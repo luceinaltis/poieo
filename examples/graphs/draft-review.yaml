@@ -1,0 +1,68 @@
+# A graph with a real cycle: draft -> review -> revise -> review -> ...
+# The gate exits on approval, or gives up after two revisions. `run.path`
+# records every node visited, so the graph can count its own attempts without
+# needing a dedicated counter node.
+name: draft-review
+version: 1
+description: Draft a passage, have a second model critique it, revise until approved.
+entry: draft
+max_steps: 12
+
+state:
+  approved_count: 0
+
+nodes:
+  - id: draft
+    type: llm
+    role: writer
+    prompt: |
+      Write a single tight paragraph on this brief. No preamble.
+
+      Brief:
+      {{ input.brief }}
+    output:
+      as: draft
+    next: review
+
+  - id: review
+    type: llm
+    role: critic              # a different logical role -> can be a different model
+    system: You are a terse editor. Reply with JSON only.
+    prompt: |
+      Review the paragraph below. Reply with exactly this JSON shape:
+      {"approved": true|false, "feedback": "one sentence"}
+
+      Paragraph:
+      {{ draft }}
+    output:
+      as: review
+      format: json
+    next: gate
+
+  - id: gate
+    type: router
+    branches:
+      - when: "review.approved"
+        to: null              # null means the run ends here
+        label: approved
+      - when: "run.path.count('revise') >= 2"
+        to: null
+        label: gave-up
+    default: revise
+
+  - id: revise
+    type: llm
+    role: writer
+    prompt: |
+      Revise the paragraph to address the editor's note. Return only the
+      revised paragraph.
+
+      Paragraph:
+      {{ draft }}
+
+      Editor's note:
+      {{ review.feedback }}
+    output:
+      as: draft               # overwrite the alias so review reads the new text
+      into_state: latest_draft
+    next: review

@@ -1,0 +1,196 @@
+"""The resident process: keeps flows firing until it is told to stop."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import signal
+from typing import Any, Callable
+
+from ..errors import PoieoError
+from ..providers import ProviderPool
+from ..runtime.context import RunResult
+from ..runtime.executor import execute
+from ..store import RunStore
+from .config import DaemonConfig, LoadedFlow, load_flows
+
+log = logging.getLogger("poieo.daemon")
+
+RunCallback = Callable[[str, RunResult], None]
+
+
+class FlowRunner:
+    """Drives one flow: trigger -> run -> carry state -> repeat."""
+
+    def __init__(
+        self,
+        flow: LoadedFlow,
+        config: DaemonConfig,
+        pool: ProviderPool,
+        store: RunStore,
+        cancel: asyncio.Event,
+        on_run: RunCallback | None = None,
+    ):
+        self.flow = flow
+        self.config = config
+        self.pool = pool
+        self.store = store
+        self.cancel = cancel
+        self.on_run = on_run
+        self.trigger = flow.spec.trigger.build()
+        self.results: list[RunResult] = []
+        # Ending state of the last run, replayed into the next when carrying.
+        self.state: dict[str, Any] = {}
+
+    @property
+    def name(self) -> str:
+        return self.flow.spec.name
+
+    async def run(self) -> None:
+        log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
+        async for fire in self.trigger.fires(self.cancel):
+            if self.cancel.is_set():
+                break
+            try:
+                payload = self.flow.read_input(self.config)
+            except PoieoError as exc:
+                log.error("flow '%s': %s", self.name, exc)
+                if self.flow.spec.on_error == "stop":
+                    break
+                continue
+
+            log.info(
+                "flow '%s' firing (iteration %d, %s)",
+                self.name,
+                fire.iteration,
+                fire.reason,
+            )
+            result = await execute(
+                self.flow.graph,
+                self.flow.binding,
+                self.pool,
+                self.store,
+                input=payload,
+                state=dict(self.state) if self.flow.spec.carry_state else None,
+                flow=self.name,
+                trigger=self.trigger.describe,
+                iteration=fire.iteration,
+                cancel=self.cancel,
+            )
+            self.results.append(result)
+            if self.flow.spec.carry_state:
+                self.state = result.state
+
+            if result.status == "completed":
+                log.info(
+                    "flow '%s' run %s completed in %d step(s) [%s]",
+                    self.name,
+                    result.run_id,
+                    result.steps,
+                    " -> ".join(result.path),
+                )
+            else:
+                log.error(
+                    "flow '%s' run %s %s: %s",
+                    self.name,
+                    result.run_id,
+                    result.status,
+                    result.error,
+                )
+                if self.flow.spec.on_error == "stop" and result.status == "failed":
+                    log.error("flow '%s' stopping (on_error: stop)", self.name)
+                    break
+
+            if self.on_run:
+                self.on_run(self.name, result)
+
+        log.info("flow '%s' stopped", self.name)
+
+
+class Daemon:
+    """Owns the provider pools, the flow tasks, and the shutdown handshake."""
+
+    def __init__(
+        self,
+        config: DaemonConfig,
+        *,
+        store: RunStore | None = None,
+        on_run: RunCallback | None = None,
+    ):
+        self.config = config
+        self.flows = load_flows(config)
+        self.store = store or RunStore(config.store_path())
+        self.on_run = on_run
+        self.cancel = asyncio.Event()
+        # One pool per distinct binding file: clients are reused across flows.
+        self.pools: dict[str, ProviderPool] = {}
+        self.runners: list[FlowRunner] = []
+
+    def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
+        if flow.binding_key not in self.pools:
+            self.pools[flow.binding_key] = ProviderPool(flow.binding)
+        return self.pools[flow.binding_key]
+
+    def stop(self) -> None:
+        """Request a graceful shutdown; in-flight runs finish their current node."""
+        self.cancel.set()
+
+    def _install_signals(self) -> None:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, self._on_signal, sig)
+            except (NotImplementedError, RuntimeError):  # pragma: no cover - win32
+                pass
+
+    def _on_signal(self, sig: signal.Signals) -> None:
+        if self.cancel.is_set():
+            log.warning("second %s -- exiting now", sig.name)
+            raise SystemExit(1)
+        log.info("%s received; finishing in-flight runs", sig.name)
+        self.cancel.set()
+
+    async def serve(self, *, install_signals: bool = True) -> list[RunResult]:
+        if not self.flows:
+            log.warning("no enabled flows in %s", self.config.source_path)
+            return []
+        if install_signals:
+            self._install_signals()
+
+        self.runners = [
+            FlowRunner(
+                flow,
+                self.config,
+                self._pool_for(flow),
+                self.store,
+                self.cancel,
+                self.on_run,
+            )
+            for flow in self.flows
+        ]
+        log.info(
+            "poieo daemon up: %d flow(s), store at %s",
+            len(self.runners),
+            self.store.root,
+        )
+        try:
+            # return_exceptions: one flow blowing up must not orphan the others
+            # or tear down pools they are still using.
+            outcomes = await asyncio.gather(
+                *(runner.run() for runner in self.runners), return_exceptions=True
+            )
+            for runner, outcome in zip(self.runners, outcomes):
+                if isinstance(outcome, BaseException):
+                    log.exception(
+                        "flow '%s' crashed: %s", runner.name, outcome, exc_info=outcome
+                    )
+        finally:
+            self.cancel.set()
+            for pool in self.pools.values():
+                await pool.aclose()
+            log.info("poieo daemon down")
+        return [result for runner in self.runners for result in runner.results]
+
+
+async def serve(config: DaemonConfig, **kwargs: Any) -> list[RunResult]:
+    return await Daemon(config, **kwargs).serve()

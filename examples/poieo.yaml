@@ -1,0 +1,37 @@
+# The daemon: which logical flows stay alive, and on what trigger.
+# Paths are resolved relative to this file.
+version: 1
+store: .poieo
+binding: bindings/mock.yaml       # swap for bindings/claude.yaml or bindings/local.yaml
+
+flows:
+  # Fires on a fixed period. A run that overruns its period skips the missed
+  # ticks rather than queuing them up.
+  - name: triage
+    graph: graphs/support-triage.yaml
+    trigger:
+      type: interval
+      every: 30s
+      run_at_start: true
+    input:
+      message: "The export button crashes on 2.1 whenever the filter is empty."
+
+  # Runs back to back forever, carrying the previous run's state forward.
+  - name: revision
+    graph: graphs/draft-review.yaml
+    trigger:
+      type: loop
+      cooldown: 10s
+    carry_state: true
+    input:
+      brief: "Why a workflow engine should not know which model it runs on."
+
+  # Disabled here; flip `enabled` to arm it. Re-reads its payload every night.
+  - name: nightly-digest
+    graph: graphs/support-triage.yaml
+    binding: bindings/mock.yaml
+    trigger:
+      type: cron
+      expression: "0 3 * * *"
+    input_file: inputs/nightly.json
+    enabled: false

@@ -1,0 +1,71 @@
+# Logical layer: what happens. No model is named anywhere in this file.
+name: support-triage
+version: 1
+description: Classify an inbound support message, then draft the matching reply.
+entry: classify
+default_role: default
+max_steps: 20
+
+nodes:
+  - id: classify
+    type: llm
+    role: classifier          # cheap, fast model in every binding
+    system: You are a precise triage classifier. Reply with one word and nothing else.
+    prompt: |
+      Classify the support message below as exactly one of: bug, feature, question.
+
+      Message:
+      {{ input.message }}
+    output:
+      as: category
+    next: route
+
+  - id: route
+    type: router
+    description: Send the message down the arm that matches its category.
+    branches:
+      - when: "'bug' in category.lower()"
+        to: draft_bug
+        label: bug
+      - when: "'feature' in category.lower()"
+        to: draft_feature
+        label: feature
+    default: draft_answer
+
+  - id: draft_bug
+    type: llm
+    role: writer              # the expensive model: this text reaches a human
+    prompt: |
+      A user reported a bug. Write a short acknowledgement that restates the
+      problem and asks for the one missing detail an engineer would need.
+
+      Report:
+      {{ input.message }}
+    output:
+      as: reply
+      into_state: last_reply
+
+  - id: draft_feature
+    type: llm
+    role: writer
+    prompt: |
+      A user requested a feature. Write a short, warm acknowledgement that
+      confirms the use case in your own words. Do not promise a ship date.
+
+      Request:
+      {{ input.message }}
+    output:
+      as: reply
+      into_state: last_reply
+
+  - id: draft_answer
+    type: llm
+    role: writer
+    prompt: |
+      Answer this support question directly and briefly.
+
+      Question:
+      {{ input.message }}
+    output:
+      as: reply
+      into_state: last_reply

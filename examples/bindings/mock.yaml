@@ -1,0 +1,22 @@
+# Physical layer for local development: no network, no tokens spent.
+# A list value is a script -- one entry per call to that role.
+name: mock
+version: 1
+
+providers:
+  fake:
+    type: mock
+    options:
+      responses:
+        classifier: bug
+        writer:
+          - "A first draft that is merely adequate."
+          - "A revised draft, now with a verb that earns its keep."
+        critic:
+          - '{"approved": false, "feedback": "The middle clause is limp."}'
+          - '{"approved": true, "feedback": "Good."}'
+        "*": "(mock response)"
+
+default:
+  provider: fake
+  model: mock-model

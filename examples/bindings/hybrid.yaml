@@ -1,0 +1,25 @@
+# Physical layer: cheap local triage, Claude for anything a human will read.
+name: hybrid
+version: 1
+
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+  claude:
+    type: anthropic
+
+default:
+  provider: claude
+  model: claude-opus-5
+  params:
+    max_tokens: 16000
+    effort: high
+
+roles:
+  classifier:
+    provider: ollama
+    model: llama3.2:3b
+    params:
+      max_tokens: 16
+      temperature: 0

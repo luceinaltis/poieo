@@ -1,0 +1,229 @@
+"""Triggers decide *when* a flow fires; the daemon decides what happens then.
+
+Each trigger is an async generator: it yields a :class:`Fire` when the flow
+should run and only resumes once the run has finished. That resume-after-run
+property is what makes the ``loop`` trigger a true "run continuously" mode
+instead of a queue that piles up behind a slow model.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import random
+import re
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, AsyncIterator, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ..errors import SpecError
+from .cron import CronSchedule
+
+_DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?\s*$", re.IGNORECASE)
+_UNITS = {"ms": 0.001, "s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
+
+
+def parse_duration(value: str | int | float) -> float:
+    """``"30s"`` / ``"5m"`` / ``90`` -> seconds."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = _DURATION.match(str(value))
+    if not match:
+        raise SpecError(f"cannot parse duration {value!r} (try '30s', '5m', '2h')")
+    amount, unit = match.groups()
+    return float(amount) * _UNITS[(unit or "s").lower()]
+
+
+@dataclass(slots=True)
+class Fire:
+    """One scheduled activation of a flow."""
+
+    iteration: int
+    at: datetime
+    reason: str
+    # Carried forward from the previous run when the flow keeps state.
+    state: dict[str, Any] = field(default_factory=dict)
+
+
+class TriggerSpec(BaseModel):
+    """Declarative trigger configuration, discriminated by ``type``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["manual", "interval", "cron", "loop"] = "manual"
+
+    # interval
+    every: str | float | None = None
+    jitter: str | float = 0
+    run_at_start: bool = True
+
+    # cron
+    expression: str | None = None
+
+    # loop
+    cooldown: str | float = 0
+
+    # all types
+    max_iterations: int | None = Field(default=None, ge=1)
+
+    @field_validator("expression")
+    @classmethod
+    def _valid_cron(cls, value: str | None) -> str | None:
+        if value is not None:
+            CronSchedule(value)
+        return value
+
+    def build(self) -> Trigger:
+        if self.type == "interval":
+            if self.every is None:
+                raise SpecError("interval trigger requires 'every'")
+            return IntervalTrigger(
+                every=parse_duration(self.every),
+                jitter=parse_duration(self.jitter),
+                run_at_start=self.run_at_start,
+                max_iterations=self.max_iterations,
+            )
+        if self.type == "cron":
+            if not self.expression:
+                raise SpecError("cron trigger requires 'expression'")
+            return CronTrigger(
+                schedule=CronSchedule(self.expression),
+                max_iterations=self.max_iterations,
+            )
+        if self.type == "loop":
+            return LoopTrigger(
+                cooldown=parse_duration(self.cooldown),
+                max_iterations=self.max_iterations,
+            )
+        return ManualTrigger(max_iterations=self.max_iterations)
+
+
+async def _sleep_or_cancel(seconds: float, cancel: asyncio.Event) -> bool:
+    """Sleep, returning False if shutdown was requested first."""
+    if seconds <= 0:
+        return not cancel.is_set()
+    try:
+        await asyncio.wait_for(cancel.wait(), timeout=seconds)
+    except asyncio.TimeoutError:
+        return True
+    return False
+
+
+class Trigger:
+    """Base trigger. Subclasses implement :meth:`fires`."""
+
+    describe: str = "manual"
+
+    def __init__(self, max_iterations: int | None = None):
+        self.max_iterations = max_iterations
+
+    def _exhausted(self, iteration: int) -> bool:
+        return self.max_iterations is not None and iteration > self.max_iterations
+
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+        raise NotImplementedError
+        yield  # pragma: no cover - makes this an async generator for typing
+
+
+class ManualTrigger(Trigger):
+    """Never fires on its own; the flow only runs when something asks it to."""
+
+    describe = "manual"
+
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+        await cancel.wait()
+        return
+        yield  # pragma: no cover
+
+
+class IntervalTrigger(Trigger):
+    """Fires every N seconds on an absolute grid, skipping ticks a slow run ate."""
+
+    def __init__(
+        self,
+        every: float,
+        jitter: float = 0.0,
+        run_at_start: bool = True,
+        max_iterations: int | None = None,
+    ):
+        super().__init__(max_iterations)
+        if every <= 0:
+            raise SpecError("interval trigger 'every' must be positive")
+        self.every = every
+        self.jitter = max(0.0, jitter)
+        self.run_at_start = run_at_start
+        self.describe = f"every {every:g}s"
+
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+        loop = asyncio.get_running_loop()
+        origin = loop.time()
+        iteration = 0
+
+        if not self.run_at_start:
+            if not await _sleep_or_cancel(self.every, cancel):
+                return
+
+        while not cancel.is_set():
+            iteration += 1
+            if self._exhausted(iteration):
+                return
+            yield Fire(iteration=iteration, at=datetime.now(), reason=self.describe)
+            if self._exhausted(iteration + 1):
+                return  # nothing left to fire; do not sit out the period
+
+            # Anchor to the grid so a run that overran does not shift every
+            # later tick; ticks that fully elapsed are skipped, not queued.
+            elapsed = loop.time() - origin
+            ticks = int(elapsed // self.every) + 1
+            delay = origin + ticks * self.every - loop.time()
+            if self.jitter:
+                delay += random.uniform(0, self.jitter)
+            if not await _sleep_or_cancel(delay, cancel):
+                return
+
+
+class CronTrigger(Trigger):
+    """Fires on a cron schedule, evaluated in local time."""
+
+    def __init__(self, schedule: CronSchedule, max_iterations: int | None = None):
+        super().__init__(max_iterations)
+        self.schedule = schedule
+        self.describe = f"cron {schedule.expression}"
+
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+        iteration = 0
+        while not cancel.is_set():
+            if self._exhausted(iteration + 1):
+                return
+            now = datetime.now()
+            target = self.schedule.next_after(now)
+            if not await _sleep_or_cancel((target - now).total_seconds(), cancel):
+                return
+            iteration += 1
+            yield Fire(iteration=iteration, at=target, reason=self.describe)
+
+
+class LoopTrigger(Trigger):
+    """Runs the graph back to back forever, pausing only for ``cooldown``.
+
+    The generator resumes after the previous run returns, so iterations never
+    overlap and a slow model simply slows the loop down.
+    """
+
+    def __init__(self, cooldown: float = 0.0, max_iterations: int | None = None):
+        super().__init__(max_iterations)
+        self.cooldown = max(0.0, cooldown)
+        self.describe = f"loop (cooldown {cooldown:g}s)" if cooldown else "loop"
+
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+        iteration = 0
+        while not cancel.is_set():
+            iteration += 1
+            if self._exhausted(iteration):
+                return
+            yield Fire(iteration=iteration, at=datetime.now(), reason="loop")
+            if self._exhausted(iteration + 1):
+                return
+            if not await _sleep_or_cancel(self.cooldown, cancel):
+                return

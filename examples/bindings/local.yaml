@@ -1,0 +1,37 @@
+# Physical layer: everything served by models running on this machine.
+# The graph files are unchanged -- only role -> model wiring differs.
+name: local
+version: 1
+
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+    timeout: 300
+
+  vllm:
+    type: openai_compatible
+    base_url: http://localhost:8000/v1
+    api_key_env: LOCAL_API_KEY     # optional; omit if the server is unauthenticated
+    timeout: 300
+
+default:
+  provider: ollama
+  model: llama3.1:8b
+  params:
+    max_tokens: 2048
+    temperature: 0.2
+
+roles:
+  classifier:
+    provider: ollama
+    model: llama3.2:3b            # small model is plenty for one-word labels
+    params:
+      max_tokens: 16
+      temperature: 0
+  writer:
+    provider: vllm
+    model: Qwen/Qwen2.5-14B-Instruct
+    params:
+      max_tokens: 1024
+      temperature: 0.7

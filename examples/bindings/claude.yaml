@@ -1,0 +1,30 @@
+# Physical layer: the Claude API. Same graphs, different muscle.
+# Credentials resolve from the environment (ANTHROPIC_API_KEY or `ant auth login`).
+name: claude
+version: 1
+
+providers:
+  claude:
+    type: anthropic
+    timeout: 600
+    max_retries: 2
+
+default:
+  provider: claude
+  model: claude-opus-5
+  params:
+    max_tokens: 16000
+    effort: high                  # low | medium | high | xhigh | max
+    thinking: auto                # adaptive where the model supports it
+
+roles:
+  classifier:
+    model: claude-haiku-4-5
+    params:
+      max_tokens: 256
+      thinking: off
+  writer:
+    model: claude-opus-5
+    params:
+      max_tokens: 8000
+      effort: medium
