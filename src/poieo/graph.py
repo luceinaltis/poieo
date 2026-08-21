@@ -65,7 +65,7 @@ class Branch(_Spec):
 
 class NodeSpec(_Spec):
     id: str
-    type: Literal["llm", "router"]
+    type: Literal["llm", "router", "agent"]
     description: str | None = None
 
     # --- llm nodes ---
@@ -80,6 +80,14 @@ class NodeSpec(_Spec):
     # --- router nodes ---
     branches: list[Branch] = Field(default_factory=list)
     default: str | None = None
+
+    # --- agent nodes ---
+    # Every tool call is confined to this directory. Templates allowed.
+    workdir: str | None = None
+    # Toolset names from poieo.tools.TOOLSETS; None means all of them.
+    tools: list[str] | None = None
+    # Upper bound on model calls in one node execution.
+    max_turns: int = Field(default=20, ge=1, le=200)
 
     # `None` means "this node ends the run".
     next: str | None = None
@@ -98,18 +106,38 @@ class NodeSpec(_Spec):
 
     @model_validator(mode="after")
     def _check_shape(self) -> NodeSpec:
-        if self.type == "llm":
+        if self.type in ("llm", "agent"):
             if not self.prompt:
-                raise ValueError(f"llm node '{self.id}' requires a prompt")
+                raise ValueError(f"{self.type} node '{self.id}' requires a prompt")
             if self.branches:
-                raise ValueError(f"llm node '{self.id}' cannot declare branches")
+                raise ValueError(f"{self.type} node '{self.id}' cannot declare branches")
             try:
                 validate_template(self.prompt)
                 if self.system:
                     validate_template(self.system)
             except ExpressionError as exc:
                 raise ValueError(f"node '{self.id}': {exc}") from exc
-        else:  # router
+        if self.type == "agent":
+            if not self.workdir:
+                raise ValueError(f"agent node '{self.id}' requires a workdir")
+            try:
+                validate_template(self.workdir)
+            except ExpressionError as exc:
+                raise ValueError(f"node '{self.id}': {exc}") from exc
+            from .tools import TOOLSETS  # late import; tools pulls in providers
+
+            for name in self.tools or []:
+                if name not in TOOLSETS:
+                    raise ValueError(
+                        f"agent node '{self.id}' names unknown toolset '{name}'; "
+                        f"known: {sorted(TOOLSETS)}"
+                    )
+        else:
+            if self.workdir or self.tools:
+                raise ValueError(
+                    f"{self.type} node '{self.id}' does not take workdir/tools"
+                )
+        if self.type == "router":
             if not self.branches:
                 raise ValueError(f"router node '{self.id}' requires at least one branch")
             if self.prompt or self.role:
@@ -188,7 +216,11 @@ class GraphSpec(_Spec):
 
     def roles(self) -> set[str]:
         """Every logical role this graph needs a binding for."""
-        return {n.role or self.default_role for n in self.nodes if n.type == "llm"}
+        return {
+            n.role or self.default_role
+            for n in self.nodes
+            if n.type in ("llm", "agent")
+        }
 
 
 def load_document(path: str | Path) -> dict[str, Any]:
