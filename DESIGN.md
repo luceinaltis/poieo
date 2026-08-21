@@ -113,10 +113,18 @@ carried between iterations as state.
 
 Autonomous execution needs explicit fences:
 
-- **Space**: tools cannot reach outside the task's designated workdir. (This
-  prevents accidents, not a malicious model — OS-level sandboxing is a
-  non-goal. Run flows only in a directory you'd let a junior contributor
-  loose in.)
+- **Space**: tools cannot reach outside the task's designated workdir. Tool
+  execution goes through a pluggable executor: the default (`local`) enforces
+  path confinement only — it prevents accidents, not a malicious model — while
+  an opt-in `docker` executor runs the task's tools inside a container with
+  the workdir mounted, so nothing outside the workdir is reachable at all.
+  Docker stays opt-in because it costs setup and per-task images, which the
+  minimal-configuration principle refuses to impose by default.
+- **Recovery**: sandboxing protects everything *outside* the workdir; the
+  files *inside* it are the work, so they are exposed by definition. What
+  guards them is git: agent changes must be checkpointed per run so any
+  night's work can be reviewed as a diff and rolled back. Autonomy without
+  undo is a different, scarier product.
 - **Time**: graphs are bounded by `max_steps`, tool loops by `max_turns`,
   shell commands by timeouts. Endless wandering becomes a recorded failure,
   and the next trigger starts fresh.
@@ -132,16 +140,21 @@ Autonomous execution needs explicit fences:
   LangChain-style abstraction stacks, but to complete one experience: *my
   work keeps running on my machine*. Node types and tools grow only as far
   as that experience requires.
-- **No OS-level sandbox.** (See safety boundaries.)
+- **No OS-level sandbox by default.** Path confinement is the default; real
+  isolation is the opt-in `docker` executor, never a prerequisite for getting
+  started. (See safety boundaries.)
 
 ## Roadmap
 
 1. **Agent node** — build the hands: tool protocol, files/shell toolsets,
-   workdir confinement.
+   workdir confinement. The executor is designed as a swappable interface
+   from day one (`local` ships; `docker` slots in later without reshaping
+   the node).
    (`docs/superpowers/specs/2026-08-21-agent-node-design.md`)
 2. **Web control plane** — integrate an HTTP server into the daemon; task
    card CRUD and flow control (REST API); the roadmap board page; fold the
    existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-3. **Beyond (candidates)** — external agent-CLI provider (Claude Code, etc.),
-   map/fan-out nodes, dependencies between tasks (roadmap ordering).
+3. **Beyond (candidates)** — the `docker` executor backend; per-run git
+   checkpointing of agent changes; external agent-CLI provider (Claude Code,
+   etc.); map/fan-out nodes; dependencies between tasks (roadmap ordering).

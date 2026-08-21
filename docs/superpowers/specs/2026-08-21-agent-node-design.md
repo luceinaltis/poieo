@@ -26,8 +26,12 @@ qwen), with the Claude API equally supported through the same neutral protocol.
 - The web control plane / roadmap board (next sub-project; this design's
   `node_tool_call` events are recorded so that UI can replay them later).
 - A `command` provider that shells out to external agent CLIs.
-- OS-level sandboxing. Confinement here prevents accidents, not a malicious
-  model (see Security boundary).
+- The `docker` executor backend. This design ships only the `local` executor
+  (path confinement), but tool execution is funnelled through an executor
+  interface so a container-backed executor can slot in later without
+  reshaping the node (see Tools).
+- OS-level sandboxing in the default path. The `local` executor prevents
+  accidents, not a malicious model (see Security boundary).
 
 ## Architecture
 
@@ -115,7 +119,14 @@ A backend/model that cannot do tool calling fails with a clear
 
 ## Tools
 
-All execution funnels through one confinement helper.
+All execution funnels through an **executor** — one object that owns "run
+this tool call inside this workdir". The node never touches the filesystem or
+a subprocess directly; it hands `ToolCall`s to the executor and gets result
+text back. This design implements a single executor, `local` (direct
+execution with path confinement, below). A future `docker` executor runs the
+same calls inside a container with the workdir mounted, selected per node
+(`sandbox: docker`, an `image:` field); nothing else about the node changes.
+The schema reserves no fields for it yet — they arrive with that backend.
 
 **files** toolset:
 
@@ -145,9 +156,13 @@ Confinement rules:
 ### Security boundary
 
 Path confinement prevents *accidents*. A shell command can itself touch
-absolute paths; without an OS sandbox that cannot be prevented and this design
-does not claim to. Run flows against a workdir you would let a junior
-contributor loose in. Documented in the README when this ships.
+absolute paths; the `local` executor cannot prevent that and this design does
+not claim to. Run flows against a workdir you would let a junior contributor
+loose in. Real isolation is the future `docker` executor's job — and even
+then the mounted workdir remains exposed by definition (editing it is the
+work); reviewability and rollback of those files belong to per-run git
+checkpointing, a separate roadmap item. Documented in the README when this
+ships.
 
 ## Failure handling
 
