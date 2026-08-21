@@ -11,7 +11,7 @@ from typing import Any
 from ..errors import ExpressionError, NodeError, ProviderError
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
-from ..providers import LLMRequest
+from ..providers import LLMRequest, LLMResponse
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -52,6 +52,52 @@ def _parse_json(text: str, node_id: str) -> Any:
         ) from exc
 
 
+async def call_with_retry(spec: NodeSpec, provider, request: LLMRequest, ctx: RunContext) -> LLMResponse:
+    """Call the provider with exponential backoff retry logic."""
+    retry = spec.retry
+    last: ProviderError | None = None
+    for attempt in range(1, retry.attempts + 1):
+        try:
+            return await provider.complete(request)
+        except ProviderError as exc:
+            last = exc
+            if not exc.retryable or attempt == retry.attempts:
+                break
+            delay = retry.backoff * (2 ** (attempt - 1))
+            ctx.emit(
+                "node_retry",
+                node_id=spec.id,
+                attempt=attempt,
+                delay=delay,
+                error=str(exc),
+            )
+            await asyncio.sleep(delay)
+    raise NodeError(
+        f"node '{spec.id}' failed after {retry.attempts} attempt(s): {last}",
+        node_id=spec.id,
+    ) from last
+
+
+def shape_output(spec: NodeSpec, text: str) -> Any:
+    """Shape the model output according to the node's output configuration."""
+    out = spec.output
+    if out.format == "text":
+        return text.strip()
+    data = _parse_json(text, spec.id)
+    if out.path:
+        cursor: Any = data
+        for part in out.path.split("."):
+            if not isinstance(cursor, dict) or part not in cursor:
+                raise NodeError(
+                    f"node '{spec.id}': output path '{out.path}' "
+                    f"is missing from the parsed JSON",
+                    node_id=spec.id,
+                )
+            cursor = cursor[part]
+        return cursor
+    return data
+
+
 class LLMNode(Node):
     """Renders a prompt, calls the model bound to this node's role, stores the result."""
 
@@ -76,10 +122,10 @@ class LLMNode(Node):
             role=role,
         )
 
-        response = await self._call_with_retry(provider, request, ctx)
+        response = await call_with_retry(self.spec, provider, request, ctx)
 
         ctx.usage = ctx.usage.merge(response.usage)
-        output = self._shape_output(response.text)
+        output = shape_output(self.spec, response.text)
         ctx.record_output(spec.id, output, spec.output.as_)
         if spec.output.into_state:
             ctx.state[spec.output.into_state] = unwrap(output)
@@ -97,47 +143,6 @@ class LLMNode(Node):
             },
         )
 
-    async def _call_with_retry(self, provider, request: LLMRequest, ctx: RunContext):
-        retry = self.spec.retry
-        last: ProviderError | None = None
-        for attempt in range(1, retry.attempts + 1):
-            try:
-                return await provider.complete(request)
-            except ProviderError as exc:
-                last = exc
-                if not exc.retryable or attempt == retry.attempts:
-                    break
-                delay = retry.backoff * (2 ** (attempt - 1))
-                ctx.emit(
-                    "node_retry",
-                    node_id=self.spec.id,
-                    attempt=attempt,
-                    delay=delay,
-                    error=str(exc),
-                )
-                await asyncio.sleep(delay)
-        raise NodeError(
-            f"node '{self.spec.id}' failed after {retry.attempts} attempt(s): {last}",
-            node_id=self.spec.id,
-        ) from last
-
-    def _shape_output(self, text: str) -> Any:
-        out = self.spec.output
-        if out.format == "text":
-            return text.strip()
-        data = _parse_json(text, self.spec.id)
-        if out.path:
-            cursor: Any = data
-            for part in out.path.split("."):
-                if not isinstance(cursor, dict) or part not in cursor:
-                    raise NodeError(
-                        f"node '{self.spec.id}': output path '{out.path}' "
-                        f"is missing from the parsed JSON",
-                        node_id=self.spec.id,
-                    )
-                cursor = cursor[part]
-            return cursor
-        return data
 
 
 class RouterNode(Node):
