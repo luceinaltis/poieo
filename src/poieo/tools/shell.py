@@ -5,6 +5,10 @@ local executor does not claim to be (see the design spec)."""
 from __future__ import annotations
 
 import asyncio
+import locale
+import os
+import signal
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +20,20 @@ _MAX_TIMEOUT = 600.0
 _OUTPUT_CAP = 20_000
 
 
+def _kill_tree(process: asyncio.subprocess.Process) -> None:
+    """Kill the shell and everything it spawned."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+            capture_output=True,
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
     command = str(args["command"])
     timeout = min(float(args.get("timeout", _DEFAULT_TIMEOUT)), _MAX_TIMEOUT)
@@ -24,14 +42,18 @@ async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
         cwd=workdir,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
+        start_new_session=(os.name != "nt"),
     )
     try:
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout)
     except asyncio.TimeoutError:
-        process.kill()
+        _kill_tree(process)
         await process.communicate()
         raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
-    text = stdout.decode(errors="replace")
+    try:
+        text = stdout.decode()
+    except UnicodeDecodeError:
+        text = stdout.decode(locale.getpreferredencoding(False), errors="replace")
     if len(text) > _OUTPUT_CAP:
         text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
     return f"exit code: {process.returncode}\n{text}"
