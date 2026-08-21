@@ -413,3 +413,42 @@ async def test_ollama_complete_parses_tool_calls(monkeypatch):
     assert response.tool_calls[0].arguments == {"path": "a"}
     assert response.tool_calls[0].id.startswith("call_")
     await provider.aclose()
+
+
+from poieo.providers.anthropic_provider import _anthropic_messages, _anthropic_tools
+
+
+def test_anthropic_tools_shape():
+    assert _anthropic_tools([A_TOOL]) == [
+        {"name": "read_file", "description": "read", "input_schema": {"type": "object"}}
+    ]
+
+
+def test_anthropic_messages_translation_merges_tool_results():
+    history = [
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "checking",
+            "tool_calls": [
+                {"id": "c1", "name": "read_file", "arguments": {"path": "a"}},
+                {"id": "c2", "name": "list_dir", "arguments": {}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "data-1"},
+        {"role": "tool", "tool_call_id": "c2", "content": "data-2"},
+    ]
+    messages = _anthropic_messages(history)
+    assert messages[0] == {"role": "user", "content": "go"}
+    assistant = messages[1]
+    assert assistant["role"] == "assistant"
+    assert assistant["content"][0] == {"type": "text", "text": "checking"}
+    assert assistant["content"][1] == {
+        "type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}
+    }
+    # Both tool results land in ONE user turn.
+    results = messages[2]
+    assert results["role"] == "user"
+    assert [b["tool_use_id"] for b in results["content"]] == ["c1", "c2"]
+    assert results["content"][0]["type"] == "tool_result"
+    assert len(messages) == 3
