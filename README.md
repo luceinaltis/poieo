@@ -66,8 +66,24 @@ nodes:
 |---|---|---|
 | `llm` | renders a prompt, calls the model bound to its role | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next` |
 | `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
+| `agent` | hands the model tools and loops until it finishes one step | `role`, `workdir`, `tools`, `max_turns`, plus the `llm` keys |
 
 `next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
+
+### Agent nodes
+
+An `agent` node gives its model hands: `files` (read/write/list/glob) and
+`shell` (run a command) toolsets, every call confined to the node's `workdir`.
+The node loops — model asks, poieo executes, result goes back — until the
+model answers without a tool call; `max_turns` bounds the loop. Tool failures
+are fed back to the model as text so it can correct itself. Every call is
+recorded as a `node_tool_call` event in the run log.
+
+Path confinement prevents accidents, not malice: a shell command can still
+name absolute paths. Point `workdir` only at a directory you would let a
+junior contributor loose in. `poieo run examples/graphs/agent-task.yaml -b
+examples/bindings/mock.yaml --set workdir=/tmp/demo` exercises the loop
+offline.
 
 **Expressions** in `{{ … }}` templates and `when:` conditions run in a sandbox: attribute
 and index access, comparisons, boolean logic, and a short list of builtins (`len`, `str`,
@@ -234,7 +250,7 @@ src/poieo/
 * The web editor. The graph schema is the contract it will produce; `poieo show --mermaid`
   renders a graph today.
 * A REST API for graph CRUD and run inspection.
-* Node types beyond `llm` and `router` (tool calls, code execution, map/fan-out).
+* Node types beyond `llm`, `router`, and `agent` (map/fan-out).
   `runtime/nodes.py` has a `NODE_TYPES` registry to add them to.
 
 ## Tests

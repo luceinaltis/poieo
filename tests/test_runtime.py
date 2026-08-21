@@ -306,3 +306,11 @@ async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
     result = await run_graph(graph, binding)
     assert result.status == "failed"
     assert "workdir" in result.error
+
+
+async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
+    graph = load_graph(EXAMPLES / "graphs/agent-task.yaml")
+    binding = load_binding(EXAMPLES / "bindings/mock.yaml")
+    result = await run_graph(graph, binding, input={"workdir": str(tmp_path)})
+    assert result.status == "completed"
+    assert (tmp_path / "TODO.md").exists()
