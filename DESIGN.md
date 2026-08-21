@@ -100,7 +100,7 @@ What poieo offers the user stacks in layers:
 | layer | what the user gets | status |
 |---|---|---|
 | **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
-| **Residency** — daemon, triggers, carry_state | the designed flow keeps running, 24/7 | done |
+| **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
 | **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | spec approved, next to build |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
@@ -113,21 +113,22 @@ carried between iterations as state.
 
 Autonomous execution needs explicit fences:
 
-- **Space**: tools cannot reach outside the task's designated workdir. Tool
-  execution goes through a pluggable executor: the default (`local`) enforces
-  path confinement only — it prevents accidents, not a malicious model — while
-  an opt-in `docker` executor runs the task's tools inside a container with
-  the workdir mounted, so nothing outside the workdir is reachable at all.
-  Docker stays opt-in because it costs setup and per-task images, which the
-  minimal-configuration principle refuses to impose by default.
-- **Recovery**: sandboxing protects everything *outside* the workdir; the
-  files *inside* it are the work, so they are exposed by definition. What
-  guards them is git: agent changes must be checkpointed per run so any
-  night's work can be reviewed as a diff and rolled back. Autonomy without
-  undo is a different, scarier product.
-- **Time**: graphs are bounded by `max_steps`, tool loops by `max_turns`,
-  shell commands by timeouts. Endless wandering becomes a recorded failure,
-  and the next trigger starts fresh.
+- **Space**: tools cannot reach outside the task's designated working
+  directory. By default that fence is path checking — it prevents accidents,
+  not a malicious model. A task can opt into container isolation (Docker),
+  where only the working directory is visible and nothing else on the machine
+  is reachable at all. Isolation stays opt-in because it costs setup and
+  per-task images, which the minimal-configuration principle refuses to
+  impose by default.
+- **Recovery**: isolation protects everything *outside* the working
+  directory; the files *inside* it are the work, so they are exposed by
+  definition. What guards them is version control: the model's changes must
+  be checkpointed per run so any night's work can be reviewed as a diff and
+  rolled back. Autonomy without undo is a different, scarier product.
+- **Time**: every unbounded thing has a ceiling — how many steps a flow may
+  take, how many turns a model may spend on one step, how long a command may
+  run. Endless wandering becomes a recorded failure, and the next trigger
+  starts fresh.
 - **Cost**: every run's token usage is recorded. With local models this is
   free in practice; when a cloud model is bound, the spend is visible.
 
@@ -141,20 +142,20 @@ Autonomous execution needs explicit fences:
   work keeps running on my machine*. Node types and tools grow only as far
   as that experience requires.
 - **No OS-level sandbox by default.** Path confinement is the default; real
-  isolation is the opt-in `docker` executor, never a prerequisite for getting
-  started. (See safety boundaries.)
+  isolation is opt-in, never a prerequisite for getting started. (See safety
+  boundaries.)
 
 ## Roadmap
 
-1. **Agent node** — build the hands: tool protocol, files/shell toolsets,
-   workdir confinement. The executor is designed as a swappable interface
-   from day one (`local` ships; `docker` slots in later without reshaping
-   the node).
+1. **Agent node** — build the hands: file and shell tools confined to a
+   working directory. Tool execution sits behind a swappable seam from day
+   one, so container isolation can arrive later without reshaping anything.
    (`docs/superpowers/specs/2026-08-21-agent-node-design.md`)
 2. **Web control plane** — integrate an HTTP server into the daemon; task
    card CRUD and flow control (REST API); the roadmap board page; fold the
    existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-3. **Beyond (candidates)** — the `docker` executor backend; per-run git
-   checkpointing of agent changes; external agent-CLI provider (Claude Code,
-   etc.); map/fan-out nodes; dependencies between tasks (roadmap ordering).
+3. **Beyond (candidates)** — container isolation (Docker); per-run
+   checkpointing of the model's changes; delegating steps to external agent
+   CLIs (Claude Code, etc.); fan-out steps; dependencies between tasks
+   (roadmap ordering).
