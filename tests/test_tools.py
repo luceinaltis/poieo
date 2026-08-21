@@ -81,3 +81,36 @@ async def test_run_command_times_out(tmp_path):
     sleeper = "ping -n 30 127.0.0.1 > NUL" if os.name == "nt" else "sleep 30"
     with pytest.raises(ToolError, match="timed out"):
         await SHELL["run_command"].run(tmp_path, {"command": sleeper, "timeout": 1})
+
+
+from poieo.providers.base import ToolCall
+from poieo.tools import DEFAULT_TOOLSETS, TOOLSETS, LocalExecutor
+
+
+def test_registry_names():
+    assert set(TOOLSETS) == {"files", "shell"}
+    assert DEFAULT_TOOLSETS == ["files", "shell"]
+
+
+def test_executor_declares_selected_toolsets(tmp_path):
+    only_files = LocalExecutor(tmp_path, ["files"])
+    names = {d.name for d in only_files.definitions()}
+    assert "read_file" in names and "run_command" not in names
+
+
+async def test_executor_runs_a_call(tmp_path):
+    (tmp_path / "a.txt").write_text("data")
+    ex = LocalExecutor(tmp_path, DEFAULT_TOOLSETS)
+    result = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "a.txt"}))
+    assert not result.error
+    assert result.text == "data"
+
+
+async def test_executor_turns_failures_into_error_results(tmp_path):
+    ex = LocalExecutor(tmp_path, DEFAULT_TOOLSETS)
+    missing = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "nope"}))
+    assert missing.error and "nope" in missing.text
+    unknown = await ex.execute(ToolCall(id="2", name="fly", arguments={}))
+    assert unknown.error and "fly" in unknown.text
+    bad_args = await ex.execute(ToolCall(id="3", name="read_file", arguments={}))
+    assert bad_args.error
