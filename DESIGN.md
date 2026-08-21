@@ -1,134 +1,147 @@
-# poieo 디자인
+# poieo Design
 
-> 이 문서는 poieo가 **사용자에게 무엇을 제공해야 하는가**를 정리한다.
-> 코드 구현의 세부는 `docs/superpowers/specs/`의 개별 설계 문서가 다룬다.
+> This document describes **what poieo must provide to its user**.
+> Implementation detail lives in the per-feature specs under
+> `docs/superpowers/specs/`.
 
-## 한 줄 정의
+## One line
 
-**내가 하고 싶은 작업들을 적어두면, 내 컴퓨터의 LLM이 24시간 알아서 굴려주는 자율 작업 보드.**
+**An autonomous task board: write down the work you want done, and the LLMs on
+your own machine keep it running around the clock.**
 
-사용자는 작업의 흐름을 디자인하고, poieo는 그 흐름을 상주시키고, 모델은 각
-단계에서 실제로 손을 움직인다. 예를 들어 "이 프로젝트를 스스로 발전시켜라"라는
-작업을 걸어두면 — 고칠 곳을 찾고, 코드를 수정하고, 테스트를 돌리고, 결과에 따라
-분기하는 흐름이 — 사용자가 자리를 비운 사이에도 계속 돈다.
+The user designs the flow of the work, poieo keeps that flow resident, and the
+model does the actual hands-on work at each step. Pin up a task like "keep
+improving this project" and — find something to fix, edit the code, run the
+tests, branch on the result — the flow keeps turning while you are away.
 
-## 핵심 원칙
+## Core principles
 
-### 1. 논리와 물리의 분리
+### 1. Logical / physical separation
 
-**무슨 일을 하는가**(graph)와 **어떤 모델이 하는가**(binding)는 별개의 파일이다.
-그래프는 role만 부르고, 바인딩이 role을 실제 모델에 잇는다. 노트북의 3B 모델로
-설계한 워크플로우를 Claude Opus로 옮기는 것은 플래그 하나다.
+**What the work is** (graph) and **which model does it** (binding) are two
+separate files. A graph names roles; a binding maps roles onto real models.
+Moving a workflow designed against a 3B laptop model onto Claude Opus is one
+flag.
 
-이 분리는 모든 신규 기능이 지켜야 하는 불변식이다. 웹 에디터가 생겨도 그래프
-편집과 바인딩 편집은 섞이지 않는다.
+This separation is an invariant every new feature must respect. When the web
+editor arrives, graph editing and binding editing stay distinct.
 
-### 2. 최소 설정으로 동작
+### 2. Minimal configuration
 
-사용자가 반드시 써야 하는 것은 **작업의 이름과 프롬프트뿐**이다. 나머지 —
-어떤 role을 쓸지, 언제 돌지, 출력을 어디 담을지 — 는 전부 합리적인 기본값이
-있고, 디테일한 지시가 필요할 때만 열어서 설정한다.
+The only things a user must write are **a task's name and its prompt**.
+Everything else — which role serves it, when it runs, where output lands — has
+a sensible default, opened and tuned only when detailed instructions are
+actually needed.
 
-"간단한 것은 한 줄, 복잡한 것은 가능하게."
+Simple things take one line; complex things stay possible.
 
-### 3. 로컬 우선
+### 3. Local first
 
-주 타겟은 사용자의 컴퓨터에서 도는 로컬 LLM(Ollama 등)이다. 24시간 상주하는
-설계가 성립하는 이유가 이것이다 — 토큰 비용 걱정 없이 돌 수 있어야 한다.
-클라우드 모델(Claude API)은 같은 바인딩 메커니즘으로 언제든 꽂을 수 있는
-선택지이지 전제가 아니다.
+The primary target is a local LLM running on the user's machine (Ollama and
+friends). That is what makes a 24/7 resident design viable — it has to be able
+to run without worrying about token spend. Cloud models (the Claude API) plug
+into the same binding mechanism as an option, never as a prerequisite.
 
-### 4. 전부 파일, 전부 검사 가능
+### 4. Everything is a file, everything is inspectable
 
-그래프도, 바인딩도, 작업 설정도, 실행 기록도 사람이 읽을 수 있는 파일이다
-(YAML/JSONL). 데이터베이스는 없다. git으로 버전 관리되고, CLI와 웹 UI는 같은
-파일을 본다. 어떤 인터페이스로 만들었든 다른 인터페이스에서 이어서 만질 수 있다.
+Graphs, bindings, task configuration, and run history are all human-readable
+files (YAML/JSONL). There is no database. Everything versions with git, and
+the CLI and web UI read the same files — work started in one interface can be
+continued in any other.
 
-### 5. 실패는 launch에서, 3am이 아니라
+### 5. Fail at launch, not at 3am
 
-모든 그래프·바인딩·표현식은 로드 시점에 검증된다. 새벽에 트리거가 발화했을 때
-오타로 죽는 일은 없어야 한다. 반대로 **실행 중의 실패는 데몬을 죽이지 않는다**
-— 기록되고, 다음 트리거에서 새 run이 다시 시작된다. 상주가 기본값이다.
+Every graph, binding, and expression is validated at load time. A typo must
+never kill a flow when its trigger fires in the middle of the night. In the
+other direction, **an in-run failure never kills the daemon** — it is
+recorded, and the next trigger starts a fresh run. Staying up is the default.
 
-### 6. 무엇을 했는지 항상 볼 수 있다
+### 6. You can always see what it did
 
-자율적으로 도는 시스템은 감사 가능해야 신뢰할 수 있다. 모든 run은 어떤 모델이
-응답했고, 라우터가 어느 가지를 탔고, 토큰을 얼마나 썼고, **모델이 어떤 파일을
-만지고 어떤 명령을 실행했는지**까지 이벤트 단위로 남는다. "어젯밤에 얘가 뭘
-했지?"에 로그 파일 하나로 답할 수 있어야 한다.
+An autonomous system is only trustworthy if it is auditable. Every run records,
+event by event, which model answered, which branch a router took, what tokens
+were spent, and — once the model has hands — **which files it touched and
+which commands it ran**. "What did this thing do last night?" must be
+answerable from a single log file.
 
-## 사용자 경험
+## User experience
 
-### 지금: CLI
+### Today: the CLI
 
 ```
-poieo run      그래프 한 번 실행
-poieo daemon   flow들을 상주시키기
-poieo runs     무슨 일이 있었는지 보기
-poieo validate / show / check   실행 전 점검
+poieo run      execute a graph once
+poieo daemon   keep flows resident
+poieo runs     see what happened
+poieo validate / show / check   preflight everything
 ```
 
-### 목표: 웹 로드맵 보드
+### Target: the web roadmap board
 
-`poieo daemon`이 떠 있는 곳에 브라우저로 접속하면 열리는 단일 페이지.
-사용자가 거기서 할 수 있는 것:
+A single page that opens when you point a browser at wherever `poieo daemon`
+is serving. From there the user can:
 
-- **작업 카드 만들기** — 이름 + 프롬프트만 쓰면 카드가 생기고, 저장하면
-  24시간 돌기 시작한다. 카드가 곧 flow다.
-- **로드맵 보기** — 내 작업들이 지금 어떤 상태인지 (도는 중 / 멈춤 / 마지막
-  실행 결과) 한눈에.
-- **디테일 열기** — 카드를 펼치면 흐름(그래프)을 캔버스에서 편집하고, 트리거
-  주기를 바꾸고, role→모델 매핑(바인딩)을 조정할 수 있다. 안 열면 기본값.
-- **제어** — 켜기/끄기, 지금 즉시 한 번 실행.
-- **관찰** — run 기록과 모델의 도구 사용 내역을 그대로 재생해서 보기.
+- **Create a task card** — write a name and a prompt, save, and the card
+  starts running around the clock. A card *is* a flow.
+- **See the roadmap** — every task's state at a glance: running / paused /
+  last result.
+- **Open the details** — expanding a card exposes the flow (graph) on a
+  canvas editor, the trigger schedule, and the role→model mapping (binding).
+  Unopened, it all stays on defaults.
+- **Control** — pause/resume, run once right now.
+- **Observe** — replay run history, including the model's tool activity.
 
-수정 사항은 파일로 저장되고 데몬이 다음 실행부터 반영한다. 재시작은 없다.
+Edits are saved to files and picked up by the daemon from the next run.
+No restarts.
 
-## 능력의 층위
+## Capability layers
 
-poieo가 사용자에게 제공하는 능력은 세 층으로 쌓인다:
+What poieo offers the user stacks in layers:
 
-| 층 | 사용자에게 주는 것 | 상태 |
+| layer | what the user gets | status |
 |---|---|---|
-| **흐름** — graph, router, 사이클, state | 작업의 순서와 분기를 디자인하는 언어 | 완성 |
-| **상주** — daemon, 트리거, carry_state | 디자인한 흐름이 24시간 계속 도는 것 | 완성 |
-| **손** — agent 노드, files/shell 도구 | 모델이 말만 하는 게 아니라 실제로 파일을 고치고 명령을 실행하는 것 | 설계 완료, 구현 예정 |
-| **얼굴** — 웹 로드맵 보드 | 위 전부를 브라우저에서 최소 설정으로 | 다음 |
+| **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
+| **Residency** — daemon, triggers, carry_state | the designed flow keeps running, 24/7 | done |
+| **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | spec approved, next to build |
+| **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
-핵심 통찰: **"계속 일한다"는 노드의 속성이 아니라 흐름의 속성이다.**
-agent 노드는 흐름의 한 스텝에서 손을 움직이는 것뿐이고, 영원히 도는 것은
-사용자가 디자인한 그래프와 데몬의 트리거가 담당한다. 진행 상황은 state로
-다음 바퀴에 이어진다.
+The key insight: **"keeps working" is a property of the flow, not of a node.**
+An agent node is one step of the flow using its hands; running forever is the
+job of the user-designed graph plus the daemon's triggers, with progress
+carried between iterations as state.
 
-## 안전 경계
+## Safety boundaries
 
-자율 실행에는 명확한 울타리가 있어야 한다:
+Autonomous execution needs explicit fences:
 
-- **공간의 울타리**: 도구는 작업별로 지정된 workdir 밖을 만질 수 없다.
-  (단, 이것은 실수 방지이지 악의적 모델에 대한 방어가 아니다 — OS 샌드박스는
-  비목표. 신뢰할 수 있는 디렉토리에서만 돌린다.)
-- **시간의 울타리**: 그래프는 `max_steps`, 도구 루프는 `max_turns`, 셸 명령은
-  타임아웃으로 각각 상한이 있다. 무한히 헤매는 것은 실패로 기록되고, 다음
-  트리거에서 새로 시작한다.
-- **비용의 울타리**: 모든 run의 토큰 사용량이 기록된다. 로컬 모델이 기본이라
-  평시엔 무료지만, 클라우드 모델을 물렸을 때 얼마나 쓰는지 보인다.
+- **Space**: tools cannot reach outside the task's designated workdir. (This
+  prevents accidents, not a malicious model — OS-level sandboxing is a
+  non-goal. Run flows only in a directory you'd let a junior contributor
+  loose in.)
+- **Time**: graphs are bounded by `max_steps`, tool loops by `max_turns`,
+  shell commands by timeouts. Endless wandering becomes a recorded failure,
+  and the next trigger starts fresh.
+- **Cost**: every run's token usage is recorded. With local models this is
+  free in practice; when a cloud model is bound, the spend is visible.
 
-## 비목표
+## Non-goals
 
-- **멀티유저 서비스가 아니다.** 한 사람의 컴퓨터에서 그 사람의 작업을 돌린다.
-  인증, 권한, 팀 기능은 없다.
-- **데이터베이스를 도입하지 않는다.** 파일이 진실이다.
-- **범용 에이전트 프레임워크가 아니다.** LangChain류의 추상화 경쟁이 목표가
-  아니라, "내 작업이 내 컴퓨터에서 계속 돈다"는 하나의 경험을 완성하는 것이
-  목표다. 노드 타입과 도구는 그 경험에 필요한 만큼만 늘린다.
-- **OS 수준 샌드박스를 제공하지 않는다.** (안전 경계 참조)
+- **Not a multi-user service.** One person's machine, that person's work.
+  No auth, no permissions, no team features.
+- **No database.** Files are the source of truth.
+- **Not a general-purpose agent framework.** The goal is not to compete with
+  LangChain-style abstraction stacks, but to complete one experience: *my
+  work keeps running on my machine*. Node types and tools grow only as far
+  as that experience requires.
+- **No OS-level sandbox.** (See safety boundaries.)
 
-## 로드맵
+## Roadmap
 
-1. **agent 노드** — 손을 만든다. 도구 프로토콜, files/shell, workdir 격리.
+1. **Agent node** — build the hands: tool protocol, files/shell toolsets,
+   workdir confinement.
    (`docs/superpowers/specs/2026-08-21-agent-node-design.md`)
-2. **웹 컨트롤 플레인** — 데몬에 HTTP 서버를 통합하고, 작업 카드 CRUD와
-   flow 제어(REST API), 로드맵 보드 페이지를 만든다. 기존 캔버스 에디터를
-   디테일 편집용으로 통합한다. 데몬은 런타임 flow 추가/제거/일시정지를 얻는다.
-3. **그 이후 (후보)** — 외부 에이전트 CLI 프로바이더(Claude Code 등),
-   map/fan-out 노드, 작업 간 의존 관계(로드맵의 선후 관계).
+2. **Web control plane** — integrate an HTTP server into the daemon; task
+   card CRUD and flow control (REST API); the roadmap board page; fold the
+   existing canvas editor in for detail editing. The daemon gains runtime
+   flow add/remove/pause.
+3. **Beyond (candidates)** — external agent-CLI provider (Claude Code, etc.),
+   map/fan-out nodes, dependencies between tasks (roadmap ordering).
