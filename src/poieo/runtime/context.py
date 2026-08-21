@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -36,6 +37,8 @@ class RunContext:
     state: dict[str, Any] = field(default_factory=dict)
     # Which pass of a looping flow this is.
     iteration: int = 0
+    # Set by execute(); agent loops poll it between turns.
+    cancel: asyncio.Event | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

@@ -235,3 +235,74 @@ async def test_a_failed_run_still_reports_the_path_it_took():
     assert result.status == "failed"
     assert result.path == ["a"]
     assert result.finished_at >= result.started_at
+
+
+def agent_graph(workdir, **node_overrides):
+    node = {
+        "id": "work",
+        "type": "agent",
+        "role": "worker",
+        "workdir": str(workdir),
+        "prompt": "do it",
+        "output": {"as": "report"},
+    }
+    node.update(node_overrides)
+    return GraphSpec.model_validate({"name": "ag", "entry": "work", "nodes": [node]})
+
+
+async def test_agent_node_runs_tools_and_finishes(tmp_path):
+    (tmp_path / "notes.txt").write_text("secret-content")
+    graph = agent_graph(tmp_path)
+    binding = mock_binding(
+        {
+            "worker": [
+                {"tool_calls": [{"name": "read_file", "arguments": {"path": "notes.txt"}}]},
+                "done",
+            ]
+        }
+    )
+    async with ProviderPool(binding) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    assert result.outputs["work"] == "done"
+    # The second model call must carry the tool result back.
+    second_call = provider.calls[1]
+    tool_turns = [m for m in second_call.messages if m["role"] == "tool"]
+    assert tool_turns and "secret-content" in tool_turns[0]["content"]
+    assert second_call.messages[-2]["role"] == "assistant"
+
+
+async def test_agent_node_survives_tool_errors(tmp_path):
+    graph = agent_graph(tmp_path)
+    binding = mock_binding(
+        {
+            "worker": [
+                {"tool_calls": [{"name": "read_file", "arguments": {"path": "missing"}}]},
+                "recovered",
+            ]
+        }
+    )
+    result = await run_graph(graph, binding)
+    assert result.status == "completed"
+    assert result.outputs["work"] == "recovered"
+
+
+async def test_agent_node_stops_at_max_turns(tmp_path):
+    graph = agent_graph(tmp_path, max_turns=3)
+    # The script's last entry repeats forever, so the model never finishes.
+    binding = mock_binding(
+        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
+    )
+    result = await run_graph(graph, binding)
+    assert result.status == "failed"
+    assert "max_turns" in result.error
+
+
+async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
+    graph = agent_graph(tmp_path / "not-there")
+    binding = mock_binding({"worker": "hi"})
+    result = await run_graph(graph, binding)
+    assert result.status == "failed"
+    assert "workdir" in result.error

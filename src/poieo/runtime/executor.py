@@ -63,6 +63,7 @@ async def execute(
         input=dict(input or {}),
         state={**graph.state, **(state or {})},
         iteration=iteration,
+        cancel=cancel,
     )
 
     started_at = utcnow()
