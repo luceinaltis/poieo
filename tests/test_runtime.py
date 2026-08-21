@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from conftest import EXAMPLES
@@ -314,3 +316,51 @@ async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
     result = await run_graph(graph, binding, input={"workdir": str(tmp_path)})
     assert result.status == "completed"
     assert (tmp_path / "TODO.md").exists()
+
+
+async def test_agent_node_carries_raw_content_into_the_next_turn(tmp_path):
+    # Provider-specific blocks (e.g. anthropic thinking blocks) arrive on
+    # LLMResponse.meta["raw_content"]; AgentNode must round-trip them onto
+    # the neutral history's assistant turn unchanged so the provider can
+    # replay them verbatim on the next call.
+    raw_blocks = [
+        {"type": "thinking", "thinking": "hmm", "signature": "sig-xyz"},
+        {"type": "tool_use", "id": "mock_1", "name": "read_file", "input": {"path": "notes.txt"}},
+    ]
+    (tmp_path / "notes.txt").write_text("secret-content")
+    graph = agent_graph(tmp_path)
+    binding = mock_binding(
+        {
+            "worker": [
+                {
+                    "tool_calls": [{"name": "read_file", "arguments": {"path": "notes.txt"}}],
+                    "raw_content": raw_blocks,
+                },
+                "done",
+            ]
+        }
+    )
+    async with ProviderPool(binding) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    second_call = provider.calls[1]
+    assistant_turn = second_call.messages[-2]
+    assert assistant_turn["role"] == "assistant"
+    assert assistant_turn["raw_content"] == raw_blocks
+
+
+async def test_agent_node_aborts_when_cancelled(tmp_path):
+    # The last script entry repeats forever, so without cancellation this
+    # node would loop until max_turns. Cancellation is checked at the top of
+    # every turn (both the executor's and the agent node's), so a pre-set
+    # event aborts the run before the first model call ever fires.
+    graph = agent_graph(tmp_path)
+    binding = mock_binding(
+        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
+    )
+    cancel = asyncio.Event()
+    cancel.set()
+    result = await run_graph(graph, binding, cancel=cancel)
+    assert result.status == "aborted"

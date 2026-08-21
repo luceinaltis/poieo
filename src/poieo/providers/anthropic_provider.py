@@ -59,6 +59,13 @@ def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for message in messages:
         role = message.get("role")
         if role == "assistant" and message.get("tool_calls"):
+            raw = message.get("raw_content")
+            if raw:
+                # Replay the provider's own content blocks verbatim -- this
+                # keeps thinking blocks (and their signatures) intact, which
+                # a from-scratch reconstruction below would drop.
+                out.append({"role": "assistant", "content": raw})
+                continue
             content: list[dict[str, Any]] = []
             if message.get("content"):
                 content.append({"type": "text", "text": message["content"]})
@@ -224,7 +231,15 @@ class AnthropicProvider(Provider):
                 cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
             ),
             stop_reason=message.stop_reason,
-            meta={"message_id": message.id},
+            meta={
+                "message_id": message.id,
+                # Raw content blocks (including thinking blocks and their
+                # signatures) so the next turn can replay this assistant
+                # message verbatim -- reconstructing text/tool_use blocks
+                # from LLMResponse alone drops thinking blocks, which the API
+                # then rejects on continuation.
+                "raw_content": [b.model_dump() for b in message.content],
+            },
             tool_calls=tool_calls,
         )
 

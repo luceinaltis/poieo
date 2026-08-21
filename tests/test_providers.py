@@ -200,6 +200,15 @@ class _FakeStream:
         return self._message
 
 
+def _block(**kwargs):
+    """A fake pydantic-ish content block: attributes plus a model_dump()."""
+    from types import SimpleNamespace
+
+    block = SimpleNamespace(**kwargs)
+    block.model_dump = lambda: dict(kwargs)
+    return block
+
+
 def _message(**overrides):
     from types import SimpleNamespace
 
@@ -209,9 +218,9 @@ def _message(**overrides):
         stop_reason="end_turn",
         stop_details=None,
         content=[
-            SimpleNamespace(type="thinking", thinking="..."),
-            SimpleNamespace(type="text", text="hello "),
-            SimpleNamespace(type="text", text="world"),
+            _block(type="thinking", thinking="..."),
+            _block(type="text", text="hello "),
+            _block(type="text", text="world"),
         ],
         usage=SimpleNamespace(
             input_tokens=10,
@@ -234,6 +243,29 @@ async def test_completion_joins_text_blocks_and_reports_usage(anthropic_provider
     assert response.text == "hello world"  # thinking blocks are not part of the output
     assert response.usage.input_tokens == 10
     assert response.usage.cache_read_tokens == 6
+
+
+async def test_completion_stashes_raw_content_including_thinking_blocks(
+    anthropic_provider, monkeypatch
+):
+    thinking = _block(type="thinking", thinking="let me see...", signature="sig-abc")
+    text = _block(type="text", text="checking")
+    tool_use = _block(type="tool_use", id="c1", name="read_file", input={"path": "a"})
+    message = _message(content=[thinking, text, tool_use], stop_reason="tool_use")
+
+    monkeypatch.setattr(
+        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message)
+    )
+    response = await anthropic_provider.complete(
+        LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "hi"}])
+    )
+
+    assert response.meta["raw_content"] == [
+        {"type": "thinking", "thinking": "let me see...", "signature": "sig-abc"},
+        {"type": "text", "text": "checking"},
+        {"type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}},
+    ]
+    assert response.tool_calls == [ToolCall(id="c1", name="read_file", arguments={"path": "a"})]
 
 
 async def test_a_refusal_becomes_a_provider_error(anthropic_provider, monkeypatch):
@@ -452,3 +484,29 @@ def test_anthropic_messages_translation_merges_tool_results():
     assert [b["tool_use_id"] for b in results["content"]] == ["c1", "c2"]
     assert results["content"][0]["type"] == "tool_result"
     assert len(messages) == 3
+
+
+def test_anthropic_messages_replays_raw_content_verbatim():
+    # A thinking block has no ``content``/``tool_calls`` equivalent in the
+    # neutral history -- it only survives if raw_content is replayed as-is
+    # instead of being reconstructed from text/tool_calls.
+    raw_blocks = [
+        {"type": "thinking", "thinking": "let me see...", "signature": "sig-abc"},
+        {"type": "text", "text": "checking"},
+        {"type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}},
+    ]
+    history = [
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "checking",
+            "tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a"}}],
+            "raw_content": raw_blocks,
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "data-1"},
+    ]
+    messages = _anthropic_messages(history)
+    assistant = messages[1]
+    assert assistant == {"role": "assistant", "content": raw_blocks}
+    # It must be the exact list, untouched -- no reconstruction happened.
+    assert assistant["content"] is raw_blocks

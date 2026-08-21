@@ -42,6 +42,7 @@ class MockProvider(Provider):
             value = value[min(index - 1, len(value) - 1)]
         tool_calls: list[ToolCall] = []
         text = ""
+        meta: dict[str, Any] = {}
         if isinstance(value, dict):
             # A dict entry scripts an assistant turn that may request tools.
             text = value.get("text", "")
@@ -53,6 +54,11 @@ class MockProvider(Provider):
                         arguments=dict(call.get("arguments", {})),
                     )
                 )
+            if "raw_content" in value:
+                # Lets a test exercise the raw_content passthrough seam
+                # (AgentNode carrying it, providers ignoring it) without a
+                # real provider.
+                meta["raw_content"] = value["raw_content"]
         else:
             text = value if isinstance(value, str) else str(value)
         return LLMResponse(
@@ -60,6 +66,7 @@ class MockProvider(Provider):
             model=request.model,
             usage=Usage(input_tokens=0, output_tokens=len(text.split())),
             stop_reason="tool_use" if tool_calls else "end_turn",
+            meta=meta,
             tool_calls=tool_calls,
         )
 

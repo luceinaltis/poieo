@@ -207,16 +207,20 @@ class AgentNode(Node):
                     node_id=spec.id,
                 )
 
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.text,
-                    "tool_calls": [
-                        {"id": c.id, "name": c.name, "arguments": c.arguments}
-                        for c in response.tool_calls
-                    ],
-                }
-            )
+            assistant_turn: dict[str, Any] = {
+                "role": "assistant",
+                "content": response.text,
+                "tool_calls": [
+                    {"id": c.id, "name": c.name, "arguments": c.arguments}
+                    for c in response.tool_calls
+                ],
+            }
+            raw = response.meta.get("raw_content")
+            if raw:
+                # Provider-specific blocks (e.g. anthropic thinking) replayed
+                # verbatim on the next turn; other providers ignore the key.
+                assistant_turn["raw_content"] = raw
+            messages.append(assistant_turn)
             for call in response.tool_calls:
                 started = time.monotonic()
                 result = await executor.execute(call)
