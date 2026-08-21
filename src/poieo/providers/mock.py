@@ -16,7 +16,7 @@ from typing import Any
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, Usage
+from .base import LLMRequest, LLMResponse, Provider, ToolCall, Usage
 
 
 class MockProvider(Provider):
@@ -40,12 +40,27 @@ class MockProvider(Provider):
             if not value:
                 raise ProviderError(f"mock '{self.name}': empty script", provider=self.name)
             value = value[min(index - 1, len(value) - 1)]
-        text = value if isinstance(value, str) else str(value)
+        tool_calls: list[ToolCall] = []
+        text = ""
+        if isinstance(value, dict):
+            # A dict entry scripts an assistant turn that may request tools.
+            text = value.get("text", "")
+            for i, call in enumerate(value.get("tool_calls", []), start=1):
+                tool_calls.append(
+                    ToolCall(
+                        id=f"mock_{len(self.calls)}" if len(value.get("tool_calls", [])) == 1 else f"mock_{len(self.calls)}_{i}",
+                        name=call["name"],
+                        arguments=dict(call.get("arguments", {})),
+                    )
+                )
+        else:
+            text = value if isinstance(value, str) else str(value)
         return LLMResponse(
             text=text,
             model=request.model,
             usage=Usage(input_tokens=0, output_tokens=len(text.split())),
-            stop_reason="end_turn",
+            stop_reason="tool_use" if tool_calls else "end_turn",
+            tool_calls=tool_calls,
         )
 
     async def health(self) -> tuple[bool, str]:

@@ -3,8 +3,10 @@ import pytest
 
 from poieo.binding import ProviderSpec, ResolvedModel
 from poieo.errors import ProviderError
-from poieo.providers import LLMRequest, build_provider
+from poieo.providers import LLMRequest, LLMResponse, build_provider
 from poieo.providers.anthropic_provider import AnthropicProvider
+from poieo.providers.base import ToolCall, ToolDef
+from poieo.providers.mock import MockProvider
 
 
 @pytest.fixture
@@ -246,3 +248,37 @@ async def test_a_refusal_becomes_a_provider_error(anthropic_provider, monkeypatc
     )
     with pytest.raises(ProviderError, match="declined the request"):
         await anthropic_provider.complete(LLMRequest(model="claude-opus-5", messages=[]))
+
+
+def test_llm_request_and_response_default_to_no_tools():
+    request = LLMRequest(model="m", messages=[])
+    response = LLMResponse(text="t", model="m")
+    assert request.tools == []
+    assert response.tool_calls == []
+
+
+async def test_mock_scripts_tool_calls():
+    spec = ProviderSpec.model_validate(
+        {
+            "type": "mock",
+            "options": {
+                "responses": {
+                    "worker": [
+                        {"tool_calls": [{"name": "read_file", "arguments": {"path": "a.txt"}}]},
+                        "done",
+                    ]
+                }
+            },
+        }
+    )
+    provider = MockProvider("fake", spec)
+    request = LLMRequest(model="m", messages=[], role="worker")
+
+    first = await provider.complete(request)
+    assert first.text == ""
+    assert first.tool_calls == [ToolCall(id="mock_1", name="read_file", arguments={"path": "a.txt"})]
+    assert first.stop_reason == "tool_use"
+
+    second = await provider.complete(request)
+    assert second.text == "done"
+    assert second.tool_calls == []
