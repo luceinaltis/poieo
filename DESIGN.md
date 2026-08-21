@@ -101,7 +101,7 @@ What poieo offers the user stacks in layers:
 |---|---|---|
 | **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
 | **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
-| **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | spec approved, next to build |
+| **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**

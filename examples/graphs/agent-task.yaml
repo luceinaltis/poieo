@@ -1,0 +1,14 @@
+name: agent-task
+description: One resident step that actually touches files.
+entry: work
+
+nodes:
+  - id: work
+    type: agent
+    role: worker
+    workdir: "{{ input.workdir }}"
+    prompt: |
+      Look at the project in your working directory and write a TODO.md
+      listing the three most useful next steps.
+    max_turns: 10
+    output: {as: report}

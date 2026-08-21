@@ -3,8 +3,11 @@ import pytest
 
 from poieo.binding import ProviderSpec, ResolvedModel
 from poieo.errors import ProviderError
-from poieo.providers import LLMRequest, build_provider
+from poieo.providers import LLMRequest, LLMResponse, build_provider
 from poieo.providers.anthropic_provider import AnthropicProvider
+from poieo.providers.base import ToolCall, ToolDef
+from poieo.providers.local import OllamaProvider, OpenAICompatibleProvider
+from poieo.providers.mock import MockProvider
 
 
 @pytest.fixture
@@ -197,6 +200,15 @@ class _FakeStream:
         return self._message
 
 
+def _block(**kwargs):
+    """A fake pydantic-ish content block: attributes plus a model_dump()."""
+    from types import SimpleNamespace
+
+    block = SimpleNamespace(**kwargs)
+    block.model_dump = lambda: dict(kwargs)
+    return block
+
+
 def _message(**overrides):
     from types import SimpleNamespace
 
@@ -206,9 +218,9 @@ def _message(**overrides):
         stop_reason="end_turn",
         stop_details=None,
         content=[
-            SimpleNamespace(type="thinking", thinking="..."),
-            SimpleNamespace(type="text", text="hello "),
-            SimpleNamespace(type="text", text="world"),
+            _block(type="thinking", thinking="..."),
+            _block(type="text", text="hello "),
+            _block(type="text", text="world"),
         ],
         usage=SimpleNamespace(
             input_tokens=10,
@@ -233,6 +245,29 @@ async def test_completion_joins_text_blocks_and_reports_usage(anthropic_provider
     assert response.usage.cache_read_tokens == 6
 
 
+async def test_completion_stashes_raw_content_including_thinking_blocks(
+    anthropic_provider, monkeypatch
+):
+    thinking = _block(type="thinking", thinking="let me see...", signature="sig-abc")
+    text = _block(type="text", text="checking")
+    tool_use = _block(type="tool_use", id="c1", name="read_file", input={"path": "a"})
+    message = _message(content=[thinking, text, tool_use], stop_reason="tool_use")
+
+    monkeypatch.setattr(
+        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message)
+    )
+    response = await anthropic_provider.complete(
+        LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "hi"}])
+    )
+
+    assert response.meta["raw_content"] == [
+        {"type": "thinking", "thinking": "let me see...", "signature": "sig-abc"},
+        {"type": "text", "text": "checking"},
+        {"type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}},
+    ]
+    assert response.tool_calls == [ToolCall(id="c1", name="read_file", arguments={"path": "a"})]
+
+
 async def test_a_refusal_becomes_a_provider_error(anthropic_provider, monkeypatch):
     from types import SimpleNamespace
 
@@ -246,3 +281,232 @@ async def test_a_refusal_becomes_a_provider_error(anthropic_provider, monkeypatc
     )
     with pytest.raises(ProviderError, match="declined the request"):
         await anthropic_provider.complete(LLMRequest(model="claude-opus-5", messages=[]))
+
+
+def test_llm_request_and_response_default_to_no_tools():
+    request = LLMRequest(model="m", messages=[])
+    response = LLMResponse(text="t", model="m")
+    assert request.tools == []
+    assert response.tool_calls == []
+
+
+async def test_mock_scripts_tool_calls():
+    spec = ProviderSpec.model_validate(
+        {
+            "type": "mock",
+            "options": {
+                "responses": {
+                    "worker": [
+                        {"tool_calls": [{"name": "read_file", "arguments": {"path": "a.txt"}}]},
+                        "done",
+                    ]
+                }
+            },
+        }
+    )
+    provider = MockProvider("fake", spec)
+    request = LLMRequest(model="m", messages=[], role="worker")
+
+    first = await provider.complete(request)
+    assert first.text == ""
+    assert first.tool_calls == [ToolCall(id="mock_1", name="read_file", arguments={"path": "a.txt"})]
+    assert first.stop_reason == "tool_use"
+
+    second = await provider.complete(request)
+    assert second.text == "done"
+    assert second.tool_calls == []
+
+
+from poieo.providers.local import _ollama_messages, _openai_messages, _wire_tools
+
+NEUTRAL_HISTORY = [
+    {"role": "user", "content": "go"},
+    {
+        "role": "assistant",
+        "content": "checking",
+        "tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a"}}],
+    },
+    {"role": "tool", "tool_call_id": "c1", "content": "data"},
+]
+
+A_TOOL = ToolDef(name="read_file", description="read", input_schema={"type": "object"})
+
+
+def test_wire_tools_wraps_openai_style():
+    assert _wire_tools([A_TOOL]) == [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "read",
+                "parameters": {"type": "object"},
+            },
+        }
+    ]
+
+
+def test_openai_messages_translation():
+    request = LLMRequest(model="m", messages=NEUTRAL_HISTORY, system="sys")
+    messages = _openai_messages(request)
+    assert messages[0] == {"role": "system", "content": "sys"}
+    assistant = messages[2]
+    assert assistant["tool_calls"][0]["id"] == "c1"
+    assert assistant["tool_calls"][0]["function"]["name"] == "read_file"
+    import json
+    assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == {"path": "a"}
+    assert messages[3] == {"role": "tool", "tool_call_id": "c1", "content": "data"}
+
+
+def test_ollama_messages_translation():
+    request = LLMRequest(model="m", messages=NEUTRAL_HISTORY, system=None)
+    messages = _ollama_messages(request)
+    assistant = messages[1]
+    # Ollama takes arguments as a dict, not a JSON string.
+    assert assistant["tool_calls"][0]["function"]["arguments"] == {"path": "a"}
+    assert messages[2]["role"] == "tool"
+
+
+async def test_openai_complete_parses_tool_calls(monkeypatch):
+    spec = ProviderSpec.model_validate(
+        {"type": "openai_compatible", "base_url": "http://x"}
+    )
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        assert payload["tools"][0]["function"]["name"] == "read_file"
+        return {
+            "model": "m",
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "c9",
+                        "function": {"name": "read_file", "arguments": '{"path": "a"}'},
+                    }],
+                },
+                "finish_reason": "tool_calls",
+            }],
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    response = await provider.complete(
+        LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+    )
+    assert response.tool_calls == [ToolCall(id="c9", name="read_file", arguments={"path": "a"})]
+    await provider.aclose()
+
+
+async def test_openai_complete_rejects_malformed_tool_arguments(monkeypatch):
+    spec = ProviderSpec.model_validate(
+        {"type": "openai_compatible", "base_url": "http://x"}
+    )
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        return {
+            "model": "m",
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{"function": {"name": "read_file", "arguments": "{not json"}}],
+                },
+            }],
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    with pytest.raises(ProviderError, match="malformed"):
+        await provider.complete(
+            LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+        )
+    await provider.aclose()
+
+
+async def test_ollama_complete_parses_tool_calls(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "ollama", "base_url": "http://x"})
+    provider = OllamaProvider("ollama", spec)
+
+    async def fake_post(path, payload):
+        assert payload["tools"][0]["function"]["name"] == "read_file"
+        return {
+            "model": "m",
+            "message": {
+                "content": "",
+                "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "a"}}}],
+            },
+            "done_reason": "stop",
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    response = await provider.complete(
+        LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+    )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {"path": "a"}
+    assert response.tool_calls[0].id.startswith("call_")
+    await provider.aclose()
+
+
+from poieo.providers.anthropic_provider import _anthropic_messages, _anthropic_tools
+
+
+def test_anthropic_tools_shape():
+    assert _anthropic_tools([A_TOOL]) == [
+        {"name": "read_file", "description": "read", "input_schema": {"type": "object"}}
+    ]
+
+
+def test_anthropic_messages_translation_merges_tool_results():
+    history = [
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "checking",
+            "tool_calls": [
+                {"id": "c1", "name": "read_file", "arguments": {"path": "a"}},
+                {"id": "c2", "name": "list_dir", "arguments": {}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "data-1"},
+        {"role": "tool", "tool_call_id": "c2", "content": "data-2"},
+    ]
+    messages = _anthropic_messages(history)
+    assert messages[0] == {"role": "user", "content": "go"}
+    assistant = messages[1]
+    assert assistant["role"] == "assistant"
+    assert assistant["content"][0] == {"type": "text", "text": "checking"}
+    assert assistant["content"][1] == {
+        "type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}
+    }
+    # Both tool results land in ONE user turn.
+    results = messages[2]
+    assert results["role"] == "user"
+    assert [b["tool_use_id"] for b in results["content"]] == ["c1", "c2"]
+    assert results["content"][0]["type"] == "tool_result"
+    assert len(messages) == 3
+
+
+def test_anthropic_messages_replays_raw_content_verbatim():
+    # A thinking block has no ``content``/``tool_calls`` equivalent in the
+    # neutral history -- it only survives if raw_content is replayed as-is
+    # instead of being reconstructed from text/tool_calls.
+    raw_blocks = [
+        {"type": "thinking", "thinking": "let me see...", "signature": "sig-abc"},
+        {"type": "text", "text": "checking"},
+        {"type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}},
+    ]
+    history = [
+        {"role": "user", "content": "go"},
+        {
+            "role": "assistant",
+            "content": "checking",
+            "tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a"}}],
+            "raw_content": raw_blocks,
+        },
+        {"role": "tool", "tool_call_id": "c1", "content": "data-1"},
+    ]
+    messages = _anthropic_messages(history)
+    assistant = messages[1]
+    assert assistant == {"role": "assistant", "content": raw_blocks}
+    # It must be the exact list, untouched -- no reconstruction happened.
+    assert assistant["content"] is raw_blocks

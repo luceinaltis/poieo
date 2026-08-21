@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from conftest import EXAMPLES
 from poieo.errors import SpecError
@@ -78,3 +79,52 @@ def test_router_must_have_branches():
 def test_missing_file_is_a_spec_error(tmp_path):
     with pytest.raises(SpecError, match="file not found"):
         load_graph(tmp_path / "nope.yaml")
+
+
+def _agent_graph(**overrides):
+    node = {
+        "id": "work",
+        "type": "agent",
+        "role": "worker",
+        "workdir": "/tmp/proj",
+        "prompt": "do the thing",
+    }
+    node.update(overrides)
+    return {"name": "g", "entry": "work", "nodes": [node]}
+
+
+def test_agent_node_parses_with_defaults():
+    graph = GraphSpec.model_validate(_agent_graph())
+    node = graph.node("work")
+    assert node.max_turns == 20
+    assert node.tools is None  # None means every toolset
+
+
+def test_agent_node_requires_workdir():
+    with pytest.raises(ValidationError, match="workdir"):
+        GraphSpec.model_validate(_agent_graph(workdir=None))
+
+
+def test_agent_node_rejects_unknown_toolset():
+    with pytest.raises(ValidationError, match="parachute"):
+        GraphSpec.model_validate(_agent_graph(tools=["parachute"]))
+
+
+def test_agent_node_rejects_branches():
+    with pytest.raises(ValidationError, match="branches"):
+        GraphSpec.model_validate(_agent_graph(branches=[{"when": "True", "to": None}]))
+
+
+def test_llm_node_rejects_agent_only_fields():
+    spec = {
+        "name": "g",
+        "entry": "a",
+        "nodes": [{"id": "a", "type": "llm", "prompt": "p", "workdir": "/x"}],
+    }
+    with pytest.raises(ValidationError, match="workdir"):
+        GraphSpec.model_validate(spec)
+
+
+def test_roles_includes_agent_nodes():
+    graph = GraphSpec.model_validate(_agent_graph())
+    assert graph.roles() == {"worker"}

@@ -34,6 +34,24 @@ class Usage:
 
 
 @dataclass(slots=True)
+class ToolDef:
+    """A tool offered to the model, declared as JSON Schema."""
+
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+@dataclass(slots=True)
+class ToolCall:
+    """One tool invocation the model asked for."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(slots=True)
 class LLMRequest:
     """A provider-neutral completion request built by an llm node."""
 
@@ -44,6 +62,8 @@ class LLMRequest:
     # The logical role this call came from -- carried for logging and mocks,
     # never sent to a backend.
     role: str | None = None
+    # Tools offered for this call; empty means a plain completion.
+    tools: list[ToolDef] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -54,6 +74,8 @@ class LLMResponse:
     stop_reason: str | None = None
     # Anything provider-specific worth keeping in the run log.
     meta: dict[str, Any] = field(default_factory=dict)
+    # Calls the model wants executed; empty means it is done.
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 class Provider(abc.ABC):

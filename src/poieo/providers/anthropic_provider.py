@@ -9,7 +9,7 @@ import anthropic
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, Usage
+from .base import LLMRequest, LLMResponse, Provider, ToolCall, ToolDef, Usage
 
 # Model families that take `thinking: {type: "adaptive"}`. Older models use the
 # removed `budget_tokens` form, so we omit `thinking` for them entirely rather
@@ -42,6 +42,58 @@ def _matches(model: str, families: tuple[str, ...]) -> bool:
     return any(model.startswith(f) for f in families)
 
 
+def _anthropic_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
+    return [
+        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+        for t in tools
+    ]
+
+
+def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Neutral history -> Anthropic content blocks.
+
+    Consecutive tool turns collapse into one user message: the API expects
+    every tool_result for a turn's tool_use blocks together.
+    """
+    out: list[dict[str, Any]] = []
+    for message in messages:
+        role = message.get("role")
+        if role == "assistant" and message.get("tool_calls"):
+            raw = message.get("raw_content")
+            if raw:
+                # Replay the provider's own content blocks verbatim -- this
+                # keeps thinking blocks (and their signatures) intact, which
+                # a from-scratch reconstruction below would drop.
+                out.append({"role": "assistant", "content": raw})
+                continue
+            content: list[dict[str, Any]] = []
+            if message.get("content"):
+                content.append({"type": "text", "text": message["content"]})
+            for call in message["tool_calls"]:
+                content.append(
+                    {
+                        "type": "tool_use",
+                        "id": call["id"],
+                        "name": call["name"],
+                        "input": call["arguments"],
+                    }
+                )
+            out.append({"role": "assistant", "content": content})
+        elif role == "tool":
+            block = {
+                "type": "tool_result",
+                "tool_use_id": message["tool_call_id"],
+                "content": message["content"],
+            }
+            if out and out[-1]["role"] == "user" and isinstance(out[-1]["content"], list):
+                out[-1]["content"].append(block)
+            else:
+                out.append({"role": "user", "content": [block]})
+        else:
+            out.append(dict(message))
+    return out
+
+
 class AnthropicProvider(Provider):
     type = "anthropic"
 
@@ -72,10 +124,13 @@ class AnthropicProvider(Provider):
         kwargs: dict[str, Any] = {
             "model": model,
             "max_tokens": int(params.pop("max_tokens", _DEFAULT_MAX_TOKENS)),
-            "messages": request.messages,
+            "messages": _anthropic_messages(request.messages),
         }
         if request.system:
             kwargs["system"] = request.system
+
+        if request.tools:
+            kwargs["tools"] = _anthropic_tools(request.tools)
 
         # --- thinking -------------------------------------------------------
         thinking = params.pop("thinking", "auto")
@@ -160,6 +215,11 @@ class AnthropicProvider(Provider):
             )
 
         text = "".join(b.text for b in message.content if b.type == "text")
+        tool_calls = [
+            ToolCall(id=b.id, name=b.name, arguments=dict(b.input or {}))
+            for b in message.content
+            if b.type == "tool_use"
+        ]
         usage = message.usage
         return LLMResponse(
             text=text,
@@ -171,7 +231,16 @@ class AnthropicProvider(Provider):
                 cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
             ),
             stop_reason=message.stop_reason,
-            meta={"message_id": message.id},
+            meta={
+                "message_id": message.id,
+                # Raw content blocks (including thinking blocks and their
+                # signatures) so the next turn can replay this assistant
+                # message verbatim -- reconstructing text/tool_use blocks
+                # from LLMResponse alone drops thinking blocks, which the API
+                # then rejects on continuation.
+                "raw_content": [b.model_dump() for b in message.content],
+            },
+            tool_calls=tool_calls,
         )
 
     async def health(self) -> tuple[bool, str]:
