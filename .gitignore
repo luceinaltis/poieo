@@ -10,3 +10,6 @@ venv/
 # run logs
 .poieo/
 examples/.poieo/
+
+# session worktrees
+.claude/worktrees/
