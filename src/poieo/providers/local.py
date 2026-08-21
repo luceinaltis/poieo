@@ -6,16 +6,70 @@ These speak their own native HTTP APIs over httpx. (The Claude backend lives in
 
 from __future__ import annotations
 
+import json
 import os
+import uuid
 from typing import Any
 
 import httpx
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, Usage
+from .base import LLMRequest, LLMResponse, Provider, ToolCall, ToolDef, Usage
 
 _RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _wire_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
+    """Both local APIs take the OpenAI-style function wrapper."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema,
+            },
+        }
+        for t in tools
+    ]
+
+
+def _translate_history(request: LLMRequest, arguments_as_json: bool) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    if request.system:
+        messages.append({"role": "system", "content": request.system})
+    for message in request.messages:
+        if message.get("role") == "assistant" and message.get("tool_calls"):
+            calls = []
+            for call in message["tool_calls"]:
+                arguments = call["arguments"]
+                calls.append(
+                    {
+                        "id": call["id"],
+                        "type": "function",
+                        "function": {
+                            "name": call["name"],
+                            "arguments": json.dumps(arguments)
+                            if arguments_as_json
+                            else arguments,
+                        },
+                    }
+                )
+            messages.append(
+                {"role": "assistant", "content": message.get("content") or "", "tool_calls": calls}
+            )
+        else:
+            messages.append(dict(message))
+    return messages
+
+
+def _openai_messages(request: LLMRequest) -> list[dict[str, Any]]:
+    return _translate_history(request, arguments_as_json=True)
+
+
+def _ollama_messages(request: LLMRequest) -> list[dict[str, Any]]:
+    return _translate_history(request, arguments_as_json=False)
 
 
 class _HttpProvider(Provider):
@@ -60,13 +114,6 @@ class _HttpProvider(Provider):
                 provider=self.name,
             ) from exc
 
-    @staticmethod
-    def _with_system(request: LLMRequest) -> list[dict[str, Any]]:
-        """Local chat APIs carry the system prompt as the first message."""
-        if not request.system:
-            return list(request.messages)
-        return [{"role": "system", "content": request.system}, *request.messages]
-
     async def aclose(self) -> None:
         await self.client.aclose()
 
@@ -80,12 +127,14 @@ class OpenAICompatibleProvider(_HttpProvider):
         params = dict(request.params)
         payload: dict[str, Any] = {
             "model": request.model,
-            "messages": self._with_system(request),
+            "messages": _openai_messages(request),
             "stream": False,
         }
         if "max_tokens" in params:
             payload["max_tokens"] = params.pop("max_tokens")
         payload.update(params)
+        if request.tools:
+            payload["tools"] = _wire_tools(request.tools)
 
         data = await self._post("/chat/completions", payload)
         choices = data.get("choices") or []
@@ -94,6 +143,14 @@ class OpenAICompatibleProvider(_HttpProvider):
                 f"{self.name}: response contained no choices", provider=self.name
             )
         message = choices[0].get("message") or {}
+        tool_calls = [
+            ToolCall(
+                id=call.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+                name=call["function"]["name"],
+                arguments=json.loads(call["function"].get("arguments") or "{}"),
+            )
+            for call in (message.get("tool_calls") or [])
+        ]
         usage = data.get("usage") or {}
         return LLMResponse(
             text=message.get("content") or "",
@@ -103,6 +160,7 @@ class OpenAICompatibleProvider(_HttpProvider):
                 output_tokens=usage.get("completion_tokens", 0) or 0,
             ),
             stop_reason=choices[0].get("finish_reason"),
+            tool_calls=tool_calls,
         )
 
     async def health(self) -> tuple[bool, str]:
@@ -133,15 +191,25 @@ class OllamaProvider(_HttpProvider):
 
         payload: dict[str, Any] = {
             "model": request.model,
-            "messages": self._with_system(request),
+            "messages": _ollama_messages(request),
             "stream": False,
         }
         if options:
             payload["options"] = options
         payload.update(params)
+        if request.tools:
+            payload["tools"] = _wire_tools(request.tools)
 
         data = await self._post("/api/chat", payload)
         message = data.get("message") or {}
+        tool_calls = [
+            ToolCall(
+                id=call.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+                name=call["function"]["name"],
+                arguments=dict(call["function"].get("arguments") or {}),
+            )
+            for call in (message.get("tool_calls") or [])
+        ]
         return LLMResponse(
             text=message.get("content") or "",
             model=data.get("model", request.model),
@@ -150,6 +218,7 @@ class OllamaProvider(_HttpProvider):
                 output_tokens=data.get("eval_count", 0) or 0,
             ),
             stop_reason=data.get("done_reason"),
+            tool_calls=tool_calls,
         )
 
     async def health(self) -> tuple[bool, str]:

@@ -282,3 +282,52 @@ async def test_mock_scripts_tool_calls():
     second = await provider.complete(request)
     assert second.text == "done"
     assert second.tool_calls == []
+
+
+from poieo.providers.local import _ollama_messages, _openai_messages, _wire_tools
+
+NEUTRAL_HISTORY = [
+    {"role": "user", "content": "go"},
+    {
+        "role": "assistant",
+        "content": "checking",
+        "tool_calls": [{"id": "c1", "name": "read_file", "arguments": {"path": "a"}}],
+    },
+    {"role": "tool", "tool_call_id": "c1", "content": "data"},
+]
+
+A_TOOL = ToolDef(name="read_file", description="read", input_schema={"type": "object"})
+
+
+def test_wire_tools_wraps_openai_style():
+    assert _wire_tools([A_TOOL]) == [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "read",
+                "parameters": {"type": "object"},
+            },
+        }
+    ]
+
+
+def test_openai_messages_translation():
+    request = LLMRequest(model="m", messages=NEUTRAL_HISTORY, system="sys")
+    messages = _openai_messages(request)
+    assert messages[0] == {"role": "system", "content": "sys"}
+    assistant = messages[2]
+    assert assistant["tool_calls"][0]["id"] == "c1"
+    assert assistant["tool_calls"][0]["function"]["name"] == "read_file"
+    import json
+    assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == {"path": "a"}
+    assert messages[3] == {"role": "tool", "tool_call_id": "c1", "content": "data"}
+
+
+def test_ollama_messages_translation():
+    request = LLMRequest(model="m", messages=NEUTRAL_HISTORY, system=None)
+    messages = _ollama_messages(request)
+    assistant = messages[1]
+    # Ollama takes arguments as a dict, not a JSON string.
+    assert assistant["tool_calls"][0]["function"]["arguments"] == {"path": "a"}
+    assert messages[2]["role"] == "tool"
