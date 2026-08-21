@@ -143,14 +143,24 @@ class OpenAICompatibleProvider(_HttpProvider):
                 f"{self.name}: response contained no choices", provider=self.name
             )
         message = choices[0].get("message") or {}
-        tool_calls = [
-            ToolCall(
-                id=call.get("id") or f"call_{uuid.uuid4().hex[:8]}",
-                name=call["function"]["name"],
-                arguments=json.loads(call["function"].get("arguments") or "{}"),
+        tool_calls = []
+        for call in (message.get("tool_calls") or []):
+            raw = call["function"].get("arguments") or "{}"
+            try:
+                arguments = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise ProviderError(
+                    f"{self.name}: model produced malformed tool arguments: {raw[:200]}",
+                    provider=self.name,
+                    retryable=True,
+                ) from exc
+            tool_calls.append(
+                ToolCall(
+                    id=call.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+                    name=call["function"]["name"],
+                    arguments=arguments,
+                )
             )
-            for call in (message.get("tool_calls") or [])
-        ]
         usage = data.get("usage") or {}
         return LLMResponse(
             text=message.get("content") or "",

@@ -6,6 +6,7 @@ from poieo.errors import ProviderError
 from poieo.providers import LLMRequest, LLMResponse, build_provider
 from poieo.providers.anthropic_provider import AnthropicProvider
 from poieo.providers.base import ToolCall, ToolDef
+from poieo.providers.local import OllamaProvider, OpenAICompatibleProvider
 from poieo.providers.mock import MockProvider
 
 
@@ -331,3 +332,84 @@ def test_ollama_messages_translation():
     # Ollama takes arguments as a dict, not a JSON string.
     assert assistant["tool_calls"][0]["function"]["arguments"] == {"path": "a"}
     assert messages[2]["role"] == "tool"
+
+
+async def test_openai_complete_parses_tool_calls(monkeypatch):
+    spec = ProviderSpec.model_validate(
+        {"type": "openai_compatible", "base_url": "http://x"}
+    )
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        assert payload["tools"][0]["function"]["name"] == "read_file"
+        return {
+            "model": "m",
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "c9",
+                        "function": {"name": "read_file", "arguments": '{"path": "a"}'},
+                    }],
+                },
+                "finish_reason": "tool_calls",
+            }],
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    response = await provider.complete(
+        LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+    )
+    assert response.tool_calls == [ToolCall(id="c9", name="read_file", arguments={"path": "a"})]
+    await provider.aclose()
+
+
+async def test_openai_complete_rejects_malformed_tool_arguments(monkeypatch):
+    spec = ProviderSpec.model_validate(
+        {"type": "openai_compatible", "base_url": "http://x"}
+    )
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        return {
+            "model": "m",
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{"function": {"name": "read_file", "arguments": "{not json"}}],
+                },
+            }],
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    with pytest.raises(ProviderError, match="malformed"):
+        await provider.complete(
+            LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+        )
+    await provider.aclose()
+
+
+async def test_ollama_complete_parses_tool_calls(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "ollama", "base_url": "http://x"})
+    provider = OllamaProvider("ollama", spec)
+
+    async def fake_post(path, payload):
+        assert payload["tools"][0]["function"]["name"] == "read_file"
+        return {
+            "model": "m",
+            "message": {
+                "content": "",
+                "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "a"}}}],
+            },
+            "done_reason": "stop",
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    response = await provider.complete(
+        LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
+    )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "read_file"
+    assert response.tool_calls[0].arguments == {"path": "a"}
+    assert response.tool_calls[0].id.startswith("call_")
+    await provider.aclose()
