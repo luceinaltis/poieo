@@ -52,3 +52,32 @@ async def test_list_dir_and_glob(tmp_path):
 async def test_glob_rejects_escaping_pattern(tmp_path):
     with pytest.raises(ToolError):
         await TOOLS["glob_files"].run(tmp_path, {"pattern": "../**/*.py"})
+
+
+from poieo.tools.shell import SHELL_TOOLS
+
+SHELL = {t.definition.name: t for t in SHELL_TOOLS}
+
+
+async def test_run_command_reports_exit_code_and_output(tmp_path):
+    out = await SHELL["run_command"].run(tmp_path, {"command": "echo hello"})
+    assert out.startswith("exit code: 0")
+    assert "hello" in out
+
+
+async def test_run_command_nonzero_exit_is_reported_not_raised(tmp_path):
+    out = await SHELL["run_command"].run(tmp_path, {"command": "exit 3"})
+    assert out.startswith("exit code: 3")
+
+
+async def test_run_command_runs_in_workdir(tmp_path):
+    (tmp_path / "here.txt").write_text("x")
+    out = await SHELL["run_command"].run(tmp_path, {"command": "dir /b" if __import__("os").name == "nt" else "ls"})
+    assert "here.txt" in out
+
+
+async def test_run_command_times_out(tmp_path):
+    import os
+    sleeper = "ping -n 30 127.0.0.1 > NUL" if os.name == "nt" else "sleep 30"
+    with pytest.raises(ToolError, match="timed out"):
+        await SHELL["run_command"].run(tmp_path, {"command": sleeper, "timeout": 1})
