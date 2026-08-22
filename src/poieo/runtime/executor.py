@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from ..binding import BindingSpec
 from ..errors import BindingError, PoieoError, RunAborted, SpecError
@@ -54,6 +54,7 @@ async def execute(
     run_id: str | None = None,
     cancel: asyncio.Event | None = None,
     workdir: Path | None = None,
+    finalize: Callable[[RunResult], Awaitable[None]] | None = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -151,5 +152,9 @@ async def execute(
         ctx.emit(
             "run_finished", steps=steps, usage=ctx.usage.as_dict(), path=list(ctx.path)
         )
+    # Last chance to add to the outcome: the summary written next is what the
+    # store keeps, and nobody gets to amend it afterwards.
+    if finalize is not None:
+        await finalize(run_result)
     store.record_summary(run_result.summary())
     return run_result

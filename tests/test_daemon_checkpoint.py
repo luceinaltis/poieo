@@ -120,6 +120,27 @@ async def test_summary_carries_the_change(tmp_path):
     assert change["base"] != change["head"]
 
 
+async def test_the_recorded_summary_carries_the_change(tmp_path):
+    # The in-memory result is not what the review screen reads. The row in the
+    # index is, and it is written by execute() -- which finishes before the
+    # daemon has anything to say about the change.
+    repo, config = build(tmp_path)
+
+    _, result = await run_once(config)
+
+    row = RunStore(config.store_path()).run(result.run_id)
+    assert row["change"]["head"] == head(repo, "poieo/chores")
+
+
+async def test_a_run_is_recorded_once(tmp_path):
+    _, config = build(tmp_path)
+
+    _, result = await run_once(config)
+
+    rows = RunStore(config.store_path()).list_runs(limit=50)
+    assert [r["run_id"] for r in rows].count(result.run_id) == 1
+
+
 async def test_run_change_event_is_emitted(tmp_path):
     _, config = build(tmp_path)
 

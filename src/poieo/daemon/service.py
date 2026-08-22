@@ -165,10 +165,10 @@ class FlowRunner:
                     run_id=run_id,
                     cancel=self.cancel,
                     workdir=workdir,
+                    finalize=self._close_change,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None
-            await self._close_change(result)
             self.results.append(result)
             if self.flow.spec.carry_state:
                 self.state = result.state
