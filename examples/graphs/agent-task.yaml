@@ -6,7 +6,8 @@ nodes:
   - id: work
     type: agent
     role: worker
-    workdir: "{{ input.workdir }}"
+    # No workdir here on purpose: a path is physical, and this file is not.
+    # `poieo run --workdir`, or a flow's `workdir:`, says where it happens.
     prompt: |
       Look at the project in your working directory and write a TODO.md
       listing the three most useful next steps.

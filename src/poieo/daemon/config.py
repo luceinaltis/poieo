@@ -26,6 +26,10 @@ class FlowSpec(BaseModel):
     trigger: TriggerSpec = Field(default_factory=TriggerSpec)
     enabled: bool = True
 
+    # Where this flow's agent nodes work. Resolved against the config file, so
+    # the graph can stay portable and say nothing about this machine.
+    workdir: str | None = None
+
     # Static payload handed to every run.
     input: dict[str, Any] = Field(default_factory=dict)
     # Re-read before each run, so an external process can feed the flow.
@@ -81,6 +85,11 @@ class DaemonConfig(BaseModel):
 
     def store_path(self) -> Path:
         return self.resolve_path(self.store)
+
+    def workdir_path(self, flow: FlowSpec) -> Path | None:
+        # Resolved: this one is handed to a subprocess and shown in warnings,
+        # so "examples/.." helps nobody.
+        return self.resolve_path(flow.workdir).resolve() if flow.workdir else None
 
     def binding_path(self, flow: FlowSpec) -> Path:
         target = flow.binding or self.binding
@@ -150,9 +159,13 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         if binding_path not in bindings:
             bindings[binding_path] = load_binding(binding_path)
 
+        workdir = config.workdir_path(flow)
+        if workdir is not None and not workdir.is_dir():
+            raise SpecError(f"flow '{flow.name}': workdir does not exist: {workdir}")
+
         graph, binding = graphs[graph_path], bindings[binding_path]
         try:
-            preflight(graph, binding)
+            preflight(graph, binding, workdir=workdir)
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 

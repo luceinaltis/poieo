@@ -5,6 +5,9 @@ from types import SimpleNamespace
 
 from starlette.testclient import TestClient
 
+from test_checkpoint import git, head, make_repo
+
+from poieo.checkpoint import Checkpoint
 from poieo.store import Event, RunStore
 from poieo.web.events import BroadcastStore
 from poieo.web import server
@@ -16,12 +19,13 @@ def stub_daemon(tmp_path, runners=()):
     return SimpleNamespace(runners=list(runners), store=store)
 
 
-def stub_runner(name="triage", status="waiting", current=None, last=None):
+def stub_runner(name="triage", status="waiting", current=None, last=None, checkpoint=None):
     return SimpleNamespace(
         name=name,
         status=status,
         current_run_id=current,
         last_result=last,
+        checkpoint=checkpoint,
         trigger=SimpleNamespace(describe=f"interval 30s"),
         flow=SimpleNamespace(graph=SimpleNamespace(name="support-triage")),
     )
@@ -41,6 +45,7 @@ def test_flows_lists_runner_state(tmp_path):
             "status": "waiting",
             "current_run_id": None,
             "last_run": {"run_id": "r0", "status": "completed"},
+            "pending": 0,
         }
     ]
 
@@ -104,3 +109,222 @@ def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
     # Vite's index.html asks for /assets/<name>; the mount has to resolve there
     # and not one directory up.
     assert client.get("/assets/app.js").status_code == 200
+
+def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
+    """A stub daemon whose one flow really has a change to show."""
+    repo = make_repo(tmp_path)
+    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    point.prepare()
+    (point.worktree / "new.py").write_text(body, encoding="utf-8")
+    change = point.commit(run_id, "did a thing")
+
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    store.append(Event(run_id=run_id, type="run_started", data={"flow": "chores"}))
+    store.record_summary(
+        {
+            "run_id": run_id,
+            "flow": "chores",
+            "status": "completed",
+            "change": change.as_dict(),
+        }
+    )
+    runner = stub_runner(name="chores", checkpoint=point)
+    return SimpleNamespace(runners=[runner], store=store), change
+
+
+def test_diff_reports_the_files_and_the_patch(tmp_path):
+    daemon, change = daemon_with_a_change(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    body = client.get("/api/runs/r1/diff").json()
+
+    assert body["run_id"] == "r1"
+    assert body["base"] == change.base and body["head"] == change.head
+    assert body["files"] == [
+        {"path": "new.py", "status": "A", "insertions": 1, "deletions": 0}
+    ]
+    assert "print(1)" in body["patch"]
+    assert body["truncated"] is False
+
+
+def test_diff_of_a_run_that_changed_nothing_is_not_an_error(tmp_path):
+    daemon = stub_daemon(tmp_path, [stub_runner(name="chores")])
+    daemon.store.append(Event(run_id="quiet", type="run_started", data={"flow": "chores"}))
+    daemon.store.record_summary(
+        {"run_id": "quiet", "flow": "chores", "status": "completed"}
+    )
+    client = TestClient(create_app(daemon))
+
+    response = client.get("/api/runs/quiet/diff")
+
+    # Nothing to review is information, not a failure.
+    assert response.status_code == 200
+    assert response.json() == {"run_id": "quiet", "change": None}
+
+
+def test_diff_of_an_unknown_run_is_404(tmp_path):
+    daemon = stub_daemon(tmp_path, [stub_runner(name="chores")])
+    client = TestClient(create_app(daemon))
+    assert client.get("/api/runs/nope/diff").status_code == 404
+
+
+def test_diff_truncates_a_huge_patch_but_keeps_the_file_list(tmp_path):
+    huge = ("x" * 79 + chr(10)) * 6000  # comfortably past the 400k default
+    daemon, _ = daemon_with_a_change(tmp_path, body=huge)
+    client = TestClient(create_app(daemon))
+
+    body = client.get("/api/runs/r1/diff").json()
+
+    assert body["truncated"] is True
+    assert len(body["patch"]) <= 400_000
+    assert body["files"][0]["path"] == "new.py"
+    assert body["files"][0]["insertions"] == 6000
+
+
+def daemon_with_two_changes(tmp_path):
+    """Two runs' worth of pending work on one flow's branch."""
+    repo = make_repo(tmp_path)
+    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    changes = {}
+
+    for run_id, name in (("r1", "one.py"), ("r2", "two.py")):
+        point.prepare()
+        (point.worktree / name).write_text("print(1)" + chr(10), encoding="utf-8")
+        change = point.commit(run_id, f"wrote {name}")
+        changes[run_id] = change
+        store.append(Event(run_id=run_id, type="run_started", data={"flow": "chores"}))
+        store.record_summary(
+            {
+                "run_id": run_id,
+                "flow": "chores",
+                "status": "completed",
+                "change": change.as_dict(),
+            }
+        )
+
+    runner = stub_runner(name="chores", checkpoint=point)
+    return SimpleNamespace(runners=[runner], store=store), repo, changes
+
+
+def test_flows_reports_how_much_is_waiting(tmp_path):
+    daemon, _, _ = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/flows").json()["flows"][0]["pending"] == 2
+
+
+def test_flows_reports_nothing_pending_without_a_private_copy(tmp_path):
+    daemon = stub_daemon(tmp_path, [stub_runner(name="triage")])
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/flows").json()["flows"][0]["pending"] == 0
+
+
+def test_accept_puts_the_work_in_the_users_branch(tmp_path):
+    daemon, repo, changes = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/flows/chores/accept", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"accepted": 2}
+    assert head(repo, "main") == changes["r2"].head
+    assert (repo / "one.py").exists() and (repo / "two.py").exists()
+
+
+def test_accept_through_a_run_stops_there(tmp_path):
+    daemon, repo, changes = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    body = client.post("/api/flows/chores/accept", json={"through_run_id": "r1"}).json()
+
+    assert body == {"accepted": 1}
+    assert head(repo, "main") == changes["r1"].head
+    assert not (repo / "two.py").exists()
+
+
+def test_accept_refuses_a_dirty_checkout(tmp_path):
+    daemon, repo, _ = daemon_with_two_changes(tmp_path)
+    before = head(repo, "main")
+    (repo / "README.md").write_text("mine, unsaved", encoding="utf-8")
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/flows/chores/accept", json={})
+
+    assert response.status_code == 409
+    assert response.json() == {"dirty": ["README.md"]}
+    assert head(repo, "main") == before
+
+
+def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
+    repo = make_repo(tmp_path)
+    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    point.prepare()
+    (point.worktree / "README.md").write_text("theirs", encoding="utf-8")
+    change = point.commit("r1", "rewrote it")
+
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    store.record_summary(
+        {"run_id": "r1", "flow": "chores", "status": "completed", "change": change.as_dict()}
+    )
+    (repo / "README.md").write_text("mine", encoding="utf-8")
+    git(repo, "commit", "-am", "my own edit")
+    before = head(repo, "main")
+
+    daemon = SimpleNamespace(
+        runners=[stub_runner(name="chores", checkpoint=point)], store=store
+    )
+    response = TestClient(create_app(daemon)).post("/api/flows/chores/accept", json={})
+
+    assert response.status_code == 409
+    assert response.json() == {"conflict": ["README.md"]}
+    assert head(repo, "main") == before
+    # no half-finished merge left for the user to discover
+    assert git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
+
+
+def test_discard_puts_the_branch_back_and_keeps_the_work_reachable(tmp_path):
+    daemon, repo, changes = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/flows/chores/discard", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"discarded": 2}
+    assert head(repo, "poieo/chores") == head(repo, "main")
+    assert head(repo, "refs/poieo/discarded/r2") == changes["r2"].head
+
+
+def test_discard_from_a_run_keeps_the_earlier_work(tmp_path):
+    daemon, repo, changes = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    body = client.post("/api/flows/chores/discard", json={"from_run_id": "r2"}).json()
+
+    assert body == {"discarded": 1}
+    assert head(repo, "poieo/chores") == changes["r1"].head
+
+
+def test_accept_and_discard_404_on_an_unknown_flow(tmp_path):
+    daemon, _, _ = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.post("/api/flows/nope/accept", json={}).status_code == 404
+    assert client.post("/api/flows/nope/discard", json={}).status_code == 404
+
+
+def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
+    # A crawler, a prefetch, or a mistyped curl must never take the work.
+    daemon, _, _ = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/flows/chores/accept").status_code == 405
+    assert client.get("/api/flows/chores/discard").status_code == 405
+
+
+def test_accept_survives_a_missing_body(tmp_path):
+    daemon, _, _ = daemon_with_two_changes(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.post("/api/flows/chores/accept").status_code == 200

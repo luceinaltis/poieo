@@ -225,3 +225,34 @@ async def test_daemon_with_web_port_wraps_store_and_serves():
     results = await asyncio.wait_for(serve_task, timeout=30)
     assert isinstance(daemon.store, BroadcastStore)
     assert results  # the run finished and the server shut down cleanly
+
+
+def test_flow_spec_accepts_a_workdir(tmp_path):
+    (tmp_path / "b.yaml").write_text(
+        "providers: {p: {type: mock}}" + chr(10) + "default: {provider: p, model: m}" + chr(10)
+    )
+    (tmp_path / "g.yaml").write_text(
+        "name: g" + chr(10) + "entry: a" + chr(10) + "nodes: [{id: a, type: llm, prompt: p}]" + chr(10)
+    )
+    path = tmp_path / "d.yaml"
+    path.write_text(
+        "binding: b.yaml" + chr(10)
+        + "flows: [{name: f, graph: g.yaml, workdir: project}]" + chr(10)
+    )
+
+    config = load_config(path)
+
+    assert config.flows[0].workdir == "project"
+    # resolved against the config file, not whatever cwd the daemon started in
+    assert config.workdir_path(config.flows[0]) == tmp_path / "project"
+
+
+def test_flow_workdir_is_optional(tmp_path):
+    config = load_config(EXAMPLES / "poieo.yaml")
+    by_name = {f.name: f for f in config.flows}
+
+    # A flow that only moves text says nothing about the filesystem...
+    assert by_name["triage"].workdir is None
+    assert config.workdir_path(by_name["triage"]) is None
+    # ...while one that touches a project says where.
+    assert config.workdir_path(by_name["chores"]) == (EXAMPLES / "..").resolve()

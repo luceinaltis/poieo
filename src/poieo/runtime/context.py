@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -39,6 +40,8 @@ class RunContext:
     iteration: int = 0
     # Set by execute(); agent loops poll it between turns.
     cancel: asyncio.Event | None = None
+    # Where agent nodes work unless they name a directory of their own.
+    workdir: Path | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)
@@ -112,9 +115,11 @@ class RunResult:
     state: dict[str, Any]
     error: str | None = None
     iteration: int = 0
+    # Set after the run by the daemon when the flow keeps a private copy.
+    change: dict[str, Any] | None = None
 
     def summary(self) -> dict[str, Any]:
-        return {
+        summary: dict[str, Any] = {
             "run_id": self.run_id,
             "flow": self.flow,
             "graph": self.graph,
@@ -126,3 +131,8 @@ class RunResult:
             "usage": self.usage,
             "error": self.error,
         }
+        # Absent, not null: a run that changed nothing has nothing to review,
+        # and the difference matters to the card that reads this.
+        if self.change is not None:
+            summary["change"] = self.change
+        return summary

@@ -118,12 +118,13 @@ class NodeSpec(_Spec):
             except ExpressionError as exc:
                 raise ValueError(f"node '{self.id}': {exc}") from exc
         if self.type == "agent":
-            if not self.workdir:
-                raise ValueError(f"agent node '{self.id}' requires a workdir")
-            try:
-                validate_template(self.workdir)
-            except ExpressionError as exc:
-                raise ValueError(f"node '{self.id}': {exc}") from exc
+            # A workdir is physical, and this is the logical layer: the flow may
+            # supply it instead. preflight() is where "nowhere to work" fails.
+            if self.workdir:
+                try:
+                    validate_template(self.workdir)
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}': {exc}") from exc
             from .tools import TOOLSETS  # late import; tools pulls in providers
 
             for name in self.tools or []:

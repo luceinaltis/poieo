@@ -8,10 +8,11 @@ that is how a graph "keeps going" -- and ``graph.max_steps`` bounds them.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from pathlib import Path
+from typing import Any, Awaitable, Callable
 
 from ..binding import BindingSpec
-from ..errors import BindingError, PoieoError, RunAborted
+from ..errors import BindingError, PoieoError, RunAborted, SpecError
 from ..expr import unwrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool
@@ -20,14 +21,36 @@ from .context import RunContext, RunResult, new_run_id
 from .nodes import build_node
 
 
-def preflight(graph: GraphSpec, binding: BindingSpec) -> None:
-    """Fail before spending tokens if the binding cannot serve every role."""
+def needs_a_workdir(graph: GraphSpec) -> list[str]:
+    """Agent nodes that will have to be told where to work."""
+    return [n.id for n in graph.nodes if n.type == "agent" and not n.workdir]
+
+
+def preflight(
+    graph: GraphSpec,
+    binding: BindingSpec,
+    *,
+    workdir: Path | None = None,
+    require_workdir: bool = True,
+) -> None:
+    """Fail before spending tokens if the run cannot possibly succeed.
+
+    ``require_workdir=False`` is for checking a graph on its own, where not
+    naming a directory is the point rather than a defect.
+    """
     missing = binding.check_roles(graph.roles())
     if missing:
         raise BindingError(
             f"binding '{binding.name}' cannot resolve role(s) "
             f"{missing} required by graph '{graph.name}'"
         )
+    if require_workdir and workdir is None:
+        homeless = needs_a_workdir(graph)
+        if homeless:
+            raise SpecError(
+                f"agent node(s) {homeless} in graph '{graph.name}' have nowhere to "
+                f"work: give the node a workdir, or the flow one"
+            )
 
 
 async def execute(
@@ -43,6 +66,8 @@ async def execute(
     iteration: int = 0,
     run_id: str | None = None,
     cancel: asyncio.Event | None = None,
+    workdir: Path | None = None,
+    finalize: Callable[[RunResult], Awaitable[None]] | None = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -50,7 +75,7 @@ async def execute(
     daemon flow can log it and stay up. Spec/binding problems still raise, since
     those mean the flow is misconfigured rather than flaky.
     """
-    preflight(graph, binding)
+    preflight(graph, binding, workdir=workdir)
 
     ctx = RunContext(
         graph=graph,
@@ -64,6 +89,7 @@ async def execute(
         state={**graph.state, **(state or {})},
         iteration=iteration,
         cancel=cancel,
+        workdir=workdir,
     )
 
     started_at = utcnow()
@@ -139,5 +165,9 @@ async def execute(
         ctx.emit(
             "run_finished", steps=steps, usage=ctx.usage.as_dict(), path=list(ctx.path)
         )
+    # Last chance to add to the outcome: the summary written next is what the
+    # store keeps, and nobody gets to amend it afterwards.
+    if finalize is not None:
+        await finalize(run_result)
     store.record_summary(run_result.summary())
     return run_result

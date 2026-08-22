@@ -4,13 +4,48 @@
 
 **Goal:** Point a browser at `http://127.0.0.1:8484` while `poieo daemon` runs and watch the work happen — which flow is on which node, every tool call as it fires, what the model said and thought each turn — and replay any past run the same way.
 
-**Architecture:** One reducer (`StageState`) folds the event stream into a presentation-neutral model; skins render that model and nothing else. Live SSE and replayed history run through the same reducer, so replay is the live path at a different speed. v1 ships two skins: `ledger` (plain DOM, proves the contract) and `atelier` (PixiJS isometric workshop, default).
+**Architecture:** One reducer (`StageState`) folds the event stream into a presentation-neutral model; skins render that model and nothing else. Live SSE and replayed history run through the same reducer, so replay is the live path at a different speed. `ledger` (plain DOM) is the default skin; the review screen — work list, diff, accept/discard — is shared React UI outside the skins. *(See the amendment: `atelier` is optional and last.)*
 
 **Tech Stack:** Vite + React + TypeScript, vitest for the reducer, PixiJS for `atelier`. Node v24.14.0 / npm 11.9.0 on this machine.
 
 **Spec:** docs/superpowers/specs/2026-08-22-web-observation-design.md
 
 **Depends on:** Plan A, merged to main at `87c01fb`. Its API is live and verified by curl; nothing in this plan changes backend behaviour except the one static-mount fix in Task 1.
+
+---
+
+## Amendment 2026-08-22 — the review screen comes first
+
+`docs/superpowers/specs/2026-08-22-nightly-review-design.md` resequenced this
+plan. The first question the page must answer is not *what is it doing* but
+**what did it do last night, and do I want it** — so the review screen is now
+part of v1 and `atelier` is not.
+
+What changes:
+
+- **Three new tasks, 5A–5C**, inserted after Task 5: the work list, the diff
+  viewer, and the accept/discard controls. They are numbered this way so the
+  existing tasks keep their numbers and their briefs stay valid.
+- **Task 6 (`atelier`) is now optional and last.** Ship 1–5C, 7 and the product
+  is usable; `atelier` is charm on top and may be dropped from this plan
+  entirely without anything else changing. The skin contract is unaffected —
+  that was the point of having it.
+- **`ledger` is the default skin** (Task 4 already builds it; Task 6's registry
+  line no longer makes `atelier` default).
+- **The read-only constraint below now has exactly two exceptions**: accept and
+  discard, in Task 5C. Nothing else may POST. See the vocabulary rule.
+
+**Depends additionally on:** Plan C (checkpoint backend), which provides
+`GET /api/runs/{id}/diff`, `POST /api/flows/{flow}/accept`,
+`POST /api/flows/{flow}/discard`, `pending` on `GET /api/flows`, and the
+`change` key on run summaries. Tasks 5A–5C cannot start before it is merged.
+
+**Vocabulary rule (binding on all UI text in this plan):** the user sees
+**task**, **work**, and **change**. The strings `commit`, `sha`, `branch`,
+`worktree`, `ref`, `merge`, `HEAD` and `run id` must not appear in rendered
+text. One licensed exception: the accept button's preview line, which says
+what is about to happen to the user's own repository — `adds 3 commits to
+main`. A test asserts the forbidden words are absent from the rendered board.
 
 ---
 
@@ -49,12 +84,22 @@ It is live-only: summaries go to `index.jsonl`, not to the run's own JSONL, so `
 | `GET /api/events?flow=` | SSE, `text/event-stream` |
 | `GET /` | `static/index.html` if built, else a plaintext "not built yet" line |
 
+Added by Plan C, consumed by Tasks 5A–5C:
+
+| route | returns |
+|---|---|
+| `GET /api/runs/{run_id}/diff` | `{run_id, base, head, files, patch, truncated}`, or `{change: null}` when the run changed nothing |
+| `POST /api/flows/{flow}/accept` | `{accepted: n}` / 409 `{conflict: [...]}` / 409 `{dirty: [...]}` |
+| `POST /api/flows/{flow}/discard` | `{discarded: n}` |
+
+`GET /api/flows` also gains `pending: n`, and run summaries gain an optional `change` key.
+
 ## Global Constraints
 
 - New npm dependencies only, in `web-ui/`: react, react-dom, typescript, vite, @vitejs/plugin-react, vitest, pixi.js, and their types. No state library, no router, no CSS framework, no component kit, no sprite/art packages — the spec puts asset packs out of scope and `atelier` is drawn from shapes in code.
 - **PixiJS is loaded lazily.** It is by far the heaviest thing that reaches the browser, and it serves exactly one skin. `atelier` reaches it through a dynamic `import("pixi.js")`, which Vite splits into its own chunk — someone who stays on `ledger` never downloads it. Nothing outside `skins/atelier/` may import pixi statically; a static import silently folds it back into the main bundle.
 - **No new pip dependencies.** The only Python change in this plan is the `/assets` mount fix in Task 1.
-- **Read-only.** No component may POST, PUT, PATCH or DELETE. There is no route to call.
+- **Read-only, with exactly two exceptions.** Only `review/Decide.tsx` (Task 5C) may issue a non-GET request, and only to accept and discard. No other component may POST, PUT, PATCH or DELETE. Skins may never do so at all.
 - Built output is **checked in** at `src/poieo/web/static/` (spec: "built frontend (checked in; `npm run build` refreshes it)"). `web-ui/node_modules/` is not.
 - Skins never touch the API and never see a raw event — they receive `StageState` and callbacks. Any skin reaching for `fetch` is a bug in the design, not a shortcut.
 - `prefers-reduced-motion` is respected: `atelier` switches to instant state changes, no tweens.
@@ -423,12 +468,91 @@ git commit -m "feat: app shell, skin picker, and detail drawer"
 
 ---
 
-### Task 6: the `atelier` skin
+### Task 5A: the work list
+
+**Files:**
+- Create: `web-ui/src/review/WorkList.tsx`
+- Create: `web-ui/src/review/rollup.ts`
+- Modify: `web-ui/src/state/stage.ts` (night rollup per flow)
+- Test: `web-ui/src/review/rollup.test.ts`, `web-ui/src/review/WorkList.test.tsx`
+
+**Interfaces:**
+- Consumes: `GET /api/runs?flow=` summaries, each optionally carrying `change`.
+- Produces: `rollup(summaries) -> {works, succeeded, failed, nothingToDo, insertions, deletions}` for the card line, and a list component rendering one row per piece of work.
+
+**Rows read:** time, outcome, size (`+42 / -11 · 3 files`), and the model's own
+one-line summary. Outcomes are **succeeded / failed / found nothing to do** —
+a run that changed nothing is not a failure and must not be counted as one.
+Failed rows are collapsed behind a single "2 failed" line by default.
+
+- [ ] **Step 1: Write the failing tests**
+  - `rollup` over fixtures: counts, sums, and a run with no `change` contributing zero lines but still counting as work
+  - an empty night renders an invitation, not an error
+  - failed rows are collapsed until expanded
+  - **no forbidden vocabulary** in the rendered output (the amendment's rule, asserted here once for the review UI)
+- [ ] **Step 2: Run to verify they fail** — `npm test --workspace web-ui`
+- [ ] **Step 3: Implement**
+- [ ] **Step 4: Run tests** — [ ] **Step 5: Commit** — `feat: last night's work, as a list`
+
+---
+
+### Task 5B: the diff viewer
+
+**Files:**
+- Create: `web-ui/src/review/Diff.tsx`
+- Modify: `web-ui/src/api.ts` (`fetchDiff(runId)`)
+- Test: `web-ui/src/review/Diff.test.tsx`
+
+**Interfaces:**
+- Consumes: `GET /api/runs/{run_id}/diff` → `{base, head, files, patch, truncated}`.
+- Produces: a per-file folded diff. No syntax highlighting, no new dependency — a unified patch split by file, added and removed lines coloured.
+
+- [ ] **Step 1: Write the failing tests**
+  - files render folded, with per-file `+n / -n`; clicking one expands its hunks
+  - `truncated: true` shows the file list plus an honest line saying the patch was too large to display in full — it does not silently show a partial diff as if it were whole
+  - `change: null` (a run that changed nothing) renders "this work changed no files", not an empty box
+  - a fetch failure renders a retry, not a blank pane
+- [ ] **Step 2: Run to verify they fail**
+- [ ] **Step 3: Implement**
+- [ ] **Step 4: Run tests** — [ ] **Step 5: Commit** — `feat: read a piece of work as a diff`
+
+---
+
+### Task 5C: accept and discard
+
+**Files:**
+- Create: `web-ui/src/review/Decide.tsx`
+- Modify: `web-ui/src/api.ts` (`accept(flow, throughRunId?)`, `discard(flow, fromRunId?)`)
+- Modify: `web-ui/src/review/WorkList.tsx` (per-work controls)
+- Test: `web-ui/src/review/Decide.test.tsx`
+
+**Interfaces:**
+- Consumes: the two POST routes from Plan C, plus `pending` from `GET /api/flows`.
+- Produces: card-level *accept last night's work* / *discard last night's work*, and per-work *accept up to this work* / *discard from this work onward*. There is deliberately no "accept only this one" — acceptance is linear.
+
+**These are the only two components in the app permitted to make a
+non-GET request.** Everything else stays read-only, and the constraint list
+above still holds for them.
+
+- [ ] **Step 1: Write the failing tests**
+  - accept posts once, then refetches flows and runs; the card shows nothing pending
+  - a 409 `{"dirty": [...]}` renders "you have uncommitted changes in *files*; commit or stash them first" and leaves the list as it was
+  - a 409 `{"conflict": [...]}` names the files and says the user changed them too — it does not offer a resolve button
+  - discard asks for confirmation once, and the confirmation says the work is thrown away — not that it is deleted forever, which would be a lie
+  - the accept preview line renders the count against the user's branch (`adds 3 commits to main`), the one place git words are allowed
+  - buttons disable while the request is in flight; a double click cannot post twice
+- [ ] **Step 2: Run to verify they fail**
+- [ ] **Step 3: Implement**
+- [ ] **Step 4: Run tests** — [ ] **Step 5: Commit** — `feat: accept or throw away last night's work`
+
+---
+
+### Task 6: the `atelier` skin *(optional — ship 7 without it if time is short)*
 
 **Files:**
 - Create: `web-ui/src/skins/atelier/index.ts`
 - Create: `web-ui/src/skins/atelier/scene.ts` (shape drawing: bench, figure, tool wall, shelf)
-- Modify: `web-ui/src/skins/registry.ts` (register it, make it the default)
+- Modify: `web-ui/src/skins/registry.ts` (register it; `ledger` stays the default)
 - Test: `web-ui/src/skins/atelier/scene.test.ts`
 
 **Interfaces:**
@@ -543,6 +667,8 @@ git commit -m "docs: build and document the observation UI"
 
 ## Done means
 
+- **The morning works:** open `127.0.0.1:8484`, see last night in one line per task, open a piece of work, read its diff, and accept or throw it away — without touching a terminal.
+- A user who never learns the word "commit" can do all of the above, and the rendered text proves it.
 - `poieo daemon examples/poieo.yaml` and a browser at `127.0.0.1:8484` shows flows moving in real time, in either skin, with no build step required of the user.
 - The reducer has fixture-driven tests; replay and live provably agree.
 - A third skin would be one new module and one registry line — no backend change, no reducer change.

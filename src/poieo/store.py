@@ -83,6 +83,13 @@ class RunStore:
                 rows.append(row)
         return rows[-limit:][::-1]
 
+    def run(self, run_id: str) -> dict[str, Any] | None:
+        """The index row for one run, or None if the store never saw it."""
+        for row in self.list_runs(limit=1_000_000):
+            if row.get("run_id") == run_id:
+                return row
+        return None
+
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         path = self.runs_dir / f"{run_id}.jsonl"
         if not path.exists():

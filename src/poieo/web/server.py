@@ -6,6 +6,7 @@ mutates anything. Control endpoints belong to the next roadmap slice.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -16,6 +17,7 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, S
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from ..errors import PoieoError
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -39,10 +41,34 @@ async def _event_stream(store: BroadcastStore, flow: str | None = None) -> Async
         store.unsubscribe(queue)
 
 
+def _runner_for(daemon: Any, flow: str | None) -> Any:
+    for runner in daemon.runners:
+        if runner.name == flow:
+            return runner
+    return None
+
+
+def _checkpoint_for(daemon: Any, flow: str | None) -> Any:
+    """The private copy behind a flow, if it keeps one."""
+    runner = _runner_for(daemon, flow)
+    return getattr(runner, "checkpoint", None) if runner else None
+
+
+def _pending_count(runner: Any) -> int:
+    point = getattr(runner, "checkpoint", None)
+    if point is None:
+        return 0
+    try:
+        return len(point.pending())
+    except PoieoError:
+        # A copy we cannot read is not a reason to fail the whole listing.
+        return 0
+
+
 def create_app(daemon: Any) -> Starlette:
     """Build the app over a daemon-shaped object (.runners, .store)."""
 
-    def flows(request: Request) -> JSONResponse:
+    async def flows(request: Request) -> JSONResponse:
         rows = []
         for runner in daemon.runners:
             last = runner.last_result
@@ -54,6 +80,7 @@ def create_app(daemon: Any) -> Starlette:
                     "status": runner.status,
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
+                    "pending": await asyncio.to_thread(_pending_count, runner),
                 }
             )
         return JSONResponse({"flows": rows})
@@ -69,6 +96,65 @@ def create_app(daemon: Any) -> Starlette:
         if not events:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
         return JSONResponse({"run_id": run_id, "events": events})
+
+    async def run_diff(request: Request) -> JSONResponse:
+        run_id = request.path_params["run_id"]
+        summary = daemon.store.run(run_id)
+        if summary is None:
+            return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
+
+        change = summary.get("change")
+        point = _checkpoint_for(daemon, summary.get("flow"))
+        if not change or point is None:
+            # A run that altered nothing has nothing to review. That is an
+            # answer, not a failure.
+            return JSONResponse({"run_id": run_id, "change": None})
+
+        report = await asyncio.to_thread(point.diff, change["base"], change["head"])
+        return JSONResponse({"run_id": run_id, **report})
+
+    async def _decide(request: Request, action: str, key: str) -> JSONResponse:
+        """accept and discard differ only in which verb and which run id."""
+        flow = request.path_params["flow"]
+        runner = _runner_for(daemon, flow)
+        if runner is None:
+            return JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+
+        point = getattr(runner, "checkpoint", None)
+        if point is None:
+            return JSONResponse(
+                {"error": f"flow '{flow}' keeps no reviewable copy"}, status_code=409
+            )
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}  # an empty body means "all of it"
+
+        run_id = (body or {}).get(key)
+        target = None
+        if run_id:
+            summary = daemon.store.run(run_id)
+            change = (summary or {}).get("change")
+            if not change:
+                return JSONResponse(
+                    {"error": f"run '{run_id}' has no change"}, status_code=404
+                )
+            target = change["head"]
+
+        try:
+            outcome = await asyncio.to_thread(getattr(point, action), target)
+        except PoieoError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+        refused = "dirty" in outcome or "conflict" in outcome
+        return JSONResponse(outcome, status_code=409 if refused else 200)
+
+    async def flow_accept(request: Request) -> JSONResponse:
+        return await _decide(request, "accept", "through_run_id")
+
+    async def flow_discard(request: Request) -> JSONResponse:
+        return await _decide(request, "discard", "from_run_id")
 
     async def events(request: Request) -> StreamingResponse:
         flow = request.query_params.get("flow")
@@ -90,7 +176,12 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/flows", flows),
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
+        Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/events", events),
+        # The only two routes in this file that change anything. Everything
+        # else answers "what happened"; if you are adding a third, stop.
+        Route("/api/flows/{flow}/accept", flow_accept, methods=["POST"]),
+        Route("/api/flows/{flow}/discard", flow_discard, methods=["POST"]),
         Route("/", index),
     ]
     # Vite emits static/assets/<hashed name> and references it as /assets/...,
