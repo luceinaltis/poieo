@@ -16,22 +16,24 @@
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import {
+  CELL,
   bounds,
   bubbleVisible,
+  cellAt,
+  cellOrigin,
   clampZoom,
   columnsFor,
   figurePose,
   fit,
-  fromIso,
   hammerAngle,
   lampLit,
+  occupied,
   place,
   prefersReducedMotion,
   shelfCount,
   sparking,
-  toIso,
 } from "./scene"
-import type { Spot } from "./scene"
+import type { Cell } from "./scene"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import "./atelier.css"
@@ -63,18 +65,28 @@ const INK = {
 }
 
 /**
- * How far a pointer may travel and still count as a click, not a drag.
+ * How far a pointer may travel and still count as standing still.
  *
- * A finger is not a mouse: a tap on a phone wanders further than a few pixels,
- * and at four the workshop was quietly pinning benches wherever a tap wobbled.
+ * A finger is not a mouse: a tap on a phone wanders further than a few pixels.
  */
 const CLICK_SLOP = 14
+
+/**
+ * How long a bench must be held before it can be carried.
+ *
+ * Dragging is for looking around. Picking a bench up is the rarer thing, so it
+ * is the one that asks for a deliberate press.
+ */
+const PICK_UP_MS = 380
+
+const FREE = 0xa9b665
+const TAKEN = 0xd16d5a
 
 interface Bench {
   root: any
   paint(worker: Worker): void
   tick(elapsed: number): void
-  moveTo(spot: Spot): void
+  moveTo(cell: Cell): void
   destroy(): void
 }
 
@@ -270,9 +282,9 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
       }
     },
 
-    moveTo(spot: Spot) {
-      const screen = toIso(spot.x, spot.y)
-      root.position.set(screen.x, screen.y)
+    moveTo(cell: Cell) {
+      const at = cellOrigin(cell)
+      root.position.set(at.x, at.y)
     },
 
     destroy() {
@@ -304,7 +316,12 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   el.append(tidy)
 
   const benches = new Map<string, Bench>()
-  const spots: Record<string, Spot> = {}
+  let spots: Record<string, Cell> = {}
+
+  // Shows which square a carried bench would land on, and whether it may.
+  const ghost = new PIXI.Graphics()
+  ghost.visible = false
+  room.addChild(ghost)
   let arrangedFor = ""
   /** The reader has moved or zoomed something; stop arranging it for them. */
   let handled = false
@@ -317,44 +334,65 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     })
   }
 
-  // -- moving one bench ------------------------------------------------------
-  let dragging: { flow: string; dx: number; dy: number; moved: boolean } | null = null
+  // -- carrying one bench ----------------------------------------------------
+  let dragging: { flow: string; dx: number; dy: number } | null = null
+  /** A press waiting to become a carry, or to turn out to be a tap. */
+  let press: { flow: string; timer: number; x: number; y: number } | null = null
+
+  const dropPress = () => {
+    if (!press) return
+    window.clearTimeout(press.timer)
+    press = null
+  }
+
+  const showGhost = (cell: Cell, blocked: boolean) => {
+    const at = cellOrigin(cell)
+    ghost.clear()
+    ghost
+      .roundRect(
+        at.x - CELL.width / 2 + 10,
+        at.y - CELL.height / 2 + 10,
+        CELL.width - 20,
+        CELL.height - 20,
+        12,
+      )
+      .stroke({ color: blocked ? TAKEN : FREE, width: 3 })
+    ghost.visible = true
+  }
 
   app.stage.on("pointermove", (event: any) => {
     if (!dragging) return
     const bench = benches.get(dragging.flow)
     if (!bench) return
     const point = event.getLocalPosition(room)
-    const next = { x: point.x - dragging.dx, y: point.y - dragging.dy }
-    if (
-      Math.abs(next.x - bench.root.x) > CLICK_SLOP ||
-      Math.abs(next.y - bench.root.y) > CLICK_SLOP
-    ) {
-      dragging.moved = true
-    }
-    bench.root.position.set(next.x, next.y)
+    bench.root.position.set(point.x - dragging.dx, point.y - dragging.dy)
+
+    const cell = cellAt(bench.root.x, bench.root.y)
+    showGhost(cell, occupied(spots, cell, dragging.flow))
   })
 
   const drop = () => {
     if (!dragging) return
-    const { flow, moved } = dragging
+    const { flow } = dragging
     const bench = benches.get(flow)
     dragging = null
+    ghost.visible = false
     if (!bench) return
+
     bench.root.cursor = "grab"
-    if (!moved) {
-      // A press that went nowhere is a click: open the worker.
-      callbacks.onSelectWorker(flow)
+    bench.root.alpha = 1
+
+    // Benches stand on squares, one to a square. A square that is taken
+    // refuses the bench rather than stacking two smiths in one room.
+    const cell = cellAt(bench.root.x, bench.root.y)
+    if (occupied(spots, cell, flow)) {
       bench.moveTo(spots[flow])
       return
     }
-    // Store where it stands on the floor, not where it landed on screen, so
-    // the arrangement survives any change to the projection.
-    const placedAt = fromIso(bench.root.x, bench.root.y)
-    spots[flow] = placedAt
-    saveSpot(flow, placedAt)
+    spots[flow] = cell
+    saveSpot(flow, cell)
     handled = true
-    bench.moveTo(placedAt)
+    bench.moveTo(cell)
   }
   app.stage.on("pointerup", drop)
   app.stage.on("pointerupoutside", drop)
@@ -362,6 +400,7 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   // -- moving and scaling the whole room -------------------------------------
   const pointers = new Map<number, { x: number; y: number }>()
   let panning: { x: number; y: number } | null = null
+  let pressedAt: { x: number; y: number } | null = null
   let pinch: { gap: number; scale: number; x: number; y: number } | null = null
 
   const local = (event: PointerEvent | WheelEvent) => {
@@ -396,6 +435,7 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     } else if (pointers.size === 1 && !dragging) {
       const at = local(event)
       panning = { x: at.x - room.x, y: at.y - room.y }
+      pressedAt = at
     }
   })
 
@@ -404,9 +444,19 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     pointers.set(event.pointerId, local(event))
 
     if (pinch && pointers.size >= 2) {
+      dropPress()
       const { gap, x, y } = spread()
       if (pinch.gap > 0) zoomAbout(pinch.scale * (gap / pinch.gap), x, y)
       return
+    }
+
+    // Moving before the bench has been held long enough means the reader is
+    // looking around, not rearranging.
+    if (press && pressedAt) {
+      const at = local(event)
+      if (Math.abs(at.x - pressedAt.x) > CLICK_SLOP || Math.abs(at.y - pressedAt.y) > CLICK_SLOP) {
+        dropPress()
+      }
     }
     if (panning && !dragging) {
       const at = local(event)
@@ -415,14 +465,24 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     }
   })
 
-  const release = (event: PointerEvent) => {
+  const release = (event: PointerEvent, lifted: boolean) => {
+    // Letting go before the bench came up is a tap, and a tap opens it. A
+    // cancelled gesture or a pointer leaving the canvas is neither.
+    if (press) {
+      const flow = press.flow
+      dropPress()
+      if (lifted) callbacks.onSelectWorker(flow)
+    }
     pointers.delete(event.pointerId)
     if (pointers.size < 2) pinch = null
-    if (pointers.size === 0) panning = null
+    if (pointers.size === 0) {
+      panning = null
+      pressedAt = null
+    }
   }
-  canvas.addEventListener("pointerup", release)
-  canvas.addEventListener("pointercancel", release)
-  canvas.addEventListener("pointerleave", release)
+  canvas.addEventListener("pointerup", (event) => release(event, true))
+  canvas.addEventListener("pointercancel", (event) => release(event, false))
+  canvas.addEventListener("pointerleave", (event) => release(event, false))
 
   canvas.addEventListener(
     "wheel",
@@ -467,15 +527,23 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
         bench.root.on("pointerdown", (event: any) => {
           if (pointers.size >= 2) return
           const point = event.getLocalPosition(room)
-          dragging = {
+          const held = bench!
+          dropPress()
+          press = {
             flow,
-            dx: point.x - bench!.root.x,
-            dy: point.y - bench!.root.y,
-            moved: false,
+            x: point.x,
+            y: point.y,
+            timer: window.setTimeout(() => {
+              press = null
+              // A carry takes over from looking around.
+              panning = null
+              dragging = { flow, dx: point.x - held.root.x, dy: point.y - held.root.y }
+              held.root.cursor = "grabbing"
+              held.root.alpha = 0.85
+              room.setChildIndex(held.root, room.children.length - 1)
+              showGhost(cellAt(held.root.x, held.root.y), false)
+            }, PICK_UP_MS),
           }
-          bench!.root.cursor = "grabbing"
-          // Whichever bench is being handled belongs in front.
-          room.setChildIndex(bench!.root, room.children.length - 1)
         })
         benches.set(flow, bench)
         room.addChild(bench.root)

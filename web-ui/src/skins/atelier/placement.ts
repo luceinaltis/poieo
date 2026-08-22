@@ -1,30 +1,30 @@
 /**
- * Where the reader dragged each bench.
+ * Which square the reader put each bench on.
  *
- * Positions live with the skin, not in StageState: a list has no meaningful
- * (x, y), and putting coordinates in the contract would make every future skin
- * carry a concept it never uses.
+ * Positions live with this skin, not in StageState: a list has no meaningful
+ * square, and putting them in the contract would make every future skin carry
+ * a concept it never uses.
  */
 
-import type { Spot } from "./scene"
+import type { Cell } from "./scene"
 
 /**
- * Bumped once: the first release treated a fourteen-pixel tap as a drag, so
- * phones accumulated arrangements nobody meant to make. Those are not worth
- * migrating -- the reader never chose them.
+ * Bumped twice. The first release treated a four-pixel tap as a drag, so
+ * phones collected arrangements nobody meant to make; the second stored loose
+ * floor coordinates rather than squares. Neither is worth migrating.
  */
-const KEY = "poieo.atelier.benches.v2"
+const KEY = "poieo.atelier.benches.v3"
 
-export function savedSpots(): Record<string, Spot> {
+export function savedSpots(): Record<string, Cell> {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, Spot>
-    // Anything that is not a pair of numbers is someone else's data.
-    const clean: Record<string, Spot> = {}
-    for (const [flow, spot] of Object.entries(parsed ?? {})) {
-      if (spot && typeof spot.x === "number" && typeof spot.y === "number") {
-        clean[flow] = { x: spot.x, y: spot.y }
+    const parsed = JSON.parse(raw) as Record<string, Cell>
+    const clean: Record<string, Cell> = {}
+    for (const [flow, cell] of Object.entries(parsed ?? {})) {
+      // Anything that is not a pair of whole numbers is someone else's data.
+      if (cell && Number.isInteger(cell.col) && Number.isInteger(cell.row)) {
+        clean[flow] = { col: cell.col, row: cell.row }
       }
     }
     return clean
@@ -33,9 +33,9 @@ export function savedSpots(): Record<string, Spot> {
   }
 }
 
-export function saveSpot(flow: string, spot: Spot): void {
+export function saveSpot(flow: string, cell: Cell): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...savedSpots(), [flow]: spot }))
+    localStorage.setItem(KEY, JSON.stringify({ ...savedSpots(), [flow]: cell }))
   } catch {
     // A workshop that cannot remember its layout is still a workshop.
   }

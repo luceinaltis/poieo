@@ -1,55 +1,71 @@
 /**
  * The workshop's geometry, with no canvas in sight.
  *
- * Everything here is a pure function of the stage: where a bench stands, how
- * the figure at it is standing, whether the lamp is on. index.ts turns that
- * into PixiJS. Splitting it this way is what lets the arrangement be tested
- * at all -- the drawing itself is verified by looking.
+ * Everything here is a pure function of the stage: which square a bench stands
+ * on, how the smith at it is standing, whether the forge is lit. index.ts turns
+ * that into PixiJS. Splitting it this way is what lets the arrangement be
+ * tested at all -- the drawing itself is verified by looking.
  */
 
 import type { Worker } from "../../state/stage"
+
+export interface Cell {
+  col: number
+  row: number
+}
 
 export interface Spot {
   x: number
   y: number
 }
 
-/** How much room one bench takes on screen once drawn, in pixels. */
-export const FOOTPRINT = { width: 270, height: 170 }
+/**
+ * One square of the workshop floor, in screen pixels.
+ *
+ * Tall enough for the whole bench including its label: at 170 the label of one
+ * bench disappeared behind the next one down.
+ */
+export const CELL = { width: 280, height: 250 }
 
-/** A 2:1 isometric projection: floor coordinates to screen offsets. */
-export function toIso(x: number, y: number): Spot {
-  return { x: (x - y) * 0.5, y: (x + y) * 0.25 }
+export const key = (cell: Cell): string => `${cell.col},${cell.row}`
+
+/** The screen offset a bench standing on this square is drawn at. */
+export function cellOrigin(cell: Cell): Spot {
+  return { x: cell.col * CELL.width, y: cell.row * CELL.height }
 }
 
-/**
- * Screen offsets back to floor coordinates.
- *
- * A dragged bench arrives as a screen position, and what gets remembered is
- * where it stands on the floor -- so the arrangement survives any change to
- * the projection.
- */
-export function fromIso(sx: number, sy: number): Spot {
-  return { x: sx + 2 * sy, y: 2 * sy - sx }
+/** Which square a loose position belongs to -- benches never sit between two. */
+export function cellAt(x: number, y: number): Cell {
+  return { col: Math.round(x / CELL.width), row: Math.round(y / CELL.height) }
+}
+
+/** Whether a square already has a bench on it. */
+export function occupied(
+  placed: Record<string, Cell>,
+  cell: Cell,
+  except: string,
+): boolean {
+  return Object.entries(placed).some(
+    ([flow, at]) => flow !== except && at.col === cell.col && at.row === cell.row,
+  )
 }
 
 /**
  * The screen box the arrangement occupies once drawn.
  *
- * Inflated by the footprint, because a bench is drawn around its anchor and
- * not to the right of it -- centring on the bare anchors pushes the room off
- * the left edge by half a bench.
+ * A bench is drawn around its origin, not to the right of it, so centring on
+ * bare origins pushes the room off the left edge by half a bench.
  */
-export function bounds(spots: Spot[]): { x: number; y: number; width: number; height: number } {
-  if (spots.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
-  const screen = spots.map((spot) => toIso(spot.x, spot.y))
-  const xs = screen.map((s) => s.x)
-  const ys = screen.map((s) => s.y)
+export function bounds(cells: Cell[]): { x: number; y: number; width: number; height: number } {
+  if (cells.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
+  const at = cells.map(cellOrigin)
+  const xs = at.map((s) => s.x)
+  const ys = at.map((s) => s.y)
   return {
-    x: Math.min(...xs) - FOOTPRINT.width / 2,
-    y: Math.min(...ys) - FOOTPRINT.height / 2,
-    width: Math.max(...xs) - Math.min(...xs) + FOOTPRINT.width,
-    height: Math.max(...ys) - Math.min(...ys) + FOOTPRINT.height,
+    x: Math.min(...xs) - CELL.width / 2,
+    y: Math.min(...ys) - CELL.height / 2,
+    width: Math.max(...xs) - Math.min(...xs) + CELL.width,
+    height: Math.max(...ys) - Math.min(...ys) + CELL.height,
   }
 }
 
@@ -71,46 +87,55 @@ export function fit(
 /**
  * How many benches stand across.
  *
- * A tall narrow screen gets one. Three in a row lays them along the
- * projection's diagonal, which is the worst shape a phone could be handed.
+ * A tall narrow screen gets one. Three abreast on a phone puts two of them
+ * off-stage.
  */
 export function columnsFor(screenWidth: number): number {
-  return Math.max(1, Math.min(4, Math.floor(screenWidth / FOOTPRINT.width)))
+  return Math.max(1, Math.min(4, Math.floor(screenWidth / CELL.width)))
+}
+
+/** How far the room may be zoomed by hand. */
+export const ZOOM = { min: 0.3, max: 2.5 }
+
+export function clampZoom(scale: number): number {
+  return Math.max(ZOOM.min, Math.min(ZOOM.max, scale))
 }
 
 /**
- * Where the workshop puts benches when nobody has moved them.
+ * Where the workshop puts benches, honouring anything the reader has moved.
  *
- * Arranged in screen space and projected back, rather than guessed on the
- * floor and hoped for: the projection halves one axis and quarters the other,
- * so floor spacing that reads as generous lands on top of itself.
- */
-export function benchLayout(count: number, columns = 3): Spot[] {
-  const spots: Spot[] = []
-  for (let i = 0; i < count; i += 1) {
-    spots.push(
-      fromIso((i % columns) * FOOTPRINT.width, Math.floor(i / columns) * FOOTPRINT.height),
-    )
-  }
-  return spots
-}
-
-/**
- * Merge the automatic arrangement with whatever the reader dragged.
- *
- * A saved spot for a flow that no longer exists is dropped rather than kept:
- * flows come and go, and the file should not accumulate ghosts.
+ * A saved square for a flow that no longer exists is dropped; two flows can
+ * never end up on one square, because a saved square that is already taken
+ * falls back to the automatic one.
  */
 export function place(
   flows: string[],
-  saved: Record<string, Spot> = {},
+  saved: Record<string, Cell> = {},
   columns = 3,
-): Record<string, Spot> {
-  const auto = benchLayout(flows.length, columns)
-  const placed: Record<string, Spot> = {}
-  flows.forEach((flow, index) => {
-    placed[flow] = saved[flow] ?? auto[index]
-  })
+): Record<string, Cell> {
+  const placed: Record<string, Cell> = {}
+  const taken = new Set<string>()
+
+  for (const flow of flows) {
+    const want = saved[flow]
+    if (want && !taken.has(key(want))) {
+      placed[flow] = want
+      taken.add(key(want))
+    }
+  }
+
+  let next = 0
+  for (const flow of flows) {
+    if (placed[flow]) continue
+    let cell = { col: next % columns, row: Math.floor(next / columns) }
+    while (taken.has(key(cell))) {
+      next += 1
+      cell = { col: next % columns, row: Math.floor(next / columns) }
+    }
+    placed[flow] = cell
+    taken.add(key(cell))
+    next += 1
+  }
   return placed
 }
 
@@ -137,13 +162,6 @@ export function sparking(worker: Worker, elapsed: number, period = 900): boolean
   if (figurePose(worker) !== "working") return false
   const t = ((elapsed % period) + period) % period / period
   return t > 0.93
-}
-
-/** How far the room may be zoomed by hand. */
-export const ZOOM = { min: 0.3, max: 2.5 }
-
-export function clampZoom(scale: number): number {
-  return Math.max(ZOOM.min, Math.min(ZOOM.max, scale))
 }
 
 export function figurePose(worker: Worker): Pose {
