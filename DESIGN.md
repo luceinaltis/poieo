@@ -181,9 +181,14 @@ Autonomous execution needs explicit fences:
    reviewable change; the board shows the diff and accepts or discards it.
    This is where the daemon stops being something you have to trust blindly.
    (`docs/superpowers/specs/2026-08-22-nightly-review-design.md`)
-4. **Web control plane** — task card CRUD and flow control (REST API); fold
+4. **The task card** — a task becomes one file (a name, a folder, a prompt),
+   and it keeps a journal of what it did and what the user told it, which it
+   reads before every run. This is what principle 2 promises and what the
+   board edits.
+   (`docs/superpowers/specs/2026-08-22-task-cards-design.md`)
+5. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-5. **Beyond (candidates)** — container isolation (Docker); delegating steps to
+6. **Beyond (candidates)** — container isolation (Docker); delegating steps to
    external agent CLIs (Claude Code, etc.); fan-out steps; dependencies
    between tasks (roadmap ordering); run-log retention.
