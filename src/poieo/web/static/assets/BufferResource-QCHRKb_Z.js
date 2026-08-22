@@ -1,4 +1,4 @@
-import{Q as e,a as t,i as n,rt as r,ut as i,x as a}from"./Geometry-CAVOOB5-.js";import{Q as o}from"./RenderTargetSystem-BWv93v4W.js";import{F as s}from"./GCManagedHash-CVr0_RmT.js";var c={name:`local-uniform-bit`,vertex:{header:`
+import{Q as e,a as t,i as n,rt as r,ut as i,x as a}from"./Geometry-BOlSMwJJ.js";import{Q as o}from"./RenderTargetSystem-D5jN2KZf.js";import{F as s}from"./GCManagedHash-CM99bfIJ.js";var c={name:`local-uniform-bit`,vertex:{header:`
 
             struct LocalUniforms {
                 uTransformMatrix:mat3x3<f32>,

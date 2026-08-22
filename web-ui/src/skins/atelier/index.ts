@@ -25,6 +25,7 @@ import {
   columnsFor,
   figurePose,
   fit,
+  HAMMER,
   hammerAngle,
   lampLit,
   occupied,
@@ -44,21 +45,33 @@ const INK = {
   floor: 0x211c17,
   floorEdge: 0x2e2820,
   wall: 0x1a1611,
-  benchSide: 0x3a332a,
+  stump: 0x2e2820,
+  stumpTop: 0x3a332a,
   anvil: 0x8c8378,
   anvilDark: 0x5d564d,
-  forgeCold: 0x2a241d,
+  forgeBack: 0x241f19,
+  forgeMouth: 0x15120e,
   forgeHot: 0xd8733a,
   ember: 0xffb454,
-  tool: 0x6b6257,
-  toolBad: 0xd16d5a,
+  white: 0xfff0c0,
   shelf: 0x2e2820,
   piece: 0xa9b665,
-  skin: 0xcbbfae,
+  tool: 0x6b6257,
+  toolBad: 0xd16d5a,
+  skin: 0xc9b79f,
+  skinDark: 0xa8977f,
+  hair: 0x4a423a,
   apronIdle: 0x6f665b,
   apronWork: 0x8a6a3f,
   apronBad: 0xa8503f,
-  hammer: 0x9a9086,
+  shirt: 0x8f8578,
+  shirtDark: 0x6b6257,
+  leather: 0x5d564d,
+  haft: 0x7a6a52,
+  iron: 0x4a423a,
+  ironDark: 0x3f382f,
+  ironLit: 0x6b6257,
+  shadow: 0x191510,
   bubble: 0x2a251e,
   text: 0xe8e2d8,
   faint: 0x9a9086,
@@ -95,55 +108,55 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
   root.eventMode = "static"
   root.cursor = "grab"
 
-  const floor = new PIXI.Graphics()
-  floor
+  const layer = () => {
+    const g = new PIXI.Graphics()
+    root.addChild(g)
+    return g
+  }
+
+  // -- the room, which never changes
+  const shell = layer()
+  shell
     .poly([0, -40, 132, 26, 0, 92, -132, 26])
     .fill(INK.floor)
     .stroke({ color: INK.floorEdge, width: 1 })
-  root.addChild(floor)
+  shell.poly([-132, 26, -132, -46, 0, -112, 0, -40]).fill(INK.wall)
+  shell.poly([132, 26, 132, -46, 0, -112, 0, -40]).fill(INK.floorEdge)
+  // a forge mouth set back into the wall, not a rectangle painted on it
+  shell.poly([-118, 10, -56, -22, -56, -64, -118, -34]).fill(INK.forgeBack)
+  shell.poly([-110, 4, -64, -20, -64, -54, -110, -32]).fill(INK.forgeMouth)
+  shell.poly([20, -56, 118, -6, 118, -28, 20, -78]).fill(INK.shelf)
 
-  const wall = new PIXI.Graphics()
-  wall.poly([-132, 26, -132, -46, 0, -112, 0, -40]).fill(INK.wall)
-  wall.poly([132, 26, 132, -46, 0, -112, 0, -40]).fill(INK.floorEdge)
-  root.addChild(wall)
-
-  // set into the left wall
-  const forge = new PIXI.Graphics()
-  root.addChild(forge)
-
-  // on the right wall
+  const forge = layer()
   const tools = new PIXI.Container()
   root.addChild(tools)
-
-  const shelf = new PIXI.Graphics()
-  shelf.poly([16, -54, 118, -3, 118, -25, 16, -76]).fill(INK.shelf)
-  root.addChild(shelf)
-
   const pieces = new PIXI.Container()
   root.addChild(pieces)
 
-  // The smith is drawn before the anvil, so the anvil stands in front of them.
-  const figure = new PIXI.Graphics()
-  root.addChild(figure)
+  // The smith is drawn before the anvil so the anvil stands in front of them.
+  const figure = layer()
 
   const arm = new PIXI.Container()
   const hammer = new PIXI.Graphics()
   // Drawn out along +x from the shoulder, so rotating the container swings it.
-  hammer.roundRect(0, -3, 40, 6, 3).fill(INK.hammer)
-  hammer.roundRect(34, -11, 15, 22, 3).fill(INK.anvilDark)
+  hammer.poly([0, -5, 20, -5, 20, 5, 0, 5]).fill(INK.skinDark)
+  hammer.poly([16, -3, 44, -3, 44, 3, 16, 3]).fill(INK.haft)
+  hammer.poly([40, -11, 56, -11, 56, 11, 40, 11]).fill(INK.iron)
+  hammer.poly([40, -11, 56, -11, 56, -6, 40, -6]).fill(INK.ironLit)
   arm.addChild(hammer)
   root.addChild(arm)
 
-  const anvil = new PIXI.Graphics()
-  anvil.poly([6, 32, 54, 32, 48, 60, 12, 60]).fill(INK.benchSide)
-  anvil.poly([2, 24, 58, 24, 52, 34, 8, 34]).fill(INK.anvilDark)
-  anvil.rect(22, 14, 16, 11).fill(INK.anvilDark)
-  anvil.poly([0, 2, 44, 2, 52, 8, 44, 15, 0, 15]).fill(INK.anvil)
-  anvil.poly([44, 4, 70, 8, 44, 13]).fill(INK.anvil)
-  root.addChild(anvil)
+  const anvil = layer()
+  anvil.ellipse(40, 64, 32, 9).fill(INK.shadow)
+  anvil.poly([16, 24, 60, 24, 54, 62, 22, 62]).fill(INK.stump)
+  anvil.poly([16, 24, 60, 24, 57, 32, 19, 32]).fill(INK.stumpTop)
+  anvil.rect(30, 10, 16, 15).fill(INK.iron)
+  anvil.poly([8, -4, 52, -4, 60, 2, 52, 11, 8, 11]).fill(INK.anvilDark)
+  anvil.poly([8, -4, 52, -4, 48, -8, 12, -8]).fill(INK.anvil)
+  anvil.poly([52, -6, 78, 0, 52, 8]).fill(INK.anvilDark)
 
-  const sparks = new PIXI.Graphics()
-  root.addChild(sparks)
+  const work = layer()
+  const sparks = layer()
 
   const bubble = new PIXI.Container()
   root.addChild(bubble)
@@ -172,60 +185,65 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
     paint(worker: Worker) {
       current = worker
       const pose = figurePose(worker)
+      const hot = lampLit(worker)
       const apron =
         pose === "working" ? INK.apronWork : pose === "alarmed" ? INK.apronBad : INK.apronIdle
-
-      // Leans in over the anvil to work, straightens when waiting.
-      const lean = pose === "working" ? 6 : 0
-      const drop = pose === "sitting" ? 6 : 0
-
-      figure.clear()
-      figure.roundRect(-52 + lean, 26 + drop, 12, 32, 5).fill(INK.apronIdle)
-      figure.roundRect(-36 + lean, 26 + drop, 12, 32, 5).fill(INK.apronIdle)
-      figure.roundRect(-56 + lean, -18 + drop, 40, 48, 8).fill(apron)
-      // the apron itself, darker over the front
-      figure
-        .poly([
-          -54 + lean, 4 + drop,
-          -18 + lean, 4 + drop,
-          -22 + lean, 42 + drop,
-          -50 + lean, 42 + drop,
-        ])
-        .fill(INK.anvilDark)
-      // the far arm, resting on the anvil
-      figure.roundRect(-24 + lean, -8 + drop, 32, 8, 4).fill(INK.skin)
-      figure.circle(-36 + lean, -32 + drop, 12).fill(INK.skin)
-      // a flat cap
-      figure
-        .poly([
-          -50 + lean, -36 + drop,
-          -22 + lean, -36 + drop,
-          -26 + lean, -47 + drop,
-          -46 + lean, -47 + drop,
-        ])
-        .fill(apron)
-
-      arm.position.set(-34 + lean, -6 + drop)
-      arm.visible = pose !== "alarmed"
+      const x = pose === "working" ? 4 : 0 // leans in to strike
 
       forge.clear()
-      forge.poly([-118, 6, -60, -24, -60, -60, -118, -30]).fill(INK.floorEdge)
-      const hot = lampLit(worker)
-      forge
-        .poly([-108, 0, -70, -20, -70, -46, -108, -26])
-        .fill(hot ? INK.forgeHot : INK.forgeCold)
       if (hot) {
-        forge.poly([-102, -4, -76, -18, -76, -34, -102, -20]).fill(INK.ember)
+        forge.poly([-106, 1, -68, -19, -68, -49, -106, -31]).fill(INK.forgeHot)
+        forge.poly([-100, -3, -74, -17, -74, -41, -100, -29]).fill(INK.ember)
       }
       if (worker.status === "error") {
-        forge.circle(-89, -22, 22).stroke({ color: INK.apronBad, width: 2 })
+        forge.circle(-87, -25, 24).stroke({ color: INK.apronBad, width: 2 })
       }
 
+      // -- the smith, in profile facing the anvil
+      figure.clear()
+      figure.ellipse(-34 + x, 62, 24, 8).fill(INK.shadow)
+      // a stance: back leg planted, front leg forward
+      figure.poly([-54 + x, 26, -42 + x, 26, -40 + x, 62, -52 + x, 62]).fill(INK.iron)
+      figure.poly([-38 + x, 26, -26 + x, 26, -20 + x, 60, -32 + x, 60]).fill(INK.ironDark)
+      // torso, broad at the shoulders and turned toward the work
+      figure.poly([-58 + x, -14, -26 + x, -18, -22 + x, 30, -54 + x, 30]).fill(INK.shirt)
+      figure.poly([-58 + x, -14, -46 + x, -16, -44 + x, 30, -54 + x, 30]).fill(INK.shirtDark)
+      // the apron hangs over the front rather than being cut out of it
+      figure.poly([-52 + x, 0, -22 + x, -3, -20 + x, 36, -50 + x, 36]).fill(apron)
+      figure.poly([-44 + x, -14, -39 + x, -15, -35 + x, 2, -40 + x, 2]).fill(INK.leather)
+
+      if (hot) {
+        // the forward arm, holding the work down with tongs
+        figure.poly([-30 + x, -4, -8 + x, 2, -10 + x, 10, -32 + x, 6]).fill(INK.skin)
+        figure.poly([-12 + x, 1, 20, -9, 22, -5, -10 + x, 6]).fill(INK.forgeBack)
+        figure.poly([-12 + x, 6, 20, -4, 22, 0, -10 + x, 11]).fill(INK.forgeBack)
+      } else {
+        figure.poly([-32 + x, -2, -22 + x, 0, -20 + x, 20, -30 + x, 20]).fill(INK.skin)
+      }
+
+      // head in profile: brow, nose, beard, and a cap with a brim
+      figure.circle(-42 + x, -30, 12).fill(INK.skin)
+      figure.poly([-31 + x, -33, -25 + x, -29, -31 + x, -26]).fill(INK.skin)
+      figure.poly([-52 + x, -26, -30 + x, -24, -34 + x, -8, -48 + x, -12]).fill(INK.hair)
+      figure.poly([-55 + x, -33, -29 + x, -36, -32 + x, -46, -51 + x, -46]).fill(INK.hair)
+      figure.poly([-56 + x, -33, -26 + x, -36, -26 + x, -31, -56 + x, -29]).fill(INK.iron)
+
+      arm.position.set(-30 + x, -14)
+      arm.visible = pose !== "alarmed"
+
+      // -- the work itself, glowing on the anvil
+      work.clear()
+      if (hot) {
+        work.roundRect(14, -15, 32, 8, 3).fill(INK.ember)
+        work.roundRect(18, -14, 22, 6, 2).fill(INK.white)
+      }
+
+      // -- the wall of tools: the most recent calls, newest nearest the bench
       tools.removeChildren().forEach((child: any) => child.destroy())
       worker.recentToolCalls.slice(0, 4).forEach((call, index) => {
         const mark = new PIXI.Graphics()
         mark
-          .roundRect(58 + index * 20, -84 + index * 10, 13, 22, 3)
+          .roundRect(60 + index * 20, -86 + index * 10, 13, 22, 3)
           .fill(call.error ? INK.toolBad : INK.tool)
         tools.addChild(mark)
         if (index === 0) {
@@ -234,33 +252,35 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
             style: { fill: INK.faint, fontSize: 10, fontFamily: "system-ui, sans-serif" },
           })
           label.anchor.set(0, 1)
-          label.position.set(40, -90)
+          label.position.set(42, -92)
           tools.addChild(label)
         }
       })
 
+      // -- the shelf: one piece per run that landed
       pieces.removeChildren().forEach((child: any) => child.destroy())
       const stacked = Math.min(shelfCount(worker), 6)
       for (let i = 0; i < stacked; i += 1) {
         const piece = new PIXI.Graphics()
-        piece.roundRect(24 + i * 15, -66 + i * 7, 10, 10, 2).fill(INK.piece)
+        piece.roundRect(28 + i * 15, -68 + i * 7, 10, 10, 2).fill(INK.piece)
         pieces.addChild(piece)
       }
 
+      // -- what it is thinking, if anything
       bubble.removeChildren().forEach((child: any) => child.destroy())
       bubble.visible = bubbleVisible(worker)
       if (bubble.visible) {
         const pad = new PIXI.Graphics()
-        pad.roundRect(-46, -132, 172, 32, 9).fill(INK.bubble)
-        pad.circle(-38, -94, 5).fill(INK.bubble)
-        pad.circle(-46, -82, 3).fill(INK.bubble)
+        pad.roundRect(-46, -136, 172, 32, 9).fill(INK.bubble)
+        pad.circle(-38, -98, 5).fill(INK.bubble)
+        pad.circle(-46, -86, 3).fill(INK.bubble)
         bubble.addChild(pad)
 
         const said = new PIXI.Text({
           text: worker.lastThinking.slice(0, 36),
           style: { fill: INK.faint, fontSize: 10, fontFamily: "system-ui, sans-serif" },
         })
-        said.position.set(-38, -124)
+        said.position.set(-38, -128)
         bubble.addChild(said)
       }
 
@@ -271,13 +291,14 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
 
     tick(elapsed: number) {
       if (!current) return
-      arm.rotation = figurePose(current) === "working" ? hammerAngle(elapsed) : -0.55
+      arm.rotation =
+        figurePose(current) === "working" ? hammerAngle(elapsed) : HAMMER.resting
 
       sparks.clear()
       if (sparking(current, elapsed)) {
-        for (let i = 0; i < 5; i += 1) {
-          const spread = (i - 2) * 8
-          sparks.circle(26 + spread, 2 - Math.abs(spread) * 0.6, 2).fill(INK.ember)
+        for (let i = 0; i < 6; i += 1) {
+          const away = (i - 2.5) * 9
+          sparks.circle(30 + away, -12 - Math.abs(away) * 0.35, 2).fill(INK.ember)
         }
       }
     },

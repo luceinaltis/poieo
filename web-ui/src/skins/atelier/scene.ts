@@ -141,8 +141,13 @@ export function place(
 
 export type Pose = "sitting" | "working" | "alarmed"
 
-/** The hammer's rest and strike angles, in radians. */
-export const HAMMER = { raised: -1.15, struck: 0.35 }
+/**
+ * Where the hammer sits at each point of its arc.
+ *
+ * The pivot is the shoulder and the hammer is long, so a strike much past zero
+ * swings the head forward over the anvil instead of down onto the work.
+ */
+export const HAMMER = { raised: -1.25, struck: 0.02, resting: 1.15 }
 
 /**
  * Where the hammer is in its swing.

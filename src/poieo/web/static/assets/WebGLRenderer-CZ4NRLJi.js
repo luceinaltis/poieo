@@ -1,0 +1,1 @@
+import{WebGLRenderer as e}from"./lib-BIE76ows.js";export{e as WebGLRenderer};
