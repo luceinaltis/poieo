@@ -104,10 +104,6 @@ class TaskSpec(BaseModel):
     def folder_path(self) -> Path:
         return self.resolve(self.folder)
 
-    def journal_path(self) -> Path:
-        """Where this task's journal lives -- beside it, same name."""
-        return self.dir / f"{self.slug}.md"
-
 
 def load_task(path: str | Path) -> TaskSpec:
     """Load and fully validate a task file."""
@@ -145,7 +141,7 @@ def _trigger(task: TaskSpec) -> dict[str, Any]:
     return {"type": "interval", "every": every}
 
 
-def build_graph(task: TaskSpec, system: str | None = None) -> GraphSpec:
+def build_graph(task: TaskSpec) -> GraphSpec:
     """The one-node graph a prompt-shaped task stands for."""
     return GraphSpec(
         name=task.slug,
@@ -159,8 +155,7 @@ def build_graph(task: TaskSpec, system: str | None = None) -> GraphSpec:
                 workdir=str(task.folder_path()),
                 tools=task.tools or list(DEFAULT_TOOLS),
                 max_turns=task.max_turns,
-                system=system
-                or SYSTEM.format(title=task.name, folder=task.folder_path()),
+                system=SYSTEM.format(title=task.name, folder=task.folder_path()),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
             )
@@ -179,6 +174,9 @@ def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
     graph = None if task.graph else build_graph(task)
     flow = FlowSpec(
         name=task.slug,
+        # With no graph file of its own, the flow points at the task that stands
+        # in for one. Only load_flows reads this, and it prefers the generated
+        # graph it was handed alongside.
         graph=str(task.resolve(task.graph) if task.graph else task.source_path),
         binding=task.binding,
         trigger=_trigger(task),

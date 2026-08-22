@@ -99,7 +99,6 @@ def version() -> None:
     typer.echo(f"poieo {__version__}")
 
 
-
 def _load_spec(path: Path) -> GraphSpec:
     """Load a graph, or the graph a task file stands for."""
     if not is_task_file(path):
@@ -551,7 +550,11 @@ def eject(
         kept["binding"] = task.binding
     if not task.enabled:
         kept["enabled"] = False
-    kept["graph"] = Path(os.path.relpath(target, task.dir)).as_posix()
+    try:
+        named = Path(os.path.relpath(target, task.dir)).as_posix()
+    except ValueError:  # a different drive on Windows: no relative path exists
+        named = target.as_posix()
+    kept["graph"] = named
     task_path.write_text(
         yaml.safe_dump(kept, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
