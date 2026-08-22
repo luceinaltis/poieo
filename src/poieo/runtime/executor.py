@@ -21,18 +21,31 @@ from .context import RunContext, RunResult, new_run_id
 from .nodes import build_node
 
 
+def needs_a_workdir(graph: GraphSpec) -> list[str]:
+    """Agent nodes that will have to be told where to work."""
+    return [n.id for n in graph.nodes if n.type == "agent" and not n.workdir]
+
+
 def preflight(
-    graph: GraphSpec, binding: BindingSpec, *, workdir: Path | None = None
+    graph: GraphSpec,
+    binding: BindingSpec,
+    *,
+    workdir: Path | None = None,
+    require_workdir: bool = True,
 ) -> None:
-    """Fail before spending tokens if the run cannot possibly succeed."""
+    """Fail before spending tokens if the run cannot possibly succeed.
+
+    ``require_workdir=False`` is for checking a graph on its own, where not
+    naming a directory is the point rather than a defect.
+    """
     missing = binding.check_roles(graph.roles())
     if missing:
         raise BindingError(
             f"binding '{binding.name}' cannot resolve role(s) "
             f"{missing} required by graph '{graph.name}'"
         )
-    if workdir is None:
-        homeless = [n.id for n in graph.nodes if n.type == "agent" and not n.workdir]
+    if require_workdir and workdir is None:
+        homeless = needs_a_workdir(graph)
         if homeless:
             raise SpecError(
                 f"agent node(s) {homeless} in graph '{graph.name}' have nowhere to "

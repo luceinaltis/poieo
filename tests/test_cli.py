@@ -242,3 +242,21 @@ def test_run_takes_a_workdir_for_a_portable_graph(tmp_path):
     )
     assert result.exit_code == 0, result.stdout
     assert (tmp_path / "TODO.md").exists()
+
+
+def test_validate_accepts_a_graph_that_leaves_the_workdir_open():
+    # A graph is the logical layer: not saying where it runs is the point,
+    # not a defect. `validate` says what the graph will need, and passes.
+    result = runner.invoke(
+        app,
+        [
+            "validate",
+            str(EXAMPLES / "graphs/agent-task.yaml"),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+        ],
+    )
+    assert result.exit_code == 0, result.stderr
+    assert "valid" in result.stdout
+    assert "workdir" in result.stdout  # but it says one will be needed
+    assert "work" in result.stdout  # and names the node that needs it
