@@ -1,0 +1,8 @@
+# A task is the short form: a name, a folder, and a prompt. Everything else --
+# which model, how often, where the log goes -- has a default. `poieo show`
+# renders the flow this expands to; `poieo eject` hands that flow over.
+name: keep the examples tidy
+folder: ..
+prompt: |
+  Look through this folder and fix one small thing that is out of date.
+  Run nothing destructive.

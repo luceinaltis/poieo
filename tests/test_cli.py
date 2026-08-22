@@ -174,3 +174,76 @@ def test_view_writes_a_page(tmp_path):
     page = out.read_text()
     assert "flowchart TD" in page
     assert "llama3.2:3b" in page
+
+
+# -- task cards --------------------------------------------------------------
+
+
+def _task(tmp_path, stem="tidy", body="name: tidy the project\nprompt: go\n"):
+    (tmp_path / "project").mkdir(exist_ok=True)
+    (tmp_path / "tasks").mkdir(exist_ok=True)
+    path = tmp_path / "tasks" / f"{stem}.yaml"
+    path.write_text(f"folder: {(tmp_path / 'project').as_posix()}\n{body}", encoding="utf-8")
+    return path
+
+
+def test_show_renders_what_a_task_expands_to(tmp_path):
+    result = runner.invoke(app, ["show", str(_task(tmp_path))])
+    assert result.exit_code == 0
+    assert "work" in result.stdout and "agent" in result.stdout
+
+
+def test_run_executes_a_task_file(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(_task(tmp_path)),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--store",
+            str(tmp_path / "logs"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "completed" in result.stdout
+
+
+def test_tasks_lists_the_cards(tmp_path):
+    _task(tmp_path)
+    _task(tmp_path, "docs", "name: write docs\nprompt: go\nevery: loop\nenabled: false\n")
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["tasks", str(config)])
+    assert result.exit_code == 0
+    assert "[off] docs" in result.stdout
+    assert "[on ] tidy" in result.stdout
+    assert "write docs" in result.stdout
+
+
+def test_eject_writes_the_graph_and_the_task_keeps_working(tmp_path):
+    path = _task(tmp_path, body="name: tidy\nprompt: go\nevery: 30m\n")
+    result = runner.invoke(app, ["eject", str(path)])
+    assert result.exit_code == 0
+
+    graph_file = tmp_path / "graphs" / "tidy.yaml"
+    assert "type: agent" in graph_file.read_text(encoding="utf-8")
+    rewritten = path.read_text(encoding="utf-8")
+    assert "graph: ../graphs/tidy.yaml" in rewritten
+    assert "prompt" not in rewritten
+    assert "every: 30m" in rewritten
+
+    after = runner.invoke(app, ["show", str(path)])
+    assert after.exit_code == 0
+    assert "agent" in after.stdout
+
+
+def test_eject_refuses_to_overwrite(tmp_path):
+    path = _task(tmp_path)
+    assert runner.invoke(app, ["eject", str(path)]).exit_code == 0
+    again = runner.invoke(app, ["eject", str(path)])
+    assert again.exit_code == 1
+    assert "already names a graph" in again.stderr

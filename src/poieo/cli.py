@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Optional
 
 import typer
+import yaml
 
 # Model output is arbitrary Unicode; legacy Windows console codepages (cp949,
 # cp1252, ...) cannot encode all of it and would crash every `poieo run` that
@@ -30,6 +32,7 @@ from .graph import GraphSpec, load_graph
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
+from .task import build_graph, expand, is_task_file, load_task, load_tasks
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
 
@@ -96,16 +99,26 @@ def version() -> None:
     typer.echo(f"poieo {__version__}")
 
 
+def _load_spec(path: Path) -> GraphSpec:
+    """Load a graph, or the graph a task file stands for."""
+    if not is_task_file(path):
+        return load_graph(path)
+    task = load_task(path)
+    if task.graph:
+        return load_graph(task.resolve(task.graph))
+    return build_graph(task)
+
+
 @app.command()
 def validate(
-    graph_path: Path = typer.Argument(..., help="Graph YAML/JSON file."),
+    graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     binding: Optional[Path] = typer.Option(
         None, "--binding", "-b", help="Also check every role resolves in this binding."
     ),
 ) -> None:
-    """Parse a graph (and optionally a binding) and report problems."""
+    """Parse a graph or task (and optionally a binding) and report problems."""
     try:
-        graph = load_graph(graph_path)
+        graph = _load_spec(graph_path)
     except PoieoError as exc:
         _fail(str(exc))
 
@@ -127,12 +140,12 @@ def validate(
 
 @app.command()
 def show(
-    graph_path: Path = typer.Argument(..., help="Graph YAML/JSON file."),
+    graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     mermaid: bool = typer.Option(False, "--mermaid", help="Emit a mermaid flowchart."),
 ) -> None:
-    """Print a graph's structure (optionally as a mermaid diagram)."""
+    """Print what a graph -- or what a task expands to -- looks like."""
     try:
-        graph = load_graph(graph_path)
+        graph = _load_spec(graph_path)
     except PoieoError as exc:
         _fail(str(exc))
 
@@ -147,7 +160,7 @@ def show(
         marker = "*" if node.id == graph.entry else " "
         detail = (
             f"role={node.role or graph.default_role}"
-            if node.type == "llm"
+            if node.type in ("llm", "agent")
             else f"{len(node.branches)} branch(es)"
         )
         typer.echo(f" {marker} {node.id:<16} {node.type:<7} {detail}")
@@ -318,7 +331,7 @@ def edit(
 
 @app.command()
 def run(
-    graph_path: Path = typer.Argument(..., help="Graph YAML/JSON file."),
+    graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     binding: Path = typer.Option(..., "--binding", "-b", help="Binding YAML/JSON file."),
     input_json: Optional[str] = typer.Option(
         None, "--input", "-i", help="Run payload as JSON, or @file.json."
@@ -331,10 +344,10 @@ def run(
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Execute a graph once."""
+    """Execute a graph, or a task, once."""
     _setup_logging(verbose)
     try:
-        graph = load_graph(graph_path)
+        graph = _load_spec(graph_path)
         spec = load_binding(binding)
     except PoieoError as exc:
         _fail(str(exc))
@@ -472,6 +485,82 @@ def flows(
         )
         for role in sorted(item.graph.roles()):
             typer.echo(f"        {item.binding.resolve(role).describe()}")
+
+
+@app.command()
+def tasks(
+    config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
+) -> None:
+    """List the task cards a daemon config would run."""
+    try:
+        config = load_config(config_path)
+        if not config.tasks:
+            _fail(f"{config_path} names no tasks folder")
+        items = load_tasks(config.resolve_path(config.tasks))
+    except PoieoError as exc:
+        _fail(str(exc))
+
+    if not items:
+        typer.echo("(no tasks)")
+        return
+    for task in items:
+        flow, _ = expand(task)
+        state = "on " if task.enabled else "off"
+        typer.echo(
+            f"[{state}] {task.slug:<20} {flow.trigger.build().describe:<24} "
+            f"{task.folder_path()}"
+        )
+        typer.echo(f"        {task.name}")
+
+
+@app.command()
+def eject(
+    task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
+    to: Optional[Path] = typer.Option(
+        None, "--to", help="Where to write the graph [../graphs/<task>.yaml]."
+    ),
+) -> None:
+    """Write out the graph a task stands for, and point the task at it."""
+    try:
+        task = load_task(task_path)
+    except PoieoError as exc:
+        _fail(str(exc))
+
+    if task.graph:
+        _fail(f"{task_path} already names a graph: {task.graph}")
+    target = to or (task.dir.parent / "graphs" / f"{task.slug}.yaml")
+    if target.exists():
+        _fail(f"{target} already exists")
+
+    graph = build_graph(task)
+    document = graph.model_dump(
+        mode="json", by_alias=True, exclude_none=True, exclude_defaults=True
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+
+    kept: dict[str, Any] = {"name": task.name, "folder": task.folder}
+    if task.every is not None:
+        kept["every"] = task.every
+    if task.at is not None:
+        kept["at"] = task.at
+    if task.binding:
+        kept["binding"] = task.binding
+    if not task.enabled:
+        kept["enabled"] = False
+    try:
+        named = Path(os.path.relpath(target, task.dir)).as_posix()
+    except ValueError:  # a different drive on Windows: no relative path exists
+        named = target.as_posix()
+    kept["graph"] = named
+    task_path.write_text(
+        yaml.safe_dump(kept, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+
+    _ok(f"wrote {target}")
+    typer.echo(f"{task_path} now names it (comments in it were not preserved)")
 
 
 @runs_app.command("list")
