@@ -100,15 +100,15 @@ class LocalExecutor(Executor):
         self._load(toolsets)
 
 
-def make_box_keeper(key: str) -> Any:
-    """The task-scoped thing that keeps boxes between runs, or None without docker.
+def make_box_keeper() -> Any:
+    """The thing that keeps boxes between runs, shared across tasks.
 
     Returned as ``Any`` on purpose: the daemon holds it and hands it back, and
     nothing between here and the executor may learn what is inside it.
     """
     from .docker import BoxKeeper
 
-    return BoxKeeper(key)
+    return BoxKeeper()
 
 
 def make_executor(

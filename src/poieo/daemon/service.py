@@ -54,6 +54,7 @@ class FlowRunner:
         store: RunStore,
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
+        boxes: Any = None,
     ):
         self.flow = flow
         self.config = config
@@ -67,11 +68,10 @@ class FlowRunner:
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
         self.current_run_id: str | None = None
-        # Boxes outlive a run, so the thing that outlives runs holds them.
-        # Opaque here: only make_executor knows what is inside.
-        self.boxes: Any = (
-            make_box_keeper(flow.spec.name) if flow.spec.isolation else None
-        )
+        # The daemon's, not this runner's: two tasks over one folder share a
+        # box the way they already share a provider pool. Opaque here --
+        # only make_executor knows what is inside.
+        self.boxes = boxes
 
     @property
     def name(self) -> str:
@@ -80,11 +80,6 @@ class FlowRunner:
     @property
     def last_result(self) -> RunResult | None:
         return self.results[-1] if self.results else None
-
-    async def aclose(self) -> None:
-        """Drop this task's boxes. The daemon stopping is one of their reset points."""
-        if self.boxes is not None:
-            await self.boxes.aclose()
 
     async def run(self) -> None:
         log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
@@ -193,6 +188,12 @@ class Daemon:
         self.cancel = asyncio.Event()
         # One pool per distinct binding file: clients are reused across flows.
         self.pools: dict[str, ProviderPool] = {}
+        # One box per distinct folder-and-settings, for the same reason.
+        self.boxes: Any = (
+            make_box_keeper()
+            if any(f.spec.isolation for f in self.flows)
+            else None
+        )
         self.runners: list[FlowRunner] = []
 
     def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
@@ -252,6 +253,7 @@ class Daemon:
                 self.store,
                 self.cancel,
                 self.on_run,
+                self.boxes,
             )
             for flow in self.flows
         ]
@@ -273,14 +275,14 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
-            for runner in self.runners:
-                await runner.aclose()
             if web_task is not None:
                 server.should_exit = True
                 try:
                     await asyncio.wait_for(web_task, timeout=5)
                 except (asyncio.TimeoutError, Exception):
                     web_task.cancel()
+            if self.boxes is not None:
+                await self.boxes.aclose()
             for pool in self.pools.values():
                 await pool.aclose()
             log.info("poieo daemon down")

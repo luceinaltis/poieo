@@ -206,7 +206,7 @@ async def test_execute_before_entering_is_a_harness_error(tmp_path):
 from datetime import timedelta
 
 from poieo.tools import Isolation
-from poieo.tools.docker import Box, sweep
+from poieo.tools.docker import Box, BoxKeeper, sweep
 
 ISO = Isolation(image=IMAGE)
 
@@ -308,3 +308,50 @@ async def test_the_sweep_removes_an_idle_box(tmp_path):
         assert not _container_exists(container_id)
     finally:
         await box.remove()
+
+
+# -- one box per (folder, isolation), shared by whatever tasks want it -------
+
+
+async def test_two_tasks_on_one_folder_share_a_box(tmp_path):
+    """The common case: several standing jobs on the same repo."""
+    work = _workdir(tmp_path)
+    keeper = BoxKeeper()
+    try:
+        a = keeper.get(work, ISO)
+        b = keeper.get(work, ISO)
+        assert a is b
+        assert await a.ensure() == await b.ensure()
+    finally:
+        await keeper.aclose()
+
+
+async def test_a_different_image_gets_its_own_box(tmp_path):
+    work = _workdir(tmp_path)
+    keeper = BoxKeeper()
+    try:
+        a = keeper.get(work, ISO)
+        b = keeper.get(work, Isolation(image=IMAGE, network="bridge"))
+        assert a is not b
+    finally:
+        await keeper.aclose()
+
+
+async def test_a_different_folder_gets_its_own_box(tmp_path):
+    keeper = BoxKeeper()
+    other = tmp_path / "other"
+    other.mkdir()
+    try:
+        assert keeper.get(_workdir(tmp_path), ISO) is not keeper.get(other, ISO)
+    finally:
+        await keeper.aclose()
+
+
+async def test_closing_the_keeper_removes_every_box(tmp_path):
+    work = _workdir(tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    keeper = BoxKeeper()
+    ids = [await keeper.get(work, ISO).ensure(), await keeper.get(other, ISO).ensure()]
+    await keeper.aclose()
+    assert not any(_container_exists(i) for i in ids)

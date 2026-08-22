@@ -62,8 +62,8 @@ journal is re-read before every run, and its private working copy persists
 across runs. A box that resets hourly would be the one part of a task that
 refuses to remember.
 
-So: **one box per task, kept between runs.** See *Lifetime* below for what
-bounds the drift that buys.
+So: **a box is kept between runs, and shared by whatever tasks want the same
+one.** See *Lifetime* below for both halves of that.
 
 ## Decisions already made (with the user)
 
@@ -174,10 +174,24 @@ the config loads, not when the trigger fires.
 
 ## Lifetime
 
-**One box per task, kept between runs.** The task's other durable things — its
-journal, its private working copy — already work this way, and a box that
-reset hourly would contradict them. A task that installs its dependencies on
-Monday still has them on Tuesday.
+**One box per folder-and-settings, kept between runs.** The task's other
+durable things — its journal, its private working copy — already work this way,
+and a box that reset hourly would contradict them. A task that installs its
+dependencies on Monday still has them on Tuesday.
+
+**Two tasks that want the same box get the same box.** Several standing jobs
+over one repo — keep the tests green, keep the docs current, keep the lint
+quiet — is the ordinary shape, and a box each would mean installing one
+toolchain three times. The daemon already keeps one provider pool per binding
+file for exactly this reason; boxes sit beside the pools.
+
+Sharing is implicit, and that has a cost worth naming: tasks in one box can
+disturb each other, because a box is one machine. What they still cannot
+disturb is anything outside the folder, which is the boundary this slice is
+about. Naming a shared box would make the coupling visible, but it would also
+be a fourth word against principle 7 — and it stays available later, because
+adding a name to something implicit is additive while removing a concept
+users have learned is not.
 
 The box is **derived state**, exactly as the private worktree is: deleting it
 is always safe, and the next run rebuilds it. That property is what makes
@@ -188,9 +202,9 @@ It is thrown away and rebuilt when:
 
 | trigger | why |
 |---|---|
-| the task's `isolation` block changes | a box built from a different image is not the box that was asked for |
+| a task's `isolation` block changes | a box built from a different image is not the box that was asked for |
 | the daemon restarts | the reset a user already knows how to reach |
-| the task has not run for 7 days | disk is not infinite, and a box nobody uses is only drift |
+| the box is older than 7 days | docker records creation, not last use; an age cap is the honest version and one rebuild a week is the ceiling working |
 | the user asks (`poieo reset <task>`) | the explicit escape hatch, and the thing to suggest when a task starts behaving oddly |
 
 **Daemon restart is a weaker bound than it sounds.** A resident daemon is meant
@@ -200,7 +214,7 @@ gets. Both are here for that reason; neither is sufficient alone.
 A one-shot `poieo run --isolate` has no next run to keep a box for, so it gets
 an ephemeral one, removed when the run ends.
 
-Within a run, every agent node shares the task's box. Nodes in one graph
+Within a run, every agent node working in one folder shares one box. Nodes in one graph
 already share a working directory; giving them separate boxes would isolate
 them from each other and from nothing that matters, while making step 1's
 `pip install` invisible to step 2.
@@ -239,8 +253,10 @@ in:
 - **An owner.** Because a box outlives a run, something that outlives a run
   must hold it. That is `FlowRunner` — "drives one flow: trigger -> run ->
   carry state -> repeat" — which Plan C already makes the owner of the task's
-  private worktree. The executor *attaches* to a box it is handed; only the
-  one-shot path creates and destroys its own.
+  private worktree. Because a box is shared across tasks, the keeper itself
+  sits on the `Daemon`, beside the provider pools it already shares. The
+  executor *attaches* to a box it is handed; only the one-shot path creates and
+  destroys its own.
 
 What the runtime receives is an opaque handle with no Docker words on it, the
 same way it receives a workdir without knowing how the worktree was made.
@@ -260,8 +276,8 @@ Principle 5 — fail at launch, not at 3am — decides most of this table.
 | the box cannot be started | run start | the run fails with docker's own message; never a fallback to local |
 | docker dies mid-run | run | the run fails and is recorded; the daemon stays up (principle 5, other half) |
 | command times out | tool call | killed inside the box, same `_MAX_TIMEOUT`; the box survives, as it would after any failed command |
-| poieo is killed | — | boxes carry a `poieo.task` label, so orphans are findable, sweepable, and removable by hand |
-| two tasks share a folder | — | two boxes, one mount. Ordinary concurrent writers; the checkpoint slice is what makes it reviewable |
+| poieo is killed | — | boxes carry a `poieo.box` label, so orphans are findable, sweepable, and removable by hand |
+| two tasks share a folder | — | one box, shared. They are concurrent writers in one place; the checkpoint slice is what makes that reviewable |
 | files written as root in the box | run | why `user` exists; documented, not guessed at |
 
 ## Testing
@@ -277,6 +293,8 @@ Principle 5 — fail at launch, not at 3am — decides most of this table.
 - Reuse: two runs of one task land in the same box, and a file written by the
   first run's shell is still there for the second. That is the lifetime
   decision, stated as a test.
+- Sharing: two tasks over one folder get one box; a different folder or a
+  different image gets its own.
 - Rebuild: changing the `isolation` block replaces the box; a removed box is
   rebuilt on the next run; the idle sweep removes an old one and leaves a
   fresh one.

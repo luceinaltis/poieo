@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import locale
+import hashlib
 import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -31,7 +32,7 @@ from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 _IDLE = "2147483647"
 _MOUNT = "/work"
 # How an orphaned box is found after a hard kill, and what the sweep matches on.
-LABEL_TASK = "poieo.task"
+LABEL_BOX = "poieo.box"
 _PROBE_TIMEOUT = 20.0
 
 log = logging.getLogger("poieo.isolation")
@@ -178,7 +179,7 @@ class Box:
         if self.container_id and await _alive(self.container_id):
             return self.container_id
         self.container_id = await _start(
-            self.workdir, self.isolation, {LABEL_TASK: self.key}
+            self.workdir, self.isolation, {LABEL_BOX: self.key}
         )
         return self.container_id
 
@@ -201,7 +202,7 @@ async def sweep(older_than: timedelta) -> int:
     an hourly trigger the difference is one rebuild a week, which is the drift
     ceiling working rather than a cost.
     """
-    code, out = await _docker("ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_TASK}")
+    code, out = await _docker("ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_BOX}")
     if code != 0:
         return 0
     removed = 0
@@ -308,26 +309,40 @@ class DockerExecutor(Executor):
 
 
 
+def box_key(workdir: Path, isolation: Isolation) -> str:
+    """What makes two boxes the same box.
+
+    Folder and settings, nothing about who asked. Two tasks standing over one
+    repo -- keep the tests green, keep the docs current -- are the common case,
+    and giving them a box each would mean installing the same toolchain twice.
+    """
+    raw = f"{workdir}|{isolation.image}|{isolation.network}|{isolation.user}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
 class BoxKeeper:
-    """Every box one task owns, kept between that task's runs.
+    """Every box this daemon keeps, shared by whatever tasks want the same one.
 
-    Keyed by folder, because that is what a box is built around and what an
-    agent node knows. A graph whose nodes work in different folders gets one
-    box each; they are all dropped together when the task is.
+    One box per (folder, settings), the way the daemon already keeps one
+    provider pool per binding file. Sharing is implicit and has a cost worth
+    knowing: tasks in one box can disturb each other, because the box is one
+    machine. What they cannot disturb is anything outside the folder, which is
+    the boundary this whole slice is about.
 
-    Held by the daemon's FlowRunner, which outlives runs. Handed down as an
-    opaque object -- nothing between here and the executor learns what it is.
+    Held by the Daemon, which outlives every run of every task. Handed down as
+    an opaque object -- nothing between here and the executor learns what it
+    is.
     """
 
-    def __init__(self, key: str):
-        self.key = key
-        self.boxes: dict[Path, Box] = {}
+    def __init__(self) -> None:
+        self.boxes: dict[str, Box] = {}
 
     def get(self, workdir: Path, isolation: Isolation) -> Box:
         workdir = _resolved(workdir)
-        box = self.boxes.get(workdir)
+        key = box_key(workdir, isolation)
+        box = self.boxes.get(key)
         if box is None:
-            box = self.boxes[workdir] = Box(self.key, workdir, isolation)
+            box = self.boxes[key] = Box(key, workdir, isolation)
         return box
 
     async def aclose(self) -> None:
