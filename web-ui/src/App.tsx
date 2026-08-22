@@ -67,18 +67,21 @@ export default function App({ store }: { store?: StageStore }) {
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
         </span>
-        <select
-          className="shell-skin"
-          aria-label="View"
-          value={skinById(skinId).id}
-          onChange={(event) => chooseSkin(event.target.value)}
-        >
-          {SKINS.map((skin) => (
-            <option key={skin.id} value={skin.id}>
-              {skin.label}
-            </option>
-          ))}
-        </select>
+        <label className="shell-pick">
+          view
+          <select
+            className="shell-skin"
+            aria-label="View"
+            value={skinById(skinId).id}
+            onChange={(event) => chooseSkin(event.target.value)}
+          >
+            {SKINS.map((skin) => (
+              <option key={skin.id} value={skin.id}>
+                {skin.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <div className="shell-stage" data-drawer={String(Boolean(selected))}>

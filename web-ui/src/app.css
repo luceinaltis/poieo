@@ -27,6 +27,14 @@
   color: #d16d5a;
 }
 
+.shell-pick {
+  align-items: center;
+  color: #9a9086;
+  display: flex;
+  font-size: 0.85em;
+  gap: 6px;
+}
+
 .shell-skin {
   background: #1c1915;
   border: 1px solid #2e2820;

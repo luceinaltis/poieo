@@ -108,6 +108,9 @@ let root: Root
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   localStorage.clear()
+  // The shell is driven here by clicking a worker on the board, so these ask
+  // for the DOM skin explicitly. The default is the canvas one.
+  localStorage.setItem("poieo.skin", "ledger")
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -135,7 +138,10 @@ test("the picker lists the registered skins and the board carries the workers", 
   await render(initialStage(FLOWS))
 
   const picker = container.querySelector("select")!
-  expect(picker.options.length).toBeGreaterThan(0)
+  expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual([
+    "atelier",
+    "ledger",
+  ])
   expect(picker.value).toBe("ledger")
   expect(container.querySelectorAll("[data-flow]")).toHaveLength(2)
 })

@@ -6,12 +6,13 @@ import { atelier } from "./atelier"
 import type { Skin } from "./contract"
 import { ledger } from "./ledger"
 
-// ledger first: it is the fallback and the default, and listing a skin here
-// must not pull its renderer in -- atelier's PixiJS stays behind a dynamic
-// import inside its own module.
-export const SKINS: Skin[] = [ledger, atelier]
+// Listing a skin here must not pull its renderer in: atelier's PixiJS stays
+// behind a dynamic import inside its own module.
+export const SKINS: Skin[] = [atelier, ledger]
 
-export const DEFAULT_SKIN_ID = ledger.id
+// The workshop is what this page is for. ledger remains the fallback that an
+// unknown or unreadable choice lands on.
+export const DEFAULT_SKIN_ID = atelier.id
 
 /** A stale or unknown id -- from an old localStorage value -- must not blank
  * the page, so it lands on the fallback skin instead. */

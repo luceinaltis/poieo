@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./skinHost"
+import { DEFAULT_SKIN_ID } from "../skins/registry"
 import { initialStage } from "../state/stage"
 import type { Skin, SkinHandle } from "../skins/contract"
 import type { FlowRow } from "../types"
@@ -77,10 +78,10 @@ test("a skin mounted mid-run is handed the current stage at once", () => {
 })
 
 test("the skin preference survives a reload and an unknown value", () => {
-  expect(readSkinPreference()).toBe("ledger")
+  expect(readSkinPreference()).toBe(DEFAULT_SKIN_ID)
 
-  writeSkinPreference("atelier")
-  expect(readSkinPreference()).toBe("atelier")
+  writeSkinPreference("ledger")
+  expect(readSkinPreference()).toBe("ledger")
 
   localStorage.setItem("poieo.skin", "kitchen")
   // readSkinPreference reports what is stored; the registry decides whether it
@@ -92,6 +93,6 @@ test("a hostile storage does not take the page down", () => {
   const boom = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
     throw new Error("denied")
   })
-  expect(readSkinPreference()).toBe("ledger")
+  expect(readSkinPreference()).toBe(DEFAULT_SKIN_ID)
   boom.mockRestore()
 })

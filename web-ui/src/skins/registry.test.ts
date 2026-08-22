@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 
 import { ledger } from "./ledger"
-import { SKINS, skinById } from "./registry"
+import { DEFAULT_SKIN_ID, SKINS, skinById } from "./registry"
 import { AGENT_RUN } from "../state/fixtures"
 import { initialStage, replay } from "../state/stage"
 import type { FlowRow } from "../types"
@@ -40,6 +40,10 @@ test("every registered skin satisfies the contract", () => {
   }
   const ids = SKINS.map((skin) => skin.id)
   expect(new Set(ids).size).toBe(ids.length)
+})
+
+test("the workshop is what opens by default", () => {
+  expect(DEFAULT_SKIN_ID).toBe("atelier")
 })
 
 test("skinById falls back to ledger for an unknown id", () => {
