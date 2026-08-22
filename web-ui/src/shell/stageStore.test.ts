@@ -14,6 +14,7 @@ const CHORES: FlowRow = {
   current_run_id: null,
   last_run: null,
   pending: 0,
+  into: null,
 }
 
 function harness(overrides: Partial<StageApi> = {}) {

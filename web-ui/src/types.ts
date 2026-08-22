@@ -47,6 +47,8 @@ export interface FlowRow {
   last_run: RunSummary | null
   /** How many pieces of work are waiting to be looked at. */
   pending: number
+  /** What accepting them would add to; null when the flow keeps no copy. */
+  into: string | null
 }
 
 /**

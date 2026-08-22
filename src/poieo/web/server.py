@@ -54,15 +54,16 @@ def _checkpoint_for(daemon: Any, flow: str | None) -> Any:
     return getattr(runner, "checkpoint", None) if runner else None
 
 
-def _pending_count(runner: Any) -> int:
+def _review_state(runner: Any) -> dict[str, Any]:
+    """How much is waiting, and what accepting it would add to."""
     point = getattr(runner, "checkpoint", None)
     if point is None:
-        return 0
+        return {"pending": 0, "into": None}
     try:
-        return len(point.pending())
+        return {"pending": len(point.pending()), "into": point.into()}
     except PoieoError:
         # A copy we cannot read is not a reason to fail the whole listing.
-        return 0
+        return {"pending": 0, "into": None}
 
 
 def create_app(daemon: Any) -> Starlette:
@@ -80,7 +81,7 @@ def create_app(daemon: Any) -> Starlette:
                     "status": runner.status,
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
-                    "pending": await asyncio.to_thread(_pending_count, runner),
+                    **await asyncio.to_thread(_review_state, runner),
                 }
             )
         return JSONResponse({"flows": rows})

@@ -26,6 +26,8 @@ vi.mock("./api", () => ({
   ]),
   fetchRunEvents: vi.fn(async () => AGENT_RUN),
   fetchDiff: vi.fn(async () => ({ run_id: "20260822T072819-98a6708d", change: null })),
+  accept: vi.fn(async () => ({ ok: true, accepted: 0 })),
+  discard: vi.fn(async () => ({ ok: true, discarded: 0 })),
   openFeed: vi.fn(() => () => {}),
 }))
 
@@ -45,6 +47,7 @@ const FLOWS: FlowRow[] = [
     current_run_id: null,
     last_run: null,
     pending: 0,
+    into: null,
   },
   {
     name: "revision",
@@ -54,6 +57,7 @@ const FLOWS: FlowRow[] = [
     current_run_id: null,
     last_run: null,
     pending: 0,
+    into: null,
   },
 ]
 

@@ -113,6 +113,10 @@ class Checkpoint:
         except CheckpointError:
             return False
 
+    def into(self) -> str:
+        """What accepting would add to -- the branch the user is standing on."""
+        return _git(self.repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+
     def pending(self) -> list[str]:
         """Commits on the flow's branch that the user's HEAD does not contain."""
         if not self._branch_exists():

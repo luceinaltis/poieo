@@ -24,6 +24,7 @@ export default function App({ store }: { store?: StageStore }) {
   const [theStore] = useState<StageStore>(() => store ?? createStageStore())
   const stage = useSyncExternalStore(theStore.subscribe, theStore.getStage)
   const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
+  const flows = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
@@ -88,7 +89,15 @@ export default function App({ store }: { store?: StageStore }) {
         </p>
       ) : null}
 
-      {selected ? <Drawer flow={selected} onClose={() => setSelected(null)} /> : null}
+      {selected ? (
+        <Drawer
+          flow={selected}
+          pending={flows.find((row) => row.name === selected)?.pending ?? 0}
+          into={flows.find((row) => row.name === selected)?.into ?? null}
+          onClose={() => setSelected(null)}
+          onDecided={() => void theStore.resync()}
+        />
+      ) : null}
     </>
   )
 }

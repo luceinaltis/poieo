@@ -46,6 +46,7 @@ def test_flows_lists_runner_state(tmp_path):
             "current_run_id": None,
             "last_run": {"run_id": "r0", "status": "completed"},
             "pending": 0,
+            "into": None,
         }
     ]
 
@@ -207,11 +208,14 @@ def daemon_with_two_changes(tmp_path):
     return SimpleNamespace(runners=[runner], store=store), repo, changes
 
 
-def test_flows_reports_how_much_is_waiting(tmp_path):
+def test_flows_reports_how_much_is_waiting_and_where_it_would_go(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.get("/api/flows").json()["flows"][0]["pending"] == 2
+    row = client.get("/api/flows").json()["flows"][0]
+    assert row["pending"] == 2
+    # the accept button has to say what it would add to
+    assert row["into"] == "main"
 
 
 def test_flows_reports_nothing_pending_without_a_private_copy(tmp_path):

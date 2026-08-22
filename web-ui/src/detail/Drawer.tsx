@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
+import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { WorkList } from "../review/WorkList"
 import { initialStage, replay } from "../state/stage"
@@ -84,22 +85,40 @@ function Entry({ event }: { event: PoieoEvent }) {
   return null
 }
 
-export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
+export function Drawer({
+  flow,
+  pending = 0,
+  into = null,
+  onClose,
+  onDecided,
+}: {
+  flow: string
+  pending?: number
+  into?: string | null
+  onClose(): void
+  onDecided?(): void
+}) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [picked, setPicked] = useState<string | null>(null)
   const [events, setEvents] = useState<PoieoEvent[]>([])
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let live = true
     void fetchRuns({ flow, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setPicked(rows[0]?.run_id ?? null)
+      setPicked((current) => current ?? rows[0]?.run_id ?? null)
     })
     return () => {
       live = false
     }
-  }, [flow])
+  }, [flow, reload])
+
+  const decided = () => {
+    setReload((n) => n + 1)
+    onDecided?.()
+  }
 
   useEffect(() => {
     if (!picked) {
@@ -127,6 +146,7 @@ export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
         current_run_id: null,
         last_run: null,
         pending: 0,
+        into: null,
       },
     ])
     return replay(scratch, events).workers[flow] ?? null
@@ -141,7 +161,24 @@ export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
         </button>
       </header>
 
-      <WorkList runs={runs} selected={picked} onSelect={setPicked} />
+      <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
+
+      <WorkList
+        runs={runs}
+        selected={picked}
+        onSelect={setPicked}
+        controls={(run) =>
+          run.change ? (
+            <Decide
+              flow={flow}
+              pending={pending}
+              into={into}
+              runId={run.run_id}
+              onDone={decided}
+            />
+          ) : null
+        }
+      />
 
       {picked ? <Diff runId={picked} /> : null}
 
