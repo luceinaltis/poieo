@@ -3,7 +3,7 @@
  * route to call that changes anything, so there is no verb here but GET.
  */
 
-import type { FlowRow, PoieoEvent, RunSummary } from "./types"
+import type { DiffReport, FlowRow, PoieoEvent, RunSummary } from "./types"
 
 async function getJson<T>(path: string): Promise<T | null> {
   const response = await fetch(path)
@@ -35,6 +35,21 @@ export async function fetchRunEvents(runId: string): Promise<PoieoEvent[]> {
     `/api/runs/${encodeURIComponent(runId)}`,
   )
   return body?.events ?? []
+}
+
+/**
+ * A run's diff, regenerated on demand from two ids the store kept.
+ *
+ * `null` means it could not be read at all -- unknown run, or the daemon went
+ * away. A body with `change: null` is different: the run really did alter
+ * nothing, and saying so is the answer.
+ */
+export async function fetchDiff(runId: string): Promise<DiffReport | null> {
+  try {
+    return await getJson<DiffReport>(`/api/runs/${encodeURIComponent(runId)}/diff`)
+  } catch {
+    return null
+  }
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

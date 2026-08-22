@@ -65,3 +65,22 @@ export interface PoieoEvent {
   data?: Record<string, any>
   [flatSummaryField: string]: unknown
 }
+
+
+export interface DiffFile {
+  path: string
+  status: string
+  insertions: number
+  deletions: number
+}
+
+export interface DiffReport {
+  run_id: string
+  base?: string
+  head?: string
+  files?: DiffFile[]
+  patch?: string
+  truncated?: boolean
+  /** Present and null when the run altered nothing. */
+  change?: null
+}

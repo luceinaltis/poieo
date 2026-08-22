@@ -75,3 +75,77 @@
   gap: 6px;
   padding-bottom: 4px;
 }
+
+.diff {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.diff-note {
+  color: #9a9086;
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.diff-note button {
+  background: #221e18;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9em;
+  margin-top: 4px;
+  padding: 2px 8px;
+}
+
+.diff-files {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diff-open {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.85em;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 3px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.diff-count {
+  color: #9a9086;
+  white-space: nowrap;
+}
+
+.diff-hunks {
+  background: #14120f;
+  border-radius: 4px;
+  font-size: 0.78em;
+  margin: 2px 0 6px;
+  overflow-x: auto;
+  padding: 6px 8px;
+}
+
+.diff-line[data-line="added"] {
+  color: #a9b665;
+}
+
+.diff-line[data-line="removed"] {
+  color: #d16d5a;
+}
+
+.diff-line[data-line="meta"] {
+  color: #6b6257;
+}

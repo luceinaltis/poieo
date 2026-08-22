@@ -25,6 +25,7 @@ vi.mock("./api", () => ({
     },
   ]),
   fetchRunEvents: vi.fn(async () => AGENT_RUN),
+  fetchDiff: vi.fn(async () => ({ run_id: "20260822T072819-98a6708d", change: null })),
   openFeed: vi.fn(() => () => {}),
 }))
 

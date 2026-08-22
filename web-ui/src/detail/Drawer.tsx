@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
+import { Diff } from "../review/Diff"
 import { WorkList } from "../review/WorkList"
 import { initialStage, replay } from "../state/stage"
 import type { Worker } from "../state/stage"
@@ -141,6 +142,8 @@ export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
       </header>
 
       <WorkList runs={runs} selected={picked} onSelect={setPicked} />
+
+      {picked ? <Diff runId={picked} /> : null}
 
       {replayed ? (
         <p className="drawer-summary">
