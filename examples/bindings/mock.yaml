@@ -16,7 +16,8 @@ providers:
           - '{"approved": false, "feedback": "The middle clause is limp."}'
           - '{"approved": true, "feedback": "Good."}'
         worker:
-          - tool_calls:
+          - thinking: "First see what is in this directory."
+            tool_calls:
               - {name: list_dir, arguments: {}}
           - tool_calls:
               - name: write_file

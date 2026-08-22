@@ -192,6 +192,11 @@ poieo daemon examples/poieo.yaml     # stay up
 poieo daemon examples/poieo.yaml --once --flow triage
 ```
 
+While the daemon runs it serves a read-only observation page on
+`http://127.0.0.1:8484` (`--port` to change it, `--no-web` to turn it off).
+`GET /api/events` streams every run event live (SSE); `/api/flows` and
+`/api/runs` answer what is running and what already ran.
+
 ## Run logs
 
 Every run appends a JSONL event stream under `<store>/runs/<run_id>.jsonl` plus a summary
