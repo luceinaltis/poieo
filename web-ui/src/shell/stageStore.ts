@@ -8,18 +8,24 @@
 import {
   fetchFlows as defaultFetchFlows,
   fetchRunEvents as defaultFetchRunEvents,
+  fetchRuns as defaultFetchRuns,
   openFeed as defaultOpenFeed,
 } from "../api"
 import type { FeedStatus } from "../api"
-import { initialStage, reduce, replay } from "../state/stage"
+import { rollup } from "../review/rollup"
+import { initialStage, reduce, replay, setRecent } from "../state/stage"
 import type { StageState, Worker } from "../state/stage"
 import type { FlowRow, PoieoEvent } from "../types"
 
 export interface StageApi {
   fetchFlows: typeof defaultFetchFlows
   fetchRunEvents: typeof defaultFetchRunEvents
+  fetchRuns: typeof defaultFetchRuns
   openFeed: typeof defaultOpenFeed
 }
+
+/** How far back the review window reaches. */
+export const REVIEW_LIMIT = 50
 
 export interface StageStore {
   getStage(): StageState
@@ -65,6 +71,7 @@ function seed(state: StageState, flows: FlowRow[]): StageState {
 export function createStageStore(api: StageApi = {
   fetchFlows: defaultFetchFlows,
   fetchRunEvents: defaultFetchRunEvents,
+  fetchRuns: defaultFetchRuns,
   openFeed: defaultOpenFeed,
 }): StageStore {
   let stage = initialStage([])
@@ -94,12 +101,23 @@ export function createStageStore(api: StageApi = {
     announce()
   }
 
+  /** The run index knows what a night amounted to; the event stream does not. */
+  async function tally(current: StageState, rows: FlowRow[]): Promise<StageState> {
+    let next = current
+    for (const row of rows) {
+      const runs = await api.fetchRuns({ flow: row.name, limit: REVIEW_LIMIT })
+      next = setRecent(next, row.name, rollup(runs))
+    }
+    return next
+  }
+
   async function resync(): Promise<void> {
     holding = true
     held = []
     try {
       flows = await api.fetchFlows()
       stage = seed(stage, flows)
+      stage = await tally(stage, flows)
 
       for (const row of flows) {
         if (!row.current_run_id) continue
@@ -129,6 +147,7 @@ export function createStageStore(api: StageApi = {
       // the board should still say what the daemon is running.
       flows = await api.fetchFlows()
       stage = seed(stage, flows)
+      stage = await tally(stage, flows)
       announce()
 
       closeFeed = api.openFeed({

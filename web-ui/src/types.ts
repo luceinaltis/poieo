@@ -13,6 +13,16 @@ export interface Usage {
   cache_write_tokens: number
 }
 
+export interface Change {
+  base: string
+  head: string
+  files: string[]
+  insertions: number
+  deletions: number
+  /** The run's own one-line account of what it did. */
+  message: string
+}
+
 export interface RunSummary {
   run_id: string
   flow: string | null
@@ -24,6 +34,8 @@ export interface RunSummary {
   iteration: number
   usage: Usage
   error: string | null
+  /** Absent when the run altered nothing -- which is not the same as null. */
+  change?: Change
 }
 
 export interface FlowRow {
@@ -33,6 +45,8 @@ export interface FlowRow {
   status: string
   current_run_id: string | null
   last_run: RunSummary | null
+  /** How many pieces of work are waiting to be looked at. */
+  pending: number
 }
 
 /**

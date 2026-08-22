@@ -1,0 +1,100 @@
+import { expect, test } from "vitest"
+
+import { NOTHING, fold, outcomeOf, rollup } from "./rollup"
+import type { RunSummary } from "../types"
+
+const USAGE = {
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_tokens: 0,
+  cache_write_tokens: 0,
+}
+
+function run(over: Partial<RunSummary> = {}): RunSummary {
+  return {
+    run_id: "r",
+    flow: "chores",
+    graph: "agent-task",
+    status: "completed",
+    started_at: "2026-08-22T02:00:00+00:00",
+    finished_at: "2026-08-22T02:00:04+00:00",
+    steps: 1,
+    iteration: 1,
+    usage: USAGE,
+    error: null,
+    ...over,
+  }
+}
+
+function change(over = {}) {
+  return {
+    base: "aaa",
+    head: "bbb",
+    files: ["one.py"],
+    insertions: 42,
+    deletions: 11,
+    message: "tidied the exports",
+    ...over,
+  }
+}
+
+test("an empty night rolls up to nothing", () => {
+  expect(rollup([])).toEqual(NOTHING)
+})
+
+test("counts and sums across a night", () => {
+  const summary = rollup([
+    run({ run_id: "a", change: change() }),
+    run({ run_id: "b", change: change({ insertions: 3, deletions: 1, files: ["x", "y"] }) }),
+  ])
+
+  expect(summary.works).toBe(2)
+  expect(summary.succeeded).toBe(2)
+  expect(summary.insertions).toBe(45)
+  expect(summary.deletions).toBe(12)
+})
+
+test("a run that changed nothing is work, not a failure", () => {
+  const summary = rollup([run({ run_id: "quiet" })])
+
+  // It ran, it looked, there was nothing to do. Counting that as failed would
+  // make a quiet night look broken.
+  expect(summary.works).toBe(1)
+  expect(summary.nothingToDo).toBe(1)
+  expect(summary.failed).toBe(0)
+  expect(summary.insertions).toBe(0)
+})
+
+test("a failed run is counted as failed", () => {
+  const summary = rollup([run({ status: "failed", error: "NodeError: boom" })])
+
+  expect(summary.failed).toBe(1)
+  expect(summary.succeeded).toBe(0)
+  expect(summary.nothingToDo).toBe(0)
+})
+
+test("a failed run that got partway still contributes no lines", () => {
+  // Its work is parked, not on the branch, so it is not part of what is waiting.
+  const summary = rollup([run({ status: "failed", change: change() })])
+
+  expect(summary.failed).toBe(1)
+  expect(summary.insertions).toBe(0)
+  expect(summary.deletions).toBe(0)
+})
+
+test("outcomeOf names the three outcomes", () => {
+  expect(outcomeOf(run({ change: change() }))).toBe("succeeded")
+  expect(outcomeOf(run())).toBe("nothing")
+  expect(outcomeOf(run({ status: "failed" }))).toBe("failed")
+  expect(outcomeOf(run({ status: "aborted" }))).toBe("failed")
+})
+
+test("fold adds one run at a time, matching rollup", () => {
+  const runs = [run({ change: change() }), run(), run({ status: "failed" })]
+  expect(runs.reduce(fold, NOTHING)).toEqual(rollup(runs))
+})
+
+test("NOTHING is not mutated by folding", () => {
+  fold(NOTHING, run({ change: change() }))
+  expect(NOTHING.works).toBe(0)
+})

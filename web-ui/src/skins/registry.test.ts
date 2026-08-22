@@ -14,6 +14,7 @@ const FLOWS: FlowRow[] = [
     status: "waiting",
     current_run_id: null,
     last_run: null,
+    pending: 0,
   },
   {
     name: "revision",
@@ -22,6 +23,7 @@ const FLOWS: FlowRow[] = [
     status: "waiting",
     current_run_id: null,
     last_run: null,
+    pending: 0,
   },
 ]
 

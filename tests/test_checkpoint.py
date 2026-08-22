@@ -115,6 +115,7 @@ def test_commit_records_the_change(tmp_path):
 
     assert isinstance(change, Change)
     assert change.files == ["new.py"]
+    assert change.message == "wrote new.py"
     assert change.insertions > 0
     assert change.base == before
     assert head(repo, "poieo/chores") == change.head

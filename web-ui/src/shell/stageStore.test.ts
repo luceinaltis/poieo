@@ -13,6 +13,7 @@ const CHORES: FlowRow = {
   status: "waiting",
   current_run_id: null,
   last_run: null,
+  pending: 0,
 }
 
 function harness(overrides: Partial<StageApi> = {}) {
@@ -20,6 +21,7 @@ function harness(overrides: Partial<StageApi> = {}) {
   const api: StageApi = {
     fetchFlows: vi.fn(async () => [CHORES]),
     fetchRunEvents: vi.fn(async () => [] as PoieoEvent[]),
+    fetchRuns: vi.fn(async () => []),
     openFeed: vi.fn((h: FeedHandlers) => {
       handlers = h
       return () => {
@@ -152,5 +154,43 @@ test("feed status is reported through", async () => {
 
   feed().onStatus("lost")
   expect(store.getStatus()).toBe("lost")
+  store.stop()
+})
+
+
+test("the store tallies each flow's recent work from the run index", async () => {
+  const runs = [
+    {
+      run_id: "a",
+      flow: "chores",
+      graph: "agent-task",
+      status: "completed",
+      started_at: "t",
+      finished_at: "t",
+      steps: 1,
+      iteration: 1,
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+      error: null,
+      change: {
+        base: "a",
+        head: "b",
+        files: ["one.py"],
+        insertions: 9,
+        deletions: 1,
+        message: "did a thing",
+      },
+    },
+  ]
+  const { store } = harness({ fetchRuns: vi.fn(async () => runs) })
+
+  await store.start()
+
+  // The event stream never carries this: a browser opened at noon has to be
+  // told what happened at 3am.
+  expect(store.getStage().workers.chores.recent).toMatchObject({
+    works: 1,
+    succeeded: 1,
+    insertions: 9,
+  })
   store.stop()
 })

@@ -7,7 +7,9 @@
  * never an event, which is what lets a new skin be one module and one line.
  */
 
-import type { FlowRow, PoieoEvent } from "../types"
+import { NOTHING, fold } from "../review/rollup"
+import type { Rollup } from "../review/rollup"
+import type { FlowRow, PoieoEvent, RunSummary } from "../types"
 
 export interface ToolCall {
   name: string
@@ -31,6 +33,14 @@ export interface Worker {
   lastThinking: string
   recentToolCalls: ToolCall[]
   lastRun: LastRun | null
+  /**
+   * What this flow has done lately, for the card line.
+   *
+   * "Lately" is the window the run index hands back, not a clock-based night:
+   * the work list below the card shows those same runs, so the tally and the
+   * list always agree, which is the property a reader would notice breaking.
+   */
+  recent: Rollup
 }
 
 export interface StageState {
@@ -60,6 +70,7 @@ function blankWorker(): Worker {
     lastThinking: "",
     recentToolCalls: [],
     lastRun: null,
+    recent: NOTHING,
   }
 }
 
@@ -190,6 +201,8 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
           steps: asNumber(event.steps),
           finished_at: asString(event.finished_at),
         },
+        // The frame is the summary, flattened -- so it folds like one.
+        recent: fold(state.workers[flow].recent, event as unknown as RunSummary),
       },
     },
   }
@@ -220,6 +233,15 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
     ...state,
     runFlow,
     workers: { ...state.workers, [flow]: { ...state.workers[flow], ...patch } },
+  }
+}
+
+/** Seed a flow's tally from the run index, which the reducer cannot see. */
+export function setRecent(state: StageState, flow: string, recent: Rollup): StageState {
+  if (!(flow in state.workers)) return state
+  return {
+    ...state,
+    workers: { ...state.workers, [flow]: { ...state.workers[flow], recent } },
   }
 }
 

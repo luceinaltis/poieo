@@ -7,7 +7,8 @@ import {
   FAILED_SUMMARY,
   LLM_RUN,
 } from "./fixtures"
-import { initialStage, reduce, replay } from "./stage"
+import { initialStage, reduce, replay, setRecent } from "./stage"
+import { NOTHING } from "../review/rollup"
 import type { StageState } from "./stage"
 import type { FlowRow, PoieoEvent } from "../types"
 
@@ -19,6 +20,7 @@ const FLOWS: FlowRow[] = [
     status: "waiting",
     current_run_id: null,
     last_run: null,
+    pending: 0,
   },
   {
     name: "revision",
@@ -27,6 +29,7 @@ const FLOWS: FlowRow[] = [
     status: "waiting",
     current_run_id: null,
     last_run: null,
+    pending: 0,
   },
 ]
 
@@ -158,4 +161,34 @@ test("an unknown event type leaves the state untouched", () => {
 test("replay equals folding one at a time", () => {
   const folded = AGENT_RUN.reduce<StageState>((s, e) => reduce(s, e), start())
   expect(replay(start(), AGENT_RUN).workers).toEqual(folded.workers)
+})
+
+test("a run summary adds to the flow's recent tally", () => {
+  const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
+
+  expect(stage.workers.chores.recent.works).toBe(1)
+  // the fixture run changed nothing the store recorded, so it is quiet work
+  expect(stage.workers.chores.recent.failed).toBe(0)
+})
+
+test("a failed run's summary is tallied as failed", () => {
+  const stage = reduce(replay(start(), FAILED_RUN), FAILED_SUMMARY)
+
+  expect(stage.workers.chores.recent.failed).toBe(1)
+  expect(stage.workers.chores.recent.succeeded).toBe(0)
+})
+
+test("setRecent seeds a tally the events cannot supply", () => {
+  const seeded = setRecent(start(), "chores", {
+    works: 3,
+    succeeded: 2,
+    failed: 1,
+    nothingToDo: 0,
+    insertions: 40,
+    deletions: 2,
+  })
+
+  expect(seeded.workers.chores.recent.works).toBe(3)
+  expect(seeded.workers.revision.recent.works).toBe(0)
+  expect(setRecent(seeded, "ghost", NOTHING)).toBe(seeded)
 })

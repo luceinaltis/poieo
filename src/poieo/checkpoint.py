@@ -37,6 +37,9 @@ class Change:
     files: list[str] = field(default_factory=list)
     insertions: int = 0
     deletions: int = 0
+    # The run's own one-line account of itself, which is what a reader sees
+    # first. It lives in the commit too, but nothing downstream reads that.
+    message: str = ""
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -45,6 +48,7 @@ class Change:
             "files": list(self.files),
             "insertions": self.insertions,
             "deletions": self.deletions,
+            "message": self.message,
         }
 
 
@@ -187,7 +191,12 @@ class Checkpoint:
             _git(self.repo, "diff", "--numstat", base, head)
         )
         return Change(
-            base=base, head=head, files=files, insertions=insertions, deletions=deletions
+            base=base,
+            head=head,
+            files=files,
+            insertions=insertions,
+            deletions=deletions,
+            message=message.splitlines()[0] if message else "",
         )
 
     # -- the morning after --------------------------------------------------

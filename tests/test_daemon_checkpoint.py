@@ -115,6 +115,8 @@ async def test_summary_carries_the_change(tmp_path):
 
     change = result.summary()["change"]
     assert change["files"] == ["made.txt"]
+    # the model's own last words, which the work list shows
+    assert change["message"] == "wrote made.txt"
     assert change["insertions"] > 0
     assert change["head"] == head(repo, "poieo/chores")
     assert change["base"] != change["head"]

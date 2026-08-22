@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
+import { WorkList } from "../review/WorkList"
 import { initialStage, replay } from "../state/stage"
 import type { Worker } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
@@ -124,6 +125,7 @@ export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
         status: "waiting",
         current_run_id: null,
         last_run: null,
+        pending: 0,
       },
     ])
     return replay(scratch, events).workers[flow] ?? null
@@ -138,22 +140,7 @@ export function Drawer({ flow, onClose }: { flow: string; onClose(): void }) {
         </button>
       </header>
 
-      <nav className="drawer-runs" aria-label="Recent work">
-        {runs.length === 0 ? <p className="drawer-empty">No work yet.</p> : null}
-        {runs.map((row) => (
-          <button
-            key={row.run_id}
-            type="button"
-            className="drawer-run"
-            data-picked={String(row.run_id === picked)}
-            onClick={() => setPicked(row.run_id)}
-          >
-            <span>{shortTime(row.started_at)}</span>
-            <span>{row.status}</span>
-            <span>{row.steps} step(s)</span>
-          </button>
-        ))}
-      </nav>
+      <WorkList runs={runs} selected={picked} onSelect={setPicked} />
 
       {replayed ? (
         <p className="drawer-summary">

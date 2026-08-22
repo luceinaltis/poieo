@@ -54,6 +54,20 @@ function describeNode(worker: Worker): string {
   return parts.join(" · ")
 }
 
+function describeRecent(worker: Worker): string {
+  const recent = worker.recent
+  if (recent.works === 0) return "nothing finished yet"
+
+  const parts = [`${recent.works} piece${recent.works === 1 ? "" : "s"} of work`]
+  if (recent.insertions || recent.deletions) {
+    parts.push(`+${recent.insertions} / -${recent.deletions}`)
+  }
+  if (recent.nothingToDo) parts.push(`${recent.nothingToDo} found nothing to do`)
+  if (recent.failed) parts.push(`${recent.failed} failed`)
+  return parts.join(" · ")
+}
+
+
 function paint(card: Card, worker: Worker): void {
   card.root.dataset.status = worker.status
   card.node.textContent = describeNode(worker)
@@ -73,9 +87,7 @@ function paint(card: Card, worker: Worker): void {
     }),
   )
 
-  card.last.textContent = worker.lastRun
-    ? `last: ${worker.lastRun.status} · ${worker.lastRun.steps} step(s)`
-    : "nothing finished yet"
+  card.last.textContent = describeRecent(worker)
 }
 
 export const ledger: Skin = {
