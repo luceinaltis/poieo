@@ -2,7 +2,12 @@ import { expect, test } from "vitest"
 
 import {
   FOOTPRINT,
+  HAMMER,
+  ZOOM,
   benchLayout,
+  clampZoom,
+  hammerAngle,
+  sparking,
   bounds,
   columnsFor,
   fit,
@@ -168,4 +173,39 @@ test("the room never shrinks to nothing", () => {
 
 test("an empty room needs no scaling", () => {
   expect(fit({ width: 0, height: 0 }, { width: 390, height: 700 })).toBe(1)
+})
+
+test("the hammer lifts slowly and falls fast", () => {
+  // An even swing reads as waving. A smith's arm spends most of the cycle on
+  // the way up.
+  expect(hammerAngle(0)).toBeCloseTo(HAMMER.struck)
+  expect(hammerAngle(630)).toBeCloseTo(HAMMER.raised) // 70% of the way through
+  expect(hammerAngle(899)).toBeGreaterThan(HAMMER.raised)
+
+  const mid = hammerAngle(315)
+  expect(mid).toBeLessThan(HAMMER.struck)
+  expect(mid).toBeGreaterThan(HAMMER.raised)
+})
+
+test("the swing repeats and never leaves its arc", () => {
+  for (let t = 0; t < 3000; t += 37) {
+    expect(hammerAngle(t)).toBeGreaterThanOrEqual(HAMMER.raised)
+    expect(hammerAngle(t)).toBeLessThanOrEqual(HAMMER.struck)
+  }
+  expect(hammerAngle(120)).toBeCloseTo(hammerAngle(120 + 900))
+})
+
+test("sparks fly on the strike, and only while working", () => {
+  const busy = worker({ status: "running" })
+  const idle = worker({ status: "waiting" })
+
+  expect(sparking(busy, 880)).toBe(true) // just before the blow lands
+  expect(sparking(busy, 300)).toBe(false) // mid-lift
+  expect(sparking(idle, 880)).toBe(false) // nobody at the anvil
+})
+
+test("zoom is bounded on both sides", () => {
+  expect(clampZoom(99)).toBe(ZOOM.max)
+  expect(clampZoom(0.001)).toBe(ZOOM.min)
+  expect(clampZoom(1.4)).toBe(1.4)
 })

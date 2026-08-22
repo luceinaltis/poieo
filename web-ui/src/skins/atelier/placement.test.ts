@@ -22,12 +22,12 @@ test("moving one bench leaves the others where they were", () => {
 })
 
 test("nonsense in storage is ignored, not rendered", () => {
-  localStorage.setItem("poieo.atelier.benches", '{"a": {"x": "left"}, "b": null}')
+  localStorage.setItem("poieo.atelier.benches.v2", '{"a": {"x": "left"}, "b": null}')
   expect(savedSpots()).toEqual({})
 })
 
 test("unreadable storage is not a crash", () => {
-  localStorage.setItem("poieo.atelier.benches", "{not json")
+  localStorage.setItem("poieo.atelier.benches.v2", "{not json")
   expect(savedSpots()).toEqual({})
 
   const blocked = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
@@ -40,5 +40,14 @@ test("unreadable storage is not a crash", () => {
 test("the arrangement can be forgotten", () => {
   saveSpot("chores", { x: 1, y: 2 })
   forgetSpots()
+  expect(savedSpots()).toEqual({})
+})
+
+
+test("an arrangement from the tap-as-drag release is not carried over", () => {
+  localStorage.setItem(
+    "poieo.atelier.benches",
+    JSON.stringify({ chores: { x: 40, y: 40 } }),
+  )
   expect(savedSpots()).toEqual({})
 })

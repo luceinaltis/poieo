@@ -116,6 +116,36 @@ export function place(
 
 export type Pose = "sitting" | "working" | "alarmed"
 
+/** The hammer's rest and strike angles, in radians. */
+export const HAMMER = { raised: -1.15, struck: 0.35 }
+
+/**
+ * Where the hammer is in its swing.
+ *
+ * Slow lift, quick fall -- an even sine reads as waving, not striking.
+ */
+export function hammerAngle(elapsed: number, period = 900): number {
+  const t = ((elapsed % period) + period) % period / period
+  const { raised, struck } = HAMMER
+  return t < 0.7
+    ? struck + (raised - struck) * (t / 0.7)
+    : raised + (struck - raised) * ((t - 0.7) / 0.3)
+}
+
+/** Sparks fly on the strike, and only while there is work under the hammer. */
+export function sparking(worker: Worker, elapsed: number, period = 900): boolean {
+  if (figurePose(worker) !== "working") return false
+  const t = ((elapsed % period) + period) % period / period
+  return t > 0.93
+}
+
+/** How far the room may be zoomed by hand. */
+export const ZOOM = { min: 0.3, max: 2.5 }
+
+export function clampZoom(scale: number): number {
+  return Math.max(ZOOM.min, Math.min(ZOOM.max, scale))
+}
+
 export function figurePose(worker: Worker): Pose {
   if (worker.status === "error") return "alarmed"
   return worker.status === "running" ? "working" : "sitting"

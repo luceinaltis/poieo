@@ -8,7 +8,12 @@
 
 import type { Spot } from "./scene"
 
-const KEY = "poieo.atelier.benches"
+/**
+ * Bumped once: the first release treated a fourteen-pixel tap as a drag, so
+ * phones accumulated arrangements nobody meant to make. Those are not worth
+ * migrating -- the reader never chose them.
+ */
+const KEY = "poieo.atelier.benches.v2"
 
 export function savedSpots(): Record<string, Spot> {
   try {
