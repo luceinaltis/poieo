@@ -14,6 +14,8 @@ Spec: docs/superpowers/specs/2026-08-22-task-cards-design.md
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,16 +27,33 @@ from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .daemon.config import FlowSpec
 
+log = logging.getLogger("poieo.task")
+
 DEFAULT_EVERY = "1h"
 DEFAULT_TOOLS = ["files", "shell"]
 DEFAULT_MAX_TURNS = 40
 
-# The node's system block is user-visible behaviour, so it is fixed here rather
-# than assembled at run time.
-SYSTEM = """You are working on {title}, in {folder}.
+# How many journal entries reach the prompt. The file keeps everything; this
+# only bounds what the model is asked to hold in mind.
+JOURNAL_LIMIT = 20
+# A single entry is one line, so a chatty model cannot bury the rest.
+JOURNAL_WIDTH = 300
 
-Finish by saying in one line what you did. If there was nothing worth doing,
-say that in one line instead."""
+
+def system_block(task: TaskSpec) -> str:
+    """The generated node's system prompt. User-visible, so it is fixed here.
+
+    The journal arrives as run input rather than baked in, because it is
+    re-read before every run -- a note written at 8am is in effect at 9am.
+    """
+    return (
+        f"You are working on {task.name}, in {task.folder_path()}.\n\n"
+        "What you have already done, and what the user has told you:\n"
+        "{{ input.journal }}\n\n"
+        "Finish by saying in one line what you did. If there was nothing worth\n"
+        "doing, say that in one line instead."
+    )
+
 
 # Keys that describe the single generated node, and therefore have nowhere to
 # go once the task names a graph of its own.
@@ -104,6 +123,10 @@ class TaskSpec(BaseModel):
     def folder_path(self) -> Path:
         return self.resolve(self.folder)
 
+    def journal_path(self) -> Path:
+        """Where this task remembers: beside it, under the same name."""
+        return self.dir / f"{self.slug}.md"
+
 
 def load_task(path: str | Path) -> TaskSpec:
     """Load and fully validate a task file."""
@@ -155,7 +178,7 @@ def build_graph(task: TaskSpec) -> GraphSpec:
                 workdir=str(task.folder_path()),
                 tools=task.tools or list(DEFAULT_TOOLS),
                 max_turns=task.max_turns,
-                system=SYSTEM.format(title=task.name, folder=task.folder_path()),
+                system=system_block(task),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
             )
@@ -196,3 +219,52 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
         p for p in folder.iterdir() if p.suffix.lower() in suffixes and not p.name.startswith(".")
     )
     return [load_task(p) for p in files]
+
+
+# -- the journal -------------------------------------------------------------
+#
+# One markdown file per task, appended to and never rewritten, so a line the
+# user types by hand works exactly like a line poieo wrote.
+
+
+def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
+    """The tail of a task's journal, as it goes into the prompt.
+
+    Read as text, not parsed: that is what makes hand-written lines work.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8") if path.exists() else ""
+    except OSError as exc:
+        # Forgetting beats failing, but say so: a task that cannot read its
+        # journal repeats itself silently.
+        log.warning("could not read the journal %s: %s", path, exc)
+        raw = ""
+    lines = [
+        line.rstrip()
+        for line in raw.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    if not lines:
+        return "nothing yet"
+    if len(lines) > limit:
+        return "\n".join(["(earlier entries omitted)", *lines[-limit:]])
+    return "\n".join(lines)
+
+
+def append_journal(
+    path: Path,
+    kind: str,
+    text: str,
+    *,
+    title: str | None = None,
+    when: datetime | None = None,
+) -> None:
+    """Add one line. ``kind`` is did / nothing / failed / you."""
+    one_line = " ".join(str(text).split()) or "(nothing said)"
+    if len(one_line) > JOURNAL_WIDTH:
+        one_line = one_line[: JOURNAL_WIDTH - 3] + "..."
+    stamp = (when or datetime.now()).strftime("%Y-%m-%d %H:%M")
+
+    opening = "" if path.exists() else f"# {title or path.stem}\n\n"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{opening}- {stamp} · {kind:<8}{one_line}\n")

@@ -32,7 +32,15 @@ from .graph import GraphSpec, load_graph
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
-from .task import build_graph, expand, is_task_file, load_task, load_tasks
+from .task import (
+    append_journal,
+    build_graph,
+    expand,
+    is_task_file,
+    load_task,
+    load_tasks,
+    read_journal,
+)
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
 
@@ -107,6 +115,13 @@ def _load_spec(path: Path) -> GraphSpec:
     if task.graph:
         return load_graph(task.resolve(task.graph))
     return build_graph(task)
+
+
+def _task_payload(path: Path) -> dict[str, Any]:
+    """What a task's generated graph expects in its input, beyond the user's."""
+    if not is_task_file(path):
+        return {}
+    return {"journal": read_journal(load_task(path).journal_path())}
 
 
 @app.command()
@@ -352,7 +367,7 @@ def run(
     except PoieoError as exc:
         _fail(str(exc))
 
-    payload = _parse_input(input_json, set_)
+    payload = {**_task_payload(graph_path), **_parse_input(input_json, set_)}
     run_store = NullStore() if no_log else RunStore(store)
 
     async def _go():
@@ -511,6 +526,22 @@ def tasks(
             f"{task.folder_path()}"
         )
         typer.echo(f"        {task.name}")
+        last = read_journal(task.journal_path(), limit=1).splitlines()[-1]
+        typer.echo(f"        {last}")
+
+
+@app.command()
+def note(
+    task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
+    text: str = typer.Argument(..., help="What you want it to do differently."),
+) -> None:
+    """Tell a task something. It reads this before its next piece of work."""
+    try:
+        task = load_task(task_path)
+    except PoieoError as exc:
+        _fail(str(exc))
+    append_journal(task.journal_path(), "you", text, title=task.name)
+    _ok(f"noted in {task.journal_path()}")
 
 
 @app.command()

@@ -4,6 +4,8 @@ The expansion tests compare against the hand-written equivalent on purpose:
 that equality is the whole safety argument for the sugar.
 """
 
+import asyncio
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -11,7 +13,8 @@ import pytest
 from poieo.daemon.config import FlowSpec, load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
-from poieo.task import expand, load_task
+from poieo.store import NullStore
+from poieo.task import append_journal, expand, load_task, read_journal
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -227,3 +230,83 @@ def test_a_config_without_tasks_is_untouched(tmp_path):
     loaded = load_config(config)
     assert loaded.tasks is None
     assert [f.name for f in loaded.flows] == ["legacy"]
+
+
+# -- the journal -------------------------------------------------------------
+
+
+def test_a_new_journal_gets_a_header_then_one_line_per_entry(tmp_path):
+    task = load_task(write_task(tmp_path, "tidy", "name: tidy up\nprompt: go\n"))
+    when = datetime(2026, 8, 22, 3, 14)
+
+    append_journal(task.journal_path(), "did", "fixed the flaky test", title=task.name, when=when)
+    append_journal(task.journal_path(), "you", "leave prose alone", title=task.name, when=when)
+
+    text = task.journal_path().read_text(encoding="utf-8")
+    assert text.startswith("# tidy up\n")
+    assert "- 2026-08-22 03:14 · did     fixed the flaky test" in text
+    assert "- 2026-08-22 03:14 · you     leave prose alone" in text
+
+
+def test_an_entry_is_one_line_however_the_model_answers(tmp_path):
+    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    append_journal(task.journal_path(), "did", "first line\n\nsecond   line\n")
+    written = task.journal_path().read_text(encoding="utf-8")
+    assert len([line for line in written.splitlines() if line.startswith("- ")]) == 1
+    assert "first line second line" in written
+
+
+def test_reading_an_absent_journal_says_so(tmp_path):
+    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    assert read_journal(task.journal_path()) == "nothing yet"
+
+
+def test_only_the_tail_reaches_the_prompt(tmp_path):
+    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    for i in range(25):
+        append_journal(task.journal_path(), "did", f"entry {i}", title=task.name)
+
+    tail = read_journal(task.journal_path())
+    assert tail.startswith("(earlier entries omitted)")
+    assert "entry 24" in tail and "entry 4" not in tail
+    # The file itself keeps everything.
+    assert "entry 0" in task.journal_path().read_text(encoding="utf-8")
+
+
+def test_a_hand_written_line_is_read_like_any_other(tmp_path):
+    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task.journal_path().write_text("# t\n\nstop touching the README\n", encoding="utf-8")
+    assert read_journal(task.journal_path()) == "stop touching the README"
+
+
+def test_the_generated_prompt_carries_the_journal(tmp_path):
+    _, graph = expand(load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n")))
+    assert "{{ input.journal }}" in graph.nodes[0].system
+
+
+def test_a_task_backed_flow_reads_its_journal_before_every_run(tmp_path):
+    path = write_task(tmp_path, "one", "name: one\nprompt: go\n")
+    config = load_config(_config(tmp_path))
+    flow = load_flows(config)[0]
+
+    assert flow.read_input(config)["journal"] == "nothing yet"
+    append_journal(load_task(path).journal_path(), "you", "try the tests instead")
+    assert "try the tests instead" in flow.read_input(config)["journal"]
+
+
+async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
+    from poieo.daemon import Daemon
+
+    path = write_task(tmp_path, "one", "name: one\nprompt: go\n")
+    config = load_config(_config(tmp_path))
+    for flow in config.flows:
+        flow.trigger.max_iterations = 1
+
+    await asyncio.wait_for(
+        Daemon(config, store=NullStore()).serve(install_signals=False), timeout=10
+    )
+
+    written = load_task(path).journal_path().read_text(encoding="utf-8")
+    assert written.startswith("# one\n")
+    assert "· did" in written
+    assert "(mock response)" in written

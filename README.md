@@ -196,6 +196,33 @@ A task's identity is its **filename**, so the title on the card can be
 rewritten without orphaning its run history. Paths written inside a task file
 resolve against the task file itself.
 
+### What a task remembers
+
+Each task keeps a journal beside it -- `tasks/keep-improving.md` -- and reads it
+before every run.
+
+```
+- 2026-08-22 03:14 . did     fixed the flaky interval test on Windows
+- 2026-08-22 08:02 . you     leave prose alone, spend the night on tests
+- 2026-08-22 09:30 . did     added two cases to test_cron
+```
+
+poieo appends a `did` line after each run that finished (the model's own
+closing sentence) and a `failed` line after one that did not. You add a `you`
+line:
+
+```bash
+poieo note tasks/keep-improving.yaml "leave prose alone, spend the night on tests"
+```
+
+-- or by opening the file and typing one. The tail is read as text and never
+parsed, so a line you wrote works exactly like a line poieo wrote. The last 20
+entries go into the prompt; the file keeps everything.
+
+This is what stops a standing task from re-doing last night's work, and it is
+where the morning review's accept and discard notes will land once the review
+screen ships.
+
 ## The resident layer
 
 ```yaml
