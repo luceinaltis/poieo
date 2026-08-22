@@ -287,3 +287,29 @@ def test_a_task_run_reads_its_journal(tmp_path):
     events = (tmp_path / "logs" / "runs").glob("*.jsonl")
     written = "\n".join(p.read_text(encoding="utf-8") for p in events)
     assert "only touch the tests" in written
+
+
+def test_view_renders_a_task(tmp_path):
+    out = tmp_path / "v.html"
+    result = runner.invoke(app, ["view", str(_task(tmp_path)), "-o", str(out)])
+    assert result.exit_code == 0
+    assert "flowchart TD" in out.read_text(encoding="utf-8")
+
+
+def test_edit_refuses_a_task_and_points_at_eject(tmp_path):
+    result = runner.invoke(app, ["edit", str(_task(tmp_path))])
+    assert result.exit_code == 1
+    assert "eject" in result.stderr
+
+
+def test_tasks_accepts_the_folder_itself(tmp_path):
+    _task(tmp_path)
+    result = runner.invoke(app, ["tasks", str(tmp_path / "tasks")])
+    assert result.exit_code == 0
+    assert "tidy" in result.stdout
+
+
+def test_eject_says_the_graph_still_needs_its_task(tmp_path):
+    result = runner.invoke(app, ["eject", str(_task(tmp_path))])
+    assert result.exit_code == 0
+    assert "journal" in result.stdout
