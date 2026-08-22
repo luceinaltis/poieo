@@ -1,0 +1,83 @@
+/**
+ * Everything that talks to the daemon. Read-only by construction: there is no
+ * route to call that changes anything, so there is no verb here but GET.
+ */
+
+import type { FlowRow, PoieoEvent, RunSummary } from "./types"
+
+async function getJson<T>(path: string): Promise<T | null> {
+  const response = await fetch(path)
+  if (!response.ok) return null
+  return (await response.json()) as T
+}
+
+export async function fetchFlows(): Promise<FlowRow[]> {
+  const body = await getJson<{ flows: FlowRow[] }>("/api/flows")
+  return body?.flows ?? []
+}
+
+export async function fetchRuns(
+  opts: { flow?: string; limit?: number } = {},
+): Promise<RunSummary[]> {
+  const query = new URLSearchParams()
+  if (opts.flow) query.set("flow", opts.flow)
+  if (opts.limit !== undefined) query.set("limit", String(opts.limit))
+  const suffix = query.toString() ? `?${query}` : ""
+
+  const body = await getJson<{ runs: RunSummary[] }>(`/api/runs${suffix}`)
+  return body?.runs ?? []
+}
+
+export async function fetchRunEvents(runId: string): Promise<PoieoEvent[]> {
+  // 404 means the store has no such run, which a fresh daemon is entitled to.
+  // An empty board with an invitation beats an error the user cannot act on.
+  const body = await getJson<{ events: PoieoEvent[] }>(
+    `/api/runs/${encodeURIComponent(runId)}`,
+  )
+  return body?.events ?? []
+}
+
+export type FeedStatus = "connecting" | "live" | "lost"
+
+export interface FeedHandlers {
+  onEvent(event: PoieoEvent): void
+  onStatus(status: FeedStatus): void
+  /**
+   * Fired on every open, reconnects included. EventSource reconnects by
+   * itself, but the events that happened while it was down are gone -- only
+   * the caller knows how to go back and read them.
+   */
+  onResync(): void
+}
+
+export function openFeed(handlers: FeedHandlers): () => void {
+  const source = new EventSource("/api/events")
+  handlers.onStatus("connecting")
+
+  source.onopen = () => {
+    handlers.onStatus("live")
+    handlers.onResync()
+  }
+
+  source.onerror = () => {
+    // Not fatal: EventSource is already retrying. Say so and wait for onopen.
+    handlers.onStatus("lost")
+  }
+
+  source.onmessage = (message: MessageEvent) => {
+    let event: PoieoEvent
+    try {
+      event = JSON.parse(message.data) as PoieoEvent
+    } catch {
+      return // a torn frame must not take the page down
+    }
+    handlers.onEvent(event)
+  }
+
+  return () => {
+    source.onopen = null
+    source.onerror = null
+    source.onmessage = null
+    source.close()
+  }
+}
