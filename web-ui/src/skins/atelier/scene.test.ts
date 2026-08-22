@@ -3,6 +3,8 @@ import { expect, test } from "vitest"
 import {
   FOOTPRINT,
   benchLayout,
+  bounds,
+  columnsFor,
   fit,
   fromIso,
   bubbleVisible,
@@ -11,7 +13,6 @@ import {
   place,
   shelfCount,
   toIso,
-  transitionMs,
 } from "./scene"
 import { NOTHING } from "../../review/rollup"
 import type { Worker } from "../../state/stage"
@@ -118,21 +119,46 @@ test("the shelf fills with finished work, not attempts", () => {
   expect(shelfCount(worker({ recent: { ...NOTHING, works: 2, failed: 2 } }))).toBe(0)
 })
 
-test("reduced motion means no tween at all", () => {
-  expect(transitionMs(false)).toBeGreaterThan(0)
-  expect(transitionMs(true)).toBe(0)
-})
-
 test("the room shrinks to fit a narrow screen", () => {
-  const box = { width: 560, height: 280 }
+  const box = { width: 830, height: 440 }
 
-  // A phone: the arrangement is wider than the viewport, so it scales down.
   const onPhone = fit(box, { width: 390, height: 700 })
   expect(onPhone).toBeLessThan(1)
-  expect(box.width * onPhone + FOOTPRINT.width * onPhone).toBeLessThanOrEqual(391)
+  expect(box.width * onPhone).toBeLessThanOrEqual(391)
 
   // A monitor with room to spare: one bench must not be blown up to fill it.
   expect(fit(box, { width: 2400, height: 1200 })).toBe(1)
+})
+
+test("a phone gets a single column, a monitor gets several", () => {
+  // Three across lays benches down the projection's diagonal, which on a tall
+  // narrow screen puts two of them off-stage.
+  expect(columnsFor(390)).toBe(1)
+  expect(columnsFor(1400)).toBeGreaterThan(1)
+})
+
+test("a single column stacks straight down the screen", () => {
+  const spots = benchLayout(3, 1).map((spot) => toIso(spot.x, spot.y))
+
+  expect(spots[0].x).toBeCloseTo(spots[1].x)
+  expect(spots[1].x).toBeCloseTo(spots[2].x)
+  expect(spots[1].y).toBeGreaterThan(spots[0].y)
+})
+
+test("the arrangement fits a phone without shrinking", () => {
+  const spots = benchLayout(3, columnsFor(390))
+  const box = bounds(spots)
+
+  // Nothing off the edge, and nothing squinted at: one column of three fits.
+  expect(box.width).toBeLessThanOrEqual(390)
+  expect(fit(box, { width: 390, height: 700 })).toBe(1)
+})
+
+test("bounds covers the drawn bench, not just its anchor", () => {
+  // Centring on bare anchors pushed the room half a bench off the left edge.
+  const box = bounds([{ x: 0, y: 0 }])
+  expect(box.x).toBe(-FOOTPRINT.width / 2)
+  expect(box.width).toBe(FOOTPRINT.width)
 })
 
 test("the room never shrinks to nothing", () => {

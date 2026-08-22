@@ -14,22 +14,8 @@ export interface Spot {
   y: number
 }
 
-/**
- * How much room one bench takes on screen once drawn, in pixels.
- *
- * The spacing below is derived from this rather than guessed: the projection
- * halves one axis and quarters the other, so floor distances that look
- * generous end up overlapping.
- */
-export const FOOTPRINT = { width: 270, height: 160 }
-
-/** Floor spacing between benches, in room units. */
-export const BENCH = { width: 560, depth: 700 }
-
-/** How many benches stand in a row before the workshop starts another. */
-const PER_ROW = 3
-
-export type Pose = "sitting" | "working" | "alarmed"
+/** How much room one bench takes on screen once drawn, in pixels. */
+export const FOOTPRINT = { width: 270, height: 170 }
 
 /** A 2:1 isometric projection: floor coordinates to screen offsets. */
 export function toIso(x: number, y: number): Spot {
@@ -48,17 +34,23 @@ export function fromIso(sx: number, sy: number): Spot {
 }
 
 /**
- * The screen box the whole arrangement occupies, so the room can be centred
- * instead of hugging a corner.
+ * The screen box the arrangement occupies once drawn.
+ *
+ * Inflated by the footprint, because a bench is drawn around its anchor and
+ * not to the right of it -- centring on the bare anchors pushes the room off
+ * the left edge by half a bench.
  */
 export function bounds(spots: Spot[]): { x: number; y: number; width: number; height: number } {
   if (spots.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
   const screen = spots.map((spot) => toIso(spot.x, spot.y))
   const xs = screen.map((s) => s.x)
   const ys = screen.map((s) => s.y)
-  const x = Math.min(...xs)
-  const y = Math.min(...ys)
-  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+  return {
+    x: Math.min(...xs) - FOOTPRINT.width / 2,
+    y: Math.min(...ys) - FOOTPRINT.height / 2,
+    width: Math.max(...xs) - Math.min(...xs) + FOOTPRINT.width,
+    height: Math.max(...ys) - Math.min(...ys) + FOOTPRINT.height,
+  }
 }
 
 /**
@@ -71,22 +63,34 @@ export function bounds(spots: Spot[]): { x: number; y: number; width: number; he
 export function fit(
   box: { width: number; height: number },
   screen: { width: number; height: number },
-  pad = FOOTPRINT.width,
 ): number {
-  const wide = box.width + pad
-  const tall = box.height + FOOTPRINT.height
-  if (wide <= 0 || tall <= 0) return 1
-  return Math.max(0.35, Math.min(1, screen.width / wide, screen.height / tall))
+  if (box.width <= 0 || box.height <= 0) return 1
+  return Math.max(0.35, Math.min(1, screen.width / box.width, screen.height / box.height))
 }
 
-/** Where the workshop puts benches when nobody has moved them. */
-export function benchLayout(count: number): Spot[] {
+/**
+ * How many benches stand across.
+ *
+ * A tall narrow screen gets one. Three in a row lays them along the
+ * projection's diagonal, which is the worst shape a phone could be handed.
+ */
+export function columnsFor(screenWidth: number): number {
+  return Math.max(1, Math.min(4, Math.floor(screenWidth / FOOTPRINT.width)))
+}
+
+/**
+ * Where the workshop puts benches when nobody has moved them.
+ *
+ * Arranged in screen space and projected back, rather than guessed on the
+ * floor and hoped for: the projection halves one axis and quarters the other,
+ * so floor spacing that reads as generous lands on top of itself.
+ */
+export function benchLayout(count: number, columns = 3): Spot[] {
   const spots: Spot[] = []
   for (let i = 0; i < count; i += 1) {
-    spots.push({
-      x: (i % PER_ROW) * BENCH.width,
-      y: Math.floor(i / PER_ROW) * BENCH.depth,
-    })
+    spots.push(
+      fromIso((i % columns) * FOOTPRINT.width, Math.floor(i / columns) * FOOTPRINT.height),
+    )
   }
   return spots
 }
@@ -100,14 +104,17 @@ export function benchLayout(count: number): Spot[] {
 export function place(
   flows: string[],
   saved: Record<string, Spot> = {},
+  columns = 3,
 ): Record<string, Spot> {
-  const auto = benchLayout(flows.length)
+  const auto = benchLayout(flows.length, columns)
   const placed: Record<string, Spot> = {}
   flows.forEach((flow, index) => {
     placed[flow] = saved[flow] ?? auto[index]
   })
   return placed
 }
+
+export type Pose = "sitting" | "working" | "alarmed"
 
 export function figurePose(worker: Worker): Pose {
   if (worker.status === "error") return "alarmed"
@@ -131,10 +138,6 @@ export function bubbleVisible(worker: Worker): boolean {
  */
 export function shelfCount(worker: Worker): number {
   return worker.tracked ? worker.recent.succeeded : 0
-}
-
-export function transitionMs(reducedMotion: boolean): number {
-  return reducedMotion ? 0 : 220
 }
 
 export function prefersReducedMotion(): boolean {

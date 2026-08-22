@@ -15,6 +15,7 @@ import { savedSpots, saveSpot } from "./placement"
 import {
   bounds,
   bubbleVisible,
+  columnsFor,
   fit,
   fromIso,
   figurePose,
@@ -287,7 +288,7 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   return {
     update(stage: StageState) {
       const flows = Object.keys(stage.workers)
-      const arranged = place(flows, savedSpots())
+      const arranged = place(flows, savedSpots(), columnsFor(app.screen.width))
 
       for (const [flow, bench] of benches) {
         if (!(flow in stage.workers)) {
