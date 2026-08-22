@@ -52,6 +52,7 @@ It is live-only: summaries go to `index.jsonl`, not to the run's own JSONL, so `
 ## Global Constraints
 
 - New npm dependencies only, in `web-ui/`: react, react-dom, typescript, vite, @vitejs/plugin-react, vitest, pixi.js, and their types. No state library, no router, no CSS framework, no component kit, no sprite/art packages — the spec puts asset packs out of scope and `atelier` is drawn from shapes in code.
+- **PixiJS is loaded lazily.** It is by far the heaviest thing that reaches the browser, and it serves exactly one skin. `atelier` reaches it through a dynamic `import("pixi.js")`, which Vite splits into its own chunk — someone who stays on `ledger` never downloads it. Nothing outside `skins/atelier/` may import pixi statically; a static import silently folds it back into the main bundle.
 - **No new pip dependencies.** The only Python change in this plan is the `/assets` mount fix in Task 1.
 - **Read-only.** No component may POST, PUT, PATCH or DELETE. There is no route to call.
 - Built output is **checked in** at `src/poieo/web/static/` (spec: "built frontend (checked in; `npm run build` refreshes it)"). `web-ui/node_modules/` is not.
@@ -338,7 +339,9 @@ interface SkinHandle {
 }
 ```
 
-`registry.ts` exports `SKINS: Skin[]` and `skinById(id): Skin` falling back to `ledger` — an unknown id in localStorage must not blank the page.
+`registry.ts` exports `SKINS: Skin[]` and `skinById(id): Skin` falling back to `ledger` — an unknown id in localStorage must not blank the page. The registry holds skin *descriptors*, so listing skins in the picker must not pull any skin's rendering code — `atelier`'s id and label are known without loading PixiJS.
+
+**`mount` stays synchronous**, exactly as the spec writes it, even though `atelier` loads its renderer asynchronously. A skin that needs something loaded returns its handle immediately, keeps the latest `StageState` handed to `update()`, and swaps in the real renderer when the load resolves. The alternative — making `mount` return a promise — would push waiting into the App and into every future skin to serve one skin's private problem.
 
 `ledger` is deliberately plain DOM (no React, no canvas): one card per flow with a live status dot, the current node and step, the latest turn's text, and a scrolling feed of turns and tool calls. It is the fallback and the proof that the contract is sufficient — if `ledger` needs something `StageState` does not carry, the reducer is wrong, not the skin.
 
@@ -349,6 +352,7 @@ test("every registered skin satisfies the contract", ...)     // id, label, moun
 test("skinById falls back to ledger for an unknown id", ...)
 test("mount/update/destroy leaves the element empty", ...)    // no leaked nodes or listeners
 test("ledger renders one card per worker and reflects status", ...)  // jsdom
+test("listing skins loads no renderer", ...)   // the picker must not drag PixiJS in
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -428,8 +432,10 @@ git commit -m "feat: app shell, skin picker, and detail drawer"
 - Test: `web-ui/src/skins/atelier/scene.test.ts`
 
 **Interfaces:**
-- Consumes: `StageState`, PixiJS.
+- Consumes: `StageState`, PixiJS — **only** through `await import("pixi.js")` inside `index.ts`.
 - Produces: a skin satisfying the same contract as `ledger` — no new state, no API access.
+
+**Lazy loading, concretely.** `mount()` returns its handle at once, having painted a quiet "opening the workshop" placeholder and started the import. Until it resolves, `update(stage)` just stores the stage. When it resolves, the renderer is built and immediately fed the stored stage — so a skin switch mid-run shows the current state, not a blank bench waiting for the next event. If `destroy()` lands before the import resolves, a disposed flag makes the resolution a no-op: no PixiJS canvas may appear in a detached element. A failed import (offline, corrupt chunk) leaves a plain message in place and logs — it must not take the page down, since the page's whole job is showing that something else is still running.
 
 **The scene, per the spec.** An isometric workshop drawn from shapes in code; no sprite packs. One workbench per flow, with an artisan figure that:
 
@@ -455,7 +461,13 @@ test("bubbleVisible is false when thinking is empty", ...)
 test("a tool call surfaces the tool name and its error flag", ...)
 test("shelfItems grows only on a completed run", ...)
 test("reduced motion returns zero-duration transitions", ...)
+test("mount returns a handle before the import resolves", ...)
+test("the stage handed over while loading is applied once ready", ...)
+test("destroy before the import resolves leaves nothing behind", ...)
+test("a failed import degrades to a message, not a throw", ...)
 ```
+
+Stub the dynamic import in these tests (`vi.mock("pixi.js", ...)`) — vitest must never load real PixiJS, and the pure `scene.ts` half needs no canvas at all.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -504,7 +516,16 @@ npm test --workspace web-ui
 
 Expected: both green.
 
-- [ ] **Step 4: End-to-end smoke**
+- [ ] **Step 4: Verify the PixiJS chunk really is separate**
+
+```bash
+npm run build --workspace web-ui
+ls -la src/poieo/web/static/assets
+```
+
+Expected: an entry chunk and a distinctly larger pixi chunk beside it. Grep the entry chunk for a PixiJS-only identifier to prove it is absent — if PixiJS folded into the entry, some module imported it statically. Record both chunk sizes in the report; they are the number this decision was made on.
+
+- [ ] **Step 5: End-to-end smoke**
 
 ```bash
 python main.py daemon examples/poieo.yaml
@@ -512,7 +533,7 @@ python main.py daemon examples/poieo.yaml
 
 Open `http://127.0.0.1:8484` in a browser — not the dev server. Confirm the built page loads from the daemon, both skins run, and the drawer replays a past run. Paste what you saw into the report.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git commit -m "docs: build and document the observation UI"
@@ -525,3 +546,4 @@ git commit -m "docs: build and document the observation UI"
 - `poieo daemon examples/poieo.yaml` and a browser at `127.0.0.1:8484` shows flows moving in real time, in either skin, with no build step required of the user.
 - The reducer has fixture-driven tests; replay and live provably agree.
 - A third skin would be one new module and one registry line — no backend change, no reducer change.
+- Staying on `ledger` downloads no PixiJS at all, and the entry chunk proves it.
