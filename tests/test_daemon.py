@@ -1,14 +1,18 @@
 import asyncio
+import socket
 from datetime import datetime
 
+import httpx
 import pytest
 
 from conftest import EXAMPLES
 from poieo.daemon import Daemon, load_config, load_flows
 from poieo.daemon.cron import CronSchedule
+from poieo.daemon.service import _ensure_port_free
 from poieo.daemon.triggers import TriggerSpec, parse_duration
 from poieo.errors import SpecError
 from poieo.store import NullStore
+from poieo.web.events import BroadcastStore
 
 
 @pytest.mark.parametrize(
@@ -168,3 +172,56 @@ async def test_flow_runner_exposes_live_status():
     assert runner.current_run_id is None
     assert runner.last_result is results[-1]
     assert runner.last_result.status == "completed"
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_ensure_port_free_raises_when_taken():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        with pytest.raises(SpecError, match=str(port)):
+            _ensure_port_free("127.0.0.1", port)
+
+
+def test_ensure_port_free_passes_on_free_port():
+    port = _free_port()  # released above; must not raise
+    _ensure_port_free("127.0.0.1", port)
+
+
+async def test_daemon_with_web_port_wraps_store_and_serves():
+    config = load_config(EXAMPLES / "poieo.yaml")
+    config.flows = [f for f in config.flows if f.name == "triage"]
+    # Two iterations 30s apart: the first fires at once, then the runner sits on
+    # the second, so the API is still up when the poll below lands.
+    config.flows[0].trigger.max_iterations = 2
+
+    port = _free_port()
+    daemon = Daemon(config, store=NullStore(), web_port=port)
+    serve_task = asyncio.create_task(daemon.serve(install_signals=False))
+
+    try:
+        async with httpx.AsyncClient() as client:
+            deadline = asyncio.get_running_loop().time() + 5
+            response = None
+            while asyncio.get_running_loop().time() < deadline:
+                try:
+                    response = await client.get(f"http://127.0.0.1:{port}/api/flows")
+                    if response.status_code == 200:
+                        break
+                except httpx.TransportError:
+                    pass
+                await asyncio.sleep(0.1)
+
+        assert response is not None and response.status_code == 200
+        assert "triage" in response.text
+    finally:
+        daemon.cancel.set()
+
+    results = await asyncio.wait_for(serve_task, timeout=30)
+    assert isinstance(daemon.store, BroadcastStore)
+    assert results  # the run finished and the server shut down cleanly

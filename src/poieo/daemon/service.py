@@ -5,18 +5,31 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import socket
 from typing import Any, Callable
 
-from ..errors import PoieoError
+from ..errors import PoieoError, SpecError
 from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import RunStore
+from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
 
 log = logging.getLogger("poieo.daemon")
 
 RunCallback = Callable[[str, RunResult], None]
+
+
+def _ensure_port_free(host: str, port: int) -> None:
+    """Fail at launch, not after flows have started."""
+    with socket.socket() as sock:
+        try:
+            sock.bind((host, port))
+        except OSError as exc:
+            raise SpecError(
+                f"web port {port} is already in use on {host}: {exc}"
+            ) from exc
 
 
 class FlowRunner:
@@ -128,10 +141,15 @@ class Daemon:
         *,
         store: RunStore | None = None,
         on_run: RunCallback | None = None,
+        web_port: int | None = None,
     ):
         self.config = config
         self.flows = load_flows(config)
-        self.store = store or RunStore(config.store_path())
+        base_store = store or RunStore(config.store_path())
+        if web_port is not None and not isinstance(base_store, BroadcastStore):
+            base_store = BroadcastStore(base_store)
+        self.store = base_store
+        self.web_port = web_port
         self.on_run = on_run
         self.cancel = asyncio.Event()
         # One pool per distinct binding file: clients are reused across flows.
@@ -169,6 +187,24 @@ class Daemon:
         if install_signals:
             self._install_signals()
 
+        web_task = None
+        server = None
+        if self.web_port is not None:
+            import uvicorn
+
+            _ensure_port_free("127.0.0.1", self.web_port)
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    create_app(self),
+                    host="127.0.0.1",
+                    port=self.web_port,
+                    log_level="warning",
+                )
+            )
+            server.install_signal_handlers = lambda: None
+            web_task = asyncio.create_task(server.serve())
+            log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
+
         self.runners = [
             FlowRunner(
                 flow,
@@ -198,6 +234,12 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
+            if web_task is not None:
+                server.should_exit = True
+                try:
+                    await asyncio.wait_for(web_task, timeout=5)
+                except (asyncio.TimeoutError, Exception):
+                    web_task.cancel()
             for pool in self.pools.values():
                 await pool.aclose()
             log.info("poieo daemon down")

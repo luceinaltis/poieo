@@ -380,6 +380,8 @@ def daemon(
     flow: Optional[str] = typer.Option(
         None, "--flow", help="Run only this flow from the config."
     ),
+    port: int = typer.Option(8484, "--port", help="Web observation UI port."),
+    no_web: bool = typer.Option(False, "--no-web", help="Disable the web UI."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Start the resident scheduler and keep flows running."""
@@ -405,7 +407,9 @@ def daemon(
                 spec.trigger = spec.trigger.model_copy(update={"type": "loop"})
 
     try:
-        results = asyncio.run(Daemon(config).serve())
+        results = asyncio.run(
+            Daemon(config, web_port=None if no_web else port).serve()
+        )
     except PoieoError as exc:
         _fail(str(exc))
     except KeyboardInterrupt:  # pragma: no cover - interactive
