@@ -21,8 +21,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ..errors import IsolationError
-from ..providers.base import ToolCall, ToolDef
-from . import TOOLSETS, Tool, ToolError, ToolResult
+from . import Executor, Tool, ToolError
 from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
@@ -96,12 +95,11 @@ def _decode(raw: bytes) -> str:
         return raw.decode(locale.getpreferredencoding(False), errors="replace")
 
 
-class DockerExecutor:
-    """Same ``definitions()`` and ``execute()`` as :class:`~poieo.tools.LocalExecutor`.
+class DockerExecutor(Executor):
+    """The same executor contract, with the shell inside a container.
 
-    Different blast radius: the shell runs inside a container that has the
-    workdir and nothing else. Enter it before use -- ``execute()`` outside the
-    context manager is an error, never a quiet fall back to the host.
+    Enter it before use -- ``execute()`` outside the context manager reports a
+    tool error, never a quiet fall back to the host.
     """
 
     def __init__(
@@ -124,18 +122,12 @@ class DockerExecutor:
         self.labels = dict(labels or {})
         self.container_id: str | None = None
 
-        self.tools: dict[str, Tool] = {}
-        for name in toolsets:
-            for tool in TOOLSETS[name]:
-                self.tools[tool.definition.name] = tool
+        self._load(toolsets)
         # The one substitution this class exists to make.
         if "run_command" in self.tools:
             self.tools["run_command"] = Tool(
                 self.tools["run_command"].definition, self._run_command_in_box
             )
-
-    def definitions(self) -> list[ToolDef]:
-        return [tool.definition for tool in self.tools.values()]
 
     # -- lifecycle -----------------------------------------------------------
     async def __aenter__(self) -> "DockerExecutor":
@@ -174,16 +166,8 @@ class DockerExecutor:
             log.warning("could not remove container %s: %s", container_id, failure)
 
     # -- execution -----------------------------------------------------------
-    async def execute(self, call: ToolCall) -> ToolResult:
-        tool = self.tools.get(call.name)
-        if tool is None:
-            return ToolResult(f"unknown tool '{call.name}'", error=True)
-        try:
-            return ToolResult(await tool.run(self.workdir, call.arguments))
-        except ToolError as exc:
-            return ToolResult(str(exc), error=True)
-        except Exception as exc:  # a bad argument shape must not kill the run
-            return ToolResult(f"{type(exc).__name__}: {exc}", error=True)
+    # execute() and definitions() are inherited: the contract is identical, and
+    # only the tool bound to run_command differs.
 
     async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
         if not self.container_id:

@@ -34,16 +34,32 @@ class Tool:
     run: Callable[[Path, dict[str, Any]], Awaitable[str]]
 
 
-class LocalExecutor:
-    """Runs tool calls directly on this machine, confined to one workdir.
+@dataclass(slots=True)
+class Isolation:
+    """Where an agent node's shell may run.
 
-    The executor is the seam a future container-backed implementation slots
-    into: same definitions(), same execute(), different blast radius.
+    Deliberately backend-neutral and free of Docker words: a flow's
+    ``isolation:`` block is parsed into this at the edge, and everything
+    inside the runtime sees only this shape.
     """
 
-    def __init__(self, workdir: Path, toolsets: "Sequence[str]"):
-        self.workdir = workdir
-        self.tools: dict[str, Tool] = {}
+    image: str
+    network: str = "none"
+    user: str | None = None
+
+
+class Executor:
+    """Tool lookup, failure-to-text, and a lifecycle that costs nothing by default.
+
+    Subclasses differ in *where* the tools run, never in what a caller does
+    with them: ``async with``, then ``definitions()`` and ``execute()``.
+    """
+
+    workdir: Path
+    tools: dict[str, Tool]
+
+    def _load(self, toolsets: "Sequence[str]") -> None:
+        self.tools = {}
         for name in toolsets:
             for tool in TOOLSETS[name]:
                 self.tools[tool.definition.name] = tool
@@ -61,6 +77,46 @@ class LocalExecutor:
             return ToolResult(str(exc), error=True)
         except Exception as exc:  # a bad argument shape must not kill the run
             return ToolResult(f"{type(exc).__name__}: {exc}", error=True)
+
+    async def __aenter__(self) -> "Executor":
+        return self
+
+    async def __aexit__(self, *_exc_info: Any) -> None:
+        return None
+
+
+class LocalExecutor(Executor):
+    """Runs tool calls directly on this machine, confined to one workdir.
+
+    The default, and the one with nothing to set up or tear down -- its
+    lifecycle is inherited and does nothing.
+    """
+
+    def __init__(self, workdir: Path, toolsets: "Sequence[str]"):
+        self.workdir = workdir
+        self._load(toolsets)
+
+
+def make_executor(
+    workdir: Path, toolsets: "Sequence[str]", isolation: Isolation | None = None
+) -> Executor:
+    """The one place that decides where an agent node's tools run.
+
+    Callers hand over a setting and use what comes back, so nothing upstream
+    of here names a backend. The Docker import sits inside the branch: a
+    machine that never isolates never pays to load it.
+    """
+    if isolation is None:
+        return LocalExecutor(workdir, toolsets)
+    from .docker import DockerExecutor
+
+    return DockerExecutor(
+        workdir,
+        toolsets,
+        image=isolation.image,
+        network=isolation.network,
+        user=isolation.user,
+    )
 
 
 # Import toolset modules after Tool is defined, since they import Tool from this module
