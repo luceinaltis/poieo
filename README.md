@@ -154,6 +154,48 @@ name it from that point on.
 poieo check -b examples/bindings/local.yaml      # probe every declared endpoint
 ```
 
+## The short form: a task
+
+A graph plus a binding plus a daemon entry is three files. When the work is
+*one model, one folder, one instruction, on repeat*, write one instead:
+
+```yaml
+# tasks/keep-improving.yaml
+name: keep improving poieo
+folder: ~/code/poieo
+prompt: |
+  Find one thing worth fixing, fix it, run the tests.
+```
+
+Point a daemon config at the folder, and every file in it becomes a flow:
+
+```yaml
+store: .poieo
+binding: bindings/local.yaml
+tasks: tasks/
+```
+
+Everything else is defaulted. It runs hourly (`every: 30m`, `every: loop`, or
+`at: "0 3 * * *"` to change that), the model comes from the binding's default
+role, the step gets the `files` and `shell` toolsets and 40 turns, and state
+carries from one run into the next. `role`, `tools`, `max_turns`, `enabled`,
+and `binding` are there when a task outgrows the defaults.
+
+| command | does |
+|---|---|
+| `poieo tasks poieo.yaml` | list the cards, with their schedules |
+| `poieo show tasks/keep-improving.yaml` | render the flow the task expands to |
+| `poieo run tasks/keep-improving.yaml -b bindings/mock.yaml` | run it once |
+| `poieo eject tasks/keep-improving.yaml` | write that flow out as a real graph; the task names it from then on |
+
+The sugar is not a second configuration format: a task expands into exactly the
+flow and graph you would have written by hand, `show` proves it, and `eject`
+hands it over the moment one line stops being enough.
+
+A task's identity is its **filename**, so the title on the card can be
+rewritten without orphaning its run history. Paths written inside a task file
+resolve against the task file itself.
+
 ## The resident layer
 
 ```yaml
@@ -242,6 +284,7 @@ flow is misconfigured rather than flaky.
 src/poieo/
   expr.py            sandboxed expressions + {{ }} templating
   graph.py           logical layer: nodes, wiring, validation
+  task.py            the short form: one file expands into a flow + a graph
   binding.py         physical layer: providers, roles, param merging
   providers/         anthropic · openai_compatible · ollama · mock
   runtime/           context, node implementations, the graph walker

@@ -53,8 +53,13 @@ class DaemonConfig(BaseModel):
     # Default binding for flows that do not name one.
     binding: str | None = None
     flows: list[FlowSpec] = Field(default_factory=list)
+    # A folder of task files; each one expands into a flow. See poieo.task.
+    tasks: str | None = None
 
     source_path: Path | None = Field(default=None, exclude=True)
+    # Graphs generated from task files, by flow name. Filled by load_config;
+    # anything a document puts here is discarded.
+    task_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
 
     @model_validator(mode="after")
     def _check_flows(self) -> DaemonConfig:
@@ -125,7 +130,32 @@ def load_config(path: str | Path) -> DaemonConfig:
     except Exception as exc:
         raise SpecError(f"{path}: invalid daemon config: {exc}") from exc
     config.source_path = path.resolve()
+    _load_tasks(config)
     return config
+
+
+def _load_tasks(config: DaemonConfig) -> None:
+    """Expand the tasks folder into flows, if the config names one."""
+    from ..task import expand, load_tasks
+
+    config.task_graphs = {}
+    if not config.tasks:
+        return
+    folder = config.resolve_path(config.tasks)
+    if not folder.is_dir():
+        raise SpecError(f"tasks folder does not exist: {folder}")
+
+    taken = {flow.name for flow in config.flows}
+    for task in load_tasks(folder):
+        flow, graph = expand(task)
+        if flow.name in taken:
+            raise SpecError(
+                f"task '{task.source_path}' is already a flow named '{flow.name}'"
+            )
+        taken.add(flow.name)
+        config.flows.append(flow)
+        if graph is not None:
+            config.task_graphs[flow.name] = graph
 
 
 def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[LoadedFlow]:
@@ -143,14 +173,18 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
     for flow in config.flows:
         if enabled_only and not flow.enabled:
             continue
-        graph_path = config.resolve_path(flow.graph).resolve()
         binding_path = config.binding_path(flow).resolve()
-        if graph_path not in graphs:
-            graphs[graph_path] = load_graph(graph_path)
         if binding_path not in bindings:
             bindings[binding_path] = load_binding(binding_path)
 
-        graph, binding = graphs[graph_path], bindings[binding_path]
+        generated = config.task_graphs.get(flow.name)
+        if generated is None:
+            graph_path = config.resolve_path(flow.graph).resolve()
+            if graph_path not in graphs:
+                graphs[graph_path] = load_graph(graph_path)
+            generated = graphs[graph_path]
+
+        graph, binding = generated, bindings[binding_path]
         try:
             preflight(graph, binding)
         except Exception as exc:
