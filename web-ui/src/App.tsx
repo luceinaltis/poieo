@@ -81,17 +81,14 @@ export default function App({ store }: { store?: StageStore }) {
         </select>
       </header>
 
-      <div
-        className="shell-board"
-        data-drawer={String(Boolean(selected))}
-        ref={boardRef}
-      />
-
-      {empty ? (
-        <p className="shell-empty">
-          Nothing is running yet. When the daemon picks up work, it shows up here.
-        </p>
-      ) : null}
+      <div className="shell-stage" data-drawer={String(Boolean(selected))}>
+        <div className="shell-board" ref={boardRef} />
+        {empty ? (
+          <p className="shell-empty">
+            Nothing is running yet. When the daemon picks up work, it shows up here.
+          </p>
+        ) : null}
+      </div>
 
       {selected ? (
         <Drawer

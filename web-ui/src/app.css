@@ -36,12 +36,30 @@
   padding: 3px 6px;
 }
 
-.shell-board[data-drawer="true"] {
+.shell-stage {
+  height: calc(100vh - var(--bar-height));
+  position: relative;
+}
+
+.shell-stage[data-drawer="true"] {
   margin-right: min(440px, 100vw);
 }
 
+.shell-board {
+  inset: 0;
+  overflow: auto;
+  position: absolute;
+}
+
 .shell-empty {
+  align-content: center;
   color: #9a9086;
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  margin: 0;
   padding: 32px 16px;
+  pointer-events: none;
+  position: absolute;
   text-align: center;
 }

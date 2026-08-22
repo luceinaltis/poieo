@@ -1,0 +1,10 @@
+.atelier-note {
+  color: #9a9086;
+  font-size: 0.9em;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.atelier-canvas {
+  display: block;
+}
