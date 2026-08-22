@@ -14,7 +14,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..tools import DEFAULT_TOOLSETS, LocalExecutor
+from ..tools import DEFAULT_TOOLSETS, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -178,74 +178,76 @@ class AgentNode(Node):
                 f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id
             )
 
-        executor = LocalExecutor(workdir, spec.tools or DEFAULT_TOOLSETS)
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
-        turns = 0
-        tool_call_count = 0
+        async with make_executor(
+            workdir, spec.tools or DEFAULT_TOOLSETS, ctx.isolation, ctx.boxes
+        ) as executor:
+            messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+            turns = 0
+            tool_call_count = 0
 
-        while True:
-            if ctx.cancel is not None and ctx.cancel.is_set():
-                raise RunAborted(f"cancelled during agent node '{spec.id}'")
-            turns += 1
-            request = LLMRequest(
-                model=resolved.model,
-                messages=list(messages),
-                system=system,
-                params=dict(resolved.params),
-                role=role,
-                tools=executor.definitions(),
-            )
-            response = await call_with_retry(spec, provider, request, ctx)
-            ctx.usage = ctx.usage.merge(response.usage)
-            ctx.emit(
-                "node_turn",
-                node_id=spec.id,
-                turn=turns,
-                text=_clip(response.text),
-                thinking=_clip(response.meta.get("thinking") or ""),
-                tool_call_count=len(response.tool_calls),
-            )
-
-            if not response.tool_calls:
-                break
-            if turns >= spec.max_turns:
-                raise NodeError(
-                    f"node '{spec.id}' hit max_turns ({spec.max_turns}) "
-                    f"with tool calls still pending",
-                    node_id=spec.id,
+            while True:
+                if ctx.cancel is not None and ctx.cancel.is_set():
+                    raise RunAborted(f"cancelled during agent node '{spec.id}'")
+                turns += 1
+                request = LLMRequest(
+                    model=resolved.model,
+                    messages=list(messages),
+                    system=system,
+                    params=dict(resolved.params),
+                    role=role,
+                    tools=executor.definitions(),
                 )
-
-            assistant_turn: dict[str, Any] = {
-                "role": "assistant",
-                "content": response.text,
-                "tool_calls": [
-                    {"id": c.id, "name": c.name, "arguments": c.arguments}
-                    for c in response.tool_calls
-                ],
-            }
-            raw = response.meta.get("raw_content")
-            if raw:
-                # Provider-specific blocks (e.g. anthropic thinking) replayed
-                # verbatim on the next turn; other providers ignore the key.
-                assistant_turn["raw_content"] = raw
-            messages.append(assistant_turn)
-            for call in response.tool_calls:
-                started = time.monotonic()
-                result = await executor.execute(call)
-                tool_call_count += 1
+                response = await call_with_retry(spec, provider, request, ctx)
+                ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(
-                    "node_tool_call",
+                    "node_turn",
                     node_id=spec.id,
                     turn=turns,
-                    name=call.name,
-                    arguments=_clip(call.arguments),
-                    result=_clip(result.text),
-                    error=result.error,
-                    duration_ms=round((time.monotonic() - started) * 1000),
+                    text=_clip(response.text),
+                    thinking=_clip(response.meta.get("thinking") or ""),
+                    tool_call_count=len(response.tool_calls),
                 )
-                messages.append(
-                    {"role": "tool", "tool_call_id": call.id, "content": result.text}
-                )
+
+                if not response.tool_calls:
+                    break
+                if turns >= spec.max_turns:
+                    raise NodeError(
+                        f"node '{spec.id}' hit max_turns ({spec.max_turns}) "
+                        f"with tool calls still pending",
+                        node_id=spec.id,
+                    )
+
+                assistant_turn: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": response.text,
+                    "tool_calls": [
+                        {"id": c.id, "name": c.name, "arguments": c.arguments}
+                        for c in response.tool_calls
+                    ],
+                }
+                raw = response.meta.get("raw_content")
+                if raw:
+                    # Provider-specific blocks (e.g. anthropic thinking) replayed
+                    # verbatim on the next turn; other providers ignore the key.
+                    assistant_turn["raw_content"] = raw
+                messages.append(assistant_turn)
+                for call in response.tool_calls:
+                    started = time.monotonic()
+                    result = await executor.execute(call)
+                    tool_call_count += 1
+                    ctx.emit(
+                        "node_tool_call",
+                        node_id=spec.id,
+                        turn=turns,
+                        name=call.name,
+                        arguments=_clip(call.arguments),
+                        result=_clip(result.text),
+                        error=result.error,
+                        duration_ms=round((time.monotonic() - started) * 1000),
+                    )
+                    messages.append(
+                        {"role": "tool", "tool_call_id": call.id, "content": result.text}
+                    )
 
         output = shape_output(spec, response.text)
         ctx.record_output(spec.id, output, spec.output.as_)

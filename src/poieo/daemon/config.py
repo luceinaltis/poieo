@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError
 from ..graph import GraphSpec, load_document, load_graph
+from ..tools import Isolation
 from ..task import TaskSpec, expand, load_tasks, read_journal
 from .triggers import TriggerSpec
 
@@ -34,6 +35,8 @@ class FlowSpec(BaseModel):
     # Carry the ending state of one run into the next -- the memory that makes
     # a looping flow accumulate instead of restarting from zero every time.
     carry_state: bool = False
+    # Where this flow's commands may run. Absent means the host, as before.
+    isolation: Isolation | None = None
     on_error: Literal["continue", "stop"] = "continue"
 
     @model_validator(mode="after")

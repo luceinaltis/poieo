@@ -414,3 +414,44 @@ async def test_agent_node_emits_a_turn_event_per_model_turn(tmp_path):
     assert turns[0].data["thinking"] == "let me see"
     assert turns[1].data["text"] == "all done"
     assert turns[1].data["tool_call_count"] == 0
+
+
+async def test_the_executor_is_torn_down_even_when_the_node_fails(tmp_path, monkeypatch):
+    """`async with` is the whole reason the seam has a lifecycle: a node that
+    raises must still release whatever the executor was holding."""
+    from poieo import tools as tools_module
+    from poieo.runtime import nodes as nodes_module
+
+    torn_down = []
+    real = tools_module.make_executor
+
+    class Spy:
+        """A wrapper class, not a patched instance: `async with` looks dunders
+        up on the type, so assigning executor.__aexit__ would do nothing."""
+
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __aenter__(self):
+            return await self.inner.__aenter__()
+
+        async def __aexit__(self, *exc_info):
+            torn_down.append(True)
+            return await self.inner.__aexit__(*exc_info)
+
+    monkeypatch.setattr(
+        nodes_module,
+        "make_executor",
+        lambda *args, **kwargs: Spy(real(*args, **kwargs)),
+    )
+
+    graph = agent_graph(tmp_path, max_turns=1)
+    # The script repeats, so the model never stops calling tools and the node
+    # hits max_turns and raises.
+    binding = mock_binding(
+        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
+    )
+    result = await run_graph(graph, binding)
+
+    assert result.status == "failed"
+    assert torn_down, "the executor was never torn down"

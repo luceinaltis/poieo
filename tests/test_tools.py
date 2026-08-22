@@ -114,3 +114,41 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
     assert unknown.error and "fly" in unknown.text
     bad_args = await ex.execute(ToolCall(id="3", name="read_file", arguments={}))
     assert bad_args.error
+
+
+import sys
+
+from poieo.tools import Isolation, make_executor
+
+
+async def test_local_executor_works_as_a_context_manager(tmp_path):
+    (tmp_path / "a.txt").write_text("data")
+    async with LocalExecutor(tmp_path, DEFAULT_TOOLSETS) as ex:
+        result = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "a.txt"}))
+    assert result.text == "data"
+
+
+async def test_make_executor_returns_local_without_isolation(tmp_path):
+    assert isinstance(make_executor(tmp_path, DEFAULT_TOOLSETS), LocalExecutor)
+
+
+def test_make_executor_does_not_import_docker_without_isolation(tmp_path, monkeypatch):
+    """The import lives inside the isolation branch, so the common path stays cheap.
+
+    monkeypatch.delitem, not sys.modules.pop: a bare pop would leave the module
+    unloaded for whatever test runs next, and re-importing it later would build
+    a second DockerExecutor class that fails identity checks.
+    """
+    monkeypatch.delitem(sys.modules, "poieo.tools.docker", raising=False)
+    make_executor(tmp_path, DEFAULT_TOOLSETS)
+    assert "poieo.tools.docker" not in sys.modules
+
+
+def test_make_executor_returns_a_boxed_executor_with_isolation(tmp_path):
+    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, Isolation(image="alpine:3.20"))
+    assert type(ex).__name__ == "DockerExecutor"
+    assert ex.image == "alpine:3.20" and ex.network == "none"
+
+
+def test_isolation_defaults_to_no_network():
+    assert Isolation(image="x").network == "none"
