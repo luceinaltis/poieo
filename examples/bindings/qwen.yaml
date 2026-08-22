@@ -1,0 +1,23 @@
+# Physical layer: Qwen3.8-9B-Distill (Q5_K_M) on a local Ollama.
+# Sized for an 8GB GPU: ~6.7GB of weights leaves room for an 8k context.
+name: qwen
+version: 1
+
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+    timeout: 600                    # agent turns on a 9B model can be slow
+
+default:
+  provider: ollama
+  model: hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q5_K_M
+  params:
+    max_tokens: 2048
+    options:
+      num_ctx: 8192                 # KV cache is what's left of the 8GB
+
+roles:
+  worker:
+    params:
+      max_tokens: 4096              # agent steps may write whole files

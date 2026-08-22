@@ -9,10 +9,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
 import typer
+
+# Model output is arbitrary Unicode; legacy Windows console codepages (cp949,
+# cp1252, ...) cannot encode all of it and would crash every `poieo run` that
+# prints a fancy dash. Reconfigure rather than crash.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream and _stream.encoding and _stream.encoding.lower() not in ("utf-8", "utf8"):
+        _stream.reconfigure(errors="replace")
 
 from . import __version__
 from .binding import load_binding
