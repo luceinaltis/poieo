@@ -93,6 +93,9 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/events", events),
         Route("/", index),
     ]
-    if STATIC_DIR.is_dir():
-        routes.append(Mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets"))
+    # Vite emits static/assets/<hashed name> and references it as /assets/...,
+    # so the mount points one level in, not at the build root.
+    assets = STATIC_DIR / "assets"
+    if assets.is_dir():
+        routes.append(Mount("/assets", StaticFiles(directory=assets), name="assets"))
     return Starlette(routes=routes)

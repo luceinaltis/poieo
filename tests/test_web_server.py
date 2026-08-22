@@ -7,6 +7,7 @@ from starlette.testclient import TestClient
 
 from poieo.store import Event, RunStore
 from poieo.web.events import BroadcastStore
+from poieo.web import server
 from poieo.web.server import create_app, sse_frame, _event_stream
 
 
@@ -58,7 +59,11 @@ def test_runs_index_and_detail_and_404(tmp_path):
     assert client.get("/api/runs/nope").status_code == 404
 
 
-def test_root_serves_fallback_without_built_ui(tmp_path):
+def test_root_serves_fallback_without_built_ui(tmp_path, monkeypatch):
+    # Point away from the checked-in build so this covers a fresh checkout
+    # rather than whatever `npm run build` last left in the package.
+    monkeypatch.setattr(server, "STATIC_DIR", tmp_path / "unbuilt")
+
     client = TestClient(create_app(stub_daemon(tmp_path)))
     response = client.get("/")
     assert response.status_code == 200
@@ -84,3 +89,18 @@ async def test_event_stream_yields_and_filters(tmp_path):
     frame = await asyncio.wait_for(task, timeout=2)
     assert '"run_id": "b"' in frame
     await stream.aclose()
+
+
+def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("<!doctype html><title>poieo</title>")
+    (static / "assets" / "app.js").write_text("export default 1;")
+    monkeypatch.setattr(server, "STATIC_DIR", static)
+
+    client = TestClient(create_app(stub_daemon(tmp_path)))
+
+    assert "<!doctype html>" in client.get("/").text
+    # Vite's index.html asks for /assets/<name>; the mount has to resolve there
+    # and not one directory up.
+    assert client.get("/assets/app.js").status_code == 200
