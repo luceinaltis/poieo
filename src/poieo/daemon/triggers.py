@@ -159,6 +159,7 @@ class IntervalTrigger(Trigger):
         loop = asyncio.get_running_loop()
         origin = loop.time()
         iteration = 0
+        tick = 0
 
         if not self.run_at_start:
             if not await _sleep_or_cancel(self.every, cancel):
@@ -174,9 +175,12 @@ class IntervalTrigger(Trigger):
 
             # Anchor to the grid so a run that overran does not shift every
             # later tick; ticks that fully elapsed are skipped, not queued.
+            # Always advance by at least one tick: a timer that woke a hair
+            # early (Windows' clock is coarse) would otherwise land back on the
+            # tick just fired and turn one period into two.
             elapsed = loop.time() - origin
-            ticks = int(elapsed // self.every) + 1
-            delay = origin + ticks * self.every - loop.time()
+            tick = max(tick + 1, int(elapsed // self.every) + 1)
+            delay = origin + tick * self.every - loop.time()
             if self.jitter:
                 delay += random.uniform(0, self.jitter)
             if not await _sleep_or_cancel(delay, cancel):

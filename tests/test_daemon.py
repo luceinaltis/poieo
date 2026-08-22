@@ -87,6 +87,27 @@ async def test_interval_trigger_fires_immediately_then_periodically():
     assert 0.08 <= elapsed < 0.5
 
 
+async def test_interval_trigger_never_fires_twice_inside_one_period():
+    """A timer that wakes early must not turn one tick into two.
+
+    The grid is derived from elapsed time, so a wake-up a hair before the tick
+    it was aimed at used to select that same tick again and fire immediately.
+    """
+    trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=20).build()
+    loop = asyncio.get_running_loop()
+
+    stamps = []
+    cancel = asyncio.Event()
+    async for _ in trigger.fires(cancel):
+        stamps.append(loop.time())
+
+    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+    assert len(stamps) == 20
+    # One period is 50ms; the floor allows for a wake-up up to 20ms early,
+    # which a coarse Windows timer really does produce.
+    assert min(gaps) >= 0.03, gaps
+
+
 async def test_manual_trigger_never_fires_on_its_own():
     trigger = TriggerSpec(type="manual").build()
     cancel = asyncio.Event()
