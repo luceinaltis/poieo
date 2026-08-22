@@ -130,6 +130,18 @@ Then:
 gh pr merge --squash --delete-branch
 ```
 
+**`--delete-branch` fails here, after the merge has already gone through.**
+It tries to switch the local checkout to `main`, and `main` is checked out in
+the primary worktree, so git refuses. The PR is merged and the remote branch is
+gone (the repo has delete-branch-on-merge on); only the local branch is left.
+Check the PR state before assuming the merge failed, then delete the local
+branch by hand:
+
+```bash
+gh pr view <n> --json state --jq .state    # expect MERGED
+git switch --detach origin/main && git branch -D <branch>
+```
+
 Stop and ask a human instead of merging when the PR changes a public interface, deletes a
 test, adds a dependency no plan calls for, or touches how bindings and credentials are
 loaded.
