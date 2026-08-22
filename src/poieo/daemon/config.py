@@ -87,7 +87,9 @@ class DaemonConfig(BaseModel):
         return self.resolve_path(self.store)
 
     def workdir_path(self, flow: FlowSpec) -> Path | None:
-        return self.resolve_path(flow.workdir) if flow.workdir else None
+        # Resolved: this one is handed to a subprocess and shown in warnings,
+        # so "examples/.." helps nobody.
+        return self.resolve_path(flow.workdir).resolve() if flow.workdir else None
 
     def binding_path(self, flow: FlowSpec) -> Path:
         target = flow.binding or self.binding
@@ -157,9 +159,13 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         if binding_path not in bindings:
             bindings[binding_path] = load_binding(binding_path)
 
+        workdir = config.workdir_path(flow)
+        if workdir is not None and not workdir.is_dir():
+            raise SpecError(f"flow '{flow.name}': workdir does not exist: {workdir}")
+
         graph, binding = graphs[graph_path], bindings[binding_path]
         try:
-            preflight(graph, binding, workdir=config.workdir_path(flow))
+            preflight(graph, binding, workdir=workdir)
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 

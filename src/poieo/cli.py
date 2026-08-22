@@ -24,6 +24,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 from . import __version__
 from .binding import load_binding
+from .checkpoint import Checkpoint
 from .daemon import Daemon, load_config, load_flows
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
@@ -326,6 +327,9 @@ def run(
     set_: list[str] = typer.Option(
         [], "--set", "-s", help="Payload override, key=value. Repeatable."
     ),
+    workdir: Optional[Path] = typer.Option(
+        None, "--workdir", "-w", help="Where agent nodes work, if the graph leaves it open."
+    ),
     store: Path = typer.Option(Path(".poieo"), "--store", help="Run-log directory."),
     no_log: bool = typer.Option(False, "--no-log", help="Do not write a run log."),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
@@ -344,7 +348,9 @@ def run(
 
     async def _go():
         async with ProviderPool(spec) as pool:
-            return await execute(graph, spec, pool, run_store, input=payload)
+            return await execute(
+                graph, spec, pool, run_store, input=payload, workdir=workdir
+            )
 
     try:
         result = asyncio.run(_go())
@@ -472,6 +478,14 @@ def flows(
         )
         for role in sorted(item.graph.roles()):
             typer.echo(f"        {item.binding.resolve(role).describe()}")
+
+        workdir = config.workdir_path(item.spec)
+        if workdir and not Checkpoint(workdir, item.spec.name, config.store_path()).available():
+            # Degraded, not broken: the flow still runs tonight.
+            typer.secho(
+                f"        note: changes in {workdir} can't be reviewed or undone",
+                fg=typer.colors.YELLOW,
+            )
 
 
 @runs_app.command("list")

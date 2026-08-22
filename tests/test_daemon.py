@@ -249,5 +249,10 @@ def test_flow_spec_accepts_a_workdir(tmp_path):
 
 def test_flow_workdir_is_optional(tmp_path):
     config = load_config(EXAMPLES / "poieo.yaml")
-    assert all(f.workdir is None for f in config.flows)
-    assert config.workdir_path(config.flows[0]) is None
+    by_name = {f.name: f for f in config.flows}
+
+    # A flow that only moves text says nothing about the filesystem...
+    assert by_name["triage"].workdir is None
+    assert config.workdir_path(by_name["triage"]) is None
+    # ...while one that touches a project says where.
+    assert config.workdir_path(by_name["chores"]) == (EXAMPLES / "..").resolve()

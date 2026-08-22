@@ -26,6 +26,18 @@ flows:
     input:
       brief: "Why a workflow engine should not know which model it runs on."
 
+  # Works on a project instead of on text. `workdir` is what makes the run
+  # happen in a private copy: the work lands as one change to review in the
+  # morning, and this checkout is never written to.
+  # Disabled here because it would commit -- flip `enabled` to try it.
+  - name: chores
+    graph: graphs/agent-task.yaml
+    workdir: ..
+    trigger:
+      type: cron
+      expression: "0 2 * * *"
+    enabled: false
+
   # Disabled here; flip `enabled` to arm it. Re-reads its payload every night.
   - name: nightly-digest
     graph: graphs/support-triage.yaml

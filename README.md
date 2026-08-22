@@ -197,6 +197,38 @@ While the daemon runs it serves a read-only observation page on
 `GET /api/events` streams every run event live (SSE); `/api/flows` and
 `/api/runs` answer what is running and what already ran.
 
+## Work you look at in the morning
+
+A flow that names a `workdir` does not work in your project. It works in a
+private copy of it, and each run lands as one **change** carrying its own
+one-line summary of what it did.
+
+```yaml
+flows:
+  - name: chores
+    graph: graphs/agent-task.yaml
+    workdir: ../my-project      # where the work happens
+```
+
+Your project is never written to while you sleep. In the morning it is exactly
+as you left it, and the night's work is waiting:
+
+```bash
+curl     127.0.0.1:8484/api/flows                     # how much is waiting
+curl     127.0.0.1:8484/api/runs/<id>/diff            # what one run did
+curl -X POST 127.0.0.1:8484/api/flows/chores/accept   # take it
+curl -X POST 127.0.0.1:8484/api/flows/chores/discard  # throw it away
+```
+
+Accepting puts the work into your project. Discarding is recoverable -- nothing
+is ever thrown away for good. A run that found nothing to do is not a failure
+and leaves nothing to review, and a run that failed keeps its half-finished work
+aside instead of mixing it in.
+
+None of this is required. A flow with no `workdir` behaves exactly as it always
+has, and a `workdir` that nothing tracks still runs -- `poieo flows` says up
+front that its changes can't be reviewed or undone.
+
 ## Run logs
 
 Every run appends a JSONL event stream under `<store>/runs/<run_id>.jsonl` plus a summary
