@@ -6,6 +6,7 @@ mutates anything. Control endpoints belong to the next roadmap slice.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -39,6 +40,14 @@ async def _event_stream(store: BroadcastStore, flow: str | None = None) -> Async
         store.unsubscribe(queue)
 
 
+def _checkpoint_for(daemon: Any, flow: str | None) -> Any:
+    """The private copy behind a flow, if it keeps one."""
+    for runner in daemon.runners:
+        if runner.name == flow:
+            return getattr(runner, "checkpoint", None)
+    return None
+
+
 def create_app(daemon: Any) -> Starlette:
     """Build the app over a daemon-shaped object (.runners, .store)."""
 
@@ -70,6 +79,22 @@ def create_app(daemon: Any) -> Starlette:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
         return JSONResponse({"run_id": run_id, "events": events})
 
+    async def run_diff(request: Request) -> JSONResponse:
+        run_id = request.path_params["run_id"]
+        summary = daemon.store.run(run_id)
+        if summary is None:
+            return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
+
+        change = summary.get("change")
+        point = _checkpoint_for(daemon, summary.get("flow"))
+        if not change or point is None:
+            # A run that altered nothing has nothing to review. That is an
+            # answer, not a failure.
+            return JSONResponse({"run_id": run_id, "change": None})
+
+        report = await asyncio.to_thread(point.diff, change["base"], change["head"])
+        return JSONResponse({"run_id": run_id, **report})
+
     async def events(request: Request) -> StreamingResponse:
         flow = request.query_params.get("flow")
         return StreamingResponse(
@@ -90,6 +115,7 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/flows", flows),
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
+        Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/events", events),
         Route("/", index),
     ]
