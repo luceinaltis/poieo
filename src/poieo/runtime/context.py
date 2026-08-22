@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -39,6 +40,8 @@ class RunContext:
     iteration: int = 0
     # Set by execute(); agent loops poll it between turns.
     cancel: asyncio.Event | None = None
+    # Where agent nodes work unless they name a directory of their own.
+    workdir: Path | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)
