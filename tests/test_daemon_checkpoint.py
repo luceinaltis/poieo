@@ -1,0 +1,180 @@
+"""A flow with a workdir works in a private copy and lands one change.
+
+These run the real daemon against a real repository. The thing worth proving
+is a negative -- that the user's own checkout is exactly as they left it -- and
+that only holds if git is actually involved.
+"""
+
+import asyncio
+
+from test_checkpoint import git, head, make_repo
+
+from poieo.daemon import Daemon, load_config
+from poieo.store import RunStore
+
+BINDING = """
+name: mock
+providers:
+  fake:
+    type: mock
+    options:
+      responses:
+        worker:
+{responses}
+default: {{provider: fake, model: mock-model}}
+"""
+
+WRITES_A_FILE = """          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: "hi"}}
+          - "wrote made.txt"
+"""
+
+WRITES_NOTHING = """          - "nothing needed doing"
+"""
+
+NEVER_STOPS = """          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: "hi"}}
+"""
+
+GRAPH = """
+name: chore
+entry: work
+nodes:
+  - id: work
+    type: agent
+    role: worker
+    prompt: do it
+    max_turns: {max_turns}
+    output: {{as: report}}
+"""
+
+LLM_GRAPH = """
+name: chat
+entry: say
+nodes:
+  - id: say
+    type: llm
+    role: worker
+    prompt: hello
+    output: {as: reply}
+"""
+
+CONFIG = """
+version: 1
+store: store
+binding: b.yaml
+flows:
+  - name: chores
+    graph: g.yaml
+{workdir}
+    trigger: {{type: loop, max_iterations: 1}}
+"""
+
+
+def build(tmp_path, *, responses=WRITES_A_FILE, graph=None, workdir=True, max_turns=10):
+    repo = make_repo(tmp_path)
+    (tmp_path / "b.yaml").write_text(BINDING.format(responses=responses), encoding="utf-8")
+    (tmp_path / "g.yaml").write_text(
+        graph if graph else GRAPH.format(max_turns=max_turns), encoding="utf-8"
+    )
+    (tmp_path / "d.yaml").write_text(
+        CONFIG.format(workdir="    workdir: project" if workdir else ""), encoding="utf-8"
+    )
+    return repo, load_config(tmp_path / "d.yaml")
+
+
+async def run_once(config):
+    daemon = Daemon(config, store=RunStore(config.store_path()))
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=60)
+    return daemon, results[0]
+
+
+def events_of(config, run_id):
+    return list(RunStore(config.store_path()).events(run_id))
+
+
+async def test_run_works_in_the_private_copy_not_the_users_folder(tmp_path):
+    repo, config = build(tmp_path)
+    before = head(repo, "main")
+
+    _, result = await run_once(config)
+
+    assert result.status == "completed"
+    # the user's checkout: untouched, unmoved, and the file is not in it
+    assert not (repo / "made.txt").exists()
+    assert head(repo, "main") == before
+    assert git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
+    # the work is on the flow's own branch
+    assert git(repo, "show", "poieo/chores:made.txt").strip() == "hi"
+
+
+async def test_summary_carries_the_change(tmp_path):
+    repo, config = build(tmp_path)
+
+    _, result = await run_once(config)
+
+    change = result.summary()["change"]
+    assert change["files"] == ["made.txt"]
+    assert change["insertions"] > 0
+    assert change["head"] == head(repo, "poieo/chores")
+    assert change["base"] != change["head"]
+
+
+async def test_run_change_event_is_emitted(tmp_path):
+    _, config = build(tmp_path)
+
+    _, result = await run_once(config)
+
+    changes = [e for e in events_of(config, result.run_id) if e["type"] == "run_change"]
+    assert len(changes) == 1
+    assert changes[0]["data"]["head"] == result.change["head"]
+
+
+async def test_no_change_is_not_a_failure(tmp_path):
+    repo, config = build(tmp_path, responses=WRITES_NOTHING)
+    before = head(repo, "main")
+
+    _, result = await run_once(config)
+
+    # A run that found nothing to do did its job. It is not an error, and there
+    # is nothing to review.
+    assert result.status == "completed"
+    assert "change" not in result.summary()
+    assert head(repo, "poieo/chores") == before
+
+
+async def test_failed_run_does_not_advance_the_branch(tmp_path):
+    repo, config = build(tmp_path, responses=NEVER_STOPS, max_turns=2)
+    before = head(repo, "main")
+
+    _, result = await run_once(config)
+
+    assert result.status == "failed"
+    assert head(repo, "poieo/chores") == before
+    # the run is still on the record, and its half-done work is still reachable
+    assert events_of(config, result.run_id)
+    assert head(repo, f"refs/poieo/failed/{result.run_id}")
+
+
+async def test_flow_without_workdir_is_untouched(tmp_path):
+    _, config = build(tmp_path, graph=LLM_GRAPH, workdir=False)
+
+    _, result = await run_once(config)
+
+    assert result.status == "completed"
+    assert result.change is None
+    assert "change" not in result.summary()
+    assert not (config.store_path() / "worktrees").exists()
+
+
+async def test_a_broken_repository_does_not_stop_the_flow(tmp_path):
+    repo, config = build(tmp_path)
+    # Renamed rather than deleted: git's object files are read-only, and on
+    # Windows rmtree trips over that. Either way it stops being a repository.
+    (repo / ".git").rename(repo / ".git-gone")
+
+    _, result = await run_once(config)
+
+    # No review is possible, but 3am is no time to stop working.
+    assert result.status == "completed"
+    assert result.change is None
