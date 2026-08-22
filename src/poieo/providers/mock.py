@@ -59,6 +59,8 @@ class MockProvider(Provider):
                 # (AgentNode carrying it, providers ignoring it) without a
                 # real provider.
                 meta["raw_content"] = value["raw_content"]
+            if value.get("thinking"):
+                meta["thinking"] = value["thinking"]
         else:
             text = value if isinstance(value, str) else str(value)
         return LLMResponse(

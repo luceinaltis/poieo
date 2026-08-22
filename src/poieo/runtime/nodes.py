@@ -197,6 +197,14 @@ class AgentNode(Node):
             )
             response = await call_with_retry(spec, provider, request, ctx)
             ctx.usage = ctx.usage.merge(response.usage)
+            ctx.emit(
+                "node_turn",
+                node_id=spec.id,
+                turn=turns,
+                text=_clip(response.text),
+                thinking=_clip(response.meta.get("thinking") or ""),
+                tool_call_count=len(response.tool_calls),
+            )
 
             if not response.tool_calls:
                 break

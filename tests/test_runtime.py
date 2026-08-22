@@ -27,8 +27,9 @@ def mock_binding(responses, fallback=""):
 
 
 async def run_graph(graph, binding, **kwargs):
+    store = kwargs.pop("store", None) or NullStore()
     async with ProviderPool(binding) as pool:
-        return await execute(graph, binding, pool, NullStore(), **kwargs)
+        return await execute(graph, binding, pool, store, **kwargs)
 
 
 async def test_router_picks_the_matching_arm():
@@ -364,3 +365,52 @@ async def test_agent_node_aborts_when_cancelled(tmp_path):
     cancel.set()
     result = await run_graph(graph, binding, cancel=cancel)
     assert result.status == "aborted"
+
+
+class _CapturingStore(NullStore):
+    def __init__(self):
+        super().__init__()
+        self.events = []
+
+    def append(self, event):
+        self.events.append(event)
+
+
+async def test_agent_node_emits_a_turn_event_per_model_turn(tmp_path):
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "work",
+            "nodes": [
+                {
+                    "id": "work",
+                    "type": "agent",
+                    "role": "worker",
+                    "workdir": str(tmp_path),
+                    "prompt": "go",
+                }
+            ],
+        }
+    )
+    binding = mock_binding(
+        {
+            "worker": [
+                {
+                    "text": "looking",
+                    "thinking": "let me see",
+                    "tool_calls": [{"name": "list_dir", "arguments": {}}],
+                },
+                "all done",
+            ]
+        }
+    )
+    store = _CapturingStore()
+    result = await run_graph(graph, binding, store=store)
+
+    assert result.status == "completed"
+    turns = [e for e in store.events if e.type == "node_turn"]
+    assert [t.data["turn"] for t in turns] == [1, 2]
+    assert turns[0].data["tool_call_count"] == 1
+    assert turns[0].data["thinking"] == "let me see"
+    assert turns[1].data["text"] == "all done"
+    assert turns[1].data["tool_call_count"] == 0
