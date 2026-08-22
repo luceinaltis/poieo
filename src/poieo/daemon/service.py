@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from ..errors import PoieoError
 from ..providers import ProviderPool
-from ..runtime.context import RunResult
+from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import RunStore
 from .config import DaemonConfig, LoadedFlow, load_flows
@@ -41,10 +41,16 @@ class FlowRunner:
         self.results: list[RunResult] = []
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
+        self.status: str = "waiting"
+        self.current_run_id: str | None = None
 
     @property
     def name(self) -> str:
         return self.flow.spec.name
+
+    @property
+    def last_result(self) -> RunResult | None:
+        return self.results[-1] if self.results else None
 
     async def run(self) -> None:
         log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
@@ -65,18 +71,24 @@ class FlowRunner:
                 fire.iteration,
                 fire.reason,
             )
-            result = await execute(
-                self.flow.graph,
-                self.flow.binding,
-                self.pool,
-                self.store,
-                input=payload,
-                state=dict(self.state) if self.flow.spec.carry_state else None,
-                flow=self.name,
-                trigger=self.trigger.describe,
-                iteration=fire.iteration,
-                cancel=self.cancel,
-            )
+            run_id = new_run_id()
+            self.status, self.current_run_id = "running", run_id
+            try:
+                result = await execute(
+                    self.flow.graph,
+                    self.flow.binding,
+                    self.pool,
+                    self.store,
+                    input=payload,
+                    state=dict(self.state) if self.flow.spec.carry_state else None,
+                    flow=self.name,
+                    trigger=self.trigger.describe,
+                    iteration=fire.iteration,
+                    run_id=run_id,
+                    cancel=self.cancel,
+                )
+            finally:
+                self.status, self.current_run_id = "waiting", None
             self.results.append(result)
             if self.flow.spec.carry_state:
                 self.state = result.state

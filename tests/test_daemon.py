@@ -153,3 +153,18 @@ async def test_carry_state_feeds_the_next_iteration():
 
     assert [r.iteration for r in results] == [1, 2]
     assert results[1].state.get("latest_draft")
+
+
+async def test_flow_runner_exposes_live_status():
+    config = load_config(EXAMPLES / "poieo.yaml")
+    config.flows = [f for f in config.flows if f.name == "triage"]
+    config.flows[0].trigger.max_iterations = 1
+
+    daemon = Daemon(config, store=NullStore())
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
+
+    runner = daemon.runners[0]
+    assert runner.status == "waiting"
+    assert runner.current_run_id is None
+    assert runner.last_result is results[-1]
+    assert runner.last_result.status == "completed"
