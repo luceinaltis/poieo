@@ -13,6 +13,7 @@
 
 import { savedSpots, saveSpot } from "./placement"
 import {
+  bounds,
   bubbleVisible,
   fromIso,
   figurePose,
@@ -87,7 +88,7 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
   const pieces = new PIXI.Container()
   root.addChild(pieces)
 
-  // -- the bench itself
+  // -- the bench itself, drawn over the figure's legs
   const slab = new PIXI.Graphics()
   slab.poly([0, -6, 78, 32, 0, 70, -78, 32]).fill(INK.benchTop)
   slab.poly([-78, 32, 0, 70, 0, 82, -78, 44]).fill(INK.benchSide)
@@ -130,23 +131,26 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
       const body =
         pose === "working" ? INK.bodyWork : pose === "alarmed" ? INK.bodyBad : INK.bodyIdle
 
-      // The figure leans in to work and sits back when waiting.
-      const lean = pose === "working" ? -10 : 0
-      const seat = pose === "sitting" ? 10 : 0
+      // Leans in to work, settles back when waiting. The slab is drawn after
+      // this, so the lower body is hidden and the figure stands behind it.
+      const lean = pose === "working" ? -8 : 0
+      const drop = pose === "sitting" ? 8 : 0
       figure.clear()
-      figure.ellipse(lean, 18 + seat, 15, 22).fill(body)
-      figure.circle(lean, -8 + seat, 11).fill(body)
+      figure.ellipse(lean, 8 + drop, 17, 30).fill(body)
+      figure.roundRect(lean - 18, -20 + drop, 36, 14, 6).fill(body)
+      figure.circle(lean, -34 + drop, 11).fill(body)
       if (pose === "working") {
-        // an arm out over the bench
-        figure.ellipse(lean + 20, 22, 14, 5).fill(body)
+        // an arm out across the bench
+        figure.ellipse(lean + 26, 2, 18, 6).fill(body)
       }
 
       lamp.clear()
+      lamp.rect(62, -34, 3, 30).fill(INK.benchSide)
       lamp
-        .circle(58, -34, 7)
+        .circle(64, -40, 8)
         .fill(lampLit(worker) ? INK.lampOn : INK.lampOff)
       if (worker.status === "error") {
-        lamp.circle(58, -34, 12).stroke({ color: INK.bodyBad, width: 2 })
+        lamp.circle(64, -40, 13).stroke({ color: INK.bodyBad, width: 2 })
       }
 
       // -- the wall of tools: the most recent calls, newest nearest the bench
@@ -225,8 +229,8 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   // The room is drawn around an origin the benches hang off, so the whole
   // workshop can be nudged without touching any bench's own spot.
   const room = new PIXI.Container()
-  room.position.set(240, 180)
   app.stage.addChild(room)
+  let arrangedFor = ""
 
   app.stage.eventMode = "static"
   app.stage.hitArea = app.screen
@@ -289,6 +293,18 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
           bench.destroy()
           benches.delete(flow)
         }
+      }
+
+      // Centre the room when the set of benches changes -- but never once the
+      // reader has arranged it, or every event would tug their layout around.
+      const signature = flows.join("|")
+      if (signature !== arrangedFor && Object.keys(savedSpots()).length === 0) {
+        arrangedFor = signature
+        const box = bounds(Object.values(arranged))
+        room.position.set(
+          (app.screen.width - box.width) / 2 - box.x,
+          (app.screen.height - box.height) / 2 - box.y,
+        )
       }
 
       for (const flow of flows) {

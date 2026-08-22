@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 
 import {
-  BENCH,
+  FOOTPRINT,
   benchLayout,
   fromIso,
   bubbleVisible,
@@ -50,15 +50,18 @@ test("a dragged bench round-trips through the projection", () => {
   }
 })
 
-test("benchLayout spaces every bench without overlap", () => {
-  const spots = benchLayout(7)
+test("benchLayout keeps benches apart on screen, not just on the floor", () => {
+  // The first version of this measured floor coordinates, which the
+  // projection then halves and quarters -- so it passed while the benches
+  // overlapped by more than half their width.
+  const spots = benchLayout(7).map((spot) => toIso(spot.x, spot.y))
 
   expect(spots).toHaveLength(7)
   for (let i = 0; i < spots.length; i += 1) {
     for (let j = i + 1; j < spots.length; j += 1) {
       const dx = Math.abs(spots[i].x - spots[j].x)
       const dy = Math.abs(spots[i].y - spots[j].y)
-      expect(dx >= BENCH.width || dy >= BENCH.depth).toBe(true)
+      expect(dx >= FOOTPRINT.width || dy >= FOOTPRINT.height).toBe(true)
     }
   }
 })
@@ -95,6 +98,16 @@ test("the lamp is lit while the bench is in use", () => {
 test("the bubble appears only when there is a thought to show", () => {
   expect(bubbleVisible(worker({ lastThinking: "" }))).toBe(false)
   expect(bubbleVisible(worker({ lastThinking: "hm" }))).toBe(true)
+})
+
+test("a flow with no private copy shelves nothing", () => {
+  // It produces no piece to put anywhere. Counting its runs as finished work
+  // fills a shelf with things that do not exist.
+  const busy = worker({
+    tracked: false,
+    recent: { ...NOTHING, works: 40, succeeded: 40 },
+  })
+  expect(shelfCount(busy)).toBe(0)
 })
 
 test("the shelf fills with finished work, not attempts", () => {

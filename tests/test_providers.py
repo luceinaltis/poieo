@@ -546,3 +546,40 @@ async def test_anthropic_captures_thinking_blocks(monkeypatch, anthropic_provide
     )
     assert response.meta["thinking"] == "step one, step two"
     assert response.text == "final answer"
+
+
+async def test_mock_latency_makes_a_call_take_time():
+    """A mock that answers instantly makes every live view look idle."""
+    import time
+
+    from poieo.binding import ProviderSpec
+    from poieo.providers.base import LLMRequest
+    from poieo.providers.mock import MockProvider
+
+    spec = ProviderSpec.model_validate(
+        {"type": "mock", "options": {"responses": {"*": "hi"}, "latency": 0.05}}
+    )
+    provider = MockProvider("slow", spec)
+
+    started = time.monotonic()
+    response = await provider.complete(LLMRequest(model="m", messages=[]))
+    elapsed = time.monotonic() - started
+
+    assert response.text == "hi"
+    assert elapsed >= 0.04
+
+
+async def test_mock_has_no_latency_by_default():
+    import time
+
+    from poieo.binding import ProviderSpec
+    from poieo.providers.base import LLMRequest
+    from poieo.providers.mock import MockProvider
+
+    spec = ProviderSpec.model_validate({"type": "mock", "options": {"responses": {"*": "hi"}}})
+    provider = MockProvider("quick", spec)
+
+    started = time.monotonic()
+    await provider.complete(LLMRequest(model="m", messages=[]))
+
+    assert time.monotonic() - started < 0.02

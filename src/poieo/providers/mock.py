@@ -12,6 +12,7 @@ Declare it in a binding to exercise a graph's wiring without spending tokens:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from ..binding import ProviderSpec
@@ -27,11 +28,16 @@ class MockProvider(Provider):
         options: dict[str, Any] = spec.options or {}
         self.responses: dict[str, Any] = options.get("responses", {})
         self.fallback: str = options.get("fallback", "")
+        # Seconds to spend on each call. A model takes time, and a mock that
+        # answers instantly makes every observation surface look idle.
+        self.latency: float = float(options.get("latency", 0) or 0)
         # Every request, in order -- assertions in tests read this.
         self.calls: list[LLMRequest] = []
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         self.calls.append(request)
+        if self.latency:
+            await asyncio.sleep(self.latency)
         key = request.role or request.model
         value = self.responses.get(key, self.responses.get("*", self.fallback))
         if isinstance(value, list):

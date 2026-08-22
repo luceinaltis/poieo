@@ -14,8 +14,17 @@ export interface Spot {
   y: number
 }
 
-/** Floor footprint of one bench, in room units. */
-export const BENCH = { width: 220, depth: 150 }
+/**
+ * How much room one bench takes on screen once drawn, in pixels.
+ *
+ * The spacing below is derived from this rather than guessed: the projection
+ * halves one axis and quarters the other, so floor distances that look
+ * generous end up overlapping.
+ */
+export const FOOTPRINT = { width: 270, height: 160 }
+
+/** Floor spacing between benches, in room units. */
+export const BENCH = { width: 560, depth: 700 }
 
 /** How many benches stand in a row before the workshop starts another. */
 const PER_ROW = 3
@@ -36,6 +45,20 @@ export function toIso(x: number, y: number): Spot {
  */
 export function fromIso(sx: number, sy: number): Spot {
   return { x: sx + 2 * sy, y: 2 * sy - sx }
+}
+
+/**
+ * The screen box the whole arrangement occupies, so the room can be centred
+ * instead of hugging a corner.
+ */
+export function bounds(spots: Spot[]): { x: number; y: number; width: number; height: number } {
+  if (spots.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
+  const screen = spots.map((spot) => toIso(spot.x, spot.y))
+  const xs = screen.map((s) => s.x)
+  const ys = screen.map((s) => s.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
 /** Where the workshop puts benches when nobody has moved them. */
@@ -81,9 +104,15 @@ export function bubbleVisible(worker: Worker): boolean {
   return worker.lastThinking.trim().length > 0
 }
 
-/** Finished pieces on the shelf. Attempts do not count; only work that landed. */
+/**
+ * Finished pieces on the shelf.
+ *
+ * Attempts do not count, and neither does a flow that keeps no private copy:
+ * it produces nothing to put on a shelf, so filling one would be inventing
+ * work it never did.
+ */
 export function shelfCount(worker: Worker): number {
-  return worker.recent.succeeded
+  return worker.tracked ? worker.recent.succeeded : 0
 }
 
 export function transitionMs(reducedMotion: boolean): number {
