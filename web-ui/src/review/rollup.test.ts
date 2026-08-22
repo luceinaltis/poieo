@@ -91,10 +91,36 @@ test("outcomeOf names the three outcomes", () => {
 
 test("fold adds one run at a time, matching rollup", () => {
   const runs = [run({ change: change() }), run(), run({ status: "failed" })]
-  expect(runs.reduce(fold, NOTHING)).toEqual(rollup(runs))
+  // Not `runs.reduce(fold, ...)`: reduce would hand the array index in as
+  // `tracked`, which is falsy only for the first run.
+  expect(runs.reduce((into, one) => fold(into, one), NOTHING)).toEqual(rollup(runs))
 })
 
 test("NOTHING is not mutated by folding", () => {
   fold(NOTHING, run({ change: change() }))
   expect(NOTHING.works).toBe(0)
+})
+
+
+test("a flow that keeps no private copy has no 'nothing to do' at all", () => {
+  // Its runs never carry a change because there is nothing to change against.
+  // Reporting every one of them as "found nothing to do" makes a flow that
+  // only moves text look like it wasted the night, every night.
+  const summary = rollup([run({ run_id: "a" }), run({ run_id: "b" })], false)
+
+  expect(summary.works).toBe(2)
+  expect(summary.nothingToDo).toBe(0)
+  expect(summary.succeeded).toBe(2)
+})
+
+test("an untracked flow still counts its failures", () => {
+  const summary = rollup([run({ status: "failed" }), run()], false)
+
+  expect(summary.failed).toBe(1)
+  expect(summary.succeeded).toBe(1)
+})
+
+test("outcomeOf needs to know whether changes were possible", () => {
+  expect(outcomeOf(run(), false)).toBe("succeeded")
+  expect(outcomeOf(run(), true)).toBe("nothing")
 })

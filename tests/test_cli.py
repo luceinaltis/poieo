@@ -141,8 +141,10 @@ def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
         "    trigger: {type: interval, every: 60s}\n"
         "    input: {message: hi}\n"
     )
-    result = runner.invoke(app, ["daemon", str(config), "--once"])
-    assert result.exit_code == 0
+    # --no-web on purpose: this covers running the flows, and grabbing the
+    # real default port makes the suite fail for anyone with a daemon up.
+    result = runner.invoke(app, ["daemon", str(config), "--once", "--no-web"])
+    assert result.exit_code == 0, result.stderr
     assert "1 run(s), 0 not completed" in result.stdout
 
     listed = runner.invoke(app, ["runs", "list", "--store", str(tmp_path / "logs")])

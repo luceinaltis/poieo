@@ -24,22 +24,26 @@ function size(run: RunSummary): string {
   return `+${change.insertions} / -${change.deletions} · ${files} file${files === 1 ? "" : "s"}`
 }
 
-function account(run: RunSummary): string {
-  const outcome = outcomeOf(run)
-  if (outcome === "succeeded") return run.change?.message || "made a change"
+function account(run: RunSummary, tracked: boolean): string {
+  const outcome = outcomeOf(run, tracked)
+  if (outcome === "failed") return run.error || "stopped early"
   if (outcome === "nothing") return "found nothing to do"
-  return run.error || "stopped early"
+  if (run.change?.message) return run.change.message
+  // A flow that keeps no private copy has no change to describe itself with.
+  return `${run.steps} step${run.steps === 1 ? "" : "s"}`
 }
 
 export function WorkList({
   runs,
   selected,
   onSelect,
+  tracked = true,
   controls,
 }: {
   runs: RunSummary[]
   selected: string | null
   onSelect(runId: string): void
+  tracked?: boolean
   controls?: (run: RunSummary) => React.ReactNode
 }) {
   const [showFailed, setShowFailed] = useState(false)
@@ -52,8 +56,10 @@ export function WorkList({
     )
   }
 
-  const failed = runs.filter((run) => outcomeOf(run) === "failed")
-  const shown = showFailed ? runs : runs.filter((run) => outcomeOf(run) !== "failed")
+  const failed = runs.filter((run) => outcomeOf(run, tracked) === "failed")
+  const shown = showFailed
+    ? runs
+    : runs.filter((run) => outcomeOf(run, tracked) !== "failed")
 
   return (
     <div className="work">
@@ -63,12 +69,12 @@ export function WorkList({
             key={run.run_id}
             className="work-row"
             data-run={run.run_id}
-            data-outcome={outcomeOf(run)}
+            data-outcome={outcomeOf(run, tracked)}
             data-selected={String(run.run_id === selected)}
           >
             <button type="button" className="work-open" onClick={() => onSelect(run.run_id)}>
               <span className="work-when">{shortTime(run.started_at)}</span>
-              <span className="work-what">{account(run)}</span>
+              <span className="work-what">{account(run, tracked)}</span>
               <span className="work-size">{size(run)}</span>
             </button>
             {controls ? <div className="work-controls">{controls(run)}</div> : null}

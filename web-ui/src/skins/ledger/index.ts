@@ -62,7 +62,9 @@ function describeRecent(worker: Worker): string {
   if (recent.insertions || recent.deletions) {
     parts.push(`+${recent.insertions} / -${recent.deletions}`)
   }
-  if (recent.nothingToDo) parts.push(`${recent.nothingToDo} found nothing to do`)
+  if (worker.tracked && recent.nothingToDo) {
+    parts.push(`${recent.nothingToDo} found nothing to do`)
+  }
   if (recent.failed) parts.push(`${recent.failed} failed`)
   return parts.join(" · ")
 }

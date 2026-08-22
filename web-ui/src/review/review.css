@@ -31,7 +31,8 @@
 }
 
 .work-row[data-selected="true"] {
-  background: #221e18;
+  background: #262019;
+  border-left-color: #d8a657;
 }
 
 .work-open {

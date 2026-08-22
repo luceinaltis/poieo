@@ -29,13 +29,21 @@ export const NOTHING: Rollup = Object.freeze({
   deletions: 0,
 })
 
-export function outcomeOf(run: RunSummary): Outcome {
+/**
+ * `tracked` says whether this flow keeps a private copy at all.
+ *
+ * Without one there is nothing to change against, so a run that carries no
+ * change simply ran. Calling that "found nothing to do" would tell someone
+ * whose flow only moves text that it wasted every night it ever worked.
+ */
+export function outcomeOf(run: RunSummary, tracked = true): Outcome {
   if (run.status !== "completed") return "failed"
+  if (!tracked) return "succeeded"
   return run.change ? "succeeded" : "nothing"
 }
 
-export function fold(into: Rollup, run: RunSummary): Rollup {
-  const outcome = outcomeOf(run)
+export function fold(into: Rollup, run: RunSummary, tracked = true): Rollup {
+  const outcome = outcomeOf(run, tracked)
   // A failed run's work is parked rather than waiting, so its lines are not
   // part of what there is to accept.
   const change = outcome === "succeeded" ? run.change : undefined
@@ -50,6 +58,6 @@ export function fold(into: Rollup, run: RunSummary): Rollup {
   }
 }
 
-export function rollup(runs: RunSummary[]): Rollup {
-  return runs.reduce(fold, NOTHING)
+export function rollup(runs: RunSummary[], tracked = true): Rollup {
+  return runs.reduce((into, run) => fold(into, run, tracked), NOTHING)
 }

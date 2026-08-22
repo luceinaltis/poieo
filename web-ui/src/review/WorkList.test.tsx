@@ -58,9 +58,11 @@ afterEach(() => {
   container.remove()
 })
 
-function render(runs: RunSummary[]) {
+function render(runs: RunSummary[], tracked = true) {
   act(() => {
-    root.render(<WorkList runs={runs} selected={null} onSelect={() => {}} />)
+    root.render(
+      <WorkList runs={runs} selected={null} tracked={tracked} onSelect={() => {}} />,
+    )
   })
 }
 
@@ -119,7 +121,9 @@ test("the rendered work list uses none of the forbidden words", () => {
 
 test("the selected piece of work is marked", () => {
   act(() => {
-    root.render(<WorkList runs={[DID_SOMETHING]} selected="a" onSelect={() => {}} />)
+    root.render(
+      <WorkList runs={[DID_SOMETHING]} selected="a" tracked onSelect={() => {}} />,
+    )
   })
 
   expect(rows()[0].getAttribute("data-selected")).toBe("true")
@@ -129,11 +133,27 @@ test("clicking a row selects that piece of work", () => {
   const picked: string[] = []
   act(() => {
     root.render(
-      <WorkList runs={[DID_SOMETHING]} selected={null} onSelect={(id) => picked.push(id)} />,
+      <WorkList
+        runs={[DID_SOMETHING]}
+        selected={null}
+        tracked
+        onSelect={(id) => picked.push(id)}
+      />,
     )
   })
 
   act(() => container.querySelector<HTMLElement>("[data-run] button")!.click())
 
   expect(picked).toEqual(["a"])
+})
+
+
+test("a flow with no private copy is not accused of finding nothing to do", () => {
+  render([FOUND_NOTHING], false)
+
+  const row = rows()[0]
+  expect(row.getAttribute("data-outcome")).toBe("succeeded")
+  expect(row.textContent).not.toMatch(/nothing to do/i)
+  // it still says what the run amounted to
+  expect(row.textContent).toMatch(/step/i)
 })

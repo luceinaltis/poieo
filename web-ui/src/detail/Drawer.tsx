@@ -108,7 +108,10 @@ export function Drawer({
     void fetchRuns({ flow, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setPicked((current) => current ?? rows[0]?.run_id ?? null)
+      setPicked(
+        (current) =>
+          current ?? rows.find((row) => row.change)?.run_id ?? rows[0]?.run_id ?? null,
+      )
     })
     return () => {
       live = false
@@ -168,6 +171,7 @@ export function Drawer({
           runs={runs}
           selected={picked}
           onSelect={setPicked}
+          tracked={into !== null}
           controls={(run) =>
             run.change ? (
               <Decide

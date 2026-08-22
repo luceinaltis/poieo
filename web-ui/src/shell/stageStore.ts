@@ -56,6 +56,7 @@ function seed(state: StageState, flows: FlowRow[]): StageState {
     }
     workers[name] = {
       ...existing,
+      tracked: blank.tracked,
       lastRun: blank.lastRun ?? existing.lastRun,
       status:
         blank.status === "running"
@@ -106,7 +107,7 @@ export function createStageStore(api: StageApi = {
     let next = current
     for (const row of rows) {
       const runs = await api.fetchRuns({ flow: row.name, limit: REVIEW_LIMIT })
-      next = setRecent(next, row.name, rollup(runs))
+      next = setRecent(next, row.name, rollup(runs, row.into !== null))
     }
     return next
   }

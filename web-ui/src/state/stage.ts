@@ -41,6 +41,8 @@ export interface Worker {
    * list always agree, which is the property a reader would notice breaking.
    */
   recent: Rollup
+  /** Whether this flow keeps a private copy, and so can have changes at all. */
+  tracked: boolean
 }
 
 export interface StageState {
@@ -71,6 +73,7 @@ function blankWorker(): Worker {
     recentToolCalls: [],
     lastRun: null,
     recent: NOTHING,
+    tracked: false,
   }
 }
 
@@ -79,6 +82,7 @@ export function initialStage(flows: FlowRow[]): StageState {
   for (const row of flows) {
     workers[row.name] = {
       ...blankWorker(),
+      tracked: row.into !== null,
       status: row.status === "running" ? "running" : "waiting",
       lastRun: row.last_run
         ? {
@@ -202,7 +206,11 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
           finished_at: asString(event.finished_at),
         },
         // The frame is the summary, flattened -- so it folds like one.
-        recent: fold(state.workers[flow].recent, event as unknown as RunSummary),
+        recent: fold(
+          state.workers[flow].recent,
+          event as unknown as RunSummary,
+          state.workers[flow].tracked,
+        ),
       },
     },
   }

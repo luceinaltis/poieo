@@ -7,6 +7,23 @@ vi.mock("./api", () => ({
   fetchFlows: vi.fn(async () => []),
   fetchRuns: vi.fn(async () => [
     {
+      run_id: "newest-but-quiet",
+      flow: "chores",
+      graph: "agent-task",
+      status: "completed",
+      started_at: "2026-08-22T07:30:00+00:00",
+      finished_at: "2026-08-22T07:30:01+00:00",
+      steps: 1,
+      iteration: 2,
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+      },
+      error: null,
+    },
+    {
       run_id: "20260822T072819-98a6708d",
       flow: "chores",
       graph: "agent-task",
@@ -22,6 +39,14 @@ vi.mock("./api", () => ({
         cache_write_tokens: 0,
       },
       error: null,
+      change: {
+        base: "aaa",
+        head: "bbb",
+        files: ["TODO.md"],
+        insertions: 2,
+        deletions: 0,
+        message: "Added TODO.md",
+      },
     },
   ]),
   fetchRunEvents: vi.fn(async () => AGENT_RUN),
@@ -173,4 +198,18 @@ test("opening a different worker does not show the previous one's work", async (
   expect(drawer.getAttribute("data-flow")).toBe("revision")
   // nothing carried over from the worker we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+})
+
+
+test("the drawer opens on the work that changed something", async () => {
+  // The newest run found nothing to do. Opening on it greets the reader with
+  // "this work changed no files", which is not what they came for.
+  await render(replay(initialStage(FLOWS), AGENT_RUN))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+  })
+
+  const selected = container.querySelector("[data-run][data-selected='true']")!
+  expect(selected.getAttribute("data-run")).toBe("20260822T072819-98a6708d")
 })
