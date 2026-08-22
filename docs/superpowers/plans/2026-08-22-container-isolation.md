@@ -2,240 +2,173 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A flow with an `isolation` block runs its shell commands inside a container that can see only the working directory — provable by one pair of tests where the same command succeeds without isolation and fails with it.
+**Goal:** A task with an `isolation` block runs its shell commands inside a container that can see only its folder — provable by one pair of tests where the same command succeeds without isolation and fails with it.
 
-**Architecture:** A new `poieo.tools.docker` module is the only thing in the codebase that knows Docker exists. `LocalExecutor` and `DockerExecutor` become async context managers behind one factory; `runtime/nodes.py` acquires its executor from that factory with `async with` and never learns which it got. File tools stay on the host, confined by `resolve_path` exactly as today; only `run_command` moves inside the box.
+**Architecture:** `poieo.tools.docker` is the only module that knows Docker exists. `LocalExecutor` and `DockerExecutor` are async context managers behind one factory; `runtime/nodes.py` acquires its executor from that factory and never learns which it got. A box outlives a run, so `FlowRunner` owns it — the same object that owns the task's private working copy. File tools stay on the host, confined by `resolve_path`; only `run_command` moves inside.
 
 **Tech Stack:** Python 3.10, subprocess-invoked `docker`, pytest + pytest-asyncio (asyncio_mode=auto).
 
 **Spec:** docs/superpowers/specs/2026-08-22-container-isolation-design.md
 
-## Depends on, and conflicts with
+## Revision, 2026-08-23
 
-**Plan C touches the same function this plan touches.** Its Task 2 ("flow-level `workdir` reaches agent nodes") edits `AgentNode.run` in `src/poieo/runtime/nodes.py` where the workdir is resolved; this plan's Task 2 edits the next statement, where the executor is constructed. That is one small conflict in one function, not a design collision.
+Tasks 1 and 2 shipped against the original design, where a box lived exactly as long as one agent node. The user asked what the boundary should be; a survey of the field (recorded in the spec) said nobody runs a container per command, and that container users keep one alive per conversation or per instance.
 
-Land Plan C first. Then, in Task 3, **reuse whatever mechanism Plan C built to carry a flow-level value down to agent nodes — do not invent a second one.** If two parallel settings arrive at `AgentNode.run` by two different routes, the next person to add a third will have to pick, and will pick wrong.
+poieo's task accumulates on purpose — its journal is re-read before every run, its private working copy persists — so **the box is now per task, kept between runs**. Tasks 3 onward are written against that. Nothing in Tasks 1 or 2 has to be undone: the executor still attaches to a container, it just no longer creates the one it attaches to.
 
-Everything else is untouched ground: Plan C's constraints promise that nothing in `tools/` learns about git, and Plan B is frontend-only.
+## Depends on
+
+**Plan C is not merged yet** (`src/poieo/checkpoint.py` is absent from `main`; the `checkpoint-backend` branch has all six of its tasks done). Task 3 puts a second durable, task-scoped thing on `FlowRunner`, which is exactly where Plan C puts the private worktree.
+
+Land Plan C first, then **reuse the shape it built — do not invent a second one.** If the worktree and the box arrive at `AgentNode.run` by two different routes, whoever adds a third will have to pick, and will pick wrong.
 
 ## Global Constraints
 
 - **No new dependencies**, pip or otherwise. `docker` is invoked as a subprocess; there is no docker-py, no podman shim.
-- **`poieo.tools.docker` is the only module that names Docker.** Not `nodes.py`, not `graph.py`, not `files.py`, not `shell.py`. The factory in `tools/__init__.py` may import it lazily; nothing else may import it at all.
-- **A flow without `isolation` must behave exactly as it does today.** Every new code path is guarded by that block being present. The no-isolation suite must stay byte-for-byte green.
-- **No fallback, ever.** If isolation is requested and cannot be provided, the caller gets an error. A code path that silently runs unsandboxed is the one bug this whole slice exists to prevent — it would be worse than not shipping.
-- Docker calls are async (`asyncio.create_subprocess_exec`), like `shell.py`. The daemon shares one loop with the web server; a blocking `subprocess.run` would stall SSE for every watcher.
+- **`poieo.tools.docker` is the only module that names Docker.** Not `nodes.py`, not `graph.py`, not `files.py`, not `shell.py`, not `task.py`. The factory in `tools/__init__.py` may import it lazily; nothing else may import it at all. `daemon/service.py` may hold a box, but only through a handle with no Docker words on it.
+- **A task without `isolation` must behave exactly as it does today.** Every new code path is guarded by that block being present. The no-isolation suite must stay byte-for-byte green.
+- **No fallback, ever.** If isolation is requested and cannot be provided, the caller gets an error. A code path that silently runs unsandboxed is the one bug this whole slice exists to prevent — worse than not shipping.
+- Docker calls made while the loop is running are async (`asyncio.create_subprocess_exec`), like `shell.py`. The daemon shares one loop with the web server; a blocking `subprocess.run` would stall SSE for every watcher. Preflight runs before the loop starts and may be synchronous.
 - Tests use real containers. Mocking `docker` would test the mock. They skip with an explicit reason when the daemon is unreachable, so a machine without Docker still gets an honest count.
-- **Baseline on this machine:** `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio` → **171 tests, 170 pass.** `tests/test_cli.py::test_daemon_once_runs_each_flow_and_logs_them` fails whenever a `poieo daemon` is already listening on 8484, because it invokes the CLI without `--no-web` and tries to bind the real port. That is a pre-existing test-isolation defect, unrelated to this plan; do not "fix" it here and do not let it mask a regression.
+- **Baseline:** `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio` → **235 passed, 0 failed** at `df0b3f8` with Tasks 1–2 applied. The suite is fully green; anything red is yours.
 - Comment style: sparse, like the existing modules — explain constraints, not mechanics.
 - Commit messages end with the trailer naming the model that wrote them, per CLAUDE.md.
 
 ## Vocabulary guard
 
-The spec fixes what the user reads: **isolated** / **not isolated**. This plan produces backend and configuration, so Docker words are correct in code, in field names, and in configuration errors. They must not reach a string a task card could display. Any message about a run says *isolated*, never *container* or *image*.
+The spec fixes what the user reads: a task is **isolated** or it is not, and the idea underneath is **reach**. This plan produces backend and configuration, so Docker words are correct in code, in field names, and in configuration errors. They must not reach a string a card could display — not *container*, not *image*, not *mount*, not *exec*.
 
 ---
 
-### Task 1: `DockerExecutor` and the escape test
+### Task 1: `DockerExecutor` and the escape test — **done** (PR #1, `f7f9283`)
 
-**Files:**
-- Create: `src/poieo/tools/docker.py`
-- Test: `tests/test_tools_docker.py`
+`src/poieo/tools/docker.py` and `tests/test_tools_docker.py`. `docker_available()`, `image_present()`, and a `DockerExecutor` with the same `definitions()`/`execute()` as `LocalExecutor`. 16 tests against real `alpine:3.20` containers; the escape pair verified by hand as well as by assertion.
 
-**Interfaces:**
-- Consumes: `Tool`, `ToolError`, `ToolResult`, `TOOLSETS` from `poieo.tools`; `FILES_TOOLS` unchanged.
-- Produces:
-  - `docker_available() -> tuple[bool, str]` — `(False, reason)` when docker is off PATH or the daemon does not answer. The reason is a configuration string, not an interface string.
-  - `image_present(image) -> bool`
-  - `DockerExecutor(workdir, toolsets, *, image, network="none", user=None, labels=None)` with the same `definitions()` and `execute()` as `LocalExecutor`, plus `__aenter__` / `__aexit__`.
+Two things recorded there that no test would have explained:
 
-**How it is built.** `DockerExecutor` assembles the same tool dict `LocalExecutor` does, then replaces the `run_command` entry with one bound to its container. File tools are the host implementations, untouched — the workdir they write is the bind-mount source, so the container sees each write immediately.
+- The idle command is `sleep 2147483647`, not `sleep infinity`. `infinity` is a GNU coreutils extension. Busybox 1.36.1 does accept it — measured — but older builds reject it, and then the container exits instantly and every later `docker exec` fails with a confusing "is not running".
+- The bind-mount source must be an **absolute, resolved** path. Given a relative or `~`-prefixed one, Docker silently creates an empty *named volume*: the container starts, `/work` is empty, and the model reports the project does not exist.
 
-`__aenter__` runs `docker run -d --rm -v <workdir>:/work -w /work --network <network> [--user <user>] --label poieo.run_id=<id> <image> sleep 2147483647` and keeps the container id. `__aexit__` runs `docker rm -f <id>` and must not raise — teardown failure is logged, never propagated over the exception that caused it.
+### Task 2: the lifecycle seam and the factory — **done** (PR #2, `dc1c709`)
 
-**Two details that will not show up as a red test.**
-
-- The idle command is `sleep 2147483647`, not `sleep infinity`. `infinity` is a GNU coreutils extension. Busybox 1.36.1 (alpine 3.20) does accept it — measured, not assumed — but its own `sleep --help` still documents only `sleep [N]`, and older busybox builds reject it, in which case the container exits immediately and every later `docker exec` fails with a confusing "is not running". A finite number costs nothing and works everywhere. The image's only requirement is a shell at `/bin/sh`, and that belongs in the README.
-- The bind-mount source must be passed as an **absolute, resolved** path. On Windows, `Path.resolve()` yields `C:\Users\...`, which Docker Desktop accepts, but a relative or `~`-prefixed path silently becomes a *named volume* instead of a mount — the container then starts fine, sees an empty `/work`, and the model reports that the project is empty. Resolve before building the argument, and assert the mount is a directory.
-
-`run_command` becomes `docker exec -w /work <id> sh -c <command>`, keeping `shell.py`'s existing `_MAX_TIMEOUT`, output cap, and `exit code: N` result shape. On timeout, the exec is killed and the container is still torn down by `__aexit__`.
-
-- [ ] **Step 1: Write the failing tests**
-
-`tests/test_tools_docker.py`, guarded by a module-level skip when `docker_available()` is false:
-
-```python
-async def test_a_command_cannot_read_above_the_workdir(tmp_path): ...   # THE test
-async def test_the_same_command_succeeds_without_isolation(tmp_path): ...  # the control
-async def test_network_is_off_by_default(tmp_path): ...
-async def test_write_file_then_cat_sees_the_write(tmp_path): ...
-async def test_the_reverse_direction_also_agrees(tmp_path): ...
-async def test_the_container_is_gone_after_aexit(tmp_path): ...
-async def test_the_container_is_gone_when_the_body_raises(tmp_path): ...
-async def test_a_timed_out_command_still_tears_down(tmp_path): ...
-async def test_an_unknown_tool_is_an_error_not_a_crash(tmp_path): ...
-```
-
-The first two are a pair and must be read as one: a secret file is written one level *above* `tmp_path/work`, and `run_command("cat ../secret")` must fail isolated and succeed unisolated. If both pass, the feature does nothing.
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests/test_tools_docker.py -q -p asyncio`
-Expected: FAIL — `src/poieo/tools/docker.py` does not exist. If instead they all SKIP, Docker Desktop is not running; start it before continuing, because a skipped escape test proves nothing.
-
-- [ ] **Step 3: Implement**
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Paste the run into the report, and state plainly whether it ran or skipped.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat: docker-backed executor confines the shell to the workdir"
-```
+A shared `Executor` base owns tool lookup, failure-to-text and a no-op lifecycle. `make_executor(workdir, toolsets, isolation=None)` is the one place that picks a subclass, with the Docker import inside the isolation branch. `AgentNode.run` acquires its executor with `async with` and names no backend.
 
 ---
 
-### Task 2: the lifecycle seam and the factory
+### Task 3: the box, and who owns it
 
 **Files:**
-- Modify: `src/poieo/tools/__init__.py`
-- Modify: `src/poieo/runtime/nodes.py`
-- Test: `tests/test_tools.py` (append)
+- Modify: `src/poieo/tools/docker.py` (split creation from attachment)
+- Modify: `src/poieo/tools/__init__.py` (`make_executor` takes a box)
+- Modify: `src/poieo/daemon/service.py` (`FlowRunner` holds one)
+- Test: `tests/test_tools_docker.py`, `tests/test_daemon.py`
 
 **Interfaces:**
-- Produces:
-  - `LocalExecutor.__aenter__` / `__aexit__` — no-ops returning `self`.
-  - `make_executor(workdir, toolsets, isolation=None) -> Executor` — returns `LocalExecutor` when `isolation` is `None`, `DockerExecutor` otherwise. The `poieo.tools.docker` import happens **inside** the isolation branch, so a machine without Docker never imports it and `poieo run` starts no slower.
+- Produces, in `tools/docker.py`:
+  - `Box(key: str, workdir: Path, isolation: Isolation)` — owns at most one container.
+    - `async ensure() -> str` — the container id, starting it if missing or dead. Idempotent; two runs in a row get the same id.
+    - `async remove() -> None` — never raises.
+    - `matches(isolation) -> bool` — false when the image, network or user changed.
+    - `last_used: datetime` — what the idle sweep reads.
+  - `async sweep(older_than: timedelta) -> int` — removes boxes whose `poieo.task` label marks them idle past the cutoff, including ones this process did not start.
+- `DockerExecutor` gains `box: Box | None`. With a box it **attaches**: `__aenter__` calls `ensure()`, `__aexit__` does nothing. Without one it behaves exactly as today — creates on enter, removes on exit — which is the one-shot `poieo run` path.
+- `make_executor(workdir, toolsets, isolation=None, box=None)`.
 
-**The one runtime change.** In `AgentNode.run`:
+**The ownership rule.** `FlowRunner` already drives one task and outlives every run of it. It holds the box, creates it lazily on the first run that needs one, drops it when the daemon stops or the task's `isolation` stops matching. Nothing above `FlowRunner` and nothing below `make_executor` knows a box exists; what travels between them is an opaque handle.
 
-```python
-executor = LocalExecutor(workdir, spec.tools or DEFAULT_TOOLSETS)
-```
-
-becomes
-
-```python
-async with make_executor(workdir, spec.tools or DEFAULT_TOOLSETS, isolation) as executor:
-    ...
-```
-
-and the turn loop moves inside. That is the whole diff the runtime sees: no `if`, no Docker import, no knowledge that a container is a thing. If this task ends with the word "docker" anywhere in `runtime/`, it went wrong.
+**Do not tear a box down in `__aexit__` when it was handed in.** That inversion — the borrower destroying the lender's object — is the bug this task exists to avoid, and it will look correct in every single-run test. The reuse test below is the one that catches it.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-async def test_local_executor_works_as_a_context_manager(tmp_path): ...
-async def test_make_executor_returns_local_without_isolation(tmp_path): ...
-async def test_make_executor_does_not_import_docker_without_isolation(): ...  # sys.modules
-async def test_an_agent_node_still_runs_unchanged(tmp_path): ...              # the no-op proof
+async def test_two_runs_share_one_box(tmp_path): ...              # THE test: same container id
+async def test_a_file_written_by_the_first_run_survives(tmp_path): ...  # what reuse is for
+async def test_ensure_restarts_a_box_that_died(tmp_path): ...
+async def test_a_changed_image_does_not_match(tmp_path): ...
+async def test_remove_is_safe_to_call_twice(tmp_path): ...
+async def test_an_attached_executor_does_not_remove_the_box(tmp_path): ...   # the inversion
+async def test_a_one_shot_executor_still_removes_its_own(tmp_path): ...
+async def test_the_sweep_removes_an_idle_box_and_spares_a_fresh_one(tmp_path): ...
+async def test_the_daemon_drops_its_boxes_when_it_stops(tmp_path): ...
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
-
 - [ ] **Step 3: Implement**
-
 - [ ] **Step 4: Run the full suite**
-
-Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio`
-Expected: the baseline above, plus the new tests. The pre-existing 8484 failure may or may not appear depending on whether a daemon is running; anything else that turns red is yours.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "refactor: executors are context managers behind one factory"
-```
+- [ ] **Step 5: Commit** — `feat: a task keeps one box between its runs`
 
 ---
 
-### Task 3: flow-level `isolation`
+### Task 4: a task opts in
 
 **Files:**
-- Modify: `src/poieo/daemon/config.py`
-- Modify: whichever module Plan C used to carry a flow value into `AgentNode.run`
-- Test: `tests/test_daemon.py` (append)
+- Modify: `src/poieo/task.py` (`TaskSpec.isolation`)
+- Modify: `src/poieo/daemon/config.py` (`FlowSpec.isolation`, and the task -> flow expansion)
+- Test: `tests/test_task.py`, `tests/test_daemon.py`
 
 **Interfaces:**
-- Produces: `IsolationSpec` (`image: str` required, `network: Literal["none","bridge"] = "none"`, `user: str | None = None`, `extra="forbid"`) and `FlowSpec.isolation: IsolationSpec | None = None`.
+- Produces: an `isolation` block on a task card and on a hand-written flow, parsed into the `Isolation` dataclass Task 2 defined. `image` required, `network` defaulting to `none`, `user` optional, `extra="forbid"`.
 
-**Read Plan C's landed diff before writing anything here.** It solved "a flow-level value reaches agent nodes" for `workdir`; this is the same problem with a second value. Extend its route. Two parallel mechanisms for the same job is the failure mode to avoid, and it is easier to avoid now than to unpick later.
+A task is sugar that expands into a flow plus a one-node graph, so `isolation` rides that expansion like every other task key. Read `task.py`'s existing expansion before adding to it; the `_NODE_KEYS` list is where a key that describes the generated node goes, and `isolation` is **not** one of those — it describes the task, and survives `poieo eject`.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_a_flow_parses_an_isolation_block(): ...
+def test_a_task_card_parses_an_isolation_block(): ...
 def test_image_is_required_when_the_block_is_present(): ...
 def test_network_defaults_to_none(): ...
-def test_an_unknown_isolation_key_is_rejected(): ...        # extra="forbid"
-def test_a_flow_without_isolation_is_unchanged(): ...
-async def test_the_setting_reaches_the_agent_node(): ...    # via Plan C's route
+def test_an_unknown_isolation_key_is_rejected(): ...
+def test_isolation_survives_eject(): ...              # it is not a node key
+def test_a_task_without_isolation_is_unchanged(): ...
+async def test_the_setting_reaches_the_agent_node(): ...
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
-
 - [ ] **Step 3: Implement**
-
 - [ ] **Step 4: Run the tests to verify they pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat: flows opt into isolation, and the setting reaches agent nodes"
-```
+- [ ] **Step 5: Commit** — `feat: a task can ask to run isolated`
 
 ---
 
-### Task 4: preflight — fail at launch, not at 3am
+### Task 5: preflight — fail at launch, not at 3am
 
 **Files:**
 - Modify: `src/poieo/daemon/config.py` (`load_flows`)
-- Modify: `src/poieo/cli.py` (the `check` command)
-- Test: `tests/test_daemon.py`, `tests/test_cli.py` (append)
+- Modify: `src/poieo/cli.py` (`check`)
+- Test: `tests/test_daemon.py`, `tests/test_cli.py`
 
-**Interfaces:** none new — `docker_available()` and `image_present()` from Task 1 are called at load time.
+Every task declaring `isolation` is checked when the config loads: docker on PATH, the daemon answering, and the named image present locally. A missing image prints the fix verbatim — `docker pull python:3.12-slim` — because that is the next thing the user will type.
 
-Every flow declaring `isolation` is checked when the config loads: docker on PATH, the daemon answering, and the named image present locally. A missing image prints the fix verbatim — `docker pull python:3.12-slim` — because the next thing the user will do is search for that command.
-
-This is the slowest preflight in the codebase (a daemon ping plus an image inspect per distinct image). Cache by image within one load so ten flows sharing an image cost one check. A flow whose image was pruned last week must not discover it at 3am, which is what buys the cost.
+Cache by image within one load, so ten tasks sharing an image cost one check. This is the slowest preflight in the codebase; what buys the cost is that a task whose image was pruned last week must not discover it at 3am.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_a_flow_with_isolation_fails_to_load_without_docker(monkeypatch): ...
+def test_a_task_with_isolation_fails_to_load_without_docker(monkeypatch): ...
 def test_a_missing_image_names_the_pull_command(monkeypatch): ...
 def test_the_same_image_is_only_checked_once(monkeypatch): ...
-def test_flows_without_isolation_never_touch_docker(monkeypatch): ...   # no ping at all
+def test_tasks_without_isolation_never_touch_docker(monkeypatch): ...   # no ping at all
 def test_check_reports_isolation_readiness(): ...
 ```
 
-`docker_available` is monkeypatched here, not driven for real — this task tests poieo's reaction to an answer, not Docker itself. Task 1 is where the real thing is exercised.
+`docker_available` is monkeypatched here rather than driven for real: this task tests poieo's reaction to an answer, not Docker itself. Task 1 is where the real thing is exercised.
 
 - [ ] **Step 2: Run the tests to verify they fail**
-
 - [ ] **Step 3: Implement**
-
 - [ ] **Step 4: Run the tests to verify they pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat: isolation is verified when the config loads"
-```
+- [ ] **Step 5: Commit** — `feat: isolation is verified when the config loads`
 
 ---
 
-### Task 5: `poieo run --isolate`
+### Task 6: `poieo run --isolate` and `poieo reset`
 
 **Files:**
 - Modify: `src/poieo/cli.py`
-- Test: `tests/test_cli.py` (append)
+- Test: `tests/test_cli.py`
 
 **Interfaces:**
-- Produces: `--isolate <image>` on `poieo run`, building an `IsolationSpec` with the defaults from Task 3 and running it through the same preflight.
-
-A one-shot run gets the same box the daemon does, or the feature is something you can only test by writing a daemon config — which means nobody will test it.
+- `poieo run --isolate <image>` — a one-shot run in an ephemeral box, through the same preflight. No box outlives it; there is no next run to keep one for.
+- `poieo reset <task>` — throw away that task's box. The spec makes this the explicit escape hatch and the thing to suggest when a task starts behaving oddly, so it must work whether or not a daemon is running, and say plainly that nothing in the task's folder was touched.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -243,42 +176,37 @@ A one-shot run gets the same box the daemon does, or the feature is something yo
 def test_run_isolate_builds_an_isolation_spec(monkeypatch): ...
 def test_run_isolate_preflights_before_the_first_model_call(monkeypatch): ...
 def test_run_without_isolate_never_touches_docker(monkeypatch): ...
+def test_reset_removes_the_box_and_says_the_folder_is_untouched(): ...
+def test_reset_on_a_task_with_no_box_is_not_an_error(): ...
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
-
 - [ ] **Step 3: Implement**
-
 - [ ] **Step 4: Run the tests to verify they pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat: poieo run --isolate"
-```
+- [ ] **Step 5: Commit** — `feat: poieo run --isolate, and poieo reset`
 
 ---
 
-### Task 6: document it and show it working
+### Task 7: document it and show it working
 
 **Files:**
 - Modify: `README.md`
-- Modify: `DESIGN.md` (the capability-layer and safety-boundary text only)
-- Modify: `examples/poieo.yaml` (one disabled flow, like `nightly-digest`)
-
-**Interfaces:** none — this ships what the previous five built.
+- Modify: `DESIGN.md` (capability layers and safety boundaries — status only)
+- Modify: `examples/tasks/` (one card, isolation on, documented as needing a pull)
 
 - [ ] **Step 1: The example**
 
-Add one flow to `examples/poieo.yaml`, `enabled: false`, with an `isolation` block and a comment saying it needs `docker pull python:3.12-slim` first. Disabled, because an example that fails to load on a machine without Docker would break `poieo check` for everyone.
+A task card with an `isolation` block, and a comment saying it needs `docker pull python:3.12-slim` first. It must not break `poieo tasks` on a machine without Docker — check what the loader does before deciding whether it ships enabled.
 
 - [ ] **Step 2: README**
 
-Three or four sentences in the README's plain tone: what opting in changes (`run_command` sees only the workdir), what it does not (file tools were already confined), that the network is off unless asked for, and that the image must exist locally.
+Use the spec's *reach* wording, not Docker's. Say what changes (a command it runs stays inside the folder), what does not (file tools were already confined), that the network is off unless asked for, and that the image must already exist locally. Then the honest half, in its own short paragraph: the folder itself is exposed by definition, prompts still leave the host, and a container shares the host kernel — it is a strong boundary, not an absolute one.
+
+End with the question the user is actually deciding: *can you predict every command this prompt will run, overnight, with this model?*
 
 - [ ] **Step 3: DESIGN.md**
 
-The safety-boundaries section says container isolation is opt-in; that is now true rather than planned. Change the status, not the argument, and keep the file under 500 lines and at the logic level.
+The safety-boundaries section says container isolation is opt-in; that is now true rather than planned. Change the status, not the argument. Keep the file under 500 lines and at the logic level.
 
 - [ ] **Step 4: The whole suite, both ways**
 
@@ -290,20 +218,18 @@ Then stop Docker Desktop and run it again. Expected: green both times — the co
 
 - [ ] **Step 5: End-to-end by hand**
 
-Run an isolated agent flow against `examples/graphs/agent-task.yaml` with the mock binding, watch it in the browser, and confirm the tool calls land. Then set the prompt to read something above the workdir and confirm the model gets an error back and keeps working — the model must *see* a tool failure, not have the run die.
+Run an isolated task twice against the mock binding. Confirm: the second run reuses the first run's box, a file the first run's shell wrote is still there, and the tool calls show in the browser. Then set the prompt to read something above the folder and confirm the model gets a tool error back **and keeps working** — the model must see a failure, not have the run die.
 
-- [ ] **Step 6: Commit**
-
-```bash
-git commit -m "docs: container isolation, opt-in per task"
-```
+- [ ] **Step 6: Commit** — `docs: container isolation, opt-in per task`
 
 ---
 
 ## Done means
 
-- A flow with `isolation` runs shell commands that cannot read one directory above the workdir; the same flow without it can. Both are tests, and they run in CI-less reality on a machine with Docker running.
+- A task with `isolation` runs shell commands that cannot read one directory above its folder; the same task without it can. Both are tests.
+- Two runs of one task share a box, and what the first installed is there for the second. Deleting the box is always safe and the next run rebuilds it.
 - `grep -ri docker src/poieo --include=*.py` matches `tools/docker.py`, one lazy import in `tools/__init__.py`, and the preflight call in `daemon/config.py`. Nothing else.
-- A machine without Docker runs the full suite green and every existing flow unchanged.
-- A flow whose image is missing fails when the config loads, naming the `docker pull` that fixes it.
-- Adding Podman later is one new module and one factory branch — no runtime change, no config reshuffle.
+- A machine without Docker runs the full suite green and every existing task unchanged.
+- A task whose image is missing fails when the config loads, naming the `docker pull` that fixes it.
+- The README says plainly what isolation does **not** protect.
+- Adding Podman, or an OS-level sandbox, is one new module and one factory branch — no runtime change, no config reshuffle.
