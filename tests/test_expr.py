@@ -64,3 +64,10 @@ def test_render_inlines_values_and_json(scope):
 def test_compile_reports_syntax_errors_early():
     with pytest.raises(ExpressionError, match="syntax error"):
         compile_expr("a ==")
+
+
+def test_a_missing_key_names_itself_and_what_was_there():
+    with pytest.raises(ExpressionError) as exc:
+        render("{{ input.journal }}", {"input": wrap({"message": "hi", "count": 2})})
+    assert "journal" in str(exc.value)
+    assert "count, message" in str(exc.value)

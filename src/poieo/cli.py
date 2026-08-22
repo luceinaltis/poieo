@@ -204,7 +204,7 @@ def view(
 ) -> None:
     """Render graphs as a browsable HTML page."""
     try:
-        graphs = [load_graph(path) for path in graph_paths]
+        graphs = [_load_spec(path) for path in graph_paths]
         spec = load_binding(binding) if binding else None
     except PoieoError as exc:
         _fail(str(exc))
@@ -291,6 +291,9 @@ def edit(
     host: str = typer.Option("127.0.0.1", "--host"),
 ) -> None:
     """Open a graph in the drag-and-drop canvas editor."""
+    if is_task_file(graph_path):
+        # The editor saves back over what it opened, and a task is not a graph.
+        _fail(f"{graph_path} is a task; run 'poieo eject' first, then edit the graph")
     try:
         graph = load_graph(graph_path)
         spec = load_binding(binding) if binding else None
@@ -504,14 +507,18 @@ def flows(
 
 @app.command()
 def tasks(
-    config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
+    target: Path = typer.Argument(..., help="Daemon config file, or a tasks folder."),
 ) -> None:
-    """List the task cards a daemon config would run."""
+    """List the task cards in a folder, or the ones a daemon config would run."""
     try:
-        config = load_config(config_path)
-        if not config.tasks:
-            _fail(f"{config_path} names no tasks folder")
-        items = load_tasks(config.resolve_path(config.tasks))
+        if target.is_dir():
+            folder = target
+        else:
+            config = load_config(target)
+            if not config.tasks:
+                _fail(f"{target} names no tasks folder")
+            folder = config.resolve_path(config.tasks)
+        items = load_tasks(folder)
     except PoieoError as exc:
         _fail(str(exc))
 
@@ -592,6 +599,10 @@ def eject(
 
     _ok(f"wrote {target}")
     typer.echo(f"{task_path} now names it (comments in it were not preserved)")
+    typer.echo(
+        "the graph reads {{ input.journal }}, which the task supplies -- run it "
+        f"through '{task_path}', or pass --set journal=..."
+    )
 
 
 @runs_app.command("list")

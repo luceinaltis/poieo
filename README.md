@@ -183,14 +183,16 @@ and `binding` are there when a task outgrows the defaults.
 
 | command | does |
 |---|---|
-| `poieo tasks poieo.yaml` | list the cards, with their schedules |
+| `poieo tasks tasks/` | list the cards, with their schedules (a daemon config works too) |
 | `poieo show tasks/keep-improving.yaml` | render the flow the task expands to |
 | `poieo run tasks/keep-improving.yaml -b bindings/mock.yaml` | run it once |
 | `poieo eject tasks/keep-improving.yaml` | write that flow out as a real graph; the task names it from then on |
 
 The sugar is not a second configuration format: a task expands into exactly the
 flow and graph you would have written by hand, `show` proves it, and `eject`
-hands it over the moment one line stops being enough.
+hands it over the moment one line stops being enough. An ejected graph still
+reads `{{ input.journal }}`, which the task supplies -- run it through the task,
+or pass `--set journal=...` when running that graph on its own.
 
 A task's identity is its **filename**, so the title on the card can be
 rewritten without orphaning its run history. Paths written inside a task file
