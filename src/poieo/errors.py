@@ -28,6 +28,10 @@ class ProviderError(PoieoError):
         self.retryable = retryable
 
 
+class IsolationError(PoieoError):
+    """An isolated environment could not be provided. Never fall back without one."""
+
+
 class NodeError(PoieoError):
     """A node failed during execution."""
 

@@ -55,7 +55,7 @@ The spec fixes what the user reads: **isolated** / **not isolated**. This plan p
 
 **Two details that will not show up as a red test.**
 
-- The idle command is `sleep 2147483647`, not `sleep infinity`. `infinity` is a GNU coreutils extension; busybox `sleep` — which is what `alpine` and most slim images ship — rejects it, so the container would exit immediately and every later `docker exec` would fail with a confusing "not running". A finite number works on both. The image's only requirement is a shell at `/bin/sh`, and that belongs in the README.
+- The idle command is `sleep 2147483647`, not `sleep infinity`. `infinity` is a GNU coreutils extension. Busybox 1.36.1 (alpine 3.20) does accept it — measured, not assumed — but its own `sleep --help` still documents only `sleep [N]`, and older busybox builds reject it, in which case the container exits immediately and every later `docker exec` fails with a confusing "is not running". A finite number costs nothing and works everywhere. The image's only requirement is a shell at `/bin/sh`, and that belongs in the README.
 - The bind-mount source must be passed as an **absolute, resolved** path. On Windows, `Path.resolve()` yields `C:\Users\...`, which Docker Desktop accepts, but a relative or `~`-prefixed path silently becomes a *named volume* instead of a mount — the container then starts fine, sees an empty `/work`, and the model reports that the project is empty. Resolve before building the argument, and assert the mount is a directory.
 
 `run_command` becomes `docker exec -w /work <id> sh -c <command>`, keeping `shell.py`'s existing `_MAX_TIMEOUT`, output cap, and `exit code: N` result shape. On timeout, the exec is killed and the container is still torn down by `__aexit__`.
