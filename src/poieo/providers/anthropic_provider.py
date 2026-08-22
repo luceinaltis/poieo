@@ -220,6 +220,9 @@ class AnthropicProvider(Provider):
             for b in message.content
             if b.type == "tool_use"
         ]
+        thinking = "\n".join(
+            getattr(b, "thinking", "") for b in message.content if b.type == "thinking"
+        )
         usage = message.usage
         return LLMResponse(
             text=text,
@@ -239,6 +242,7 @@ class AnthropicProvider(Provider):
                 # from LLMResponse alone drops thinking blocks, which the API
                 # then rejects on continuation.
                 "raw_content": [b.model_dump() for b in message.content],
+                **({"thinking": thinking} if thinking else {}),
             },
             tool_calls=tool_calls,
         )

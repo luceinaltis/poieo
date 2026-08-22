@@ -220,6 +220,9 @@ class OllamaProvider(_HttpProvider):
             )
             for call in (message.get("tool_calls") or [])
         ]
+        meta: dict[str, Any] = {}
+        if message.get("thinking"):
+            meta["thinking"] = message["thinking"]
         return LLMResponse(
             text=message.get("content") or "",
             model=data.get("model", request.model),
@@ -229,6 +232,7 @@ class OllamaProvider(_HttpProvider):
             ),
             stop_reason=data.get("done_reason"),
             tool_calls=tool_calls,
+            meta=meta,
         )
 
     async def health(self) -> tuple[bool, str]:

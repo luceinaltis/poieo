@@ -510,3 +510,39 @@ def test_anthropic_messages_replays_raw_content_verbatim():
     assert assistant == {"role": "assistant", "content": raw_blocks}
     # It must be the exact list, untouched -- no reconstruction happened.
     assert assistant["content"] is raw_blocks
+
+
+async def test_ollama_captures_separated_thinking(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "ollama", "base_url": "http://x"})
+    provider = OllamaProvider("ollama", spec)
+
+    async def fake_post(path, payload):
+        return {
+            "model": "m",
+            "message": {"content": "answer", "thinking": "hmm, tricky"},
+            "done_reason": "stop",
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    response = await provider.complete(
+        LLMRequest(model="m", messages=[{"role": "user", "content": "q"}])
+    )
+    assert response.meta["thinking"] == "hmm, tricky"
+    await provider.aclose()
+
+
+async def test_anthropic_captures_thinking_blocks(monkeypatch, anthropic_provider):
+    message = _message(
+        content=[
+            _block(type="thinking", thinking="step one, step two"),
+            _block(type="text", text="final answer"),
+        ]
+    )
+    monkeypatch.setattr(
+        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message)
+    )
+    response = await anthropic_provider.complete(
+        LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "q"}])
+    )
+    assert response.meta["thinking"] == "step one, step two"
+    assert response.text == "final answer"
