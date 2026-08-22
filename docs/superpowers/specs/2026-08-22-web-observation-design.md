@@ -14,6 +14,14 @@ past run from the store.
 Editing and control (task cards, pause/resume, run-now) are the next slice —
 this design is strictly read-only.
 
+> **Amended 2026-08-22.** The backend below shipped as specified. The frontend
+> half has since been resequenced by
+> `2026-08-22-nightly-review-design.md`: the first thing the page must do is
+> answer *what did it do last night*, so the review screen (work list, diff,
+> accept/discard) comes before the `atelier` skin. That sibling spec also
+> carries the only two mutations the web is allowed — accept and discard —
+> which are a deliberate, bounded exception to the read-only rule stated here.
+
 ## Decisions already made (with the user)
 
 - Realtime granularity: **turn level** — node/tool events plus one event per
@@ -23,9 +31,10 @@ this design is strictly read-only.
 - Transport: **SSE** (one-way observation; EventSource reconnects for free).
 - Frontend: **Vite + React + TypeScript**, built output served statically by
   the daemon. PixiJS for sprite scenes.
-- Presentation is a **swappable skin**: v1 ships `atelier` (workshop concept,
-  default) and `ledger` (plain DOM timeline, fallback). Kitchen / office /
-  transit-map skins come later without backend changes.
+- Presentation is a **swappable skin**: `atelier` (workshop concept) and
+  `ledger` (plain DOM timeline). Kitchen / office / transit-map skins come
+  later without backend changes. *(Amended: `ledger` is the default and ships
+  first; `atelier` follows the review screen. The contract is unchanged.)*
 
 ## Out of scope
 
@@ -155,7 +164,7 @@ React UI outside the skin.
 
 ### v1 skins
 
-- **`atelier`** (default): an isometric workshop drawn with PixiJS from
+- **`atelier`** (after the review screen): an isometric workshop drawn with PixiJS from
   simple shapes (no sprite packs). One workbench per flow, an artisan
   figure that: sits idle when waiting (lamp dimmed), works at the bench
   while a node runs, reaches to a wall of tools on tool calls (the tool
@@ -194,5 +203,7 @@ Two plans off this one spec:
 - **Plan A — observation backend**: BroadcastStore, node_turn, thinking
   capture, FlowRunner status, server + API + SSE, CLI flags. Verifiable
   with curl alone.
+- **Plan C — checkpoint backend**: see the nightly-review spec. Sequenced
+  between A and B, because the review screen has nothing to show without it.
 - **Plan B — frontend**: Vite scaffold, StageState, ledger skin, atelier
   skin, skin picker, detail drawer, static serving wiring.

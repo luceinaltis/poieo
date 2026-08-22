@@ -64,6 +64,20 @@ were spent, and — once the model has hands — **which files it touched and
 which commands it ran**. "What did this thing do last night?" must be
 answerable from a single log file.
 
+### 7. A small vocabulary
+
+Minimal configuration (principle 2) is worth little if understanding the
+result takes a manual. The user learns three words and no more: a **task**
+(a name, a prompt, a folder), a piece of **work** (one run of it — succeeded,
+failed, or found nothing to do), and a **change** (what that work did to the
+files, which you accept or discard).
+
+Everything underneath — how work is isolated, how a change is stored, how it is
+undone — is machinery, and machinery does not appear in the interface. The one
+exception is the moment the user's own files are about to change: there,
+poieo says exactly what will happen to them. **Hide the mechanism, never the
+result.**
+
 ## User experience
 
 ### Today: the CLI
@@ -89,6 +103,9 @@ is serving. From there the user can:
   Unopened, it all stays on defaults.
 - **Control** — pause/resume, run once right now.
 - **Observe** — replay run history, including the model's tool activity.
+- **Review the night** — open a piece of work, read the change it made as a
+  diff, and accept it or throw it away. Until it is accepted, nothing the
+  model wrote has touched the user's own files.
 
 Edits are saved to files and picked up by the daemon from the next run.
 No restarts.
@@ -102,6 +119,7 @@ What poieo offers the user stacks in layers:
 | **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
 | **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
 | **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
+| **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | next |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
@@ -122,9 +140,13 @@ Autonomous execution needs explicit fences:
   impose by default.
 - **Recovery**: isolation protects everything *outside* the working
   directory; the files *inside* it are the work, so they are exposed by
-  definition. What guards them is version control: the model's changes must
-  be checkpointed per run so any night's work can be reviewed as a diff and
-  rolled back. Autonomy without undo is a different, scarier product.
+  definition. What guards them is version control, in two moves. The model
+  works in a **private copy** of the project, so the user's own files are
+  never touched while they sleep. Each run's changes are **checkpointed as
+  one reviewable change**, so a night's work can be read as a diff and either
+  accepted into the project or thrown away. This is not a later luxury: it is
+  what makes hands safe to hand out, and it ships with them. Autonomy without
+  undo is a different, scarier product.
 - **Time**: every unbounded thing has a ceiling — how many steps a flow may
   take, how many turns a model may spend on one step, how long a command may
   run. Endless wandering becomes a recorded failure, and the next trigger
@@ -151,11 +173,17 @@ Autonomous execution needs explicit fences:
    working directory. Tool execution sits behind a swappable seam from day
    one, so container isolation can arrive later without reshaping anything.
    (`docs/superpowers/specs/2026-08-21-agent-node-design.md`)
-2. **Web control plane** — integrate an HTTP server into the daemon; task
-   card CRUD and flow control (REST API); the roadmap board page; fold the
-   existing canvas editor in for detail editing. The daemon gains runtime
+2. **Observation** — an HTTP server inside the daemon streaming run events to
+   a browser: what is running, which node, every tool call, what the model
+   said. Read-only.
+   (`docs/superpowers/specs/2026-08-22-web-observation-design.md`)
+3. **The morning review** — the model works in a private copy; each run is one
+   reviewable change; the board shows the diff and accepts or discards it.
+   This is where the daemon stops being something you have to trust blindly.
+   (`docs/superpowers/specs/2026-08-22-nightly-review-design.md`)
+4. **Web control plane** — task card CRUD and flow control (REST API); fold
+   the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-3. **Beyond (candidates)** — container isolation (Docker); per-run
-   checkpointing of the model's changes; delegating steps to external agent
-   CLIs (Claude Code, etc.); fan-out steps; dependencies between tasks
-   (roadmap ordering).
+5. **Beyond (candidates)** — container isolation (Docker); delegating steps to
+   external agent CLIs (Claude Code, etc.); fan-out steps; dependencies
+   between tasks (roadmap ordering); run-log retention.
