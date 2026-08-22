@@ -79,8 +79,6 @@
 .diff {
   display: grid;
   gap: 6px;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 .diff-note {

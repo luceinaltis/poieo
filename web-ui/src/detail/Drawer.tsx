@@ -161,39 +161,41 @@ export function Drawer({
         </button>
       </header>
 
-      <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
+      <div className="drawer-body">
+        <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
 
-      <WorkList
-        runs={runs}
-        selected={picked}
-        onSelect={setPicked}
-        controls={(run) =>
-          run.change ? (
-            <Decide
-              flow={flow}
-              pending={pending}
-              into={into}
-              runId={run.run_id}
-              onDone={decided}
-            />
-          ) : null
-        }
-      />
+        <WorkList
+          runs={runs}
+          selected={picked}
+          onSelect={setPicked}
+          controls={(run) =>
+            run.change ? (
+              <Decide
+                flow={flow}
+                pending={pending}
+                into={into}
+                runId={run.run_id}
+                onDone={decided}
+              />
+            ) : null
+          }
+        />
 
-      {picked ? <Diff runId={picked} /> : null}
+        {picked ? <Diff runId={picked} /> : null}
 
-      {replayed ? (
-        <p className="drawer-summary">
-          {replayed.currentNode ?? "finished"}
-          {replayed.turn > 0 ? ` · ${replayed.turn} turn(s)` : ""}
-        </p>
-      ) : null}
+        {replayed ? (
+          <p className="drawer-summary">
+            {replayed.currentNode ?? "finished"}
+            {replayed.turn > 0 ? ` · ${replayed.turn} turn(s)` : ""}
+          </p>
+        ) : null}
 
-      <ol className="drawer-timeline">
-        {events.map((event, index) => (
-          <Entry key={`${event.type}-${index}`} event={event} />
-        ))}
-      </ol>
+        <ol className="drawer-timeline">
+          {events.map((event, index) => (
+            <Entry key={`${event.type}-${index}`} event={event} />
+          ))}
+        </ol>
+      </div>
     </aside>
   )
 }

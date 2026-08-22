@@ -152,3 +152,25 @@ test("closing the drawer puts it away", async () => {
 
   expect(container.querySelector(".drawer")).toBeNull()
 })
+
+
+test("opening a different worker does not show the previous one's work", async () => {
+  // The drawer keeps a selected piece of work. Without a fresh instance per
+  // flow, switching workers leaves the last flow's run in the diff pane.
+  await render(replay(initialStage(FLOWS), AGENT_RUN))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+  })
+  expect(container.querySelector(".drawer")!.getAttribute("data-flow")).toBe("chores")
+  const first = container.querySelector("[data-run][data-selected='true']")
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-flow="revision"]')!.click()
+  })
+
+  const drawer = container.querySelector(".drawer")!
+  expect(drawer.getAttribute("data-flow")).toBe("revision")
+  // nothing carried over from the worker we just left
+  expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+})

@@ -34,6 +34,10 @@
   padding: 3px 6px;
 }
 
+.shell-board[data-drawer="true"] {
+  margin-right: min(440px, 100vw);
+}
+
 .shell-empty {
   color: #9a9086;
   padding: 32px 16px;

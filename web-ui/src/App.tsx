@@ -81,7 +81,11 @@ export default function App({ store }: { store?: StageStore }) {
         </select>
       </header>
 
-      <div className="shell-board" ref={boardRef} />
+      <div
+        className="shell-board"
+        data-drawer={String(Boolean(selected))}
+        ref={boardRef}
+      />
 
       {empty ? (
         <p className="shell-empty">
@@ -91,6 +95,9 @@ export default function App({ store }: { store?: StageStore }) {
 
       {selected ? (
         <Drawer
+          // A fresh drawer per worker: its selected work, its opened files and
+          // its expanded-failures toggle all belong to the flow being read.
+          key={selected}
           flow={selected}
           pending={flows.find((row) => row.name === selected)?.pending ?? 0}
           into={flows.find((row) => row.name === selected)?.into ?? null}
