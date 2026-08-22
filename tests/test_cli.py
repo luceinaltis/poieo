@@ -139,7 +139,9 @@ def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
         "    trigger: {type: interval, every: 60s}\n"
         "    input: {message: hi}\n"
     )
-    result = runner.invoke(app, ["daemon", str(config), "--once"])
+    # --no-web: the observation server binds a real port, so without this the
+    # test fails on any machine already running a daemon.
+    result = runner.invoke(app, ["daemon", str(config), "--once", "--no-web"])
     assert result.exit_code == 0
     assert "1 run(s), 0 not completed" in result.stdout
 
