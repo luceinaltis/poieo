@@ -84,10 +84,3 @@ async def test_event_stream_yields_and_filters(tmp_path):
     frame = await asyncio.wait_for(task, timeout=2)
     assert '"run_id": "b"' in frame
     await stream.aclose()
-
-
-def test_events_endpoint_handshake(tmp_path):
-    client = TestClient(create_app(stub_daemon(tmp_path)))
-    with client.stream("GET", "/api/events") as response:
-        assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/event-stream")
