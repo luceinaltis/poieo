@@ -41,6 +41,15 @@ async def _event_stream(store: BroadcastStore, flow: str | None = None) -> Async
         store.unsubscribe(queue)
 
 
+class ImmutableFiles(StaticFiles):
+    """Static files whose names change whenever their contents do."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Any:
+        response = super().file_response(*args, **kwargs)
+        response.headers["cache-control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 def _runner_for(daemon: Any, flow: str | None) -> Any:
     for runner in daemon.runners:
         if runner.name == flow:
@@ -168,7 +177,9 @@ def create_app(daemon: Any) -> Starlette:
     def index(request: Request):
         page = STATIC_DIR / "index.html"
         if page.exists():
-            return FileResponse(page)
+            # This document names the build. Let a browser cache it and the
+            # reader keeps running an old page with no way to find out.
+            return FileResponse(page, headers={"cache-control": "no-cache"})
         return PlainTextResponse(
             "poieo web UI is not built yet. The API is live: /api/flows"
         )
@@ -189,5 +200,8 @@ def create_app(daemon: Any) -> Starlette:
     # so the mount points one level in, not at the build root.
     assets = STATIC_DIR / "assets"
     if assets.is_dir():
-        routes.append(Mount("/assets", StaticFiles(directory=assets), name="assets"))
+        # Asset names carry a content hash, so they can never go stale.
+        routes.append(
+            Mount("/assets", ImmutableFiles(directory=assets), name="assets")
+        )
     return Starlette(routes=routes)

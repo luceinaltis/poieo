@@ -11,7 +11,7 @@
  * stays on the ledger never pays for it.
  */
 
-import { savedSpots, saveSpot } from "./placement"
+import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import {
   bounds,
   bubbleVisible,
@@ -52,8 +52,14 @@ const INK = {
   faint: 0x9a9086,
 }
 
-/** How far a pointer may travel and still count as a click, not a drag. */
-const CLICK_SLOP = 4
+/**
+ * How far a pointer may travel and still count as a click, not a drag.
+ *
+ * A finger is not a mouse: a tap on a phone wanders further than a few
+ * pixels, and at four the workshop was quietly pinning benches wherever a
+ * tap happened to wobble.
+ */
+const CLICK_SLOP = 14
 
 interface Bench {
   root: any
@@ -237,6 +243,15 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   app.stage.eventMode = "static"
   app.stage.hitArea = app.screen
 
+  // A stray drag can put a bench somewhere useless, and the arrangement is
+  // remembered -- so there has to be a way back.
+  const tidy = document.createElement("button")
+  tidy.type = "button"
+  tidy.className = "atelier-tidy"
+  tidy.textContent = "tidy up"
+  tidy.hidden = true
+  el.append(tidy)
+
   const benches = new Map<string, Bench>()
   const spots: Record<string, Spot> = {}
   const reduced = prefersReducedMotion()
@@ -285,8 +300,7 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
   app.stage.on("pointerup", drop)
   app.stage.on("pointerupoutside", drop)
 
-  return {
-    update(stage: StageState) {
+  const render = (stage: StageState) => {
       const flows = Object.keys(stage.workers)
       const arranged = place(flows, savedSpots(), columnsFor(app.screen.width))
 
@@ -334,6 +348,21 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
         if (dragging?.flow !== flow) bench.moveTo(arranged[flow])
         bench.paint(stage.workers[flow])
       }
+
+      tidy.hidden = Object.keys(savedSpots()).length === 0
+  }
+
+  let latest: StageState | null = null
+  tidy.addEventListener("click", () => {
+    forgetSpots()
+    arrangedFor = ""
+    if (latest) render(latest)
+  })
+
+  return {
+    update(stage: StageState) {
+      latest = stage
+      render(stage)
     },
 
     destroy() {

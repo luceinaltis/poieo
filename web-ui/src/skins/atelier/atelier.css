@@ -10,3 +10,18 @@
   /* A finger dragging a bench must move the bench, not scroll the page. */
   touch-action: none;
 }
+
+.atelier-tidy {
+  background: #221e18;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  bottom: 12px;
+  color: #9a9086;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8em;
+  left: 12px;
+  min-height: 30px;
+  padding: 4px 10px;
+  position: absolute;
+}

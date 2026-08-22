@@ -332,3 +332,23 @@ def test_accept_survives_a_missing_body(tmp_path):
     client = TestClient(create_app(daemon))
 
     assert client.post("/api/flows/chores/accept").status_code == 200
+
+
+def test_the_page_is_revalidated_but_its_assets_are_not(tmp_path, monkeypatch):
+    static = tmp_path / "static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text("<!doctype html><title>poieo</title>")
+    (static / "assets" / "app-abc123.js").write_text("export default 1;")
+    monkeypatch.setattr(server, "STATIC_DIR", static)
+
+    client = TestClient(create_app(stub_daemon(tmp_path)))
+
+    # The document names the build; cache it and a browser keeps running an
+    # old app forever, with no way for the reader to know.
+    page = client.get("/")
+    assert "no-cache" in page.headers["cache-control"]
+
+    # Asset names carry a content hash, so they can never go stale.
+    asset = client.get("/assets/app-abc123.js")
+    assert "max-age=31536000" in asset.headers["cache-control"]
+    assert "immutable" in asset.headers["cache-control"]
