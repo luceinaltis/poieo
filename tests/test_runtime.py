@@ -442,7 +442,7 @@ async def test_the_executor_is_torn_down_even_when_the_node_fails(tmp_path, monk
     monkeypatch.setattr(
         nodes_module,
         "make_executor",
-        lambda workdir, toolsets, isolation=None: Spy(real(workdir, toolsets, isolation)),
+        lambda *args, **kwargs: Spy(real(*args, **kwargs)),
     )
 
     graph = agent_graph(tmp_path, max_turns=1)

@@ -14,6 +14,7 @@ from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import RunStore
 from ..task import append_journal
+from ..tools import make_box_keeper
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
 
@@ -66,6 +67,11 @@ class FlowRunner:
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
         self.current_run_id: str | None = None
+        # Boxes outlive a run, so the thing that outlives runs holds them.
+        # Opaque here: only make_executor knows what is inside.
+        self.boxes: Any = (
+            make_box_keeper(flow.spec.name) if flow.spec.isolation else None
+        )
 
     @property
     def name(self) -> str:
@@ -74,6 +80,11 @@ class FlowRunner:
     @property
     def last_result(self) -> RunResult | None:
         return self.results[-1] if self.results else None
+
+    async def aclose(self) -> None:
+        """Drop this task's boxes. The daemon stopping is one of their reset points."""
+        if self.boxes is not None:
+            await self.boxes.aclose()
 
     async def run(self) -> None:
         log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
@@ -109,6 +120,8 @@ class FlowRunner:
                     iteration=fire.iteration,
                     run_id=run_id,
                     cancel=self.cancel,
+                    isolation=self.flow.spec.isolation,
+                    boxes=self.boxes,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None
@@ -260,6 +273,8 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
+            for runner in self.runners:
+                await runner.aclose()
             if web_task is not None:
                 server.should_exit = True
                 try:

@@ -178,7 +178,9 @@ class AgentNode(Node):
                 f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id
             )
 
-        async with make_executor(workdir, spec.tools or DEFAULT_TOOLSETS) as executor:
+        async with make_executor(
+            workdir, spec.tools or DEFAULT_TOOLSETS, ctx.isolation, ctx.boxes
+        ) as executor:
             messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
             turns = 0
             tool_call_count = 0

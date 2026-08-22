@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Literal, Sequence
+
+from pydantic import BaseModel, ConfigDict
 
 from ..errors import PoieoError
 from ..providers.base import ToolCall, ToolDef
@@ -34,17 +36,18 @@ class Tool:
     run: Callable[[Path, dict[str, Any]], Awaitable[str]]
 
 
-@dataclass(slots=True)
-class Isolation:
-    """Where an agent node's shell may run.
+class Isolation(BaseModel):
+    """Where a task's shell commands may run.
 
-    Deliberately backend-neutral and free of Docker words: a flow's
-    ``isolation:`` block is parsed into this at the edge, and everything
-    inside the runtime sees only this shape.
+    Deliberately backend-neutral and free of Docker words: a task's
+    ``isolation:`` block parses into this, and everything downstream -- the
+    factory, the box, the executor -- sees only this shape.
     """
 
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     image: str
-    network: str = "none"
+    network: Literal["none", "bridge"] = "none"
     user: str | None = None
 
 
@@ -97,8 +100,22 @@ class LocalExecutor(Executor):
         self._load(toolsets)
 
 
+def make_box_keeper(key: str) -> Any:
+    """The task-scoped thing that keeps boxes between runs, or None without docker.
+
+    Returned as ``Any`` on purpose: the daemon holds it and hands it back, and
+    nothing between here and the executor may learn what is inside it.
+    """
+    from .docker import BoxKeeper
+
+    return BoxKeeper(key)
+
+
 def make_executor(
-    workdir: Path, toolsets: "Sequence[str]", isolation: Isolation | None = None
+    workdir: Path,
+    toolsets: "Sequence[str]",
+    isolation: Isolation | None = None,
+    boxes: Any = None,
 ) -> Executor:
     """The one place that decides where an agent node's tools run.
 
@@ -110,12 +127,17 @@ def make_executor(
         return LocalExecutor(workdir, toolsets)
     from .docker import DockerExecutor
 
+    # With a keeper the box is the task's and survives the run; without one
+    # the executor makes its own and destroys it, which is `poieo run`.
+    box = boxes.get(workdir, isolation) if boxes is not None else None
+
     return DockerExecutor(
         workdir,
         toolsets,
         image=isolation.image,
         network=isolation.network,
         user=isolation.user,
+        box=box,
     )
 
 

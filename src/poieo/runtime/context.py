@@ -13,6 +13,7 @@ from ..expr import unwrap, wrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
+from ..tools import Isolation
 
 
 def new_run_id() -> str:
@@ -39,6 +40,12 @@ class RunContext:
     iteration: int = 0
     # Set by execute(); agent loops poll it between turns.
     cancel: asyncio.Event | None = None
+    # Where this run's commands may run. None means the host, as before.
+    isolation: Isolation | None = None
+    # The task's boxes, when it runs isolated. Opaque on purpose: only
+    # make_executor knows what is inside, so the runtime stays unaware that
+    # containers exist at all.
+    boxes: Any = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

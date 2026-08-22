@@ -14,7 +14,7 @@ from poieo.daemon.config import FlowSpec, load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
 from poieo.store import NullStore
-from poieo.task import append_journal, expand, load_task, read_journal
+from poieo.task import TaskSpec, append_journal, expand, load_task, read_journal
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -310,3 +310,59 @@ async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
     assert written.startswith("# one\n")
     assert "· did" in written
     assert "(mock response)" in written
+
+
+# -- isolation ---------------------------------------------------------------
+
+from poieo.tools import Isolation
+
+
+def _task(tmp_path, **extra):
+    body = {"name": "boxed", "folder": str(tmp_path), "prompt": "do it", **extra}
+    return TaskSpec.model_validate(body)
+
+
+def test_a_task_card_parses_an_isolation_block(tmp_path):
+    task = _task(tmp_path, isolation={"image": "python:3.12-slim"})
+    assert task.isolation == Isolation(image="python:3.12-slim")
+
+
+def test_network_defaults_to_none(tmp_path):
+    assert _task(tmp_path, isolation={"image": "x"}).isolation.network == "none"
+
+
+def test_image_is_required_when_the_block_is_present(tmp_path):
+    with pytest.raises(Exception):
+        _task(tmp_path, isolation={"network": "bridge"})
+
+
+def test_an_unknown_isolation_key_is_rejected(tmp_path):
+    with pytest.raises(Exception):
+        _task(tmp_path, isolation={"image": "x", "privileged": True})
+
+
+def test_a_task_without_isolation_is_unchanged(tmp_path):
+    assert _task(tmp_path).isolation is None
+
+
+def _load(tmp_path, body):
+    """expand() needs a task that came off disk, so write one."""
+    (tmp_path / "work").mkdir(exist_ok=True)
+    card = tmp_path / "card.yaml"
+    card.write_text(f"name: boxed\nfolder: work\n{body}\nisolation:\n  image: x\n")
+    return load_task(card)
+
+
+def test_isolation_reaches_the_flow(tmp_path):
+    """It describes the task, not the generated node, so it rides the expansion."""
+    flow, _graph = expand(_load(tmp_path, "prompt: do it"))
+    assert flow.isolation == Isolation(image="x")
+
+
+def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
+    """Unlike prompt/role/tools, isolation is not a node key -- eject keeps it."""
+    (tmp_path / "g.yaml").write_text(
+        "name: g\nentry: n\nnodes: [{id: n, type: llm, role: r, prompt: hi}]\n"
+    )
+    flow, graph = expand(_load(tmp_path, "graph: g.yaml"))
+    assert graph is None and flow.isolation == Isolation(image="x")

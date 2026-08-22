@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
+from .tools import Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .daemon.config import FlowSpec
@@ -80,6 +81,9 @@ class TaskSpec(BaseModel):
     max_turns: int = Field(default=DEFAULT_MAX_TURNS, ge=1, le=200)
     enabled: bool = True
     binding: str | None = None
+    # Where this task's commands may run. Absent means the host, as before.
+    # Not a node key: it describes the task, so `poieo eject` keeps it.
+    isolation: Isolation | None = None
 
     # Populated by load_task; not part of the authored document.
     source_path: Path | None = Field(default=None, exclude=True)
@@ -204,6 +208,7 @@ def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
         binding=task.binding,
         trigger=_trigger(task),
         enabled=task.enabled,
+        isolation=task.isolation,
         # A task is a standing job, so what it learned last night is in scope
         # tonight. Hand-written flows still opt in.
         carry_state=True,
