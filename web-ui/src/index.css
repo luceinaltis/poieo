@@ -1,6 +1,9 @@
 :root {
   color-scheme: dark;
   font-family: ui-sans-serif, system-ui, sans-serif;
+  /* One source of truth: the drawer starts where the bar ends, so the skin
+     picker in the bar's right corner stays reachable with the drawer open. */
+  --bar-height: 42px;
 }
 
 body {

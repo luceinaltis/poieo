@@ -1,9 +1,11 @@
 .shell-bar {
   align-items: center;
   border-bottom: 1px solid #2e2820;
+  box-sizing: border-box;
   display: flex;
   gap: 12px;
-  padding: 10px 16px;
+  height: var(--bar-height);
+  padding: 0 16px;
 }
 
 .shell-title {
