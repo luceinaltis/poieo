@@ -89,8 +89,9 @@ the pytest summary line, the vitest run, the curl response. Not "tests pass". Th
 
 ## Before you merge
 
-Agents may merge their own PRs. That trust rests entirely on the gate below. Run it; do
-not assume it.
+Agents may merge their own PRs. **Nothing on GitHub enforces any of this** — `main` is
+unprotected by choice, so the discipline below is the only thing standing between a bad
+change and the next agent's afternoon. Run the gate; do not assume it.
 
 ```bash
 # Python — the global pytest plugin on this machine is broken, hence the flags
@@ -100,13 +101,27 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
 npm test --workspace web-ui
 ```
 
+**Review your own diff before merging.** There is one GitHub account here and no second
+reviewer, so self-review *is* the review — expected, not a shortcut. Read the whole change
+as though someone else wrote it:
+
+```bash
+git diff main...HEAD
+```
+
+Look for what a green suite cannot tell you: a dropped error path, a public surface that
+quietly widened, a comment that no longer matches the code below it, a file staged by
+accident. Then write in the PR what you checked and what you found. "Self-reviewed, no
+findings" under a 400-line diff is not a review.
+
 Merge only when all of these hold:
 
 1. Both suites are green, and the run appears in the PR body.
-2. The branch is current with `main` and conflict-free.
-3. Every behaviour change has a test that fails without it. This repo is TDD — the plans
+2. You have read the full diff and recorded that review in the PR.
+3. The branch is current with `main` and conflict-free.
+4. Every behaviour change has a test that fails without it. This repo is TDD — the plans
    are written test-first and the history follows it.
-4. Nothing in the diff is an artifact you did not mean to check in.
+5. Nothing in the diff is an artifact you did not mean to check in.
    `src/poieo/web/static/` **is** deliberately checked in; `node_modules/` is not.
 
 Then:
@@ -123,5 +138,7 @@ loaded.
 
 - Force-push `main`, or rewrite any commit already on `origin/main`.
 - Push a `worktree-*` branch.
+- Push code straight to `main` because opening a PR felt like overhead. Nothing will stop
+  you. That is exactly why it is written down.
 - Merge on a red or unrun suite, or reach for a skip marker to turn one green.
 - Commit a secret, a token, or a real API transcript to this public repo.
