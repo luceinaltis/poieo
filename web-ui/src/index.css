@@ -10,4 +10,10 @@ body {
   margin: 0;
   background: #14120f;
   color: #e8e2d8;
+  /* Holding a bench must not raise the phone's Copy / Look Up callout, and a
+     drag across the board must not paint half the page blue. Text worth
+     copying opts back in below. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }

@@ -27,6 +27,11 @@
   gap: 10px;
   min-height: 0;
   overflow-y: auto;
+  /* What a run said, what it changed, and why it failed are all worth
+     copying out of here. */
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .drawer-head h2 {
