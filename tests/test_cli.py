@@ -247,3 +247,43 @@ def test_eject_refuses_to_overwrite(tmp_path):
     again = runner.invoke(app, ["eject", str(path)])
     assert again.exit_code == 1
     assert "already names a graph" in again.stderr
+
+
+def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
+    path = _task(tmp_path)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        encoding="utf-8",
+    )
+
+    noted = runner.invoke(app, ["note", str(path), "leave the README alone"])
+    assert noted.exit_code == 0
+    assert "leave the README alone" in (tmp_path / "tasks" / "tidy.md").read_text(
+        encoding="utf-8"
+    )
+
+    listed = runner.invoke(app, ["tasks", str(config)])
+    assert listed.exit_code == 0
+    assert "leave the README alone" in listed.stdout
+
+
+def test_a_task_run_reads_its_journal(tmp_path):
+    path = _task(tmp_path)
+    runner.invoke(app, ["note", str(path), "only touch the tests"])
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(path),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--store",
+            str(tmp_path / "logs"),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    events = (tmp_path / "logs" / "runs").glob("*.jsonl")
+    written = "\n".join(p.read_text(encoding="utf-8") for p in events)
+    assert "only touch the tests" in written

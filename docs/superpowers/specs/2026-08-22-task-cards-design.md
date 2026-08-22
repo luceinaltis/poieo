@@ -181,6 +181,17 @@ file itself is never truncated.
 poieo does not parse the journal on the way in. It reads the tail as text and
 drops it into the prompt, which is what makes hand-written lines work.
 
+### Shipped so far
+
+The journal, its four line kinds, and reading the tail into every run are in.
+Two pieces wait on the checkpoint backend, which is unmerged:
+
+- **`nothing`** cannot be told from `did` yet. Whether a run changed anything is
+  a checkpoint question, so every finished run currently writes `did`.
+- **The `note` field on accept and discard** has no route to sit on. Until it
+  does, `poieo note` is how a user adds a `you` line -- the same function, a
+  different door.
+
 ## Interfaces
 
 **CLI**

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError
 from ..graph import GraphSpec, load_document, load_graph
+from ..task import TaskSpec, expand, load_tasks, read_journal
 from .triggers import TriggerSpec
 
 
@@ -57,9 +58,10 @@ class DaemonConfig(BaseModel):
     tasks: str | None = None
 
     source_path: Path | None = Field(default=None, exclude=True)
-    # Graphs generated from task files, by flow name. Filled by load_config;
-    # anything a document puts here is discarded.
+    # What each task-backed flow came from, by flow name. Filled by
+    # load_config; anything a document puts here is discarded.
     task_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
+    tasks_by_flow: dict[str, TaskSpec] = Field(default_factory=dict, exclude=True)
 
     @model_validator(mode="after")
     def _check_flows(self) -> DaemonConfig:
@@ -119,6 +121,10 @@ class LoadedFlow(BaseModel):
                     f"flow '{self.spec.name}': {path} must contain a mapping"
                 )
             payload.update(data)
+        task = config.tasks_by_flow.get(self.spec.name)
+        if task is not None:
+            # Re-read every run: a note left at 8am is in effect at 9am.
+            payload["journal"] = read_journal(task.journal_path())
         return payload
 
 
@@ -136,9 +142,8 @@ def load_config(path: str | Path) -> DaemonConfig:
 
 def _load_tasks(config: DaemonConfig) -> None:
     """Expand the tasks folder into flows, if the config names one."""
-    from ..task import expand, load_tasks
-
     config.task_graphs = {}
+    config.tasks_by_flow = {}
     if not config.tasks:
         return
     folder = config.resolve_path(config.tasks)
@@ -154,6 +159,7 @@ def _load_tasks(config: DaemonConfig) -> None:
             )
         taken.add(flow.name)
         config.flows.append(flow)
+        config.tasks_by_flow[flow.name] = task
         if graph is not None:
             config.task_graphs[flow.name] = graph
 
