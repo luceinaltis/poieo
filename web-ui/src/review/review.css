@@ -193,3 +193,19 @@
 .decide-refusal {
   color: #d16d5a;
 }
+
+@media (max-width: 720px) {
+  .work-open {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 8px 2px;
+  }
+
+  .work-size {
+    justify-self: start;
+  }
+
+  .diff-open {
+    padding: 8px 0;
+  }
+}

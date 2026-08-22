@@ -110,3 +110,18 @@
   font-style: italic;
   margin-top: 2px;
 }
+
+@media (max-width: 720px) {
+  .drawer {
+    border-left: 0;
+    width: 100vw;
+  }
+
+  /* Thumbs, not pointers. */
+  .drawer-head button,
+  .drawer-run,
+  .decide-take,
+  .decide-drop {
+    min-height: 34px;
+  }
+}

@@ -3,6 +3,7 @@ import { expect, test } from "vitest"
 import {
   FOOTPRINT,
   benchLayout,
+  fit,
   fromIso,
   bubbleVisible,
   figurePose,
@@ -120,4 +121,25 @@ test("the shelf fills with finished work, not attempts", () => {
 test("reduced motion means no tween at all", () => {
   expect(transitionMs(false)).toBeGreaterThan(0)
   expect(transitionMs(true)).toBe(0)
+})
+
+test("the room shrinks to fit a narrow screen", () => {
+  const box = { width: 560, height: 280 }
+
+  // A phone: the arrangement is wider than the viewport, so it scales down.
+  const onPhone = fit(box, { width: 390, height: 700 })
+  expect(onPhone).toBeLessThan(1)
+  expect(box.width * onPhone + FOOTPRINT.width * onPhone).toBeLessThanOrEqual(391)
+
+  // A monitor with room to spare: one bench must not be blown up to fill it.
+  expect(fit(box, { width: 2400, height: 1200 })).toBe(1)
+})
+
+test("the room never shrinks to nothing", () => {
+  // Scrolling a small room beats squinting at an unreadable one.
+  expect(fit({ width: 9000, height: 9000 }, { width: 320, height: 480 })).toBe(0.35)
+})
+
+test("an empty room needs no scaling", () => {
+  expect(fit({ width: 0, height: 0 }, { width: 390, height: 700 })).toBe(1)
 })

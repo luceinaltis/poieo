@@ -1,0 +1,1 @@
+import{WebGLRenderer as e}from"./lib-taewby75.js";export{e as WebGLRenderer};

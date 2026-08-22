@@ -61,6 +61,24 @@ export function bounds(spots: Spot[]): { x: number; y: number; width: number; he
   return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
 }
 
+/**
+ * How much to shrink the room so the whole arrangement is on screen.
+ *
+ * Never grows past 1: a workshop with one bench on a wide monitor should not
+ * blow that bench up to fill it. There is a floor, because a room scaled to
+ * nothing is worse than a room you have to scroll.
+ */
+export function fit(
+  box: { width: number; height: number },
+  screen: { width: number; height: number },
+  pad = FOOTPRINT.width,
+): number {
+  const wide = box.width + pad
+  const tall = box.height + FOOTPRINT.height
+  if (wide <= 0 || tall <= 0) return 1
+  return Math.max(0.35, Math.min(1, screen.width / wide, screen.height / tall))
+}
+
 /** Where the workshop puts benches when nobody has moved them. */
 export function benchLayout(count: number): Spot[] {
   const spots: Spot[] = []

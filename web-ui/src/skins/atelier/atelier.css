@@ -7,4 +7,6 @@
 
 .atelier-canvas {
   display: block;
+  /* A finger dragging a bench must move the bench, not scroll the page. */
+  touch-action: none;
 }

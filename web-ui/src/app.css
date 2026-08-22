@@ -71,3 +71,11 @@
   position: absolute;
   text-align: center;
 }
+
+/* On a phone the drawer takes the whole screen, so there is nothing to make
+   room beside -- and reserving 100vw of margin left the board zero wide. */
+@media (max-width: 720px) {
+  .shell-stage[data-drawer="true"] {
+    margin-right: 0;
+  }
+}

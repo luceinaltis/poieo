@@ -15,6 +15,7 @@ import { savedSpots, saveSpot } from "./placement"
 import {
   bounds,
   bubbleVisible,
+  fit,
   fromIso,
   figurePose,
   lampLit,
@@ -297,13 +298,15 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
 
       // Centre the room when the set of benches changes -- but never once the
       // reader has arranged it, or every event would tug their layout around.
-      const signature = flows.join("|")
+      const signature = `${flows.join("|")}@${app.screen.width}x${app.screen.height}`
       if (signature !== arrangedFor && Object.keys(savedSpots()).length === 0) {
         arrangedFor = signature
         const box = bounds(Object.values(arranged))
+        const scale = fit(box, app.screen)
+        room.scale.set(scale)
         room.position.set(
-          (app.screen.width - box.width) / 2 - box.x,
-          (app.screen.height - box.height) / 2 - box.y,
+          (app.screen.width - box.width * scale) / 2 - box.x * scale,
+          (app.screen.height - box.height * scale) / 2 - box.y * scale,
         )
       }
 
