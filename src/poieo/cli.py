@@ -532,7 +532,10 @@ def tasks(
             f"[{state}] {task.slug:<20} {flow.trigger.build().describe:<24} "
             f"{task.folder_path()}"
         )
-        typer.echo(f"        {task.name}")
+        # "isolated", never the image: naming it is licensed in configuration
+        # and in errors, not in a listing.
+        boxed = " · isolated" if task.isolation else ""
+        typer.echo(f"        {task.name}{boxed}")
         last = read_journal(task.journal_path(), limit=1).splitlines()[-1]
         typer.echo(f"        {last}")
 

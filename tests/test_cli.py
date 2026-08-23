@@ -313,3 +313,40 @@ def test_eject_says_the_graph_still_needs_its_task(tmp_path):
     result = runner.invoke(app, ["eject", str(_task(tmp_path))])
     assert result.exit_code == 0
     assert "journal" in result.stdout
+
+# -- isolation shows up where a user is already looking ----------------------
+#
+# These assert on MARK, not on the bare word: pytest's tmp_path embeds the test
+# name, and the listing prints the folder, so `"isolated" in stdout` passes for
+# any test whose own name contains it.
+
+MARK = "· isolated"
+
+
+def _card(tmp_path, block=""):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    (tmp_path / "card.yaml").write_text(
+        f"name: boxed\nfolder: work\nprompt: do it\n{block}"
+    )
+    return tmp_path
+
+
+def test_tasks_marks_a_boxed_task(tmp_path):
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["tasks", str(folder)])
+    assert result.exit_code == 0
+    assert MARK in result.stdout
+
+
+def test_tasks_says_nothing_for_a_plain_task(tmp_path):
+    result = runner.invoke(app, ["tasks", str(_card(tmp_path))])
+    assert result.exit_code == 0
+    assert MARK not in result.stdout
+
+
+def test_the_listing_never_names_the_machinery(tmp_path):
+    """Configuration may name docker; a listing is interface, and must not."""
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["tasks", str(folder)])
+    for word in ("python:3.12-slim", "docker", "container"):
+        assert word not in result.stdout

@@ -246,3 +246,79 @@ async def test_daemon_with_web_port_wraps_store_and_serves():
     results = await asyncio.wait_for(serve_task, timeout=30)
     assert isinstance(daemon.store, BroadcastStore)
     assert results  # the run finished and the server shut down cleanly
+
+
+# -- isolation preflight: fail at launch, not at 3am -------------------------
+
+
+def _isolated_config(tmp_path, image="python:3.12-slim", count=1):
+    body = [
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}",
+        f"store: {tmp_path / 'logs'}",
+        "flows:",
+    ]
+    for i in range(count):
+        body += [
+            f"  - name: t{i}",
+            f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}",
+            "    trigger: {type: interval, every: 60s}",
+            "    isolation:",
+            f"      image: {image}",
+        ]
+    path = tmp_path / "poieo.yaml"
+    path.write_text("\n".join(body) + "\n")
+    return load_config(path)
+
+
+def test_a_flow_with_isolation_fails_to_load_without_docker(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    with pytest.raises(SpecError, match="docker is not on PATH"):
+        load_flows(_isolated_config(tmp_path))
+
+
+def test_a_missing_image_names_the_pull_command(tmp_path, monkeypatch):
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.image_present", lambda image: False)
+    with pytest.raises(SpecError, match="docker pull python:3.12-slim"):
+        load_flows(_isolated_config(tmp_path))
+
+
+def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
+    """Ten tasks sharing an image must not cost ten inspects."""
+    seen = []
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr(
+        "poieo.tools.docker.image_present", lambda image: seen.append(image) or True
+    )
+    load_flows(_isolated_config(tmp_path, count=5))
+    assert seen == ["python:3.12-slim"]
+
+
+def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
+    """No ping at all: a machine without docker must not slow down or fail."""
+    def boom():
+        raise AssertionError("docker was probed for a flow that never asked")
+
+    monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"store: {tmp_path / 'logs'}\n"
+        "flows:\n"
+        "  - name: plain\n"
+        f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}\n"
+        "    trigger: {type: interval, every: 60s}\n"
+    )
+    assert len(load_flows(load_config(config))) == 1
+
+
+def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
+    """Its image may well be gone; it is not going to run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    config = _isolated_config(tmp_path)
+    config.flows[0].enabled = False
+    assert load_flows(config) == []
