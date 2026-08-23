@@ -69,6 +69,30 @@ test("the hammer swings in the plane the smith faces, not across it", () => {
   expect(sideways).toBeLessThan(along / 10)
 })
 
+test("swings the same way when the smith is turned to face his anvil", () => {
+  // The room stands every smith at a quarter turn, and three's rotateOnWorldAxis
+  // quietly assumes an unrotated parent: the arm swung across the body instead
+  // of along it, and only the workshop showed it, because the first harness
+  // rendered the figure square on.
+  const figure = stickFigure()
+  figure.rotation.y = Math.PI * 0.5
+  const rig = riggingOf(figure)
+
+  const inHisOwnFrame = () => {
+    figure.updateWorldMatrix(true, true)
+    return figure.worldToLocal(handAt(figure, "RightHand"))
+  }
+
+  poseAt(THREE, figure, rig, 0)
+  const raised = inHisOwnFrame()
+  poseAt(THREE, figure, rig, 1)
+  const struck = inHisOwnFrame()
+
+  const sideways = Math.abs(struck.x - raised.x)
+  const along = Math.hypot(struck.y - raised.y, struck.z - raised.z)
+  expect(sideways).toBeLessThan(along / 10)
+})
+
 test("the other hand holds still while the hammer moves", () => {
   const figure = stickFigure()
   const rig = riggingOf(figure)

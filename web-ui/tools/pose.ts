@@ -16,6 +16,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 
 import { EYE, LID, headFrame, makeFace } from "../src/skins/atelier/face"
+import { FACING } from "../src/skins/atelier/index"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
 import type { Tuning } from "../src/skins/atelier/pose"
 import {
@@ -104,6 +105,10 @@ const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
 const gltf = await loader.loadAsync(smithUrl)
 const figure = gltf.scene
+// Turned the way the room turns him. A harness that renders the model square
+// on cannot see a swing that goes wrong only once the figure is rotated, which
+// is exactly the bug that reached the board.
+figure.rotation.y = FACING
 scene.add(figure)
 
 const rig = riggingOf(figure)
@@ -162,7 +167,12 @@ for (const [column, through] of PHASES.entries()) {
     camera.top = wide / 2
     camera.bottom = -wide / 2
     camera.updateProjectionMatrix()
-    camera.position.copy(view.from).normalize().multiplyScalar(reach).add(at)
+    camera.position
+      .copy(view.from)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), FACING)
+      .normalize()
+      .multiplyScalar(reach)
+      .add(at)
     camera.lookAt(at)
 
     // Tiles are given in CSS pixels: three scales them by the pixel ratio

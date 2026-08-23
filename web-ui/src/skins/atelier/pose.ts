@@ -21,8 +21,8 @@ export const HAMMER_HAND = "Right"
  * Raised: the arm is back and the elbow folded. Struck: both have opened out
  * and the hammer is down on the work.
  */
-export const SHOULDER = { raised: -2.0, struck: 0.05 }
-export const ELBOW = { raised: -1.15, struck: -0.35 }
+export const SHOULDER = { raised: -2.0, struck: 0.42 }
+export const ELBOW = { raised: -1.15, struck: -0.05 }
 
 /** Which way round the rig turns. Filmed, not reasoned about. */
 export const ARM_SENSE = 1
@@ -40,6 +40,15 @@ export const SWING_AXIS = { x: 1, y: 0, z: 0 }
 /** Where the other hand holds the work: down and forward, onto the anvil. */
 export const TONG_SHOULDER = 0.55
 export const TONG_ELBOW = -1.1
+
+/**
+ * Where a smith stands when he is not working: hammer down by the anvil.
+ *
+ * Holding the raised pose instead leaves an idle flow frozen halfway through a
+ * backswing, arm up beside the ear, which reads as a man waiting rather than a
+ * man resting.
+ */
+export const RESTING = 1
 
 /** How far the waist follows the blow. */
 export const LEAN = { raised: -0.05, struck: 0.35 }
@@ -139,16 +148,37 @@ export function poseAt(
     between(tuning.shoulder ?? SHOULDER, through),
     between(tuning.elbow ?? ELBOW, through),
   ]
-  rig.swinging.forEach((joint, index) => {
-    joint.bone.quaternion.copy(joint.rest)
-    joint.bone.updateWorldMatrix(true, false)
-    joint.bone.rotateOnWorldAxis(axis, swing[index] * ARM_SENSE)
-  })
-
   const steady = [tuning.tongShoulder ?? TONG_SHOULDER, tuning.tongElbow ?? TONG_ELBOW]
-  rig.holding.forEach((joint, index) => {
-    joint.bone.quaternion.copy(joint.rest)
-    joint.bone.updateWorldMatrix(true, false)
-    joint.bone.rotateOnWorldAxis(axis, steady[index] * ARM_SENSE)
-  })
+
+  const turn = (joints: Hinge[], angles: number[]) => {
+    joints.forEach((joint, index) => {
+      joint.bone.quaternion.copy(joint.rest)
+      // Parent first: the forearm hangs off the upper arm, which has just moved.
+      joint.bone.parent?.updateWorldMatrix(true, false)
+      aboutWorld(THREE, joint.bone, axis, angles[index] * ARM_SENSE)
+    })
+  }
+
+  turn(rig.swinging, swing)
+  turn(rig.holding, steady)
+}
+
+/**
+ * Turn a bone about a line in world space.
+ *
+ * Three's own rotateOnWorldAxis says in its docs that it assumes no rotated
+ * parent, and the workshop stands every smith at a quarter turn to the room --
+ * so using it directly swung the arm across the body instead of along it, and
+ * the harness missed it because the harness did not turn the figure. Carrying
+ * the axis into the parent's frame first is the whole fix.
+ */
+function aboutWorld(THREE: any, bone: any, axis: any, angle: number): void {
+  if (!bone.parent) {
+    bone.rotateOnWorldAxis(axis, angle)
+    return
+  }
+  const parent = new THREE.Quaternion()
+  bone.parent.getWorldQuaternion(parent)
+  const local = axis.clone().applyQuaternion(parent.invert())
+  bone.rotateOnWorldAxis(local, angle)
 }

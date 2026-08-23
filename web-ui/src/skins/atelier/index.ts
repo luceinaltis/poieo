@@ -12,7 +12,7 @@
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { makeFace } from "./face"
-import { HAMMER_HAND, poseAt, riggingOf } from "./pose"
+import { HAMMER_HAND, RESTING, poseAt, riggingOf } from "./pose"
 import { HAMMER, figurePose, hammerAngle, lampLit, shelfCount } from "./scene"
 import {
   bounds,
@@ -41,7 +41,7 @@ const PER_UNIT = 70
 const BASE_HALF = 3.2
 
 /** Which way the imported model has to turn to face its anvil. */
-const FACING = Math.PI * 0.5
+export const FACING = Math.PI * 0.5
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -58,7 +58,7 @@ const HUE = {
   taken: 0xd16d5a,
 }
 
-interface Bench {
+export interface Bench {
   group: any
   place(cell: Cell): void
   paint(worker: Worker): void
@@ -73,7 +73,8 @@ function stagger(flow: string): number {
   return hash
 }
 
-function makeBench(
+/** Exported for tools/bench.html, which judges the swing over a real anvil. */
+export function makeBench(
   THREE: Three,
   smith: any,
   cloneSkinned: (node: any) => any,
@@ -180,15 +181,16 @@ function makeBench(
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
   hand.getWorldPosition(grip)
 
-  // Standing the anvil exactly under the hand buries it in the smith. Push it
-  // out along the way he faces, so he works over it rather than through it.
+  // Just clear of the fist, along the way he faces, so the hammer lands on the
+  // face of the anvil rather than through it -- or, as the first guess had it,
+  // a foot short of it with the smith punching the air.
   const ahead = new THREE.Vector3(0, 0, 1)
     .applyQuaternion(figure.quaternion)
     .setY(0)
     .normalize()
-    .multiplyScalar(0.34)
+    .multiplyScalar(0.12)
   bench.position.set(grip.x + ahead.x, 0, grip.z + ahead.z)
-  pose(0)
+  pose(RESTING)
 
   let working = false
   let hot = false
@@ -236,8 +238,8 @@ function makeBench(
     tick(elapsed: number) {
       // A strike is mostly arms: the hammer falls from overhead in an arc,
       // and the waist follows it. Bending the spine alone is a nod, not a blow.
-      const swing = working ? hammerAngle(elapsed) : HAMMER.raised
-      pose(working ? (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised) : 0)
+      const swing = hammerAngle(elapsed)
+      pose(working ? (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised) : RESTING)
 
       face?.at(elapsed)
 

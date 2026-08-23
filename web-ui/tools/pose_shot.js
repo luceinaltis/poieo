@@ -1,9 +1,11 @@
 /**
  * Photograph the pose sheet.
  *
- *   node pose_shot.mjs out.png path/to/web-ui [query]
+ *   node pose_shot.mjs out.png path/to/web-ui [page] [query]
  *
- * `query` is handed to the page, e.g. `axis=1,0,0` to shoot a candidate.
+ * `page` picks the sheet: pose.html by default, bench.html for the whole
+ * bench seen through the room's own camera. `query` is handed to it, e.g.
+ * `axis=1,0,0` to shoot a candidate swing.
  *
  * Starts a vite dev server of its own, because the sheet is a dev-only page and
  * the daemon's build does not contain it. Playwright is not a dependency of the
@@ -19,7 +21,10 @@ import { fileURLToPath } from "node:url"
 import { chromium } from "playwright"
 
 const out = process.argv[2] ?? "pose.png"
-const query = process.argv[4] ? `?${process.argv[4]}` : ""
+// Not `page`: playwright's own page shadows it inside the run, and the
+// request quietly became /tools/[object Object].
+const sheet = process.argv[4] || "pose.html"
+const query = process.argv[5] ? `?${process.argv[5]}` : ""
 const root = process.argv[3]
   ? path.resolve(process.argv[3])
   : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -56,12 +61,13 @@ const stop = () => {
   let arrived = false
   for (let tries = 0; tries < 40 && !arrived; tries++) {
     try {
-      await page.goto(`http://localhost:${PORT}/tools/pose.html${query}`)
+      await page.goto(`http://localhost:${PORT}/tools/${sheet}${query}`)
       arrived = true
     } catch {
       await page.waitForTimeout(500)
     }
   }
+  console.log(`  ${sheet}${query}`)
   if (!arrived) {
     console.log("  the dev server never answered")
     stop()
