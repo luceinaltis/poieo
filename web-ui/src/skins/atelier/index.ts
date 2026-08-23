@@ -208,7 +208,9 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
       // spine brings the head down in an arc and keeps the pose whole.
       const swing = working ? hammerAngle(elapsed) : HAMMER.raised
       const through = (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised)
-      const bend = working ? -0.12 + through * 0.62 : 0
+      // Spread across three spine bones, so this is the whole bow: leaning
+      // back a little to raise, and about fifty degrees over to strike.
+      const bend = working ? -0.2 + through * 1.15 : 0
       for (const joint of spine) {
         joint.bone.rotation.x = joint.rest + bend / spine.length
       }
