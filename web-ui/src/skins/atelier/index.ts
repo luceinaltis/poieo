@@ -69,6 +69,14 @@ export function turnAnvil(angle: number) {
 /** Which hand the model holds its hammer in. */
 const HAMMER_HAND = "Right"
 
+/**
+ * How fast the clips play. The capture swings like a man in a fight; a smith
+ * at his own anvil takes his time, so the swing runs below full speed and a
+ * strike lands about every three seconds instead of two.
+ */
+const WORK_PACE = 0.65
+const REST_PACE = 0.9
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -262,6 +270,10 @@ export function makeBench(
     .normalize()
     .multiplyScalar(0.12)
   bench.position.set(grip.x + ahead.x, 0, grip.z + ahead.z)
+  // Only after the probe: setTime works in unscaled clip seconds, and slowing
+  // the clock before measuring would have moved the anvil.
+  acts.working.setEffectiveTimeScale(WORK_PACE)
+  acts.resting.setEffectiveTimeScale(REST_PACE)
   acts.working.setEffectiveWeight(0)
   acts.resting.setEffectiveWeight(1)
   figure.updateWorldMatrix(true, true)
@@ -320,6 +332,7 @@ export function makeBench(
         const away = acts[mode]
         mode = next
         toward.reset()
+        toward.setEffectiveTimeScale(next === "working" ? WORK_PACE : REST_PACE)
         toward.setEffectiveWeight(1)
         away.crossFadeTo(toward, 0.35, false)
       }
