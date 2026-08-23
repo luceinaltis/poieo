@@ -115,3 +115,10 @@ test("no skin imports pixi.js statically", () => {
 
   expect(offenders).toEqual([])
 })
+
+
+test("the three-dimensional skin is listed but never loaded by listing it", () => {
+  // Its three.js and its model are both behind dynamic imports, so appearing
+  // in the picker must not drag either of them in.
+  expect(SKINS.map((skin) => skin.id)).toContain("smithy")
+})

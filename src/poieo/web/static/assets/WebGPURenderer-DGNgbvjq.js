@@ -1,0 +1,1 @@
+import{WebGPURenderer as e}from"./lib-L0rBspiq.js";export{e as WebGPURenderer};
