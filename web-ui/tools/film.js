@@ -19,7 +19,11 @@ const STEP = Number(step)
   const browser = await chromium.launch({
     args: ["--use-gl=angle", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
   })
-  const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
+  // Twice the pixels in the crop, so a small figure can still be judged.
+  const page = await browser.newPage({
+    viewport: { width: 900, height: 700 },
+    deviceScaleFactor: 2,
+  })
 
   await page.addInitScript(() => {
     localStorage.setItem("poieo.skin", "atelier")

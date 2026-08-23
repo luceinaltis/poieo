@@ -41,17 +41,11 @@ const BASE_HALF = 3.2
 /** Which way the imported model has to turn to face its anvil. */
 const FACING = Math.PI * 0.5
 
-/**
- * Which local axis swings a shoulder, and whether the two mirror each other.
- *
- * A rig's bone axes are its own business and reading them off the file is
- * guesswork; these were chosen by filming all four combinations and looking.
- */
-const ARM_AXIS: "x" | "z" = "x"
-const ARM_MIRROR = 1
-
 /** How far the shoulders travel from overhead to the anvil. */
 const ARM_SWEEP = 1.9
+
+/** Which way round that travel goes; the rig decides, so this was filmed. */
+const ARM_SENSE = 1
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -82,11 +76,19 @@ interface Joint {
   rest: number
 }
 
-function jointsOf(figure: any, names: string[], axis: "x" | "z"): Joint[] {
+function jointsOf(figure: any, names: string[]): Joint[] {
   return names
     .map((name) => figure.getObjectByName(name))
     .filter(Boolean)
-    .map((bone: any) => ({ bone, rest: bone.rotation[axis] }))
+    .map((bone: any) => ({ bone, rest: bone.rotation.x }))
+}
+
+/** Bones that must move together, held by their rest orientation. */
+function heldBy(figure: any, names: string[]): { bone: any; rest: any }[] {
+  return names
+    .map((name) => figure.getObjectByName(name))
+    .filter(Boolean)
+    .map((bone: any) => ({ bone, rest: bone.quaternion.clone() }))
 }
 
 function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): Bench {
@@ -172,28 +174,36 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
   group.add(figure)
-  const spine = jointsOf(figure, ["Spine", "Spine01", "Spine02"], "x")
-  // Both hands are on the hammer, so the arms have to travel together.
-  const leftArm = jointsOf(figure, ["LeftArm", "LeftForeArm"], ARM_AXIS)
-  const rightArm = jointsOf(figure, ["RightArm", "RightForeArm"], ARM_AXIS)
+  const spine = jointsOf(figure, ["Spine", "Spine01", "Spine02"])
+  // Both hands are on one haft, so the arms travel as a single piece.
+  const arms = heldBy(figure, ["LeftArm", "RightArm"])
+  const swingAxis = new THREE.Vector3()
+  const facing = new THREE.Quaternion()
 
   // -- finished work on a shelf
   const shelf = new THREE.Group()
   shelf.position.set(0.75, 1.15, -1.1)
   group.add(shelf)
 
-  /** Pose the arms and waist at a point in the swing, 0 raised to 1 struck. */
+  /** Pose the waist and arms at a point in the swing, 0 raised to 1 struck. */
   const pose = (through: number) => {
-    const drop = through * ARM_SWEEP
-    for (const joint of leftArm) {
-      joint.bone.rotation[ARM_AXIS] = joint.rest + drop / leftArm.length
-    }
-    for (const joint of rightArm) {
-      joint.bone.rotation[ARM_AXIS] = joint.rest + (drop * ARM_MIRROR) / rightArm.length
-    }
     const bend = -0.1 + through * 0.55
     for (const joint of spine) {
       joint.bone.rotation.x = joint.rest + bend / spine.length
+    }
+
+    // The arms hang off the spine, so it has to have moved before they are
+    // placed against the world.
+    figure.updateWorldMatrix(true, true)
+    figure.getWorldQuaternion(facing)
+    // The smith's own left-to-right line: a hammer swings in the plane he
+    // faces, and turns about the axis across his shoulders.
+    swingAxis.set(1, 0, 0).applyQuaternion(facing)
+
+    for (const arm of arms) {
+      arm.bone.quaternion.copy(arm.rest)
+      arm.bone.updateWorldMatrix(true, false)
+      arm.bone.rotateOnWorldAxis(swingAxis, through * ARM_SWEEP * ARM_SENSE)
     }
   }
 
