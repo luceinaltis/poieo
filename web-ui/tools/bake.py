@@ -5,7 +5,9 @@ The workshop is a web page, so both have to come down hard -- textures first,
 then meshopt on the geometry, which is the one thing three.js can decode with a
 26 kB decoder rather than a full Draco build.
 
-    python bake.py models/rigged_glb.glb ../src/skins/atelier/smith.glb
+    python bake.py models/rigged_glb.glb ../src/skins/atelier/smith.glb [max_px]
+
+Props get by on 256px textures; only the character's face earns 512.
 
 The result is checked in, because a build should not depend on an API key.
 """
@@ -26,10 +28,10 @@ TEXTURE_PX = 512
 TEXTURE_QUALITY = 80
 
 
-def bake(source: Path, target: Path) -> None:
+def bake(source: Path, target: Path, texture_px: int = TEXTURE_PX) -> None:
     work = Path(tempfile.mkdtemp())
     smaller = work / "textures.glb"
-    shrink_textures.shrink(source, smaller, TEXTURE_PX, TEXTURE_QUALITY)
+    shrink_textures.shrink(source, smaller, texture_px, TEXTURE_QUALITY)
     print(f"  textures  {source.stat().st_size // 1024} kB"
           f" -> {smaller.stat().st_size // 1024} kB")
 
@@ -50,6 +52,10 @@ def bake(source: Path, target: Path) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         raise SystemExit(__doc__)
-    bake(Path(sys.argv[1]), Path(sys.argv[2]))
+    bake(
+        Path(sys.argv[1]),
+        Path(sys.argv[2]),
+        int(sys.argv[3]) if len(sys.argv) == 4 else TEXTURE_PX,
+    )

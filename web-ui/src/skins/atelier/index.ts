@@ -12,6 +12,7 @@
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { makeFace } from "./face"
+import { makeFire } from "./fire"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
   bounds,
@@ -29,6 +30,8 @@ import "./atelier.css"
 // Imported rather than served from a fixed path, so Vite hashes it into
 // /assets with everything else: one cache policy, and a changed model
 // reaches the browser instead of sitting stale behind its own name.
+import anvilUrl from "./anvil.glb?url"
+import forgeUrl from "./forge.glb?url"
 import smithUrl from "./smith.glb?url"
 
 type Three = typeof import("three")
@@ -96,12 +99,34 @@ function stagger(flow: string): number {
 }
 
 /** Exported for tools/bench.html, which judges the swing over a real anvil. */
+export interface Props {
+  anvil: any
+  forge: any
+}
+
+/**
+ * Stand a downloaded prop on the floor at a given height, measured rather
+ * than assumed: each generation of a model is a different size.
+ */
+function grounded(THREE: Three, model: any, tall: number): any {
+  const stood = model.clone()
+  const box = new THREE.Box3().setFromObject(stood)
+  const scale = tall / (box.max.y - box.min.y || 1)
+  stood.scale.multiplyScalar(scale)
+  const measured = new THREE.Box3().setFromObject(stood)
+  stood.position.y -= measured.min.y
+  stood.position.x -= (measured.min.x + measured.max.x) / 2
+  stood.position.z -= (measured.min.z + measured.max.z) / 2
+  return stood
+}
+
 export function makeBench(
   THREE: Three,
   smith: any,
   cloneSkinned: (node: any) => any,
   blinkOffset: number,
   clips: any[],
+  props: Props,
 ): Bench {
   const group = new THREE.Group()
 
@@ -124,62 +149,46 @@ export function makeBench(
   sideWall.position.set(-1.24, 1.0, 0)
   group.add(sideWall)
 
-  // -- the forge: a stone box with a mouth that lights up
-  const forge = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 1.0, 0.6),
-    new THREE.MeshStandardMaterial({ color: HUE.stone, roughness: 1 }),
-  )
-  forge.position.set(-0.75, 0.5, -0.9)
-  group.add(forge)
+  // -- the forge, downloaded; its fire, drawn.
+  const hearth = new THREE.Group()
+  hearth.position.set(-0.78, 0, -0.88)
+  const forge = grounded(THREE, props.forge, 1.5)
+  hearth.add(forge)
 
-  const hood = new THREE.Mesh(
-    new THREE.BoxGeometry(1.0, 0.7, 0.6),
-    new THREE.MeshStandardMaterial({ color: HUE.stone, roughness: 1 }),
-  )
-  hood.position.set(-0.75, 1.5, -0.9)
-  group.add(hood)
-
-  const mouth = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.6, 0.45),
-    new THREE.MeshBasicMaterial({ color: HUE.ember }),
-  )
-  mouth.position.set(-0.75, 0.62, -0.59)
-  group.add(mouth)
+  // The flame stands in the hearth's mouth. Where that is on a generated
+  // model cannot be known ahead, so these are constants found by
+  // photographing tools/bench.html and nudging.
+  const flame = makeFire(THREE, 0.38, 0.5)
+  flame.group.position.set(0.02, 0.52, 0.1)
+  hearth.add(flame.group)
+  group.add(hearth)
 
   // Firelight is the whole point of the room; it has to reach the walls.
   const fire = new THREE.PointLight(HUE.ember, 0, 6, 1.6)
   fire.position.set(-0.7, 0.7, -0.4)
   group.add(fire)
 
-  // -- the anvil on its stump
+  // -- the anvil, downloaded with its stump
   const bench = new THREE.Group()
-  // A smith works at the anvil's broad side, not at the horn end: its long
-  // axis lies across the way he faces, so the strike lands on the face and
-  // the work stretches left-to-right in front of him. Chosen by photographing
-  // both in tools/bench.html and looking.
+  // A smith works at the anvil's broad side, not at the horn end; chosen by
+  // photographing both in tools/bench.html and looking.
   bench.rotation.y = ANVIL_TURN
   group.add(bench)
 
-  const stump = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.26, 0.3, 0.5, 10),
-    new THREE.MeshStandardMaterial({ color: HUE.iron, roughness: 1 }),
-  )
-  stump.position.y = 0.25
-  bench.add(stump)
-
-  const anvil = new THREE.Mesh(
-    new THREE.BoxGeometry(0.7, 0.18, 0.26),
-    new THREE.MeshStandardMaterial({ color: HUE.anvil, roughness: 0.55, metalness: 0.6 }),
-  )
-  anvil.position.y = 0.59
+  const anvil = grounded(THREE, props.anvil, 0.78)
   bench.add(anvil)
+  const anvilTop = new THREE.Box3().setFromObject(anvil).max.y
 
+  // The piece being worked still glows from code, so it can cool when idle.
   const work = new THREE.Mesh(
-    new THREE.BoxGeometry(0.34, 0.06, 0.1),
-    new THREE.MeshBasicMaterial({ color: HUE.ember }),
+    new THREE.BoxGeometry(0.26, 0.035, 0.07),
+    new THREE.MeshBasicMaterial({ color: 0xd8551a }),
   )
-  work.position.y = 0.71
+  work.position.y = anvilTop + 0.02
   bench.add(work)
+  // Hex colours, not setRGB: raw components are read as linear these days and
+  // come out washed -- the hot bar rendered as a pat of butter.
+  const iron = { cool: new THREE.Color(0xc93f0f), hot: new THREE.Color(0xff9a2e) }
 
   // -- the smith, the one thing that was downloaded.
   // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
@@ -281,11 +290,10 @@ export function makeBench(
         away.crossFadeTo(toward, 0.35, false)
       }
 
-      mouth.material.color.setHex(hot ? HUE.ember : HUE.wall)
       work.visible = hot
       fire.intensity = hot ? 9 : 0
+      flame.set(pose === "alarmed" ? "alarmed" : hot ? "burning" : "cold")
       if (pose === "alarmed") {
-        mouth.material.color.setHex(HUE.taken)
         fire.color.setHex(HUE.taken)
         fire.intensity = 2
       } else {
@@ -317,14 +325,19 @@ export function makeBench(
 
       face?.at(elapsed)
 
+      flame.tick(elapsed)
       if (hot) {
         // firelight is never steady
         fire.intensity = 8 + Math.sin(elapsed / 90) * 1.2 + Math.sin(elapsed / 37) * 0.6
+        // and neither is hot iron: the piece breathes between orange and yellow
+        const breath = 0.5 + Math.sin(elapsed / 340) * 0.5
+        ;(work.material as any).color.copy(iron.cool).lerp(iron.hot, breath)
       }
     },
 
     dispose() {
       face?.dispose()
+      flame.dispose()
       group.traverse((node: any) => {
         node.geometry?.dispose?.()
         if (Array.isArray(node.material)) node.material.forEach((m: any) => m.dispose?.())
@@ -341,10 +354,16 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
 
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
-  const gltf = await loader.loadAsync(smithUrl)
+  // The character and both props ride one connection each, in parallel.
+  const [gltf, anvilGltf, forgeGltf] = await Promise.all([
+    loader.loadAsync(smithUrl),
+    loader.loadAsync(anvilUrl),
+    loader.loadAsync(forgeUrl),
+  ])
 
   const smith = gltf.scene
   const clips = gltf.animations ?? []
+  const props = { anvil: anvilGltf.scene, forge: forgeGltf.scene }
   // Meshy exports around a metre; scale it to the room and stand it on the floor.
   const box = new THREE.Box3().setFromObject(smith)
   const height = box.max.y - box.min.y
@@ -683,7 +702,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     for (const flow of flows) {
       let bench = benches.get(flow)
       if (!bench) {
-        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow), clips)
+        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow), clips, props)
         benches.set(flow, bench)
         room.add(bench.group)
       }

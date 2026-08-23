@@ -19,6 +19,8 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
 import { makeBench, turnAnvil, turnFigure } from "../src/skins/atelier/index"
+import anvilUrl from "../src/skins/atelier/anvil.glb?url"
+import forgeUrl from "../src/skins/atelier/forge.glb?url"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
 import { NOTHING } from "../src/review/rollup"
 import type { Worker } from "../src/state/stage"
@@ -59,7 +61,11 @@ scene.add(fill)
 
 const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
-const gltf = await loader.loadAsync(smithUrl)
+const [gltf, anvilGltf, forgeGltf] = await Promise.all([
+  loader.loadAsync(smithUrl),
+  loader.loadAsync(anvilUrl),
+  loader.loadAsync(forgeUrl),
+])
 const smith = gltf.scene
 
 // Same sizing the skin does: the model exports around a metre, the room wants
@@ -77,7 +83,10 @@ if (anvilAsked !== null) turnAnvil((Number(anvilAsked) * Math.PI) / 180)
 const facingAsked = asked.get("facing")
 if (facingAsked !== null) turnFigure((Number(facingAsked) * Math.PI) / 180)
 
-const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [])
+const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [], {
+  anvil: anvilGltf.scene,
+  forge: forgeGltf.scene,
+})
 
 /** One whole strike, whatever the clip's own length is. */
 const swingClip = (gltf.animations ?? []).find((c) => c.name === "swing")
