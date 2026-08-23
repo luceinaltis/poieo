@@ -41,3 +41,38 @@ def test_null_store_writes_nothing(tmp_path, monkeypatch):
     store.append(Event(run_id="r1", type="t"))
     store.record_summary({"run_id": "r1"})
     assert list(tmp_path.iterdir()) == []
+
+
+def test_list_runs_parses_only_what_it_returns(tmp_path, monkeypatch):
+    """The index grows for the daemon's lifetime and the web UI reads it per
+    request; parsing all of history to show the last 20 is what made a month
+    of uptime cost half a second per call."""
+    store = RunStore(tmp_path / "logs")
+    for i in range(500):
+        store.record_summary({"run_id": f"r{i}", "flow": "loop", "status": "completed"})
+
+    import poieo.store as store_module
+
+    parsed = []
+    real = json.loads
+    monkeypatch.setattr(store_module.json, "loads", lambda s: parsed.append(1) or real(s))
+    rows = store.list_runs(limit=20)
+    assert [r["run_id"] for r in rows] == [f"r{499 - i}" for i in range(20)]
+    assert len(parsed) <= 25          # the tail, not the history
+
+
+def test_a_filter_still_finds_older_matches(tmp_path):
+    """A rare flow's runs sit deep in the file; the early stop must not
+    give up before finding them."""
+    store = RunStore(tmp_path / "logs")
+    store.record_summary({"run_id": "old", "flow": "rare", "status": "completed"})
+    for i in range(100):
+        store.record_summary({"run_id": f"r{i}", "flow": "busy", "status": "completed"})
+    assert [r["run_id"] for r in store.list_runs(flow="rare")] == ["old"]
+
+
+def test_a_limit_beyond_history_returns_everything(tmp_path):
+    store = RunStore(tmp_path / "logs")
+    for i in range(3):
+        store.record_summary({"run_id": f"r{i}"})
+    assert len(store.list_runs(limit=50)) == 3

@@ -35,6 +35,7 @@ from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
 from .tools import Hands, Isolation
 from .task import (
+    TaskSpec,
     append_journal,
     build_graph,
     expand,
@@ -57,6 +58,24 @@ runs_app = typer.Typer(name="runs", help="Inspect past runs.", no_args_is_help=T
 app.add_typer(runs_app)
 
 err = typer.style
+
+
+def _guarded(fn):
+    """Every command fails in the product's voice, never with a traceback.
+
+    The daemon command once printed one because a single site forgot its
+    try/except; making the guard part of registration removes the category.
+    """
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except PoieoError as exc:
+            _fail(str(exc))
+
+    return wrapper
 
 
 def _fail(message: str) -> None:
@@ -105,29 +124,38 @@ def _parse_input(raw: Optional[str], pairs: list[str]) -> dict[str, Any]:
 
 
 @app.command()
+@_guarded
 def version() -> None:
     """Print the poieo version."""
     typer.echo(f"poieo {__version__}")
 
 
-def _load_spec(path: Path) -> GraphSpec:
+def _load_card(path: Path) -> "TaskSpec | None":
+    """The task a path names, or None for a plain graph. Loaded once per
+    command -- run used to read the same file four times through helpers that
+    each opened it again."""
+    return load_task(path) if is_task_file(path) else None
+
+
+def _load_spec(path: Path, task: "TaskSpec | None" = None) -> GraphSpec:
     """Load a graph, or the graph a task file stands for."""
-    if not is_task_file(path):
+    task = task or _load_card(path)
+    if task is None:
         return load_graph(path)
-    task = load_task(path)
     if task.graph:
         return load_graph(task.resolve(task.graph))
     return build_graph(task)
 
 
-def _task_payload(path: Path) -> dict[str, Any]:
+def _task_payload(task: "TaskSpec | None") -> dict[str, Any]:
     """What a task's generated graph expects in its input, beyond the user's."""
-    if not is_task_file(path):
+    if task is None:
         return {}
-    return {"journal": read_journal(load_task(path).journal_path())}
+    return {"journal": read_journal(task.journal_path())}
 
 
 @app.command()
+@_guarded
 def validate(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     binding: Optional[Path] = typer.Option(
@@ -135,26 +163,21 @@ def validate(
     ),
 ) -> None:
     """Parse a graph or task (and optionally a binding) and report problems."""
-    try:
-        graph = _load_spec(graph_path)
-        if is_task_file(graph_path):
-            # The whole card, not just its graph: a schedule that cannot
-            # parse must fail here, not when the daemon is armed.
-            flow, _ = expand(load_task(graph_path))
-            typer.echo(f"schedule   {flow.trigger.build().describe}")
-    except PoieoError as exc:
-        _fail(str(exc))
+    task = _load_card(graph_path)
+    graph = _load_spec(graph_path, task)
+    if task is not None:
+        # The whole card, not just its graph: a schedule that cannot
+        # parse must fail here, not when the daemon is armed.
+        flow, _ = expand(task)
+        typer.echo(f"schedule   {flow.trigger.build().describe}")
 
     typer.echo(f"graph      {graph.name} v{graph.version}  ({len(graph.nodes)} nodes)")
     typer.echo(f"entry      {graph.entry}")
     typer.echo(f"roles      {', '.join(sorted(graph.roles())) or '(none)'}")
 
     if binding:
-        try:
-            spec = load_binding(binding)
-            preflight(graph, spec)
-        except PoieoError as exc:
-            _fail(str(exc))
+        spec = load_binding(binding)
+        preflight(graph, spec)
         typer.echo(f"binding    {spec.name}")
         for role in sorted(graph.roles()):
             typer.echo(f"           {spec.resolve(role).describe()}")
@@ -162,15 +185,13 @@ def validate(
 
 
 @app.command()
+@_guarded
 def show(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     mermaid: bool = typer.Option(False, "--mermaid", help="Emit a mermaid flowchart."),
 ) -> None:
     """Print what a graph -- or what a task expands to -- looks like."""
-    try:
-        graph = _load_spec(graph_path)
-    except PoieoError as exc:
-        _fail(str(exc))
+    graph = _load_spec(graph_path)
 
     if mermaid:
         typer.echo(mermaid_source(graph))
@@ -196,6 +217,7 @@ def show(
 
 
 @app.command()
+@_guarded
 def view(
     graph_paths: list[Path] = typer.Argument(..., help="One or more graph files."),
     binding: Optional[Path] = typer.Option(
@@ -211,11 +233,8 @@ def view(
     host: str = typer.Option("127.0.0.1", "--host", help="Interface for --serve."),
 ) -> None:
     """Render graphs as a browsable HTML page."""
-    try:
-        graphs = [_load_spec(path) for path in graph_paths]
-        spec = load_binding(binding) if binding else None
-    except PoieoError as exc:
-        _fail(str(exc))
+    graphs = [_load_spec(path) for path in graph_paths]
+    spec = load_binding(binding) if binding else None
 
     title = graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows"
     page = render_page(graphs, spec, title=title)
@@ -278,6 +297,7 @@ def _jupyter_session() -> dict[str, Any]:
 
 
 @app.command()
+@_guarded
 def edit(
     graph_path: Path = typer.Argument(..., help="Graph file to edit."),
     binding: Optional[Path] = typer.Option(
@@ -302,11 +322,8 @@ def edit(
     if is_task_file(graph_path):
         # The editor saves back over what it opened, and a task is not a graph.
         _fail(f"{graph_path} is a task; run 'poieo eject' first, then edit the graph")
-    try:
-        graph = load_graph(graph_path)
-        spec = load_binding(binding) if binding else None
-    except PoieoError as exc:
-        _fail(str(exc))
+    graph = load_graph(graph_path)
+    spec = load_binding(binding) if binding else None
 
     resolved_graph = graph_path.resolve()
     save: dict[str, Any] = {"mode": "none", "filename": resolved_graph.name}
@@ -356,6 +373,7 @@ def edit(
 
 
 @app.command()
+@_guarded
 def run(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     binding: Optional[Path] = typer.Option(
@@ -381,23 +399,20 @@ def run(
 ) -> None:
     """Execute a graph, or a task, once."""
     _setup_logging(verbose)
-    try:
-        task = load_task(graph_path) if is_task_file(graph_path) else None
-        graph = _load_spec(graph_path)
-        # The flag wins; otherwise a card answers for itself. A new user's
-        # first command must not demand a flag their card already carries.
-        if binding is None and task is not None and task.binding:
-            binding = task.resolve(task.binding)
-        if binding is None:
-            _fail(
-                "no binding: pass one with -b, or add `binding: <file>` "
-                "to the card"
-            )
-        spec = load_binding(binding)
-    except PoieoError as exc:
-        _fail(str(exc))
+    task = _load_card(graph_path)
+    graph = _load_spec(graph_path, task)
+    # The flag wins; otherwise a card answers for itself. A new user's
+    # first command must not demand a flag their card already carries.
+    if binding is None and task is not None and task.binding:
+        binding = task.resolve(task.binding)
+    if binding is None:
+        _fail(
+            "no binding: pass one with -b, or add `binding: <file>` "
+            "to the card"
+        )
+    spec = load_binding(binding)
 
-    payload = {**_task_payload(graph_path), **_parse_input(input_json, set_)}
+    payload = {**_task_payload(task), **_parse_input(input_json, set_)}
     if store is None:
         # A task's history lives beside the task, wherever the command was
         # typed from -- the same rule `poieo daemon <folder>` follows.
@@ -410,10 +425,7 @@ def run(
         # Same preflight the daemon does, for the same reason: better here
         # than eight turns in. No box is kept -- a one-shot run has no next
         # run to keep one for, so the executor makes and destroys its own.
-        try:
-            check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
-        except PoieoError as exc:
-            _fail(str(exc))
+        check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
 
     async def _go():
         async with ProviderPool(spec) as pool:
@@ -421,10 +433,7 @@ def run(
                 graph, spec, pool, run_store, input=payload, hands=hands
             )
 
-    try:
-        result = asyncio.run(_go())
-    except PoieoError as exc:
-        _fail(str(exc))
+    result = asyncio.run(_go())
     if task is not None:
         # The journal contract: every run of a task leaves a line, or the
         # next run redoes this one's work and notes are never consumed.
@@ -451,14 +460,12 @@ def run(
 
 
 @app.command()
+@_guarded
 def reset(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
 ) -> None:
     """Throw away a task's isolated environment. It is rebuilt on the next run."""
-    try:
-        task = load_task(task_path)
-    except PoieoError as exc:
-        _fail(str(exc))
+    task = load_task(task_path)
 
     if not task.isolation:
         _ok(f"'{task.name}' does not run isolated; there is nothing to reset")
@@ -479,6 +486,7 @@ def reset(
 
 
 @app.command()
+@_guarded
 def daemon(
     config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
     once: bool = typer.Option(
@@ -493,22 +501,19 @@ def daemon(
 ) -> None:
     """Start the resident scheduler and keep flows running."""
     _setup_logging(verbose)
-    try:
-        if config_path.is_dir():
-            # `poieo daemon tasks/` is the natural guess once cards exist,
-            # so it is a spelling of the same thing, not an error.
-            config = config_for_tasks_folder(config_path)
-        elif is_task_file(config_path):
-            _fail(
-                f"'{config_path}' is a single task. "
-                f"`poieo run {config_path}` runs it once; to keep it "
-                f"running, point the daemon at its folder: "
-                f"`poieo daemon {config_path.parent}`"
-            )
-        else:
-            config = load_config(config_path)
-    except PoieoError as exc:
-        _fail(str(exc))
+    if config_path.is_dir():
+        # `poieo daemon tasks/` is the natural guess once cards exist,
+        # so it is a spelling of the same thing, not an error.
+        config = config_for_tasks_folder(config_path)
+    elif is_task_file(config_path):
+        _fail(
+            f"'{config_path}' is a single task. "
+            f"`poieo run {config_path}` runs it once; to keep it "
+            f"running, point the daemon at its folder: "
+            f"`poieo daemon {config_path.parent}`"
+        )
+    else:
+        config = load_config(config_path)
 
     if flow:
         matching = [f for f in config.flows if f.name == flow]
@@ -529,8 +534,6 @@ def daemon(
         results = asyncio.run(
             Daemon(config, web_port=None if no_web else port).serve()
         )
-    except PoieoError as exc:
-        _fail(str(exc))
     except KeyboardInterrupt:  # pragma: no cover - interactive
         raise typer.Exit(code=130)
 
@@ -542,14 +545,12 @@ def daemon(
 
 
 @app.command("check")
+@_guarded
 def check_providers(
     binding: Path = typer.Option(..., "--binding", "-b", help="Binding YAML/JSON file."),
 ) -> None:
     """Probe every provider declared in a binding."""
-    try:
-        spec = load_binding(binding)
-    except PoieoError as exc:
-        _fail(str(exc))
+    spec = load_binding(binding)
 
     async def _go() -> list[tuple[str, bool, str]]:
         rows: list[tuple[str, bool, str]] = []
@@ -572,15 +573,13 @@ def check_providers(
 
 
 @app.command()
+@_guarded
 def flows(
     config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
 ) -> None:
     """List the flows a daemon config would run, with their triggers and bindings."""
-    try:
-        config = load_config(config_path)
-        loaded = load_flows(config, enabled_only=False)
-    except PoieoError as exc:
-        _fail(str(exc))
+    config = load_config(config_path)
+    loaded = load_flows(config, enabled_only=False)
 
     for item in loaded:
         state = "on " if item.spec.enabled else "off"
@@ -594,21 +593,19 @@ def flows(
 
 
 @app.command()
+@_guarded
 def tasks(
     target: Path = typer.Argument(..., help="Daemon config file, or a tasks folder."),
 ) -> None:
     """List the task cards in a folder, or the ones a daemon config would run."""
-    try:
-        if target.is_dir():
-            folder = target
-        else:
-            config = load_config(target)
-            if not config.tasks:
-                _fail(f"{target} names no tasks folder")
-            folder = config.resolve_path(config.tasks)
-        items = load_tasks(folder)
-    except PoieoError as exc:
-        _fail(str(exc))
+    if target.is_dir():
+        folder = target
+    else:
+        config = load_config(target)
+        if not config.tasks:
+            _fail(f"{target} names no tasks folder")
+        folder = config.resolve_path(config.tasks)
+    items = load_tasks(folder)
 
     if not items:
         typer.echo("(no tasks)")
@@ -629,20 +626,19 @@ def tasks(
 
 
 @app.command()
+@_guarded
 def note(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
     text: str = typer.Argument(..., help="What you want it to do differently."),
 ) -> None:
     """Tell a task something. It reads this before its next piece of work."""
-    try:
-        task = load_task(task_path)
-    except PoieoError as exc:
-        _fail(str(exc))
+    task = load_task(task_path)
     append_journal(task.journal_path(), "you", text, title=task.name)
     _ok(f"noted in {task.journal_path()}")
 
 
 @app.command()
+@_guarded
 def eject(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
     to: Optional[Path] = typer.Option(
@@ -650,10 +646,7 @@ def eject(
     ),
 ) -> None:
     """Write out the graph a task stands for, and point the task at it."""
-    try:
-        task = load_task(task_path)
-    except PoieoError as exc:
-        _fail(str(exc))
+    task = load_task(task_path)
 
     if task.graph:
         _fail(f"{task_path} already names a graph: {task.graph}")
@@ -697,6 +690,7 @@ def eject(
 
 
 @runs_app.command("list")
+@_guarded
 def runs_list(
     store: Optional[Path] = typer.Option(
         None, "--store",
@@ -722,6 +716,7 @@ def runs_list(
 
 
 @runs_app.command("show")
+@_guarded
 def runs_show(
     run_id: str = typer.Argument(..., help="Run id from `poieo runs list`."),
     store: Optional[Path] = typer.Option(
