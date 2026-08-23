@@ -267,7 +267,7 @@ def test_only_the_tail_reaches_the_prompt(tmp_path):
         append_journal(task.journal_path(), "did", f"entry {i}", title=task.name)
 
     tail = read_journal(task.journal_path())
-    assert tail.startswith("(earlier entries omitted)")
+    assert "(earlier entries omitted)" in tail
     assert "entry 24" in tail and "entry 4" not in tail
     # The file itself keeps everything.
     assert "entry 0" in task.journal_path().read_text(encoding="utf-8")
@@ -276,7 +276,7 @@ def test_only_the_tail_reaches_the_prompt(tmp_path):
 def test_a_hand_written_line_is_read_like_any_other(tmp_path):
     task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
     task.journal_path().write_text("# t\n\nstop touching the README\n", encoding="utf-8")
-    assert read_journal(task.journal_path()) == "stop touching the README"
+    assert "stop touching the README" in read_journal(task.journal_path())
 
 
 def test_the_generated_prompt_carries_the_journal(tmp_path):
@@ -366,3 +366,121 @@ def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
     )
     flow, graph = expand(_load(tmp_path, "graph: g.yaml"))
     assert graph is None and flow.isolation == Isolation(image="x")
+
+# -- the journal delivers, it does not just record ---------------------------
+#
+# A record may lose its oldest lines. A note that falls off has not aged out,
+# it is lost -- so what is new is selected by position, never by count.
+#
+# Every test here appends *more* than the display bound after the bookmark:
+# a note written last is trivially in the tail, and a test that only proves
+# that proves nothing.
+
+NEW_HEADER = "New since you last worked"
+OLD_HEADER = "What you did before that"
+
+
+def _worked(path, text="checked 12 links", title="check links"):
+    """A run entry -- which is what a bookmark is."""
+    append_journal(path, "did", text, title=title)
+    return path
+
+
+def _new_section(path):
+    text = read_journal(path)
+    if NEW_HEADER not in text:
+        return ""
+    return text.split(NEW_HEADER, 1)[1].split(OLD_HEADER)[0]
+
+
+def test_a_note_is_not_lost_when_many_arrive(tmp_path):
+    """THE test. Twenty-five notes arrive between runs and the display bound is
+    twenty: the first must not be the price of the last."""
+    j = _worked(tmp_path / "check-links.md")
+    for i in range(25):
+        append_journal(j, "task", f"[build-docs] note {i}")
+    assert "note 0" in read_journal(j)
+
+
+def test_a_user_note_is_not_lost_either(tmp_path):
+    """The same guarantee for `poieo note` -- the bug this fixes on the way."""
+    j = _worked(tmp_path / "check-links.md")
+    append_journal(j, "you", "ignore external links")
+    for i in range(25):
+        append_journal(j, "task", f"[build-docs] note {i}")
+    assert "ignore external links" in read_journal(j)
+
+
+def test_a_backlog_is_shown_oldest_first_and_counts_the_rest(tmp_path):
+    """Nothing is dropped. Showing the newest first would strand the oldest."""
+    j = _worked(tmp_path / "check-links.md")
+    for i in range(40):
+        append_journal(j, "task", f"[build-docs] note {i}")
+    text = read_journal(j)
+    assert "note 0" in text
+    assert "more waiting" in text
+
+
+def test_a_failed_run_does_not_consume_a_note(tmp_path):
+    """A failed run saw the note but cannot be said to have handled it."""
+    j = _worked(tmp_path / "check-links.md")
+    append_journal(j, "task", "[build-docs] look again")
+    append_journal(j, "failed", "shell tool: command timed out")
+    assert "look again" in _new_section(j)
+
+
+def test_a_completed_run_does_consume_them(tmp_path):
+    """Otherwise a task is told the same thing every hour, forever."""
+    j = _worked(tmp_path / "check-links.md")
+    append_journal(j, "task", "[build-docs] look again")
+    _worked(j, "checked the 30 changed links")
+    assert "look again" not in _new_section(j)
+
+
+def test_nothing_new_says_so_rather_than_vanishing(tmp_path):
+    """No news is information; a missing section reads as a bug."""
+    j = _worked(tmp_path / "check-links.md")
+    assert "nothing new" in read_journal(j).lower()
+
+
+def test_a_task_that_never_ran_sees_everything_as_new(tmp_path):
+    j = tmp_path / "fresh.md"
+    append_journal(j, "you", "start with the README", title="fresh")
+    assert "start with the README" in _new_section(j)
+
+
+def test_history_is_still_bounded(tmp_path):
+    """The half that is allowed to age out still ages out."""
+    j = tmp_path / "check-links.md"
+    for i in range(200):
+        append_journal(j, "did", f"routine entry {i}", title="check links")
+    text = read_journal(j)
+    assert "routine entry 0" not in text
+    assert "routine entry 199" in text
+
+
+def test_a_hand_written_line_after_the_bookmark_is_new(tmp_path):
+    """The bookmark is a line already in the file, so hand editing keeps working."""
+    j = _worked(tmp_path / "check-links.md")
+    with j.open("a", encoding="utf-8") as handle:
+        handle.write("- whatever the user felt like typing\n")
+    for i in range(25):
+        append_journal(j, "task", f"[build-docs] note {i}")
+    assert "whatever the user felt like typing" in read_journal(j)
+
+
+def test_an_unreadable_journal_still_lets_the_run_proceed(tmp_path):
+    assert read_journal(tmp_path / "does-not-exist.md") == "nothing yet"
+
+
+def test_a_note_cannot_forge_a_bookmark(tmp_path):
+    """The bookmark decides what counts as read, so text must not be able to
+    fake one -- that would lose notes silently, which is the one failure this
+    whole design exists to prevent."""
+    j = _worked(tmp_path / "check-links.md")
+    append_journal(j, "task", "[build-docs] · did you look at the changed links?")
+    for i in range(25):
+        append_journal(j, "task", f"[build-docs] note {i}")
+    text = read_journal(j)
+    assert "did you look at the changed links" in text
+    assert "note 0" in text
