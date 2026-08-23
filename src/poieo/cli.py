@@ -27,7 +27,7 @@ for _stream in (sys.stdout, sys.stderr):
 from . import __version__
 from .binding import load_binding
 from .daemon import Daemon, load_config, load_flows
-from .daemon.config import FlowSpec, check_isolation
+from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .providers import ProviderPool
@@ -136,6 +136,11 @@ def validate(
     """Parse a graph or task (and optionally a binding) and report problems."""
     try:
         graph = _load_spec(graph_path)
+        if is_task_file(graph_path):
+            # The whole card, not just its graph: a schedule that cannot
+            # parse must fail here, not when the daemon is armed.
+            flow, _ = expand(load_task(graph_path))
+            typer.echo(f"schedule   {flow.trigger.build().describe}")
     except PoieoError as exc:
         _fail(str(exc))
 
@@ -352,7 +357,10 @@ def edit(
 @app.command()
 def run(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
-    binding: Path = typer.Option(..., "--binding", "-b", help="Binding YAML/JSON file."),
+    binding: Optional[Path] = typer.Option(
+        None, "--binding", "-b",
+        help="Binding YAML/JSON file [default: what the card names].",
+    ),
     input_json: Optional[str] = typer.Option(
         None, "--input", "-i", help="Run payload as JSON, or @file.json."
     ),
@@ -371,6 +379,17 @@ def run(
     _setup_logging(verbose)
     try:
         graph = _load_spec(graph_path)
+        # The flag wins; otherwise a card answers for itself. A new user's
+        # first command must not demand a flag their card already carries.
+        if binding is None and is_task_file(graph_path):
+            task = load_task(graph_path)
+            if task.binding:
+                binding = task.resolve(task.binding)
+        if binding is None:
+            _fail(
+                "no binding: pass one with -b, or add `binding: <file>` "
+                "to the card"
+            )
         spec = load_binding(binding)
     except PoieoError as exc:
         _fail(str(exc))
@@ -464,7 +483,19 @@ def daemon(
     """Start the resident scheduler and keep flows running."""
     _setup_logging(verbose)
     try:
-        config = load_config(config_path)
+        if config_path.is_dir():
+            # `poieo daemon tasks/` is the natural guess once cards exist,
+            # so it is a spelling of the same thing, not an error.
+            config = config_for_tasks_folder(config_path)
+        elif is_task_file(config_path):
+            _fail(
+                f"'{config_path}' is a single task. "
+                f"`poieo run {config_path}` runs it once; to keep it "
+                f"running, point the daemon at its folder: "
+                f"`poieo daemon {config_path.parent}`"
+            )
+        else:
+            config = load_config(config_path)
     except PoieoError as exc:
         _fail(str(exc))
 

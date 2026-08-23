@@ -74,6 +74,16 @@ class TriggerSpec(BaseModel):
             CronSchedule(value)
         return value
 
+    @field_validator("every", "jitter", "cooldown")
+    @classmethod
+    def _valid_duration(cls, value: str | float | None) -> str | float | None:
+        # Checked here, not in build(): a schedule that cannot parse must
+        # fail where `poieo validate` and the daemon's load can see it,
+        # not when the trigger is first armed.
+        if value is not None:
+            parse_duration(value)
+        return value
+
     def build(self) -> Trigger:
         if self.type == "interval":
             if self.every is None:

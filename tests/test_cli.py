@@ -413,3 +413,89 @@ def test_reset_on_a_task_that_is_not_isolated_explains_itself(tmp_path):
     result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
     assert result.exit_code == 0
     assert "isolated" in result.stdout
+
+
+# -- the first-run experience ------------------------------------------------
+#
+# DESIGN.md promises the only things a user writes are a name and a prompt.
+# These pin the places where the CLI used to break that promise first.
+
+
+def _self_bound_card(tmp_path):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    card = tmp_path / "card.yaml"
+    card.write_text(
+        "name: hello\nfolder: work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    return card
+
+
+def test_run_uses_the_binding_the_card_names(tmp_path):
+    """The first command a new user types must not demand a flag the card
+    already answers."""
+    result = runner.invoke(app, ["run", str(_self_bound_card(tmp_path)), "--no-log"])
+    assert result.exit_code == 0, result.output
+
+
+def test_run_without_any_binding_names_both_ways_out(tmp_path):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: say hello\n")
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+    assert result.exit_code == 1
+    assert "-b" in result.stderr and "binding:" in result.stderr
+
+
+def test_run_flag_still_wins_over_the_card(tmp_path):
+    result = runner.invoke(
+        app,
+        ["run", str(_self_bound_card(tmp_path)), "--no-log",
+         "-b", str(EXAMPLES / "bindings/mock.yaml")],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_daemon_given_a_folder_runs_the_cards_in_it(tmp_path):
+    """`poieo daemon tasks/` is the natural guess, and it used to answer with
+    a raw traceback."""
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    (folder / "hello.yaml").write_text(
+        "name: hello\nfolder: ../work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
+    assert result.exit_code == 0, result.output
+
+
+def test_daemon_given_a_task_card_points_at_both_answers(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(app, ["daemon", str(card), "--once", "--no-web"])
+    assert result.exit_code == 1
+    assert "task" in result.stderr
+    assert "poieo run" in result.stderr
+
+
+def test_a_typo_gets_one_line_and_a_suggestion(tmp_path):
+    (tmp_path / "work").mkdir()
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\npromt: say hello\n")
+    result = runner.invoke(app, ["validate", str(card)])
+    assert result.exit_code == 1
+    assert "promt" in result.stderr
+    assert "prompt" in result.stderr          # the did-you-mean
+    assert "pydantic" not in result.stderr    # internals stay internal
+    assert "https://" not in result.stderr
+
+
+def test_validate_checks_the_schedule_too(tmp_path):
+    """It said "valid" on a card whose schedule could not parse -- and a
+    validator that lies is worse than none."""
+    (tmp_path / "work").mkdir()
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: hi\nevery: 5 minutes\n")
+    result = runner.invoke(app, ["validate", str(card)])
+    assert result.exit_code == 1
+    assert "5m" in result.stderr              # the fix is named, not just the fault

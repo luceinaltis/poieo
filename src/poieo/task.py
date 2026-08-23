@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .errors import SpecError
+from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
 from .tools import Isolation
 
@@ -159,7 +159,10 @@ def load_task(path: str | Path) -> TaskSpec:
     try:
         task = TaskSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(f"{path}: invalid task: {exc}") from exc
+        raise SpecError(
+            f"{path}: invalid task: "
+            f"{describe_invalid(exc, tuple(TaskSpec.model_fields))}"
+        ) from exc
     task.source_path = path
     folder = task.folder_path()
     if not folder.is_dir():
@@ -218,23 +221,30 @@ def expand(
     The graph is None when the task names one of its own; the flow then points
     at that file and is loaded like any other.
     """
+    from pydantic import ValidationError
+
     from .daemon.config import FlowSpec  # late import: config imports this module
 
     graph = None if task.graph else build_graph(task, roster)
-    flow = FlowSpec(
-        name=task.slug,
-        # With no graph file of its own, the flow points at the task that stands
-        # in for one. Only load_flows reads this, and it prefers the generated
-        # graph it was handed alongside.
-        graph=str(task.resolve(task.graph) if task.graph else task.source_path),
-        binding=task.binding,
-        trigger=_trigger(task),
-        enabled=task.enabled,
-        isolation=task.isolation,
-        # A task is a standing job, so what it learned last night is in scope
-        # tonight. Hand-written flows still opt in.
-        carry_state=True,
-    )
+    try:
+        flow = FlowSpec(
+            name=task.slug,
+            # With no graph file of its own, the flow points at the task that
+            # stands in for one. Only load_flows reads this, and it prefers the
+            # generated graph it was handed alongside.
+            graph=str(task.resolve(task.graph) if task.graph else task.source_path),
+            binding=task.binding,
+            trigger=_trigger(task),
+            enabled=task.enabled,
+            isolation=task.isolation,
+            # A task is a standing job, so what it learned last night is in
+            # scope tonight. Hand-written flows still opt in.
+            carry_state=True,
+        )
+    except (ValidationError, SpecError) as exc:
+        # A schedule that cannot parse must read as *this card's* problem --
+        # ten cards in a folder, and the message must say which one.
+        raise SpecError(f"task '{task.slug}': {describe_invalid(exc)}") from exc
     return flow, graph
 
 
