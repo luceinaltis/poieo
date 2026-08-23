@@ -9,7 +9,7 @@ import pytest
 
 from poieo.providers.base import ToolCall
 from poieo.task import append_journal, read_journal
-from poieo.tools import DEFAULT_TOOLSETS, LocalExecutor
+from poieo.tools import DEFAULT_TOOLSETS, Hands, LocalExecutor
 from poieo.tools.notes import Postbox
 
 
@@ -25,7 +25,7 @@ def _tell(**arguments):
 
 
 def _executor(tmp_path, postbox):
-    return LocalExecutor(tmp_path, ["files", "notes"], postbox=postbox)
+    return LocalExecutor(tmp_path, ["files", "notes"], Hands(postbox=postbox))
 
 
 async def test_tell_appends_to_the_recipients_journal(tmp_path):

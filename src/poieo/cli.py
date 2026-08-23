@@ -33,7 +33,7 @@ from .graph import GraphSpec, load_graph
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
-from .tools import Isolation
+from .tools import Hands, Isolation
 from .task import (
     append_journal,
     build_graph,
@@ -378,7 +378,8 @@ def run(
     payload = {**_task_payload(graph_path), **_parse_input(input_json, set_)}
     run_store = NullStore() if no_log else RunStore(store)
 
-    isolation = Isolation(image=isolate) if isolate else None
+    hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
+    isolation = hands.isolation if hands else None
     if isolation is not None:
         # Same preflight the daemon does, for the same reason: better here
         # than eight turns in. No box is kept -- a one-shot run has no next
@@ -391,7 +392,7 @@ def run(
     async def _go():
         async with ProviderPool(spec) as pool:
             return await execute(
-                graph, spec, pool, run_store, input=payload, isolation=isolation
+                graph, spec, pool, run_store, input=payload, hands=hands
             )
 
     try:

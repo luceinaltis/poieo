@@ -271,12 +271,17 @@ async def test_ensure_restarts_a_box_that_died(tmp_path):
         await box.remove()
 
 
-async def test_a_changed_image_does_not_match(tmp_path):
+async def test_a_changed_image_gets_a_different_box(tmp_path):
+    """Not a reconfigure: the keeper keys by settings, so this is the whole
+    mechanism and there is nothing else to check."""
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
-    assert box.matches(ISO)
-    assert not box.matches(Isolation(image="busybox:latest"))
-    assert not box.matches(Isolation(image=IMAGE, network="bridge"))
+    keeper = BoxKeeper()
+    try:
+        assert keeper.get(work, ISO) is not keeper.get(
+            work, Isolation(image="busybox:latest")
+        )
+    finally:
+        await keeper.aclose()
 
 
 async def test_remove_is_safe_to_call_twice(tmp_path):
@@ -355,3 +360,17 @@ async def test_closing_the_keeper_removes_every_box(tmp_path):
     ids = [await keeper.get(work, ISO).ensure(), await keeper.get(other, ISO).ensure()]
     await keeper.aclose()
     assert not any(_container_exists(i) for i in ids)
+
+
+async def test_the_sweep_is_what_reclaims_a_hard_kill(tmp_path):
+    """A clean shutdown removes every box, so what survives is only what a
+    crash left behind -- and that is what the sweep is for."""
+    work = _workdir(tmp_path)
+    box = Box("orphan", work, ISO)
+    container_id = await box.ensure()
+    box.container_id = None          # as if the process died holding it
+    try:
+        await sweep(older_than=timedelta(seconds=0))
+        assert not _container_exists(container_id)
+    finally:
+        subprocess.run(["docker", "rm", "-f", container_id], capture_output=True)

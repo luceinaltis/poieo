@@ -168,20 +168,17 @@ class Box:
         self.isolation = isolation
         self.container_id: str | None = None
 
-    def matches(self, isolation: Isolation) -> bool:
-        """False once the task asks for something this box is not."""
-        return self.isolation == isolation
-
-    async def ensure(self, isolation: Isolation | None = None) -> str:
-        """The container id, starting one if it is missing, dead, or now wrong.
+    async def ensure(self) -> str:
+        """The container id, starting one if it is missing or has died.
 
         Idempotent, and deliberately tolerant: a machine that slept, a docker
-        restart, someone running `docker rm` by hand, or an edited isolation
-        block all land here as a rebuild rather than a failure.
+        restart, or someone running `docker rm` by hand all land here as a
+        rebuild rather than a failure.
+
+        Settings changing is not one of the cases: the keeper keys a box by
+        them, so a task that edits its isolation block gets a different box
+        rather than this one being reconfigured.
         """
-        if isolation is not None and isolation != self.isolation:
-            await self.remove()
-            self.isolation = isolation
         if self.container_id and await _alive(self.container_id):
             return self.container_id
         self.container_id = await _start(
@@ -255,12 +252,10 @@ class DockerExecutor(Executor):
         user: str | None = None,
         labels: dict[str, str] | None = None,
         box: "Box | None" = None,
-        postbox: Any = None,
+        hands: Any = None,
     ):
         self.workdir = _resolved(workdir)
-        self.image = image
-        self.network = network
-        self.user = user
+        self.isolation = Isolation(image=image, network=network, user=user)
         self.labels = dict(labels or {})
         # Handed a box, this executor borrows it and must not remove it; the
         # owner outlives the run. Without one it creates and destroys its own,
@@ -268,22 +263,19 @@ class DockerExecutor(Executor):
         self.box = box
         self.container_id: str | None = None
 
-        self._load(toolsets, postbox)
+        self._load(toolsets, hands.postbox if hands else None)
         # The one substitution this class exists to make.
         if "run_command" in self.tools:
             self.tools["run_command"] = Tool(
                 self.tools["run_command"].definition, self._run_command_in_box
             )
 
-    def _isolation(self) -> Isolation:
-        return Isolation(image=self.image, network=self.network, user=self.user)
-
     # -- lifecycle -----------------------------------------------------------
     async def __aenter__(self) -> "DockerExecutor":
         if self.box is not None:
-            self.container_id = await self.box.ensure(self._isolation())
+            self.container_id = await self.box.ensure()
         else:
-            self.container_id = await _start(self.workdir, self._isolation(), self.labels)
+            self.container_id = await _start(self.workdir, self.isolation, self.labels)
         return self
 
     async def __aexit__(self, *_exc_info: Any) -> None:

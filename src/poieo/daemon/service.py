@@ -14,7 +14,7 @@ from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import RunStore
 from ..task import append_journal
-from ..tools import make_box_keeper
+from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
 
@@ -54,8 +54,7 @@ class FlowRunner:
         store: RunStore,
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
-        boxes: Any = None,
-        postbox: Any = None,
+        hands: Any = None,
     ):
         self.flow = flow
         self.config = config
@@ -69,12 +68,9 @@ class FlowRunner:
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
         self.current_run_id: str | None = None
-        # The daemon's, not this runner's: two tasks over one folder share a
-        # box the way they already share a provider pool. Opaque here --
-        # only make_executor knows what is inside.
-        self.boxes = boxes
-        # Who this task may leave a note for. None unless it took the toolset.
-        self.postbox = postbox
+        # Where this task's tools work. Built by the daemon, because the box
+        # keeper is shared across tasks and the roster is only known there.
+        self.hands = hands
 
     @property
     def name(self) -> str:
@@ -118,9 +114,7 @@ class FlowRunner:
                     iteration=fire.iteration,
                     run_id=run_id,
                     cancel=self.cancel,
-                    isolation=self.flow.spec.isolation,
-                    boxes=self.boxes,
-                    postbox=self.postbox,
+                    hands=self.hands,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None
@@ -215,6 +209,13 @@ class Daemon:
             },
         )
 
+    def _hands_for(self, flow: LoadedFlow) -> Hands:
+        return Hands(
+            isolation=flow.spec.isolation,
+            boxes=self.boxes,
+            postbox=self._postbox_for(flow),
+        )
+
     def _runners(self) -> list[FlowRunner]:
         return [
             FlowRunner(
@@ -224,8 +225,7 @@ class Daemon:
                 self.store,
                 self.cancel,
                 self.on_run,
-                self.boxes,
-                self._postbox_for(flow),
+                self._hands_for(flow),
             )
             for flow in self.flows
         ]
@@ -278,6 +278,17 @@ class Daemon:
             server.install_signal_handlers = lambda: None
             web_task = asyncio.create_task(server.serve())
             log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
+
+        if self.boxes is not None:
+            # Whatever an earlier poieo left behind after a crash. Boxes it
+            # owned itself are already gone -- shutdown removes them.
+            try:
+                reclaimed = await sweep_boxes()
+                if reclaimed:
+                    log.info("reclaimed %d abandoned environment(s)", reclaimed)
+            except Exception as exc:
+                # Tidying is never worth refusing to start over.
+                log.warning("could not reclaim old environments: %s", exc)
 
         self.runners = self._runners()
         log.info(

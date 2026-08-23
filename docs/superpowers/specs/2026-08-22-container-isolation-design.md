@@ -204,12 +204,13 @@ It is thrown away and rebuilt when:
 |---|---|
 | a task's `isolation` block changes | a box built from a different image is not the box that was asked for |
 | the daemon restarts | the reset a user already knows how to reach |
-| the box is older than 7 days | docker records creation, not last use; an age cap is the honest version and one rebuild a week is the ceiling working |
+| an earlier poieo left it behind | a clean shutdown removes every box it owns, so anything still standing is from a crash. Swept at startup, by age, because that is the only moment the answer can change |
 | the user asks (`poieo reset <task>`) | the explicit escape hatch, and the thing to suggest when a task starts behaving oddly |
 
-**Daemon restart is a weaker bound than it sounds.** A resident daemon is meant
-to run for weeks, so it is the idle sweep that actually caps how old a box
-gets. Both are here for that reason; neither is sufficient alone.
+**A daemon restart is the real bound.** Shutdown removes every box the daemon
+owns, so a box lives at most as long as one daemon session. The startup sweep
+is not a second cap on that -- it is how boxes from a *crashed* session are
+reclaimed, since those are the only ones that outlive their owner.
 
 A one-shot `poieo run --isolate` has no next run to keep a box for, so it gets
 an ephemeral one, removed when the run ends.
