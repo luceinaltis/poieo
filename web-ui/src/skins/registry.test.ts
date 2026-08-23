@@ -100,9 +100,9 @@ test("clicking a card selects that worker", () => {
   handle.destroy()
 })
 
-test("no skin imports pixi.js statically", () => {
-  // A static import folds PixiJS back into the entry chunk without a word of
-  // warning; only `await import("pixi.js")` keeps it in its own file.
+test("no skin imports three.js statically", () => {
+  // A static import folds three.js back into the entry chunk without a word of
+  // warning; only `await import("three")` keeps it in its own file.
   const sources = import.meta.glob("./**/*.{ts,tsx}", {
     query: "?raw",
     import: "default",
@@ -110,15 +110,10 @@ test("no skin imports pixi.js statically", () => {
   }) as Record<string, string>
 
   const offenders = Object.entries(sources)
-    .filter(([, source]) => /^\s*import[^\n]*["']pixi\.js["']/m.test(source))
+    .filter(([, source]) => /^\s*import[^\n]*["']three["']/m.test(source))
     .map(([path]) => path)
 
   expect(offenders).toEqual([])
 })
 
 
-test("the three-dimensional skin is listed but never loaded by listing it", () => {
-  // Its three.js and its model are both behind dynamic imports, so appearing
-  // in the picker must not drag either of them in.
-  expect(SKINS.map((skin) => skin.id)).toContain("smithy")
-})

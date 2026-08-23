@@ -5,11 +5,10 @@
 import { atelier } from "./atelier"
 import type { Skin } from "./contract"
 import { ledger } from "./ledger"
-import { smithy } from "./smithy"
 
 // Listing a skin here must not pull its renderer in: atelier's PixiJS stays
 // behind a dynamic import inside its own module.
-export const SKINS: Skin[] = [atelier, ledger, smithy]
+export const SKINS: Skin[] = [atelier, ledger]
 
 // The workshop is what this page is for. ledger remains the fallback that an
 // unknown or unreadable choice lands on.

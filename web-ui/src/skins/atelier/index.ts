@@ -1,377 +1,317 @@
 /**
- * The workshop: a smithy, one forge per flow.
+ * The workshop: a smithy, one forge per flow, in three dimensions.
  *
- * Drawn from shapes in code — no sprite packs, per the spec. The smith stands
- * at an anvil, lifts a hammer while a node runs and brings it down, sparks on
- * the blow. The forge behind them glows while there is work in it. Tool calls
- * hang on the wall; each run that landed puts a finished piece on the shelf.
+ * Benches stand on the shared grid of squares. The forge is a real light, so
+ * its warmth falls on the walls and on the smith rather than being painted on.
  *
- * The room can be dragged and pinched; benches can be moved one at a time and
- * their places are remembered.
- *
- * PixiJS arrives through a dynamic import and nowhere else: it is the heaviest
- * thing that reaches the browser and it serves this one skin, so a reader who
- * stays on the ledger never pays for it.
+ * The character is the only downloaded asset. Everything else is boxes and
+ * cylinders: an anvil and a forge that cost nothing to ship. Three.js and the
+ * model arrive through a dynamic import, so a reader who stays on the ledger
+ * or the atelier never pays for either.
  */
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
+import { HAMMER, figurePose, hammerAngle, lampLit, shelfCount } from "./scene"
 import {
-  CELL,
   bounds,
-  bubbleVisible,
   cellAt,
   cellOrigin,
   clampZoom,
   columnsFor,
-  figurePose,
-  fit,
-  HAMMER,
-  hammerAngle,
-  lampLit,
   occupied,
   place,
-  prefersReducedMotion,
-  shelfCount,
-  sparking,
-} from "./scene"
-import type { Cell } from "./scene"
+} from "../layout"
+import type { Cell } from "../layout"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import "./atelier.css"
+// Imported rather than served from a fixed path, so Vite hashes it into
+// /assets with everything else: one cache policy, and a changed model
+// reaches the browser instead of sitting stale behind its own name.
+import smithUrl from "./smith.glb?url"
 
-type Pixi = typeof import("pixi.js")
+type Three = typeof import("three")
 
-const INK = {
-  floor: 0x211c17,
-  floorEdge: 0x2e2820,
-  wall: 0x1a1611,
-  stump: 0x2e2820,
-  stumpTop: 0x3a332a,
-  anvil: 0x8c8378,
-  anvilDark: 0x5d564d,
-  forgeBack: 0x241f19,
-  forgeMouth: 0x15120e,
-  forgeHot: 0xd8733a,
-  ember: 0xffb454,
-  white: 0xfff0c0,
-  shelf: 0x2e2820,
-  piece: 0xa9b665,
-  tool: 0x6b6257,
-  toolBad: 0xd16d5a,
-  skin: 0xc9b79f,
-  skinDark: 0xa8977f,
-  hair: 0x4a423a,
-  apronIdle: 0x6f665b,
-  apronWork: 0x8a6a3f,
-  apronBad: 0xa8503f,
-  shirt: 0x8f8578,
-  shirtDark: 0x6b6257,
-  leather: 0x5d564d,
-  haft: 0x7a6a52,
-  iron: 0x4a423a,
-  ironDark: 0x3f382f,
-  ironLit: 0x6b6257,
-  shadow: 0x191510,
-  bubble: 0x2a251e,
-  text: 0xe8e2d8,
-  faint: 0x9a9086,
-}
+/** Screen pixels per world unit, so the grid keeps its familiar spacing. */
+const PER_UNIT = 70
 
-/**
- * How far a pointer may travel and still count as standing still.
- *
- * A finger is not a mouse: a tap on a phone wanders further than a few pixels.
- */
+/** Half the height the camera sees at zoom 1, in world units. */
+const BASE_HALF = 3.2
+
+/** Which way the imported model has to turn to face its anvil. */
+const FACING = Math.PI * 0.5
+
 const CLICK_SLOP = 14
-
-/**
- * How long a bench must be held before it can be carried.
- *
- * Dragging is for looking around. Picking a bench up is the rarer thing, so it
- * is the one that asks for a deliberate press.
- */
 const PICK_UP_MS = 380
 
-const FREE = 0xa9b665
-const TAKEN = 0xd16d5a
-
-interface Bench {
-  root: any
-  paint(worker: Worker): void
-  tick(elapsed: number): void
-  moveTo(cell: Cell): void
-  destroy(): void
+const HUE = {
+  floor: 0x2a241d,
+  wall: 0x1e1a15,
+  iron: 0x3f3a33,
+  anvil: 0x6b6257,
+  stone: 0x38322a,
+  ember: 0xff8a3d,
+  piece: 0xa9b665,
+  free: 0xa9b665,
+  taken: 0xd16d5a,
 }
 
-function makeBench(PIXI: Pixi, flow: string): Bench {
-  const root = new PIXI.Container()
-  root.eventMode = "static"
-  root.cursor = "grab"
+interface Bench {
+  group: any
+  place(cell: Cell): void
+  paint(worker: Worker): void
+  tick(elapsed: number): void
+  dispose(): void
+}
 
-  const layer = () => {
-    const g = new PIXI.Graphics()
-    root.addChild(g)
-    return g
-  }
+/** The spine bones, outermost first, and the rotation they rest at. */
+function spineOf(figure: any): { bone: any; rest: number }[] {
+  return ["Spine", "Spine01", "Spine02"]
+    .map((name) => figure.getObjectByName(name))
+    .filter(Boolean)
+    .map((bone: any) => ({ bone, rest: bone.rotation.x }))
+}
 
-  // -- the room, which never changes
-  const shell = layer()
-  shell
-    .poly([0, -40, 132, 26, 0, 92, -132, 26])
-    .fill(INK.floor)
-    .stroke({ color: INK.floorEdge, width: 1 })
-  shell.poly([-132, 26, -132, -46, 0, -112, 0, -40]).fill(INK.wall)
-  shell.poly([132, 26, 132, -46, 0, -112, 0, -40]).fill(INK.floorEdge)
-  // a forge mouth set back into the wall, not a rectangle painted on it
-  shell.poly([-118, 10, -56, -22, -56, -64, -118, -34]).fill(INK.forgeBack)
-  shell.poly([-110, 4, -64, -20, -64, -54, -110, -32]).fill(INK.forgeMouth)
-  shell.poly([20, -56, 118, -6, 118, -28, 20, -78]).fill(INK.shelf)
+function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): Bench {
+  const group = new THREE.Group()
 
-  const forge = layer()
-  const tools = new PIXI.Container()
-  root.addChild(tools)
-  const pieces = new PIXI.Container()
-  root.addChild(pieces)
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 0.12, 2.6),
+    new THREE.MeshStandardMaterial({ color: HUE.floor, roughness: 0.95 }),
+  )
+  floor.position.y = -0.06
+  group.add(floor)
 
-  // The smith is drawn before the anvil so the anvil stands in front of them.
-  const figure = layer()
+  const backWall = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 2.0, 0.12),
+    new THREE.MeshStandardMaterial({ color: HUE.wall, roughness: 1 }),
+  )
+  backWall.position.set(0, 1.0, -1.24)
+  group.add(backWall)
 
-  const arm = new PIXI.Container()
-  const hammer = new PIXI.Graphics()
-  // Drawn out along +x from the shoulder, so rotating the container swings it.
-  hammer.poly([0, -5, 20, -5, 20, 5, 0, 5]).fill(INK.skinDark)
-  hammer.poly([16, -3, 44, -3, 44, 3, 16, 3]).fill(INK.haft)
-  hammer.poly([40, -11, 56, -11, 56, 11, 40, 11]).fill(INK.iron)
-  hammer.poly([40, -11, 56, -11, 56, -6, 40, -6]).fill(INK.ironLit)
-  arm.addChild(hammer)
-  root.addChild(arm)
+  const sideWall = backWall.clone()
+  sideWall.rotation.y = Math.PI / 2
+  sideWall.position.set(-1.24, 1.0, 0)
+  group.add(sideWall)
 
-  const anvil = layer()
-  anvil.ellipse(40, 64, 32, 9).fill(INK.shadow)
-  anvil.poly([16, 24, 60, 24, 54, 62, 22, 62]).fill(INK.stump)
-  anvil.poly([16, 24, 60, 24, 57, 32, 19, 32]).fill(INK.stumpTop)
-  anvil.rect(30, 10, 16, 15).fill(INK.iron)
-  anvil.poly([8, -4, 52, -4, 60, 2, 52, 11, 8, 11]).fill(INK.anvilDark)
-  anvil.poly([8, -4, 52, -4, 48, -8, 12, -8]).fill(INK.anvil)
-  anvil.poly([52, -6, 78, 0, 52, 8]).fill(INK.anvilDark)
+  // -- the forge: a stone box with a mouth that lights up
+  const forge = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 1.0, 0.6),
+    new THREE.MeshStandardMaterial({ color: HUE.stone, roughness: 1 }),
+  )
+  forge.position.set(-0.75, 0.5, -0.9)
+  group.add(forge)
 
-  const work = layer()
-  const sparks = layer()
+  const hood = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 0.7, 0.6),
+    new THREE.MeshStandardMaterial({ color: HUE.stone, roughness: 1 }),
+  )
+  hood.position.set(-0.75, 1.5, -0.9)
+  group.add(hood)
 
-  // Light. Radial gradients rather than a blur filter: a filter costs a pass
-  // per bench per frame, and this only changes when the flow does.
-  const glow = (colour: number) =>
-    new PIXI.FillGradient({
-      type: "radial",
-      center: { x: 0.5, y: 0.5 },
-      innerRadius: 0,
-      outerCenter: { x: 0.5, y: 0.5 },
-      outerRadius: 0.5,
-      // Fading to black is fading to nothing under additive blending.
-      colorStops: [
-        { offset: 0, color: colour },
-        { offset: 0.45, color: (colour & 0xfefefe) >> 1 },
-        { offset: 1, color: 0x000000 },
-      ],
-      textureSpace: "local",
-    })
+  const mouth = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.6, 0.45),
+    new THREE.MeshBasicMaterial({ color: HUE.ember }),
+  )
+  mouth.position.set(-0.75, 0.62, -0.59)
+  group.add(mouth)
 
-  const FIRE = glow(0x8a4a1c)
-  const POOL = glow(0x33180a)
-  const HOT = glow(0x7a4412)
-  const RIM = glow(0x53290c)
+  // Firelight is the whole point of the room; it has to reach the walls.
+  const fire = new THREE.PointLight(HUE.ember, 0, 6, 1.6)
+  fire.position.set(-0.7, 0.7, -0.4)
+  group.add(fire)
 
-  // A glow that spills past the walls reads as fog, not firelight.
-  const roomMask = new PIXI.Graphics()
-  roomMask.poly([0, -40, 132, 26, 0, 92, -132, 26]).fill(0xffffff)
-  roomMask.poly([-132, 26, -132, -46, 0, -112, 0, -40]).fill(0xffffff)
-  roomMask.poly([132, 26, 132, -46, 0, -112, 0, -40]).fill(0xffffff)
-  root.addChild(roomMask)
+  // -- the anvil on its stump
+  const stump = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.26, 0.3, 0.5, 10),
+    new THREE.MeshStandardMaterial({ color: HUE.iron, roughness: 1 }),
+  )
+  stump.position.set(0.45, 0.25, 0.35)
+  group.add(stump)
 
-  const light = layer()
-  light.blendMode = "add"
-  light.mask = roomMask
+  const anvil = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.18, 0.26),
+    new THREE.MeshStandardMaterial({ color: HUE.anvil, roughness: 0.55, metalness: 0.6 }),
+  )
+  anvil.position.set(0.45, 0.59, 0.35)
+  group.add(anvil)
 
-  const bubble = new PIXI.Container()
-  root.addChild(bubble)
+  const work = new THREE.Mesh(
+    new THREE.BoxGeometry(0.34, 0.06, 0.1),
+    new THREE.MeshBasicMaterial({ color: HUE.ember }),
+  )
+  work.position.set(0.4, 0.71, 0.35)
+  group.add(work)
 
-  const name = new PIXI.Text({
-    text: flow,
-    style: { fill: INK.text, fontSize: 14, fontFamily: "system-ui, sans-serif" },
-  })
-  name.anchor.set(0.5, 0)
-  name.position.set(0, 98)
-  root.addChild(name)
+  // -- the smith, the one thing that was downloaded.
+  // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
+  // every bench would swing whenever any of them did.
+  const figure = cloneSkinned(smith)
+  figure.position.set(-0.35, 0, 0.35)
+  // Turned to the anvil rather than the camera. Which way that is depends on
+  // the model's own facing, so it is a constant to look at rather than derive.
+  figure.rotation.y = FACING
+  group.add(figure)
+  const spine = spineOf(figure)
 
-  const doing = new PIXI.Text({
-    text: "",
-    style: { fill: INK.faint, fontSize: 11, fontFamily: "system-ui, sans-serif" },
-  })
-  doing.anchor.set(0.5, 0)
-  doing.position.set(0, 116)
-  root.addChild(doing)
+  // -- finished work on a shelf
+  const shelf = new THREE.Group()
+  shelf.position.set(0.75, 1.15, -1.1)
+  group.add(shelf)
 
-  let current: Worker | null = null
+  let working = false
+  let hot = false
 
   return {
-    root,
+    group,
+
+    place(cell: Cell) {
+      const at = cellOrigin(cell)
+      group.position.set(at.x / PER_UNIT, 0, at.y / PER_UNIT)
+    },
 
     paint(worker: Worker) {
-      current = worker
       const pose = figurePose(worker)
-      const hot = lampLit(worker)
-      const apron =
-        pose === "working" ? INK.apronWork : pose === "alarmed" ? INK.apronBad : INK.apronIdle
-      const x = pose === "working" ? 4 : 0 // leans in to strike
+      working = pose === "working"
+      hot = lampLit(worker)
 
-      forge.clear()
-      if (hot) {
-        forge.poly([-106, 1, -68, -19, -68, -49, -106, -31]).fill(INK.forgeHot)
-        forge.poly([-100, -3, -74, -17, -74, -41, -100, -29]).fill(INK.ember)
-      }
-      if (worker.status === "error") {
-        forge.circle(-87, -25, 24).stroke({ color: INK.apronBad, width: 2 })
-      }
-
-      // -- the smith, in profile facing the anvil
-      figure.clear()
-      figure.ellipse(-34 + x, 62, 24, 8).fill(INK.shadow)
-      // a stance: back leg planted, front leg forward
-      figure.poly([-54 + x, 26, -42 + x, 26, -40 + x, 62, -52 + x, 62]).fill(INK.iron)
-      figure.poly([-38 + x, 26, -26 + x, 26, -20 + x, 60, -32 + x, 60]).fill(INK.ironDark)
-      // torso, broad at the shoulders and turned toward the work
-      figure.poly([-58 + x, -14, -26 + x, -18, -22 + x, 30, -54 + x, 30]).fill(INK.shirt)
-      figure.poly([-58 + x, -14, -46 + x, -16, -44 + x, 30, -54 + x, 30]).fill(INK.shirtDark)
-      // the apron hangs over the front rather than being cut out of it
-      figure.poly([-52 + x, 0, -22 + x, -3, -20 + x, 36, -50 + x, 36]).fill(apron)
-      figure.poly([-44 + x, -14, -39 + x, -15, -35 + x, 2, -40 + x, 2]).fill(INK.leather)
-
-      if (hot) {
-        // the forward arm, holding the work down with tongs
-        figure.poly([-30 + x, -4, -8 + x, 2, -10 + x, 10, -32 + x, 6]).fill(INK.skin)
-        figure.poly([-12 + x, 1, 20, -9, 22, -5, -10 + x, 6]).fill(INK.forgeBack)
-        figure.poly([-12 + x, 6, 20, -4, 22, 0, -10 + x, 11]).fill(INK.forgeBack)
+      mouth.material.color.setHex(hot ? HUE.ember : HUE.wall)
+      work.visible = hot
+      fire.intensity = hot ? 9 : 0
+      if (pose === "alarmed") {
+        mouth.material.color.setHex(HUE.taken)
+        fire.color.setHex(HUE.taken)
+        fire.intensity = 2
       } else {
-        figure.poly([-32 + x, -2, -22 + x, 0, -20 + x, 20, -30 + x, 20]).fill(INK.skin)
+        fire.color.setHex(HUE.ember)
       }
 
-      // head in profile: brow, nose, beard, and a cap with a brim
-      figure.circle(-42 + x, -30, 12).fill(INK.skin)
-      figure.poly([-31 + x, -33, -25 + x, -29, -31 + x, -26]).fill(INK.skin)
-      figure.poly([-52 + x, -26, -30 + x, -24, -34 + x, -8, -48 + x, -12]).fill(INK.hair)
-      figure.poly([-55 + x, -33, -29 + x, -36, -32 + x, -46, -51 + x, -46]).fill(INK.hair)
-      figure.poly([-56 + x, -33, -26 + x, -36, -26 + x, -31, -56 + x, -29]).fill(INK.iron)
-
-      arm.position.set(-30 + x, -14)
-      arm.visible = pose !== "alarmed"
-
-      // -- the work itself, glowing on the anvil
-      work.clear()
-      if (hot) {
-        work.roundRect(14, -15, 32, 8, 3).fill(INK.ember)
-        work.roundRect(18, -14, 22, 6, 2).fill(INK.white)
+      while (shelf.children.length) {
+        const piece = shelf.children.pop() as any
+        piece?.geometry?.dispose?.()
+        piece?.material?.dispose?.()
       }
-
-      // -- what the fire does to the room
-      light.clear()
-      if (hot) {
-        light.circle(-87, -25, 104).fill(FIRE)
-        light.ellipse(-36, 30, 128, 58).fill(POOL)
-        light.circle(30, -11, 58).fill(HOT)
-        light.circle(-52 + x, -8, 44).fill(RIM)
-      }
-
-      // -- the wall of tools: the most recent calls, newest nearest the bench
-      tools.removeChildren().forEach((child: any) => child.destroy())
-      worker.recentToolCalls.slice(0, 4).forEach((call, index) => {
-        const mark = new PIXI.Graphics()
-        mark
-          .roundRect(60 + index * 20, -86 + index * 10, 13, 22, 3)
-          .fill(call.error ? INK.toolBad : INK.tool)
-        tools.addChild(mark)
-        if (index === 0) {
-          const label = new PIXI.Text({
-            text: call.name,
-            style: { fill: INK.faint, fontSize: 10, fontFamily: "system-ui, sans-serif" },
-          })
-          label.anchor.set(0, 1)
-          label.position.set(42, -92)
-          tools.addChild(label)
-        }
-      })
-
-      // -- the shelf: one piece per run that landed
-      pieces.removeChildren().forEach((child: any) => child.destroy())
       const stacked = Math.min(shelfCount(worker), 6)
       for (let i = 0; i < stacked; i += 1) {
-        const piece = new PIXI.Graphics()
-        piece.roundRect(28 + i * 15, -68 + i * 7, 10, 10, 2).fill(INK.piece)
-        pieces.addChild(piece)
+        const piece = new THREE.Mesh(
+          new THREE.BoxGeometry(0.1, 0.1, 0.1),
+          new THREE.MeshStandardMaterial({ color: HUE.piece, roughness: 0.8 }),
+        )
+        piece.position.x = i * 0.14
+        shelf.add(piece)
       }
-
-      // -- what it is thinking, if anything
-      bubble.removeChildren().forEach((child: any) => child.destroy())
-      bubble.visible = bubbleVisible(worker)
-      if (bubble.visible) {
-        const pad = new PIXI.Graphics()
-        pad.roundRect(-46, -136, 172, 32, 9).fill(INK.bubble)
-        pad.circle(-38, -98, 5).fill(INK.bubble)
-        pad.circle(-46, -86, 3).fill(INK.bubble)
-        bubble.addChild(pad)
-
-        const said = new PIXI.Text({
-          text: worker.lastThinking.slice(0, 36),
-          style: { fill: INK.faint, fontSize: 10, fontFamily: "system-ui, sans-serif" },
-        })
-        said.position.set(-38, -128)
-        bubble.addChild(said)
-      }
-
-      doing.text = worker.currentNode
-        ? `${worker.currentNode}${worker.turn > 0 ? ` · turn ${worker.turn}` : ""}`
-        : "idle"
     },
 
     tick(elapsed: number) {
-      if (!current) return
-      arm.rotation =
-        figurePose(current) === "working" ? hammerAngle(elapsed) : HAMMER.resting
+      // The swing comes from the waist. Both of the smith's hands are on the
+      // hammer, so turning one arm would tear the grip apart -- bending the
+      // spine brings the head down in an arc and keeps the pose whole.
+      const swing = working ? hammerAngle(elapsed) : HAMMER.raised
+      const through = (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised)
+      const bend = working ? -0.12 + through * 0.62 : 0
+      for (const joint of spine) {
+        joint.bone.rotation.x = joint.rest + bend / spine.length
+      }
 
-      sparks.clear()
-      if (sparking(current, elapsed)) {
-        for (let i = 0; i < 6; i += 1) {
-          const away = (i - 2.5) * 9
-          sparks.circle(30 + away, -12 - Math.abs(away) * 0.35, 2).fill(INK.ember)
-        }
+      if (hot) {
+        // firelight is never steady
+        fire.intensity = 8 + Math.sin(elapsed / 90) * 1.2 + Math.sin(elapsed / 37) * 0.6
       }
     },
 
-    moveTo(cell: Cell) {
-      const at = cellOrigin(cell)
-      root.position.set(at.x, at.y)
-    },
-
-    destroy() {
-      root.removeAllListeners?.()
-      root.destroy({ children: true })
+    dispose() {
+      group.traverse((node: any) => {
+        node.geometry?.dispose?.()
+        if (Array.isArray(node.material)) node.material.forEach((m: any) => m.dispose?.())
+        else node.material?.dispose?.()
+      })
     },
   }
 }
 
-async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
-  const app = new PIXI.Application()
-  await app.init({ background: 0x14120f, antialias: true, resizeTo: el })
-  const canvas: HTMLCanvasElement = app.canvas
-  canvas.classList.add("atelier-canvas")
-  el.append(canvas)
+async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js")
+  const { MeshoptDecoder } = await import("three/examples/jsm/libs/meshopt_decoder.module.js")
+  const { clone: cloneSkinned } = await import("three/examples/jsm/utils/SkeletonUtils.js")
 
-  const room = new PIXI.Container()
-  app.stage.addChild(room)
-  app.stage.eventMode = "static"
-  app.stage.hitArea = app.screen
+  const loader = new GLTFLoader()
+  loader.setMeshoptDecoder(MeshoptDecoder)
+  const gltf = await loader.loadAsync(smithUrl)
 
-  // A stray drag can put a bench somewhere useless, and the arrangement is
-  // remembered -- so there has to be a way back.
+  const smith = gltf.scene
+  // Meshy exports around a metre; scale it to the room and stand it on the floor.
+  const box = new THREE.Box3().setFromObject(smith)
+  const height = box.max.y - box.min.y
+  const tall = 1.45
+  smith.scale.setScalar(tall / (height || 1))
+  smith.position.y = -box.min.y * (tall / (height || 1))
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setSize(el.clientWidth, el.clientHeight)
+  renderer.setClearColor(0x14120f, 1)
+  el.append(renderer.domElement)
+  renderer.domElement.classList.add("atelier-canvas")
+
+  const scene = new THREE.Scene()
+  // Enough to read the room by; the forge does the rest.
+  scene.add(new THREE.AmbientLight(0xb9ab95, 1.5))
+  const key = new THREE.DirectionalLight(0xd8cbb2, 2.2)
+  key.position.set(4, 8, 6)
+  scene.add(key)
+  const fill = new THREE.DirectionalLight(0x8fa0bf, 0.8)
+  fill.position.set(-5, 3, -4)
+  scene.add(fill)
+
+  const room = new THREE.Group()
+  scene.add(room)
+
+  // A true isometric view: equal foreshortening on both floor axes.
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -100, 100)
+  camera.position.set(10, 10, 10)
+  camera.lookAt(0, 0, 0)
+
+  const ghost = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 0.02, 2.6),
+    new THREE.MeshBasicMaterial({ color: HUE.free, transparent: true, opacity: 0.35 }),
+  )
+  ghost.visible = false
+  room.add(ghost)
+
+  // Names are HTML over the canvas rather than geometry in it: text in a 3D
+  // scene either faces the wrong way or costs a texture per label.
+  const labels = document.createElement("div")
+  labels.className = "atelier-labels"
+  el.append(labels)
+  const tags = new Map<string, HTMLElement>()
+
+  const tagFor = (flow: string) => {
+    let tag = tags.get(flow)
+    if (!tag) {
+      tag = document.createElement("div")
+      tag.className = "atelier-tag"
+      tag.innerHTML = `<b></b><span></span>`
+      labels.append(tag)
+      tags.set(flow, tag)
+    }
+    return tag
+  }
+
+  const placeLabels = () => {
+    for (const [flow, bench] of benches) {
+      const tag = tags.get(flow)
+      if (!tag) continue
+      // The room's near corner, so the name sits under the bench rather than
+      // across the anvil.
+      const at = bench.group.position.clone()
+      at.x += 1.3
+      at.z += 1.3
+      at.project(camera)
+      tag.style.left = `${((at.x + 1) / 2) * canvasWidth()}px`
+      tag.style.top = `${((-at.y + 1) / 2) * canvasHeight() + 10}px`
+    }
+  }
+
   const tidy = document.createElement("button")
   tidy.type = "button"
   tidy.className = "atelier-tidy"
@@ -381,27 +321,113 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
 
   const benches = new Map<string, Bench>()
   let spots: Record<string, Cell> = {}
-
-  // Shows which square a carried bench would land on, and whether it may.
-  const ghost = new PIXI.Graphics()
-  ghost.visible = false
-  room.addChild(ghost)
   let arrangedFor = ""
-  /** The reader has moved or zoomed something; stop arranging it for them. */
   let handled = false
-
   let elapsed = 0
-  if (!prefersReducedMotion()) {
-    app.ticker.add((ticker: any) => {
-      elapsed += ticker.deltaMS
-      for (const bench of benches.values()) bench.tick(elapsed)
-    })
+
+  // -- the view ---------------------------------------------------------------
+  let zoom = 1
+  const centre = { x: 0, y: 0 }
+
+  const frame = () => {
+    const w = el.clientWidth || 1
+    const h = el.clientHeight || 1
+    const half = BASE_HALF / zoom
+    camera.left = -half * (w / h)
+    camera.right = half * (w / h)
+    camera.top = half
+    camera.bottom = -half
+    camera.position.set(10 + centre.x, 10, 10 + centre.y)
+    camera.lookAt(centre.x, 0, centre.y)
+    camera.updateProjectionMatrix()
+    renderer.setSize(w, h, false)
   }
 
-  // -- carrying one bench ----------------------------------------------------
-  let dragging: { flow: string; dx: number; dy: number } | null = null
-  /** A press waiting to become a carry, or to turn out to be a tap. */
-  let press: { flow: string; timer: number; x: number; y: number } | null = null
+  const canvasWidth = () => el.clientWidth || 1
+  const canvasHeight = () => el.clientHeight || 1
+
+  /** Zoom until the room's own corners sit inside the frame. */
+  const fitToContent = () => {
+    const box3 = new THREE.Box3().setFromObject(room)
+    if (box3.isEmpty()) return
+
+    zoom = 1
+    frame()
+    camera.updateMatrixWorld()
+
+    let wide = 0
+    let high = 0
+    for (const x of [box3.min.x, box3.max.x]) {
+      for (const y of [box3.min.y, box3.max.y]) {
+        for (const z of [box3.min.z, box3.max.z]) {
+          const at = new THREE.Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse)
+          wide = Math.max(wide, Math.abs(at.x))
+          high = Math.max(high, Math.abs(at.y))
+        }
+      }
+    }
+
+    const aspect = canvasWidth() / canvasHeight()
+    // 0.88 leaves a margin, and room for the name under each bench.
+    zoom = clampZoom(Math.min((BASE_HALF * aspect) / wide, BASE_HALF / high) * 0.88)
+  }
+
+  const draw = () => {
+    frame()
+    renderer.render(scene, camera)
+    placeLabels()
+  }
+
+  let running = true
+  const loop = () => {
+    if (!running) return
+    elapsed += 16
+    for (const bench of benches.values()) bench.tick(elapsed)
+    draw()
+    requestAnimationFrame(loop)
+  }
+  requestAnimationFrame(loop)
+
+  // -- pointers ---------------------------------------------------------------
+  const canvas = renderer.domElement
+  const raycaster = new THREE.Raycaster()
+  const pointer = new THREE.Vector2()
+  const pointers = new Map<number, { x: number; y: number }>()
+  let panning: { x: number; y: number } | null = null
+  let pinch: { gap: number; zoom: number } | null = null
+  let pressedAt: { x: number; y: number } | null = null
+  let press: { flow: string; timer: number } | null = null
+  let dragging: string | null = null
+
+  const local = (event: PointerEvent | WheelEvent) => {
+    const box = canvas.getBoundingClientRect()
+    return { x: event.clientX - box.left, y: event.clientY - box.top }
+  }
+
+  /** Which bench, if any, is under the pointer. */
+  const pick = (at: { x: number; y: number }): string | null => {
+    pointer.set((at.x / canvas.clientWidth) * 2 - 1, -(at.y / canvas.clientHeight) * 2 + 1)
+    raycaster.setFromCamera(pointer, camera)
+    const hits = raycaster.intersectObjects(room.children, true)
+    for (const hit of hits) {
+      let node: any = hit.object
+      while (node) {
+        for (const [flow, bench] of benches) if (bench.group === node) return flow
+        node = node.parent
+      }
+    }
+    return null
+  }
+
+  /** Where on the floor the pointer is, in grid pixels. */
+  const floorAt = (at: { x: number; y: number }) => {
+    pointer.set((at.x / canvas.clientWidth) * 2 - 1, -(at.y / canvas.clientHeight) * 2 + 1)
+    raycaster.setFromCamera(pointer, camera)
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+    const point = new THREE.Vector3()
+    raycaster.ray.intersectPlane(ground, point)
+    return { x: point.x * PER_UNIT, y: point.z * PER_UNIT }
+  }
 
   const dropPress = () => {
     if (!press) return
@@ -409,134 +435,99 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     press = null
   }
 
-  const showGhost = (cell: Cell, blocked: boolean) => {
-    const at = cellOrigin(cell)
-    ghost.clear()
-    ghost
-      .roundRect(
-        at.x - CELL.width / 2 + 10,
-        at.y - CELL.height / 2 + 10,
-        CELL.width - 20,
-        CELL.height - 20,
-        12,
-      )
-      .stroke({ color: blocked ? TAKEN : FREE, width: 3 })
-    ghost.visible = true
-  }
-
-  app.stage.on("pointermove", (event: any) => {
-    if (!dragging) return
-    const bench = benches.get(dragging.flow)
-    if (!bench) return
-    const point = event.getLocalPosition(room)
-    bench.root.position.set(point.x - dragging.dx, point.y - dragging.dy)
-
-    const cell = cellAt(bench.root.x, bench.root.y)
-    showGhost(cell, occupied(spots, cell, dragging.flow))
-  })
-
-  const drop = () => {
-    if (!dragging) return
-    const { flow } = dragging
-    const bench = benches.get(flow)
-    dragging = null
-    ghost.visible = false
-    if (!bench) return
-
-    bench.root.cursor = "grab"
-    bench.root.alpha = 1
-
-    // Benches stand on squares, one to a square. A square that is taken
-    // refuses the bench rather than stacking two smiths in one room.
-    const cell = cellAt(bench.root.x, bench.root.y)
-    if (occupied(spots, cell, flow)) {
-      bench.moveTo(spots[flow])
-      return
-    }
-    spots[flow] = cell
-    saveSpot(flow, cell)
-    handled = true
-    bench.moveTo(cell)
-  }
-  app.stage.on("pointerup", drop)
-  app.stage.on("pointerupoutside", drop)
-
-  // -- moving and scaling the whole room -------------------------------------
-  const pointers = new Map<number, { x: number; y: number }>()
-  let panning: { x: number; y: number } | null = null
-  let pressedAt: { x: number; y: number } | null = null
-  let pinch: { gap: number; scale: number; x: number; y: number } | null = null
-
-  const local = (event: PointerEvent | WheelEvent) => {
-    const box = canvas.getBoundingClientRect()
-    return { x: event.clientX - box.left, y: event.clientY - box.top }
-  }
-
-  /** Scale about a point, so whatever is under the fingers stays under them. */
-  const zoomAbout = (scale: number, x: number, y: number) => {
-    const next = clampZoom(scale)
-    const before = room.scale.x
-    const worldX = (x - room.x) / before
-    const worldY = (y - room.y) / before
-    room.scale.set(next)
-    room.position.set(x - worldX * next, y - worldY * next)
-    handled = true
-  }
-
-  const spread = () => {
-    const [a, b] = [...pointers.values()]
-    return { gap: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-  }
-
   canvas.addEventListener("pointerdown", (event) => {
-    pointers.set(event.pointerId, local(event))
+    const at = local(event)
+    pointers.set(event.pointerId, at)
+
     if (pointers.size === 2) {
-      // Two fingers are for the room, never for a bench.
+      dropPress()
       dragging = null
       panning = null
-      const { gap, x, y } = spread()
-      pinch = { gap, scale: room.scale.x, x, y }
-    } else if (pointers.size === 1 && !dragging) {
-      const at = local(event)
-      panning = { x: at.x - room.x, y: at.y - room.y }
-      pressedAt = at
+      const [a, b] = [...pointers.values()]
+      pinch = { gap: Math.hypot(a.x - b.x, a.y - b.y), zoom }
+      return
     }
+
+    const flow = pick(at)
+    pressedAt = at
+    if (flow) {
+      press = {
+        flow,
+        timer: window.setTimeout(() => {
+          press = null
+          panning = null
+          dragging = flow
+          handled = true
+        }, PICK_UP_MS),
+      }
+    }
+    panning = { x: at.x, y: at.y }
   })
 
   canvas.addEventListener("pointermove", (event) => {
     if (!pointers.has(event.pointerId)) return
-    pointers.set(event.pointerId, local(event))
+    const at = local(event)
+    pointers.set(event.pointerId, at)
 
     if (pinch && pointers.size >= 2) {
-      dropPress()
-      const { gap, x, y } = spread()
-      if (pinch.gap > 0) zoomAbout(pinch.scale * (gap / pinch.gap), x, y)
+      const [a, b] = [...pointers.values()]
+      const gap = Math.hypot(a.x - b.x, a.y - b.y)
+      if (pinch.gap > 0) zoom = clampZoom(pinch.zoom * (gap / pinch.gap))
+      handled = true
       return
     }
 
-    // Moving before the bench has been held long enough means the reader is
-    // looking around, not rearranging.
+    if (dragging) {
+      const bench = benches.get(dragging)
+      const on = floorAt(at)
+      if (bench) {
+        bench.group.position.set(on.x / PER_UNIT, 0, on.y / PER_UNIT)
+        const cell = cellAt(on.x, on.y)
+        const blocked = occupied(spots, cell, dragging)
+        const origin = cellOrigin(cell)
+        ghost.position.set(origin.x / PER_UNIT, 0.02, origin.y / PER_UNIT)
+        ghost.material.color.setHex(blocked ? HUE.taken : HUE.free)
+        ghost.visible = true
+      }
+      return
+    }
+
     if (press && pressedAt) {
-      const at = local(event)
       if (Math.abs(at.x - pressedAt.x) > CLICK_SLOP || Math.abs(at.y - pressedAt.y) > CLICK_SLOP) {
         dropPress()
       }
     }
-    if (panning && !dragging) {
-      const at = local(event)
-      room.position.set(at.x - panning.x, at.y - panning.y)
+    if (panning && pressedAt) {
+      const scale = ((BASE_HALF / zoom) * 2) / (canvas.clientHeight || 1)
+      centre.x -= (at.x - panning.x) * scale * 0.7
+      centre.y -= (at.y - panning.y) * scale * 0.7
+      panning = at
       handled = true
     }
   })
 
   const release = (event: PointerEvent, lifted: boolean) => {
-    // Letting go before the bench came up is a tap, and a tap opens it. A
-    // cancelled gesture or a pointer leaving the canvas is neither.
-    if (press) {
+    if (dragging) {
+      const flow = dragging
+      const bench = benches.get(flow)
+      dragging = null
+      ghost.visible = false
+      if (bench) {
+        const cell = cellAt(bench.group.position.x * PER_UNIT, bench.group.position.z * PER_UNIT)
+        if (occupied(spots, cell, flow)) {
+          bench.place(spots[flow])
+        } else {
+          spots[flow] = cell
+          saveSpot(flow, cell)
+          bench.place(cell)
+        }
+      }
+    } else if (press) {
       const flow = press.flow
       dropPress()
       if (lifted) callbacks.onSelectWorker(flow)
     }
+
     pointers.delete(event.pointerId)
     if (pointers.size < 2) pinch = null
     if (pointers.size === 0) {
@@ -552,70 +543,62 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     "wheel",
     (event) => {
       event.preventDefault()
-      const at = local(event)
-      zoomAbout(room.scale.x * (event.deltaY < 0 ? 1.12 : 1 / 1.12), at.x, at.y)
+      zoom = clampZoom(zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12))
+      handled = true
     },
     { passive: false },
   )
 
-  // -- drawing ---------------------------------------------------------------
+  // -- drawing ----------------------------------------------------------------
   const render = (stage: StageState) => {
     const flows = Object.keys(stage.workers)
-    const arranged = place(flows, savedSpots(), columnsFor(app.screen.width))
+    const arranged = place(flows, savedSpots(), columnsFor(el.clientWidth))
 
     for (const [flow, bench] of benches) {
       if (!(flow in stage.workers)) {
-        bench.destroy()
+        room.remove(bench.group)
+        bench.dispose()
         benches.delete(flow)
       }
     }
 
-    // Centre when the set of benches changes -- but never once the reader has
-    // arranged or zoomed it, or every event would tug their view around.
-    const signature = `${flows.join("|")}@${app.screen.width}x${app.screen.height}`
+    const signature = `${flows.join("|")}@${el.clientWidth}x${el.clientHeight}`
     if (signature !== arrangedFor && !handled && Object.keys(savedSpots()).length === 0) {
       arrangedFor = signature
       const box = bounds(Object.values(arranged))
-      const scale = fit(box, app.screen)
-      room.scale.set(scale)
-      room.position.set(
-        (app.screen.width - box.width * scale) / 2 - box.x * scale,
-        (app.screen.height - box.height * scale) / 2 - box.y * scale,
-      )
+      centre.x = (box.x + box.width / 2) / PER_UNIT
+      centre.y = (box.y + box.height / 2) / PER_UNIT
+
+      // Estimating the on-screen extent of an isometric scene is a good way to
+      // be wrong twice; ask the camera where the corners land instead.
+      fitToContent()
     }
 
     for (const flow of flows) {
       let bench = benches.get(flow)
       if (!bench) {
-        bench = makeBench(PIXI, flow)
-        bench.root.on("pointerdown", (event: any) => {
-          if (pointers.size >= 2) return
-          const point = event.getLocalPosition(room)
-          const held = bench!
-          dropPress()
-          press = {
-            flow,
-            x: point.x,
-            y: point.y,
-            timer: window.setTimeout(() => {
-              press = null
-              // A carry takes over from looking around.
-              panning = null
-              dragging = { flow, dx: point.x - held.root.x, dy: point.y - held.root.y }
-              held.root.cursor = "grabbing"
-              held.root.alpha = 0.85
-              room.setChildIndex(held.root, room.children.length - 1)
-              showGhost(cellAt(held.root.x, held.root.y), false)
-            }, PICK_UP_MS),
-          }
-        })
+        bench = makeBench(THREE, smith, cloneSkinned)
         benches.set(flow, bench)
-        room.addChild(bench.root)
+        room.add(bench.group)
       }
       spots[flow] = arranged[flow]
-      if (dragging?.flow !== flow) bench.moveTo(arranged[flow])
+      if (dragging !== flow) bench.place(arranged[flow])
       bench.paint(stage.workers[flow])
-      bench.tick(elapsed)
+
+      const worker = stage.workers[flow]
+      const tag = tagFor(flow)
+      tag.dataset.status = worker.status
+      tag.querySelector("b")!.textContent = flow
+      tag.querySelector("span")!.textContent = worker.currentNode
+        ? `${worker.currentNode}${worker.turn > 0 ? ` · turn ${worker.turn}` : ""}`
+        : "idle"
+    }
+
+    for (const [flow, tag] of tags) {
+      if (!(flow in stage.workers)) {
+        tag.remove()
+        tags.delete(flow)
+      }
     }
 
     tidy.hidden = !handled && Object.keys(savedSpots()).length === 0
@@ -636,9 +619,10 @@ async function build(PIXI: Pixi, el: HTMLElement, callbacks: SkinCallbacks) {
     },
 
     destroy() {
-      for (const bench of benches.values()) bench.destroy()
+      running = false
+      for (const bench of benches.values()) bench.dispose()
       benches.clear()
-      app.destroy(true, { children: true })
+      renderer.dispose()
     },
   }
 }
@@ -652,21 +636,18 @@ export const atelier: Skin = {
     let latest: StageState | null = null
     let renderer: { update(stage: StageState): void; destroy(): void } | null = null
 
-    // Something to look at while the renderer arrives. `mount` stays
-    // synchronous so no other skin has to learn about loading.
     const note = document.createElement("p")
     note.className = "atelier-note"
-    note.textContent = "opening the workshop…"
+    note.textContent = "lighting the forge…"
     el.append(note)
 
-    // The catch covers the arrival of the renderer, and nothing after it: a
-    // bug while drawing is not "the workshop could not be loaded", and
-    // labelling it that way hides it.
-    void import("pixi.js")
-      .then((PIXI) => (disposed ? null : build(PIXI, el, callbacks)))
+    // The catch covers the arrival of three.js and the model, and nothing
+    // after it: a bug while drawing is not a failed download.
+    void import("three")
+      .then((THREE) => (disposed ? null : build(THREE, el, callbacks)))
       .catch(() => {
         if (!disposed) {
-          note.textContent = "The workshop could not be drawn. The ledger view still works."
+          note.textContent = "The smithy could not be loaded. The other views still work."
         }
         return null
       })
@@ -678,7 +659,6 @@ export const atelier: Skin = {
         }
         renderer = built
         note.remove()
-        // Hand over the board as it stands; the next event may be minutes off.
         if (latest) renderer.update(latest)
       })
 

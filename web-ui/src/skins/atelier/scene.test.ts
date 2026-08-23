@@ -5,7 +5,6 @@ import {
   HAMMER,
   ZOOM,
   bounds,
-  bubbleVisible,
   cellAt,
   cellOrigin,
   clampZoom,
@@ -17,7 +16,6 @@ import {
   occupied,
   place,
   shelfCount,
-  sparking,
 } from "./scene"
 import { NOTHING } from "../../review/rollup"
 import type { Worker } from "../../state/stage"
@@ -137,11 +135,6 @@ test("the lamp is lit while the bench is in use", () => {
   expect(lampLit(worker({ status: "waiting" }))).toBe(false)
 })
 
-test("the bubble appears only when there is a thought to show", () => {
-  expect(bubbleVisible(worker({ lastThinking: "" }))).toBe(false)
-  expect(bubbleVisible(worker({ lastThinking: "hm" }))).toBe(true)
-})
-
 test("a flow with no private copy shelves nothing", () => {
   // It produces no piece to put anywhere. Counting its runs as finished work
   // fills a shelf with things that do not exist.
@@ -177,14 +170,5 @@ test("the swing repeats and never leaves its arc", () => {
     expect(hammerAngle(t)).toBeLessThanOrEqual(HAMMER.struck)
   }
   expect(hammerAngle(120)).toBeCloseTo(hammerAngle(120 + 900))
-})
-
-test("sparks fly on the strike, and only while working", () => {
-  const busy = worker({ status: "running" })
-  const idle = worker({ status: "waiting" })
-
-  expect(sparking(busy, 880)).toBe(true) // just before the blow lands
-  expect(sparking(busy, 300)).toBe(false) // mid-lift
-  expect(sparking(idle, 880)).toBe(false) // nobody at the anvil
 })
 

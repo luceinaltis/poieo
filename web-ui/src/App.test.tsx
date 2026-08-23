@@ -141,7 +141,6 @@ test("the picker lists the registered skins and the board carries the workers", 
   expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual([
     "atelier",
     "ledger",
-    "smithy",
   ])
   expect(picker.value).toBe("ledger")
   expect(container.querySelectorAll("[data-flow]")).toHaveLength(2)

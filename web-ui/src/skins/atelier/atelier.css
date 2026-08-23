@@ -7,7 +7,6 @@
 
 .atelier-canvas {
   display: block;
-  /* A finger dragging a bench must move the bench, not scroll the page. */
   touch-action: none;
 }
 
@@ -24,4 +23,37 @@
   min-height: 30px;
   padding: 4px 10px;
   position: absolute;
+}
+
+.atelier-labels {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.atelier-tag {
+  display: grid;
+  justify-items: center;
+  position: absolute;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+}
+
+.atelier-tag b {
+  color: #e8e2d8;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.atelier-tag span {
+  color: #9a9086;
+  font-size: 0.75em;
+}
+
+.atelier-tag[data-status="running"] b {
+  color: #ffb454;
+}
+
+.atelier-tag[data-status="error"] b {
+  color: #d16d5a;
 }

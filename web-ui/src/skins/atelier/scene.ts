@@ -48,12 +48,6 @@ export function hammerAngle(elapsed: number, period = 900): number {
     : raised + (struck - raised) * ((t - 0.7) / 0.3)
 }
 
-/** Sparks fly on the strike, and only while there is work under the hammer. */
-export function sparking(worker: Worker, elapsed: number, period = 900): boolean {
-  if (figurePose(worker) !== "working") return false
-  const t = ((elapsed % period) + period) % period / period
-  return t > 0.93
-}
 
 export function figurePose(worker: Worker): Pose {
   if (worker.status === "error") return "alarmed"
@@ -64,9 +58,6 @@ export function lampLit(worker: Worker): boolean {
   return worker.status === "running"
 }
 
-export function bubbleVisible(worker: Worker): boolean {
-  return worker.lastThinking.trim().length > 0
-}
 
 /**
  * Finished pieces on the shelf.
@@ -79,10 +70,3 @@ export function shelfCount(worker: Worker): number {
   return worker.tracked ? worker.recent.succeeded : 0
 }
 
-export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  )
-}
