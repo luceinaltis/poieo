@@ -160,7 +160,20 @@ export function makeBench(
   bench.rotation.y = ANVIL_TURN
   group.add(bench)
 
+  // The stump is right -- smiths mount anvils on wood to eat the shock -- but
+  // a quarter ton of iron does not stand on floorboards. A stone pad goes
+  // under it, and because it lives in the bench group it follows the anvil
+  // wherever the strike probe decides to stand it.
+  const pad = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.52, 0.56, 0.07, 9),
+    new THREE.MeshStandardMaterial({ color: 0x3c3934, roughness: 1 }),
+  )
+  pad.position.y = 0.035
+  pad.rotation.y = 0.4
+  bench.add(pad)
+
   const anvil = grounded(THREE, props.anvil, 0.78)
+  anvil.position.y += 0.07
   bench.add(anvil)
   const anvilTop = new THREE.Box3().setFromObject(anvil).max.y
 
