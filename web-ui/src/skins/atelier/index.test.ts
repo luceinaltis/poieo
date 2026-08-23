@@ -28,12 +28,17 @@ const pixi = vi.hoisted(() => {
   class FakeContainer {
     children: any[] = []
     position = { set: () => {} }
+    scale = { set: () => {}, x: 1, y: 1 }
     anchor = { set: () => {} }
+    blendMode = ""
+    mask: any = null
+    alpha = 1
+    rotation = 0
+    x = 0
+    y = 0
     eventMode = ""
     cursor = ""
     visible = true
-    x = 0
-    y = 0
     text = ""
     destroyed = false
     listeners: Record<string, Function[]> = {}
@@ -102,6 +107,8 @@ const pixi = vi.hoisted(() => {
     }
   }
 
+  class FakeGradient {}
+
   return {
     apps,
     module: {
@@ -109,6 +116,7 @@ const pixi = vi.hoisted(() => {
       Container: FakeContainer,
       Graphics: FakeGraphics,
       Text: FakeContainer,
+      FillGradient: FakeGradient,
     },
   }
 })
@@ -159,7 +167,13 @@ test("a stage handed over while loading is applied once the room is ready", asyn
   // flow can be minutes away.
   expect(pixi.apps).toHaveLength(1)
   expect(el.querySelector("canvas")).not.toBeNull()
-  expect(el.textContent).not.toMatch(/opening/i)
+  // The note must be gone, not merely reworded: a renderer that threw would
+  // land in the catch and rewrite it, and the canvas is appended before that.
+  expect(el.querySelector(".atelier-note")).toBeNull()
+  // And a bench was actually built. Without this, a renderer that threw
+  // halfway still looks like a success from the outside.
+  const room = pixi.apps[0].stage.children[0]
+  expect(room.children.length).toBeGreaterThan(1)
   handle.destroy()
 })
 

@@ -158,6 +158,40 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
   const work = layer()
   const sparks = layer()
 
+  // Light. Radial gradients rather than a blur filter: a filter costs a pass
+  // per bench per frame, and this only changes when the flow does.
+  const glow = (colour: number) =>
+    new PIXI.FillGradient({
+      type: "radial",
+      center: { x: 0.5, y: 0.5 },
+      innerRadius: 0,
+      outerCenter: { x: 0.5, y: 0.5 },
+      outerRadius: 0.5,
+      // Fading to black is fading to nothing under additive blending.
+      colorStops: [
+        { offset: 0, color: colour },
+        { offset: 0.45, color: (colour & 0xfefefe) >> 1 },
+        { offset: 1, color: 0x000000 },
+      ],
+      textureSpace: "local",
+    })
+
+  const FIRE = glow(0x8a4a1c)
+  const POOL = glow(0x33180a)
+  const HOT = glow(0x7a4412)
+  const RIM = glow(0x53290c)
+
+  // A glow that spills past the walls reads as fog, not firelight.
+  const roomMask = new PIXI.Graphics()
+  roomMask.poly([0, -40, 132, 26, 0, 92, -132, 26]).fill(0xffffff)
+  roomMask.poly([-132, 26, -132, -46, 0, -112, 0, -40]).fill(0xffffff)
+  roomMask.poly([132, 26, 132, -46, 0, -112, 0, -40]).fill(0xffffff)
+  root.addChild(roomMask)
+
+  const light = layer()
+  light.blendMode = "add"
+  light.mask = roomMask
+
   const bubble = new PIXI.Container()
   root.addChild(bubble)
 
@@ -236,6 +270,15 @@ function makeBench(PIXI: Pixi, flow: string): Bench {
       if (hot) {
         work.roundRect(14, -15, 32, 8, 3).fill(INK.ember)
         work.roundRect(18, -14, 22, 6, 2).fill(INK.white)
+      }
+
+      // -- what the fire does to the room
+      light.clear()
+      if (hot) {
+        light.circle(-87, -25, 104).fill(FIRE)
+        light.ellipse(-36, 30, 128, 58).fill(POOL)
+        light.circle(30, -11, 58).fill(HOT)
+        light.circle(-52 + x, -8, 44).fill(RIM)
       }
 
       // -- the wall of tools: the most recent calls, newest nearest the bench
@@ -616,10 +659,19 @@ export const atelier: Skin = {
     note.textContent = "opening the workshop…"
     el.append(note)
 
+    // The catch covers the arrival of the renderer, and nothing after it: a
+    // bug while drawing is not "the workshop could not be loaded", and
+    // labelling it that way hides it.
     void import("pixi.js")
-      .then(async (PIXI) => {
-        if (disposed) return
-        const built = await build(PIXI, el, callbacks)
+      .then((PIXI) => (disposed ? null : build(PIXI, el, callbacks)))
+      .catch(() => {
+        if (!disposed) {
+          note.textContent = "The workshop could not be drawn. The ledger view still works."
+        }
+        return null
+      })
+      .then((built) => {
+        if (!built) return
         if (disposed) {
           built.destroy()
           return
@@ -628,10 +680,6 @@ export const atelier: Skin = {
         note.remove()
         // Hand over the board as it stands; the next event may be minutes off.
         if (latest) renderer.update(latest)
-      })
-      .catch(() => {
-        if (disposed) return
-        note.textContent = "The workshop could not be drawn. The ledger view still works."
       })
 
     return {
