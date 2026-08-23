@@ -27,6 +27,10 @@ import type { Cell } from "../layout"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import "./smithy.css"
+// Imported rather than served from a fixed path, so Vite hashes it into
+// /assets with everything else: one cache policy, and a changed model
+// reaches the browser instead of sitting stale behind its own name.
+import smithUrl from "./smith.glb?url"
 
 type Three = typeof import("three")
 
@@ -202,7 +206,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
 
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
-  const gltf = await loader.loadAsync("/models/smith.glb")
+  const gltf = await loader.loadAsync(smithUrl)
 
   const smith = gltf.scene
   // Meshy exports around a metre; scale it to the room and stand it on the floor.
