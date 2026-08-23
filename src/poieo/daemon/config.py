@@ -183,11 +183,12 @@ def config_for_tasks_folder(folder: Path) -> DaemonConfig:
     """The config `poieo daemon <folder>` stands for: run the cards in it.
 
     Each card names its own binding, because there is no config file to hold
-    a default. The store lands beside the folder, so the cards, their
-    journals and their run logs travel together.
+    a default. The store lands inside the folder, beside the journals, so
+    everything about the cards travels with them -- and `poieo run` on one
+    card follows the same rule.
     """
     folder = folder.resolve()
-    config = DaemonConfig(store=str(folder.parent / ".poieo"), tasks=str(folder))
+    config = DaemonConfig(store=str(folder / ".poieo"), tasks=str(folder))
     config.source_path = folder / "poieo.yaml"  # anchors relative paths
     _load_tasks(config)
     return config

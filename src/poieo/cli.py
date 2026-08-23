@@ -42,6 +42,7 @@ from .task import (
     load_task,
     load_tasks,
     read_journal,
+    record_run,
 )
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
@@ -367,7 +368,10 @@ def run(
     set_: list[str] = typer.Option(
         [], "--set", "-s", help="Payload override, key=value. Repeatable."
     ),
-    store: Path = typer.Option(Path(".poieo"), "--store", help="Run-log directory."),
+    store: Optional[Path] = typer.Option(
+        None, "--store",
+        help="Run-log directory [default: beside the card, or ./.poieo].",
+    ),
     no_log: bool = typer.Option(False, "--no-log", help="Do not write a run log."),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
     isolate: Optional[str] = typer.Option(
@@ -378,13 +382,12 @@ def run(
     """Execute a graph, or a task, once."""
     _setup_logging(verbose)
     try:
+        task = load_task(graph_path) if is_task_file(graph_path) else None
         graph = _load_spec(graph_path)
         # The flag wins; otherwise a card answers for itself. A new user's
         # first command must not demand a flag their card already carries.
-        if binding is None and is_task_file(graph_path):
-            task = load_task(graph_path)
-            if task.binding:
-                binding = task.resolve(task.binding)
+        if binding is None and task is not None and task.binding:
+            binding = task.resolve(task.binding)
         if binding is None:
             _fail(
                 "no binding: pass one with -b, or add `binding: <file>` "
@@ -395,6 +398,10 @@ def run(
         _fail(str(exc))
 
     payload = {**_task_payload(graph_path), **_parse_input(input_json, set_)}
+    if store is None:
+        # A task's history lives beside the task, wherever the command was
+        # typed from -- the same rule `poieo daemon <folder>` follows.
+        store = task.dir / ".poieo" if task is not None else Path(".poieo")
     run_store = NullStore() if no_log else RunStore(store)
 
     hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
@@ -418,6 +425,10 @@ def run(
         result = asyncio.run(_go())
     except PoieoError as exc:
         _fail(str(exc))
+    if task is not None:
+        # The journal contract: every run of a task leaves a line, or the
+        # next run redoes this one's work and notes are never consumed.
+        record_run(task, result)
 
     if as_json:
         typer.echo(json.dumps(result.__dict__, indent=2, ensure_ascii=False, default=str))
@@ -687,7 +698,10 @@ def eject(
 
 @runs_app.command("list")
 def runs_list(
-    store: Path = typer.Option(Path(".poieo"), "--store", help="Run-log directory."),
+    store: Optional[Path] = typer.Option(
+        None, "--store",
+        help="Run-log directory [default: beside the card, or ./.poieo].",
+    ),
     limit: int = typer.Option(20, "--limit", "-n"),
     flow: Optional[str] = typer.Option(None, "--flow"),
 ) -> None:
@@ -710,7 +724,10 @@ def runs_list(
 @runs_app.command("show")
 def runs_show(
     run_id: str = typer.Argument(..., help="Run id from `poieo runs list`."),
-    store: Path = typer.Option(Path(".poieo"), "--store", help="Run-log directory."),
+    store: Optional[Path] = typer.Option(
+        None, "--store",
+        help="Run-log directory [default: beside the card, or ./.poieo].",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Print raw events."),
 ) -> None:
     """Replay one run's event log."""
