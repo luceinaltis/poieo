@@ -122,6 +122,7 @@ def make_executor(
     toolsets: "Sequence[str]",
     isolation: Isolation | None = None,
     boxes: Any = None,
+    postbox: Any = None,
 ) -> Executor:
     """The one place that decides where an agent node's tools run.
 
@@ -130,7 +131,7 @@ def make_executor(
     machine that never isolates never pays to load it.
     """
     if isolation is None:
-        return LocalExecutor(workdir, toolsets)
+        return LocalExecutor(workdir, toolsets, postbox)
     from .docker import DockerExecutor
 
     # With a keeper the box is the task's and survives the run; without one
@@ -144,6 +145,7 @@ def make_executor(
         network=isolation.network,
         user=isolation.user,
         box=box,
+        postbox=postbox,
     )
 
 

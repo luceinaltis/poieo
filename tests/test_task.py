@@ -14,7 +14,14 @@ from poieo.daemon.config import FlowSpec, load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
 from poieo.store import NullStore
-from poieo.task import TaskSpec, append_journal, expand, load_task, read_journal
+from poieo.task import (
+    TaskSpec,
+    append_journal,
+    expand,
+    load_task,
+    read_journal,
+    system_block,
+)
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -484,3 +491,38 @@ def test_a_note_cannot_forge_a_bookmark(tmp_path):
     text = read_journal(j)
     assert "did you look at the changed links" in text
     assert "note 0" in text
+
+
+# -- knowing who else is there -----------------------------------------------
+
+
+def _card(tmp_path, name, tools=""):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    path = tmp_path / f"{name}.yaml"
+    path.write_text(f"name: {name}\nfolder: work\nprompt: go\n{tools}")
+    return load_task(path)
+
+
+def test_a_task_with_notes_is_told_who_it_can_tell(tmp_path):
+    task = _card(tmp_path, "build-docs", "tools: [files, notes]\n")
+    block = system_block(task, roster=["check-links", "run-tests"])
+    assert "check-links" in block and "run-tests" in block
+
+
+def test_a_task_without_notes_sees_no_roster(tmp_path):
+    """No roster, no sentence, no hint that other tasks exist."""
+    task = _card(tmp_path, "build-docs")
+    block = system_block(task, roster=["check-links"])
+    assert "check-links" not in block
+
+
+def test_the_prompt_says_a_note_is_not_a_reply(tmp_path):
+    """So the model does not sit waiting for an answer that never comes."""
+    task = _card(tmp_path, "build-docs", "tools: [files, notes]\n")
+    assert "next run" in system_block(task, roster=["check-links"])
+
+
+def test_an_empty_roster_is_not_an_awkward_sentence(tmp_path):
+    task = _card(tmp_path, "build-docs", "tools: [files, notes]\n")
+    block = system_block(task, roster=[])
+    assert "tell" not in block.lower()

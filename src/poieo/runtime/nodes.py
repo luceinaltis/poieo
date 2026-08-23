@@ -179,7 +179,11 @@ class AgentNode(Node):
             )
 
         async with make_executor(
-            workdir, spec.tools or DEFAULT_TOOLSETS, ctx.isolation, ctx.boxes
+            workdir,
+            spec.tools or DEFAULT_TOOLSETS,
+            ctx.isolation,
+            ctx.boxes,
+            ctx.postbox,
         ) as executor:
             messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
             turns = 0

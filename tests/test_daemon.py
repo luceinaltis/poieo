@@ -333,3 +333,49 @@ def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypat
     config = _isolated_config(tmp_path)
     config.flows[0].enabled = False
     assert len(load_flows(config, enabled_only=False)) == 1
+
+
+# -- notes reach the tasks that can send them --------------------------------
+
+
+def _tasks_config(tmp_path, tools="[files, notes]"):
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    for name in ("build-docs", "check-links"):
+        (folder / f"{name}.yaml").write_text(
+            f"name: {name}\nfolder: ../work\nprompt: go\ntools: {tools}\n"
+        )
+    path = tmp_path / "poieo.yaml"
+    path.write_text(
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"store: {tmp_path / 'logs'}\n"
+        "tasks: tasks\n"
+        "flows: []\n"
+    )
+    return load_config(path)
+
+
+async def test_a_task_can_actually_reach_its_sibling(tmp_path):
+    """The whole chain: daemon builds the postbox, the tool writes the journal."""
+    config = _tasks_config(tmp_path)
+    daemon = Daemon(config)
+    runner = next(r for r in daemon._runners() if r.name == "build-docs")
+    box = runner.postbox
+    assert box is not None
+    assert box.sender == "build-docs"
+    assert "check-links" in box.recipients
+
+
+def test_the_roster_reaches_the_generated_prompt(tmp_path):
+    config = _tasks_config(tmp_path)
+    flow = next(f for f in load_flows(config) if f.spec.name == "build-docs")
+    system = flow.graph.nodes[0].system or ""
+    assert "check-links" in system
+    assert "build-docs" not in system.split("Other tasks")[-1]
+
+
+def test_a_task_without_notes_gets_no_postbox(tmp_path):
+    config = _tasks_config(tmp_path, tools="[files, shell]")
+    daemon = Daemon(config)
+    assert all(r.postbox is None for r in daemon._runners())

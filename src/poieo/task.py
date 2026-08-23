@@ -41,7 +41,7 @@ JOURNAL_LIMIT = 20
 JOURNAL_WIDTH = 300
 
 
-def system_block(task: TaskSpec) -> str:
+def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
     """The generated node's system prompt. User-visible, so it is fixed here.
 
     The journal arrives as run input rather than baked in, because it is
@@ -53,6 +53,26 @@ def system_block(task: TaskSpec) -> str:
         "{{ input.journal }}\n\n"
         "Finish by saying in one line what you did. If there was nothing worth\n"
         "doing, say that in one line instead."
+        + _roster_block(task, roster)
+    )
+
+
+def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
+    """Who this task may leave a note for.
+
+    A model cannot address a task it does not know exists. One that did not ask
+    for the notes toolset is told nothing at all -- not even that others are
+    there -- and one whose siblings are none gets no awkward empty sentence.
+    """
+    if "notes" not in (task.tools or DEFAULT_TOOLS):
+        return ""
+    others = [name for name in (roster or []) if name != task.slug]
+    if not others:
+        return ""
+    return (
+        "\n\nOther tasks you can leave a note for: "
+        + ", ".join(others)
+        + ".\nThey read it on their next run, not now, so do not wait for a reply."
     )
 
 
@@ -168,7 +188,7 @@ def _trigger(task: TaskSpec) -> dict[str, Any]:
     return {"type": "interval", "every": every}
 
 
-def build_graph(task: TaskSpec) -> GraphSpec:
+def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
     """The one-node graph a prompt-shaped task stands for."""
     return GraphSpec(
         name=task.slug,
@@ -182,7 +202,7 @@ def build_graph(task: TaskSpec) -> GraphSpec:
                 workdir=str(task.folder_path()),
                 tools=task.tools or list(DEFAULT_TOOLS),
                 max_turns=task.max_turns,
-                system=system_block(task),
+                system=system_block(task, roster),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
             )
@@ -190,7 +210,9 @@ def build_graph(task: TaskSpec) -> GraphSpec:
     )
 
 
-def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
+def expand(
+    task: TaskSpec, roster: list[str] | None = None
+) -> tuple[FlowSpec, GraphSpec | None]:
     """Desugar a task into the flow and graph the rest of poieo understands.
 
     The graph is None when the task names one of its own; the flow then points
@@ -198,7 +220,7 @@ def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
     """
     from .daemon.config import FlowSpec  # late import: config imports this module
 
-    graph = None if task.graph else build_graph(task)
+    graph = None if task.graph else build_graph(task, roster)
     flow = FlowSpec(
         name=task.slug,
         # With no graph file of its own, the flow points at the task that stands
