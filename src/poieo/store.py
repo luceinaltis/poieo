@@ -66,22 +66,31 @@ class RunStore:
 
     # -- reads ---------------------------------------------------------------
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
+        """The newest ``limit`` summaries, newest first.
+
+        Read from the end and parsed only until enough have matched. The index
+        grows for the daemon's lifetime and the web UI asks per request, so
+        parsing all of history to show the last twenty would make a month of
+        uptime cost half a second per call -- measured, not feared.
+        """
         if not self.index_path.exists():
             return []
+        lines = self.index_path.read_text(encoding="utf-8").splitlines()
         rows: list[dict[str, Any]] = []
-        with self.index_path.open(encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if flow and row.get("flow") != flow:
-                    continue
-                rows.append(row)
-        return rows[-limit:][::-1]
+        for line in reversed(lines):
+            if len(rows) >= limit:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if flow and row.get("flow") != flow:
+                continue
+            rows.append(row)
+        return rows
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         path = self.runs_dir / f"{run_id}.jsonl"
