@@ -12,7 +12,7 @@
  */
 
 import { forgetSpots, savedSpots, saveSpot } from "../atelier/placement"
-import { figurePose, hammerAngle, lampLit, shelfCount } from "../atelier/scene"
+import { HAMMER, figurePose, hammerAngle, lampLit, shelfCount } from "../atelier/scene"
 import {
   bounds,
   cellAt,
@@ -60,7 +60,15 @@ interface Bench {
   dispose(): void
 }
 
-function makeBench(THREE: Three, smith: any): Bench {
+/** The spine bones, outermost first, and the rotation they rest at. */
+function spineOf(figure: any): { bone: any; rest: number }[] {
+  return ["Spine", "Spine01", "Spine02"]
+    .map((name) => figure.getObjectByName(name))
+    .filter(Boolean)
+    .map((bone: any) => ({ bone, rest: bone.rotation.x }))
+}
+
+function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): Bench {
   const group = new THREE.Group()
 
   const floor = new THREE.Mesh(
@@ -123,11 +131,14 @@ function makeBench(THREE: Three, smith: any): Bench {
   work.position.set(0.5, 0.71, 0.1)
   group.add(work)
 
-  // -- the smith, the one thing that was downloaded
-  const figure = smith.clone(true)
+  // -- the smith, the one thing that was downloaded.
+  // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
+  // every bench would swing whenever any of them did.
+  const figure = cloneSkinned(smith)
   figure.position.set(-0.15, 0, 0.15)
   figure.rotation.y = Math.PI * 0.15
   group.add(figure)
+  const spine = spineOf(figure)
 
   // -- finished work on a shelf
   const shelf = new THREE.Group()
@@ -178,11 +189,15 @@ function makeBench(THREE: Three, smith: any): Bench {
     },
 
     tick(elapsed: number) {
-      // The model is one piece, so the whole body takes the swing: it leans
-      // into the blow and comes back up. Half a hammer is better than none.
-      const swing = working ? hammerAngle(elapsed) : 0
-      figure.rotation.x = working ? (swing + 1.25) * 0.18 : 0
-      figure.position.y = working ? Math.max(0, -swing) * 0.04 : 0
+      // The swing comes from the waist. Both of the smith's hands are on the
+      // hammer, so turning one arm would tear the grip apart -- bending the
+      // spine brings the head down in an arc and keeps the pose whole.
+      const swing = working ? hammerAngle(elapsed) : HAMMER.raised
+      const through = (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised)
+      const bend = working ? -0.12 + through * 0.62 : 0
+      for (const joint of spine) {
+        joint.bone.rotation.x = joint.rest + bend / spine.length
+      }
 
       if (hot) {
         // firelight is never steady
@@ -203,6 +218,7 @@ function makeBench(THREE: Three, smith: any): Bench {
 async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js")
   const { MeshoptDecoder } = await import("three/examples/jsm/libs/meshopt_decoder.module.js")
+  const { clone: cloneSkinned } = await import("three/examples/jsm/utils/SkeletonUtils.js")
 
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
@@ -475,7 +491,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     for (const flow of flows) {
       let bench = benches.get(flow)
       if (!bench) {
-        bench = makeBench(THREE, smith)
+        bench = makeBench(THREE, smith, cloneSkinned)
         benches.set(flow, bench)
         room.add(bench.group)
       }
