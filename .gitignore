@@ -11,6 +11,10 @@ venv/
 .poieo/
 examples/.poieo/
 
+# secrets
+.env
+.env.*
+
 # web-ui build inputs (the built output in src/poieo/web/static IS checked in)
 node_modules/
 web-ui/dist/
