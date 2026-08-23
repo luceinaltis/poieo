@@ -136,8 +136,12 @@ const marks = document.getElementById("marks") as HTMLElement
 marks.style.gridTemplateColumns = `repeat(${FRAMES}, ${TILE}px)`
 marks.style.width = `${TILE * FRAMES}px`
 
+// The last frame is pinned just after the blow, where the sparks live; a
+// even sampling of a 1.9 s clip misses a 0.28 s burst more often than not.
+const strikeAt = (bench.group as any).userData.strikeAt as number
 for (let frame = 0; frame < FRAMES; frame += 1) {
-  const elapsed = (frame * PERIOD) / FRAMES
+  const elapsed =
+    frame === FRAMES - 1 ? (strikeAt + 0.1) * 1000 : (frame * PERIOD) / FRAMES
   bench.tick(elapsed)
 
   for (const [row, view] of VIEWS.entries()) {
@@ -159,6 +163,29 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
     .join("\n")
   cell.innerHTML = `<b>${Math.round(elapsed)} ms</b>${state}`
   marks.append(cell)
+}
+
+// The hammer hand's whole path, printed, because arguing from two stills about
+// which dip is the blow has now been wrong twice.
+{
+  const hand = bench.group.getObjectByName("RightHand")
+  if (hand) {
+    const probe = new THREE.Vector3()
+    const lines: string[] = []
+    for (let step = 0; step <= 36; step += 1) {
+      const t = (step / 36) * (swingClip?.duration ?? 1)
+      bench.tick(t * 1000)
+      hand.getWorldPosition(probe)
+      const bar = "#".repeat(Math.max(0, Math.round((probe.y - 0.2) * 30)))
+      lines.push(
+        `${t.toFixed(2)}s y${probe.y.toFixed(2)} x${probe.x.toFixed(2)} z${probe.z.toFixed(2)} ${bar}`,
+      )
+    }
+    const sheet = document.createElement("pre")
+    sheet.style.cssText = "margin:12px 16px;font-size:12px;line-height:1.25"
+    sheet.textContent = lines.join("\n")
+    document.body.append(sheet)
+  }
 }
 
 // Playwright waits on this rather than on a timer.

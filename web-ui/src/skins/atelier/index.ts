@@ -216,17 +216,24 @@ export function makeBench(
   acts.working.setEffectiveWeight(1)
   const grip = new THREE.Vector3()
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
+  // When, within the clip, the blow actually lands -- the sparks need it too.
+  // Printing the hand's whole path settled it: the clip winds up mid-loop and
+  // slams at the very END, so the lowest point is the blow, and the loop seam
+  // sits right behind it.
+  let strikeAt = 0
   {
     const swing = clipNamed("swing")
     const probe = new THREE.Vector3()
     let lowest = Infinity
     for (let step = 0; step <= 60; step += 1) {
-      mixer.setTime((step / 60) * swing.duration)
+      const moment = (step / 60) * swing.duration
+      mixer.setTime(moment)
       figure.updateWorldMatrix(true, true)
       hand.getWorldPosition(probe)
       if (probe.y < lowest) {
         lowest = probe.y
         grip.copy(probe)
+        strikeAt = moment
       }
     }
     mixer.setTime(0)
@@ -245,11 +252,38 @@ export function makeBench(
   acts.resting.setEffectiveWeight(1)
   figure.updateWorldMatrix(true, true)
 
+  // -- sparks off the blow: a handful of points thrown out of the work for a
+  // quarter second after each strike. Directions are hashed from the spark's
+  // index and the swing's count, so every replay throws the same sparks.
+  const SPARKS = 20
+  const sparkSpray = new Float32Array(SPARKS * 3)
+  const sparkShape = new THREE.BufferGeometry()
+  sparkShape.setAttribute("position", new THREE.BufferAttribute(sparkSpray, 3))
+  const sparkGlow = new THREE.PointsMaterial({
+    color: 0xffd98a,
+    size: 0.05,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const sparks = new THREE.Points(sparkShape, sparkGlow)
+  sparks.position.copy(work.position)
+  bench.add(sparks)
+
+  const scatter = (seed: number) => {
+    const spun = Math.sin(seed * 127.1 + 311.7) * 43758.5453
+    return spun - Math.floor(spun)
+  }
+
+  const swingLength = clipNamed("swing").duration
+
   let hot = false
   let was = -1
   let mode: "working" | "resting" = "resting"
   // For tools/bench.html only: lets the sheet print what the mixer is doing.
   ;(group as any).userData.acts = acts
+  ;(group as any).userData.strikeAt = strikeAt
 
   return {
     group,
@@ -312,6 +346,29 @@ export function makeBench(
       face?.at(elapsed)
 
       flame.tick(elapsed)
+
+      // Sparks fly for a moment after the hammer lands. Measured around the
+      // loop: the blow lands a tenth of a second before the clip's seam, and
+      // an unwrapped clock cut every burst off at the seam, a third grown.
+      const sinceBlow =
+        (acts.working.time - strikeAt + swingLength) % swingLength
+      const flight = sinceBlow / 0.28
+      if (mode === "working" && flight > 0 && flight < 1) {
+        const burst = Math.floor(mixer.time / swingLength)
+        for (let i = 0; i < SPARKS; i += 1) {
+          const angle = scatter(i * 3.1 + burst * 17) * Math.PI * 2
+          const reach = 0.25 + scatter(i * 7.3 + burst * 5) * 0.3
+          const lift = 0.5 + scatter(i * 11.7 + burst * 3) * 0.5
+          sparkSpray[i * 3] = Math.cos(angle) * reach * flight
+          sparkSpray[i * 3 + 1] = 0.04 + lift * flight - 1.1 * flight * flight
+          sparkSpray[i * 3 + 2] = Math.sin(angle) * reach * flight
+        }
+        sparkShape.attributes.position.needsUpdate = true
+        sparkGlow.opacity = 1 - flight
+      } else {
+        sparkGlow.opacity = 0
+      }
+
       if (hot) {
         // firelight is never steady
         fire.intensity = 8 + Math.sin(elapsed / 90) * 1.2 + Math.sin(elapsed / 37) * 0.6
@@ -324,6 +381,8 @@ export function makeBench(
     dispose() {
       face?.dispose()
       flame.dispose()
+      sparkShape.dispose()
+      sparkGlow.dispose()
       group.traverse((node: any) => {
         node.geometry?.dispose?.()
         if (Array.isArray(node.material)) node.material.forEach((m: any) => m.dispose?.())
