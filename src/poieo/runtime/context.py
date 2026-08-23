@@ -13,7 +13,7 @@ from ..expr import unwrap, wrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
-from ..tools import Isolation
+from ..tools import Hands
 
 
 def new_run_id() -> str:
@@ -40,14 +40,10 @@ class RunContext:
     iteration: int = 0
     # Set by execute(); agent loops poll it between turns.
     cancel: asyncio.Event | None = None
-    # Where this run's commands may run. None means the host, as before.
-    isolation: Isolation | None = None
-    # The task's boxes, when it runs isolated. Opaque on purpose: only
-    # make_executor knows what is inside, so the runtime stays unaware that
-    # containers exist at all.
-    boxes: Any = None
-    # Who this run may leave a note for. Opaque, like boxes.
-    postbox: Any = None
+    # Where this run's tools work, what they may reach, who they may tell.
+    # The runtime carries it and never opens it -- which is how it stays
+    # unaware that containers, or journals, exist at all.
+    hands: Hands | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

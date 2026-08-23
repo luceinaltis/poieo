@@ -361,7 +361,7 @@ async def test_a_task_can_actually_reach_its_sibling(tmp_path):
     config = _tasks_config(tmp_path)
     daemon = Daemon(config)
     runner = next(r for r in daemon._runners() if r.name == "build-docs")
-    box = runner.postbox
+    box = runner.hands.postbox
     assert box is not None
     assert box.sender == "build-docs"
     assert "check-links" in box.recipients
@@ -378,4 +378,4 @@ def test_the_roster_reaches_the_generated_prompt(tmp_path):
 def test_a_task_without_notes_gets_no_postbox(tmp_path):
     config = _tasks_config(tmp_path, tools="[files, shell]")
     daemon = Daemon(config)
-    assert all(r.postbox is None for r in daemon._runners())
+    assert all(r.hands.postbox is None for r in daemon._runners())

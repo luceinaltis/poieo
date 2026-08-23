@@ -43,9 +43,7 @@ async def execute(
     iteration: int = 0,
     run_id: str | None = None,
     cancel: asyncio.Event | None = None,
-    isolation: Any = None,
-    boxes: Any = None,
-    postbox: Any = None,
+    hands: Any = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -67,9 +65,7 @@ async def execute(
         state={**graph.state, **(state or {})},
         iteration=iteration,
         cancel=cancel,
-        isolation=isolation,
-        boxes=boxes,
-        postbox=postbox,
+        hands=hands,
     )
 
     started_at = utcnow()

@@ -120,7 +120,7 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
 
 import sys
 
-from poieo.tools import Isolation, make_executor
+from poieo.tools import Hands, Isolation, make_executor
 
 
 async def test_local_executor_works_as_a_context_manager(tmp_path):
@@ -130,7 +130,7 @@ async def test_local_executor_works_as_a_context_manager(tmp_path):
     assert result.text == "data"
 
 
-async def test_make_executor_returns_local_without_isolation(tmp_path):
+async def test_make_executor_returns_local_without_hands(tmp_path):
     assert isinstance(make_executor(tmp_path, DEFAULT_TOOLSETS), LocalExecutor)
 
 
@@ -147,9 +147,10 @@ def test_make_executor_does_not_import_docker_without_isolation(tmp_path, monkey
 
 
 def test_make_executor_returns_a_boxed_executor_with_isolation(tmp_path):
-    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, Isolation(image="alpine:3.20"))
+    iso = Isolation(image="alpine:3.20")
+    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, Hands(isolation=iso))
     assert type(ex).__name__ == "DockerExecutor"
-    assert ex.image == "alpine:3.20" and ex.network == "none"
+    assert ex.isolation == iso
 
 
 def test_isolation_defaults_to_no_network():

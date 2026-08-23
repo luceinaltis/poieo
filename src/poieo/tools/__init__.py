@@ -51,6 +51,25 @@ class Isolation(BaseModel):
     user: str | None = None
 
 
+@dataclass(slots=True)
+class Hands:
+    """Everything an agent node's tools need beyond a workdir and a toolset.
+
+    One object rather than one parameter each. Three separate ones -- where
+    commands may run, which boxes are kept, who may be told -- had reached the
+    point of being threaded through five modules apiece, and the next feature
+    would have added a fourth. What travels between the daemon and the factory
+    is this; what each field holds is nobody else's business, which is why two
+    of them are deliberately opaque.
+    """
+
+    isolation: Isolation | None = None
+    # The daemon's box keeper and this task's postbox. Untyped on purpose: only
+    # the tools package may know what they are.
+    boxes: Any = None
+    postbox: Any = None
+
+
 class Executor:
     """Tool lookup, failure-to-text, and a lifecycle that costs nothing by default.
 
@@ -100,10 +119,10 @@ class LocalExecutor(Executor):
     """
 
     def __init__(
-        self, workdir: Path, toolsets: "Sequence[str]", postbox: Any = None
+        self, workdir: Path, toolsets: "Sequence[str]", hands: "Hands | None" = None
     ):
         self.workdir = workdir
-        self._load(toolsets, postbox)
+        self._load(toolsets, hands.postbox if hands else None)
 
 
 def make_box_keeper() -> Any:
@@ -117,12 +136,26 @@ def make_box_keeper() -> Any:
     return BoxKeeper()
 
 
+async def sweep_boxes(days: int = 7) -> int:
+    """Reclaim boxes an earlier poieo left behind. Returns how many went.
+
+    A clean shutdown removes every box it owns, so anything still standing
+    is from a crash, a power cut, or a kill -9. Swept at startup rather than
+    on a timer, because that is the only moment the answer can change.
+
+    Safe to run beside another daemon: a box it owns and is older than the
+    cutoff would be removed, and rebuilt on that task's next run. A box is
+    derived state, so the cost of being wrong here is one rebuild.
+    """
+    from datetime import timedelta
+
+    from .docker import sweep
+
+    return await sweep(older_than=timedelta(days=days))
+
+
 def make_executor(
-    workdir: Path,
-    toolsets: "Sequence[str]",
-    isolation: Isolation | None = None,
-    boxes: Any = None,
-    postbox: Any = None,
+    workdir: Path, toolsets: "Sequence[str]", hands: Hands | None = None
 ) -> Executor:
     """The one place that decides where an agent node's tools run.
 
@@ -130,12 +163,14 @@ def make_executor(
     of here names a backend. The Docker import sits inside the branch: a
     machine that never isolates never pays to load it.
     """
+    isolation = hands.isolation if hands else None
     if isolation is None:
-        return LocalExecutor(workdir, toolsets, postbox)
+        return LocalExecutor(workdir, toolsets, hands)
     from .docker import DockerExecutor
 
     # With a keeper the box is the task's and survives the run; without one
     # the executor makes its own and destroys it, which is `poieo run`.
+    boxes = hands.boxes if hands else None
     box = boxes.get(workdir, isolation) if boxes is not None else None
 
     return DockerExecutor(
@@ -145,7 +180,7 @@ def make_executor(
         network=isolation.network,
         user=isolation.user,
         box=box,
-        postbox=postbox,
+        hands=hands,
     )
 
 
