@@ -258,6 +258,37 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
     return [load_task(p) for p in files]
 
 
+def record_run(task: TaskSpec, result: Any) -> None:
+    """Add one run to the task's journal, so the next one can read it.
+
+    This is the other half of the journal contract: reading splits at the
+    task's own last entry, so a run that never writes one leaves every note
+    marked new forever and its own work forgotten. Every runner of a task --
+    the daemon's, the CLI's one-shot -- must land here.
+
+    ``result`` is duck-typed (status / path / outputs / error) so this module
+    does not grow a dependency on the runtime.
+    """
+    if result.status == "completed":
+        kind, text = "did", _closing_line(result)
+    else:
+        kind, text = "failed", result.error or result.status
+    try:
+        append_journal(task.journal_path(), kind, text, title=task.name)
+    except OSError as exc:
+        # Memory is not worth killing a night's work over.
+        log.warning("task '%s': could not write the journal: %s", task.slug, exc)
+
+
+def _closing_line(result: Any) -> str:
+    """What the model said last: its own one-line summary of the work."""
+    for node_id in reversed(result.path):
+        value = result.outputs.get(node_id)
+        if isinstance(value, str) and value.strip():
+            return value
+    return "(said nothing)"
+
+
 # -- the journal -------------------------------------------------------------
 #
 # One markdown file per task, appended to and never rewritten, so a line the

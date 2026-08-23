@@ -499,3 +499,77 @@ def test_validate_checks_the_schedule_too(tmp_path):
     result = runner.invoke(app, ["validate", str(card)])
     assert result.exit_code == 1
     assert "5m" in result.stderr              # the fix is named, not just the fault
+
+
+# -- a one-shot run is still a task's run ------------------------------------
+#
+# The journal contract says a task writes a line at the end of every run. That
+# held for daemon runs only: `poieo run card.yaml` read the journal and never
+# wrote it, so a second run redid the first's work and a note it read was
+# never consumed.
+
+
+def test_run_writes_the_journal(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+    assert result.exit_code == 0, result.output
+    journal = (tmp_path / "card.md").read_text(encoding="utf-8")
+    assert "did" in journal
+
+
+def test_run_consumes_a_note_the_way_a_daemon_run_does(tmp_path):
+    """The bookmark must move, or a note stays "new" forever."""
+    card = _self_bound_card(tmp_path)
+    runner.invoke(app, ["note", str(card), "look at the README first"])
+    runner.invoke(app, ["run", str(card), "--no-log"])
+    from poieo.task import load_task, read_journal
+
+    shown = read_journal(load_task(card).journal_path())
+    assert "Nothing new" in shown
+    assert "look at the README" in shown       # consumed, not lost
+
+
+def test_run_stores_beside_the_card(tmp_path, monkeypatch):
+    """One task, one history -- wherever the command was typed from."""
+    card = _self_bound_card(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    result = runner.invoke(app, ["run", str(card)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".poieo" / "runs").is_dir()
+    assert not (elsewhere / ".poieo").exists()
+
+
+def test_run_store_flag_still_wins(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(
+        app, ["run", str(card), "--store", str(tmp_path / "mystore")]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "mystore" / "runs").is_dir()
+
+
+def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
+    """The beside-the-card rule is the card's; bare graphs keep today's."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["run", str(EXAMPLES / "graphs/support-triage.yaml"),
+         "-b", str(EXAMPLES / "bindings/mock.yaml"), "--set", "message=hi"],
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".poieo" / "runs").is_dir()
+
+
+def test_daemon_folder_stores_beside_the_cards(tmp_path):
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    (folder / "hello.yaml").write_text(
+        "name: hello\nfolder: ../work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
+    assert result.exit_code == 0, result.output
+    assert (folder / ".poieo" / "runs").is_dir()

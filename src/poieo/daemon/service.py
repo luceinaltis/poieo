@@ -13,7 +13,7 @@ from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import RunStore
-from ..task import append_journal
+from ..task import record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
@@ -21,15 +21,6 @@ from .config import DaemonConfig, LoadedFlow, load_flows
 log = logging.getLogger("poieo.daemon")
 
 RunCallback = Callable[[str, RunResult], None]
-
-
-def _last_output(result: RunResult) -> str:
-    """What the model said last: its own one-line summary of the work."""
-    for node_id in reversed(result.path):
-        value = result.outputs.get(node_id)
-        if isinstance(value, str) and value.strip():
-            return value
-    return "(said nothing)"
 
 
 def _ensure_port_free(host: str, port: int) -> None:
@@ -149,19 +140,9 @@ class FlowRunner:
         log.info("flow '%s' stopped", self.name)
 
     def _remember(self, result: RunResult) -> None:
-        """Add this run to the task's journal, so the next one can read it."""
         task = self.config.tasks_by_flow.get(self.name)
-        if task is None:
-            return
-        if result.status == "completed":
-            kind, text = "did", _last_output(result)
-        else:
-            kind, text = "failed", result.error or result.status
-        try:
-            append_journal(task.journal_path(), kind, text, title=task.name)
-        except OSError as exc:
-            # Memory is not worth killing a night's work over.
-            log.warning("flow '%s': could not write the journal: %s", self.name, exc)
+        if task is not None:
+            record_run(task, result)
 
 
 class Daemon:
