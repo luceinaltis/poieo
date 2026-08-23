@@ -167,6 +167,43 @@ def _load_tasks(config: DaemonConfig) -> None:
             config.task_graphs[flow.name] = graph
 
 
+def check_isolation(flows: list[FlowSpec]) -> None:
+    """Docker present, answering, and every named image already here.
+
+    The slowest preflight in the codebase -- a daemon ping plus one inspect per
+    distinct image -- and the only one that reaches outside the process. What
+    buys the cost is principle 5: a task whose image was pruned last week must
+    not discover it at 3am.
+
+    Flows that never asked are not merely skipped, they are not probed at all,
+    so a machine with no docker pays nothing and fails nowhere. Neither are
+    disabled flows: they are not going to run, and refusing to *list* one
+    would be the check getting in the way of the fix.
+    """
+    wanted = [f for f in flows if f.isolation]
+    if not wanted:
+        return
+
+    from ..tools import docker  # late: nothing imports it unless asked
+
+    ok, reason = docker.docker_available()
+    if not ok:
+        names = ", ".join(sorted(f.name for f in wanted))
+        raise SpecError(f"flow(s) {names} ask to run isolated, but {reason}")
+
+    checked: set[str] = set()
+    for flow in wanted:
+        image = flow.isolation.image
+        if image in checked:
+            continue
+        checked.add(image)
+        if not docker.image_present(image):
+            raise SpecError(
+                f"flow '{flow.name}' runs isolated in '{image}', which is not on "
+                f"this machine. Run: docker pull {image}"
+            )
+
+
 def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[LoadedFlow]:
     """Parse every flow's graph and binding, and verify roles resolve.
 
@@ -175,13 +212,16 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
     """
     from ..runtime.executor import preflight
 
+    selected = [f for f in config.flows if f.enabled or not enabled_only]
+    # Only what will actually run: `poieo flows` loads disabled flows to list
+    # them, and a disabled flow whose image is gone must not block the listing.
+    check_isolation([f for f in selected if f.enabled])
+
     graphs: dict[Path, GraphSpec] = {}
     bindings: dict[Path, BindingSpec] = {}
     loaded: list[LoadedFlow] = []
 
-    for flow in config.flows:
-        if enabled_only and not flow.enabled:
-            continue
+    for flow in selected:
         binding_path = config.binding_path(flow).resolve()
         if binding_path not in bindings:
             bindings[binding_path] = load_binding(binding_path)

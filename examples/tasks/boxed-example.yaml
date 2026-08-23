@@ -1,0 +1,15 @@
+# The same short form, with a fence around it. `isolation` means a command this
+# task runs sees `folder` and nothing else of the machine -- poieo's file tools
+# were already confined; the shell was not.
+#
+# Disabled: it needs an image that may not be here. Pull it, then flip `enabled`.
+#     docker pull python:3.12-slim
+name: keep the examples tidy, in a box
+folder: ..
+enabled: false
+prompt: |
+  Look through this folder and fix one small thing that is out of date.
+  Run nothing destructive.
+isolation:
+  image: python:3.12-slim
+  network: none

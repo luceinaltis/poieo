@@ -152,3 +152,25 @@ def test_make_executor_returns_a_boxed_executor_with_isolation(tmp_path):
 
 def test_isolation_defaults_to_no_network():
     assert Isolation(image="x").network == "none"
+
+
+def test_docker_available_treats_an_empty_version_as_unavailable(monkeypatch):
+    """`docker info` exits 0 with an unreachable daemon on Windows and writes the
+    failure to stderr, so the exit code alone says "available" when it is not.
+
+    Left uncaught, the user is told to `docker pull` an image at 3am when the
+    real problem is that docker is not running.
+    """
+    import subprocess
+
+    from poieo.tools import docker as docker_module
+
+    class _Done:
+        returncode = 0
+        stdout = "\n"
+        stderr = 'error during connect: open //./pipe/dockerDesktopLinuxEngine'
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+    ok, reason = docker_module.docker_available()
+    assert not ok
+    assert "not running" in reason
