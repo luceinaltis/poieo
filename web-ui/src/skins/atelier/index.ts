@@ -11,6 +11,7 @@
  */
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
+import { makeCabin } from "./cabin"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
 import { figurePose, lampLit, shelfCount } from "./scene"
@@ -130,24 +131,8 @@ export function makeBench(
 ): Bench {
   const group = new THREE.Group()
 
-  const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(2.6, 0.12, 2.6),
-    new THREE.MeshStandardMaterial({ color: HUE.floor, roughness: 0.95 }),
-  )
-  floor.position.y = -0.06
-  group.add(floor)
-
-  const backWall = new THREE.Mesh(
-    new THREE.BoxGeometry(2.6, 2.0, 0.12),
-    new THREE.MeshStandardMaterial({ color: HUE.wall, roughness: 1 }),
-  )
-  backWall.position.set(0, 1.0, -1.24)
-  group.add(backWall)
-
-  const sideWall = backWall.clone()
-  sideWall.rotation.y = Math.PI / 2
-  sideWall.position.set(-1.24, 1.0, 0)
-  group.add(sideWall)
+  // The room is a log cabin, drawn from primitives in its own module.
+  group.add(makeCabin(THREE))
 
   // -- the forge, downloaded; its fire, drawn.
   const hearth = new THREE.Group()
@@ -203,7 +188,8 @@ export function makeBench(
 
   // -- finished work on a shelf
   const shelf = new THREE.Group()
-  shelf.position.set(0.75, 1.15, -1.1)
+  // On the board the cabin nailed to its back wall.
+  shelf.position.set(0.42, 1.16, -1.06)
   group.add(shelf)
 
   // Hand-tuned joint angles never stopped looking hand-tuned; these clips are
