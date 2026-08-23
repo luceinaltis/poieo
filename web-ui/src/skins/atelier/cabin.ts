@@ -20,10 +20,10 @@ const LOG_RADIUS = 0.115
 const PLANK = 0.325
 
 const WOOD = {
-  floor: [0x3e3222, 0x39301e, 0x443626, 0x352c1a],
-  log: [0x4c3c2a, 0x51402c, 0x473826, 0x4e3e2b],
-  beam: 0x33281a,
-  frame: 0x2c2216,
+  floor: [0x322818, 0x2d2415, 0x372c1b, 0x2a2113],
+  log: [0x42331f, 0x473722, 0x3d2f1c, 0x443521],
+  beam: 0x2b2114,
+  frame: 0x241b10,
   pane: 0x1a2028,
 }
 
@@ -151,13 +151,22 @@ export function makeCabin(THREE: any): any {
   upLeft.position.x = -0.245
   const upRight = upLeft.clone()
   upRight.position.x = 0.245
-  const pane = new THREE.Mesh(
+  // Shuttered, not glazed: cottage glass was half of why the room read as a
+  // holiday hut. A crack of night shows between the boards.
+  const night = new THREE.Mesh(
     new THREE.PlaneGeometry(0.46, 0.46),
     new THREE.MeshBasicMaterial({ color: WOOD.pane }),
   )
-  const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.5, 0.04), frame)
-  const transom = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.035, 0.04), frame)
-  window_.add(acrossTop, acrossBottom, upLeft, upRight, pane, mullion, transom)
+  const shutters = new THREE.Group()
+  for (const side of [-1, 1]) {
+    const shutter = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.48, 0.03), frame)
+    shutter.position.set(side * 0.125, 0, 0.02)
+    shutters.add(shutter)
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.035), frame)
+    strap.position.set(side * 0.125, 0.12, 0.025)
+    shutters.add(strap)
+  }
+  window_.add(acrossTop, acrossBottom, upLeft, upRight, night, shutters)
   cabin.add(window_)
 
   // -- horseshoes nailed to the side wall: the smithy's own signage
@@ -220,6 +229,94 @@ export function makeCabin(THREE: any): any {
     const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.18), plate)
     bracket.position.set(at, 0.96, -SPAN / 2 + LOG_RADIUS * 2 + 0.08)
     cabin.add(bracket)
+  }
+
+  // -- the clutter that says work happens here ---------------------------------
+
+  const darkWood = new THREE.MeshStandardMaterial({ color: 0x3a2d1c, roughness: 1 })
+
+  // A workbench against the side wall, heavy top on post legs, tools on it.
+  const benchTable = new THREE.Group()
+  // Clear of the wall face, which sits at x -1.01: the first placement put
+  // half the bench inside the logs.
+  benchTable.position.set(-0.82, 0, 0.35)
+  const top = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 1.05), darkWood)
+  top.position.y = 0.52
+  benchTable.add(top)
+  for (const [dx, dz] of [[-0.15, -0.44], [0.15, -0.44], [-0.15, 0.44], [0.15, 0.44]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.5, 0.07), darkWood)
+    leg.position.set(dx, 0.25, dz)
+    benchTable.add(leg)
+  }
+  // work on the bench: a bar, an offcut, a mallet head
+  const strewn = [
+    { size: [0.3, 0.03, 0.04], at: [0.02, 0.57, -0.2], turn: 0.4 },
+    { size: [0.1, 0.05, 0.05], at: [-0.06, 0.58, 0.18], turn: -0.2 },
+    { size: [0.16, 0.045, 0.045], at: [0.08, 0.58, 0.34], turn: 1.2 },
+  ]
+  for (const piece of strewn) {
+    const bit = new THREE.Mesh(new THREE.BoxGeometry(...piece.size), ironWare)
+    bit.position.set(...(piece.at as [number, number, number]))
+    bit.rotation.y = piece.turn
+    benchTable.add(bit)
+  }
+  cabin.add(benchTable)
+
+  // Iron stock leaning on the back wall, right of the shelf.
+  for (let i = 0; i < 4; i += 1) {
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.014, 1.15, 5),
+      ironWare,
+    )
+    bar.position.set(1.05 + i * 0.07, 0.55, -1.12 + drift(i * 3) * 0.05)
+    bar.rotation.z = 0.28 + (drift(i * 7 + 2) - 0.5) * 0.1
+    bar.rotation.y = drift(i * 5) * 0.4
+    cabin.add(bar)
+  }
+
+  // The coal heap by the forge: a low mound of dark lumps.
+  const coal = new THREE.MeshStandardMaterial({ color: 0x191612, roughness: 1 })
+  for (let i = 0; i < 7; i += 1) {
+    const lump = new THREE.Mesh(new THREE.SphereGeometry(0.09 + drift(i) * 0.05, 6, 5), coal)
+    // Beside the hearth's mouth, on the flags, where it can be seen -- the
+    // first heap hid behind the forge's own stonework.
+    lump.position.set(
+      0.05 + drift(i * 3 + 1) * 0.3,
+      0.05,
+      -0.62 + drift(i * 5 + 2) * 0.2,
+    )
+    lump.scale.y = 0.55
+    cabin.add(lump)
+  }
+
+  // Dropped work by the anvil: a horseshoe and a hammer someone will trip on.
+  const flatShoe = new THREE.Mesh(shoe, ironWare)
+  flatShoe.rotation.x = -Math.PI / 2
+  flatShoe.position.set(0.5, 0.11, 0.55)
+  cabin.add(flatShoe)
+  const droppedHandle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.016, 0.02, 0.3, 6),
+    darkWood,
+  )
+  droppedHandle.rotation.set(Math.PI / 2, 0, 0.8)
+  droppedHandle.position.set(-0.5, 0.12, 0.9)
+  cabin.add(droppedHandle)
+
+  // Soot shadows worked into the boards around the fire and the anvil.
+  const grime = new THREE.MeshBasicMaterial({
+    color: 0x0d0a07,
+    transparent: true,
+    opacity: 0.35,
+  })
+  for (const stain of [
+    { r: 0.6, x: -0.55, z: -0.75 },
+    { r: 0.42, x: 0.1, z: 0.35 },
+    { r: 0.3, x: 0.7, z: -0.3 },
+  ]) {
+    const mark = new THREE.Mesh(new THREE.CircleGeometry(stain.r, 14), grime)
+    mark.rotation.x = -Math.PI / 2
+    mark.position.set(stain.x, 0.015, stain.z)
+    cabin.add(mark)
   }
 
   return cabin

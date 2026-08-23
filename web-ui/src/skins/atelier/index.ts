@@ -179,7 +179,8 @@ export function makeBench(
   // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
   // every bench would swing whenever any of them did.
   const figure = cloneSkinned(smith)
-  figure.position.set(-0.18, 0, 0.45)
+  // A step from the hearth: hot iron does not survive a walk across the room.
+  figure.position.set(-0.3, 0, 0.14)
   // Turned to the anvil rather than the camera. Which way that is depends on
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
@@ -424,9 +425,10 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   renderer.domElement.classList.add("atelier-canvas")
 
   const scene = new THREE.Scene()
-  // Enough to read the room by; the forge does the rest.
-  scene.add(new THREE.AmbientLight(0xb9ab95, 1.5))
-  const key = new THREE.DirectionalLight(0xd8cbb2, 2.2)
+  // Just enough to read the room by -- the forge is meant to carry it. The
+  // first pass lit everything like noon, and the smithy read as a pine sauna.
+  scene.add(new THREE.AmbientLight(0xa08f7a, 0.95))
+  const key = new THREE.DirectionalLight(0xc4b49c, 1.5)
   key.position.set(4, 8, 6)
   scene.add(key)
   const fill = new THREE.DirectionalLight(0x8fa0bf, 0.8)
