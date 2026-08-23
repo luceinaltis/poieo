@@ -74,6 +74,9 @@ export interface Fire {
   dispose(): void
 }
 
+/** How many embers drift up out of the fire at any moment. */
+const EMBERS = 9
+
 /** A flame `wide` across and `tall` high, standing on its own origin. */
 export function makeFire(THREE: any, wide = 0.5, tall = 0.6): Fire {
   const uniforms = {
@@ -100,10 +103,49 @@ export function makeFire(THREE: any, wide = 0.5, tall = 0.6): Fire {
     group.add(quad)
   }
 
+  // -- embers: motes that break off the flame, sway, and die on the climb.
+  // Per-point colours instead of per-point opacity, because PointsMaterial
+  // has only one opacity and an ember must dim as it rises.
+  const drift = (seed: number) => {
+    const spun = Math.sin(seed * 127.1 + 311.7) * 43758.5453
+    return spun - Math.floor(spun)
+  }
+  const emberSpots = new Float32Array(EMBERS * 3)
+  const emberTints = new Float32Array(EMBERS * 3)
+  const emberShape = new THREE.BufferGeometry()
+  emberShape.setAttribute("position", new THREE.BufferAttribute(emberSpots, 3))
+  emberShape.setAttribute("color", new THREE.BufferAttribute(emberTints, 3))
+  const emberGlow = new THREE.PointsMaterial({
+    size: 0.028,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const embers = new THREE.Points(emberShape, emberGlow)
+  group.add(embers)
+
   return {
     group,
     tick(elapsed: number) {
-      uniforms.time.value = elapsed / 1000
+      const time = elapsed / 1000
+      uniforms.time.value = time
+
+      for (let i = 0; i < EMBERS; i += 1) {
+        const phase = drift(i * 3 + 1)
+        const climb = (time * (0.16 + drift(i) * 0.1) + phase) % 1
+        const sway = Math.sin(time * 1.7 + i * 2.1) * 0.05 * climb
+        emberSpots[i * 3] = (drift(i * 7) - 0.5) * wide * 0.5 + sway
+        emberSpots[i * 3 + 1] = tall * 0.25 + climb * tall * 1.15
+        emberSpots[i * 3 + 2] = (drift(i * 11) - 0.5) * wide * 0.5 - sway
+        // yellow at birth, red on the climb, dark by the top
+        const dim = (1 - climb) * (1 - climb)
+        emberTints[i * 3] = dim * 1.0
+        emberTints[i * 3 + 1] = dim * (0.55 - climb * 0.3)
+        emberTints[i * 3 + 2] = dim * 0.08
+      }
+      emberShape.attributes.position.needsUpdate = true
+      emberShape.attributes.color.needsUpdate = true
     },
     set(state) {
       group.visible = state !== "cold"
@@ -119,6 +161,8 @@ export function makeFire(THREE: any, wide = 0.5, tall = 0.6): Fire {
     dispose() {
       sheet.dispose()
       material.dispose()
+      emberShape.dispose()
+      emberGlow.dispose()
     },
   }
 }

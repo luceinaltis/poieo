@@ -139,9 +139,14 @@ marks.style.width = `${TILE * FRAMES}px`
 // The last frame is pinned just after the blow, where the sparks live; a
 // even sampling of a 1.9 s clip misses a 0.28 s burst more often than not.
 const strikeAt = (bench.group as any).userData.strikeAt as number
+// The clips run below full speed; the pin has to convert clip seconds into
+// wall-clock milliseconds through the working action's own time scale.
+const pace = (bench.group as any).userData.acts.working.getEffectiveTimeScale()
 for (let frame = 0; frame < FRAMES; frame += 1) {
   const elapsed =
-    frame === FRAMES - 1 ? (strikeAt + 0.1) * 1000 : (frame * PERIOD) / FRAMES
+    frame === FRAMES - 1
+      ? ((strikeAt + 0.07) / pace) * 1000
+      : (frame * PERIOD) / FRAMES / pace
   bench.tick(elapsed)
 
   for (const [row, view] of VIEWS.entries()) {

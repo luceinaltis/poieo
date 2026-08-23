@@ -281,13 +281,13 @@ export function makeBench(
   // -- sparks off the blow: a handful of points thrown out of the work for a
   // quarter second after each strike. Directions are hashed from the spark's
   // index and the swing's count, so every replay throws the same sparks.
-  const SPARKS = 20
+  const SPARKS = 28
   const sparkSpray = new Float32Array(SPARKS * 3)
   const sparkShape = new THREE.BufferGeometry()
   sparkShape.setAttribute("position", new THREE.BufferAttribute(sparkSpray, 3))
   const sparkGlow = new THREE.PointsMaterial({
     color: 0xffd98a,
-    size: 0.05,
+    size: 0.055,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -296,6 +296,12 @@ export function makeBench(
   const sparks = new THREE.Points(sparkShape, sparkGlow)
   sparks.position.copy(work.position)
   bench.add(sparks)
+
+  // The flash is what sells the impact: for a tenth of a second the anvil is
+  // the brightest thing in the room and the smith is lit from below.
+  const impact = new THREE.PointLight(0xffc46b, 0, 2.4, 1.8)
+  impact.position.copy(work.position).y += 0.12
+  bench.add(impact)
 
   const scatter = (seed: number) => {
     const spun = Math.sin(seed * 127.1 + 311.7) * 43758.5453
@@ -384,7 +390,7 @@ export function makeBench(
         const burst = Math.floor(mixer.time / swingLength)
         for (let i = 0; i < SPARKS; i += 1) {
           const angle = scatter(i * 3.1 + burst * 17) * Math.PI * 2
-          const reach = 0.25 + scatter(i * 7.3 + burst * 5) * 0.3
+          const reach = 0.25 + scatter(i * 7.3 + burst * 5) * 0.35
           const lift = 0.5 + scatter(i * 11.7 + burst * 3) * 0.5
           sparkSpray[i * 3] = Math.cos(angle) * reach * flight
           sparkSpray[i * 3 + 1] = 0.04 + lift * flight - 1.1 * flight * flight
@@ -392,8 +398,10 @@ export function makeBench(
         }
         sparkShape.attributes.position.needsUpdate = true
         sparkGlow.opacity = 1 - flight
+        impact.intensity = flight < 0.35 ? 7 * (1 - flight / 0.35) : 0
       } else {
         sparkGlow.opacity = 0
+        impact.intensity = 0
       }
 
       if (hot) {
