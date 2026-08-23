@@ -81,9 +81,47 @@ recorded as a `node_tool_call` event in the run log.
 
 Path confinement prevents accidents, not malice: a shell command can still
 name absolute paths. Point `workdir` only at a directory you would let a
-junior contributor loose in. `poieo run examples/graphs/agent-task.yaml -b
-examples/bindings/mock.yaml --set workdir=/tmp/demo` exercises the loop
-offline.
+junior contributor loose in — or turn on isolation, below. `poieo run
+examples/graphs/agent-task.yaml -b examples/bindings/mock.yaml --set
+workdir=/tmp/demo` exercises the loop offline.
+
+### Isolation
+
+A task can be told to keep its hands inside its folder:
+
+```yaml
+name: keep the tests green
+folder: ~/src/thing
+prompt: Run the tests and fix what fails.
+isolation:
+  image: python:3.12-slim    # must already be pulled; poieo never pulls for you
+  network: none              # the default; `bridge` if the task needs to fetch
+```
+
+Without it, poieo's file tools stay inside the folder but a command the model
+runs does not — it reaches whatever you can reach. With it, the command stays
+inside the folder too. Nothing else changes: the same task without the block
+behaves exactly as before, and a machine with no docker is never even asked.
+
+`poieo run … --isolate python:3.12-slim` does the same for a single run.
+Whether docker is present and the image is here is checked when the config
+loads, not when the trigger fires at 3am.
+
+The environment is kept between runs, so what a task installs on Monday is
+there on Tuesday, and tasks over the same folder share one. It is disposable
+state: `poieo reset <task>` throws it away and the next run rebuilds it, which
+is the first thing to try when a task starts behaving oddly. Nothing in your
+folder is touched by that.
+
+**What it does not protect.** The folder itself — that is the work, and it is
+exposed by definition; reviewing what a run changed is a separate feature.
+What reaches the model, either: prompts and file contents leave your machine
+exactly as before. And a container shares your kernel, so this is a strong
+boundary rather than an absolute one; a VM is stronger.
+
+The question it actually asks you is: *can you predict every command this
+prompt will run, overnight, with this model?* If yes, isolation buys little.
+If no, that is what it is for.
 
 **Expressions** in `{{ … }}` templates and `when:` conditions run in a sandbox: attribute
 and index access, comparisons, boolean logic, and a short list of builtins (`len`, `str`,

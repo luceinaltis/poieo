@@ -176,7 +176,9 @@ def check_isolation(flows: list[FlowSpec]) -> None:
     not discover it at 3am.
 
     Flows that never asked are not merely skipped, they are not probed at all,
-    so a machine with no docker pays nothing and fails nowhere.
+    so a machine with no docker pays nothing and fails nowhere. Neither are
+    disabled flows: they are not going to run, and refusing to *list* one
+    would be the check getting in the way of the fix.
     """
     wanted = [f for f in flows if f.isolation]
     if not wanted:
@@ -211,7 +213,9 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
     from ..runtime.executor import preflight
 
     selected = [f for f in config.flows if f.enabled or not enabled_only]
-    check_isolation(selected)
+    # Only what will actually run: `poieo flows` loads disabled flows to list
+    # them, and a disabled flow whose image is gone must not block the listing.
+    check_isolation([f for f in selected if f.enabled])
 
     graphs: dict[Path, GraphSpec] = {}
     bindings: dict[Path, BindingSpec] = {}

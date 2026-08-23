@@ -322,3 +322,14 @@ def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
     config = _isolated_config(tmp_path)
     config.flows[0].enabled = False
     assert load_flows(config) == []
+
+
+def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypatch):
+    """`poieo flows` loads disabled flows too. It must still list one whose
+    image is gone -- that flow is not going to run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    config = _isolated_config(tmp_path)
+    config.flows[0].enabled = False
+    assert len(load_flows(config, enabled_only=False)) == 1

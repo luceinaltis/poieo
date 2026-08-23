@@ -59,6 +59,12 @@ def docker_available() -> tuple[bool, str]:
     if done.returncode != 0:
         detail = (done.stderr or done.stdout).strip().splitlines()
         return False, detail[-1] if detail else "the docker daemon is not running"
+    if not done.stdout.strip():
+        # `docker info` exits 0 with an unreachable daemon on Windows and puts
+        # the failure on stderr, so the version being empty is the real signal.
+        # Reported plainly rather than by quoting docker's named-pipe error: the
+        # user's next move is to start Docker, not to read a URL.
+        return False, "the docker daemon is not running"
     return True, ""
 
 

@@ -120,6 +120,7 @@ What poieo offers the user stacks in layers:
 | **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
 | **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | next |
+| **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
@@ -186,9 +187,14 @@ Autonomous execution needs explicit fences:
    reads before every run. This is what principle 2 promises and what the
    board edits.
    (`docs/superpowers/specs/2026-08-22-task-cards-design.md`)
-5. **Web control plane** — task card CRUD and flow control (REST API); fold
+5. **Isolation** — a task can opt into running its commands in a container
+   that sees its folder and nothing else of the machine. The shell was the
+   one tool that could reach past path confinement; this closes it.
+   (`docs/superpowers/specs/2026-08-22-container-isolation-design.md`)
+6. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-6. **Beyond (candidates)** — container isolation (Docker); delegating steps to
-   external agent CLIs (Claude Code, etc.); fan-out steps; dependencies
-   between tasks (roadmap ordering); run-log retention.
+7. **Beyond (candidates)** — tasks that work together, and can leave each
+   other notes; delegating steps to external agent CLIs (Claude Code, etc.);
+   fan-out steps; run-log retention; stronger isolation backends (microVM,
+   or the OS-level primitives Landlock and Seatbelt) behind the same seam.
