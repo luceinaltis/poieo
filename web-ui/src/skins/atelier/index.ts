@@ -41,6 +41,18 @@ const BASE_HALF = 3.2
 /** Which way the imported model has to turn to face its anvil. */
 const FACING = Math.PI * 0.5
 
+/**
+ * Which local axis swings a shoulder, and whether the two mirror each other.
+ *
+ * A rig's bone axes are its own business and reading them off the file is
+ * guesswork; these were chosen by filming all four combinations and looking.
+ */
+const ARM_AXIS: "x" | "z" = "x"
+const ARM_MIRROR = 1
+
+/** How far the shoulders travel from overhead to the anvil. */
+const ARM_SWEEP = 1.9
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -64,12 +76,17 @@ interface Bench {
   dispose(): void
 }
 
-/** The spine bones, outermost first, and the rotation they rest at. */
-function spineOf(figure: any): { bone: any; rest: number }[] {
-  return ["Spine", "Spine01", "Spine02"]
+/** A bone and the rotation it rests at, so motion is added rather than set. */
+interface Joint {
+  bone: any
+  rest: number
+}
+
+function jointsOf(figure: any, names: string[], axis: "x" | "z"): Joint[] {
+  return names
     .map((name) => figure.getObjectByName(name))
     .filter(Boolean)
-    .map((bone: any) => ({ bone, rest: bone.rotation.x }))
+    .map((bone: any) => ({ bone, rest: bone.rotation[axis] }))
 }
 
 function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): Bench {
@@ -122,26 +139,29 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
   group.add(fire)
 
   // -- the anvil on its stump
+  const bench = new THREE.Group()
+  group.add(bench)
+
   const stump = new THREE.Mesh(
     new THREE.CylinderGeometry(0.26, 0.3, 0.5, 10),
     new THREE.MeshStandardMaterial({ color: HUE.iron, roughness: 1 }),
   )
-  stump.position.set(0.42, 0.25, 0.45)
-  group.add(stump)
+  stump.position.y = 0.25
+  bench.add(stump)
 
   const anvil = new THREE.Mesh(
     new THREE.BoxGeometry(0.7, 0.18, 0.26),
     new THREE.MeshStandardMaterial({ color: HUE.anvil, roughness: 0.55, metalness: 0.6 }),
   )
-  anvil.position.set(0.42, 0.59, 0.45)
-  group.add(anvil)
+  anvil.position.y = 0.59
+  bench.add(anvil)
 
   const work = new THREE.Mesh(
     new THREE.BoxGeometry(0.34, 0.06, 0.1),
     new THREE.MeshBasicMaterial({ color: HUE.ember }),
   )
-  work.position.set(0.36, 0.71, 0.45)
-  group.add(work)
+  work.position.y = 0.71
+  bench.add(work)
 
   // -- the smith, the one thing that was downloaded.
   // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
@@ -152,12 +172,41 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
   group.add(figure)
-  const spine = spineOf(figure)
+  const spine = jointsOf(figure, ["Spine", "Spine01", "Spine02"], "x")
+  // Both hands are on the hammer, so the arms have to travel together.
+  const leftArm = jointsOf(figure, ["LeftArm", "LeftForeArm"], ARM_AXIS)
+  const rightArm = jointsOf(figure, ["RightArm", "RightForeArm"], ARM_AXIS)
 
   // -- finished work on a shelf
   const shelf = new THREE.Group()
   shelf.position.set(0.75, 1.15, -1.1)
   group.add(shelf)
+
+  /** Pose the arms and waist at a point in the swing, 0 raised to 1 struck. */
+  const pose = (through: number) => {
+    const drop = through * ARM_SWEEP
+    for (const joint of leftArm) {
+      joint.bone.rotation[ARM_AXIS] = joint.rest + drop / leftArm.length
+    }
+    for (const joint of rightArm) {
+      joint.bone.rotation[ARM_AXIS] = joint.rest + (drop * ARM_MIRROR) / rightArm.length
+    }
+    const bend = -0.1 + through * 0.55
+    for (const joint of spine) {
+      joint.bone.rotation.x = joint.rest + bend / spine.length
+    }
+  }
+
+  // Which way a rig's bones swing is its own business, and guessing it wrong
+  // put the anvil behind the smith twice. Strike once, see where the hands
+  // end up, and stand the anvil there.
+  pose(1)
+  figure.updateWorldMatrix(true, true)
+  const grip = new THREE.Vector3()
+  const hand = figure.getObjectByName("LeftHand") ?? figure
+  hand.getWorldPosition(grip)
+  bench.position.set(grip.x, 0, grip.z)
+  pose(0)
 
   let working = false
   let hot = false
@@ -203,17 +252,10 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
     },
 
     tick(elapsed: number) {
-      // The swing comes from the waist. Both of the smith's hands are on the
-      // hammer, so turning one arm would tear the grip apart -- bending the
-      // spine brings the head down in an arc and keeps the pose whole.
+      // A strike is mostly arms: the hammer falls from overhead in an arc,
+      // and the waist follows it. Bending the spine alone is a nod, not a blow.
       const swing = working ? hammerAngle(elapsed) : HAMMER.raised
-      const through = (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised)
-      // Spread across three spine bones, so this is the whole bow: leaning
-      // back a little to raise, and about fifty degrees over to strike.
-      const bend = working ? -0.2 + through * 1.15 : 0
-      for (const joint of spine) {
-        joint.bone.rotation.x = joint.rest + bend / spine.length
-      }
+      pose(working ? (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised) : 0)
 
       if (hot) {
         // firelight is never steady
