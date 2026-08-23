@@ -11,6 +11,8 @@
  */
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
+import { makeFace } from "./face"
+import { HAMMER_HAND, poseAt, riggingOf } from "./pose"
 import { HAMMER, figurePose, hammerAngle, lampLit, shelfCount } from "./scene"
 import {
   bounds,
@@ -41,24 +43,6 @@ const BASE_HALF = 3.2
 /** Which way the imported model has to turn to face its anvil. */
 const FACING = Math.PI * 0.5
 
-/** Which hand the model holds its hammer in. */
-const HAMMER_HAND = "Right"
-
-/**
- * The swing, as a shoulder and an elbow at each end of it.
- *
- * Raised: the arm is back and the elbow folded. Struck: both have opened out
- * and the hammer is down on the work. Which way round the rig turns is its own
- * business, so ARM_SENSE was filmed rather than reasoned about.
- */
-const SHOULDER = { raised: -1.5, struck: 0.55 }
-const ELBOW = { raised: -1.5, struck: -0.15 }
-const ARM_SENSE = 1
-
-/** Where the other hand holds the work: down and forward, onto the anvil. */
-const TONG_SHOULDER = 0.75
-const TONG_ELBOW = -0.7
-
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -82,28 +66,19 @@ interface Bench {
   dispose(): void
 }
 
-/** A bone and the rotation it rests at, so motion is added rather than set. */
-interface Joint {
-  bone: any
-  rest: number
+/** A steady per-flow offset, so neighbouring smiths blink out of step. */
+function stagger(flow: string): number {
+  let hash = 0
+  for (const letter of flow) hash = (hash * 31 + letter.charCodeAt(0)) % 3600
+  return hash
 }
 
-function jointsOf(figure: any, names: string[]): Joint[] {
-  return names
-    .map((name) => figure.getObjectByName(name))
-    .filter(Boolean)
-    .map((bone: any) => ({ bone, rest: bone.rotation.x }))
-}
-
-/** Bones that must move together, held by their rest orientation. */
-function heldBy(figure: any, names: string[]): { bone: any; rest: any }[] {
-  return names
-    .map((name) => figure.getObjectByName(name))
-    .filter(Boolean)
-    .map((bone: any) => ({ bone, rest: bone.quaternion.clone() }))
-}
-
-function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): Bench {
+function makeBench(
+  THREE: Three,
+  smith: any,
+  cloneSkinned: (node: any) => any,
+  blinkOffset: number,
+): Bench {
   const group = new THREE.Group()
 
   const floor = new THREE.Mesh(
@@ -186,58 +161,15 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
   group.add(figure)
-  // Rigs name their spines differently; take whatever is there.
-  const spineNames: string[] = []
-  figure.traverse((node: any) => {
-    if (/^spine/i.test(node.name ?? "")) spineNames.push(node.name)
-  })
-  const spine = jointsOf(figure, spineNames)
-
-  const other = HAMMER_HAND === "Right" ? "Left" : "Right"
-  const swinging = heldBy(figure, [`${HAMMER_HAND}Arm`, `${HAMMER_HAND}ForeArm`])
-  const holding = heldBy(figure, [`${other}Arm`, `${other}ForeArm`])
-  const swingAxis = new THREE.Vector3()
-  const facing = new THREE.Quaternion()
+  const rig = riggingOf(figure)
+  const face = makeFace(THREE, figure, blinkOffset)
 
   // -- finished work on a shelf
   const shelf = new THREE.Group()
   shelf.position.set(0.75, 1.15, -1.1)
   group.add(shelf)
 
-  const between = (span: { raised: number; struck: number }, through: number) =>
-    span.raised + (span.struck - span.raised) * through
-
-  /** Pose the waist and arms at a point in the swing, 0 raised to 1 struck. */
-  const pose = (through: number) => {
-    const bend = -0.08 + through * 0.4
-    for (const joint of spine) {
-      joint.bone.rotation.x = joint.rest + bend / Math.max(1, spine.length)
-    }
-
-    // The arms hang off the spine, so it has to have moved before they are
-    // placed against the world.
-    figure.updateWorldMatrix(true, true)
-    figure.getWorldQuaternion(facing)
-    // A hammer swings in the plane the smith faces, turning about the line
-    // across his shoulders. Working in world space keeps this independent of
-    // whatever axes the rig gave its bones.
-    swingAxis.set(0, 0, 1).applyQuaternion(facing)
-
-    const turn = [between(SHOULDER, through), between(ELBOW, through)]
-    swinging.forEach((joint, index) => {
-      joint.bone.quaternion.copy(joint.rest)
-      joint.bone.updateWorldMatrix(true, false)
-      joint.bone.rotateOnWorldAxis(swingAxis, turn[index] * ARM_SENSE)
-    })
-
-    // The other hand stays down on the work, holding it with the tongs.
-    const steady = [TONG_SHOULDER, TONG_ELBOW]
-    holding.forEach((joint, index) => {
-      joint.bone.quaternion.copy(joint.rest)
-      joint.bone.updateWorldMatrix(true, false)
-      joint.bone.rotateOnWorldAxis(swingAxis, steady[index] * ARM_SENSE)
-    })
-  }
+  const pose = (through: number) => poseAt(THREE, figure, rig, through)
 
   // Which way a rig's bones swing is its own business, and guessing it wrong
   // put the anvil behind the smith twice. Strike once, see where the hands
@@ -307,6 +239,8 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
       const swing = working ? hammerAngle(elapsed) : HAMMER.raised
       pose(working ? (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised) : 0)
 
+      face?.at(elapsed)
+
       if (hot) {
         // firelight is never steady
         fire.intensity = 8 + Math.sin(elapsed / 90) * 1.2 + Math.sin(elapsed / 37) * 0.6
@@ -314,6 +248,7 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
     },
 
     dispose() {
+      face?.dispose()
       group.traverse((node: any) => {
         node.geometry?.dispose?.()
         if (Array.isArray(node.material)) node.material.forEach((m: any) => m.dispose?.())
@@ -671,7 +606,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     for (const flow of flows) {
       let bench = benches.get(flow)
       if (!bench) {
-        bench = makeBench(THREE, smith, cloneSkinned)
+        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow))
         benches.set(flow, bench)
         room.add(bench.group)
       }

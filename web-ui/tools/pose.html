@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>pose sheet</title>
+    <style>
+      body {
+        margin: 0;
+        background: #14110d;
+        color: #d7cbb8;
+        font: 13px/1.5 ui-monospace, monospace;
+      }
+      h1 {
+        margin: 14px 16px 0;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #e0a866;
+      }
+      canvas {
+        display: block;
+        margin: 10px auto 0;
+      }
+      #angles {
+        display: grid;
+        margin: 0 auto;
+        border-top: 1px solid #342c22;
+        padding-top: 8px;
+      }
+      #angles div {
+        padding: 0 6px;
+        text-align: center;
+        white-space: pre-line;
+      }
+      #angles b {
+        display: block;
+        color: #e0a866;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>hammer swing &mdash; profile above, front below</h1>
+    <canvas id="sheet"></canvas>
+    <div id="angles"></div>
+    <script type="module" src="./pose.ts"></script>
+  </body>
+</html>

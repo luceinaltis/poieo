@@ -29,17 +29,22 @@ API = "https://api.meshy.ai/openapi"
 # spill onto the walls and the smith, and a flame baked into a texture could
 # never be turned off when the flow goes idle.
 SUBJECTS = {
+    # No tongs. Asking for a second prop got a misshapen slab welded to the
+    # hand, and the model is one mesh with one material, so a bad prop cannot
+    # be hidden or deleted afterwards. The work on the anvil is a box drawn in
+    # code instead, which costs nothing and is always the right shape.
     "smith": (
         "A stylized medieval blacksmith standing in a neutral A-pose reference "
         "stance: upright, feet shoulder-width apart, both arms hanging relaxed "
         "and slightly away from the body, elbows straight, looking forward. He "
-        "holds a forging hammer in his right hand and a pair of iron tongs in "
-        "his left, both hanging at his sides. Heavy brown leather apron with "
-        "shoulder straps over a linen shirt with rolled sleeves, thick boots, "
-        "short red beard, flat cap. Stylized game character, slightly cartoon "
-        "proportions, clean topology, PBR textures. This is a rigging reference "
-        "stance, not an action pose: he is not swinging, not bending, not "
-        "leaning over anything."
+        "holds a forging hammer in his right hand, hanging at his side. His "
+        "left hand is empty and open, holding nothing at all, fingers relaxed, "
+        "no tool, no tongs, no props in the left hand. Heavy brown leather "
+        "apron with shoulder straps over a linen shirt with rolled sleeves, "
+        "thick boots, short red beard, flat cap, clearly defined open eyes. "
+        "Stylized game character, slightly cartoon proportions, clean topology, "
+        "PBR textures. This is a rigging reference stance, not an action pose: "
+        "he is not swinging, not bending, not leaning over anything."
     ),
     "anvil": (
         "A blacksmith's anvil on a thick worn wooden stump, dark pitted iron with a "
