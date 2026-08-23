@@ -18,7 +18,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
-import { makeBench } from "../src/skins/atelier/index"
+import { makeBench, turnAnvil, turnFigure } from "../src/skins/atelier/index"
 import { HAMMER, hammerAngle } from "../src/skins/atelier/scene"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
 import { NOTHING } from "../src/review/rollup"
@@ -38,6 +38,9 @@ const TILE = 300
 const VIEWS = [
   { name: "the room", from: new THREE.Vector3(10, 10, 10) },
   { name: "across the swing", from: new THREE.Vector3(0, 2.5, 14) },
+  // Straight down, where "which way does he face" stops being a matter of
+  // squinting at an isometric view. The nudge off vertical keeps lookAt sane.
+  { name: "from above", from: new THREE.Vector3(0.01, 14, 0.01) },
 ]
 
 const canvas = document.querySelector("canvas") as HTMLCanvasElement
@@ -70,8 +73,35 @@ const scale = tall / (box.max.y - box.min.y || 1)
 smith.scale.setScalar(scale)
 smith.position.y = -box.min.y * scale
 
+// `?anvil=90` and `?facing=45` (degrees) photograph candidate orientations.
+const asked = new URLSearchParams(location.search)
+const anvilAsked = asked.get("anvil")
+if (anvilAsked !== null) turnAnvil((Number(anvilAsked) * Math.PI) / 180)
+const facingAsked = asked.get("facing")
+if (facingAsked !== null) turnFigure((Number(facingAsked) * Math.PI) / 180)
+
 const bench = makeBench(THREE, smith, cloneSkinned, 0)
 scene.add(bench.group)
+
+// Which way is he actually facing? Painted on the floor rather than reasoned
+// about: a green arrow out of the figure's own forward, red/blue for the
+// world's x and z. The last argument about axes went three rounds and lost.
+{
+  // The figure is the bench child that has bones in it; climb from a skinned
+  // mesh to the node the skin actually rotated.
+  const skinned = bench.group.getObjectByProperty("type", "SkinnedMesh")!
+  let body: any = skinned
+  while (body.parent && body.parent !== bench.group) body = body.parent
+  body.updateWorldMatrix(true, false)
+  const forward = new THREE.Vector3(0, 0, 1)
+    .applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(body.matrixWorld))
+    .setY(0)
+    .normalize()
+  const from = new THREE.Vector3().setFromMatrixPosition(body.matrixWorld).setY(0.02)
+  scene.add(new THREE.ArrowHelper(forward, from, 0.9, 0x44ff44, 0.2, 0.12))
+  scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.02, 0), 0.6, 0xff5555))
+  scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.02, 0), 0.6, 0x5588ff))
+}
 
 /** A flow in the middle of a run, which is when the hammer moves. */
 const running: Worker = {

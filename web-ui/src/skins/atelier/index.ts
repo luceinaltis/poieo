@@ -40,8 +40,28 @@ const PER_UNIT = 70
 /** Half the height the camera sees at zoom 1, in world units. */
 const BASE_HALF = 3.2
 
-/** Which way the imported model has to turn to face its anvil. */
-export const FACING = Math.PI * 0.5
+/**
+ * Which way the imported model has to turn so his chest faces his anvil.
+ *
+ * Not derivable: this rig's rest pose is visibly twisted -- the right shoulder
+ * sits a whole hand-width behind the left -- so the angle that reads as
+ * "facing the work" was chosen by sweeping candidates in tools/bench.html
+ * (?facing=45 and so on) and looking at the room view.
+ */
+export let FACING = Math.PI * 0.25
+
+/** Tool-only override, so bench.html can photograph facing candidates. */
+export function turnFigure(angle: number) {
+  FACING = angle
+}
+
+/** Which way the anvil lies under him; see tools/bench.html. */
+export let ANVIL_TURN = 0
+
+/** Tool-only override, so bench.html can photograph the candidates. */
+export function turnAnvil(angle: number) {
+  ANVIL_TURN = angle
+}
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -130,6 +150,11 @@ export function makeBench(
 
   // -- the anvil on its stump
   const bench = new THREE.Group()
+  // A smith works at the anvil's broad side, not at the horn end: its long
+  // axis lies across the way he faces, so the strike lands on the face and
+  // the work stretches left-to-right in front of him. Chosen by photographing
+  // both in tools/bench.html and looking.
+  bench.rotation.y = ANVIL_TURN
   group.add(bench)
 
   const stump = new THREE.Mesh(
