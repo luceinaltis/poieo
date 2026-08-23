@@ -2,7 +2,6 @@ import { expect, test } from "vitest"
 
 import {
   CELL,
-  HAMMER,
   ZOOM,
   bounds,
   cellAt,
@@ -11,7 +10,6 @@ import {
   columnsFor,
   figurePose,
   fit,
-  hammerAngle,
   lampLit,
   occupied,
   place,
@@ -152,23 +150,4 @@ test("the shelf fills with finished work, not attempts", () => {
   expect(shelfCount(worker({ recent: { ...NOTHING, works: 2, failed: 2 } }))).toBe(0)
 })
 
-test("the hammer lifts slowly and falls fast", () => {
-  // An even swing reads as waving. A smith's arm spends most of the cycle on
-  // the way up.
-  expect(hammerAngle(0)).toBeCloseTo(HAMMER.struck)
-  expect(hammerAngle(630)).toBeCloseTo(HAMMER.raised) // 70% of the way through
-  expect(hammerAngle(899)).toBeGreaterThan(HAMMER.raised)
-
-  const mid = hammerAngle(315)
-  expect(mid).toBeLessThan(HAMMER.struck)
-  expect(mid).toBeGreaterThan(HAMMER.raised)
-})
-
-test("the swing repeats and never leaves its arc", () => {
-  for (let t = 0; t < 3000; t += 37) {
-    expect(hammerAngle(t)).toBeGreaterThanOrEqual(HAMMER.raised)
-    expect(hammerAngle(t)).toBeLessThanOrEqual(HAMMER.struck)
-  }
-  expect(hammerAngle(120)).toBeCloseTo(hammerAngle(120 + 900))
-})
 

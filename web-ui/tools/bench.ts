@@ -19,13 +19,10 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
 import { makeBench, turnAnvil, turnFigure } from "../src/skins/atelier/index"
-import { HAMMER, hammerAngle } from "../src/skins/atelier/scene"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
 import { NOTHING } from "../src/review/rollup"
 import type { Worker } from "../src/state/stage"
 
-/** One hammer cycle is 900ms; sample it evenly. */
-const PERIOD = 900
 const FRAMES = 8
 
 const TILE = 300
@@ -80,7 +77,11 @@ if (anvilAsked !== null) turnAnvil((Number(anvilAsked) * Math.PI) / 180)
 const facingAsked = asked.get("facing")
 if (facingAsked !== null) turnFigure((Number(facingAsked) * Math.PI) / 180)
 
-const bench = makeBench(THREE, smith, cloneSkinned, 0)
+const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [])
+
+/** One whole strike, whatever the clip's own length is. */
+const swingClip = (gltf.animations ?? []).find((c) => c.name === "swing")
+const PERIOD = (swingClip?.duration ?? 0.9) * 1000
 scene.add(bench.group)
 
 // Which way is he actually facing? Painted on the floor rather than reasoned
@@ -143,13 +144,11 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
   }
 
   const cell = document.createElement("div")
-  // What the skin is actually asking for at this moment, so a swing that looks
-  // short can be told apart from a swing that is never asked to go far.
-  const through =
-    (hammerAngle(elapsed) - HAMMER.raised) / (HAMMER.struck - HAMMER.raised)
-  cell.innerHTML =
-    `<b>${Math.round(elapsed)} ms</b>through ${through.toFixed(2)}\n` +
-    `${through < 0.5 ? "raising" : "striking"}`
+  const acts = (bench.group as any).userData.acts
+  const state = ["working", "resting"]
+    .map((name) => `${name[0]} w${acts[name].getEffectiveWeight().toFixed(2)} t${acts[name].time.toFixed(2)}`)
+    .join("\n")
+  cell.innerHTML = `<b>${Math.round(elapsed)} ms</b>${state}`
   marks.append(cell)
 }
 

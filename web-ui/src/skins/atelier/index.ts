@@ -12,8 +12,7 @@
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { makeFace } from "./face"
-import { HAMMER_HAND, RESTING, poseAt, riggingOf } from "./pose"
-import { HAMMER, figurePose, hammerAngle, lampLit, shelfCount } from "./scene"
+import { figurePose, lampLit, shelfCount } from "./scene"
 import {
   bounds,
   cellAt,
@@ -63,6 +62,9 @@ export function turnAnvil(angle: number) {
   ANVIL_TURN = angle
 }
 
+/** Which hand the model holds its hammer in. */
+const HAMMER_HAND = "Right"
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -99,6 +101,7 @@ export function makeBench(
   smith: any,
   cloneSkinned: (node: any) => any,
   blinkOffset: number,
+  clips: any[],
 ): Bench {
   const group = new THREE.Group()
 
@@ -187,7 +190,6 @@ export function makeBench(
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
   group.add(figure)
-  const rig = riggingOf(figure)
   const face = makeFace(THREE, figure, blinkOffset)
 
   // -- finished work on a shelf
@@ -195,16 +197,45 @@ export function makeBench(
   shelf.position.set(0.75, 1.15, -1.1)
   group.add(shelf)
 
-  const pose = (through: number) => poseAt(THREE, figure, rig, through)
+  // Hand-tuned joint angles never stopped looking hand-tuned; these clips are
+  // motion capture, retargeted onto the rig by the same service that rigged it.
+  const mixer = new THREE.AnimationMixer(figure)
+  const clipNamed = (name: string) =>
+    clips.find((clip) => clip.name === name) ?? clips[0]
+  const acts = {
+    working: mixer.clipAction(clipNamed("swing")),
+    resting: mixer.clipAction(clipNamed("idle")),
+  }
+  // Fades MULTIPLY an action's weight rather than replace it, so the weight
+  // itself always stays 1 and only setEffectiveWeight is used to pick which
+  // action shows. Writing .weight = 0 directly once froze every smith solid:
+  // the later fade-in was 0 times a fade, which is 0 for good.
+  for (const action of Object.values(acts)) {
+    action.setEffectiveWeight(0)
+    action.play()
+  }
 
-  // Which way a rig's bones swing is its own business, and guessing it wrong
-  // put the anvil behind the smith twice. Strike once, see where the hands
-  // end up, and stand the anvil there.
-  pose(1)
-  figure.updateWorldMatrix(true, true)
+  // The anvil stands where the blow lands. Nobody wrote the strike down any
+  // more, so find it: run the swing through once and follow the hammer hand
+  // to its lowest point.
+  acts.working.setEffectiveWeight(1)
   const grip = new THREE.Vector3()
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
-  hand.getWorldPosition(grip)
+  {
+    const swing = clipNamed("swing")
+    const probe = new THREE.Vector3()
+    let lowest = Infinity
+    for (let step = 0; step <= 60; step += 1) {
+      mixer.setTime((step / 60) * swing.duration)
+      figure.updateWorldMatrix(true, true)
+      hand.getWorldPosition(probe)
+      if (probe.y < lowest) {
+        lowest = probe.y
+        grip.copy(probe)
+      }
+    }
+    mixer.setTime(0)
+  }
 
   // Just clear of the fist, along the way he faces, so the hammer lands on the
   // face of the anvil rather than through it -- or, as the first guess had it,
@@ -215,10 +246,15 @@ export function makeBench(
     .normalize()
     .multiplyScalar(0.12)
   bench.position.set(grip.x + ahead.x, 0, grip.z + ahead.z)
-  pose(RESTING)
+  acts.working.setEffectiveWeight(0)
+  acts.resting.setEffectiveWeight(1)
+  figure.updateWorldMatrix(true, true)
 
-  let working = false
   let hot = false
+  let was = -1
+  let mode: "working" | "resting" = "resting"
+  // For tools/bench.html only: lets the sheet print what the mixer is doing.
+  ;(group as any).userData.acts = acts
 
   return {
     group,
@@ -230,8 +266,20 @@ export function makeBench(
 
     paint(worker: Worker) {
       const pose = figurePose(worker)
-      working = pose === "working"
+      const working = pose === "working"
       hot = lampLit(worker)
+
+      // Cross-fade rather than cut, so a run starting reads as picking the
+      // hammer up rather than teleporting it overhead.
+      const next = working ? "working" : "resting"
+      if (next !== mode) {
+        const toward = acts[next]
+        const away = acts[mode]
+        mode = next
+        toward.reset()
+        toward.setEffectiveWeight(1)
+        away.crossFadeTo(toward, 0.35, false)
+      }
 
       mouth.material.color.setHex(hot ? HUE.ember : HUE.wall)
       work.visible = hot
@@ -261,10 +309,11 @@ export function makeBench(
     },
 
     tick(elapsed: number) {
-      // A strike is mostly arms: the hammer falls from overhead in an arc,
-      // and the waist follows it. Bending the spine alone is a nod, not a blow.
-      const swing = hammerAngle(elapsed)
-      pose(working ? (swing - HAMMER.raised) / (HAMMER.struck - HAMMER.raised) : RESTING)
+      // Driven by the board's shared clock rather than a Clock of its own, so
+      // a filmed replay strikes exactly where the live run did.
+      if (was < 0) was = elapsed
+      mixer.update((elapsed - was) / 1000)
+      was = elapsed
 
       face?.at(elapsed)
 
@@ -295,6 +344,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   const gltf = await loader.loadAsync(smithUrl)
 
   const smith = gltf.scene
+  const clips = gltf.animations ?? []
   // Meshy exports around a metre; scale it to the room and stand it on the floor.
   const box = new THREE.Box3().setFromObject(smith)
   const height = box.max.y - box.min.y
@@ -633,7 +683,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     for (const flow of flows) {
       let bench = benches.get(flow)
       if (!bench) {
-        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow))
+        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow), clips)
         benches.set(flow, bench)
         room.add(bench.group)
       }

@@ -33,22 +33,6 @@ export type Pose = "sitting" | "working" | "alarmed"
  * The pivot is the shoulder and the hammer is long, so a strike much past zero
  * swings the head forward over the anvil instead of down onto the work.
  */
-export const HAMMER = { raised: -1.25, struck: 0.02, resting: 1.15 }
-
-/**
- * Where the hammer is in its swing.
- *
- * Slow lift, quick fall -- an even sine reads as waving, not striking.
- */
-export function hammerAngle(elapsed: number, period = 900): number {
-  const t = ((elapsed % period) + period) % period / period
-  const { raised, struck } = HAMMER
-  return t < 0.7
-    ? struck + (raised - struck) * (t / 0.7)
-    : raised + (struck - raised) * ((t - 0.7) / 0.3)
-}
-
-
 export function figurePose(worker: Worker): Pose {
   if (worker.status === "error") return "alarmed"
   return worker.status === "running" ? "working" : "sitting"
