@@ -255,6 +255,7 @@ class DockerExecutor(Executor):
         user: str | None = None,
         labels: dict[str, str] | None = None,
         box: "Box | None" = None,
+        postbox: Any = None,
     ):
         self.workdir = _resolved(workdir)
         self.image = image
@@ -267,7 +268,7 @@ class DockerExecutor(Executor):
         self.box = box
         self.container_id: str | None = None
 
-        self._load(toolsets)
+        self._load(toolsets, postbox)
         # The one substitution this class exists to make.
         if "run_command" in self.tools:
             self.tools["run_command"] = Tool(

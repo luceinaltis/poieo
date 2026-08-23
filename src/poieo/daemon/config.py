@@ -154,8 +154,12 @@ def _load_tasks(config: DaemonConfig) -> None:
         raise SpecError(f"tasks folder does not exist: {folder}")
 
     taken = {flow.name for flow in config.flows}
-    for task in load_tasks(folder):
-        flow, graph = expand(task)
+    # Two passes: a task's generated prompt names the tasks it may tell, and
+    # that is not known until the whole folder has been read.
+    tasks = load_tasks(folder)
+    roster = [task.slug for task in tasks]
+    for task in tasks:
+        flow, graph = expand(task, roster=roster)
         if flow.name in taken:
             raise SpecError(
                 f"task '{task.source_path}' is already a flow named '{flow.name}'"

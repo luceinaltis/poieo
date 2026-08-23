@@ -55,6 +55,7 @@ class FlowRunner:
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
         boxes: Any = None,
+        postbox: Any = None,
     ):
         self.flow = flow
         self.config = config
@@ -72,6 +73,8 @@ class FlowRunner:
         # box the way they already share a provider pool. Opaque here --
         # only make_executor knows what is inside.
         self.boxes = boxes
+        # Who this task may leave a note for. None unless it took the toolset.
+        self.postbox = postbox
 
     @property
     def name(self) -> str:
@@ -117,6 +120,7 @@ class FlowRunner:
                     cancel=self.cancel,
                     isolation=self.flow.spec.isolation,
                     boxes=self.boxes,
+                    postbox=self.postbox,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None
@@ -196,6 +200,36 @@ class Daemon:
         )
         self.runners: list[FlowRunner] = []
 
+    def _postbox_for(self, flow: LoadedFlow) -> Any:
+        """A task that took the notes toolset gets one; nobody else does."""
+        task = self.config.tasks_by_flow.get(flow.spec.name)
+        if task is None or "notes" not in (task.tools or []):
+            return None
+        from ..tools.notes import Postbox
+
+        return Postbox(
+            sender=flow.spec.name,
+            recipients={
+                name: other.journal_path()
+                for name, other in self.config.tasks_by_flow.items()
+            },
+        )
+
+    def _runners(self) -> list[FlowRunner]:
+        return [
+            FlowRunner(
+                flow,
+                self.config,
+                self._pool_for(flow),
+                self.store,
+                self.cancel,
+                self.on_run,
+                self.boxes,
+                self._postbox_for(flow),
+            )
+            for flow in self.flows
+        ]
+
     def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
         if flow.binding_key not in self.pools:
             self.pools[flow.binding_key] = ProviderPool(flow.binding)
@@ -245,18 +279,7 @@ class Daemon:
             web_task = asyncio.create_task(server.serve())
             log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
 
-        self.runners = [
-            FlowRunner(
-                flow,
-                self.config,
-                self._pool_for(flow),
-                self.store,
-                self.cancel,
-                self.on_run,
-                self.boxes,
-            )
-            for flow in self.flows
-        ]
+        self.runners = self._runners()
         log.info(
             "poieo daemon up: %d flow(s), store at %s",
             len(self.runners),

@@ -46,6 +46,8 @@ class RunContext:
     # make_executor knows what is inside, so the runtime stays unaware that
     # containers exist at all.
     boxes: Any = None
+    # Who this run may leave a note for. Opaque, like boxes.
+    postbox: Any = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

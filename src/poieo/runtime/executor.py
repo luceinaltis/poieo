@@ -45,6 +45,7 @@ async def execute(
     cancel: asyncio.Event | None = None,
     isolation: Any = None,
     boxes: Any = None,
+    postbox: Any = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -68,6 +69,7 @@ async def execute(
         cancel=cancel,
         isolation=isolation,
         boxes=boxes,
+        postbox=postbox,
     )
 
     started_at = utcnow()

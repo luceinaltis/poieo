@@ -61,10 +61,14 @@ class Executor:
     workdir: Path
     tools: dict[str, Tool]
 
-    def _load(self, toolsets: "Sequence[str]") -> None:
+    def _load(self, toolsets: "Sequence[str]", postbox: Any = None) -> None:
         self.tools = {}
         for name in toolsets:
-            for tool in TOOLSETS[name]:
+            entry = TOOLSETS[name]
+            # A toolset that must know who is running it is a factory, and is
+            # built per executor. The rest are shared module-level lists.
+            tools = entry(postbox) if callable(entry) else entry
+            for tool in tools:
                 self.tools[tool.definition.name] = tool
 
     def definitions(self) -> list[ToolDef]:
@@ -95,9 +99,11 @@ class LocalExecutor(Executor):
     lifecycle is inherited and does nothing.
     """
 
-    def __init__(self, workdir: Path, toolsets: "Sequence[str]"):
+    def __init__(
+        self, workdir: Path, toolsets: "Sequence[str]", postbox: Any = None
+    ):
         self.workdir = workdir
-        self._load(toolsets)
+        self._load(toolsets, postbox)
 
 
 def make_box_keeper() -> Any:
@@ -116,6 +122,7 @@ def make_executor(
     toolsets: "Sequence[str]",
     isolation: Isolation | None = None,
     boxes: Any = None,
+    postbox: Any = None,
 ) -> Executor:
     """The one place that decides where an agent node's tools run.
 
@@ -124,7 +131,7 @@ def make_executor(
     machine that never isolates never pays to load it.
     """
     if isolation is None:
-        return LocalExecutor(workdir, toolsets)
+        return LocalExecutor(workdir, toolsets, postbox)
     from .docker import DockerExecutor
 
     # With a keeper the box is the task's and survives the run; without one
@@ -138,13 +145,21 @@ def make_executor(
         network=isolation.network,
         user=isolation.user,
         box=box,
+        postbox=postbox,
     )
 
 
 # Import toolset modules after Tool is defined, since they import Tool from this module
 # (same pattern as pydantic's late rebuild)
 from .files import FILES_TOOLS  # noqa: E402
+from .notes import notes_tools  # noqa: E402
 from .shell import SHELL_TOOLS  # noqa: E402
 
-TOOLSETS: dict[str, list[Tool]] = {"files": FILES_TOOLS, "shell": SHELL_TOOLS}
+# A value is either a fixed list, or a factory taking the postbox for a
+# toolset that has to know who is running it.
+TOOLSETS: dict[str, Any] = {
+    "files": FILES_TOOLS,
+    "shell": SHELL_TOOLS,
+    "notes": notes_tools,
+}
 DEFAULT_TOOLSETS: list[str] = ["files", "shell"]

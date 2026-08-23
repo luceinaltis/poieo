@@ -41,7 +41,7 @@ JOURNAL_LIMIT = 20
 JOURNAL_WIDTH = 300
 
 
-def system_block(task: TaskSpec) -> str:
+def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
     """The generated node's system prompt. User-visible, so it is fixed here.
 
     The journal arrives as run input rather than baked in, because it is
@@ -53,6 +53,26 @@ def system_block(task: TaskSpec) -> str:
         "{{ input.journal }}\n\n"
         "Finish by saying in one line what you did. If there was nothing worth\n"
         "doing, say that in one line instead."
+        + _roster_block(task, roster)
+    )
+
+
+def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
+    """Who this task may leave a note for.
+
+    A model cannot address a task it does not know exists. One that did not ask
+    for the notes toolset is told nothing at all -- not even that others are
+    there -- and one whose siblings are none gets no awkward empty sentence.
+    """
+    if "notes" not in (task.tools or DEFAULT_TOOLS):
+        return ""
+    others = [name for name in (roster or []) if name != task.slug]
+    if not others:
+        return ""
+    return (
+        "\n\nOther tasks you can leave a note for: "
+        + ", ".join(others)
+        + ".\nThey read it on their next run, not now, so do not wait for a reply."
     )
 
 
@@ -168,7 +188,7 @@ def _trigger(task: TaskSpec) -> dict[str, Any]:
     return {"type": "interval", "every": every}
 
 
-def build_graph(task: TaskSpec) -> GraphSpec:
+def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
     """The one-node graph a prompt-shaped task stands for."""
     return GraphSpec(
         name=task.slug,
@@ -182,7 +202,7 @@ def build_graph(task: TaskSpec) -> GraphSpec:
                 workdir=str(task.folder_path()),
                 tools=task.tools or list(DEFAULT_TOOLS),
                 max_turns=task.max_turns,
-                system=system_block(task),
+                system=system_block(task, roster),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
             )
@@ -190,7 +210,9 @@ def build_graph(task: TaskSpec) -> GraphSpec:
     )
 
 
-def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
+def expand(
+    task: TaskSpec, roster: list[str] | None = None
+) -> tuple[FlowSpec, GraphSpec | None]:
     """Desugar a task into the flow and graph the rest of poieo understands.
 
     The graph is None when the task names one of its own; the flow then points
@@ -198,7 +220,7 @@ def expand(task: TaskSpec) -> tuple[FlowSpec, GraphSpec | None]:
     """
     from .daemon.config import FlowSpec  # late import: config imports this module
 
-    graph = None if task.graph else build_graph(task)
+    graph = None if task.graph else build_graph(task, roster)
     flow = FlowSpec(
         name=task.slug,
         # With no graph file of its own, the flow points at the task that stands
@@ -232,11 +254,19 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
 # user types by hand works exactly like a line poieo wrote.
 
 
-def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
-    """The tail of a task's journal, as it goes into the prompt.
+# What a task writes at the end of its own run. The last such line is the
+# bookmark: everything after it arrived while the task was not looking.
+OWN_KINDS = ("did", "nothing")
+# One entry looks like: `- <date> <time> {sep} <kind padded> <text>`.
+PREFIX = "- "
+SEPARATOR = " · "
+NEW_HEADER = "New since you last worked:"
+OLD_HEADER = "What you did before that:"
 
-    Read as text, not parsed: that is what makes hand-written lines work.
-    """
+
+def _entries(path: Path) -> list[str]:
+    """Every journal line, as text. Not parsed -- that is what makes a
+    hand-written line work exactly like one poieo wrote."""
     try:
         raw = path.read_text(encoding="utf-8") if path.exists() else ""
     except OSError as exc:
@@ -244,16 +274,70 @@ def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
         # journal repeats itself silently.
         log.warning("could not read the journal %s: %s", path, exc)
         raw = ""
-    lines = [
+    return [
         line.rstrip()
         for line in raw.splitlines()
         if line.strip() and not line.startswith("#")
     ]
+
+
+def _is_own_entry(line: str) -> bool:
+    """Is this line the task writing about its own run?
+
+    Read by structure -- the kind sits in a fixed field after the separator --
+    so a note whose *text* mentions one of those words cannot pass for a
+    bookmark. A forged bookmark would mark real notes as read, silently, which
+    is the one failure this whole design exists to prevent.
+    """
+    head, sep, rest = line.partition(SEPARATOR)
+    if not sep or not head.startswith(PREFIX):
+        return False
+    return rest.split(' ', 1)[0] in OWN_KINDS
+
+
+def _bookmark(lines: list[str]) -> int:
+    """Index just past the task's own last completed run, or 0.
+
+    A failed run is deliberately not a bookmark: it saw what had arrived but
+    cannot be said to have handled it, and repeating a note is recoverable
+    where losing one is not.
+    """
+    for i in range(len(lines) - 1, -1, -1):
+        if _is_own_entry(lines[i]):
+            return i + 1
+    return 0
+
+
+def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
+    """The journal as a prompt sees it: what is new, then what came before.
+
+    The file is one stream in time order and is never split. The two parts are
+    cut here, at the task's own last entry, so that what is new is chosen by
+    *position* -- no quantity of notes can push another out before it has been
+    seen once. Only the half that is allowed to age out is bounded.
+    """
+    lines = _entries(path)
     if not lines:
         return "nothing yet"
-    if len(lines) > limit:
-        return "\n".join(["(earlier entries omitted)", *lines[-limit:]])
-    return "\n".join(lines)
+
+    at = _bookmark(lines)
+    fresh, history = lines[at:], lines[:at]
+
+    if not fresh:
+        head = "Nothing new since you last worked."
+    else:
+        shown, waiting = fresh[:limit], max(0, len(fresh) - limit)
+        # Oldest first, always: showing the newest would strand the oldest
+        # forever, since the bookmark only moves as far as what was shown.
+        head = "\n".join([NEW_HEADER, *shown])
+        if waiting:
+            head += f"\n({waiting} more waiting; you will see them next time)"
+
+    if not history:
+        return head
+    tail = history[-limit:]
+    omitted = ["(earlier entries omitted)"] if len(history) > limit else []
+    return "\n".join([head, "", OLD_HEADER, *omitted, *tail])
 
 
 def append_journal(
