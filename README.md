@@ -37,6 +37,10 @@ poieo run      examples/graphs/support-triage.yaml -b examples/bindings/mock.yam
 poieo daemon   examples/poieo.yaml --once
 ```
 
+A task card that names its own `binding:` needs no flags at all --
+`poieo run tasks/card.yaml` runs it once, and `poieo daemon tasks/` keeps
+every card in the folder running.
+
 ## The logical layer
 
 ```yaml

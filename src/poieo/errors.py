@@ -42,3 +42,34 @@ class NodeError(PoieoError):
 
 class RunAborted(PoieoError):
     """A run was stopped before reaching a terminal node."""
+
+
+def describe_invalid(exc: Exception, known_keys: "tuple[str, ...]" = ()) -> str:
+    """A validation failure in the user's words, one line per problem.
+
+    Pydantic's own rendering is written for developers -- type slugs, a docs
+    URL -- and it is what a user with a typo in a YAML file used to see. Keys
+    close to a real one get a suggestion, because 'promt' is a slip of the
+    fingers, not a gap in understanding.
+    """
+    from difflib import get_close_matches
+
+    errors = getattr(exc, "errors", None)
+    if errors is None:
+        return str(exc)
+
+    lines = []
+    for err in errors():
+        key = ".".join(str(part) for part in err.get("loc", ()))
+        kind = err.get("type", "")
+        if kind == "extra_forbidden":
+            line = f"'{key}' is not a setting here"
+            close = get_close_matches(key, known_keys, n=1)
+            if close:
+                line += f" -- did you mean '{close[0]}'?"
+        elif kind == "missing":
+            line = f"'{key}' is required"
+        else:
+            line = f"'{key}': {err.get('msg', kind)}" if key else err.get("msg", kind)
+        lines.append(line)
+    return "; ".join(lines) or str(exc)

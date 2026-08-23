@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .errors import BindingError, SpecError
+from .errors import BindingError, SpecError, describe_invalid
 from .graph import load_document
 
 # Populated by `poieo.providers.register()` at import time. Keeping the set here
@@ -143,6 +143,9 @@ def load_binding(path: str | Path) -> BindingSpec:
     try:
         binding = BindingSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(f"{path}: invalid binding: {exc}") from exc
+        raise SpecError(
+            f"{path}: invalid binding: "
+            f"{describe_invalid(exc, tuple(BindingSpec.model_fields))}"
+        ) from exc
     binding.source_path = path
     return binding

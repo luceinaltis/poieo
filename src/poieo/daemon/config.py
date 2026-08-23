@@ -9,7 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..binding import BindingSpec, load_binding
-from ..errors import SpecError
+from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec, load_document, load_graph
 from ..tools import Isolation
 from ..task import TaskSpec, expand, load_tasks, read_journal
@@ -137,7 +137,10 @@ def load_config(path: str | Path) -> DaemonConfig:
     try:
         config = DaemonConfig.model_validate(data)
     except Exception as exc:
-        raise SpecError(f"{path}: invalid daemon config: {exc}") from exc
+        raise SpecError(
+            f"{path}: invalid daemon config: "
+            f"{describe_invalid(exc, tuple(DaemonConfig.model_fields))}"
+        ) from exc
     config.source_path = path.resolve()
     _load_tasks(config)
     return config
@@ -165,10 +168,29 @@ def _load_tasks(config: DaemonConfig) -> None:
                 f"task '{task.source_path}' is already a flow named '{flow.name}'"
             )
         taken.add(flow.name)
+        if not flow.binding and not config.binding:
+            raise SpecError(
+                f"task '{task.slug}' names no binding and there is no default. "
+                f"Add `binding: <file>` to the card, or to the daemon config."
+            )
         config.flows.append(flow)
         config.tasks_by_flow[flow.name] = task
         if graph is not None:
             config.task_graphs[flow.name] = graph
+
+
+def config_for_tasks_folder(folder: Path) -> DaemonConfig:
+    """The config `poieo daemon <folder>` stands for: run the cards in it.
+
+    Each card names its own binding, because there is no config file to hold
+    a default. The store lands beside the folder, so the cards, their
+    journals and their run logs travel together.
+    """
+    folder = folder.resolve()
+    config = DaemonConfig(store=str(folder.parent / ".poieo"), tasks=str(folder))
+    config.source_path = folder / "poieo.yaml"  # anchors relative paths
+    _load_tasks(config)
+    return config
 
 
 def check_isolation(flows: list[FlowSpec]) -> None:
