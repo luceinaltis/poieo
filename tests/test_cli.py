@@ -350,3 +350,66 @@ def test_the_listing_never_names_the_machinery(tmp_path):
     result = runner.invoke(app, ["tasks", str(folder)])
     for word in ("python:3.12-slim", "docker", "container"):
         assert word not in result.stdout
+
+
+# -- one-shot isolation, and the escape hatch --------------------------------
+
+
+def test_run_isolate_preflights_before_the_first_model_call(tmp_path, monkeypatch):
+    """A bad image must fail here, not eight turns into a run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    result = runner.invoke(
+        app,
+        [
+            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "--set", "message=hi",
+            "--no-log",
+            "--isolate", "python:3.12-slim",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "docker is not on PATH" in result.stderr  # errors go to stderr
+
+
+def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
+    def boom():
+        raise AssertionError("docker was probed for a run that never asked")
+
+    monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
+    result = runner.invoke(
+        app,
+        [
+            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "--set", "message=hi",
+            "--no-log",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_reset_says_the_folder_was_not_touched(tmp_path, monkeypatch):
+    removed = []
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: removed.append(folder) or 1)
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
+    assert result.exit_code == 0
+    assert removed and "Nothing in" in result.stdout and "was touched" in result.stdout
+
+
+def test_reset_on_a_task_with_nothing_to_reset_is_not_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: 0)
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    assert runner.invoke(app, ["reset", str(folder / "card.yaml")]).exit_code == 0
+
+
+def test_reset_on_a_task_that_is_not_isolated_explains_itself(tmp_path):
+    folder = _card(tmp_path)
+    result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
+    assert result.exit_code == 0
+    assert "isolated" in result.stdout

@@ -27,11 +27,13 @@ for _stream in (sys.stdout, sys.stderr):
 from . import __version__
 from .binding import load_binding
 from .daemon import Daemon, load_config, load_flows
+from .daemon.config import FlowSpec, check_isolation
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
+from .tools import Isolation
 from .task import (
     append_journal,
     build_graph,
@@ -360,6 +362,9 @@ def run(
     store: Path = typer.Option(Path(".poieo"), "--store", help="Run-log directory."),
     no_log: bool = typer.Option(False, "--no-log", help="Do not write a run log."),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
+    isolate: Optional[str] = typer.Option(
+        None, "--isolate", help="Run commands isolated, using this image."
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Execute a graph, or a task, once."""
@@ -373,9 +378,21 @@ def run(
     payload = {**_task_payload(graph_path), **_parse_input(input_json, set_)}
     run_store = NullStore() if no_log else RunStore(store)
 
+    isolation = Isolation(image=isolate) if isolate else None
+    if isolation is not None:
+        # Same preflight the daemon does, for the same reason: better here
+        # than eight turns in. No box is kept -- a one-shot run has no next
+        # run to keep one for, so the executor makes and destroys its own.
+        try:
+            check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
+        except PoieoError as exc:
+            _fail(str(exc))
+
     async def _go():
         async with ProviderPool(spec) as pool:
-            return await execute(graph, spec, pool, run_store, input=payload)
+            return await execute(
+                graph, spec, pool, run_store, input=payload, isolation=isolation
+            )
 
     try:
         result = asyncio.run(_go())
@@ -400,6 +417,34 @@ def run(
 
     if result.status != "completed":
         raise typer.Exit(code=1)
+
+
+@app.command()
+def reset(
+    task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
+) -> None:
+    """Throw away a task's isolated environment. It is rebuilt on the next run."""
+    try:
+        task = load_task(task_path)
+    except PoieoError as exc:
+        _fail(str(exc))
+
+    if not task.isolation:
+        _ok(f"'{task.name}' does not run isolated; there is nothing to reset")
+        return
+
+    from .tools import docker
+
+    available, reason = docker.docker_available()
+    if not available:
+        _fail(reason)
+    removed = docker.remove_boxes_for(task.folder_path())
+    # The one thing the user needs to hear: their files are fine. Everything
+    # this throws away is rebuilt the next time the task runs.
+    _ok(
+        f"reset '{task.name}': {removed} environment(s) thrown away. "
+        f"Nothing in {task.folder_path()} was touched."
+    )
 
 
 @app.command()

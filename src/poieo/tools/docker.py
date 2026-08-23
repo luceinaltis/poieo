@@ -349,3 +349,39 @@ class BoxKeeper:
         for box in list(self.boxes.values()):
             await box.remove()
         self.boxes.clear()
+
+
+def remove_boxes_for(workdir: Path) -> int:
+    """Throw away every box built around ``workdir``. Returns how many went.
+
+    Synchronous and label-driven, because `poieo reset` runs with no daemon and
+    no event loop: it must reach boxes this process never started.
+
+    Nothing inside the folder is touched. That is the whole promise of the
+    command, and the reason it is safe to suggest whenever a task starts
+    behaving oddly.
+    """
+    # Matched on the mount rather than the key: reset knows the folder but not
+    # which image or network the box was built with.
+    workdir = _resolved(workdir)
+    listed = subprocess.run(
+        ["docker", "ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_BOX}"],
+        capture_output=True,
+        text=True,
+        timeout=_PROBE_TIMEOUT,
+    )
+    if listed.returncode != 0:
+        return 0
+    removed = 0
+    for container_id in listed.stdout.split():
+        shown = subprocess.run(
+            ["docker", "inspect", "-f", "{{range .Mounts}}{{.Source}}{{end}}", container_id],
+            capture_output=True,
+            text=True,
+            timeout=_PROBE_TIMEOUT,
+        )
+        if shown.returncode != 0 or shown.stdout.strip() != str(workdir):
+            continue
+        subprocess.run(["docker", "rm", "-f", container_id], capture_output=True)
+        removed += 1
+    return removed
