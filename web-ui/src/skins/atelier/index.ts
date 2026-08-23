@@ -126,28 +126,28 @@ function makeBench(THREE: Three, smith: any, cloneSkinned: (node: any) => any): 
     new THREE.CylinderGeometry(0.26, 0.3, 0.5, 10),
     new THREE.MeshStandardMaterial({ color: HUE.iron, roughness: 1 }),
   )
-  stump.position.set(0.45, 0.25, 0.35)
+  stump.position.set(0.42, 0.25, 0.45)
   group.add(stump)
 
   const anvil = new THREE.Mesh(
     new THREE.BoxGeometry(0.7, 0.18, 0.26),
     new THREE.MeshStandardMaterial({ color: HUE.anvil, roughness: 0.55, metalness: 0.6 }),
   )
-  anvil.position.set(0.45, 0.59, 0.35)
+  anvil.position.set(0.42, 0.59, 0.45)
   group.add(anvil)
 
   const work = new THREE.Mesh(
     new THREE.BoxGeometry(0.34, 0.06, 0.1),
     new THREE.MeshBasicMaterial({ color: HUE.ember }),
   )
-  work.position.set(0.4, 0.71, 0.35)
+  work.position.set(0.36, 0.71, 0.45)
   group.add(work)
 
   // -- the smith, the one thing that was downloaded.
   // A skinned mesh needs SkeletonUtils: a plain clone shares one skeleton, so
   // every bench would swing whenever any of them did.
   const figure = cloneSkinned(smith)
-  figure.position.set(-0.35, 0, 0.35)
+  figure.position.set(-0.18, 0, 0.45)
   // Turned to the anvil rather than the camera. Which way that is depends on
   // the model's own facing, so it is a constant to look at rather than derive.
   figure.rotation.y = FACING
