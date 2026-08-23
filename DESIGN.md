@@ -121,6 +121,7 @@ What poieo offers the user stacks in layers:
 | **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | next |
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
+| **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
@@ -194,7 +195,11 @@ Autonomous execution needs explicit fences:
 6. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-7. **Beyond (candidates)** — tasks that work together, and can leave each
-   other notes; delegating steps to external agent CLIs (Claude Code, etc.);
-   fan-out steps; run-log retention; stronger isolation backends (microVM,
-   or the OS-level primitives Landlock and Seatbelt) behind the same seam.
+7. **Tasks that work together** — a task can leave a line in another task's
+   journal, read on that task's next run. News, not orders, and no way to
+   spin: a note wakes nobody.
+   (`docs/superpowers/specs/2026-08-23-task-notes-design.md`)
+8. **Beyond (candidates)** — delegating steps to external agent CLIs
+   (Claude Code, etc.); fan-out steps; run-log retention; stronger isolation
+   backends (microVM, or the OS-level primitives Landlock and Seatbelt)
+   behind the same seam.

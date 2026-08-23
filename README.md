@@ -256,12 +256,51 @@ poieo note tasks/keep-improving.yaml "leave prose alone, spend the night on test
 ```
 
 -- or by opening the file and typing one. The tail is read as text and never
-parsed, so a line you wrote works exactly like a line poieo wrote. The last 20
-entries go into the prompt; the file keeps everything.
+parsed, so a line you wrote works exactly like a line poieo wrote. The file
+keeps everything.
+
+The journal reaches the prompt in two parts: everything that arrived since the
+task last worked, in full, and then the tail of what came before, bounded. The
+task's own last entry is the divide, so a note cannot be crowded out by history
+however long the journal grows -- what is new is chosen by where it is, not by
+how much of it there is.
 
 This is what stops a standing task from re-doing last night's work, and it is
 where the morning review's accept and discard notes will land once the review
 screen ships.
+
+### Tasks leaving each other notes
+
+A task can write a line in another task's journal, using the same file and the
+same shape you do:
+
+```yaml
+name: build the docs
+folder: ~/src/thing
+prompt: Rebuild the docs when the source has changed.
+tools: [files, shell, notes]     # `notes` is opt-in
+```
+
+It then has one more tool, `tell`, and its prompt lists the tasks it may use it
+on. The link checker sees the result on its next run:
+
+```
+New since you last worked:
+- 2026-08-23 03:00 . task    [build-docs] rebuilt the docs; 30 links changed
+- 2026-08-23 08:02 . you     ignore external links
+
+What you did before that:
+- 2026-08-22 03:14 . did     checked 12 links, all fine
+```
+
+A note is **news, not an instruction** -- the recipient is a model reading
+text, and may ignore it exactly as it may ignore what you wrote. It carries a
+line, not data: tasks that need to hand over real output share a folder, and
+the note says there is something new there.
+
+And a note **wakes nobody**. It is read on the recipient's next scheduled run,
+which is why two tasks writing to each other still run only on their own
+triggers and cannot spin each other up.
 
 ## The resident layer
 
