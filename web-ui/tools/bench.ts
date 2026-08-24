@@ -147,6 +147,25 @@ bench.paint(running)
 const camera = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, -100, 100)
 const middle = new THREE.Vector3(0, 0.9, 0)
 
+// `?close` puts the camera on his face instead of the room. The whole figure
+// is forty pixels of a 300-pixel tile, which is no way to judge an eye or a
+// grip -- and judging them by eye off the board is how a hammer spent a week
+// held the wrong way up.
+if (asked.get("close") !== null) {
+  // Posed and resolved first: read straight off the bind pose and the camera
+  // ends up aimed at the roof.
+  bench.tick(0)
+  bench.group.updateMatrixWorld(true)
+  const head = bench.group.getObjectByName("Head") ?? bench.group
+  head.getWorldPosition(middle)
+  const half = 0.22
+  camera.left = -half
+  camera.right = half
+  camera.top = half
+  camera.bottom = -half
+  camera.updateProjectionMatrix()
+}
+
 const marks = document.getElementById("marks") as HTMLElement
 marks.style.gridTemplateColumns = `repeat(${FRAMES}, ${TILE}px)`
 marks.style.width = `${TILE * FRAMES}px`

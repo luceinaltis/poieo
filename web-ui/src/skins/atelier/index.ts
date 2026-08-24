@@ -491,10 +491,8 @@ export function makeBench(
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
   const turned = new THREE.Quaternion()
-  // Down in the room. The same three numbers as HANDLE and not the same
-  // thing: one is a direction in the prop, this one is a direction in the
-  // world, and tick() below turns the second into the first.
-  const floorward = new THREE.Vector3()
+  // Up in the room, carried into the forearm's frame by tick() below.
+  const skyward = new THREE.Vector3()
   const forearm = figure.getObjectByName(`${HAMMER_HAND}ForeArm`) ?? hand
   const boneScale = new THREE.Vector3().setFromMatrixScale(forearm.matrixWorld).x || 1
   const hammer = hammerHeld(THREE, props.hammer, HAMMER_LONG / boneScale)
@@ -717,15 +715,16 @@ export function makeBench(
 
       flame.tick(elapsed)
 
-      // A hammer he is not swinging hangs. Locked to the forearm it stuck out
-      // sideways whenever the arm did, which is most of the day: the smith is
-      // idle far more than he is striking, and a brick on his knuckles was
-      // what the board actually showed. So the aim rides the same crossfade
-      // the body does -- along the arm while he works, straight at the floor
-      // while he waits, and neither one snapping to the other.
+      // A hammer he is not swinging is carried head up, the way a man holds
+      // one he is about to use -- knuckles round the low end of the handle,
+      // the weight above the fist. Locked to the forearm it stuck out sideways
+      // whenever the arm did, which is most of the day, and hung head-down it
+      // read as something he had dropped. So the aim rides the same crossfade
+      // the body does: along the arm while he works, upright while he waits,
+      // and neither one snapping to the other.
       forearm.getWorldQuaternion(turned)
-      floorward.set(0, -1, 0).applyQuaternion(turned.invert())
-      hanging.setFromUnitVectors(HANDLE, floorward)
+      skyward.set(0, 1, 0).applyQuaternion(turned.invert())
+      hanging.setFromUnitVectors(HANDLE, skyward)
       hammer.holder.quaternion
         .copy(hanging)
         .slerp(swinging, acts.working.getEffectiveWeight())
