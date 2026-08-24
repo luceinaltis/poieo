@@ -43,7 +43,7 @@ The prompt says **"What this project always requires:"** and **"What earlier wor
 
 **Anchoring.** Episodes land under `task.dir/.poieo` always — not under the run-log store, which a daemon config may point elsewhere. One project, one memory; the run id joins the two wherever the run log lives.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_completed_run_leaves_an_episode(): ...
@@ -55,10 +55,10 @@ def test_an_existing_episode_is_never_rewritten(): ...
 def test_an_unwritable_episode_is_logged_and_the_result_stands(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: every task run leaves a full record behind`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 294 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: every task run leaves a full record behind`
 
 ---
 
