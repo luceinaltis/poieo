@@ -13,3 +13,6 @@ examples/.poieo/
 
 # session worktrees
 .claude/worktrees/
+
+# personal helper scripts
+claude-rc-loop.ps1
