@@ -180,6 +180,75 @@ def test_learn_without_memory_says_how_to_start_and_exits_zero(tmp_path):
     assert "no memory" in result.stdout
 
 
+def _aged(path, seconds_ago):
+    import os
+    import time
+
+    stamp = time.time() - seconds_ago
+    os.utime(path, (stamp, stamp))
+
+
+def test_a_gone_anchor_earns_a_second_look(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "second look" in result.stdout
+    assert "feeds-note" in result.stdout and "gone" in result.stdout
+
+
+def test_a_target_changed_after_the_entry_earns_a_second_look(tmp_path):
+    _, project = _project(tmp_path)
+    target = project / "notebook"
+    target.mkdir()
+    (target / "feeds.md").write_text("feeds", encoding="utf-8")
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+    _aged(project / "memory" / "facts" / "feeds-note.md", 3600)
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "feeds-note" in result.stdout and "changed after" in result.stdout
+
+
+def test_touching_the_entry_clears_the_changed_after_line(tmp_path):
+    _, project = _project(tmp_path)
+    target = project / "notebook"
+    target.mkdir()
+    (target / "feeds.md").write_text("feeds", encoding="utf-8")
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+    _aged(target / "feeds.md", 3600)  # older than the entry: looked at, then written
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "changed after" not in result.stdout
+
+
+def test_a_healthy_memory_reports_no_doubts(tmp_path):
+    _, project = _project(tmp_path)
+    target = project / "notebook"
+    target.mkdir()
+    (target / "feeds.md").write_text("feeds", encoding="utf-8")
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+    _aged(target / "feeds.md", 3600)
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "second look" not in result.stdout
+
+
 def test_memory_is_still_read_only_with_connections(tmp_path):
     _, project = _project(tmp_path)
     _entry(

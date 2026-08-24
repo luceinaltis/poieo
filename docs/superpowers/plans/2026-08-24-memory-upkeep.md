@@ -44,10 +44,10 @@ def test_touching_the_entry_clears_the_changed_after_line(): ...
 def test_a_healthy_memory_reports_no_doubts(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: the report notices when the code moved under an entry`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 386 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: the report notices when the code moved under an entry`
 
 ---
 
