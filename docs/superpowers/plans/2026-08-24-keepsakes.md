@@ -119,10 +119,10 @@ async def test_a_keepsake_referenced_from_the_attic_survives(): ...
 async def test_a_fresh_keepsake_survives(): ...
 ```
 
-- [ ] **Step 2: README** — one paragraph: entries the project learns are sealed to the content they were written about; doubt means the content really differs; the kept original is under `.poieo/blobs/`; unreferenced keepsakes are let go
-- [ ] **Step 3: End to end by hand** — in the worked example: a mock pass writes a sealed entry; touch the anchored file (identical) and see no doubt; change it and see the no-longer-matches line; open the keepsake and see the original bytes; clean before commit
-- [ ] **Step 4: The whole suite, both ways** — paste both summary lines
-- [ ] **Step 5: Commit** — `feat: keepsakes nobody references are let go` / `docs:` as fits the final diff
+- [x] **Step 2: README** — one paragraph: entries the project learns are sealed to the content they were written about; doubt means the content really differs; the kept original is under `.poieo/blobs/`; unreferenced keepsakes are let go
+- [x] **Step 3: End to end by hand** — done 2026-08-24: a mock pass wrote `feeds-file` with `sealed: {"notebook/feeds.md": "e81b…"}`; touching the file (identical) raised nothing; appending a line raised the no-longer-matches line; the keepsake opened to the original bytes; artifacts cleaned before commit
+- [x] **Step 4: The whole suite, both ways** — docker running: 440 passed in 18.99s; docker stopped: 410 passed, 30 skipped in 7.78s
+- [x] **Step 5: Commit** — `feat: keepsakes nobody references are let go`
 
 ---
 
