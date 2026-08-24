@@ -97,10 +97,10 @@ async def test_attic_entries_reach_no_load_no_report_no_prompt(): ...
 async def test_an_attic_collision_is_skipped_and_said(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: long set-aside entries move to the attic, never the void`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 396 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: long set-aside entries move to the attic, never the void`
 
 ---
 

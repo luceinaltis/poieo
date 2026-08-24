@@ -462,3 +462,84 @@ async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
         (project / "memory" / "constitution.md").read_text(encoding="utf-8")
         == "Never push to main."
     )
+
+
+# -- the attic ---------------------------------------------------------------
+
+
+def _aged(path, days):
+    import os
+    import time
+
+    stamp = time.time() - days * 86400
+    os.utime(path, (stamp, stamp))
+
+
+def _old_aside(project, slug="old-cap", because="new-cap", days=120):
+    _entry(project, because, "Caps sit at 50 now.")
+    _entry(project, slug, f"---\nsuperseded_by: {because}\n---\nCaps sat at 10 once.")
+    _aged(project / "memory" / "facts" / f"{slug}.md", days)
+
+
+async def test_an_old_unreferenced_set_aside_moves_to_the_attic_whole(tmp_path):
+    project = _project(tmp_path)
+    _old_aside(project)
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    await _learn(project, _proposal())
+    assert not (project / "memory" / "facts" / "old-cap.md").exists()
+    moved = (project / "memory" / "attic" / "old-cap.md").read_text(encoding="utf-8")
+    assert moved == "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once."
+
+
+async def test_a_referenced_set_aside_stays_however_old(tmp_path):
+    project = _project(tmp_path)
+    _old_aside(project)
+    _entry(
+        project,
+        "leaner",
+        "---\nlinks:\n  depends_on: [old-cap]\n---\nStill leans on the old cap.",
+    )
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    await _learn(project, _proposal())
+    assert (project / "memory" / "facts" / "old-cap.md").exists()
+
+
+async def test_a_fresh_set_aside_stays(tmp_path):
+    project = _project(tmp_path)
+    _old_aside(project, days=5)
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    await _learn(project, _proposal())
+    assert (project / "memory" / "facts" / "old-cap.md").exists()
+
+
+async def test_attic_entries_reach_no_load_no_report_no_prompt(tmp_path):
+    from poieo.memory import load_facts, memory_report, read_memory
+
+    project = _project(tmp_path)
+    _old_aside(project)
+    _episode(project, "20260824T010000-aaaaaaaa")
+    await _learn(project, _proposal())
+
+    assert "old-cap" not in {fact.slug for fact in load_facts(project)}
+    assert memory_report(project)["set_aside"] == 0
+    block = read_memory(project) or ""
+    assert "sat at 10" not in block
+
+
+async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
+    project = _project(tmp_path)
+    _old_aside(project)
+    attic = project / "memory" / "attic"
+    attic.mkdir()
+    (attic / "old-cap.md").write_text("already here", encoding="utf-8")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    with caplog.at_level("WARNING", logger="poieo.learn"):
+        await _learn(project, _proposal())
+
+    assert (project / "memory" / "facts" / "old-cap.md").exists()
+    assert (attic / "old-cap.md").read_text(encoding="utf-8") == "already here"
+    assert any("attic" in message for message in caplog.messages)

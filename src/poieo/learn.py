@@ -55,6 +55,7 @@ class Pass:
     # One line the pass may suggest for the page. Recorded, shown, and
     # never applied by anything but a person's editor.
     page: str | None = None
+    to_attic: list[str] = field(default_factory=list)
 
 
 async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> Pass | None:
@@ -111,6 +112,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     # Strengthening rides the same success that moves the bookmark, so a
     # failed pass earns nothing and the reread earns exactly once.
     _strengthen(project_dir, facts, records)
+    result.to_attic = _to_attic(project_dir, facts)
     _record(project_dir, result)
     return result
 
@@ -393,6 +395,48 @@ def _followable(one: Fact, other: Fact) -> bool:
         or other.slug in one.matter.links.depends_on
         or one.slug in other.matter.links.depends_on
     )
+
+
+# Set aside this long, and named by nothing typed, an entry steps out of
+# the way. The clock is the file's mtime -- the set-aside edit wound it.
+ATTIC_AFTER_DAYS = 90.0
+
+
+def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
+    """The gentlest verb the pass has: a whole-file move to memory/attic/,
+    content untouched, reversible by moving it back. Typed references hold
+    an entry in place however old -- moving a named entry would break the
+    load-time cross-check -- and the attic never overwrites either."""
+    from .memory import memory_root
+
+    referenced: set[str] = set()
+    for fact in facts:
+        referenced |= set(fact.matter.links.depends_on)
+        referenced |= set(fact.matter.links.contradicts)
+        if fact.matter.superseded_by is not None:
+            referenced.add(fact.matter.superseded_by)
+
+    now = datetime.now(timezone.utc).timestamp()
+    moved: list[str] = []
+    for fact in facts:
+        if fact.matter.superseded_by is None or fact.slug in referenced:
+            continue
+        try:
+            if (now - fact.path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
+                continue
+            attic = memory_root(project_dir) / "attic"
+            attic.mkdir(exist_ok=True)
+            target = attic / fact.path.name
+            if target.exists():
+                log.warning(
+                    "the attic already holds %s; leaving it in place", fact.path.name
+                )
+                continue
+            fact.path.rename(target)
+            moved.append(fact.slug)
+        except OSError as exc:
+            log.warning("could not move %s to the attic: %s", fact.path.name, exc)
+    return moved
 
 
 def last_suggestion(project_dir: Path) -> str | None:
