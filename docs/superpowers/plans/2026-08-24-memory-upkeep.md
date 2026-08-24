@@ -71,10 +71,10 @@ def test_memory_shows_the_last_suggestion_and_only_the_last(): ...
 async def test_a_quiet_night_leaves_the_prompt_as_it_was(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: the pass rechecks what is doubtful and may suggest a page line`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 391 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: the pass rechecks what is doubtful and may suggest a page line`
 
 ---
 
