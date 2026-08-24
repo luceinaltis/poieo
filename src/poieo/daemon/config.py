@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec, load_document, load_graph
+from ..memory import check_memory, read_memory
 from ..tools import Isolation
 from ..task import TaskSpec, expand, load_tasks, read_journal
 from .triggers import TriggerSpec
@@ -128,6 +129,9 @@ class LoadedFlow(BaseModel):
         if task is not None:
             # Re-read every run: a note left at 8am is in effect at 9am.
             payload["journal"] = read_journal(task.journal_path())
+            memory = read_memory(task.dir, task)
+            if memory is not None:
+                payload["memory"] = memory
         return payload
 
 
@@ -155,6 +159,9 @@ def _load_tasks(config: DaemonConfig) -> None:
     folder = config.resolve_path(config.tasks)
     if not folder.is_dir():
         raise SpecError(f"tasks folder does not exist: {folder}")
+    # A typo in the project's memory fails here, where `poieo validate` and
+    # the daemon's load can see it, never when a trigger fires at 3am.
+    check_memory(folder)
 
     taken = {flow.name for flow in config.flows}
     # Two passes: a task's generated prompt names the tasks it may tell, and

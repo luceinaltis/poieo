@@ -9,13 +9,19 @@ nothing depends on a model remembering to remember.
 import json
 from dataclasses import replace
 
+import pytest
+
+from conftest import EXAMPLES
 from poieo.binding import BindingSpec
+from poieo.cli import _task_payload
+from poieo.daemon.config import load_config, load_flows
+from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
 from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
-from poieo.task import JOURNAL_WIDTH, load_task, record_run
+from poieo.task import JOURNAL_WIDTH, load_task, record_run, system_block
 
 from test_task import write_task
 
@@ -132,3 +138,114 @@ def test_an_unwritable_episode_is_logged_and_the_result_stands(tmp_path, caplog)
     assert any("episode" in message for message in caplog.messages)
     # The journal line still landed: the run's memory does not hinge on the record.
     assert "tidied the docs folder" in task.journal_path().read_text(encoding="utf-8")
+
+
+# -- the page every run reads ------------------------------------------------
+#
+# The zero-configuration invariant is the point: a project that never made a
+# memory must see no trace of the feature, byte for byte. Everything else is
+# the two injection paths agreeing with each other.
+
+
+TODAY_WITHOUT_MEMORY = (
+    "You are working on {name}, in {folder}.\n\n"
+    "What you have already done, and what the user has told you:\n"
+    "{{{{ input.journal }}}}\n\n"
+    "Finish by saying in one line what you did. If there was nothing worth\n"
+    "doing, say that in one line instead."
+)
+
+
+def _remember(tmp_path, text="Never push to main."):
+    memory = tmp_path / "tasks" / "memory"
+    memory.mkdir(parents=True, exist_ok=True)
+    (memory / "constitution.md").write_text(text, encoding="utf-8")
+    return memory
+
+
+def _daemon_flow(tmp_path):
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"store: {(tmp_path / 'logs').as_posix()}\n"
+        "tasks: tasks/\n",
+        encoding="utf-8",
+    )
+    loaded_config = load_config(config)
+    return load_flows(loaded_config)[0], loaded_config
+
+
+def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
+    task = _task(tmp_path)
+    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
+        name=task.name, folder=task.folder_path()
+    )
+    assert "memory" not in _task_payload(task)
+
+    flow, config = _daemon_flow(tmp_path)
+    assert "memory" not in flow.read_input(config)
+    assert "{{ input.memory }}" not in flow.graph.nodes[0].system
+
+
+def test_the_constitution_reaches_the_prompt_on_the_daemon_path(tmp_path):
+    _task(tmp_path)
+    _remember(tmp_path)
+    flow, config = _daemon_flow(tmp_path)
+
+    assert "{{ input.memory }}" in flow.graph.nodes[0].system
+    block = flow.read_input(config)["memory"]
+    assert block.startswith("What this project always requires:")
+    assert "Never push to main." in block
+
+
+def test_the_constitution_reaches_the_prompt_on_the_cli_path(tmp_path):
+    task = _task(tmp_path)
+    _remember(tmp_path)
+
+    assert "{{ input.memory }}" in system_block(task)
+    block = _task_payload(task)["memory"]
+    assert "Never push to main." in block
+
+
+def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
+    _task(tmp_path)
+    memory = _remember(tmp_path)
+    flow, config = _daemon_flow(tmp_path)
+    assert "Never push to main." in flow.read_input(config)["memory"]
+
+    (memory / "constitution.md").write_text("Ship one change at a time.", encoding="utf-8")
+    assert "Ship one change at a time." in flow.read_input(config)["memory"]
+
+
+def test_a_malformed_fact_fails_at_load_naming_the_file(tmp_path):
+    _task(tmp_path)
+    facts = _remember(tmp_path) / "facts"
+    facts.mkdir()
+    (facts / "batch-sizes.md").write_text(
+        "---\nscope: [global]\nseverity: high\n---\nThe API caps batches at 50.\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SpecError, match="batch-sizes.md"):
+        _daemon_flow(tmp_path)
+
+
+def test_an_oversized_page_warns_and_still_loads_whole(tmp_path, caplog):
+    task = _task(tmp_path)
+    long_page = "Never push to main.\n" * 1500
+    _remember(tmp_path, long_page)
+
+    with caplog.at_level("WARNING", logger="poieo.memory"):
+        block = _task_payload(task)["memory"]
+
+    assert long_page.strip() in block
+    assert any("trim" in message for message in caplog.messages)
+
+
+def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
+    task = _task(tmp_path)
+    (tmp_path / "tasks" / "memory").mkdir()
+
+    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
+        name=task.name, folder=task.folder_path()
+    )
+    assert "memory" not in _task_payload(task)

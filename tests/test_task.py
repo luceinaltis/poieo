@@ -291,6 +291,19 @@ def test_the_generated_prompt_carries_the_journal(tmp_path):
     assert "{{ input.journal }}" in graph.nodes[0].system
 
 
+def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
+    path = write_task(tmp_path, "t", "name: t\nprompt: go\n")
+    memory = tmp_path / "tasks" / "memory"
+    memory.mkdir()
+    (memory / "constitution.md").write_text("Never push to main.", encoding="utf-8")
+
+    _, graph = expand(load_task(path))
+    system = graph.nodes[0].system
+    # The stable part of the prompt stays stable: always-true rules come
+    # before recent history.
+    assert system.index("{{ input.memory }}") < system.index("{{ input.journal }}")
+
+
 def test_a_task_backed_flow_reads_its_journal_before_every_run(tmp_path):
     path = write_task(tmp_path, "one", "name: one\nprompt: go\n")
     config = load_config(_config(tmp_path))
