@@ -104,19 +104,19 @@ def test_the_fallback_still_returns_the_same_entries(): ...
 - `second look`: each kept entry leaning on a set-aside one.
 - Both sections appear only when non-empty. Nothing is written; the command stays read-only.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_memory_lists_a_disagreement_once(): ...
 def test_memory_flags_a_lean_on_a_set_aside_entry(): ...
 def test_a_memory_with_nothing_to_say_adds_no_sections(): ...
-def test_memory_is_still_read_only(): ...
+def test_memory_is_still_read_only_with_connections(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: poieo memory surfaces disagreements and stale leans`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 367 passed (docker running)
+- [x] **Step 5: Commit** — `feat: poieo memory surfaces disagreements and stale leans`
 
 ---
 

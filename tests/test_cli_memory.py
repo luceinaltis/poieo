@@ -67,3 +67,64 @@ def test_a_project_without_memory_says_so_plainly_and_exits_zero(tmp_path):
 
     assert result.exit_code == 0
     assert "no memory" in result.stdout
+
+
+# -- what the connections imply ----------------------------------------------
+
+
+def _entry(project, slug, text):
+    (project / "memory" / "facts" / f"{slug}.md").write_text(text, encoding="utf-8")
+
+
+def test_memory_lists_a_disagreement_once(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(project, "wild-claim", "Nothing ever gets refused.")
+    _entry(
+        project,
+        "measured-claim",
+        "---\nlinks:\n  contradicts: [wild-claim]\n---\nRefusals happen nightly.",
+    )
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert result.exit_code == 0
+    assert result.stdout.count("disagree") == 1
+    assert "measured-claim" in result.stdout and "wild-claim" in result.stdout
+
+
+def test_memory_flags_a_lean_on_a_set_aside_entry(tmp_path):
+    _, project = _project(tmp_path)
+    # old-cap is already set aside in the shared project; lean on it.
+    _entry(
+        project,
+        "retry-note",
+        "---\nlinks:\n  depends_on: [old-cap]\n---\nRetry once, past the cap.",
+    )
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert result.exit_code == 0
+    assert "second look" in result.stdout
+    assert "retry-note" in result.stdout and "old-cap" in result.stdout
+
+
+def test_a_memory_with_nothing_to_say_adds_no_sections(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["memory", str(project)])
+
+    assert result.exit_code == 0
+    assert "disagree" not in result.stdout
+    assert "second look" not in result.stdout
+
+
+def test_memory_is_still_read_only_with_connections(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(
+        project,
+        "measured-claim",
+        "---\nlinks:\n  contradicts: [batch-cap]\n---\nRefusals happen nightly.",
+    )
+    before = sorted(str(p) for p in project.rglob("*"))
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert result.exit_code == 0
+    assert sorted(str(p) for p in project.rglob("*")) == before
+    assert not (project / ".poieo").exists()
