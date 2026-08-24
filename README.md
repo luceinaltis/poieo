@@ -334,6 +334,14 @@ falls through to the default), so pointing your best model at it is one
 line. `.poieo/learning.jsonl` says what every pass did, and an empty pass
 is a fine answer: most nights teach nothing.
 
+Connections wear in with use. When two connected entries both did real work
+in a run that succeeded -- their own words in what the run produced, not
+merely having been shown -- the path between them wears a little, and later
+retrievals carry it sooner and one step further. Wear fades on its own,
+no entry's connections can hoard it, and it lives outside git in
+`.poieo/strength.json`: delete the file and the project forgets which paths
+were worn, relearns them by working, and loses not one word of meaning.
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.
