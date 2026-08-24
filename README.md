@@ -303,6 +303,15 @@ poieo memory tasks/                      # the page, the counts, the lookup
 poieo memory tasks/keep-improving.yaml   # the exact block its next run gets
 ```
 
+Entries can name each other. `[[name]]` in the prose means *these belong
+near each other*, and whatever a chosen entry mentions arrives beside it --
+even sharing no word with the task. Frontmatter carries the stronger claims:
+`links: {depends_on: [...]}` for what an entry leans on (brought along, one
+step, never further), and `links: {contradicts: [...]}` for a disagreement.
+A disagreement is never resolved by a machine: `poieo memory` lists the
+pair and a person settles it -- and once one side is set aside, whatever
+leaned on it is flagged for a second look.
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.

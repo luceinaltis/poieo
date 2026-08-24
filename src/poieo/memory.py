@@ -119,7 +119,9 @@ def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
 def _load_fact(path: Path) -> Fact:
     try:
-        matter, body = _split_frontmatter(path.read_text(encoding="utf-8"))
+        # utf-8-sig: Notepad and friends write a BOM, and an invisible first
+        # character must not silently turn the frontmatter into body text.
+        matter, body = _split_frontmatter(path.read_text(encoding="utf-8-sig"))
         parsed = _Frontmatter.model_validate(matter)
         if not body.strip():
             raise ValueError("an entry needs something to say")
@@ -170,7 +172,7 @@ def check_memory(project_dir: Path) -> None:
 def _page(project_dir: Path) -> str | None:
     path = memory_root(project_dir) / CONSTITUTION
     try:
-        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        text = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
     except OSError as exc:
         # Forgetting beats failing: the run proceeds with less in mind.
         log.warning("could not read the memory page %s: %s", path, exc)
