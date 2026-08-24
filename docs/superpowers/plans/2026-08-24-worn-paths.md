@@ -71,10 +71,10 @@ def test_a_corrupt_file_reads_as_empty_and_heals_on_next_wear(): ...
 def test_wear_never_raises(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a strength store that decays and cannot run away`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 369 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a strength store that decays and cannot run away`
 
 ---
 
