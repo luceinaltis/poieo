@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from .blob import digest, kept
 from .errors import SpecError, describe_invalid
 
 log = logging.getLogger("poieo.memory")
@@ -281,10 +282,25 @@ def doubts(
                     (fact.slug, f"{fact.slug} leans on {target}, which is set aside")
                 )
         for anchor in fact.matter.anchors:
-            named = project_dir / anchor.split("::", 1)[0]
+            part = anchor.split("::", 1)[0]
+            named = project_dir / part
             try:
                 if not named.exists():
                     out.append((fact.slug, f"{fact.slug} names {anchor}, which is gone"))
+                    continue
+                seal = fact.matter.sealed.get(part)
+                if seal is not None and kept(project_dir, seal) is not None:
+                    # Sealed: doubt by content, not clocks. A touched-but-
+                    # identical file raises nothing; the line only fires
+                    # when the bytes really differ from the keepsake.
+                    if digest(named) != seal:
+                        out.append(
+                            (
+                                fact.slug,
+                                f"{fact.slug} names {anchor}, which no longer "
+                                "matches what it was written against",
+                            )
+                        )
                 elif named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns:
                     out.append(
                         (
