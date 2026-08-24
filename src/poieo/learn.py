@@ -252,7 +252,7 @@ def _apply(
             accepted.remove(raw)
 
     for raw in accepted:
-        _write_entry(project_dir, raw, shown)
+        _write_entry(project_dir, raw, shown, result)
         result.kept.append(raw["slug"])
 
     final = set(by_slug) | set(result.kept)
@@ -312,16 +312,38 @@ def _dangling(raw: dict[str, Any], ok: set[str]) -> str | None:
     return None
 
 
-def _write_entry(project_dir: Path, raw: dict[str, Any], shown: list[str]) -> None:
+def _write_entry(
+    project_dir: Path, raw: dict[str, Any], shown: list[str], result: Pass
+) -> None:
+    from . import blob
+
     # The harness stamps the source: whatever the model claimed is cut to
     # the records actually shown, and nothing surviving means all of them.
     source = [r for r in raw.get("from") or [] if r in shown] or list(shown)
+
+    # Seal what the entry was written against: each anchored file, as it
+    # is tonight, kept under its digest. Less sealing never blocks the
+    # entry -- a keepsake is a copy, not a meaning.
+    sealed: dict[str, str] = {}
+    for anchor in raw.get("anchors") or []:
+        part = anchor.split("::", 1)[0]
+        target = Path(project_dir) / part
+        if not target.is_file():
+            continue
+        name = blob.keep(project_dir, target)
+        if name is not None:
+            sealed[part] = name
+        else:
+            result.dropped.append(f"'{raw['slug']}': did not keep {part}")
+
     lines = [
         "---",
         f"scope: {json.dumps(raw.get('scope') or ['global'])}",
         f"anchors: {json.dumps(raw.get('anchors') or [])}",
         f"source: {json.dumps(source)}",
     ]
+    if sealed:
+        lines.append(f"sealed: {json.dumps(sealed)}")
     links = raw.get("links") or {}
     for kind in ("depends_on", "contradicts"):
         if links.get(kind):
