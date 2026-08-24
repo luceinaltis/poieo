@@ -129,6 +129,127 @@ def test_a_deleted_index_is_rebuilt_silently(tmp_path):
     assert index.is_file()
 
 
+# -- following what entries name ---------------------------------------------
+#
+# Direct evidence before association: a neighbor's claim to the prompt is
+# its seed's, so no neighbor ever outranks a direct hit, escapes scope,
+# resurrects a set-aside entry, or brings neighbors of its own.
+
+
+def test_a_mentioned_entry_joins_despite_sharing_no_word(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
+    _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
+
+    block = read_memory(project, task)
+    assert "over 50." in block
+    assert "alphabetically" in block
+    assert block.index("over 50.") < block.index("alphabetically")
+
+
+def test_a_mention_is_followed_in_both_directions(tmp_path):
+    # The mentioning entry shares no word with the task -- not even through
+    # the mention text itself -- so only reverse-following can bring it.
+    task, project = _project(tmp_path)
+    _fact(project, "cap-fifty", "The api rejects batch sizes over 50.")
+    _fact(project, "quiet-note", "Feeds land alphabetically. See [[cap-fifty]].")
+
+    assert "alphabetically" in read_memory(project, task)
+
+
+def test_a_leaned_on_entry_joins_forward_only(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50.",
+        matter="links:\n  depends_on: [quiet-note]",
+    )
+    _fact(project, "quiet-note", "Feeds land alphabetically, newest last.")
+    _fact(
+        project,
+        "orphan",
+        "Nothing links back here tonight.",
+        matter="links:\n  depends_on: [batch-cap]",
+    )
+
+    block = read_memory(project, task)
+    assert "alphabetically" in block
+    assert "links back here" not in block
+
+
+def test_a_disagreeing_entry_is_never_dragged_in(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50.",
+        matter="links:\n  contradicts: [wild-claim]",
+    )
+    _fact(project, "wild-claim", "Nothing ever gets refused, honestly.")
+
+    assert "honestly" not in read_memory(project, task)
+
+
+def test_neighbors_come_after_every_direct_hit(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
+    _fact(project, "retry-note", "The importer retries the api batch once.")
+    _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
+
+    block = read_memory(project, task)
+    assert block.index("retries") < block.index("alphabetically")
+
+
+def test_a_neighbor_out_of_scope_stays_out(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[exporter-note]]")
+    _fact(project, "exporter-note", "Digest pages flush nightly.", matter="scope: [exporter]")
+
+    assert "flush nightly" not in read_memory(project, task)
+
+
+def test_a_set_aside_neighbor_stays_out(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[old-cap]]")
+    _fact(project, "old-cap", "Caps sat lower once.", matter="superseded_by: batch-cap")
+
+    assert "sat lower" not in read_memory(project, task)
+
+
+def test_one_hop_means_one_hop(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
+    _fact(project, "near", "Feeds land alphabetically. [[far]]")
+    _fact(project, "far", "Somewhere a bell rings twice.")
+
+    block = read_memory(project, task)
+    assert "alphabetically" in block
+    assert "bell rings" not in block
+
+
+def test_the_budget_still_cuts_whole_entries_across_neighbors(tmp_path, monkeypatch):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
+    _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
+
+    monkeypatch.setattr(memory, "FACTS_BUDGET", 60)
+    block = read_memory(project, task)
+    assert "over 50." in block
+    assert "alphabetically" not in block
+
+
+def test_the_fallback_still_returns_the_same_entries(tmp_path, monkeypatch):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
+    _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
+    _fact(project, "quiet-note", "Digest ordering held steady. [[batch-cap]]")
+
+    preferred = read_memory(project, task)
+    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    assert read_memory(project, task) == preferred
+
+
 def test_nothing_is_ever_written_inside_the_memory_folder(tmp_path):
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")

@@ -313,14 +313,45 @@ def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[str]:
             scored.append((score, fact))
     scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
 
+    # One connection outward, after every direct hit: a neighbor has no
+    # score of its own to argue with -- its claim to the prompt is its
+    # seed's -- so association must never outrank evidence. Neighbors are
+    # drawn from the already-filtered pool, which is what keeps scope and
+    # set-aside holding through connections, and they do not expand.
+    sequence = [fact for _, fact in scored]
+    taken = {fact.slug for fact in sequence}
+    for _, fact in scored:
+        for neighbor in _connected(fact, facts):
+            if neighbor.slug not in taken:
+                taken.add(neighbor.slug)
+                sequence.append(neighbor)
+
     chosen: list[str] = []
     spent = 0
-    for _, fact in scored:
+    for fact in sequence:
         if spent + len(fact.body) > FACTS_BUDGET:
             break
         chosen.append(fact.body)
         spent += len(fact.body)
     return chosen
+
+
+def _connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
+    """Who arrives beside this entry: mentions either way (nearness is
+    symmetric), leans-on forward only (what you chose needs what it leans
+    on, not the reverse), disagrees never (its consumer is the report --
+    dragging a disputed entry in by association is how confusion spreads).
+    """
+    named = set(fact.mentions) | set(fact.matter.links.depends_on)
+    return sorted(
+        (
+            other
+            for other in eligible
+            if other.slug != fact.slug
+            and (other.slug in named or fact.slug in other.mentions)
+        ),
+        key=lambda other: other.slug,
+    )
 
 
 # -- the derived index -------------------------------------------------------

@@ -71,7 +71,7 @@ def test_leaning_on_a_set_aside_entry_is_legal_at_load(): ...
 
 **Why after ranking, not inside it.** A neighbor has no score of its own to argue with — its claim to the prompt is its seed's. Interleaving would let association outrank evidence.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_mentioned_entry_joins_despite_sharing_no_word(): ...   # THE test
@@ -86,10 +86,10 @@ def test_the_budget_still_cuts_whole_entries_across_neighbors(): ...
 def test_the_fallback_still_returns_the_same_entries(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: what an entry mentions arrives beside it`
+- [x] **Step 2: Run the tests to verify they fail** *(first pass caught the direction test scoring off the mention text itself — seed renamed so only reverse-following can pass it)*
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 363 passed (docker running)
+- [x] **Step 5: Commit** — `feat: what an entry mentions arrives beside it`
 
 ---
 
