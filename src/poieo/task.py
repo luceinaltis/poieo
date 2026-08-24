@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
+from .memory import write_episode
 from .tools import Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -269,6 +270,9 @@ def record_run(task: TaskSpec, result: Any) -> None:
     ``result`` is duck-typed (status / path / outputs / error) so this module
     does not grow a dependency on the runtime.
     """
+    # The journal keeps the line; the episode keeps the whole result. Both
+    # swallow their own failures, so neither can cost the other.
+    write_episode(task, result)
     if result.status == "completed":
         kind, text = "did", _closing_line(result)
     else:
