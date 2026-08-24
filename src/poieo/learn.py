@@ -384,7 +384,7 @@ def _strengthen(
     the run completed, and a declared connection between them. Co-presence
     alone earns nothing -- reinforcing what retrieval already picks is how
     a memory talks itself into a rut."""
-    from .memory import _tokens
+    from .memory import _used_in
     from .strength import wear
 
     by_slug = {fact.slug: fact for fact in facts}
@@ -395,13 +395,7 @@ def _strengthen(
         shown = [slug for slug in record.get("shown") or [] if slug in by_slug]
         if len(shown) < 2:
             continue
-        said = _tokens(
-            f"{record.get('summary', '')} "
-            f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
-        )
-        cited = [
-            slug for slug in shown if len(_tokens(by_slug[slug].body) & said) >= 2
-        ]
+        cited = [slug for slug in shown if _used_in(by_slug[slug], record)]
         for i, one in enumerate(cited):
             for other in cited[i + 1 :]:
                 if _followable(by_slug[one], by_slug[other]):

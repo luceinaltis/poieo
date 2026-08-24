@@ -259,7 +259,66 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
         "lookup": "fast" if _fts_available() else "file-by-file",
         "disagreements": disagreements,
         "second_look": [reason for _, reason in doubts(project_dir, facts)],
+        "accounting": _accounting(project_dir, facts),
     }
+
+
+def _used_in(fact: Fact, record: dict[str, Any]) -> bool:
+    """The one judgment of use, shared by wear and the accounting so the
+    two can never disagree: the entry's distinctive words surface in what
+    the run itself produced -- a behavioral stand-in until a serving stack
+    can report attention."""
+    said = _tokens(
+        f"{record.get('summary', '')} "
+        f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
+    )
+    return len(_tokens(fact.body) & said) >= 2
+
+
+# How far back the accounting reads, and how often an entry must have been
+# shown, unused, before it is worth naming.
+ACCOUNT_WINDOW = 50
+UNUSED_FLOOR = 3
+
+
+def _accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
+    """Is the memory earning its keep? A read over the recent run records,
+    never a stored counter, and nothing anywhere acts on it."""
+    root = project_dir / ".poieo" / "episodes"
+    if not root.is_dir():
+        return None
+    by_slug = {fact.slug: fact for fact in facts}
+    runs_shown = runs_used = 0
+    shown_count: dict[str, int] = {}
+    used_count: dict[str, int] = {}
+    for path in sorted(root.glob("*.json"), reverse=True)[:ACCOUNT_WINDOW]:
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if record.get("status") != "completed":
+            continue
+        shown = record.get("shown") or []
+        if not shown:
+            continue
+        runs_shown += 1
+        any_used = False
+        for slug in shown:
+            shown_count[slug] = shown_count.get(slug, 0) + 1
+            fact = by_slug.get(slug)
+            if fact is not None and _used_in(fact, record):
+                used_count[slug] = used_count.get(slug, 0) + 1
+                any_used = True
+        if any_used:
+            runs_used += 1
+    if runs_shown == 0:
+        return None
+    unused = sorted(
+        (slug, count)
+        for slug, count in shown_count.items()
+        if count >= UNUSED_FLOOR and used_count.get(slug, 0) == 0 and slug in by_slug
+    )
+    return {"runs_shown": runs_shown, "runs_used": runs_used, "unused": unused}
 
 
 def doubts(

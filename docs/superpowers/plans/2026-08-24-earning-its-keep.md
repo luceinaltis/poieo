@@ -45,10 +45,10 @@ def test_a_vanished_entry_is_not_named_however_often_shown(): ...
 def test_a_project_without_records_shows_no_accounting(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: poieo memory says whether the memory earns its keep`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 415 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: poieo memory says whether the memory earns its keep`
 
 ---
 
