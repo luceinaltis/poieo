@@ -41,7 +41,7 @@ The project **learns**; a pass **keeps** entries and **sets aside** others; the 
 
 **Why the library is first and alone.** Everything dangerous is here. The CLI and the daemon must be able to trust `learn()` completely, so every refusal and every stamp is pinned before either caller exists.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 async def test_an_entry_learned_carries_the_runs_that_taught_it(): ...   # THE test
@@ -60,10 +60,10 @@ async def test_the_page_is_never_written(): ...
 async def test_a_memoryless_project_never_gains_a_folder(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a pass reads the run records and writes down what stays true`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 352 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a pass reads the run records and writes down what stays true`
 
 ---
 
