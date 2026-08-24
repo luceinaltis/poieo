@@ -97,7 +97,7 @@ export function turnAnvil(angle: number) {
 export let ANVIL_FACE = 0.38
 
 /** How long the anvil is, nose to heel; its height follows from the model. */
-const ANVIL_LONG = 0.72
+const ANVIL_LONG = 0.92
 
 /** Tool-only override, so bench.html can photograph the candidates. */
 export function standAnvil(face: number) {
@@ -115,8 +115,17 @@ const HAMMER_HAND = "Right"
  */
 const HAMMER_LONG = 0.34
 
-/** How much daylight to leave between the hammer's head and the log walls. */
-const HAMMER_CLEAR = 0.08
+/**
+ * How much daylight to leave between the hammer and the log walls.
+ *
+ * A hammer's length, not a fingernail. The room is closed on two sides and
+ * two metres tall, so anything raised overhead is drawn in front of a wall
+ * whatever happens -- but at arm's reach from the logs it reads as a hammer
+ * in a room, and at a centimetre it reads as a hammer in the wall. The left
+ * wall is the one that matters: it carries the shelf and the tool rail, and
+ * the backswing goes up behind that shoulder.
+ */
+const HAMMER_CLEAR = HAMMER_LONG
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -288,7 +297,15 @@ function hammerHeld(THREE: Three, model: any, long: number): any {
   holder.add(held)
 
   // Where the blow lands, in the holder's frame: straight down the handle.
-  return { holder, head: new THREE.Vector3(0, -long * 0.75, 0) }
+  // The corners come too -- a head is a block, and clearing a wall by the one
+  // point in the middle of it clears nothing.
+  holder.updateWorldMatrix(false, true)
+  const box = new THREE.Box3().setFromObject(held)
+  const corners = []
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y])
+      for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z))
+  return { holder, head: new THREE.Vector3(0, -long * 0.75, 0), corners }
 }
 
 /**
@@ -497,15 +514,17 @@ export function makeBench(
   // his anvil out by exactly that -- toward the open side, which is where a
   // room this shape has room to give.
   {
-    const head = new THREE.Vector3()
-    let intoWall = { x: 0, z: 0 }
+    const corner = new THREE.Vector3()
+    const intoWall = { x: 0, z: 0 }
     for (let step = 0; step <= 60; step += 1) {
       mixer.setTime((step / 60) * swing.duration)
       figure.updateWorldMatrix(true, true)
-      head.copy(hammer.head)
-      hammer.holder.localToWorld(head)
-      intoWall.x = Math.max(intoWall.x, INSIDE + HAMMER_CLEAR - head.x)
-      intoWall.z = Math.max(intoWall.z, INSIDE + HAMMER_CLEAR - head.z)
+      for (const local of hammer.corners) {
+        corner.copy(local)
+        hammer.holder.localToWorld(corner)
+        intoWall.x = Math.max(intoWall.x, INSIDE + HAMMER_CLEAR - corner.x)
+        intoWall.z = Math.max(intoWall.z, INSIDE + HAMMER_CLEAR - corner.z)
+      }
     }
     figure.position.x += intoWall.x
     figure.position.z += intoWall.z
