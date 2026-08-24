@@ -278,6 +278,19 @@ export function makeBench(
   acts.resting.setEffectiveWeight(1)
   figure.updateWorldMatrix(true, true)
 
+  // A soft radial dot, drawn once: bare Points render as hard squares, and a
+  // square spark is a pixel error, not an ember.
+  const glowCanvas = document.createElement("canvas")
+  glowCanvas.width = glowCanvas.height = 32
+  const ink = glowCanvas.getContext("2d")!
+  const wash = ink.createRadialGradient(16, 16, 1, 16, 16, 16)
+  wash.addColorStop(0, "rgba(255,255,255,1)")
+  wash.addColorStop(0.4, "rgba(255,255,255,0.55)")
+  wash.addColorStop(1, "rgba(255,255,255,0)")
+  ink.fillStyle = wash
+  ink.fillRect(0, 0, 32, 32)
+  const glow = new THREE.CanvasTexture(glowCanvas)
+
   // -- sparks off the blow: a handful of points thrown out of the work for a
   // quarter second after each strike. Directions are hashed from the spark's
   // index and the swing's count, so every replay throws the same sparks.
@@ -287,7 +300,8 @@ export function makeBench(
   sparkShape.setAttribute("position", new THREE.BufferAttribute(sparkSpray, 3))
   const sparkGlow = new THREE.PointsMaterial({
     color: 0xffd98a,
-    size: 0.055,
+    size: 0.07,
+    map: glow,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -297,11 +311,26 @@ export function makeBench(
   sparks.position.copy(work.position)
   bench.add(sparks)
 
-  // The flash is what sells the impact: for a tenth of a second the anvil is
-  // the brightest thing in the room and the smith is lit from below.
+  // The flash is what sells the impact -- but a light alone did nothing: the
+  // anvil is near-black and reflects nothing, which a brightness probe on the
+  // bench sheet proved (+2 grey levels, inside the noise). So the flash is a
+  // thing that glows, not just a light: an additive sprite that blooms over
+  // the work and dies in a sixth of a second, with the light as backup.
   const impact = new THREE.PointLight(0xffc46b, 0, 2.4, 1.8)
   impact.position.copy(work.position).y += 0.12
   bench.add(impact)
+
+  const flashSkin = new THREE.SpriteMaterial({
+    map: glow,
+    color: 0xffe9b8,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const flash = new THREE.Sprite(flashSkin)
+  flash.position.copy(work.position).y += 0.08
+  bench.add(flash)
 
   const scatter = (seed: number) => {
     const spun = Math.sin(seed * 127.1 + 311.7) * 43758.5453
@@ -398,10 +427,19 @@ export function makeBench(
         }
         sparkShape.attributes.position.needsUpdate = true
         sparkGlow.opacity = 1 - flight
-        impact.intensity = flight < 0.35 ? 7 * (1 - flight / 0.35) : 0
+        impact.intensity = flight < 0.45 ? 22 * (1 - flight / 0.45) : 0
+        const bloom = flight / 0.75
+        if (bloom < 1) {
+          flashSkin.opacity = (1 - bloom) * (1 - bloom)
+          const spread = 0.22 + bloom * 0.5
+          flash.scale.set(spread, spread, 1)
+        } else {
+          flashSkin.opacity = 0
+        }
       } else {
         sparkGlow.opacity = 0
         impact.intensity = 0
+        flashSkin.opacity = 0
       }
 
       if (hot) {
@@ -418,6 +456,8 @@ export function makeBench(
       flame.dispose()
       sparkShape.dispose()
       sparkGlow.dispose()
+      flashSkin.dispose()
+      glow.dispose()
       group.traverse((node: any) => {
         node.geometry?.dispose?.()
         if (Array.isArray(node.material)) node.material.forEach((m: any) => m.dispose?.())

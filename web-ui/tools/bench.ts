@@ -142,9 +142,18 @@ const strikeAt = (bench.group as any).userData.strikeAt as number
 // The clips run below full speed; the pin has to convert clip seconds into
 // wall-clock milliseconds through the working action's own time scale.
 const pace = (bench.group as any).userData.acts.working.getEffectiveTimeScale()
+// `?strike` samples every frame tightly around the blow instead, for judging
+// the impact flash: from just before the hit to the end of the burst.
+const aroundStrike = asked.get("strike") !== null
+// The mixer is delta-driven and its first tick counts as zero: without this
+// priming tick at t=0, a sheet whose first frame starts mid-clip quietly
+// renders the wrong moments -- which is how a flash probe measured the
+// recovery crouch and called the flash invisible.
+bench.tick(0)
 for (let frame = 0; frame < FRAMES; frame += 1) {
-  const elapsed =
-    frame === FRAMES - 1
+  const elapsed = aroundStrike
+    ? ((strikeAt - 0.04 + frame * 0.045) / pace) * 1000
+    : frame === FRAMES - 1
       ? ((strikeAt + 0.07) / pace) * 1000
       : (frame * PERIOD) / FRAMES / pace
   bench.tick(elapsed)
