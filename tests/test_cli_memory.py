@@ -322,6 +322,73 @@ def test_a_lost_keepsake_falls_back_to_the_mtime_line(tmp_path):
     assert "no longer matches" not in result.stdout
 
 
+def _record_run(project, run_id, summary, shown, status="completed"):
+    import json
+
+    episodes = project / ".poieo" / "episodes"
+    episodes.mkdir(parents=True, exist_ok=True)
+    (episodes / f"{run_id}.json").write_text(
+        json.dumps(
+            {"run_id": run_id, "task": "importer", "status": status,
+             "summary": summary, "shown": shown}
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_memory_counts_the_runs_that_used_what_they_were_shown(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(project, "cap-note", "The feed api rejects batches over fifty exactly.")
+    _record_run(project, "20260824T010000-aaaaaaaa",
+                "split the batches at fifty for the api", ["cap-note"])
+    _record_run(project, "20260824T020000-bbbbbbbb",
+                "nothing worth doing tonight", ["cap-note"])
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "kept in mind  1 of 2 recent runs used what they were shown" in result.stdout
+
+
+def test_an_entry_shown_often_but_never_used_is_named(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(project, "zebra-note", "Zebra ordering holds on holidays.")
+    for i in range(3):
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
+                    "nothing worth doing tonight", ["zebra-note"])
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "unused" in result.stdout
+    assert "zebra-note (shown 3 times, used never)" in result.stdout
+
+
+def test_an_entry_used_even_once_is_not_named(tmp_path):
+    _, project = _project(tmp_path)
+    _entry(project, "zebra-note", "Zebra ordering holds on holidays.")
+    for i in range(3):
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
+                    "nothing worth doing tonight", ["zebra-note"])
+    _record_run(project, "20260824T040000-aaaaaaa4",
+                "held the zebra ordering through the holidays", ["zebra-note"])
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "unused" not in result.stdout
+
+
+def test_a_vanished_entry_is_not_named_however_often_shown(tmp_path):
+    _, project = _project(tmp_path)
+    for i in range(4):
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
+                    "nothing worth doing tonight", ["long-gone"])
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "unused" not in result.stdout
+
+
+def test_a_project_without_records_shows_no_accounting(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "kept in mind" not in result.stdout and "unused" not in result.stdout
+
+
 def test_memory_is_still_read_only_with_connections(tmp_path):
     _, project = _project(tmp_path)
     _entry(

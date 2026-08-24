@@ -672,6 +672,14 @@ def memory(
         typer.echo(f"disagree     {one} <-> {other}")
     for line in report["second_look"]:
         typer.echo(f"second look  {line}")
+    accounting = report.get("accounting")
+    if accounting:
+        typer.echo(
+            f"kept in mind  {accounting['runs_used']} of {accounting['runs_shown']} "
+            "recent runs used what they were shown"
+        )
+        for slug, count in accounting["unused"]:
+            typer.echo(f"unused       {slug} (shown {count} times, used never)")
     suggestion = last_suggestion(project)
     if suggestion:
         typer.echo(f"the last pass suggests: {suggestion}")
