@@ -9,6 +9,8 @@ import socket
 from typing import Any, Callable
 
 from ..errors import PoieoError, SpecError
+from ..learn import learn as learn_pass
+from ..memory import memory_root
 from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
@@ -17,6 +19,7 @@ from ..task import record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
+from .triggers import _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
 
@@ -220,6 +223,52 @@ class Daemon:
         """Request a graceful shutdown; in-flight runs finish their current node."""
         self.cancel.set()
 
+    # -- learning while nothing else is running ------------------------------
+
+    def _ready_to_learn(self) -> bool:
+        """Double opt-in (the config key and the folder), and learning
+        always yields to work: not one runner may be mid-run."""
+        if self.config.learn is None or not self.config.tasks:
+            return False
+        if not memory_root(self.config.resolve_path(self.config.tasks)).is_dir():
+            return False
+        return all(runner.status == "waiting" for runner in self.runners)
+
+    async def _learn_once(self, spec: Any, pool: ProviderPool) -> None:
+        """One guarded attempt. Nothing that happens here may take the
+        daemon down -- the box-sweep rule, applied continuously."""
+        project = self.config.resolve_path(self.config.tasks)
+        try:
+            result = await learn_pass(project, spec, pool)
+        except Exception as exc:
+            log.warning("the learning pass failed: %s", exc)
+            return
+        if result is None:
+            return
+        if result.error is not None:
+            log.warning("the learning pass failed and will reread: %s", result.error)
+        else:
+            log.info(
+                "learned from %d record(s): kept %d, set aside %d",
+                result.read,
+                len(result.kept),
+                len(result.set_aside),
+            )
+
+    async def _learning_loop(self) -> None:
+        from ..binding import load_binding
+
+        try:
+            interval = parse_duration(self.config.learn)
+            spec = load_binding(self.config.resolve_path(self.config.binding))
+        except Exception as exc:
+            log.warning("learning is off: %s", exc)
+            return
+        async with ProviderPool(spec) as pool:
+            while await _sleep_or_cancel(interval, self.cancel):
+                if self._ready_to_learn():
+                    await self._learn_once(spec, pool)
+
     def _install_signals(self) -> None:
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -272,6 +321,10 @@ class Daemon:
                 log.warning("could not reclaim old environments: %s", exc)
 
         self.runners = self._runners()
+        learn_task = None
+        if self.config.learn is not None:
+            learn_task = asyncio.create_task(self._learning_loop())
+            log.info("learning every %s, while nothing else is running", self.config.learn)
         log.info(
             "poieo daemon up: %d flow(s), store at %s",
             len(self.runners),
@@ -290,6 +343,11 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
+            if learn_task is not None:
+                try:
+                    await asyncio.wait_for(learn_task, timeout=5)
+                except (asyncio.TimeoutError, Exception):
+                    learn_task.cancel()
             if web_task is not None:
                 server.should_exit = True
                 try:

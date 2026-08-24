@@ -60,6 +60,11 @@ class DaemonConfig(BaseModel):
     flows: list[FlowSpec] = Field(default_factory=list)
     # A folder of task files; each one expands into a flow. See poieo.task.
     tasks: str | None = None
+    # How often the project sits down to learn from its run records
+    # (a duration: "1d"). Absent means never. The tasks folder's memory/
+    # stays the other half of the opt-in -- a config key alone must not
+    # conjure the feature for a project that never chose it.
+    learn: str | None = None
 
     source_path: Path | None = Field(default=None, exclude=True)
     # What each task-backed flow came from, by flow name. Filled by
@@ -77,6 +82,14 @@ class DaemonConfig(BaseModel):
             if not flow.binding and not self.binding:
                 raise ValueError(
                     f"flow '{flow.name}' has no binding and the daemon declares no default"
+                )
+        if self.learn is not None:
+            from .triggers import parse_duration
+
+            parse_duration(self.learn)  # a bad interval fails at load, not at 3am
+            if self.binding is None:
+                raise ValueError(
+                    "learn needs the daemon's default binding to read with"
                 )
         return self
 

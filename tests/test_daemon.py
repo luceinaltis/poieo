@@ -379,3 +379,83 @@ def test_a_task_without_notes_gets_no_postbox(tmp_path):
     config = _tasks_config(tmp_path, tools="[files, shell]")
     daemon = Daemon(config)
     assert all(r.hands.postbox is None for r in daemon._runners())
+
+
+# -- learning while nothing else is running ----------------------------------
+
+
+def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
+    (tmp_path / "project").mkdir(exist_ok=True)
+    tasks = tmp_path / "tasks"
+    tasks.mkdir(exist_ok=True)
+    (tasks / "one.yaml").write_text(
+        f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\nprompt: go\n",
+        encoding="utf-8",
+    )
+    if memory:
+        (tasks / "memory").mkdir(exist_ok=True)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"store: {(tmp_path / 'logs').as_posix()}\n"
+        "tasks: tasks/\n" + learn,
+        encoding="utf-8",
+    )
+    return load_config(config)
+
+
+def test_a_learn_interval_parses_and_a_bad_one_fails_at_load(tmp_path):
+    assert _learning_config(tmp_path, "learn: 1d\n").learn == "1d"
+    with pytest.raises(SpecError):
+        _learning_config(tmp_path, "learn: soon\n")
+
+
+def test_learning_needs_the_daemon_default_binding(tmp_path):
+    (tmp_path / "project").mkdir()
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "one.yaml").write_text(
+        f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\n"
+        f"prompt: go\nbinding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "poieo.yaml"
+    config.write_text("tasks: tasks/\nlearn: 1h\n", encoding="utf-8")
+    with pytest.raises(SpecError, match="binding"):
+        load_config(config)
+
+
+def test_an_unconfigured_daemon_never_learns(tmp_path):
+    daemon = Daemon(_learning_config(tmp_path, learn=""))
+    assert daemon._ready_to_learn() is False
+
+
+def test_a_daemon_without_a_memory_folder_never_learns(tmp_path):
+    daemon = Daemon(_learning_config(tmp_path, memory=False))
+    assert daemon._ready_to_learn() is False
+
+
+def test_a_busy_daemon_waits_its_turn(tmp_path):
+    from types import SimpleNamespace
+
+    daemon = Daemon(_learning_config(tmp_path))
+    assert daemon._ready_to_learn() is True
+
+    daemon.runners = [SimpleNamespace(status="running")]
+    assert daemon._ready_to_learn() is False
+
+
+async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch):
+    import poieo.daemon.service as service
+    from poieo.binding import load_binding
+    from poieo.providers import ProviderPool
+
+    daemon = Daemon(_learning_config(tmp_path))
+
+    async def blow_up(*args, **kwargs):
+        raise RuntimeError("the model ate the homework")
+
+    monkeypatch.setattr(service, "learn_pass", blow_up)
+    spec = load_binding(EXAMPLES / "bindings/mock.yaml")
+    async with ProviderPool(spec) as pool:
+        await daemon._learn_once(spec, pool)  # must not raise

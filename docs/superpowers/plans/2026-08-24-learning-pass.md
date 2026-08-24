@@ -103,19 +103,21 @@ def test_learn_without_memory_says_how_to_start_and_exits_zero(): ...
 - The loop: cancellable sleep (`_sleep_or_cancel`), then one pass only if every runner is waiting and the config names a tasks folder with a `memory/`; any exception is logged and the loop lives on — the box-sweep rule, "tidying is never worth refusing to start over", applied continuously.
 - One pass at a time is structural: one loop, no concurrency.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_learn_interval_parses_and_a_bad_one_fails_at_load(): ...
+def test_learning_needs_the_daemon_default_binding(): ...   # added: fail at launch
 def test_an_unconfigured_daemon_never_learns(): ...
+def test_a_daemon_without_a_memory_folder_never_learns(): ...
 def test_a_busy_daemon_waits_its_turn(): ...
 def test_a_failing_pass_never_takes_the_daemon_down(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: the daemon learns from the night while nothing else is running`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 361 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: the daemon learns from the night while nothing else is running`
 
 ---
 
