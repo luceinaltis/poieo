@@ -54,6 +54,19 @@ LEARNED_HEADER = "What earlier work here has learned:"
 # -- the page and what was learned -------------------------------------------
 
 
+class _Links(BaseModel):
+    """The typed claims an entry may make. A kind of connection exists only
+    while a mechanism consumes it, so these two are all there are."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # What this entry needs to stay true. Followed forward at retrieval;
+    # a lean on a set-aside entry earns a second-look line in the report.
+    depends_on: list[str] = Field(default_factory=list)
+    # A standing question for a person. Listed in the report, never followed.
+    contradicts: list[str] = Field(default_factory=list)
+
+
 class _Frontmatter(BaseModel):
     """What a learned entry may say about itself. Anything else is a typo."""
 
@@ -70,6 +83,7 @@ class _Frontmatter(BaseModel):
     valid_from: date | None = None
     # Set this instead of deleting: the file stays, retrieval moves on.
     superseded_by: str | None = None
+    links: _Links = Field(default_factory=_Links)
 
 
 class Fact(BaseModel):
@@ -81,6 +95,9 @@ class Fact(BaseModel):
     body: str
     matter: _Frontmatter
     path: Path
+    # [[names]] in the body: untyped, free to dangle -- a mention of an
+    # entry that does not exist yet marks something worth writing.
+    mentions: list[str] = Field(default_factory=list)
 
 
 def memory_root(project_dir: Path) -> Path:
@@ -113,7 +130,9 @@ def _load_fact(path: Path) -> Fact:
             f"{path}: invalid memory entry: "
             f"{describe_invalid(exc, tuple(_Frontmatter.model_fields))}"
         ) from exc
-    return Fact(slug=path.stem, body=body.strip(), matter=parsed, path=path)
+    body = body.strip()
+    mentions = list(dict.fromkeys(m.strip() for m in re.findall(r"\[\[([^\[\]]+)\]\]", body)))
+    return Fact(slug=path.stem, body=body, matter=parsed, path=path, mentions=mentions)
 
 
 def load_facts(project_dir: Path) -> list[Fact]:
@@ -127,8 +146,25 @@ def load_facts(project_dir: Path) -> list[Fact]:
 
 def check_memory(project_dir: Path) -> None:
     """Fail at launch, not at 3am: a typo in the memory must surface where
-    `poieo validate` and the daemon's load can see it."""
-    load_facts(project_dir)
+    `poieo validate` and the daemon's load can see it.
+
+    Typed claims are checked against the whole folder here, because a single
+    file cannot see its siblings. Prose mentions are deliberately not: a
+    mention of an entry that does not exist marks something worth writing.
+    """
+    facts = load_facts(project_dir)
+    known = {fact.slug for fact in facts}
+    for fact in facts:
+        claims = [
+            ("depends_on", target) for target in fact.matter.links.depends_on
+        ] + [("contradicts", target) for target in fact.matter.links.contradicts]
+        if fact.matter.superseded_by is not None:
+            claims.append(("superseded_by", fact.matter.superseded_by))
+        for kind, target in claims:
+            if target not in known:
+                raise SpecError(
+                    f"{fact.path}: {kind} names '{target}', and no such entry exists"
+                )
 
 
 def _page(project_dir: Path) -> str | None:

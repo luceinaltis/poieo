@@ -40,7 +40,7 @@ An entry **mentions** another, **leans on** it, or **disagrees with** it; a lean
 
 **Why this is first.** Everything else consumes what this parses, and the validation half is independently worth landing: a typo in a typed claim currently fails silently forever.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_mention_in_the_body_is_read(): ...
@@ -52,10 +52,10 @@ def test_a_body_mention_of_nothing_is_legal(): ...
 def test_leaning_on_a_set_aside_entry_is_legal_at_load(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a memory entry can name the entries it leans on`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 353 passed (docker running)
+- [x] **Step 5: Commit** — `feat: a memory entry can name the entries it leans on`
 
 ---
 
