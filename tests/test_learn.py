@@ -618,3 +618,59 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
     text = (project / "memory" / "facts" / "fat-note.md").read_text(encoding="utf-8")
     assert "sealed" not in text
     assert any("fat.bin" in note for note in result.dropped)
+
+
+# -- letting go --------------------------------------------------------------
+
+
+def _stale_blob(project, content=b"old bytes"):
+    import hashlib
+
+    store = project / ".poieo" / "blobs"
+    store.mkdir(parents=True, exist_ok=True)
+    name = hashlib.sha256(content).hexdigest()
+    (store / name).write_bytes(content)
+    _aged(store / name, 120)
+    return name
+
+
+async def test_an_old_unreferenced_keepsake_is_let_go_and_listed(tmp_path):
+    project = _project(tmp_path)
+    name = _stale_blob(project)
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(project, _proposal())
+    assert result.let_go == [name]
+    assert not (project / ".poieo" / "blobs" / name).exists()
+
+
+async def test_a_keepsake_referenced_from_the_attic_survives(tmp_path):
+    project = _project(tmp_path)
+    name = _stale_blob(project)
+    attic = project / "memory" / "attic"
+    attic.mkdir()
+    (attic / "old-note.md").write_text(
+        "---\nanchors: ['notebook/feeds.md']\nsuperseded_by: old-note\n"
+        f'sealed: {{"notebook/feeds.md": "{name}"}}\n---\nOnce true.',
+        encoding="utf-8",
+    )
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(project, _proposal())
+    assert result.let_go == []
+    assert (project / ".poieo" / "blobs" / name).exists()
+
+
+async def test_a_fresh_keepsake_survives(tmp_path):
+    import hashlib
+
+    project = _project(tmp_path)
+    store = project / ".poieo" / "blobs"
+    store.mkdir(parents=True)
+    name = hashlib.sha256(b"fresh bytes").hexdigest()
+    (store / name).write_bytes(b"fresh bytes")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(project, _proposal())
+    assert result.let_go == []
+    assert (store / name).exists()

@@ -352,6 +352,14 @@ out of every prompt and every count, restored by moving the file back,
 deleted never. A pass may also *suggest* one line for the constitution;
 poieo records and shows it, and only you ever edit that page.
 
+Entries the project learns are sealed to the files they were written
+about: the pass keeps the exact bytes under `.poieo/blobs/`, so a doubt
+means the content really differs -- a merely-touched file raises nothing --
+and the original an entry was written against is always there to open.
+Keepsakes are copies, never meaning: one that nothing references anymore
+is let go after the same grace the attic uses, and losing one costs a
+precise comparison, not a word of what was learned.
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.

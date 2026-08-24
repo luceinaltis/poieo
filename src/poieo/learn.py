@@ -56,6 +56,7 @@ class Pass:
     # never applied by anything but a person's editor.
     page: str | None = None
     to_attic: list[str] = field(default_factory=list)
+    let_go: list[str] = field(default_factory=list)
 
 
 async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> Pass | None:
@@ -113,6 +114,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     # failed pass earns nothing and the reread earns exactly once.
     _strengthen(project_dir, facts, records)
     result.to_attic = _to_attic(project_dir, facts)
+    result.let_go = _let_go(project_dir)
     _record(project_dir, result)
     return result
 
@@ -459,6 +461,47 @@ def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
         except OSError as exc:
             log.warning("could not move %s to the attic: %s", fact.path.name, exc)
     return moved
+
+
+def _let_go(project_dir: Path) -> list[str]:
+    """The one true deletion, legal because a keepsake is a copy: runtime
+    bytes named by nothing in facts/ or the attic, past the grace. The
+    meaning a keepsake backed is either alive and keeps its name, or moved
+    to the attic with its name intact -- so an unnamed keepsake backs
+    nothing."""
+    from . import blob
+    from .memory import _load_fact, memory_root
+
+    store = Path(project_dir) / ".poieo" / blob.STORE
+    if not store.is_dir():
+        return []
+
+    referenced: set[str] = set()
+    for folder in ("facts", "attic"):
+        root = memory_root(project_dir) / folder
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*.md")):
+            try:
+                referenced |= set(_load_fact(path).matter.sealed.values())
+            except Exception:
+                # An unreadable entry protects nothing it does not name --
+                # but collection must not fail over it either.
+                continue
+
+    now = datetime.now(timezone.utc).timestamp()
+    gone: list[str] = []
+    for path in sorted(store.iterdir()):
+        if len(path.name) != 64 or path.name in referenced:
+            continue
+        try:
+            if (now - path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
+                continue
+            path.unlink()
+            gone.append(path.name)
+        except OSError as exc:
+            log.warning("could not let go of %s: %s", path.name, exc)
+    return gone
 
 
 def last_suggestion(project_dir: Path) -> str | None:
