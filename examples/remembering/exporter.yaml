@@ -1,0 +1,9 @@
+# The other half. Same page, different entries: the global rate-limits entry
+# reaches this card too, but batch-cap does not -- its scope names the
+# importer, and scope is a filter over one shared memory, never a second one.
+name: publish the digest
+folder: notebook
+every: 1h
+binding: ../bindings/mock.yaml
+prompt: |
+  Publish a digest of what is new in the notebook feeds.

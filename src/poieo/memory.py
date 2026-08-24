@@ -139,7 +139,9 @@ def _page(project_dir: Path) -> str | None:
         # Forgetting beats failing: the run proceeds with less in mind.
         log.warning("could not read the memory page %s: %s", path, exc)
         text = ""
-    text = text.strip()
+    # Markdown comments are notes to the page's editor, not to the model,
+    # and the page is the most expensive room in the prompt.
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL).strip()
     if not text:
         return None
     if len(text) > PAGE_BUDGET:

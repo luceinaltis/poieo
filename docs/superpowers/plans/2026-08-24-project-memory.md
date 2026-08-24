@@ -166,27 +166,23 @@ def test_a_project_without_memory_says_so_plainly_and_exits_zero(): ...
 - Modify: `DESIGN.md` (capability layers and roadmap — status only; the wording landed with the spec)
 - Create: an example project under `examples/` — a constitution, three entries (one global, one scoped, one set aside), two cards on the mock binding
 
-- [ ] **Step 1: The example**
+- [x] **Step 1: The example** — `examples/remembering/`: two cards, one memory, one entry scoped, one global, one set aside
 
-A tasks folder whose memory plausibly matters to its cards — a rule the constitution states, a lesson one card's work would need, a superseded entry showing what setting-aside looks like. Mock binding, runs offline.
-
-- [ ] **Step 2: README**
+- [x] **Step 2: README**
 
 Extend the journal section — the placement is the argument: journal for lately, memory for always. Say the folder is the opt-in, the page is always in front of every task, entries are chosen per task, a wrong entry is set aside rather than deleted, and every entry can be traced to the work that taught it.
 
-- [ ] **Step 3: DESIGN.md**
+- [x] **Step 3: DESIGN.md**
 
 The Memory capability-layer row and roadmap entry change status. Change the status, not the argument; keep the file under 500 lines and at the logic level.
 
-- [ ] **Step 4: The whole suite, both ways**
+- [x] **Step 4: The whole suite, both ways** — docker running: 346 passed in 18.76s; docker stopped: 316 passed, 30 skipped in 6.88s
 
-With docker running and with it stopped. Green both times; paste both summary lines.
+- [x] **Step 5: End to end by hand**
 
-- [ ] **Step 5: End to end by hand**
+Run a card; confirm the constitution and the scoped entry appear in its prompt and the foreign and set-aside ones do not. Edit the page, run again, see the edit. Delete `.poieo/memory.sqlite3`, run again, see nothing change. Follow one entry's `source` to an episode and the episode to its run log — the traceability walk. Then delete `memory/` and confirm the prompt reverts to today's, byte for byte. *(Done 2026-08-24; the walk also surfaced that editor comments in the page reached the prompt — fixed in this task with `test_editor_notes_in_the_page_never_reach_the_prompt`.)*
 
-Run a card; confirm the constitution and the scoped entry appear in its prompt and the foreign and set-aside ones do not. Edit the page, run again, see the edit. Delete `.poieo/memory.sqlite3`, run again, see nothing change. Follow one entry's `source` to an episode and the episode to its run log — the traceability walk. Then delete `memory/` and confirm the prompt reverts to today's, byte for byte.
-
-- [ ] **Step 6: Commit** — `docs: a project remembers what it has learned`
+- [x] **Step 6: Commit** — `docs: a project remembers what it has learned`
 
 ---
 

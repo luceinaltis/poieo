@@ -273,6 +273,40 @@ This is what stops a standing task from re-doing last night's work, and it is
 where the morning review's accept and discard notes will land once the review
 screen ships.
 
+### What a project remembers
+
+The journal is short-term on purpose -- old lines age out of the prompt. The
+long-term half lives beside the cards, and creating the folder is the whole
+opt-in:
+
+```
+tasks/
+  memory/
+    constitution.md      one page, in front of every run of every task
+    facts/batch-cap.md   one file per learned entry
+```
+
+The page is read whole, every run, first -- put the rules there that every
+task must hold and that nothing would think to look up. The entries under
+`facts/` are chosen per task: by a scope in their frontmatter (`global`, a
+task's name, or a path), by the words they share with what the task is about,
+and above all by naming the code the task is working on. A wrong entry is not
+deleted; set `superseded_by:` and it steps aside, file and history intact.
+
+Every run also leaves a full record under `.poieo/episodes/`, unclipped where
+the run log clips, so an entry's `source:` can name the run that taught it --
+anything the project claims to remember can be walked back to the work it
+came from. Ask what a task will actually see, and why:
+
+```bash
+poieo memory tasks/                      # the page, the counts, the lookup
+poieo memory tasks/keep-improving.yaml   # the exact block its next run gets
+```
+
+Nothing configures this. No `memory/` folder, no trace of the feature;
+everything in it is markdown you edit and git versions. A worked pair of
+cards sharing one memory lives in `examples/remembering/`.
+
 ### Tasks leaving each other notes
 
 A task can write a line in another task's journal, using the same file and the
