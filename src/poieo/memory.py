@@ -340,18 +340,42 @@ def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Fact]:
             scored.append((score, fact))
     scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
 
-    # One connection outward, after every direct hit: a neighbor has no
-    # score of its own to argue with -- its claim to the prompt is its
-    # seed's -- so association must never outrank evidence. Neighbors are
-    # drawn from the already-filtered pool, which is what keeps scope and
-    # set-aside holding through connections, and they do not expand.
+    # Association after evidence: a neighbor has no score of its own to
+    # argue with -- its claim to the prompt is its seed's, times how worn
+    # the connection between them is. Neighbors are drawn from the
+    # already-filtered pool, which is what keeps scope and set-aside
+    # holding through connections; a second hop is taken only across a
+    # worn connection, so with no wear anywhere one hop means one hop and
+    # the order is exactly what the connections slice shipped.
+    from .strength import WORN_FLOOR, wear_of
+
+    worn = wear_of(project_dir)
     sequence = [fact for _, fact in scored]
     taken = {fact.slug for fact in sequence}
-    for _, fact in scored:
+
+    carry: dict[str, float] = {}
+    for rank, (_, fact) in enumerate(scored):
         for neighbor in _connected(fact, facts):
-            if neighbor.slug not in taken:
-                taken.add(neighbor.slug)
-                sequence.append(neighbor)
+            if neighbor.slug in taken:
+                continue
+            wear = worn.get(frozenset((fact.slug, neighbor.slug)), 0.0)
+            carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + wear) / (1 + rank)
+
+    by_slug = {fact.slug: fact for fact in facts}
+    further: dict[str, float] = {}
+    for slug, reached in carry.items():
+        for neighbor in _connected(by_slug[slug], facts):
+            if neighbor.slug in taken or neighbor.slug in carry:
+                continue
+            wear = worn.get(frozenset((slug, neighbor.slug)), 0.0)
+            if wear >= WORN_FLOOR:
+                further[neighbor.slug] = further.get(neighbor.slug, 0.0) + reached * wear
+
+    carry.update(further)
+    sequence += sorted(
+        (by_slug[slug] for slug in carry),
+        key=lambda fact: (-carry[fact.slug], fact.slug),
+    )
 
     chosen: list[Fact] = []
     spent = 0

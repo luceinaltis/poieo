@@ -250,6 +250,111 @@ def test_the_fallback_still_returns_the_same_entries(tmp_path, monkeypatch):
     assert read_memory(project, task) == preferred
 
 
+# -- worn paths --------------------------------------------------------------
+#
+# Wear reorders neighbors and extends reach one worn hop; it never outranks
+# direct evidence, crosses a filter, or diverges the two lookup backends.
+# With no wear anywhere, everything above this line is the whole behavior.
+
+
+def _worn(project, a, b, times=1):
+    from poieo.strength import wear
+
+    for _ in range(times):
+        wear(project, [(a, b)])
+
+
+def test_a_worn_neighbor_outranks_its_unworn_sibling(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50. [[alpha-note]] [[zeta-note]]",
+    )
+    _fact(project, "alpha-note", "Feeds land alphabetically, newest last.")
+    _fact(project, "zeta-note", "Zebra ordering holds on holidays.")
+    _worn(project, "batch-cap", "zeta-note")
+
+    block = read_memory(project, task)
+    assert block.index("Zebra ordering") < block.index("alphabetically")
+
+
+def test_an_empty_strength_store_changes_nothing(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50. [[alpha-note]] [[zeta-note]]",
+    )
+    _fact(project, "alpha-note", "Feeds land alphabetically, newest last.")
+    _fact(project, "zeta-note", "Zebra ordering holds on holidays.")
+
+    block = read_memory(project, task)
+    assert block.index("alphabetically") < block.index("Zebra ordering")
+
+
+def test_a_worn_two_hop_path_arrives(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
+    _fact(project, "near", "Feeds land alphabetically. [[far]]")
+    _fact(project, "far", "Somewhere a bell rings twice.")
+    _worn(project, "near", "far")
+
+    block = read_memory(project, task)
+    assert "bell rings" in block
+    assert block.index("alphabetically") < block.index("bell rings")
+
+
+def test_an_unworn_second_hop_is_never_taken(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
+    _fact(project, "near", "Feeds land alphabetically. [[far]]")
+    _fact(project, "far", "Somewhere a bell rings twice.")
+    _worn(project, "batch-cap", "near")  # the first hop is worn; the second is not
+
+    assert "bell rings" not in read_memory(project, task)
+
+
+def test_no_neighbor_outranks_a_direct_hit_however_worn(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[quiet-note]]")
+    _fact(project, "retry-note", "The importer retries the api batch once.")
+    _fact(project, "quiet-note", "Feeds land alphabetically, newest last.")
+    _worn(project, "batch-cap", "quiet-note", times=12)
+
+    block = read_memory(project, task)
+    assert block.index("retries") < block.index("alphabetically")
+
+
+def test_a_worn_path_never_crosses_scope_or_resurrects_the_set_aside(tmp_path):
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50. [[exporter-note]] [[old-cap]]",
+    )
+    _fact(project, "exporter-note", "Digest pages flush nightly.", matter="scope: [exporter]")
+    _fact(project, "old-cap", "Caps sat lower once.", matter="superseded_by: batch-cap")
+    _worn(project, "batch-cap", "exporter-note", times=5)
+    _worn(project, "batch-cap", "old-cap", times=5)
+
+    block = read_memory(project, task)
+    assert "flush nightly" not in block
+    assert "sat lower" not in block
+
+
+def test_the_scan_and_the_index_still_agree_on_worn_paths(tmp_path, monkeypatch):
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
+    _fact(project, "near", "Feeds land alphabetically. [[far]]")
+    _fact(project, "far", "Somewhere a bell rings twice.")
+    _worn(project, "near", "far")
+
+    preferred = read_memory(project, task)
+    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    assert read_memory(project, task) == preferred
+
+
 def test_nothing_is_ever_written_inside_the_memory_folder(tmp_path):
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
