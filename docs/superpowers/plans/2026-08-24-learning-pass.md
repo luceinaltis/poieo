@@ -77,7 +77,7 @@ async def test_a_memoryless_project_never_gains_a_folder(): ...
 - `poieo learn <folder-or-card> [-b binding]` — one pass, now. A card supplies its project and (absent `-b`) its binding, exactly as `run` resolves one. Prints what was kept and set aside, or that there was nothing to read, or how the pass failed — always in the product's voice.
 - A memoryless project: says how to start one, exit 0 (the `poieo memory` precedent).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_learn_runs_one_pass_and_says_what_it_kept(): ...
@@ -85,10 +85,10 @@ def test_learn_says_when_there_is_nothing_to_read(): ...
 def test_learn_without_memory_says_how_to_start_and_exits_zero(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: poieo learn runs one learning pass by hand`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 355 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: poieo learn runs one learning pass by hand`
 
 ---
 
