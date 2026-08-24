@@ -127,10 +127,10 @@ def test_the_scan_and_the_index_still_agree(): ...
 def test_an_empty_strength_store_changes_nothing(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite** — every Plan G test must pass unmodified
-- [ ] **Step 5: Commit** — `feat: worn connections carry retrieval sooner and further`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 382 passed, 30 skipped (docker stopped); every Plan G test unmodified
+- [x] **Step 5: Commit** — `feat: worn connections carry retrieval sooner and further`
 
 ---
 
