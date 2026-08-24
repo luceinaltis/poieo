@@ -86,7 +86,10 @@ class DaemonConfig(BaseModel):
         if self.learn is not None:
             from .triggers import parse_duration
 
-            parse_duration(self.learn)  # a bad interval fails at load, not at 3am
+            # Fails at load, not at 3am -- and a zero interval would spin
+            # the loop without ever yielding, starving the whole daemon.
+            if parse_duration(self.learn) <= 0:
+                raise ValueError("learn must be a positive duration")
             if self.binding is None:
                 raise ValueError(
                     "learn needs the daemon's default binding to read with"

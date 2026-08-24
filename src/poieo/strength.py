@@ -58,16 +58,19 @@ def _read(project_dir: Path, now: datetime) -> dict[str, float]:
     try:
         raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
         pairs = raw.get("pairs", {}) if isinstance(raw, dict) else {}
-        return {
-            key: value
-            for key, entry in pairs.items()
-            if isinstance(entry, dict)
-            and (value := _decayed(float(entry.get("w", 0)), str(entry.get("at", "")), now))
-            > _FLOOR
-        }
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         log.warning("could not read %s (%s); treating it as empty", path, exc)
         return {}
+    weights: dict[str, float] = {}
+    for key, entry in pairs.items():
+        # One bad entry loses itself, never the file.
+        try:
+            value = _decayed(float(entry.get("w", 0)), str(entry.get("at", "")), now)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if value > _FLOOR:
+            weights[key] = value
+    return weights
 
 
 def wear_of(
@@ -92,7 +95,10 @@ def wear(
     try:
         weights = _read(project_dir, now)
         for a, b in pairs:
-            if a == b:
+            # The delimiter must never appear in a name, or two pairs
+            # could collapse into one; slugs the pass writes cannot carry
+            # it, but hand-authored files on POSIX could.
+            if a == b or "|" in a or "|" in b:
                 continue
             key = "|".join(sorted((a, b)))
             weights[key] = weights.get(key, 0.0) + 1.0
