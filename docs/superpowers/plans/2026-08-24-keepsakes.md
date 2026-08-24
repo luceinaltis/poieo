@@ -45,10 +45,10 @@ def test_an_over_cap_file_is_declined(): ...
 def test_keep_never_raises(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a place to keep the exact bytes an entry was written against`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 400 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a place to keep the exact bytes an entry was written against`
 
 ---
 
