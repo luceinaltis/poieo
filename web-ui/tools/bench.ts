@@ -85,10 +85,10 @@ const anvilAsked = asked.get("anvil")
 if (anvilAsked !== null) turnAnvil((Number(anvilAsked) * Math.PI) / 180)
 const facingAsked = asked.get("facing")
 if (facingAsked !== null) turnFigure((Number(facingAsked) * Math.PI) / 180)
-// `?tall=0.35` stands the anvil at a candidate height, which is the one number
-// that decides whether the hammer lands on the face or sails past it.
-const tallAsked = asked.get("tall")
-if (tallAsked !== null) standAnvil(Number(tallAsked))
+// `?face=0.3` puts the anvil's face at a candidate height, which is the one
+// number that decides whether the hammer lands on it or sails past it.
+const faceAsked = asked.get("face")
+if (faceAsked !== null) standAnvil(Number(faceAsked))
 
 const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [], {
   anvil: anvilGltf.scene,

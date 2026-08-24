@@ -19,6 +19,16 @@ const WALL_TALL = 2.0
 const LOG_RADIUS = 0.115
 const PLANK = 0.325
 
+/**
+ * Where the logs actually stop, on the two walled sides.
+ *
+ * The room is open toward the camera and closed behind and to the left, and
+ * anything swung inside it has to stay clear of these two lines or it goes
+ * through the wall. Exported because the smith's stance is worked out from
+ * them rather than nudged until it looked right.
+ */
+export const INSIDE = -SPAN / 2 + LOG_RADIUS * 2
+
 const WOOD = {
   floor: [0x322818, 0x2d2415, 0x372c1b, 0x2a2113],
   log: [0x42331f, 0x473722, 0x3d2f1c, 0x443521],

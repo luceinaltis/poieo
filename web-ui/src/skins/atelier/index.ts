@@ -11,7 +11,7 @@
  */
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
-import { makeCabin } from "./cabin"
+import { INSIDE, makeCabin } from "./cabin"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
 import { figurePose, lampLit, shelfCount } from "./scene"
@@ -79,25 +79,29 @@ export function turnAnvil(angle: number) {
 }
 
 /**
- * How tall the anvil stands, stump included; its face sits that much plus the
- * pad off the floor.
+ * How far the anvil's face stands off the floor.
  *
- * This is a compromise, and worth knowing as one. The clip Meshy retargeted is
- * a ground-level swing: the hammer head bottoms out at y0.096, and the fist
- * holding it only reaches y0.39, so no anvil whose face clears 0.39 can ever
- * be struck -- shortening the hammer cannot help, and a face down at the blow
- * would be a toy. At 0.78 the anvil simply stood in front of the smith and hid
- * him. At 0.45 it still reads as an anvil on a stump, he is visibly bent over
- * it, and the part of the swing that carries on past the face is behind his
- * body and the iron. Candidates were photographed with
- * tools/bench.html?tall=0.30 and so on; the real fix is a swing that stops at
- * bench height.
+ * The clip Meshy retargeted is a ground-level swing: the hammer head bottoms
+ * out at y0.096 and the fist holding it only reaches y0.39, so a face much
+ * above that is never actually struck. Height and size used to be the same
+ * number -- the model arrives as an anvil on a stump, and standing the whole
+ * thing on the floor meant a low face could only be bought by shrinking the
+ * iron to a toy.
+ *
+ * They are separate now. ANVIL_LONG says how big the anvil is and this says
+ * how high it stands; the difference goes under the floorboards, where nothing
+ * can see it. At 0.38 a hand of stump still shows above the stone, which is
+ * what makes it read as an anvil rather than a wedge lying on the floor, and
+ * the face is close enough to the blow that the hammer meets it.
  */
-export let ANVIL_TALL = 0.45
+export let ANVIL_FACE = 0.38
+
+/** How long the anvil is, nose to heel; its height follows from the model. */
+const ANVIL_LONG = 0.72
 
 /** Tool-only override, so bench.html can photograph the candidates. */
-export function standAnvil(tall: number) {
-  ANVIL_TALL = tall
+export function standAnvil(face: number) {
+  ANVIL_FACE = face
 }
 
 /** Which hand the model holds its hammer in. */
@@ -110,6 +114,9 @@ const HAMMER_HAND = "Right"
  * whatever scale the generator felt like.
  */
 const HAMMER_LONG = 0.34
+
+/** How much daylight to leave between the hammer's head and the log walls. */
+const HAMMER_CLEAR = 0.08
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -339,23 +346,25 @@ export function makeBench(
   bench.rotation.y = ANVIL_TURN
   group.add(bench)
 
-  const anvil = grounded(THREE, props.anvil, ANVIL_TALL)
-  anvil.position.y += 0.07
-  bench.add(anvil)
+  // Sized by its length and then sunk until its face is where it belongs, so
+  // the two decisions stop fighting: the stump ends up under the boards, and
+  // whatever is left above them is a whole anvil.
+  const anvil = props.anvil.clone()
+  const raw = new THREE.Box3().setFromObject(anvil)
+  anvil.scale.multiplyScalar(ANVIL_LONG / Math.max(raw.max.x - raw.min.x, raw.max.z - raw.min.z))
   const stood = new THREE.Box3().setFromObject(anvil)
-  const anvilTop = stood.max.y
+  anvil.position.x -= (stood.min.x + stood.max.x) / 2
+  anvil.position.z -= (stood.min.z + stood.max.z) / 2
+  anvil.position.y += ANVIL_FACE - stood.max.y
+  bench.add(anvil)
+  const anvilTop = ANVIL_FACE
 
-  // The stump is right -- smiths mount anvils on wood to eat the shock -- but
-  // a quarter ton of iron does not stand on floorboards. A stone pad goes
-  // under it, and because it lives in the bench group it follows the anvil
-  // wherever the strike probe decides to stand it.
-  //
-  // Sized off the stump rather than written down: ANVIL_TALL is a number that
-  // moves, and a pad that does not move with it went from a flagstone to a
-  // dance floor the first time the anvil came down.
-  const across = Math.max(stood.max.x - stood.min.x, stood.max.z - stood.min.z) / 2
+  // A quarter ton of iron does not stand on floorboards. With the stump buried
+  // the pad is what it comes out of rather than what it sits on -- a collar of
+  // stone set into the floor, sized off the anvil so it follows if the anvil
+  // grows.
   const pad = new THREE.Mesh(
-    new THREE.CylinderGeometry(across * 1.35, across * 1.45, 0.07, 9),
+    new THREE.CylinderGeometry(ANVIL_LONG * 0.42, ANVIL_LONG * 0.46, 0.07, 9),
     new THREE.MeshStandardMaterial({ color: 0x3c3934, roughness: 1 }),
   )
   pad.position.y = 0.035
@@ -480,6 +489,29 @@ export function makeBench(
     hammer.holder.localToWorld(hammer.head.clone()),
   )
   const strikeAt = strike.when
+
+  // Now stand him where the swing fits the room. The backswing takes the
+  // hammer up and behind his left shoulder, which is the corner the two walls
+  // meet in, and it was going a third of a metre into the logs. So sweep the
+  // clip for how far past the inside faces the head reaches, and step him and
+  // his anvil out by exactly that -- toward the open side, which is where a
+  // room this shape has room to give.
+  {
+    const head = new THREE.Vector3()
+    let intoWall = { x: 0, z: 0 }
+    for (let step = 0; step <= 60; step += 1) {
+      mixer.setTime((step / 60) * swing.duration)
+      figure.updateWorldMatrix(true, true)
+      head.copy(hammer.head)
+      hammer.holder.localToWorld(head)
+      intoWall.x = Math.max(intoWall.x, INSIDE + HAMMER_CLEAR - head.x)
+      intoWall.z = Math.max(intoWall.z, INSIDE + HAMMER_CLEAR - head.z)
+    }
+    figure.position.x += intoWall.x
+    figure.position.z += intoWall.z
+    strike.at.x += intoWall.x
+    strike.at.z += intoWall.z
+  }
   mixer.setTime(0)
 
   bench.position.set(strike.at.x, 0, strike.at.z)
