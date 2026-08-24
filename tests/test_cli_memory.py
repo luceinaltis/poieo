@@ -249,6 +249,34 @@ def test_a_healthy_memory_reports_no_doubts(tmp_path):
     assert "second look" not in result.stdout
 
 
+def test_memory_shows_the_last_suggestion_and_only_the_last(tmp_path):
+    import json
+
+    _, project = _project(tmp_path)
+    log = project / ".poieo"
+    log.mkdir(parents=True)
+    lines = [
+        {"at": "t1", "read": 1, "upto": "a", "error": None, "page": "Old idea."},
+        {"at": "t2", "read": 1, "upto": "b", "error": None, "page": None},
+    ]
+    (log / "learning.jsonl").write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
+    quiet = runner.invoke(app, ["memory", str(project)])
+    assert "suggests" not in quiet.stdout
+
+    with (log / "learning.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {"at": "t3", "read": 1, "upto": "c", "error": None, "page": "New idea."}
+            )
+            + "\n"
+        )
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "the last pass suggests: New idea." in result.stdout
+    assert "Old idea" not in result.stdout
+
+
 def test_memory_is_still_read_only_with_connections(tmp_path):
     _, project = _project(tmp_path)
     _entry(

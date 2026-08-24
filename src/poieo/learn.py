@@ -52,6 +52,9 @@ class Pass:
     set_aside: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     error: str | None = None
+    # One line the pass may suggest for the page. Recorded, shown, and
+    # never applied by anything but a person's editor.
+    page: str | None = None
 
 
 async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> Pass | None:
@@ -66,7 +69,10 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         log.debug("nothing new to learn from in %s", project_dir)
         return None
 
+    from .memory import doubts
+
     facts = _facts_or_less(project_dir)
+    doubtful = doubts(project_dir, facts)
     result = Pass(
         at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         read=len(records),
@@ -76,7 +82,12 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     resolved = binding.resolve(LEARNER_ROLE)
     request = LLMRequest(
         model=resolved.model,
-        messages=[{"role": "user", "content": _prompt(_page(project_dir), facts, records)}],
+        messages=[
+            {
+                "role": "user",
+                "content": _prompt(_page(project_dir), facts, records, doubtful),
+            }
+        ],
         system=None,
         params=dict(resolved.params),
         role=LEARNER_ROLE,
@@ -91,6 +102,10 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         result.upto = None
         _record(project_dir, result)
         return result
+
+    suggestion = data.get("page")
+    if isinstance(suggestion, str) and suggestion.strip():
+        result.page = " ".join(suggestion.split())[:300]
 
     _apply(project_dir, facts, records, data, result)
     # Strengthening rides the same success that moves the bookmark, so a
@@ -136,7 +151,12 @@ def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
 # -- the one completion ------------------------------------------------------
 
 
-def _prompt(page: str | None, facts: list[Fact], records: list[dict[str, Any]]) -> str:
+def _prompt(
+    page: str | None,
+    facts: list[Fact],
+    records: list[dict[str, Any]],
+    doubtful: list[tuple[str, str]] | None = None,
+) -> str:
     lines = [
         "You keep the long memory of a project of scheduled tasks.",
         "Below are the project's standing rules, what it already knows, and",
@@ -153,6 +173,10 @@ def _prompt(page: str | None, facts: list[Fact], records: list[dict[str, Any]]) 
         lines.append("What it already knows:")
         lines += [f"- {fact.slug}: {' '.join(fact.body.split())}" for fact in facts]
         lines.append("")
+    if doubtful:
+        lines.append("Worth a second look (confirm silently, or retire with set_aside):")
+        lines += [f"- {reason}" for _, reason in doubtful]
+        lines.append("")
     lines.append("Records not yet learned from, oldest first:")
     for record in records:
         summary = " ".join(str(record.get("summary", "")).split())
@@ -167,6 +191,8 @@ def _prompt(page: str | None, facts: list[Fact], records: list[dict[str, Any]]) 
         ' "scope": ["global"], "anchors": [], "from": ["record ids that taught it"],',
         ' "links": {"depends_on": [], "contradicts": []}}],',
         ' "set_aside": [{"entry": "slug that no longer holds", "because": "slug that replaces it"}]}',
+        'Optionally add "page": one line suggesting a change to the standing',
+        "rules above; a person decides whether it lands.",
     ]
     return "\n".join(lines)
 
@@ -367,6 +393,24 @@ def _followable(one: Fact, other: Fact) -> bool:
         or other.slug in one.matter.links.depends_on
         or one.slug in other.matter.links.depends_on
     )
+
+
+def last_suggestion(project_dir: Path) -> str | None:
+    """What the most recent successful pass suggested for the page --
+    nothing if it suggested nothing, however loud an older pass was."""
+    path = Path(project_dir) / ".poieo" / LOG_NAME
+    if not path.is_file():
+        return None
+    latest: dict[str, Any] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("error") is None:
+            latest = entry
+    suggestion = latest.get("page")
+    return suggestion if isinstance(suggestion, str) and suggestion else None
 
 
 def _record(project_dir: Path, result: Pass) -> None:

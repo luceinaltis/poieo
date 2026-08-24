@@ -387,3 +387,78 @@ async def test_a_failed_pass_earns_nothing_and_the_reread_earns_once(tmp_path):
     await _learn(project, [_proposal()])
     worn = wear_of(project)[frozenset(("batch-cap", "retry-window"))]
     assert 0.9 < worn <= 1.0
+
+
+# -- the second look, and the page suggestion --------------------------------
+
+
+async def test_the_pass_is_shown_what_is_doubtful(tmp_path):
+    project = _project(tmp_path)
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    binding = _binding(_proposal())
+    async with ProviderPool(binding) as pool:
+        await learn(project, binding, pool)
+        prompt = pool.get("fake").calls[0].messages[0]["content"]
+
+    assert "Worth a second look" in prompt
+    assert "gone" in prompt and "feeds-note" in prompt
+
+
+async def test_a_quiet_night_leaves_the_prompt_as_it_was(tmp_path):
+    project = _project(tmp_path)
+    _entry(project, "solid", "Stands alone, anchored to nothing.")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    binding = _binding(_proposal())
+    async with ProviderPool(binding) as pool:
+        await learn(project, binding, pool)
+        prompt = pool.get("fake").calls[0].messages[0]["content"]
+
+    assert "second look" not in prompt.lower()
+
+
+async def test_a_doubted_entry_can_be_set_aside_by_the_pass(tmp_path):
+    project = _project(tmp_path)
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
+    )
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(
+        project,
+        _proposal(
+            entries=[{"slug": "feeds-split", "body": "Feeds land one file per source now."}],
+            set_aside=[{"entry": "feeds-note", "because": "feeds-split"}],
+        ),
+    )
+    assert result.set_aside == ["feeds-note"]
+
+
+async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
+    project = _project(tmp_path)
+    _episode(project, "20260824T010000-aaaaaaaa")
+    before = sorted(str(p) for p in (project / "memory").rglob("*"))
+
+    result = await _learn(
+        project,
+        json.dumps(
+            {"entries": [], "set_aside": [], "page": "Require ISO dates in the notebook."}
+        ),
+    )
+
+    assert result.page == "Require ISO dates in the notebook."
+    record = (project / ".poieo" / "learning.jsonl").read_text(encoding="utf-8")
+    assert "Require ISO dates" in record
+    assert sorted(str(p) for p in (project / "memory").rglob("*")) == before
+    assert (
+        (project / "memory" / "constitution.md").read_text(encoding="utf-8")
+        == "Never push to main."
+    )

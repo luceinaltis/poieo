@@ -30,7 +30,7 @@ from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
-from .learn import learn as run_learning_pass
+from .learn import last_suggestion, learn as run_learning_pass
 from .memory import memory_report, memory_root, read_memory
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
@@ -672,6 +672,9 @@ def memory(
         typer.echo(f"disagree     {one} <-> {other}")
     for line in report["second_look"]:
         typer.echo(f"second look  {line}")
+    suggestion = last_suggestion(project)
+    if suggestion:
+        typer.echo(f"the last pass suggests: {suggestion}")
     if task is not None:
         typer.echo("")
         typer.echo(f"what {task.slug} will be shown on its next run:")
