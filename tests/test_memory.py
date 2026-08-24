@@ -383,6 +383,18 @@ def test_an_entry_saved_with_a_bom_keeps_its_frontmatter(tmp_path):
     assert "---" not in fact.body
 
 
+def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
+    project = _learn(
+        tmp_path,
+        "feeds-note",
+        '---\nanchors: []\nsealed: {"notebook/feeds.md": "'
+        + "0" * 64
+        + '"}\n---\nFeeds land in one file.',
+    )
+    with pytest.raises(SpecError, match="feeds-note.md"):
+        check_memory(project)
+
+
 def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
     _learn(tmp_path, "new-cap", "Batches cap at 500 now.")
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nBatches cap at 50.")

@@ -543,3 +543,78 @@ async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
     assert (project / "memory" / "facts" / "old-cap.md").exists()
     assert (attic / "old-cap.md").read_text(encoding="utf-8") == "already here"
     assert any("attic" in message for message in caplog.messages)
+
+
+# -- sealing -----------------------------------------------------------------
+
+
+async def test_a_file_anchor_is_sealed_when_the_pass_writes(tmp_path):
+    from poieo.blob import digest, kept
+
+    project = _project(tmp_path)
+    notebook = project / "notebook"
+    notebook.mkdir()
+    (notebook / "feeds.md").write_text("# feeds\n- a\n- b\n", encoding="utf-8")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    await _learn(
+        project,
+        _proposal(
+            entries=[
+                {
+                    "slug": "feeds-note",
+                    "body": "Feeds land in one file.",
+                    "anchors": ["notebook/feeds.md"],
+                }
+            ]
+        ),
+    )
+
+    text = (project / "memory" / "facts" / "feeds-note.md").read_text(encoding="utf-8")
+    name = digest(notebook / "feeds.md")
+    assert f'"notebook/feeds.md": "{name}"' in text
+    assert kept(project, name).read_text(encoding="utf-8") == "# feeds\n- a\n- b\n"
+
+
+async def test_a_directory_anchor_is_not_sealed_and_the_entry_lands(tmp_path):
+    project = _project(tmp_path)
+    (project / "notebook").mkdir()
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(
+        project,
+        _proposal(
+            entries=[
+                {"slug": "place-note", "body": "Work lands here.", "anchors": ["notebook"]}
+            ]
+        ),
+    )
+
+    assert result.kept == ["place-note"]
+    text = (project / "memory" / "facts" / "place-note.md").read_text(encoding="utf-8")
+    assert "sealed" not in text
+
+
+async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
+    import poieo.blob as blob
+
+    monkeypatch.setattr(blob, "KEEP_CAP", 10)
+    project = _project(tmp_path)
+    notebook = project / "notebook"
+    notebook.mkdir()
+    (notebook / "fat.bin").write_bytes(b"x" * 100)
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(
+        project,
+        _proposal(
+            entries=[
+                {"slug": "fat-note", "body": "The big file matters.", "anchors": ["notebook/fat.bin"]}
+            ]
+        ),
+    )
+
+    assert result.kept == ["fat-note"]
+    text = (project / "memory" / "facts" / "fat-note.md").read_text(encoding="utf-8")
+    assert "sealed" not in text
+    assert any("fat.bin" in note for note in result.dropped)

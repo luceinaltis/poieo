@@ -84,6 +84,10 @@ class _Frontmatter(BaseModel):
     # Set this instead of deleting: the file stays, retrieval moves on.
     superseded_by: str | None = None
     links: _Links = Field(default_factory=_Links)
+    # Anchor path -> the digest of the content the entry was written
+    # against. Written by the pass when it seals; a person may write one
+    # by hand. Bytes live under .poieo/blobs/, never here.
+    sealed: dict[str, str] = Field(default_factory=dict)
 
 
 class Fact(BaseModel):
@@ -166,6 +170,12 @@ def check_memory(project_dir: Path) -> None:
             if target not in known:
                 raise SpecError(
                     f"{fact.path}: {kind} names '{target}', and no such entry exists"
+                )
+        anchored = {anchor.split("::", 1)[0] for anchor in fact.matter.anchors}
+        for path in fact.matter.sealed:
+            if path not in anchored:
+                raise SpecError(
+                    f"{fact.path}: sealed names '{path}', which is not an anchor here"
                 )
 
 

@@ -71,10 +71,10 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(): ...
 def test_sealed_naming_a_missing_anchor_fails_at_load(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: the pass seals its entries to what they were written against`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 404 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: the pass seals its entries to what they were written against`
 
 ---
 
