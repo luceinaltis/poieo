@@ -158,7 +158,10 @@ if (asked.get("close") !== null) {
   bench.group.updateMatrixWorld(true)
   const head = bench.group.getObjectByName("Head") ?? bench.group
   head.getWorldPosition(middle)
-  const half = 0.22
+  const half = 0.16
+  // The rig puts its head bone at the crown, so aiming at the bone frames a
+  // cap and half a forehead. The face is a bone's-length below it.
+  middle.y -= half
   camera.left = -half
   camera.right = half
   camera.top = half
