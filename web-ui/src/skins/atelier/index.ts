@@ -484,6 +484,17 @@ export function makeBench(
   // anyway.
   const wrist = new THREE.Vector3()
   const swung = bottom(() => hand.getWorldPosition(wrist))
+  /** The holder's own axis: -Y runs down the handle to the head. */
+  const HANDLE = new THREE.Vector3(0, -1, 0)
+  /** How the hammer is held while he is working: out along the forearm. */
+  const swinging = new THREE.Quaternion()
+  /** And while he is not: hanging from the fist, whatever the arm is doing. */
+  const hanging = new THREE.Quaternion()
+  const turned = new THREE.Quaternion()
+  // Down in the room. The same three numbers as HANDLE and not the same
+  // thing: one is a direction in the prop, this one is a direction in the
+  // world, and tick() below turns the second into the first.
+  const floorward = new THREE.Vector3()
   const forearm = figure.getObjectByName(`${HAMMER_HAND}ForeArm`) ?? hand
   const boneScale = new THREE.Vector3().setFromMatrixScale(forearm.matrixWorld).x || 1
   const hammer = hammerHeld(THREE, props.hammer, HAMMER_LONG / boneScale)
@@ -500,18 +511,16 @@ export function makeBench(
     hammer.holder.position.copy(grip)
     forearm.add(hammer.holder)
 
-    // -Y of the holder runs down the handle to the head. Ask what "down in
-    // the room" is in the forearm's frame at the bottom of the swing, and
-    // point the handle at it.
-    //
-    // decompose, not setFromRotationMatrix: the bone's world matrix carries
-    // the scale that shrank a 1.8-unit export to a 1.45 m man, and the
-    // trace-based extraction quietly assumes unit columns. It came back with
-    // the hammer held head-up.
-    const turned = new THREE.Quaternion()
-    forearm.matrixWorld.decompose(new THREE.Vector3(), turned, new THREE.Vector3())
-    const down = new THREE.Vector3(0, -1, 0).applyQuaternion(turned.invert()).normalize()
-    hammer.holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), down)
+    // -Y of the holder runs down the handle to the head, and while he is
+    // working it runs on out along the arm -- which is a direction the rig
+    // knows: where the wrist sits, seen from the elbow. Solving it against
+    // the floor at one pose worked for that pose and left the hammer stuck
+    // out sideways in the other clip.
+    const alongArm = new THREE.Vector3()
+    hand.getWorldPosition(alongArm)
+    forearm.worldToLocal(alongArm).normalize()
+    swinging.setFromUnitVectors(HANDLE, alongArm)
+    hammer.holder.quaternion.copy(swinging)
     figure.updateWorldMatrix(true, true)
   }
 
@@ -707,6 +716,19 @@ export function makeBench(
       face?.at(elapsed)
 
       flame.tick(elapsed)
+
+      // A hammer he is not swinging hangs. Locked to the forearm it stuck out
+      // sideways whenever the arm did, which is most of the day: the smith is
+      // idle far more than he is striking, and a brick on his knuckles was
+      // what the board actually showed. So the aim rides the same crossfade
+      // the body does -- along the arm while he works, straight at the floor
+      // while he waits, and neither one snapping to the other.
+      forearm.getWorldQuaternion(turned)
+      floorward.set(0, -1, 0).applyQuaternion(turned.invert())
+      hanging.setFromUnitVectors(HANDLE, floorward)
+      hammer.holder.quaternion
+        .copy(hanging)
+        .slerp(swinging, acts.working.getEffectiveWeight())
 
       // Sparks fly for a moment after the hammer lands. Measured around the
       // loop: the blow lands a tenth of a second before the clip's seam, and

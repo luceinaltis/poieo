@@ -97,7 +97,9 @@ const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [], {
 })
 
 /** One whole strike, whatever the clip's own length is. */
-const swingClip = (gltf.animations ?? []).find((c) => c.name === "swing")
+const swingClip = (gltf.animations ?? []).find(
+  (c) => c.name === (asked.get("resting") === null ? "swing" : "idle"),
+)
 const PERIOD = (swingClip?.duration ?? 0.9) * 1000
 scene.add(bench.group)
 
@@ -121,9 +123,14 @@ scene.add(bench.group)
   scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.02, 0), 0.6, 0x5588ff))
 }
 
-/** A flow in the middle of a run, which is when the hammer moves. */
+/**
+ * A flow in the middle of a run, which is when the hammer moves. `?resting`
+ * photographs the other clip instead -- the smith is idle far more of the day
+ * than he is swinging, and how he holds the hammer while waiting is just as
+ * visible as how he holds it while striking.
+ */
 const running: Worker = {
-  status: "running",
+  status: asked.get("resting") === null ? "running" : "waiting",
   currentNode: "forge",
   nodeType: "llm",
   step: 3,
