@@ -342,6 +342,16 @@ no entry's connections can hoard it, and it lives outside git in
 `.poieo/strength.json`: delete the file and the project forgets which paths
 were worn, relearns them by working, and loses not one word of meaning.
 
+And the memory keeps itself honest. `poieo memory` flags what deserves a
+second look -- an entry leaning on one that was set aside, an entry naming
+code that is gone or that changed after the entry was written (edit the
+entry after looking, and the flag clears) -- and the next pass is shown the
+same doubts, free to retire an entry with its ordinary set-aside. Entries
+set aside long enough, and named by nothing, move whole to `memory/attic/`:
+out of every prompt and every count, restored by moving the file back,
+deleted never. A pass may also *suggest* one line for the constitution;
+poieo records and shows it, and only you ever edit that page.
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.
