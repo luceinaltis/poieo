@@ -140,10 +140,10 @@ def test_an_empty_strength_store_changes_nothing(): ...
 - Modify: `README.md` (one paragraph in the memory section)
 - Test: by hand, per Step 3
 
-- [ ] **Step 1: README** — connections wear in with use; what wears them (helped together, work that succeeded); that wear fades, lives outside git, and can be deleted without losing a word of meaning
-- [ ] **Step 2: The whole suite, both ways** — docker running and stopped; paste both summary lines
-- [ ] **Step 3: End to end by hand** — in the worked example: seed wear on one of two mentions from the same entry, watch `poieo memory` order flip; delete `.poieo/strength.json`, watch it revert; run the mock pass over a completed run citing two connected entries and watch the wear appear in the file
-- [ ] **Step 4: Commit** — `docs: paths that wear in with use`
+- [x] **Step 1: README** — connections wear in with use; what wears them (helped together, work that succeeded); that wear fades, lives outside git, and can be deleted without losing a word of meaning
+- [x] **Step 2: The whole suite, both ways** — docker running: 412 passed in 18.79s; docker stopped: 382 passed, 30 skipped in 7.65s
+- [x] **Step 3: End to end by hand** — done 2026-08-24: with two sibling mentions, wearing one flipped the `poieo memory` order; deleting `strength.json` reverted it; a completed run citing `batch-cap` and `feeds-order` plus one mock pass produced `"batch-cap|feeds-order": {"w": 1.0}`; temp entries and artifacts removed before commit
+- [x] **Step 4: Commit** — `docs: paths that wear in with use`
 
 ---
 
