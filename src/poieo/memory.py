@@ -211,9 +211,9 @@ def read_memory(
     page = _page(project_dir)
     if page is not None:
         parts.append(f"{PAGE_HEADER}\n{page}")
-    learned = _recall(project_dir, task, use_index=not preview) if task is not None else []
-    if learned:
-        parts.append(LEARNED_HEADER + "\n\n" + "\n\n".join(learned))
+    chosen = _recall(project_dir, task, use_index=not preview) if task is not None else []
+    if chosen:
+        parts.append(LEARNED_HEADER + "\n\n" + "\n\n".join(fact.body for fact in chosen))
     return "\n\n".join(parts) or None
 
 
@@ -312,7 +312,7 @@ def _anchored(fact: Fact, task: Any, project_dir: Path) -> bool:
     return False
 
 
-def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[str]:
+def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Fact]:
     """The entries this task earned, ranked, in budget. Never the page's room."""
     facts = [
         fact
@@ -353,12 +353,12 @@ def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[str]:
                 taken.add(neighbor.slug)
                 sequence.append(neighbor)
 
-    chosen: list[str] = []
+    chosen: list[Fact] = []
     spent = 0
     for fact in sequence:
         if spent + len(fact.body) > FACTS_BUDGET:
             break
-        chosen.append(fact.body)
+        chosen.append(fact)
         spent += len(fact.body)
     return chosen
 
@@ -507,6 +507,14 @@ def write_episode(task: Any, result: Any) -> Path | None:
         "summary": _closing_line(result),
         "outputs": result.outputs,
     }
+    try:
+        # What the project had in mind: the same selection that built the
+        # run's block, recomputed at record time. Emphasis-grade, so it may
+        # fail without costing the record, let alone the run.
+        if memory_root(task.dir).is_dir():
+            record["shown"] = [fact.slug for fact in _recall(task.dir, task)]
+    except Exception as exc:
+        log.warning("task '%s': could not record what was shown: %s", task.slug, exc)
     try:
         if path.exists():
             return None

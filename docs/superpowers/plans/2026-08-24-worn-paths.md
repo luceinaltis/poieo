@@ -43,10 +43,10 @@ def test_a_memoryless_projects_episode_records_nothing_new(): ...
 def test_a_shown_recording_failure_never_fails_the_run(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a run's record says what the project had in mind`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 364 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a run's record says what the project had in mind`
 
 ---
 

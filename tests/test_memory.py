@@ -263,6 +263,46 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     assert "memory" not in _task_payload(task)
 
 
+# -- the record says what the run had in mind --------------------------------
+
+
+def test_an_episode_records_what_the_run_was_shown(tmp_path):
+    task, result = _task(tmp_path), _result()
+    _remember(tmp_path)
+    _learn(tmp_path, "tidy-order", "Tidy the project one file at a time.")
+    _learn(tmp_path, "elsewhere", "The exporter flushes nightly.", )
+
+    record_run(task, result)
+    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    assert "tidy-order" in data["shown"]
+    assert "elsewhere" not in data["shown"]
+
+
+def test_a_memoryless_projects_episode_records_nothing_new(tmp_path):
+    task, result = _task(tmp_path), _result()
+    record_run(task, result)
+
+    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    assert "shown" not in data
+
+
+def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
+    import poieo.memory as memory_module
+
+    task, result = _task(tmp_path), _result()
+    _remember(tmp_path)
+
+    def blow_up(*args, **kwargs):
+        raise RuntimeError("selection went sideways")
+
+    monkeypatch.setattr(memory_module, "_recall", blow_up)
+    record_run(task, result)  # must not raise
+
+    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    assert data["run_id"] == result.run_id
+    assert "tidied the docs folder" in task.journal_path().read_text(encoding="utf-8")
+
+
 # -- entries naming each other -----------------------------------------------
 #
 # A connection is a judgment and lives in the files: prose mentions never
