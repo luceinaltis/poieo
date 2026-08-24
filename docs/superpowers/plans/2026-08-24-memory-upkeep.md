@@ -110,10 +110,10 @@ async def test_an_attic_collision_is_skipped_and_said(): ...
 - Modify: `README.md` (a short upkeep paragraph in the memory section)
 - Test: by hand, per Step 2
 
-- [ ] **Step 1: README** — the memory keeps itself honest: doubts are shown and rechecked, old set-asides move to the attic, the page can be suggested at but only you edit it
-- [ ] **Step 2: End to end by hand** — in the worked example: break an anchor, see the second look; run a mock pass and see the doubt in the prompt (the pass log tells); age a set-aside (mtime) and watch it move to the attic and out of `poieo memory`'s counts; restore it by moving it back
-- [ ] **Step 3: The whole suite, both ways** — paste both summary lines
-- [ ] **Step 4: Commit** — `docs: a memory that keeps itself honest`
+- [x] **Step 1: README** — the memory keeps itself honest: doubts are shown and rechecked, old set-asides move to the attic, the page can be suggested at but only you edit it
+- [x] **Step 2: End to end by hand** — done 2026-08-24: a gone anchor printed `second look  sources-note names notebook/sources.md, which is gone`; a 120-day set-aside moved to `memory/attic/` on one mock pass (`"to_attic": ["ancient-cap"]` in the pass log); moving the file back restored the counts; artifacts cleaned before commit
+- [x] **Step 3: The whole suite, both ways** — docker running: 426 passed in 19.26s; docker stopped: 396 passed, 30 skipped in 7.86s
+- [x] **Step 4: Commit** — `docs: a memory that keeps itself honest`
 
 ---
 
