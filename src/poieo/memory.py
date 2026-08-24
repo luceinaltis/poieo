@@ -216,18 +216,43 @@ def read_memory(
 
 
 def memory_report(project_dir: Path) -> dict[str, Any] | None:
-    """What `poieo memory` prints, or None when the project keeps none."""
+    """What `poieo memory` prints, or None when the project keeps none.
+
+    The two connection sections are computed from the files at read time --
+    no queue, no state, nothing written. A disagreement whose one side was
+    set aside is resolved and disappears; whatever leaned on that side
+    surfaces under second look instead.
+    """
     if not memory_root(project_dir).is_dir():
         return None
     page = _page(project_dir)
     facts = _facts_or_less(project_dir)
-    kept = sum(1 for fact in facts if fact.matter.superseded_by is None)
+    kept = [fact for fact in facts if fact.matter.superseded_by is None]
+    kept_slugs = {fact.slug for fact in kept}
+    aside_slugs = {fact.slug for fact in facts if fact.matter.superseded_by is not None}
+
+    disagreements = sorted(
+        {
+            tuple(sorted((fact.slug, other)))
+            for fact in kept
+            for other in fact.matter.links.contradicts
+            if other in kept_slugs
+        }
+    )
+    second_look = sorted(
+        (fact.slug, target)
+        for fact in kept
+        for target in fact.matter.links.depends_on
+        if target in aside_slugs
+    )
     return {
         "page_chars": len(page or ""),
         "page_budget": PAGE_BUDGET,
-        "kept": kept,
-        "set_aside": len(facts) - kept,
+        "kept": len(kept),
+        "set_aside": len(facts) - len(kept),
         "lookup": "fast" if _fts_available() else "file-by-file",
+        "disagreements": disagreements,
+        "second_look": second_look,
     }
 
 
