@@ -23,6 +23,10 @@ providers:
               - name: write_file
                 arguments: {path: TODO.md, content: "- write more tests\n- add docs\n- ship\n"}
           - "Wrote TODO.md with three next steps."
+        # What the learning pass hears when it reads the night. Empty "from"
+        # means the harness stamps every record shown as the source.
+        learner: '{"entries": [{"slug": "one-at-a-time", "body": "The mock feed
+          answers everything; batches of one are wasted turns."}], "set_aside": []}'
         "*": "(mock response)"
 
 default:
