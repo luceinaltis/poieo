@@ -115,6 +115,71 @@ def test_a_memory_with_nothing_to_say_adds_no_sections(tmp_path):
     assert "second look" not in result.stdout
 
 
+def test_learn_runs_one_pass_and_says_what_it_kept(tmp_path):
+    import json
+
+    _, project = _project(tmp_path)
+    episodes = project / ".poieo" / "episodes"
+    episodes.mkdir(parents=True)
+    (episodes / "20260824T010000-aaaaaaaa.json").write_text(
+        json.dumps(
+            {
+                "run_id": "20260824T010000-aaaaaaaa",
+                "task": "importer",
+                "status": "completed",
+                "summary": "imported the feeds",
+            }
+        ),
+        encoding="utf-8",
+    )
+    binding = tmp_path / "learner.yaml"
+    binding.write_text(
+        "name: mock\n"
+        "providers:\n"
+        "  fake:\n"
+        "    type: mock\n"
+        "    options:\n"
+        "      responses:\n"
+        "        learner: '{\"entries\": [{\"slug\": \"feed-cap\", \"body\": "
+        "\"Feeds cap at 50.\"}], \"set_aside\": []}'\n"
+        "default: {provider: fake, model: mock-model}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["learn", str(project), "-b", str(binding)])
+    assert result.exit_code == 0
+    assert "kept" in result.stdout and "feed-cap" in result.stdout
+    assert (project / "memory" / "facts" / "feed-cap.md").is_file()
+
+
+def test_learn_says_when_there_is_nothing_to_read(tmp_path):
+    _, project = _project(tmp_path)
+    binding = tmp_path / "learner.yaml"
+    binding.write_text(
+        "name: mock\nproviders: {fake: {type: mock}}\n"
+        "default: {provider: fake, model: mock-model}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["learn", str(project), "-b", str(binding)])
+    assert result.exit_code == 0
+    assert "nothing new" in result.stdout
+
+
+def test_learn_without_memory_says_how_to_start_and_exits_zero(tmp_path):
+    write_task(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
+    binding = tmp_path / "learner.yaml"
+    binding.write_text(
+        "name: mock\nproviders: {fake: {type: mock}}\n"
+        "default: {provider: fake, model: mock-model}\n",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["learn", str(tmp_path / "tasks"), "-b", str(binding)])
+    assert result.exit_code == 0
+    assert "no memory" in result.stdout
+
+
 def test_memory_is_still_read_only_with_connections(tmp_path):
     _, project = _project(tmp_path)
     _entry(

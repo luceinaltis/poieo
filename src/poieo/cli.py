@@ -30,7 +30,8 @@ from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
-from .memory import memory_report, read_memory
+from .learn import learn as run_learning_pass
+from .memory import memory_report, memory_root, read_memory
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
@@ -675,6 +676,53 @@ def memory(
         typer.echo("")
         typer.echo(f"what {task.slug} will be shown on its next run:")
         typer.echo(read_memory(project, task, preview=True) or "(nothing)")
+
+
+@app.command()
+@_guarded
+def learn(
+    path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
+    binding: Optional[Path] = typer.Option(
+        None, "--binding", "-b", help="Binding whose `learner` role reads the night."
+    ),
+) -> None:
+    """Run one learning pass: read the run records, keep what stays true."""
+    task = _load_card(path) if path.is_file() else None
+    if task is None and not path.is_dir():
+        _fail(f"no such folder or card: {path}")
+    project = task.dir if task is not None else path
+
+    if binding is None and task is not None and task.binding:
+        binding = task.resolve(task.binding)
+    if binding is None:
+        _fail("no binding: pass one with -b, or add `binding: <file>` to the card")
+    spec = load_binding(binding)
+
+    if not memory_root(project).is_dir():
+        typer.echo(
+            f"no memory here yet. Start one with {project / 'memory' / 'constitution.md'}"
+        )
+        return
+
+    async def _go():
+        async with ProviderPool(spec) as pool:
+            return await run_learning_pass(project, spec, pool)
+
+    result = asyncio.run(_go())
+    if result is None:
+        typer.echo("nothing new to learn from")
+        return
+    if result.error is not None:
+        _fail(f"the pass failed and will reread next time: {result.error}")
+    typer.echo(f"read       {result.read} record{'s' if result.read != 1 else ''}")
+    typer.echo(f"kept       {', '.join(result.kept) or '(nothing -- most nights teach nothing)'}")
+    if result.set_aside:
+        typer.echo(f"set aside  {', '.join(result.set_aside)}")
+    if result.dropped:
+        typer.echo(
+            f"let go     {len(result.dropped)} suggestion"
+            f"{'s' if len(result.dropped) != 1 else ''} (.poieo/learning.jsonl says why)"
+        )
 
 
 @app.command()
