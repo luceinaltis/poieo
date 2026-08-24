@@ -77,6 +77,20 @@ export function turnAnvil(angle: number) {
   ANVIL_TURN = angle
 }
 
+/**
+ * How tall the anvil stands, stump included, with its face that much off the
+ * floor. The swing that was bought is a ground-level one -- the head of the
+ * hammer bottoms out well under a working anvil -- so this is the number that
+ * decides whether the blow lands on iron or beside it. Candidates are
+ * photographed with tools/bench.html?tall=0.35.
+ */
+export let ANVIL_TALL = 0.78
+
+/** Tool-only override, so bench.html can photograph the candidates. */
+export function standAnvil(tall: number) {
+  ANVIL_TALL = tall
+}
+
 /** Which hand the model holds its hammer in. */
 const HAMMER_HAND = "Right"
 
@@ -114,6 +128,59 @@ function stagger(flow: string): number {
 export interface Props {
   anvil: any
   forge: any
+}
+
+/**
+ * Whatever the smith is holding, as points in the grip bone's own frame.
+ *
+ * The generator welds a prop into the fist rather than parenting it, so there
+ * is no node to look up: it is whichever vertices follow the hand bone from
+ * farther out than a fist reaches. On this model that is a 0.15-unit lump
+ * standing in for a hammer head -- shapeless, but it is the part that meets
+ * the anvil, and following it beats following the wrist by a forearm.
+ *
+ * They follow the bone rigidly, so one matrix puts all of them wherever the
+ * bone has swung to, without re-skinning anything.
+ *
+ * Exported for tools/bench.html, which prints where the head goes.
+ */
+export function hammerHead(THREE: Three, figure: any, boneName: string): any[] {
+  const mesh = figure.getObjectByProperty("type", "SkinnedMesh")
+  const bone = figure.getObjectByName(boneName)
+  const slot = mesh && bone ? mesh.skeleton.bones.indexOf(bone) : -1
+  if (slot < 0) return []
+
+  const intoBone = mesh.skeleton.boneInverses[slot]
+  const wrist = new THREE.Vector3().setFromMatrixPosition(
+    new THREE.Matrix4().copy(intoBone).invert(),
+  )
+  const position = mesh.geometry.attributes.position
+  const bones = mesh.geometry.attributes.skinIndex
+  const pull = mesh.geometry.attributes.skinWeight
+  mesh.geometry.computeBoundingBox()
+  const box = mesh.geometry.boundingBox
+  // A fist, as a fraction of the figure: this rig exports at neither
+  // centimetres nor metres, and the next one will not either.
+  const fist = (box.max.y - box.min.y) * 0.06
+
+  const rest = new THREE.Vector3()
+  const head: any[] = []
+  for (let v = 0; v < position.count; v += 1) {
+    let most = 0
+    let follows = -1
+    for (let s = 0; s < 4; s += 1) {
+      const share = pull.getComponent(v, s)
+      if (share > most) {
+        most = share
+        follows = bones.getComponent(v, s)
+      }
+    }
+    if (follows !== slot) continue
+    rest.fromBufferAttribute(position, v)
+    if (rest.distanceTo(wrist) < fist) continue
+    head.push(rest.clone().applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone))
+  }
+  return head
 }
 
 /**
@@ -183,7 +250,7 @@ export function makeBench(
   pad.rotation.y = 0.4
   bench.add(pad)
 
-  const anvil = grounded(THREE, props.anvil, 0.78)
+  const anvil = grounded(THREE, props.anvil, ANVIL_TALL)
   anvil.position.y += 0.07
   bench.add(anvil)
   const anvilTop = new THREE.Box3().setFromObject(anvil).max.y
@@ -236,15 +303,22 @@ export function makeBench(
   }
 
   // The anvil stands where the blow lands. Nobody wrote the strike down any
-  // more, so find it: run the swing through once and follow the hammer hand
-  // to its lowest point.
+  // more, so find it: run the swing through once and follow the head of the
+  // hammer -- not the fist -- to its lowest point.
+  //
+  // The fist was what this followed before, plus a hand's width forward along
+  // the way he faces, and that guess was wrong twice over. The head hangs a
+  // forearm below the fist and a little across it, which is the width of an
+  // anvil; and "forward" is not where a swing ends, it only happened to be
+  // close. Following the iron itself needs no constant at all.
   acts.working.setEffectiveWeight(1)
-  const grip = new THREE.Vector3()
+  const landing = new THREE.Vector3()
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
+  const head = hammerHead(THREE, figure, `${HAMMER_HAND}Hand`)
   // When, within the clip, the blow actually lands -- the sparks need it too.
-  // Printing the hand's whole path settled it: the clip winds up mid-loop and
-  // slams at the very END, so the lowest point is the blow, and the loop seam
-  // sits right behind it.
+  // Printing the hammer's whole path settled it: the clip winds up mid-loop
+  // and slams at the very END, so the lowest point is the blow, and the loop
+  // seam sits right behind it.
   let strikeAt = 0
   {
     const swing = clipNamed("swing")
@@ -254,25 +328,28 @@ export function makeBench(
       const moment = (step / 60) * swing.duration
       mixer.setTime(moment)
       figure.updateWorldMatrix(true, true)
-      hand.getWorldPosition(probe)
-      if (probe.y < lowest) {
-        lowest = probe.y
-        grip.copy(probe)
-        strikeAt = moment
+      // The head follows the grip bone rigidly, so one matrix moves all of it.
+      for (const local of head) {
+        probe.copy(local).applyMatrix4(hand.matrixWorld)
+        if (probe.y < lowest) {
+          lowest = probe.y
+          landing.copy(probe)
+          strikeAt = moment
+        }
+      }
+      if (!head.length) {
+        hand.getWorldPosition(probe)
+        if (probe.y < lowest) {
+          lowest = probe.y
+          landing.copy(probe)
+          strikeAt = moment
+        }
       }
     }
     mixer.setTime(0)
   }
 
-  // Just clear of the fist, along the way he faces, so the hammer lands on the
-  // face of the anvil rather than through it -- or, as the first guess had it,
-  // a foot short of it with the smith punching the air.
-  const ahead = new THREE.Vector3(0, 0, 1)
-    .applyQuaternion(figure.quaternion)
-    .setY(0)
-    .normalize()
-    .multiplyScalar(0.12)
-  bench.position.set(grip.x + ahead.x, 0, grip.z + ahead.z)
+  bench.position.set(landing.x, 0, landing.z)
   // Only after the probe: setTime works in unscaled clip seconds, and slowing
   // the clock before measuring would have moved the anvil.
   acts.working.setEffectiveTimeScale(WORK_PACE)
@@ -363,6 +440,7 @@ export function makeBench(
   // The sparks too: judging a burst from a still is what let a flash that was
   // not there be signed off once already.
   ;(group as any).userData.sparks = sparks
+  ;(group as any).userData.anvilTop = anvilTop
 
   return {
     group,

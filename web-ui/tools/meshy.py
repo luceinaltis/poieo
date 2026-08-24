@@ -9,7 +9,7 @@ header, and never printed or written anywhere.
     python meshy.py refine smith-striking   # textures, once the shape is right
     python meshy.py fetch                   # download finished models as .glb
 
-Names: smith-striking, smith-resting, anvil, forge, props
+Names: smith, anvil, forge, props, hammer
 """
 
 import json
@@ -59,6 +59,21 @@ SUBJECTS = {
     "props": (
         "A blacksmith's wooden tool rack hung with tongs and hammers, beside a coal "
         "basket and a wooden quenching barrel. Game-ready props, PBR textures."
+    ),
+    # The hammer the smith holds is welded into his fist by the generator, and
+    # it came out a 13 cm lump with no handle -- measurable: 659 vertices in a
+    # 0.15-unit box sitting on the wrist, on a figure 1.80 units tall. A prop
+    # asked for on its own comes back as its own mesh, at its own scale, and
+    # can be judged before it is put in anyone's hand. Downloaded like the
+    # anvil and the forge; unprop.py cuts the lump out to make room for it.
+    "hammer": (
+        "A blacksmith's forging hammer, and nothing else. A heavy squared steel "
+        "head with one flat striking face and one slightly tapered peen, mounted "
+        "across the end of a straight wooden handle. The handle is about four "
+        "times as long as the head is wide and runs in one straight line. Dark "
+        "pitted steel, worn oiled ash wood, a single visible wedge in the eye. "
+        "Laid out straight along one axis, not held, no hand, no anvil, no "
+        "stand, no other tools. Game-ready prop, clean topology, PBR textures."
     ),
 }
 

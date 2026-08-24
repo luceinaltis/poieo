@@ -18,7 +18,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
-import { makeBench, turnAnvil, turnFigure } from "../src/skins/atelier/index"
+import {
+  hammerHead,
+  makeBench,
+  standAnvil,
+  turnAnvil,
+  turnFigure,
+} from "../src/skins/atelier/index"
 import { SPARK_LIFE } from "../src/skins/atelier/strike"
 import anvilUrl from "../src/skins/atelier/anvil.glb?url"
 import forgeUrl from "../src/skins/atelier/forge.glb?url"
@@ -83,6 +89,10 @@ const anvilAsked = asked.get("anvil")
 if (anvilAsked !== null) turnAnvil((Number(anvilAsked) * Math.PI) / 180)
 const facingAsked = asked.get("facing")
 if (facingAsked !== null) turnFigure((Number(facingAsked) * Math.PI) / 180)
+// `?tall=0.35` stands the anvil at a candidate height, which is the one number
+// that decides whether the hammer lands on the face or sails past it.
+const tallAsked = asked.get("tall")
+if (tallAsked !== null) standAnvil(Number(tallAsked))
 
 const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [], {
   anvil: anvilGltf.scene,
@@ -190,22 +200,50 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
   marks.append(cell)
 }
 
-// The hammer hand's whole path, printed, because arguing from two stills about
-// which dip is the blow has now been wrong twice.
+// The hammer's whole path, printed, because arguing from two stills about
+// which dip is the blow has now been wrong twice -- and because the fist and
+// the head of the hammer are a forearm apart, which is the width of an anvil.
 {
   const hand = bench.group.getObjectByName("RightHand")
+  const figure = hand?.parent && bench.group.getObjectByProperty("type", "SkinnedMesh")
+  const head = figure ? hammerHead(THREE, bench.group, "RightHand") : []
+  const anvilTop = (bench.group as any).userData.anvilTop as number
   if (hand) {
-    const probe = new THREE.Vector3()
-    const lines: string[] = []
+    const fist = new THREE.Vector3()
+    const point = new THREE.Vector3()
+    const lines = [
+      `anvil face at y${anvilTop?.toFixed(3)}   hammer head: ${head.length} vertices`,
+      "clip    fist              hammer head       (world units)",
+    ]
+    let lowest = { y: Infinity, at: 0, x: 0, z: 0 }
     for (let step = 0; step <= 36; step += 1) {
       const t = (step / 36) * (swingClip?.duration ?? 1)
-      bench.tick(t * 1000)
-      hand.getWorldPosition(probe)
-      const bar = "#".repeat(Math.max(0, Math.round((probe.y - 0.2) * 30)))
+      // Wall-clock in, clip seconds out: tick() takes the room's milliseconds
+      // and the clip runs at `pace`, so the labels lied by a third.
+      bench.tick((t / pace) * 1000)
+      hand.getWorldPosition(fist)
+      hand.updateWorldMatrix(true, false)
+      let low = Infinity
+      let lowAt = new THREE.Vector3()
+      for (const local of head) {
+        point.copy(local).applyMatrix4(hand.matrixWorld)
+        if (point.y < low) {
+          low = point.y
+          lowAt.copy(point)
+        }
+      }
+      if (low < lowest.y) lowest = { y: low, at: t, x: lowAt.x, z: lowAt.z }
+      const bar = "#".repeat(Math.max(0, Math.round((low - 0.1) * 30)))
       lines.push(
-        `${t.toFixed(2)}s y${probe.y.toFixed(2)} x${probe.x.toFixed(2)} z${probe.z.toFixed(2)} ${bar}`,
+        `${t.toFixed(2)}s  y${fist.y.toFixed(2)} x${fist.x.toFixed(2)} z${fist.z.toFixed(2)}` +
+          `   y${low.toFixed(2)} x${lowAt.x.toFixed(2)} z${lowAt.z.toFixed(2)} ${bar}`,
       )
     }
+    lines.push(
+      `the head bottoms out at y${lowest.y.toFixed(3)} (x${lowest.x.toFixed(3)} ` +
+        `z${lowest.z.toFixed(3)}) at ${lowest.at.toFixed(2)}s -- ` +
+        `${(lowest.y - anvilTop).toFixed(3)} from the anvil face`,
+    )
     const sheet = document.createElement("pre")
     sheet.style.cssText = "margin:12px 16px;font-size:12px;line-height:1.25"
     sheet.textContent = lines.join("\n")
