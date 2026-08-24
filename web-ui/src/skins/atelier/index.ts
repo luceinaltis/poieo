@@ -79,13 +79,21 @@ export function turnAnvil(angle: number) {
 }
 
 /**
- * How tall the anvil stands, stump included, with its face that much off the
- * floor. The swing that was bought is a ground-level one -- the head of the
- * hammer bottoms out well under a working anvil -- so this is the number that
- * decides whether the blow lands on iron or beside it. Candidates are
- * photographed with tools/bench.html?tall=0.35.
+ * How tall the anvil stands, stump included; its face sits that much plus the
+ * pad off the floor.
+ *
+ * This is a compromise, and worth knowing as one. The clip Meshy retargeted is
+ * a ground-level swing: the hammer head bottoms out at y0.096, and the fist
+ * holding it only reaches y0.39, so no anvil whose face clears 0.39 can ever
+ * be struck -- shortening the hammer cannot help, and a face down at the blow
+ * would be a toy. At 0.78 the anvil simply stood in front of the smith and hid
+ * him. At 0.45 it still reads as an anvil on a stump, he is visibly bent over
+ * it, and the part of the swing that carries on past the face is behind his
+ * body and the iron. Candidates were photographed with
+ * tools/bench.html?tall=0.30 and so on; the real fix is a swing that stops at
+ * bench height.
  */
-export let ANVIL_TALL = 0.78
+export let ANVIL_TALL = 0.45
 
 /** Tool-only override, so bench.html can photograph the candidates. */
 export function standAnvil(tall: number) {
@@ -331,22 +339,28 @@ export function makeBench(
   bench.rotation.y = ANVIL_TURN
   group.add(bench)
 
+  const anvil = grounded(THREE, props.anvil, ANVIL_TALL)
+  anvil.position.y += 0.07
+  bench.add(anvil)
+  const stood = new THREE.Box3().setFromObject(anvil)
+  const anvilTop = stood.max.y
+
   // The stump is right -- smiths mount anvils on wood to eat the shock -- but
   // a quarter ton of iron does not stand on floorboards. A stone pad goes
   // under it, and because it lives in the bench group it follows the anvil
   // wherever the strike probe decides to stand it.
+  //
+  // Sized off the stump rather than written down: ANVIL_TALL is a number that
+  // moves, and a pad that does not move with it went from a flagstone to a
+  // dance floor the first time the anvil came down.
+  const across = Math.max(stood.max.x - stood.min.x, stood.max.z - stood.min.z) / 2
   const pad = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.52, 0.56, 0.07, 9),
+    new THREE.CylinderGeometry(across * 1.35, across * 1.45, 0.07, 9),
     new THREE.MeshStandardMaterial({ color: 0x3c3934, roughness: 1 }),
   )
   pad.position.y = 0.035
   pad.rotation.y = 0.4
   bench.add(pad)
-
-  const anvil = grounded(THREE, props.anvil, ANVIL_TALL)
-  anvil.position.y += 0.07
-  bench.add(anvil)
-  const anvilTop = new THREE.Box3().setFromObject(anvil).max.y
 
   // The piece being worked still glows from code, so it can cool when idle.
   const work = new THREE.Mesh(
