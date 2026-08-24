@@ -95,10 +95,10 @@ def test_changed_content_raises_the_no_longer_matches_line(): ...
 def test_a_lost_keepsake_falls_back_to_the_mtime_line(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: sealed anchors doubt by content, not clocks`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 407 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: sealed anchors doubt by content, not clocks`
 
 ---
 

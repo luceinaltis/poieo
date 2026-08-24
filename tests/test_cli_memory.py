@@ -277,6 +277,51 @@ def test_memory_shows_the_last_suggestion_and_only_the_last(tmp_path):
     assert "Old idea" not in result.stdout
 
 
+def _sealed_entry(tmp_path):
+    from poieo.blob import keep
+
+    _, project = _project(tmp_path)
+    notebook = project / "notebook"
+    notebook.mkdir()
+    target = notebook / "feeds.md"
+    target.write_text("# feeds\n- a\n", encoding="utf-8")
+    name = keep(project, target)
+    _entry(
+        project,
+        "feeds-note",
+        "---\nanchors: ['notebook/feeds.md']\n"
+        f'sealed: {{"notebook/feeds.md": "{name}"}}\n---\nFeeds land in one file.',
+    )
+    _aged(project / "memory" / "facts" / "feeds-note.md", 3600)
+    return project, target, name
+
+
+def test_a_touched_but_identical_sealed_anchor_raises_nothing(tmp_path):
+    project, target, _ = _sealed_entry(tmp_path)
+    target.write_text("# feeds\n- a\n", encoding="utf-8")  # touched, identical
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "second look" not in result.stdout
+
+
+def test_changed_content_raises_the_no_longer_matches_line(tmp_path):
+    project, target, _ = _sealed_entry(tmp_path)
+    target.write_text("# feeds\n- a\n- b\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "no longer matches" in result.stdout and "feeds-note" in result.stdout
+
+
+def test_a_lost_keepsake_falls_back_to_the_mtime_line(tmp_path):
+    project, target, name = _sealed_entry(tmp_path)
+    (project / ".poieo" / "blobs" / name).unlink()
+    target.write_text("# feeds\n- a\n", encoding="utf-8")  # touched after the entry
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "changed after it was written" in result.stdout
+    assert "no longer matches" not in result.stdout
+
+
 def test_memory_is_still_read_only_with_connections(tmp_path):
     _, project = _project(tmp_path)
     _entry(
