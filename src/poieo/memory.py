@@ -153,22 +153,44 @@ def _page(project_dir: Path) -> str | None:
     return text
 
 
-def read_memory(project_dir: Path, task: Any | None = None) -> str | None:
+def read_memory(
+    project_dir: Path, task: Any | None = None, *, preview: bool = False
+) -> str | None:
     """The block a run is shown, or None when there is nothing to show.
 
     Re-read every run, like the journal. The page comes first and whole --
     its position is fixed so the stable part of the prompt stays stable --
     and the entries ``task`` earned follow it, best first, cut on whole-entry
     boundaries. The page never competes with them for room.
+
+    ``preview`` answers the same question without leaving a trace: the file
+    scan gives the same entries the index would, so `poieo memory` can show
+    exactly what a run will see while writing nothing at all.
     """
     parts = []
     page = _page(project_dir)
     if page is not None:
         parts.append(f"{PAGE_HEADER}\n{page}")
-    learned = _recall(project_dir, task) if task is not None else []
+    learned = _recall(project_dir, task, use_index=not preview) if task is not None else []
     if learned:
         parts.append(LEARNED_HEADER + "\n\n" + "\n\n".join(learned))
     return "\n\n".join(parts) or None
+
+
+def memory_report(project_dir: Path) -> dict[str, Any] | None:
+    """What `poieo memory` prints, or None when the project keeps none."""
+    if not memory_root(project_dir).is_dir():
+        return None
+    page = _page(project_dir)
+    facts = _facts_or_less(project_dir)
+    kept = sum(1 for fact in facts if fact.matter.superseded_by is None)
+    return {
+        "page_chars": len(page or ""),
+        "page_budget": PAGE_BUDGET,
+        "kept": kept,
+        "set_aside": len(facts) - kept,
+        "lookup": "fast" if _fts_available() else "file-by-file",
+    }
 
 
 # -- choosing what a task is shown -------------------------------------------
@@ -225,7 +247,7 @@ def _anchored(fact: Fact, task: Any, project_dir: Path) -> bool:
     return False
 
 
-def _recall(project_dir: Path, task: Any) -> list[str]:
+def _recall(project_dir: Path, task: Any, use_index: bool = True) -> list[str]:
     """The entries this task earned, ranked, in budget. Never the page's room."""
     facts = [
         fact
@@ -238,7 +260,8 @@ def _recall(project_dir: Path, task: Any) -> list[str]:
 
     # An anchored entry is relevant by where it points, not by the words it
     # shares, so it must not depend on the index finding a shared word.
-    pool = {fact.slug: fact for fact in _candidates(project_dir, facts, seed)}
+    candidates = _candidates(project_dir, facts, seed) if use_index else facts
+    pool = {fact.slug: fact for fact in candidates}
     for fact in facts:
         if _anchored(fact, task, project_dir):
             pool.setdefault(fact.slug, fact)

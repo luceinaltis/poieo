@@ -143,7 +143,7 @@ def test_nothing_is_ever_written_inside_the_memory_folder(): ...
 
 **Why this ships in the first slice.** Measurement from day one is a design decision, not a nicety: "what would this task see, and why?" must be answerable before anyone trusts the memory, and the dry-run *is* the debugging story for a wrong retrieval.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_memory_reports_page_size_counts_and_lookup(): ...
@@ -152,10 +152,10 @@ def test_memory_is_read_only(): ...                        # no file mutated, no
 def test_a_project_without_memory_says_so_plainly_and_exits_zero(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: poieo memory shows what a project remembers and what a task would see`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 315 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: poieo memory shows what a project remembers and what a task would see`
 
 ---
 
