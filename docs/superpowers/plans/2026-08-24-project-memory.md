@@ -110,7 +110,7 @@ def test_an_empty_memory_folder_behaves_as_absent(): ...
 
 **Why ranking and fallback are one task.** The fallback is only honest if it is exercised against the same expectations as FTS5 — one test suite, two backends, same answers. Splitting them would let the fallback rot into a different feature.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_relevant_entry_reaches_the_block(): ...
@@ -118,15 +118,16 @@ def test_the_fallback_returns_the_same_entries_as_fts(): ...   # forced fallback
 def test_a_superseded_entry_never_surfaces(): ...
 def test_scope_admits_global_and_own_and_excludes_foreign(): ...
 def test_an_anchored_entry_outranks_a_merely_similar_one(): ...
+def test_an_anchored_entry_arrives_even_without_a_shared_word(): ...   # added: equivalence hole
 def test_the_budget_cuts_whole_entries_and_spares_the_page(): ...
 def test_a_deleted_index_is_rebuilt_silently(): ...
 def test_nothing_is_ever_written_inside_the_memory_folder(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a task is shown what earlier work here has learned`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 311 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a task is shown what earlier work here has learned`
 
 ---
 

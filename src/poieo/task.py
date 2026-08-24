@@ -69,7 +69,7 @@ def _memory_section(task: TaskSpec) -> str:
     Always-true rules come before recent history, and before anything
     retrieved, so the stable part of the prompt stays stable.
     """
-    if read_memory(task.dir) is None:
+    if read_memory(task.dir, task) is None:
         return ""
     return "{{ input.memory }}\n\n"
 
