@@ -360,6 +360,14 @@ Keepsakes are copies, never meaning: one that nothing references anymore
 is let go after the same grace the attic uses, and losing one costs a
 precise comparison, not a word of what was learned.
 
+Finally, the memory answers for itself. `poieo memory` reads the recent
+run records and says how many runs actually used what they were shown, and
+names any entry shown again and again without ever being used -- dead
+weight for you to look at. It acts on none of it: numbers inform, people
+and passes decide. (Measuring use by what the model truly attended to
+needs a serving stack that can report attention; until then the judgment
+is the same words-in-the-output test the wear system trusts.)
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.

@@ -58,10 +58,10 @@ def test_a_project_without_records_shows_no_accounting(): ...
 - Modify: `README.md`
 - Test: by hand, per Step 2
 
-- [ ] **Step 1: README** — one paragraph: the report answers whether runs actually use what they are shown, names dead weight, and acts on none of it; attention-grade measurement waits for a serving stack that can report it
-- [ ] **Step 2: End to end by hand** — in the worked example: seed records where runs used the entries and one where an entry was shown repeatedly unused; see both lines; clean before commit
-- [ ] **Step 3: The whole suite, both ways** — paste both summary lines
-- [ ] **Step 4: Commit** — `docs: a memory that answers for itself`
+- [x] **Step 1: README** — one paragraph: the report answers whether runs actually use what they are shown, names dead weight, and acts on none of it; attention-grade measurement waits for a serving stack that can report it
+- [x] **Step 2: End to end by hand** — done 2026-08-25: four seeded records produced `kept in mind  1 of 4 recent runs used what they were shown` and `unused       rate-limits (shown 4 times, used never)`; artifacts cleaned before commit
+- [x] **Step 3: The whole suite, both ways** — docker running: 445 passed in 19.13s; docker stopped: 415 passed, 30 skipped in 8.01s
+- [x] **Step 4: Commit** — `docs: a memory that answers for itself`
 
 ---
 
