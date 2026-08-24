@@ -468,34 +468,51 @@ export function makeBench(
     return { at: found, when }
   }
 
-  // Give him the hammer before asking where it lands. The grip goes in the
-  // middle of his fist, measured off the skin, and the handle is turned so
-  // that at the bottom of the swing it points straight at the floor -- which
-  // is a rotation solved from the bone's own matrix at that moment, not an
-  // angle anybody chose. The old prop was welded into the mesh and could only
-  // be followed vertex by vertex; this one is a node, so its head is a point.
+  // Give him the hammer before asking where it lands. It sits where his fist
+  // is, measured off the skin, and the handle is turned so that at the bottom
+  // of the swing it points straight at the floor -- a rotation solved from the
+  // bone's own matrix at that moment, not an angle anybody chose. The old prop
+  // was welded into the mesh and could only be followed vertex by vertex; this
+  // one is a node, so its head is a point.
+  //
+  // It hangs off the forearm rather than the hand, which is the one place this
+  // deliberately disobeys the rig. The wrist turns 91 degrees over the swing
+  // -- from 8 off its rest pose to 99 -- because the actor was holding
+  // nothing and nothing constrained it. Two feet of iron and ash bolted to
+  // that rolls like a rubber hose. On the elbow it keeps the arc and loses the
+  // roll, and a hammer in line with the forearm is what a swing looks like
+  // anyway.
   const wrist = new THREE.Vector3()
   const swung = bottom(() => hand.getWorldPosition(wrist))
-  const boneScale = new THREE.Vector3().setFromMatrixScale(hand.matrixWorld).x || 1
+  const forearm = figure.getObjectByName(`${HAMMER_HAND}ForeArm`) ?? hand
+  const boneScale = new THREE.Vector3().setFromMatrixScale(forearm.matrixWorld).x || 1
   const hammer = hammerHeld(THREE, props.hammer, HAMMER_LONG / boneScale)
-  hammer.holder.position.copy(fistOf(THREE, figure, `${HAMMER_HAND}Hand`))
-  hand.add(hammer.holder)
 
   mixer.setTime(swung.when)
   figure.updateWorldMatrix(true, true)
   {
+    // The fist is measured in the hand's frame; the hammer lives in the
+    // forearm's. Carry the point across through the world at the one pose
+    // that has to be right.
+    const grip = fistOf(THREE, figure, `${HAMMER_HAND}Hand`)
+    hand.localToWorld(grip)
+    forearm.worldToLocal(grip)
+    hammer.holder.position.copy(grip)
+    forearm.add(hammer.holder)
+
     // -Y of the holder runs down the handle to the head. Ask what "down in
-    // the room" is in the hand's frame at the bottom of the swing, and point
-    // the handle at it.
+    // the room" is in the forearm's frame at the bottom of the swing, and
+    // point the handle at it.
     //
     // decompose, not setFromRotationMatrix: the bone's world matrix carries
     // the scale that shrank a 1.8-unit export to a 1.45 m man, and the
     // trace-based extraction quietly assumes unit columns. It came back with
     // the hammer held head-up.
     const turned = new THREE.Quaternion()
-    hand.matrixWorld.decompose(new THREE.Vector3(), turned, new THREE.Vector3())
+    forearm.matrixWorld.decompose(new THREE.Vector3(), turned, new THREE.Vector3())
     const down = new THREE.Vector3(0, -1, 0).applyQuaternion(turned.invert()).normalize()
     hammer.holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), down)
+    figure.updateWorldMatrix(true, true)
   }
 
   // When, within the clip, the blow actually lands -- the sparks need it too.
