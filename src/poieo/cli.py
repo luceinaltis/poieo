@@ -30,7 +30,7 @@ from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
-from .memory import read_memory
+from .memory import memory_report, read_memory
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
@@ -640,6 +640,37 @@ def note(
     task = load_task(task_path)
     append_journal(task.journal_path(), "you", text, title=task.name)
     _ok(f"noted in {task.journal_path()}")
+
+
+@app.command()
+@_guarded
+def memory(
+    path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
+) -> None:
+    """What this project remembers, and what a task would be shown.
+
+    Read-only on purpose: authoring belongs to the editor and git, and the
+    lookup machinery rebuilds itself, so there is nothing here to run.
+    """
+    task = _load_card(path) if path.is_file() else None
+    if task is None and not path.is_dir():
+        _fail(f"no such folder or card: {path}")
+    project = task.dir if task is not None else path
+
+    report = memory_report(project)
+    if report is None:
+        typer.echo(
+            f"no memory here yet. Start one with {project / 'memory' / 'constitution.md'}"
+        )
+        return
+
+    typer.echo(f"page       {report['page_chars']} characters (budget {report['page_budget']})")
+    typer.echo(f"learned    {report['kept']} kept, {report['set_aside']} set aside")
+    typer.echo(f"lookup     {report['lookup']}")
+    if task is not None:
+        typer.echo("")
+        typer.echo(f"what {task.slug} will be shown on its next run:")
+        typer.echo(read_memory(project, task, preview=True) or "(nothing)")
 
 
 @app.command()
