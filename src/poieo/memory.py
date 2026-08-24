@@ -231,7 +231,6 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
     facts = _facts_or_less(project_dir)
     kept = [fact for fact in facts if fact.matter.superseded_by is None]
     kept_slugs = {fact.slug for fact in kept}
-    aside_slugs = {fact.slug for fact in facts if fact.matter.superseded_by is not None}
 
     disagreements = sorted(
         {
@@ -241,12 +240,6 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
             if other in kept_slugs
         }
     )
-    second_look = sorted(
-        (fact.slug, target)
-        for fact in kept
-        for target in fact.matter.links.depends_on
-        if target in aside_slugs
-    )
     return {
         "page_chars": len(page or ""),
         "page_budget": PAGE_BUDGET,
@@ -254,8 +247,47 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
         "set_aside": len(facts) - len(kept),
         "lookup": "fast" if _fts_available() else "file-by-file",
         "disagreements": disagreements,
-        "second_look": second_look,
+        "second_look": [reason for _, reason in doubts(project_dir, facts)],
     }
+
+
+def doubts(
+    project_dir: Path, facts: list[Fact] | None = None
+) -> list[tuple[str, str]]:
+    """Every kept entry worth a second look, with the sentence that says
+    why: a lean on a set-aside entry, an anchor whose target is gone, or a
+    target that changed after the entry was last written (editing the entry
+    is how a person clears that one -- look, then touch). Computed from the
+    files every time; nothing writes a queue."""
+    facts = _facts_or_less(project_dir) if facts is None else facts
+    aside = {fact.slug for fact in facts if fact.matter.superseded_by is not None}
+    out: list[tuple[str, str]] = []
+    for fact in facts:
+        if fact.matter.superseded_by is not None:
+            continue
+        for target in fact.matter.links.depends_on:
+            if target in aside:
+                out.append(
+                    (fact.slug, f"{fact.slug} leans on {target}, which is set aside")
+                )
+        for anchor in fact.matter.anchors:
+            named = project_dir / anchor.split("::", 1)[0]
+            try:
+                if not named.exists():
+                    out.append((fact.slug, f"{fact.slug} names {anchor}, which is gone"))
+                elif named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns:
+                    out.append(
+                        (
+                            fact.slug,
+                            f"{fact.slug} names {anchor}, "
+                            "which changed after it was written",
+                        )
+                    )
+            except OSError:
+                # Unreadable is present: upkeep never turns an I/O hiccup
+                # into doubt.
+                pass
+    return sorted(out)
 
 
 # -- choosing what a task is shown -------------------------------------------

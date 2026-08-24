@@ -670,8 +670,8 @@ def memory(
     typer.echo(f"lookup     {report['lookup']}")
     for one, other in report["disagreements"]:
         typer.echo(f"disagree     {one} <-> {other}")
-    for leaner, target in report["second_look"]:
-        typer.echo(f"second look  {leaner} leans on {target}, which is set aside")
+    for line in report["second_look"]:
+        typer.echo(f"second look  {line}")
     if task is not None:
         typer.echo("")
         typer.echo(f"what {task.slug} will be shown on its next run:")
