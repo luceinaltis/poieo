@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
-from .memory import write_episode
+from .memory import read_memory, write_episode
 from .tools import Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -50,12 +50,28 @@ def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
     """
     return (
         f"You are working on {task.name}, in {task.folder_path()}.\n\n"
-        "What you have already done, and what the user has told you:\n"
+        + _memory_section(task)
+        + "What you have already done, and what the user has told you:\n"
         "{{ input.journal }}\n\n"
         "Finish by saying in one line what you did. If there was nothing worth\n"
         "doing, say that in one line instead."
         + _roster_block(task, roster)
     )
+
+
+def _memory_section(task: TaskSpec) -> str:
+    """The project's memory, for a project that keeps one.
+
+    Gated on content at graph-build time, so a project that never made a
+    memory sees no trace of the feature -- not even an empty header. A
+    memory created while the daemon is resident appears on the next load,
+    like a new task file; edits to an existing one are re-read every run.
+    Always-true rules come before recent history, and before anything
+    retrieved, so the stable part of the prompt stays stable.
+    """
+    if read_memory(task.dir) is None:
+        return ""
+    return "{{ input.memory }}\n\n"
 
 
 def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:

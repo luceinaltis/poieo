@@ -77,7 +77,7 @@ def test_an_unwritable_episode_is_logged_and_the_result_stands(): ...
 
 **Why the gate is filesystem presence.** The journal's gate is "being a task"; memory's is "the project chose to have one." A folder is the whole opt-in, which is what minimal configuration promises. Consequence, accepted and stated: a `memory/` created while the daemon is resident appears on the next load, like a new task file; *edits* to an existing memory are re-read every run, like the journal.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_no_memory_folder_means_prompts_identical_to_today(): ...   # THE test, both paths
@@ -89,10 +89,10 @@ def test_an_oversized_page_warns_and_still_loads_whole(): ...
 def test_an_empty_memory_folder_behaves_as_absent(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: a project keeps a page every task reads before working`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 302 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: a project keeps a page every task reads before working`
 
 ---
 

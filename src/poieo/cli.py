@@ -30,6 +30,7 @@ from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
+from .memory import read_memory
 from .providers import ProviderPool
 from .runtime.executor import execute, preflight
 from .store import NullStore, RunStore
@@ -151,7 +152,11 @@ def _task_payload(task: "TaskSpec | None") -> dict[str, Any]:
     """What a task's generated graph expects in its input, beyond the user's."""
     if task is None:
         return {}
-    return {"journal": read_journal(task.journal_path())}
+    payload = {"journal": read_journal(task.journal_path())}
+    memory = read_memory(task.dir, task)
+    if memory is not None:
+        payload["memory"] = memory
+    return payload
 
 
 @app.command()
