@@ -312,6 +312,28 @@ A disagreement is never resolved by a machine: `poieo memory` lists the
 pair and a person settles it -- and once one side is set aside, whatever
 leaned on it is flagged for a second look.
 
+The project can also learn by itself. Every run already leaves a full
+record; a learning pass reads the unread ones and proposes entries, which
+poieo validates and writes with `source:` naming the runs that taught them
+-- so anything learned overnight can still be walked back to the work it
+came from. Run one by hand, or let the daemon do it while nothing else is
+running:
+
+```bash
+poieo learn tasks/            # one pass, now
+```
+
+```yaml
+learn: 1d                     # in the daemon config; needs its default binding
+```
+
+The pass keeps entries and sets entries aside; it never deletes, never
+overwrites, and never touches the constitution -- that page stays yours.
+The model that reads the night is the binding's `learner` role (unbound, it
+falls through to the default), so pointing your best model at it is one
+line. `.poieo/learning.jsonl` says what every pass did, and an empty pass
+is a fine answer: most nights teach nothing.
+
 Nothing configures this. No `memory/` folder, no trace of the feature;
 everything in it is markdown you edit and git versions. A worked pair of
 cards sharing one memory lives in `examples/remembering/`.

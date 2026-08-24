@@ -127,11 +127,11 @@ def test_a_failing_pass_never_takes_the_daemon_down(): ...
 - Modify: `README.md` (the memory section learns), `examples/bindings/mock.yaml` (a scripted `learner` answer)
 - Test: by hand, per Step 4
 
-- [ ] **Step 1: The scripted learner** — mock.yaml gains a `learner` response proposing one entry (empty `from`, so the harness stamps the batch); the `"*"` fallback stays non-JSON, which is itself the failure path demo
-- [ ] **Step 2: README** — the memory section gains the learning paragraph: records pile up, `poieo learn` or `learn: 1d` turns them into entries, everything traceable, nothing deleted
-- [ ] **Step 3: The whole suite, both ways** — docker running and stopped; paste both summary lines
-- [ ] **Step 4: End to end by hand** — run the example importer once, `poieo learn examples/remembering` on the mock binding, watch the entry land with `source:` naming the run; run `poieo learn` again and see nothing to read; `poieo memory` counts the new entry; clean the runtime artifacts before commit
-- [ ] **Step 5: Commit** — `docs: the project learns from what its runs leave behind`
+- [x] **Step 1: The scripted learner** — mock.yaml gains a `learner` response proposing one entry (empty `from`, so the harness stamps the batch); the `"*"` fallback stays non-JSON, which is itself the failure path demo
+- [x] **Step 2: README** — the memory section gains the learning paragraph: records pile up, `poieo learn` or `learn: 1d` turns them into entries, everything traceable, nothing deleted
+- [x] **Step 3: The whole suite, both ways** — docker running: 391 passed in 18.25s; docker stopped: 361 passed, 30 skipped in 7.19s
+- [x] **Step 4: End to end by hand** — done 2026-08-24: the entry landed with `source: ["20260824T123915-f0515c68"]`, the second pass said nothing new, `poieo memory` counted it, `.poieo/learning.jsonl` recorded the pass; artifacts cleaned before commit
+- [x] **Step 5: Commit** — `docs: the project learns from what its runs leave behind`
 
 ---
 
