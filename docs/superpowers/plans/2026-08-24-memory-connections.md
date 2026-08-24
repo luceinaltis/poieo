@@ -126,11 +126,11 @@ def test_memory_is_still_read_only_with_connections(): ...
 - Modify: `README.md` (extend the memory section: mentions, leans, disagreements)
 - Modify: `examples/remembering/` — an entry that only arrives by being mentioned (`feeds-order`, no shared word with the importer card, mentioned by `batch-cap`)
 
-- [ ] **Step 1: The example** — `feeds-order.md` + the mention in `batch-cap.md`; confirm the exporter still sees neither (scope holds through connections)
-- [ ] **Step 2: README** — one paragraph in the memory section; interface words only
-- [ ] **Step 3: The whole suite, both ways** — docker running and stopped; paste both summary lines
-- [ ] **Step 4: End to end by hand** — `poieo memory` on the importer card shows `feeds-order` arriving with no shared word; a temporary `contradicts` pair appears once under disagreements and vanishes when one side is set aside — at which point anything leaning on it earns the second-look line; delete the derived index mid-way and nothing changes
-- [ ] **Step 5: Commit** — `docs: a memory whose entries know each other`
+- [x] **Step 1: The example** — `feeds-order.md` + the mention in `batch-cap.md`; confirm the exporter still sees neither (scope holds through connections)
+- [x] **Step 2: README** — one paragraph in the memory section; interface words only
+- [x] **Step 3: The whole suite, both ways** — docker running: 368 passed in 17.15s; docker stopped: 338 passed, 30 skipped in 6.99s
+- [x] **Step 4: End to end by hand** — all confirmed 2026-08-24. *(The walk also caught that a BOM — Notepad's and PowerShell's default — silently turned an entry's frontmatter into body text; fixed in this task with `test_an_entry_saved_with_a_bom_keeps_its_frontmatter`.)*
+- [x] **Step 5: Commit** — `docs: a memory whose entries know each other`
 
 ---
 

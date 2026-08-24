@@ -329,6 +329,20 @@ def test_a_body_mention_of_nothing_is_legal(tmp_path):
     assert fact.mentions == ["worth-writing-someday"]
 
 
+def test_an_entry_saved_with_a_bom_keeps_its_frontmatter(tmp_path):
+    # Notepad and PowerShell's utf8 both write a BOM; the frontmatter must
+    # not silently become body text because of an invisible first character.
+    _learn(tmp_path, "other", "Something to point at.")
+    project = _learn(
+        tmp_path,
+        "retry",
+        "﻿---\nlinks:\n  depends_on: [other]\n---\nRetry once.",
+    )
+    fact = next(f for f in load_facts(project) if f.slug == "retry")
+    assert fact.matter.links.depends_on == ["other"]
+    assert "---" not in fact.body
+
+
 def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
     _learn(tmp_path, "new-cap", "Batches cap at 500 now.")
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nBatches cap at 50.")
