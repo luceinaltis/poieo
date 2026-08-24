@@ -16,6 +16,17 @@ import { makeFace } from "./face"
 import { makeFire } from "./fire"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
+  REST_PACE,
+  SPARKS,
+  SPARK_LIFE,
+  WORK_PACE,
+  flashFade,
+  flashSpread,
+  lightPower,
+  sparkFade,
+  spray,
+} from "./strike"
+import {
   bounds,
   cellAt,
   cellOrigin,
@@ -68,14 +79,6 @@ export function turnAnvil(angle: number) {
 
 /** Which hand the model holds its hammer in. */
 const HAMMER_HAND = "Right"
-
-/**
- * How fast the clips play. The capture swings like a man in a fight; a smith
- * at his own anvil takes his time, so the swing runs below full speed and a
- * strike lands about every three seconds instead of two.
- */
-const WORK_PACE = 0.65
-const REST_PACE = 0.9
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -291,24 +294,35 @@ export function makeBench(
   ink.fillRect(0, 0, 32, 32)
   const glow = new THREE.CanvasTexture(glowCanvas)
 
-  // -- sparks off the blow: a handful of points thrown out of the work for a
-  // quarter second after each strike. Directions are hashed from the spark's
-  // index and the swing's count, so every replay throws the same sparks.
-  const SPARKS = 28
+  // -- sparks off the blow: a handful of embers thrown out of the work after
+  // each strike, arcing up and falling past the anvil. How long they live and
+  // where they go is in ./strike, in wall-clock seconds; this is only what
+  // shows them.
+  //
+  // Sprites rather than Points, which is not a style choice. This room is seen
+  // through an OrthographicCamera, and three.js sizes a Point by pixels unless
+  // the projection is perspective -- so `size: 0.07`, read as world units and
+  // written as such, asked for embers a fourteenth of a pixel across. The
+  // sparks were never once drawn. A Sprite is measured in world units under
+  // either projection, which is why the flash below always did show up.
   const sparkSpray = new Float32Array(SPARKS * 3)
-  const sparkShape = new THREE.BufferGeometry()
-  sparkShape.setAttribute("position", new THREE.BufferAttribute(sparkSpray, 3))
-  const sparkGlow = new THREE.PointsMaterial({
+  const sparkSkin = new THREE.SpriteMaterial({
     color: 0xffd98a,
-    size: 0.07,
     map: glow,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   })
-  const sparks = new THREE.Points(sparkShape, sparkGlow)
+  const sparks = new THREE.Group()
   sparks.position.copy(work.position)
+  for (let i = 0; i < SPARKS; i += 1) {
+    const ember = new THREE.Sprite(sparkSkin)
+    // Small enough to read as a spark rather than a firefly, big enough to
+    // survive a bench shrunk to phone width.
+    ember.scale.setScalar(0.055)
+    sparks.add(ember)
+  }
   bench.add(sparks)
 
   // The flash is what sells the impact -- but a light alone did nothing: the
@@ -332,19 +346,23 @@ export function makeBench(
   flash.position.copy(work.position).y += 0.08
   bench.add(flash)
 
-  const scatter = (seed: number) => {
-    const spun = Math.sin(seed * 127.1 + 311.7) * 43758.5453
-    return spun - Math.floor(spun)
-  }
-
   const swingLength = clipNamed("swing").duration
 
   let hot = false
   let was = -1
   let mode: "working" | "resting" = "resting"
+  // Which blow this is. Counted off the clip's own wrap rather than derived
+  // from the mixer's clock: the mixer counts unscaled seconds and the clip
+  // runs at WORK_PACE, so `mixer.time / swingLength` advances half again as
+  // fast as the hammer does and re-hashed the spray mid-flight.
+  let blow = 0
+  let lastSince = 0
   // For tools/bench.html only: lets the sheet print what the mixer is doing.
   ;(group as any).userData.acts = acts
   ;(group as any).userData.strikeAt = strikeAt
+  // The sparks too: judging a burst from a still is what let a flash that was
+  // not there be signed off once already.
+  ;(group as any).userData.sparks = sparks
 
   return {
     group,
@@ -412,32 +430,30 @@ export function makeBench(
       // Sparks fly for a moment after the hammer lands. Measured around the
       // loop: the blow lands a tenth of a second before the clip's seam, and
       // an unwrapped clock cut every burst off at the seam, a third grown.
+      // Divided by the pace here, once: everything in ./strike is real
+      // seconds, and the clip's own clock runs slower than the room's.
       const sinceBlow =
-        (acts.working.time - strikeAt + swingLength) % swingLength
-      const flight = sinceBlow / 0.28
-      if (mode === "working" && flight > 0 && flight < 1) {
-        const burst = Math.floor(mixer.time / swingLength)
-        for (let i = 0; i < SPARKS; i += 1) {
-          const angle = scatter(i * 3.1 + burst * 17) * Math.PI * 2
-          const reach = 0.25 + scatter(i * 7.3 + burst * 5) * 0.35
-          const lift = 0.5 + scatter(i * 11.7 + burst * 3) * 0.5
-          sparkSpray[i * 3] = Math.cos(angle) * reach * flight
-          sparkSpray[i * 3 + 1] = 0.04 + lift * flight - 1.1 * flight * flight
-          sparkSpray[i * 3 + 2] = Math.sin(angle) * reach * flight
-        }
-        sparkShape.attributes.position.needsUpdate = true
-        sparkGlow.opacity = 1 - flight
-        impact.intensity = flight < 0.45 ? 22 * (1 - flight / 0.45) : 0
-        const bloom = flight / 0.75
-        if (bloom < 1) {
-          flashSkin.opacity = (1 - bloom) * (1 - bloom)
-          const spread = 0.22 + bloom * 0.5
-          flash.scale.set(spread, spread, 1)
-        } else {
-          flashSkin.opacity = 0
-        }
+        ((acts.working.time - strikeAt + swingLength) % swingLength) / WORK_PACE
+      if (sinceBlow < lastSince) blow += 1
+      lastSince = sinceBlow
+      if (mode === "working" && sinceBlow > 0 && sinceBlow < SPARK_LIFE) {
+        spray(blow, sinceBlow, sparkSpray)
+        sparks.children.forEach((ember, i) =>
+          ember.position.set(
+            sparkSpray[i * 3],
+            sparkSpray[i * 3 + 1],
+            sparkSpray[i * 3 + 2],
+          ),
+        )
+        sparks.visible = true
+        sparkSkin.opacity = sparkFade(sinceBlow)
+        impact.intensity = lightPower(sinceBlow)
+        flashSkin.opacity = flashFade(sinceBlow)
+        const spread = flashSpread(sinceBlow)
+        flash.scale.set(spread, spread, 1)
       } else {
-        sparkGlow.opacity = 0
+        sparks.visible = false
+        sparkSkin.opacity = 0
         impact.intensity = 0
         flashSkin.opacity = 0
       }
@@ -454,8 +470,7 @@ export function makeBench(
     dispose() {
       face?.dispose()
       flame.dispose()
-      sparkShape.dispose()
-      sparkGlow.dispose()
+      sparkSkin.dispose()
       flashSkin.dispose()
       glow.dispose()
       group.traverse((node: any) => {

@@ -19,6 +19,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
 import { makeBench, turnAnvil, turnFigure } from "../src/skins/atelier/index"
+import { SPARK_LIFE } from "../src/skins/atelier/strike"
 import anvilUrl from "../src/skins/atelier/anvil.glb?url"
 import forgeUrl from "../src/skins/atelier/forge.glb?url"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
@@ -142,9 +143,12 @@ const strikeAt = (bench.group as any).userData.strikeAt as number
 // The clips run below full speed; the pin has to convert clip seconds into
 // wall-clock milliseconds through the working action's own time scale.
 const pace = (bench.group as any).userData.acts.working.getEffectiveTimeScale()
-// `?strike` samples every frame tightly around the blow instead, for judging
-// the impact flash: from just before the hit to the end of the burst.
+// `?strike` spends the whole sheet on the blow instead, for judging the flash
+// and the sparks: from just before the hit to the last ember going out. The
+// span comes from the skin's own SPARK_LIFE, so lengthening the burst widens
+// the sheet with it rather than quietly cropping it.
 const aroundStrike = asked.get("strike") !== null
+const BURST = SPARK_LIFE + 0.1
 // The mixer is delta-driven and its first tick counts as zero: without this
 // priming tick at t=0, a sheet whose first frame starts mid-clip quietly
 // renders the wrong moments -- which is how a flash probe measured the
@@ -152,7 +156,7 @@ const aroundStrike = asked.get("strike") !== null
 bench.tick(0)
 for (let frame = 0; frame < FRAMES; frame += 1) {
   const elapsed = aroundStrike
-    ? ((strikeAt - 0.04 + frame * 0.045) / pace) * 1000
+    ? (strikeAt / pace - 0.05 + (frame * BURST) / (FRAMES - 1)) * 1000
     : frame === FRAMES - 1
       ? ((strikeAt + 0.07) / pace) * 1000
       : (frame * PERIOD) / FRAMES / pace
@@ -175,7 +179,14 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
   const state = ["working", "resting"]
     .map((name) => `${name[0]} w${acts[name].getEffectiveWeight().toFixed(2)} t${acts[name].time.toFixed(2)}`)
     .join("\n")
-  cell.innerHTML = `<b>${Math.round(elapsed)} ms</b>${state}`
+  // How bright the embers are and how far the highest has climbed, because a
+  // still of a dark room cannot be argued with about either.
+  const sparks = (bench.group as any).userData.sparks
+  const lit = sparks.visible ? (sparks.children[0].material.opacity as number) : 0
+  const top = Math.max(...sparks.children.map((e: any) => e.position.y))
+  const wide = sparks.children[0].scale.x as number
+  const embers = `sparks o${lit.toFixed(2)} top${top.toFixed(2)} @${wide}`
+  cell.innerHTML = `<b>${Math.round(elapsed)} ms</b>${state}\n${embers}`
   marks.append(cell)
 }
 
