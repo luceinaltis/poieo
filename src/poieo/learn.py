@@ -93,6 +93,9 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         return result
 
     _apply(project_dir, facts, records, data, result)
+    # Strengthening rides the same success that moves the bookmark, so a
+    # failed pass earns nothing and the reread earns exactly once.
+    _strengthen(project_dir, facts, records)
     _record(project_dir, result)
     return result
 
@@ -320,6 +323,50 @@ def _set_aside(path: Path, because: str) -> None:
         head = [l for l in lines[1:closed] if not l.strip().startswith("superseded_by:")]
         new = ["---", *head, f"superseded_by: {because}", "---", *lines[closed + 1 :]]
     path.write_text("\n".join(new), encoding="utf-8")
+
+
+def _strengthen(
+    project_dir: Path, facts: list[Fact], records: list[dict[str, Any]]
+) -> None:
+    """Three factors or nothing: both entries cited in the run's own output,
+    the run completed, and a declared connection between them. Co-presence
+    alone earns nothing -- reinforcing what retrieval already picks is how
+    a memory talks itself into a rut."""
+    from .memory import _tokens
+    from .strength import wear
+
+    by_slug = {fact.slug: fact for fact in facts}
+    pairs: list[tuple[str, str]] = []
+    for record in records:
+        if record.get("status") != "completed":
+            continue
+        shown = [slug for slug in record.get("shown") or [] if slug in by_slug]
+        if len(shown) < 2:
+            continue
+        said = _tokens(
+            f"{record.get('summary', '')} "
+            f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
+        )
+        cited = [
+            slug for slug in shown if len(_tokens(by_slug[slug].body) & said) >= 2
+        ]
+        for i, one in enumerate(cited):
+            for other in cited[i + 1 :]:
+                if _followable(by_slug[one], by_slug[other]):
+                    pairs.append((one, other))
+    if pairs:
+        wear(project_dir, pairs)
+
+
+def _followable(one: Fact, other: Fact) -> bool:
+    """A connection retrieval would walk: mentions either way, leans-on
+    either side. Never disagrees -- a disputed pair must not wear in."""
+    return (
+        other.slug in one.mentions
+        or one.slug in other.mentions
+        or other.slug in one.matter.links.depends_on
+        or one.slug in other.matter.links.depends_on
+    )
 
 
 def _record(project_dir: Path, result: Pass) -> None:

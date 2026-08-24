@@ -23,15 +23,20 @@ def _project(tmp_path, page="Never push to main."):
     return project
 
 
-def _episode(project, run_id, summary="imported the feeds cleanly", task="importer"):
+def _episode(
+    project,
+    run_id,
+    summary="imported the feeds cleanly",
+    task="importer",
+    status="completed",
+    shown=None,
+):
     episodes = project / ".poieo" / "episodes"
     episodes.mkdir(parents=True, exist_ok=True)
-    (episodes / f"{run_id}.json").write_text(
-        json.dumps(
-            {"run_id": run_id, "task": task, "status": "completed", "summary": summary}
-        ),
-        encoding="utf-8",
-    )
+    record = {"run_id": run_id, "task": task, "status": status, "summary": summary}
+    if shown is not None:
+        record["shown"] = shown
+    (episodes / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
     return run_id
 
 
@@ -265,3 +270,120 @@ async def test_a_memoryless_project_never_gains_a_folder(tmp_path):
     result = await _learn(project, ["never called"])
     assert result is None
     assert not (project / "memory").exists()
+
+
+# -- the pass wears in what helped -------------------------------------------
+#
+# Three factors or nothing: cited (the entry's own words in the run's
+# output), succeeded, and a declared connection between the pair.
+
+
+from poieo.strength import wear_of
+
+
+def _connected_pair(project):
+    _entry(
+        project,
+        "batch-cap",
+        "The importer caps batches at fifty exactly. [[retry-window]]",
+    )
+    _entry(project, "retry-window", "Retry refused batches after the window passes.")
+
+
+CITING = "split the batches at fifty and retried after the window"
+
+
+async def test_connected_cited_entries_in_a_completed_run_wear_in(tmp_path):
+    project = _project(tmp_path)
+    _connected_pair(project)
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project)[frozenset(("batch-cap", "retry-window"))] > 0
+
+
+async def test_shown_but_uncited_earns_nothing(tmp_path):
+    project = _project(tmp_path)
+    _connected_pair(project)
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary="nothing worth doing tonight",
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project) == {}
+
+
+async def test_a_failed_run_earns_nothing(tmp_path):
+    project = _project(tmp_path)
+    _connected_pair(project)
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        status="failed",
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project) == {}
+
+
+async def test_an_unconnected_cited_pair_earns_nothing(tmp_path):
+    project = _project(tmp_path)
+    _entry(project, "batch-cap", "The importer caps batches at fifty exactly.")
+    _entry(project, "retry-window", "Retry refused batches after the window passes.")
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project) == {}
+
+
+async def test_a_disagreeing_pair_never_wears_in(tmp_path):
+    project = _project(tmp_path)
+    _entry(
+        project,
+        "batch-cap",
+        "---\nlinks:\n  contradicts: [retry-window]\n---\n"
+        "The importer caps batches at fifty exactly.",
+    )
+    _entry(project, "retry-window", "Retry refused batches after the window passes.")
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project) == {}
+
+
+async def test_a_failed_pass_earns_nothing_and_the_reread_earns_once(tmp_path):
+    project = _project(tmp_path)
+    _connected_pair(project)
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, ["this is not json"])
+    assert wear_of(project) == {}
+
+    await _learn(project, [_proposal()])
+    worn = wear_of(project)[frozenset(("batch-cap", "retry-window"))]
+    assert 0.9 < worn <= 1.0

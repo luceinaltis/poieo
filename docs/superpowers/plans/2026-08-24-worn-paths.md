@@ -99,10 +99,10 @@ async def test_a_failed_pass_earns_nothing_and_the_reread_earns_once(): ...
 async def test_a_disagreeing_pair_never_wears_in(): ...
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
-- [ ] **Step 3: Implement**
-- [ ] **Step 4: Run the full suite**
-- [ ] **Step 5: Commit** — `feat: the pass wears in the connections that helped`
+- [x] **Step 2: Run the tests to verify they fail**
+- [x] **Step 3: Implement**
+- [x] **Step 4: Run the full suite** — 375 passed, 30 skipped (docker stopped)
+- [x] **Step 5: Commit** — `feat: the pass wears in the connections that helped`
 
 ---
 
