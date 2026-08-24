@@ -69,7 +69,10 @@ def _memory_section(task: TaskSpec) -> str:
     Always-true rules come before recent history, and before anything
     retrieved, so the stable part of the prompt stays stable.
     """
-    if read_memory(task.dir, task) is None:
+    # preview: building a prompt is done by `tasks`, `show`, and the
+    # daemon's load, and none of them is a run -- the gate must not leave
+    # machinery behind the way an actual run may.
+    if read_memory(task.dir, task, preview=True) is None:
         return ""
     return "{{ input.memory }}\n\n"
 

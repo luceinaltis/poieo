@@ -373,6 +373,17 @@ def test_an_entry_used_even_once_is_not_named(tmp_path):
     assert "unused" not in result.stdout
 
 
+def test_a_set_aside_entry_is_not_named_it_was_already_judged(tmp_path):
+    _, project = _project(tmp_path)
+    # old-cap is set aside in the shared project; old records showed it often.
+    for i in range(4):
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
+                    "nothing worth doing tonight", ["old-cap"])
+
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "unused" not in result.stdout
+
+
 def test_a_vanished_entry_is_not_named_however_often_shown(tmp_path):
     _, project = _project(tmp_path)
     for i in range(4):

@@ -459,3 +459,10 @@ async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch)
     spec = load_binding(EXAMPLES / "bindings/mock.yaml")
     async with ProviderPool(spec) as pool:
         await daemon._learn_once(spec, pool)  # must not raise
+
+
+def test_a_zero_learn_interval_fails_at_load(tmp_path):
+    # _sleep_or_cancel(0) returns without awaiting; a zero interval would
+    # spin the loop without ever yielding and starve the whole daemon.
+    with pytest.raises(SpecError, match="positive"):
+        _learning_config(tmp_path, "learn: 0s\n")

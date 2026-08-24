@@ -50,16 +50,22 @@ def keep(project_dir: Path, path: Path) -> str | None:
             if path.is_file():
                 log.info("not keeping %s: over the size cap", path)
             return None
-        name = digest(path)
-        if name is None:
+        # One read both names and fills the keepsake: hashing and copying
+        # from two reads would let a file changing between them leave wrong
+        # bytes under a right name.
+        data = path.read_bytes()
+        if len(data) > KEEP_CAP:
+            # It grew past the cap between the stat and the read.
+            log.info("not keeping %s: over the size cap", path)
             return None
+        name = hashlib.sha256(data).hexdigest()
         store = Path(project_dir) / ".poieo" / STORE
         target = store / name
         if target.exists():
             return name
         store.mkdir(parents=True, exist_ok=True)
         temp = store / f".{name}.tmp"
-        temp.write_bytes(path.read_bytes())
+        temp.write_bytes(data)
         os.replace(temp, target)
         return name
     except OSError as exc:

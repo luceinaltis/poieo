@@ -57,3 +57,20 @@ def test_wear_never_raises(tmp_path):
     (tmp_path / ".poieo").write_text("in the way", encoding="utf-8")
     wear(tmp_path, [("a", "b")])  # must not raise
     assert wear_of(tmp_path) == {}
+
+
+def test_a_slug_containing_the_delimiter_is_refused_quietly(tmp_path):
+    wear(tmp_path, [("a|b", "c")])
+    assert wear_of(tmp_path) == {}
+
+
+def test_one_bad_entry_does_not_wipe_the_rest(tmp_path):
+    import json
+
+    wear(tmp_path, [("a", "b")])
+    path = tmp_path / ".poieo" / "strength.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["pairs"]["x|y"] = {"w": "abc", "at": "2026-08-24T00:00:00+00:00"}
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert _pair("a", "b") in wear_of(tmp_path)

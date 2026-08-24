@@ -263,6 +263,17 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     assert "memory" not in _task_payload(task)
 
 
+def test_listing_a_project_writes_nothing(tmp_path):
+    # A generated prompt is built by `tasks`, `show`, and the daemon's load;
+    # none of them is a run, so none of them may leave machinery behind.
+    task = _task(tmp_path)
+    _remember(tmp_path)
+    _learn(tmp_path, "tidy-order", "Tidy the project one file at a time.")
+
+    system_block(task)
+    assert not (tmp_path / "tasks" / ".poieo").exists()
+
+
 # -- the record says what the run had in mind --------------------------------
 
 

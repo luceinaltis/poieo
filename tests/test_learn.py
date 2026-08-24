@@ -674,3 +674,67 @@ async def test_a_fresh_keepsake_survives(tmp_path):
     result = await _learn(project, _proposal())
     assert result.let_go == []
     assert (store / name).exists()
+
+
+# -- hardening ---------------------------------------------------------------
+
+
+async def test_a_record_without_a_run_id_cannot_jam_the_bookmark(tmp_path):
+    project = _project(tmp_path)
+    episodes = project / ".poieo" / "episodes"
+    episodes.mkdir(parents=True)
+    (episodes / "20260824T010000-aaaaaaaa.json").write_text(
+        json.dumps({"task": "importer", "status": "completed", "summary": "quiet"}),
+        encoding="utf-8",
+    )
+
+    passed = await _learn(project, [_proposal()])
+    assert passed.error is None and passed.upto == "20260824T010000-aaaaaaaa"
+
+    again = await _learn(project, ["never called"])
+    assert again is None  # read once, never reread
+
+
+async def test_the_same_entry_cannot_be_set_aside_twice_in_one_answer(tmp_path):
+    project = _project(tmp_path)
+    _entry(project, "old-cap", "Caps sat at 10 once.")
+    _entry(project, "new-cap", "Caps sit at 50 now.")
+    _entry(project, "other-cap", "Caps sit at 60 elsewhere.")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(
+        project,
+        _proposal(
+            set_aside=[
+                {"entry": "old-cap", "because": "new-cap"},
+                {"entry": "old-cap", "because": "other-cap"},
+            ]
+        ),
+    )
+
+    assert result.set_aside == ["old-cap"]
+    text = (project / "memory" / "facts" / "old-cap.md").read_text(encoding="utf-8")
+    assert "superseded_by: new-cap" in text and "other-cap" not in text
+    assert any("already set aside" in line for line in result.dropped)
+
+
+async def test_two_entries_cannot_set_each_other_aside(tmp_path):
+    project = _project(tmp_path)
+    _entry(project, "cap-a", "Caps sit at 50, says a.")
+    _entry(project, "cap-b", "Caps sit at 60, says b.")
+    _episode(project, "20260824T010000-aaaaaaaa")
+
+    result = await _learn(
+        project,
+        _proposal(
+            set_aside=[
+                {"entry": "cap-a", "because": "cap-b"},
+                {"entry": "cap-b", "because": "cap-a"},
+            ]
+        ),
+    )
+
+    # The first aside stands; the second would lean the memory on nothing.
+    assert result.set_aside == ["cap-a"]
+    text = (project / "memory" / "facts" / "cap-b.md").read_text(encoding="utf-8")
+    assert "superseded_by" not in text

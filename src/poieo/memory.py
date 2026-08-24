@@ -316,7 +316,12 @@ def _accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
     unused = sorted(
         (slug, count)
         for slug, count in shown_count.items()
-        if count >= UNUSED_FLOOR and used_count.get(slug, 0) == 0 and slug in by_slug
+        if count >= UNUSED_FLOOR
+        and used_count.get(slug, 0) == 0
+        # Only entries still standing: a set-aside one was already judged,
+        # and naming it again is stale advice.
+        and slug in by_slug
+        and by_slug[slug].matter.superseded_by is None
     )
     return {"runs_shown": runs_shown, "runs_used": runs_used, "unused": unused}
 

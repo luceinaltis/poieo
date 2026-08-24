@@ -146,7 +146,11 @@ def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
         if path.stem <= mark:
             continue
         try:
-            records.append(json.loads(path.read_text(encoding="utf-8")))
+            record = json.loads(path.read_text(encoding="utf-8"))
+            # The filename is the run id of record; a record that forgot its
+            # own must not leave the bookmark unable to move past it.
+            record.setdefault("run_id", path.stem)
+            records.append(record)
         except (OSError, json.JSONDecodeError) as exc:
             log.warning("could not read the record %s: %s", path, exc)
     return records[:PASS_CAP]
@@ -262,17 +266,23 @@ def _apply(
     if not isinstance(asides, list):
         result.dropped.append("'set_aside' was not a list")
         asides = []
+    # by_slug is a snapshot from before the pass, so what this loop has
+    # already done must be tracked here: without it one answer could set
+    # the same entry aside twice, or two entries could retire each other
+    # and both silently vanish.
+    asided: set[str] = set()
     for raw in asides:
         entry = raw.get("entry") if isinstance(raw, dict) else None
         because = raw.get("because") if isinstance(raw, dict) else None
         if entry not in by_slug:
             result.dropped.append(f"set aside '{entry}': no such entry")
-        elif by_slug[entry].matter.superseded_by is not None:
+        elif entry in asided or by_slug[entry].matter.superseded_by is not None:
             result.dropped.append(f"set aside '{entry}': already set aside")
-        elif because not in final or because == entry:
+        elif because not in final or because == entry or because in asided:
             result.dropped.append(f"set aside '{entry}': '{because}' cannot replace it")
         else:
             _set_aside(by_slug[entry].path, because)
+            asided.add(entry)
             result.set_aside.append(entry)
 
 
