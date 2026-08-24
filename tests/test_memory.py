@@ -21,6 +21,7 @@ from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
+from poieo.memory import check_memory, load_facts
 from poieo.task import JOURNAL_WIDTH, load_task, record_run, system_block
 
 from test_task import write_task
@@ -260,3 +261,78 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
         name=task.name, folder=task.folder_path()
     )
     assert "memory" not in _task_payload(task)
+
+
+# -- entries naming each other -----------------------------------------------
+#
+# A connection is a judgment and lives in the files: prose mentions never
+# fail anything, typed claims validate at load like every other spec poieo
+# reads.
+
+
+def _learn(tmp_path, slug, text):
+    facts = tmp_path / "tasks" / "memory" / "facts"
+    facts.mkdir(parents=True, exist_ok=True)
+    (facts / f"{slug}.md").write_text(text, encoding="utf-8")
+    return tmp_path / "tasks"
+
+
+def test_a_mention_in_the_body_is_read(tmp_path):
+    project = _learn(tmp_path, "retry", "Retry once, after the window. See [[rate-limits]].")
+
+    (fact,) = load_facts(project)
+    assert fact.mentions == ["rate-limits"]
+
+
+def test_typed_links_in_frontmatter_are_read(tmp_path):
+    _learn(tmp_path, "batch-cap", "Batches cap at 50.")
+    _learn(tmp_path, "old-advice", "Retry forever.")
+    project = _learn(
+        tmp_path,
+        "retry",
+        "---\nlinks:\n  depends_on: [batch-cap]\n  contradicts: [old-advice]\n---\nRetry once.",
+    )
+
+    fact = next(f for f in load_facts(project) if f.slug == "retry")
+    assert fact.matter.links.depends_on == ["batch-cap"]
+    assert fact.matter.links.contradicts == ["old-advice"]
+
+
+def test_an_unknown_link_kind_fails_at_load_naming_the_file(tmp_path):
+    project = _learn(
+        tmp_path, "retry", "---\nlinks:\n  caused_by: [something]\n---\nRetry once."
+    )
+    with pytest.raises(SpecError, match="retry.md"):
+        load_facts(project)
+
+
+def test_a_typed_link_to_nothing_fails_at_load_naming_both(tmp_path):
+    project = _learn(
+        tmp_path, "retry", "---\nlinks:\n  depends_on: [ghost]\n---\nRetry once."
+    )
+    with pytest.raises(SpecError, match="ghost") as caught:
+        check_memory(project)
+    assert "retry.md" in str(caught.value)
+
+
+def test_a_dangling_superseded_by_now_fails_at_load(tmp_path):
+    project = _learn(tmp_path, "retry", "---\nsuperseded_by: ghost\n---\nRetry once.")
+    with pytest.raises(SpecError, match="ghost"):
+        check_memory(project)
+
+
+def test_a_body_mention_of_nothing_is_legal(tmp_path):
+    project = _learn(tmp_path, "retry", "Retry once. [[worth-writing-someday]]")
+
+    check_memory(project)
+    (fact,) = load_facts(project)
+    assert fact.mentions == ["worth-writing-someday"]
+
+
+def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
+    _learn(tmp_path, "new-cap", "Batches cap at 500 now.")
+    _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nBatches cap at 50.")
+    project = _learn(
+        tmp_path, "retry", "---\nlinks:\n  depends_on: [old-cap]\n---\nRetry once."
+    )
+    check_memory(project)  # legal; the report will flag it, nothing breaks
