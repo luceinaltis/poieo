@@ -18,16 +18,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
-import {
-  hammerHead,
-  makeBench,
-  standAnvil,
-  turnAnvil,
-  turnFigure,
-} from "../src/skins/atelier/index"
+import { makeBench, standAnvil, turnAnvil, turnFigure } from "../src/skins/atelier/index"
 import { SPARK_LIFE } from "../src/skins/atelier/strike"
 import anvilUrl from "../src/skins/atelier/anvil.glb?url"
 import forgeUrl from "../src/skins/atelier/forge.glb?url"
+import hammerUrl from "../src/skins/atelier/hammer.glb?url"
 import smithUrl from "../src/skins/atelier/smith.glb?url"
 import { NOTHING } from "../src/review/rollup"
 import type { Worker } from "../src/state/stage"
@@ -68,10 +63,11 @@ scene.add(fill)
 
 const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
-const [gltf, anvilGltf, forgeGltf] = await Promise.all([
+const [gltf, anvilGltf, forgeGltf, hammerGltf] = await Promise.all([
   loader.loadAsync(smithUrl),
   loader.loadAsync(anvilUrl),
   loader.loadAsync(forgeUrl),
+  loader.loadAsync(hammerUrl),
 ])
 const smith = gltf.scene
 
@@ -97,6 +93,7 @@ if (tallAsked !== null) standAnvil(Number(tallAsked))
 const bench = makeBench(THREE, smith, cloneSkinned, 0, gltf.animations ?? [], {
   anvil: anvilGltf.scene,
   forge: forgeGltf.scene,
+  hammer: hammerGltf.scene,
 })
 
 /** One whole strike, whatever the clip's own length is. */
@@ -201,18 +198,18 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
 }
 
 // The hammer's whole path, printed, because arguing from two stills about
-// which dip is the blow has now been wrong twice -- and because the fist and
-// the head of the hammer are a forearm apart, which is the width of an anvil.
+// which dip is the blow has now been wrong twice -- and because the head of
+// the hammer and the fist holding it are a forearm apart, which is the width
+// of an anvil.
 {
   const hand = bench.group.getObjectByName("RightHand")
-  const figure = hand?.parent && bench.group.getObjectByProperty("type", "SkinnedMesh")
-  const head = figure ? hammerHead(THREE, bench.group, "RightHand") : []
+  const hammer = (bench.group as any).userData.hammer
   const anvilTop = (bench.group as any).userData.anvilTop as number
-  if (hand) {
+  if (hand && hammer) {
     const fist = new THREE.Vector3()
-    const point = new THREE.Vector3()
+    const head = new THREE.Vector3()
     const lines = [
-      `anvil face at y${anvilTop?.toFixed(3)}   hammer head: ${head.length} vertices`,
+      `anvil face at y${anvilTop.toFixed(3)}`,
       "clip    fist              hammer head       (world units)",
     ]
     let lowest = { y: Infinity, at: 0, x: 0, z: 0 }
@@ -222,21 +219,13 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
       // and the clip runs at `pace`, so the labels lied by a third.
       bench.tick((t / pace) * 1000)
       hand.getWorldPosition(fist)
-      hand.updateWorldMatrix(true, false)
-      let low = Infinity
-      let lowAt = new THREE.Vector3()
-      for (const local of head) {
-        point.copy(local).applyMatrix4(hand.matrixWorld)
-        if (point.y < low) {
-          low = point.y
-          lowAt.copy(point)
-        }
-      }
-      if (low < lowest.y) lowest = { y: low, at: t, x: lowAt.x, z: lowAt.z }
-      const bar = "#".repeat(Math.max(0, Math.round((low - 0.1) * 30)))
+      head.copy(hammer.head)
+      hammer.holder.localToWorld(head)
+      if (head.y < lowest.y) lowest = { y: head.y, at: t, x: head.x, z: head.z }
+      const bar = "#".repeat(Math.max(0, Math.round((head.y - 0.1) * 30)))
       lines.push(
         `${t.toFixed(2)}s  y${fist.y.toFixed(2)} x${fist.x.toFixed(2)} z${fist.z.toFixed(2)}` +
-          `   y${low.toFixed(2)} x${lowAt.x.toFixed(2)} z${lowAt.z.toFixed(2)} ${bar}`,
+          `   y${head.y.toFixed(2)} x${head.x.toFixed(2)} z${head.z.toFixed(2)} ${bar}`,
       )
     }
     lines.push(

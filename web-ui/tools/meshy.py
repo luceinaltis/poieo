@@ -7,7 +7,7 @@ header, and never printed or written anywhere.
     python meshy.py preview smith-striking  # cheap, untextured shape
     python meshy.py status                  # how far along
     python meshy.py refine smith-striking   # textures, once the shape is right
-    python meshy.py fetch                   # download finished models as .glb
+    python meshy.py fetch hammer            # download it; no name means all of them
 
 Names: smith, anvil, forge, props, hammer
 """
@@ -180,9 +180,17 @@ def wait(minutes=12):
     print("  still running; run status again later")
 
 
-def fetch():
+def fetch(names=None):
+    """Download the finished models. Named ones only, if any are named.
+
+    Without a filter this re-downloads every subject ever queued -- forty
+    megabytes to collect one new prop, over the top of files later steps have
+    already been run against.
+    """
     OUT.mkdir(parents=True, exist_ok=True)
     for name, stages in tasks().items():
+        if names and name not in names:
+            continue
         task_id = stages.get("refine") or stages.get("preview")
         task = call(f"/v2/text-to-3d/{task_id}")
         if task.get("status") != "SUCCEEDED":
@@ -211,6 +219,6 @@ if __name__ == "__main__":
     elif what == "status":
         status()
     elif what == "fetch":
-        fetch()
+        fetch(wanted(sys.argv[2:]) if len(sys.argv) > 2 else None)
     else:
         raise SystemExit(__doc__)

@@ -44,6 +44,7 @@ import "./atelier.css"
 // reaches the browser instead of sitting stale behind its own name.
 import anvilUrl from "./anvil.glb?url"
 import forgeUrl from "./forge.glb?url"
+import hammerUrl from "./hammer.glb?url"
 import smithUrl from "./smith.glb?url"
 
 type Three = typeof import("three")
@@ -94,6 +95,14 @@ export function standAnvil(tall: number) {
 /** Which hand the model holds its hammer in. */
 const HAMMER_HAND = "Right"
 
+/**
+ * How long the hammer is, butt to head, in world units. A smith's hand hammer
+ * is about a third of a metre and the figure stands 1.45, so this is measured
+ * against him rather than against the downloaded prop, which arrives at
+ * whatever scale the generator felt like.
+ */
+const HAMMER_LONG = 0.34
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -128,43 +137,30 @@ function stagger(flow: string): number {
 export interface Props {
   anvil: any
   forge: any
+  hammer: any
 }
 
 /**
- * Whatever the smith is holding, as points in the grip bone's own frame.
+ * The middle of a closed fist, in that hand bone's own frame.
  *
- * The generator welds a prop into the fist rather than parenting it, so there
- * is no node to look up: it is whichever vertices follow the hand bone from
- * farther out than a fist reaches. On this model that is a 0.15-unit lump
- * standing in for a hammer head -- shapeless, but it is the part that meets
- * the anvil, and following it beats following the wrist by a forearm.
- *
- * They follow the bone rigidly, so one matrix puts all of them wherever the
- * bone has swung to, without re-skinning anything.
- *
- * Exported for tools/bench.html, which prints where the head goes.
+ * Where to put a tool, in other words. The bone's own origin is the wrist,
+ * which is a knuckle's width short of where a handle actually sits, and the
+ * rig has no finger bones to ask instead -- so the fist is measured from the
+ * skin: the vertices this bone owns, averaged.
  */
-export function hammerHead(THREE: Three, figure: any, boneName: string): any[] {
+export function fistOf(THREE: Three, figure: any, boneName: string): any {
   const mesh = figure.getObjectByProperty("type", "SkinnedMesh")
   const bone = figure.getObjectByName(boneName)
   const slot = mesh && bone ? mesh.skeleton.bones.indexOf(bone) : -1
-  if (slot < 0) return []
+  const middle = new THREE.Vector3()
+  if (slot < 0) return middle
 
   const intoBone = mesh.skeleton.boneInverses[slot]
-  const wrist = new THREE.Vector3().setFromMatrixPosition(
-    new THREE.Matrix4().copy(intoBone).invert(),
-  )
   const position = mesh.geometry.attributes.position
   const bones = mesh.geometry.attributes.skinIndex
   const pull = mesh.geometry.attributes.skinWeight
-  mesh.geometry.computeBoundingBox()
-  const box = mesh.geometry.boundingBox
-  // A fist, as a fraction of the figure: this rig exports at neither
-  // centimetres nor metres, and the next one will not either.
-  const fist = (box.max.y - box.min.y) * 0.06
-
   const rest = new THREE.Vector3()
-  const head: any[] = []
+  let found = 0
   for (let v = 0; v < position.count; v += 1) {
     let most = 0
     let follows = -1
@@ -176,11 +172,108 @@ export function hammerHead(THREE: Three, figure: any, boneName: string): any[] {
       }
     }
     if (follows !== slot) continue
-    rest.fromBufferAttribute(position, v)
-    if (rest.distanceTo(wrist) < fist) continue
-    head.push(rest.clone().applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone))
+    rest.fromBufferAttribute(position, v).applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone)
+    middle.add(rest)
+    found += 1
   }
-  return head
+  return found ? middle.divideScalar(found) : middle
+}
+
+/** The dominant direction of a cloud of points, by power iteration. */
+function longestWay(THREE: Three, points: any[], middle: any): any {
+  const covariance = new Array(9).fill(0)
+  const away = new THREE.Vector3()
+  for (const p of points) {
+    away.copy(p).sub(middle)
+    const v = [away.x, away.y, away.z]
+    for (let r = 0; r < 3; r += 1)
+      for (let c = 0; c < 3; c += 1) covariance[r * 3 + c] += v[r] * v[c]
+  }
+  let axis = new THREE.Vector3(1, 0.3, 0.2).normalize()
+  for (let turn = 0; turn < 24; turn += 1) {
+    const v = [axis.x, axis.y, axis.z]
+    axis = new THREE.Vector3(
+      covariance[0] * v[0] + covariance[1] * v[1] + covariance[2] * v[2],
+      covariance[3] * v[0] + covariance[4] * v[1] + covariance[5] * v[2],
+      covariance[6] * v[0] + covariance[7] * v[1] + covariance[8] * v[2],
+    )
+    if (axis.lengthSq() < 1e-20) return new THREE.Vector3(0, 1, 0)
+    axis.normalize()
+  }
+  return axis
+}
+
+/**
+ * A downloaded hammer, sized and turned so it can be handed to a bone.
+ *
+ * Nothing here is a chosen angle. The handle is the long way through the
+ * mesh; the head is whichever end of it is fatter; the grip sits a quarter of
+ * the way up from the butt, where a hand goes. What comes back is a node
+ * whose origin is the grip and whose local -Y runs down the handle to the
+ * middle of the head, so pointing the blow somewhere is one setFromUnitVectors
+ * away.
+ */
+function hammerHeld(THREE: Three, model: any, long: number): any {
+  const held = model.clone()
+  held.updateWorldMatrix(true, true)
+
+  const points: any[] = []
+  const at = new THREE.Vector3()
+  held.traverse((node: any) => {
+    const position = node.geometry?.attributes?.position
+    if (!position) return
+    // Every eighth vertex: this is a direction and a length, not a silhouette.
+    for (let v = 0; v < position.count; v += 8) {
+      points.push(at.fromBufferAttribute(position, v).applyMatrix4(node.matrixWorld).clone())
+    }
+  })
+  const holder = new THREE.Group()
+  if (points.length < 8) {
+    holder.add(held)
+    return { holder, head: new THREE.Vector3() }
+  }
+
+  const middle = points
+    .reduce((sum: any, p: any) => sum.add(p), new THREE.Vector3())
+    .divideScalar(points.length)
+  const guess = longestWay(THREE, points, middle)
+
+  // Which end is the head: the fatter quarter. A handle is thin all the way.
+  const reach = points.map((p: any) => p.clone().sub(middle).dot(guess))
+  const ends = [Math.min(...reach), Math.max(...reach)]
+  const girth = (from: number, to: number) => {
+    let total = 0
+    let seen = 0
+    points.forEach((p: any, i: number) => {
+      if (reach[i] < from || reach[i] > to) return
+      total += p.clone().sub(middle).addScaledVector(guess, -reach[i]).length()
+      seen += 1
+    })
+    return seen ? total / seen : 0
+  }
+  const quarter = (ends[1] - ends[0]) * 0.25
+  const butt = girth(ends[0], ends[0] + quarter) > girth(ends[1] - quarter, ends[1])
+  // From here on the axis runs butt to head, whichever way the mesh was drawn.
+  const axis = butt ? guess.negate() : guess
+
+  const along = points.map((p: any) => p.clone().sub(middle).dot(axis))
+  const low = Math.min(...along)
+  const span = Math.max(...along) - low || 1
+  // A hand sits a quarter of the way up from the butt.
+  const grip = middle.clone().addScaledVector(axis, low + span * 0.25)
+
+  // Turn the handle onto -Y, so aiming the blow is one rotation of this node
+  // and nothing inside it ever has to move again.
+  const turn = new THREE.Quaternion().setFromUnitVectors(axis, new THREE.Vector3(0, -1, 0))
+  const scale = long / span
+
+  held.applyMatrix4(new THREE.Matrix4().makeTranslation(-grip.x, -grip.y, -grip.z))
+  held.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(turn))
+  held.applyMatrix4(new THREE.Matrix4().makeScale(scale, scale, scale))
+  holder.add(held)
+
+  // Where the blow lands, in the holder's frame: straight down the handle.
+  return { holder, head: new THREE.Vector3(0, -long * 0.75, 0) }
 }
 
 /**
@@ -312,44 +405,70 @@ export function makeBench(
   // anvil; and "forward" is not where a swing ends, it only happened to be
   // close. Following the iron itself needs no constant at all.
   acts.working.setEffectiveWeight(1)
-  const landing = new THREE.Vector3()
+  const swing = clipNamed("swing")
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
-  const head = hammerHead(THREE, figure, `${HAMMER_HAND}Hand`)
-  // When, within the clip, the blow actually lands -- the sparks need it too.
-  // Printing the hammer's whole path settled it: the clip winds up mid-loop
-  // and slams at the very END, so the lowest point is the blow, and the loop
-  // seam sits right behind it.
-  let strikeAt = 0
-  {
-    const swing = clipNamed("swing")
-    const probe = new THREE.Vector3()
+
+  /** The lowest the hand goes, and when -- the blow, near enough to aim by. */
+  const bottom = (probe: (moment: number) => any) => {
+    const at = new THREE.Vector3()
+    const found = new THREE.Vector3()
     let lowest = Infinity
+    let when = 0
     for (let step = 0; step <= 60; step += 1) {
       const moment = (step / 60) * swing.duration
       mixer.setTime(moment)
       figure.updateWorldMatrix(true, true)
-      // The head follows the grip bone rigidly, so one matrix moves all of it.
-      for (const local of head) {
-        probe.copy(local).applyMatrix4(hand.matrixWorld)
-        if (probe.y < lowest) {
-          lowest = probe.y
-          landing.copy(probe)
-          strikeAt = moment
-        }
-      }
-      if (!head.length) {
-        hand.getWorldPosition(probe)
-        if (probe.y < lowest) {
-          lowest = probe.y
-          landing.copy(probe)
-          strikeAt = moment
-        }
+      at.copy(probe(moment))
+      if (at.y < lowest) {
+        lowest = at.y
+        found.copy(at)
+        when = moment
       }
     }
-    mixer.setTime(0)
+    return { at: found, when }
   }
 
-  bench.position.set(landing.x, 0, landing.z)
+  // Give him the hammer before asking where it lands. The grip goes in the
+  // middle of his fist, measured off the skin, and the handle is turned so
+  // that at the bottom of the swing it points straight at the floor -- which
+  // is a rotation solved from the bone's own matrix at that moment, not an
+  // angle anybody chose. The old prop was welded into the mesh and could only
+  // be followed vertex by vertex; this one is a node, so its head is a point.
+  const wrist = new THREE.Vector3()
+  const swung = bottom(() => hand.getWorldPosition(wrist))
+  const boneScale = new THREE.Vector3().setFromMatrixScale(hand.matrixWorld).x || 1
+  const hammer = hammerHeld(THREE, props.hammer, HAMMER_LONG / boneScale)
+  hammer.holder.position.copy(fistOf(THREE, figure, `${HAMMER_HAND}Hand`))
+  hand.add(hammer.holder)
+
+  mixer.setTime(swung.when)
+  figure.updateWorldMatrix(true, true)
+  {
+    // -Y of the holder runs down the handle to the head. Ask what "down in
+    // the room" is in the hand's frame at the bottom of the swing, and point
+    // the handle at it.
+    //
+    // decompose, not setFromRotationMatrix: the bone's world matrix carries
+    // the scale that shrank a 1.8-unit export to a 1.45 m man, and the
+    // trace-based extraction quietly assumes unit columns. It came back with
+    // the hammer held head-up.
+    const turned = new THREE.Quaternion()
+    hand.matrixWorld.decompose(new THREE.Vector3(), turned, new THREE.Vector3())
+    const down = new THREE.Vector3(0, -1, 0).applyQuaternion(turned.invert()).normalize()
+    hammer.holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), down)
+  }
+
+  // When, within the clip, the blow actually lands -- the sparks need it too.
+  // Printing the hammer's whole path settled it: the clip winds up mid-loop
+  // and slams at the very END, so the lowest point is the blow, and the loop
+  // seam sits right behind it.
+  const strike = bottom(() =>
+    hammer.holder.localToWorld(hammer.head.clone()),
+  )
+  const strikeAt = strike.when
+  mixer.setTime(0)
+
+  bench.position.set(strike.at.x, 0, strike.at.z)
   // Only after the probe: setTime works in unscaled clip seconds, and slowing
   // the clock before measuring would have moved the anvil.
   acts.working.setEffectiveTimeScale(WORK_PACE)
@@ -441,6 +560,8 @@ export function makeBench(
   // not there be signed off once already.
   ;(group as any).userData.sparks = sparks
   ;(group as any).userData.anvilTop = anvilTop
+  // The hammer, so the sheet can follow the head rather than the wrist.
+  ;(group as any).userData.hammer = hammer
 
   return {
     group,
@@ -568,15 +689,20 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   const loader = new GLTFLoader()
   loader.setMeshoptDecoder(MeshoptDecoder)
   // The character and both props ride one connection each, in parallel.
-  const [gltf, anvilGltf, forgeGltf] = await Promise.all([
+  const [gltf, anvilGltf, forgeGltf, hammerGltf] = await Promise.all([
     loader.loadAsync(smithUrl),
     loader.loadAsync(anvilUrl),
     loader.loadAsync(forgeUrl),
+    loader.loadAsync(hammerUrl),
   ])
 
   const smith = gltf.scene
   const clips = gltf.animations ?? []
-  const props = { anvil: anvilGltf.scene, forge: forgeGltf.scene }
+  const props = {
+    anvil: anvilGltf.scene,
+    forge: forgeGltf.scene,
+    hammer: hammerGltf.scene,
+  }
   // Meshy exports around a metre; scale it to the room and stand it on the floor.
   const box = new THREE.Box3().setFromObject(smith)
   const height = box.max.y - box.min.y
