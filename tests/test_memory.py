@@ -241,6 +241,17 @@ def test_an_oversized_page_warns_and_still_loads_whole(tmp_path, caplog):
     assert any("trim" in message for message in caplog.messages)
 
 
+def test_editor_notes_in_the_page_never_reach_the_prompt(tmp_path):
+    task = _task(tmp_path)
+    _remember(
+        tmp_path,
+        "<!-- ask the four questions before adding a line -->\nNever push to main.",
+    )
+    block = _task_payload(task)["memory"]
+    assert "Never push to main." in block
+    assert "four questions" not in block
+
+
 def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     task = _task(tmp_path)
     (tmp_path / "tasks" / "memory").mkdir()

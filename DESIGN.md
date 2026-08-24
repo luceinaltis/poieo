@@ -124,7 +124,7 @@ What poieo offers the user stacks in layers:
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | next |
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
-| **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | planned |
+| **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
