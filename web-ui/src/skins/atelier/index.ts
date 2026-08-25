@@ -137,7 +137,7 @@ const HAMMER_CLEAR = HAMMER_LONG
  * anvil with his palms up. Half way down reads as a smith waiting rather than
  * as one being measured for a coat.
  */
-const ARM_TUCK = 0.5
+const ARM_TUCK = 0.85
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -518,11 +518,14 @@ export function makeBench(
   const swinging = new THREE.Quaternion()
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
-  // The upper arms, and the wrist each one ends at, for the resting tuck.
+  // Both segments of each arm, and the wrist they both end at. The upper arm
+  // alone is not enough: turning it brings the elbow in and leaves the forearm
+  // sticking out in front with the palm up, which is the pose this is for.
   const arms = ["Left", "Right"]
-    .map((side) => ({
-      bone: figure.getObjectByName(`${side}Arm`),
-      wrist: figure.getObjectByName(`${side}Hand`),
+    .flatMap((side) => [`${side}Arm`, `${side}ForeArm`])
+    .map((name) => ({
+      bone: figure.getObjectByName(name),
+      wrist: figure.getObjectByName(name.replace(/(Fore)?Arm$/, "Hand")),
     }))
     .filter((arm) => arm.bone?.parent && arm.wrist)
   const from = new THREE.Vector3()
