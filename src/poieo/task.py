@@ -295,7 +295,15 @@ def record_run(task: TaskSpec, result: Any) -> None:
     if result.status == "completed":
         kind, text = "did", _closing_line(result)
     else:
-        kind, text = "failed", result.error or result.status
+        kind = "failed"
+        cause = getattr(result, "cause", None)
+        # The journal is read by the model (and the person) next run: a
+        # sentence and an action beat an exception repr. The repr stays in
+        # the episode for whoever wants it.
+        if cause:
+            text = f"{cause['said']} -- {cause['fix']}"
+        else:
+            text = result.error or result.status
     try:
         append_journal(task.journal_path(), kind, text, title=task.name)
     except OSError as exc:

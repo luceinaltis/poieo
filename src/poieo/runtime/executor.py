@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from ..binding import BindingSpec
-from ..errors import BindingError, PoieoError, RunAborted, SpecError
+from ..errors import BindingError, Cause, PoieoError, RunAborted, SpecError, explain_failure
 from ..expr import unwrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool
@@ -107,6 +107,7 @@ async def execute(
 
     status = "completed"
     error: str | None = None
+    cause: Cause | None = None
     current: str | None = graph.entry
     steps = 0
 
@@ -138,10 +139,16 @@ async def execute(
             current = result.next_node
     except RunAborted as exc:
         status, error = "aborted", str(exc)
-        ctx.emit("run_aborted", reason=error)
+        cause = explain_failure(exc)
+        ctx.emit("run_aborted", reason=error,
+                 **({"cause": cause.as_dict()} if cause else {}))
     except PoieoError as exc:
         status, error = "failed", f"{type(exc).__name__}: {exc}"
-        ctx.emit("run_failed", node_id=getattr(exc, "node_id", None), error=error)
+        # Classified here, at the one place the original exception still
+        # exists -- everything downstream sees only strings.
+        cause = explain_failure(exc)
+        ctx.emit("run_failed", node_id=getattr(exc, "node_id", None), error=error,
+                 **({"cause": cause.as_dict()} if cause else {}))
     except asyncio.CancelledError:
         ctx.emit("run_aborted", reason="cancelled")
         raise
@@ -160,6 +167,7 @@ async def execute(
         outputs=unwrap(ctx.outputs),
         state=unwrap(ctx.state),
         error=error,
+        cause=cause.as_dict() if cause else None,
         iteration=iteration,
     )
 

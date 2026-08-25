@@ -558,6 +558,9 @@ def run(
         )
         if result.error:
             typer.secho(f"error      {result.error}", fg=typer.colors.RED)
+            if result.cause:
+                typer.echo(f"cause      {result.cause['said']}")
+                typer.echo(f"try        {result.cause['fix']}")
         for node_id, value in result.outputs.items():
             rendered = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
             typer.echo(f"\n--- {node_id} ---\n{rendered}")
