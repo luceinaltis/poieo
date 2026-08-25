@@ -215,24 +215,30 @@ def validate(
     binding: Optional[Path] = typer.Option(
         None, "--binding", "-b", help="Also check every role resolves in this binding."
     ),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
 ) -> None:
     """Parse a graph or task (and optionally a binding) and report problems."""
     task = _load_card(graph_path)
     graph = _load_spec(graph_path, task)
+    # One report, two renderings: the facts are gathered once so the JSON an
+    # agent parses can never drift from the lines a person reads.
+    report: dict[str, Any] = {
+        "graph": graph.name,
+        "version": graph.version,
+        "nodes": len(graph.nodes),
+        "entry": graph.entry,
+        "roles": sorted(graph.roles()),
+        "valid": True,
+    }
     if task is not None:
         # The whole card, not just its graph: a schedule that cannot
         # parse must fail here, not when the daemon is armed.
         flow, _ = expand(task)
-        typer.echo(f"schedule   {flow.trigger.build().describe}")
-
-    typer.echo(f"graph      {graph.name} v{graph.version}  ({len(graph.nodes)} nodes)")
-    typer.echo(f"entry      {graph.entry}")
-    typer.echo(f"roles      {', '.join(sorted(graph.roles())) or '(none)'}")
+        report["schedule"] = flow.trigger.build().describe
 
     homeless = needs_a_workdir(graph)
     if homeless:
-        # Not a defect: a graph that names no directory is one that can move.
-        typer.echo(f"workdir    supplied at run time for {', '.join(homeless)}")
+        report["workdir_open"] = homeless
 
     binding, supplied_by = _find_binding(binding, task)
     if binding:
@@ -241,10 +247,34 @@ def validate(
             preflight(graph, spec, require_workdir=False)
         except PoieoError as exc:
             _fail(str(exc))
+        report["binding"] = {
+            "name": spec.name,
+            "path": str(binding),
+            "from": str(supplied_by) if supplied_by is not None else None,
+            "roles": {
+                role: f"{r.provider_name}:{r.model}"
+                for role in sorted(graph.roles())
+                for r in (spec.resolve(role),)
+            },
+        }
+
+    if as_json:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    if "schedule" in report:
+        typer.echo(f"schedule   {report['schedule']}")
+    typer.echo(f"graph      {graph.name} v{graph.version}  ({len(graph.nodes)} nodes)")
+    typer.echo(f"entry      {graph.entry}")
+    typer.echo(f"roles      {', '.join(report['roles']) or '(none)'}")
+    if homeless:
+        # Not a defect: a graph that names no directory is one that can move.
+        typer.echo(f"workdir    supplied at run time for {', '.join(homeless)}")
+    if "binding" in report:
         origin = f"  (from {supplied_by})" if supplied_by is not None else ""
-        typer.echo(f"binding    {spec.name}{origin}")
-        for role in sorted(graph.roles()):
-            typer.echo(f"           {spec.resolve(role).describe()}")
+        typer.echo(f"binding    {report['binding']['name']}{origin}")
+        for role, target in report["binding"]["roles"].items():
+            typer.echo(f"           {role} -> {target}")
     _ok("valid")
 
 
@@ -637,6 +667,9 @@ def check_providers(
         None, "--binding", "-b",
         help="Binding YAML/JSON file [default: the project's].",
     ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Print the probe results as JSON."
+    ),
 ) -> None:
     """Probe every provider declared in a binding."""
     binding, _ = _find_binding(binding, None)
@@ -656,10 +689,16 @@ def check_providers(
         return rows
 
     rows = asyncio.run(_go())
-    for name, healthy, detail in rows:
-        mark = "ok  " if healthy else "FAIL"
-        color = typer.colors.GREEN if healthy else typer.colors.RED
-        typer.secho(f"{mark} {name:<16} {detail}", fg=color)
+    if as_json:
+        typer.echo(json.dumps(
+            [{"provider": n, "healthy": h, "detail": d} for n, h, d in rows],
+            ensure_ascii=False, indent=2,
+        ))
+    else:
+        for name, healthy, detail in rows:
+            mark = "ok  " if healthy else "FAIL"
+            color = typer.colors.GREEN if healthy else typer.colors.RED
+            typer.secho(f"{mark} {name:<16} {detail}", fg=color)
     if any(not healthy for _, healthy, _ in rows):
         raise typer.Exit(code=1)
 
@@ -907,10 +946,15 @@ def runs_list(
     ),
     limit: int = typer.Option(20, "--limit", "-n"),
     flow: Optional[str] = typer.Option(None, "--flow"),
+    as_json: bool = typer.Option(False, "--json", help="Print the rows as JSON."),
 ) -> None:
     """List recent runs, newest first."""
     store = _resolve_store(store)
     rows = RunStore(store).list_runs(limit=limit, flow=flow)
+    if as_json:
+        # JSON stays JSON even when empty -- an agent parses, never greps.
+        typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
     if not rows:
         # Name where we looked: an empty answer should still orient the user.
         typer.echo(f"no runs recorded under {store}")
