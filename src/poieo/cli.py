@@ -33,7 +33,7 @@ from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import memory_report, memory_root, read_memory
-from .project import find_project, find_project_file
+from .project import find_project, find_project_file, init_project
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
@@ -132,6 +132,27 @@ def _parse_input(raw: Optional[str], pairs: list[str]) -> dict[str, Any]:
 def version() -> None:
     """Print the poieo version."""
     typer.echo(f"poieo {__version__}")
+
+
+@app.command()
+@_guarded
+def init() -> None:
+    """Write a working project into this folder: poieo.yaml, bindings, a card.
+
+    Looks at the machine once (an API key, a local Ollama) and writes what it
+    found into ordinary files. Existing files are never touched; run it twice
+    and the second run changes nothing.
+    """
+    report, reason = init_project(Path.cwd())
+    for action, relative in report:
+        line = f"{action}  {relative}"
+        if relative == "bindings/default.yaml":
+            line += f"   ({reason})"
+        typer.echo(line)
+    typer.echo("")
+    typer.echo("next:")
+    typer.echo("  poieo run tasks/hello.yaml    run the sample card once")
+    typer.echo("  poieo daemon                  keep the project's flows running")
 
 
 _NO_BINDING = (

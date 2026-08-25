@@ -234,6 +234,90 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
     assert "f" in result.stdout
 
 
+# -- poieo init ---------------------------------------------------------------
+
+
+def _no_machine(monkeypatch):
+    """A machine with nothing on it: no key, no ollama."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    import poieo.project as project
+
+    monkeypatch.setattr(project, "_ollama_models", lambda: [])
+
+
+def test_init_on_a_bare_machine_defaults_to_mock(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    assert "mock" in default
+    # The last lines orient the user: the next two commands to type.
+    assert "poieo run tasks/hello.yaml" in result.stdout
+    assert "poieo daemon" in result.stdout
+
+
+def test_an_initialized_project_loads_and_runs_offline(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    from poieo.daemon import load_config
+
+    config = load_config(tmp_path / "poieo.yaml")  # a project that cannot load is an init bug
+    assert config.binding == "bindings/default.yaml"
+    result = runner.invoke(app, ["run", "tasks/hello.yaml"])
+    assert result.exit_code == 0, result.output
+    assert "completed" in result.stdout
+
+
+def test_init_with_an_api_key_writes_a_claude_binding(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    assert "anthropic" in default
+
+
+def test_init_with_ollama_writes_a_binding_naming_an_installed_model(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    import poieo.project as project
+
+    monkeypatch.setattr(project, "_ollama_models", lambda: ["llama3.2:3b"])
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    assert "ollama" in default
+    assert "llama3.2:3b" in default
+
+
+def test_init_twice_keeps_every_existing_file(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    before = {
+        p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()
+    }
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    assert "wrote" not in result.stdout
+    after = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert before == after
+
+
+def test_init_appends_to_gitignore_without_clobbering_it(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    (tmp_path / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "node_modules/" in lines
+    assert lines.count(".poieo/") == 1
+
+
 def test_the_store_flag_still_wins_over_the_project(tmp_path, monkeypatch):
     _mark(tmp_path, "version: 1\nstore: logs\n")
     elsewhere = tmp_path / "elsewhere"
