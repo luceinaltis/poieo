@@ -33,7 +33,7 @@ from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import memory_report, memory_root, read_memory
-from .project import find_project
+from .project import find_project, find_project_file
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
@@ -134,6 +134,31 @@ def version() -> None:
     typer.echo(f"poieo {__version__}")
 
 
+_NO_BINDING = (
+    "no binding: pass one with -b, add `binding: <file>` to the card, "
+    "or set a default in a poieo.yaml"
+)
+
+
+def _find_binding(
+    binding: "Path | None", task: "TaskSpec | None"
+) -> "tuple[Path | None, Path | None]":
+    """The binding chain: the flag, then the card, then the project.
+
+    Returns ``(path, supplied_by)`` -- ``supplied_by`` is the poieo.yaml that
+    filled the silence, and None when the user named the binding themselves.
+    Automatic is fine, invisible is not: callers echo the second half.
+    """
+    if binding is not None:
+        return binding, None
+    if task is not None and task.binding:
+        return task.resolve(task.binding), None
+    project = find_project()
+    if project is not None and project.binding:
+        return project.resolve_path(project.binding), project.source_path
+    return None, None
+
+
 def _load_card(path: Path) -> "TaskSpec | None":
     """The task a path names, or None for a plain graph. Loaded once per
     command -- run used to read the same file four times through helpers that
@@ -188,13 +213,15 @@ def validate(
         # Not a defect: a graph that names no directory is one that can move.
         typer.echo(f"workdir    supplied at run time for {', '.join(homeless)}")
 
+    binding, supplied_by = _find_binding(binding, task)
     if binding:
         try:
             spec = load_binding(binding)
             preflight(graph, spec, require_workdir=False)
         except PoieoError as exc:
             _fail(str(exc))
-        typer.echo(f"binding    {spec.name}")
+        origin = f"  (from {supplied_by})" if supplied_by is not None else ""
+        typer.echo(f"binding    {spec.name}{origin}")
         for role in sorted(graph.roles()):
             typer.echo(f"           {spec.resolve(role).describe()}")
     _ok("valid")
@@ -420,22 +447,26 @@ def run(
     _setup_logging(verbose)
     task = _load_card(graph_path)
     graph = _load_spec(graph_path, task)
-    # The flag wins; otherwise a card answers for itself. A new user's
-    # first command must not demand a flag their card already carries.
-    if binding is None and task is not None and task.binding:
-        binding = task.resolve(task.binding)
+    # The flag wins; otherwise a card answers for itself; otherwise the
+    # project does. A new user's first command must not demand a flag their
+    # card -- or their poieo.yaml -- already carries.
+    binding, supplied_by = _find_binding(binding, task)
     if binding is None:
-        _fail(
-            "no binding: pass one with -b, or add `binding: <file>` "
-            "to the card"
-        )
+        _fail(_NO_BINDING)
     spec = load_binding(binding)
+    if supplied_by is not None and not as_json:
+        typer.echo(f"binding    {binding}  (from {supplied_by})")
 
     payload = {**_task_payload(task), **_parse_input(input_json, set_)}
     if store is None:
-        # A task's history lives beside the task, wherever the command was
-        # typed from -- the same rule `poieo daemon <folder>` follows.
-        store = task.dir / ".poieo" if task is not None else Path(".poieo")
+        # The project's store first, so a card run by hand and the same card
+        # run by the daemon write one history, not two. Outside a project the
+        # old rule holds: history lives beside the task.
+        project = find_project()
+        if project is not None:
+            store = project.store_path()
+        else:
+            store = task.dir / ".poieo" if task is not None else Path(".poieo")
     run_store = NullStore() if no_log else RunStore(store)
 
     hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
@@ -513,7 +544,9 @@ def reset(
 @app.command()
 @_guarded
 def daemon(
-    config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
+    config_path: Optional[Path] = typer.Argument(
+        None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
+    ),
     once: bool = typer.Option(
         False, "--once", help="Fire each flow a single time, then exit."
     ),
@@ -526,6 +559,10 @@ def daemon(
 ) -> None:
     """Start the resident scheduler and keep flows running."""
     _setup_logging(verbose)
+    if config_path is None:
+        config_path = find_project_file()
+        if config_path is None:
+            _fail("no poieo.yaml found here or above; pass a config file")
     if config_path.is_dir():
         # `poieo daemon tasks/` is the natural guess once cards exist,
         # so it is a spelling of the same thing, not an error.
@@ -572,9 +609,15 @@ def daemon(
 @app.command("check")
 @_guarded
 def check_providers(
-    binding: Path = typer.Option(..., "--binding", "-b", help="Binding YAML/JSON file."),
+    binding: Optional[Path] = typer.Option(
+        None, "--binding", "-b",
+        help="Binding YAML/JSON file [default: the project's].",
+    ),
 ) -> None:
     """Probe every provider declared in a binding."""
+    binding, _ = _find_binding(binding, None)
+    if binding is None:
+        _fail(_NO_BINDING)
     spec = load_binding(binding)
 
     async def _go() -> list[tuple[str, bool, str]]:
@@ -600,9 +643,15 @@ def check_providers(
 @app.command()
 @_guarded
 def flows(
-    config_path: Path = typer.Argument(..., help="Daemon config YAML/JSON file."),
+    config_path: Optional[Path] = typer.Argument(
+        None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
+    ),
 ) -> None:
     """List the flows a daemon config would run, with their triggers and bindings."""
+    if config_path is None:
+        config_path = find_project_file()
+        if config_path is None:
+            _fail("no poieo.yaml found here or above; pass a config file")
     config = load_config(config_path)
     loaded = load_flows(config, enabled_only=False)
 
@@ -730,10 +779,9 @@ def learn(
         _fail(f"no such folder or card: {path}")
     project = task.dir if task is not None else path
 
-    if binding is None and task is not None and task.binding:
-        binding = task.resolve(task.binding)
+    binding, _ = _find_binding(binding, task)
     if binding is None:
-        _fail("no binding: pass one with -b, or add `binding: <file>` to the card")
+        _fail(_NO_BINDING)
     spec = load_binding(binding)
 
     if not memory_root(project).is_dir():
