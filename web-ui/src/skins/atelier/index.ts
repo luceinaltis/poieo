@@ -134,10 +134,16 @@ const HAMMER_CLEAR = HAMMER_LONG
  * hung by its sides and retargeted onto one generated in an A-pose, and the
  * difference survives: this rig's hand ends up 0.28 above the hips and 0.55
  * out, where the previous smith's was 0.13 and 0.40 -- a man standing at his
- * anvil with his palms up. Half way down reads as a smith waiting rather than
- * as one being measured for a coat.
+ * anvil with his palms up.
+ *
+ * A third of the way, and no further. Both segments of the arm take the turn,
+ * so this compounds: at 0.85 the arms folded flat against the ribs and the
+ * hands disappeared inside the apron, which is worse than the pose it was
+ * fixing and shipped anyway, because it was checked on four frames of the
+ * room view instead of on all eight from two angles. It is checked on all
+ * eight now.
  */
-const ARM_TUCK = 0.85
+const ARM_TUCK = 0.35
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
