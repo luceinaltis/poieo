@@ -33,6 +33,7 @@ from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import memory_report, memory_root, read_memory
+from .project import find_project
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
@@ -814,20 +815,30 @@ def eject(
     )
 
 
+def _resolve_store(store: "Path | None") -> Path:
+    """Flag, then the project's ``store:``, then ``./.poieo``."""
+    if store is not None:
+        return store
+    project = find_project()
+    return project.store_path() if project is not None else Path(".poieo")
+
+
 @runs_app.command("list")
 @_guarded
 def runs_list(
     store: Optional[Path] = typer.Option(
         None, "--store",
-        help="Run-log directory [default: beside the card, or ./.poieo].",
+        help="Run-log directory [default: the project's store, or ./.poieo].",
     ),
     limit: int = typer.Option(20, "--limit", "-n"),
     flow: Optional[str] = typer.Option(None, "--flow"),
 ) -> None:
     """List recent runs, newest first."""
+    store = _resolve_store(store)
     rows = RunStore(store).list_runs(limit=limit, flow=flow)
     if not rows:
-        typer.echo("no runs recorded")
+        # Name where we looked: an empty answer should still orient the user.
+        typer.echo(f"no runs recorded under {store}")
         return
     for row in rows:
         color = typer.colors.GREEN if row.get("status") == "completed" else typer.colors.RED
@@ -846,11 +857,12 @@ def runs_show(
     run_id: str = typer.Argument(..., help="Run id from `poieo runs list`."),
     store: Optional[Path] = typer.Option(
         None, "--store",
-        help="Run-log directory [default: beside the card, or ./.poieo].",
+        help="Run-log directory [default: the project's store, or ./.poieo].",
     ),
     as_json: bool = typer.Option(False, "--json", help="Print raw events."),
 ) -> None:
     """Replay one run's event log."""
+    store = _resolve_store(store)
     events = list(RunStore(store).events(run_id))
     if not events:
         _fail(f"no events for run '{run_id}' under {store}")
