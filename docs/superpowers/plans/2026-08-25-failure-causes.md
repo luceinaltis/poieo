@@ -24,13 +24,13 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
 
 Tests:
 
-- [ ] unit: one classification test per slug in the table, built from the
+- [x] unit: one classification test per slug in the table, built from the
       real exception shapes (NodeError wrapping ProviderError, etc.); an
       unmatched error returns None.
-- [ ] integration: a graph whose node demands JSON from a mock that answers
+- [x] integration: a graph whose node demands JSON from a mock that answers
       prose fails with `bad_output`; `poieo run` output shows `cause` and
       `try`; the summary row carries the cause.
-- [ ] a failed task run leaves a journal line with the sentence, not the
+- [x] a failed task run leaves a journal line with the sentence, not the
       exception repr.
 
 PR `feat: failed runs say why, in words, everywhere the run goes`.
@@ -48,11 +48,11 @@ PR `feat: failed runs say why, in words, everywhere the run goes`.
 
 Tests:
 
-- [ ] a looping flow failing identically pauses after exactly 3 runs; status
+- [x] a looping flow failing identically pauses after exactly 3 runs; status
       is `paused`; a fourth run never fires.
-- [ ] alternating failure causes never pause it (the counter resets on a
+- [x] alternating failure causes never pause it (the counter resets on a
       different key).
-- [ ] a success between failures resets the counter.
-- [ ] the task journal records why it paused.
+- [x] a success between failures resets the counter.
+- [x] the task journal records why it paused.
 
 PR `feat: a flow that fails the same way three times pauses itself and says so`.
