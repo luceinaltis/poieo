@@ -74,9 +74,9 @@ def rigwait(minutes=15) -> None:
     print("  still running")
 
 
-def start(rig_id: str) -> None:
+def start(rig_id: str, clips: dict | None = None) -> None:
     state = {}
-    for name, action in CLIPS.items():
+    for name, action in (clips or CLIPS).items():
         result = meshy.call(
             "/v1/animations", {"rig_task_id": rig_id, "action_id": action}
         )
@@ -135,7 +135,15 @@ if __name__ == "__main__":
     elif what == "rigwait":
         rigwait()
     elif what == "start":
-        start(sys.argv[2])
+        # `start <rig> idle=11 calm=243` queues those instead of the usual two,
+        # which is how a replacement for a clip that retargeted badly gets
+        # tried four at a time rather than one afternoon at a time.
+        picked = dict(
+            (pair.split("=")[0], int(pair.split("=")[1]))
+            for pair in sys.argv[3:]
+            if "=" in pair
+        )
+        start(sys.argv[2], picked or None)
     elif what == "wait":
         wait()
     elif what == "fetch":
