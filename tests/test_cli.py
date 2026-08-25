@@ -130,6 +130,28 @@ def test_check_probes_every_provider():
     assert "ok   fake" in result.stdout
 
 
+def test_help_tells_two_stories_not_seventeen():
+    """Six commands visible -- the person's and the agent's story. The rest
+    keep working, hidden: plumbing, files the user edits directly, or views
+    the web board owns."""
+    visible = {
+        info.name or info.callback.__name__
+        for info in app.registered_commands
+        if not info.hidden
+    }
+    assert visible == {"init", "daemon", "run", "validate", "check"}
+    # `runs` rides along as a sub-app.
+    result = runner.invoke(app, ["--help"])
+    assert "runs" in result.stdout
+    assert "eject" not in result.stdout
+
+
+def test_hidden_commands_still_work():
+    result = runner.invoke(app, ["show", str(EXAMPLES / "graphs/support-triage.yaml")])
+    assert result.exit_code == 0
+    assert "classify" in result.stdout
+
+
 def test_validate_json_is_machine_readable():
     result = runner.invoke(
         app,

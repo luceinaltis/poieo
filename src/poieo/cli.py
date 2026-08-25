@@ -127,7 +127,7 @@ def _parse_input(raw: Optional[str], pairs: list[str]) -> dict[str, Any]:
     return payload
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def version() -> None:
     """Print the poieo version."""
@@ -278,7 +278,7 @@ def validate(
     _ok("valid")
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def show(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
@@ -310,7 +310,7 @@ def show(
             typer.echo(f"      next           ->  {node.next}")
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def view(
     graph_paths: list[Path] = typer.Argument(..., help="One or more graph files."),
@@ -390,7 +390,7 @@ def _jupyter_session() -> dict[str, Any]:
     return {}
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def edit(
     graph_path: Path = typer.Argument(..., help="Graph file to edit."),
@@ -566,7 +566,7 @@ def run(
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def reset(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
@@ -703,7 +703,7 @@ def check_providers(
         raise typer.Exit(code=1)
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def flows(
     config_path: Optional[Path] = typer.Argument(
@@ -740,7 +740,7 @@ def flows(
             )
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def tasks(
     target: Path = typer.Argument(..., help="Daemon config file, or a tasks folder."),
@@ -773,7 +773,7 @@ def tasks(
         typer.echo(f"        {last}")
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def note(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
@@ -785,7 +785,7 @@ def note(
     _ok(f"noted in {task.journal_path()}")
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def memory(
     path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
@@ -831,7 +831,7 @@ def memory(
         typer.echo(read_memory(project, task, preview=True) or "(nothing)")
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def learn(
     path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
@@ -877,7 +877,7 @@ def learn(
         )
 
 
-@app.command()
+@app.command(hidden=True)
 @_guarded
 def eject(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
