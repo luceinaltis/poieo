@@ -130,6 +130,63 @@ def test_check_probes_every_provider():
     assert "ok   fake" in result.stdout
 
 
+def test_validate_json_is_machine_readable():
+    result = runner.invoke(
+        app,
+        [
+            "validate",
+            str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["valid"] is True
+    assert data["graph"] == "support-triage"
+    assert "classifier" in data["roles"]
+    assert data["binding"]["roles"]["classifier"]  # role -> model resolution
+
+
+def test_check_json_is_machine_readable():
+    result = runner.invoke(
+        app, ["check", "-b", str(EXAMPLES / "bindings/mock.yaml"), "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    rows = json.loads(result.stdout)
+    assert rows and rows[0]["provider"] == "fake"
+    assert rows[0]["healthy"] is True
+
+
+def test_runs_list_json_is_machine_readable(tmp_path):
+    run = runner.invoke(
+        app,
+        [
+            "run",
+            str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--set",
+            "message=hi",
+            "--store",
+            str(tmp_path / "logs"),
+        ],
+    )
+    assert run.exit_code == 0, run.output
+    result = runner.invoke(
+        app, ["runs", "list", "--store", str(tmp_path / "logs"), "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    rows = json.loads(result.stdout)
+    assert len(rows) == 1 and rows[0]["status"] == "completed"
+
+    empty = runner.invoke(
+        app, ["runs", "list", "--store", str(tmp_path / "nothing"), "--json"]
+    )
+    assert json.loads(empty.stdout) == []  # JSON stays JSON, even empty
+
+
 def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
     config = tmp_path / "poieo.yaml"
     config.write_text(
