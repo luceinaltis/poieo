@@ -21,3 +21,6 @@ web-ui/dist/
 
 # session worktrees
 .claude/worktrees/
+
+# personal helper scripts
+claude-rc-loop.ps1

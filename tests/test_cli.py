@@ -141,10 +141,10 @@ def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
         "    trigger: {type: interval, every: 60s}\n"
         "    input: {message: hi}\n"
     )
-    # --no-web on purpose: this covers running the flows, and grabbing the
-    # real default port makes the suite fail for anyone with a daemon up.
+    # --no-web: the observation server binds a real port, so without this the
+    # test fails on any machine already running a daemon.
     result = runner.invoke(app, ["daemon", str(config), "--once", "--no-web"])
-    assert result.exit_code == 0, result.stderr
+    assert result.exit_code == 0
     assert "1 run(s), 0 not completed" in result.stdout
 
     listed = runner.invoke(app, ["runs", "list", "--store", str(tmp_path / "logs")])
@@ -176,6 +176,412 @@ def test_view_writes_a_page(tmp_path):
     page = out.read_text()
     assert "flowchart TD" in page
     assert "llama3.2:3b" in page
+
+
+# -- task cards --------------------------------------------------------------
+
+
+def _task(tmp_path, stem="tidy", body="name: tidy the project\nprompt: go\n"):
+    (tmp_path / "project").mkdir(exist_ok=True)
+    (tmp_path / "tasks").mkdir(exist_ok=True)
+    path = tmp_path / "tasks" / f"{stem}.yaml"
+    path.write_text(f"folder: {(tmp_path / 'project').as_posix()}\n{body}", encoding="utf-8")
+    return path
+
+
+def test_show_renders_what_a_task_expands_to(tmp_path):
+    result = runner.invoke(app, ["show", str(_task(tmp_path))])
+    assert result.exit_code == 0
+    assert "work" in result.stdout and "agent" in result.stdout
+
+
+def test_run_executes_a_task_file(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(_task(tmp_path)),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--store",
+            str(tmp_path / "logs"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "completed" in result.stdout
+
+
+def test_tasks_lists_the_cards(tmp_path):
+    _task(tmp_path)
+    _task(tmp_path, "docs", "name: write docs\nprompt: go\nevery: loop\nenabled: false\n")
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["tasks", str(config)])
+    assert result.exit_code == 0
+    assert "[off] docs" in result.stdout
+    assert "[on ] tidy" in result.stdout
+    assert "write docs" in result.stdout
+
+
+def test_eject_writes_the_graph_and_the_task_keeps_working(tmp_path):
+    path = _task(tmp_path, body="name: tidy\nprompt: go\nevery: 30m\n")
+    result = runner.invoke(app, ["eject", str(path)])
+    assert result.exit_code == 0
+
+    graph_file = tmp_path / "graphs" / "tidy.yaml"
+    assert "type: agent" in graph_file.read_text(encoding="utf-8")
+    rewritten = path.read_text(encoding="utf-8")
+    assert "graph: ../graphs/tidy.yaml" in rewritten
+    assert "prompt" not in rewritten
+    assert "every: 30m" in rewritten
+
+    after = runner.invoke(app, ["show", str(path)])
+    assert after.exit_code == 0
+    assert "agent" in after.stdout
+
+
+def test_eject_refuses_to_overwrite(tmp_path):
+    path = _task(tmp_path)
+    assert runner.invoke(app, ["eject", str(path)]).exit_code == 0
+    again = runner.invoke(app, ["eject", str(path)])
+    assert again.exit_code == 1
+    assert "already names a graph" in again.stderr
+
+
+def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
+    path = _task(tmp_path)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        encoding="utf-8",
+    )
+
+    noted = runner.invoke(app, ["note", str(path), "leave the README alone"])
+    assert noted.exit_code == 0
+    assert "leave the README alone" in (tmp_path / "tasks" / "tidy.md").read_text(
+        encoding="utf-8"
+    )
+
+    listed = runner.invoke(app, ["tasks", str(config)])
+    assert listed.exit_code == 0
+    assert "leave the README alone" in listed.stdout
+
+
+def test_a_task_run_reads_its_journal(tmp_path):
+    path = _task(tmp_path)
+    runner.invoke(app, ["note", str(path), "only touch the tests"])
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(path),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--store",
+            str(tmp_path / "logs"),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0
+    events = (tmp_path / "logs" / "runs").glob("*.jsonl")
+    written = "\n".join(p.read_text(encoding="utf-8") for p in events)
+    assert "only touch the tests" in written
+
+
+def test_view_renders_a_task(tmp_path):
+    out = tmp_path / "v.html"
+    result = runner.invoke(app, ["view", str(_task(tmp_path)), "-o", str(out)])
+    assert result.exit_code == 0
+    assert "flowchart TD" in out.read_text(encoding="utf-8")
+
+
+def test_edit_refuses_a_task_and_points_at_eject(tmp_path):
+    result = runner.invoke(app, ["edit", str(_task(tmp_path))])
+    assert result.exit_code == 1
+    assert "eject" in result.stderr
+
+
+def test_tasks_accepts_the_folder_itself(tmp_path):
+    _task(tmp_path)
+    result = runner.invoke(app, ["tasks", str(tmp_path / "tasks")])
+    assert result.exit_code == 0
+    assert "tidy" in result.stdout
+
+
+def test_eject_says_the_graph_still_needs_its_task(tmp_path):
+    result = runner.invoke(app, ["eject", str(_task(tmp_path))])
+    assert result.exit_code == 0
+    assert "journal" in result.stdout
+
+# -- isolation shows up where a user is already looking ----------------------
+#
+# These assert on MARK, not on the bare word: pytest's tmp_path embeds the test
+# name, and the listing prints the folder, so `"isolated" in stdout` passes for
+# any test whose own name contains it.
+
+MARK = "· isolated"
+
+
+def _card(tmp_path, block=""):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    (tmp_path / "card.yaml").write_text(
+        f"name: boxed\nfolder: work\nprompt: do it\n{block}"
+    )
+    return tmp_path
+
+
+def test_tasks_marks_a_boxed_task(tmp_path):
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["tasks", str(folder)])
+    assert result.exit_code == 0
+    assert MARK in result.stdout
+
+
+def test_tasks_says_nothing_for_a_plain_task(tmp_path):
+    result = runner.invoke(app, ["tasks", str(_card(tmp_path))])
+    assert result.exit_code == 0
+    assert MARK not in result.stdout
+
+
+def test_the_listing_never_names_the_machinery(tmp_path):
+    """Configuration may name docker; a listing is interface, and must not."""
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["tasks", str(folder)])
+    for word in ("python:3.12-slim", "docker", "container"):
+        assert word not in result.stdout
+
+
+# -- one-shot isolation, and the escape hatch --------------------------------
+
+
+def test_run_isolate_preflights_before_the_first_model_call(tmp_path, monkeypatch):
+    """A bad image must fail here, not eight turns into a run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    result = runner.invoke(
+        app,
+        [
+            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "--set", "message=hi",
+            "--no-log",
+            "--isolate", "python:3.12-slim",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "docker is not on PATH" in result.stderr  # errors go to stderr
+
+
+def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
+    def boom():
+        raise AssertionError("docker was probed for a run that never asked")
+
+    monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
+    result = runner.invoke(
+        app,
+        [
+            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
+            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "--set", "message=hi",
+            "--no-log",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def test_reset_says_the_folder_was_not_touched(tmp_path, monkeypatch):
+    removed = []
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: removed.append(folder) or 1)
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
+    assert result.exit_code == 0
+    assert removed and "Nothing in" in result.stdout and "was touched" in result.stdout
+
+
+def test_reset_on_a_task_with_nothing_to_reset_is_not_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: 0)
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
+    assert runner.invoke(app, ["reset", str(folder / "card.yaml")]).exit_code == 0
+
+
+def test_reset_on_a_task_that_is_not_isolated_explains_itself(tmp_path):
+    folder = _card(tmp_path)
+    result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
+    assert result.exit_code == 0
+    assert "isolated" in result.stdout
+
+
+# -- the first-run experience ------------------------------------------------
+#
+# DESIGN.md promises the only things a user writes are a name and a prompt.
+# These pin the places where the CLI used to break that promise first.
+
+
+def _self_bound_card(tmp_path):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    card = tmp_path / "card.yaml"
+    card.write_text(
+        "name: hello\nfolder: work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    return card
+
+
+def test_run_uses_the_binding_the_card_names(tmp_path):
+    """The first command a new user types must not demand a flag the card
+    already answers."""
+    result = runner.invoke(app, ["run", str(_self_bound_card(tmp_path)), "--no-log"])
+    assert result.exit_code == 0, result.output
+
+
+def test_run_without_any_binding_names_both_ways_out(tmp_path):
+    (tmp_path / "work").mkdir(exist_ok=True)
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: say hello\n")
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+    assert result.exit_code == 1
+    assert "-b" in result.stderr and "binding:" in result.stderr
+
+
+def test_run_flag_still_wins_over_the_card(tmp_path):
+    result = runner.invoke(
+        app,
+        ["run", str(_self_bound_card(tmp_path)), "--no-log",
+         "-b", str(EXAMPLES / "bindings/mock.yaml")],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_daemon_given_a_folder_runs_the_cards_in_it(tmp_path):
+    """`poieo daemon tasks/` is the natural guess, and it used to answer with
+    a raw traceback."""
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    (folder / "hello.yaml").write_text(
+        "name: hello\nfolder: ../work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
+    assert result.exit_code == 0, result.output
+
+
+def test_daemon_given_a_task_card_points_at_both_answers(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(app, ["daemon", str(card), "--once", "--no-web"])
+    assert result.exit_code == 1
+    assert "task" in result.stderr
+    assert "poieo run" in result.stderr
+
+
+def test_a_typo_gets_one_line_and_a_suggestion(tmp_path):
+    (tmp_path / "work").mkdir()
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\npromt: say hello\n")
+    result = runner.invoke(app, ["validate", str(card)])
+    assert result.exit_code == 1
+    assert "promt" in result.stderr
+    assert "prompt" in result.stderr          # the did-you-mean
+    assert "pydantic" not in result.stderr    # internals stay internal
+    assert "https://" not in result.stderr
+
+
+def test_validate_checks_the_schedule_too(tmp_path):
+    """It said "valid" on a card whose schedule could not parse -- and a
+    validator that lies is worse than none."""
+    (tmp_path / "work").mkdir()
+    card = tmp_path / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: hi\nevery: 5 minutes\n")
+    result = runner.invoke(app, ["validate", str(card)])
+    assert result.exit_code == 1
+    assert "5m" in result.stderr              # the fix is named, not just the fault
+
+
+# -- a one-shot run is still a task's run ------------------------------------
+#
+# The journal contract says a task writes a line at the end of every run. That
+# held for daemon runs only: `poieo run card.yaml` read the journal and never
+# wrote it, so a second run redid the first's work and a note it read was
+# never consumed.
+
+
+def test_run_writes_the_journal(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+    assert result.exit_code == 0, result.output
+    journal = (tmp_path / "card.md").read_text(encoding="utf-8")
+    assert "did" in journal
+
+
+def test_run_consumes_a_note_the_way_a_daemon_run_does(tmp_path):
+    """The bookmark must move, or a note stays "new" forever."""
+    card = _self_bound_card(tmp_path)
+    runner.invoke(app, ["note", str(card), "look at the README first"])
+    runner.invoke(app, ["run", str(card), "--no-log"])
+    from poieo.task import load_task, read_journal
+
+    shown = read_journal(load_task(card).journal_path())
+    assert "Nothing new" in shown
+    assert "look at the README" in shown       # consumed, not lost
+
+
+def test_run_stores_beside_the_card(tmp_path, monkeypatch):
+    """One task, one history -- wherever the command was typed from."""
+    card = _self_bound_card(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    result = runner.invoke(app, ["run", str(card)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".poieo" / "runs").is_dir()
+    assert not (elsewhere / ".poieo").exists()
+
+
+def test_run_store_flag_still_wins(tmp_path):
+    card = _self_bound_card(tmp_path)
+    result = runner.invoke(
+        app, ["run", str(card), "--store", str(tmp_path / "mystore")]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "mystore" / "runs").is_dir()
+
+
+def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
+    """The beside-the-card rule is the card's; bare graphs keep today's."""
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(
+        app,
+        ["run", str(EXAMPLES / "graphs/support-triage.yaml"),
+         "-b", str(EXAMPLES / "bindings/mock.yaml"), "--set", "message=hi"],
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".poieo" / "runs").is_dir()
+
+
+def test_daemon_folder_stores_beside_the_cards(tmp_path):
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    (folder / "hello.yaml").write_text(
+        "name: hello\nfolder: ../work\nprompt: say hello\n"
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+    )
+    result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
+    assert result.exit_code == 0, result.output
+    assert (folder / ".poieo" / "runs").is_dir()
+
+
+# -- where the work happens ---------------------------------------------------
+#
+# A graph is the logical layer and may leave its workdir open. A flow in a
+# daemon config may not: a directory that is not there has to be refused at
+# load, rather than discovered when the cron fires at 3am.
 
 
 def flow_config(tmp_path, workdir):

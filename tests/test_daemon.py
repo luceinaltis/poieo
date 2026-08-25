@@ -87,6 +87,27 @@ async def test_interval_trigger_fires_immediately_then_periodically():
     assert 0.08 <= elapsed < 0.5
 
 
+async def test_interval_trigger_never_fires_twice_inside_one_period():
+    """A timer that wakes early must not turn one tick into two.
+
+    The grid is derived from elapsed time, so a wake-up a hair before the tick
+    it was aimed at used to select that same tick again and fire immediately.
+    """
+    trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=20).build()
+    loop = asyncio.get_running_loop()
+
+    stamps = []
+    cancel = asyncio.Event()
+    async for _ in trigger.fires(cancel):
+        stamps.append(loop.time())
+
+    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+    assert len(stamps) == 20
+    # One period is 50ms; the floor allows for a wake-up up to 20ms early,
+    # which a coarse Windows timer really does produce.
+    assert min(gaps) >= 0.03, gaps
+
+
 async def test_manual_trigger_never_fires_on_its_own():
     trigger = TriggerSpec(type="manual").build()
     cancel = asyncio.Event()
@@ -256,3 +277,223 @@ def test_flow_workdir_is_optional(tmp_path):
     assert config.workdir_path(by_name["triage"]) is None
     # ...while one that touches a project says where.
     assert config.workdir_path(by_name["chores"]) == (EXAMPLES / "..").resolve()
+
+
+# -- isolation preflight: fail at launch, not at 3am -------------------------
+
+
+def _isolated_config(tmp_path, image="python:3.12-slim", count=1):
+    body = [
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}",
+        f"store: {tmp_path / 'logs'}",
+        "flows:",
+    ]
+    for i in range(count):
+        body += [
+            f"  - name: t{i}",
+            f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}",
+            "    trigger: {type: interval, every: 60s}",
+            "    isolation:",
+            f"      image: {image}",
+        ]
+    path = tmp_path / "poieo.yaml"
+    path.write_text("\n".join(body) + "\n")
+    return load_config(path)
+
+
+def test_a_flow_with_isolation_fails_to_load_without_docker(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    with pytest.raises(SpecError, match="docker is not on PATH"):
+        load_flows(_isolated_config(tmp_path))
+
+
+def test_a_missing_image_names_the_pull_command(tmp_path, monkeypatch):
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.image_present", lambda image: False)
+    with pytest.raises(SpecError, match="docker pull python:3.12-slim"):
+        load_flows(_isolated_config(tmp_path))
+
+
+def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
+    """Ten tasks sharing an image must not cost ten inspects."""
+    seen = []
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr(
+        "poieo.tools.docker.image_present", lambda image: seen.append(image) or True
+    )
+    load_flows(_isolated_config(tmp_path, count=5))
+    assert seen == ["python:3.12-slim"]
+
+
+def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
+    """No ping at all: a machine without docker must not slow down or fail."""
+    def boom():
+        raise AssertionError("docker was probed for a flow that never asked")
+
+    monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"store: {tmp_path / 'logs'}\n"
+        "flows:\n"
+        "  - name: plain\n"
+        f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}\n"
+        "    trigger: {type: interval, every: 60s}\n"
+    )
+    assert len(load_flows(load_config(config))) == 1
+
+
+def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
+    """Its image may well be gone; it is not going to run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    config = _isolated_config(tmp_path)
+    config.flows[0].enabled = False
+    assert load_flows(config) == []
+
+
+def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypatch):
+    """`poieo flows` loads disabled flows too. It must still list one whose
+    image is gone -- that flow is not going to run."""
+    monkeypatch.setattr(
+        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
+    )
+    config = _isolated_config(tmp_path)
+    config.flows[0].enabled = False
+    assert len(load_flows(config, enabled_only=False)) == 1
+
+
+# -- notes reach the tasks that can send them --------------------------------
+
+
+def _tasks_config(tmp_path, tools="[files, notes]"):
+    folder = tmp_path / "tasks"
+    folder.mkdir()
+    (tmp_path / "work").mkdir()
+    for name in ("build-docs", "check-links"):
+        (folder / f"{name}.yaml").write_text(
+            f"name: {name}\nfolder: ../work\nprompt: go\ntools: {tools}\n"
+        )
+    path = tmp_path / "poieo.yaml"
+    path.write_text(
+        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"store: {tmp_path / 'logs'}\n"
+        "tasks: tasks\n"
+        "flows: []\n"
+    )
+    return load_config(path)
+
+
+async def test_a_task_can_actually_reach_its_sibling(tmp_path):
+    """The whole chain: daemon builds the postbox, the tool writes the journal."""
+    config = _tasks_config(tmp_path)
+    daemon = Daemon(config)
+    runner = next(r for r in daemon._runners() if r.name == "build-docs")
+    box = runner.hands.postbox
+    assert box is not None
+    assert box.sender == "build-docs"
+    assert "check-links" in box.recipients
+
+
+def test_the_roster_reaches_the_generated_prompt(tmp_path):
+    config = _tasks_config(tmp_path)
+    flow = next(f for f in load_flows(config) if f.spec.name == "build-docs")
+    system = flow.graph.nodes[0].system or ""
+    assert "check-links" in system
+    assert "build-docs" not in system.split("Other tasks")[-1]
+
+
+def test_a_task_without_notes_gets_no_postbox(tmp_path):
+    config = _tasks_config(tmp_path, tools="[files, shell]")
+    daemon = Daemon(config)
+    assert all(r.hands.postbox is None for r in daemon._runners())
+
+
+# -- learning while nothing else is running ----------------------------------
+
+
+def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
+    (tmp_path / "project").mkdir(exist_ok=True)
+    tasks = tmp_path / "tasks"
+    tasks.mkdir(exist_ok=True)
+    (tasks / "one.yaml").write_text(
+        f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\nprompt: go\n",
+        encoding="utf-8",
+    )
+    if memory:
+        (tasks / "memory").mkdir(exist_ok=True)
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"store: {(tmp_path / 'logs').as_posix()}\n"
+        "tasks: tasks/\n" + learn,
+        encoding="utf-8",
+    )
+    return load_config(config)
+
+
+def test_a_learn_interval_parses_and_a_bad_one_fails_at_load(tmp_path):
+    assert _learning_config(tmp_path, "learn: 1d\n").learn == "1d"
+    with pytest.raises(SpecError):
+        _learning_config(tmp_path, "learn: soon\n")
+
+
+def test_learning_needs_the_daemon_default_binding(tmp_path):
+    (tmp_path / "project").mkdir()
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "one.yaml").write_text(
+        f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\n"
+        f"prompt: go\nbinding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "poieo.yaml"
+    config.write_text("tasks: tasks/\nlearn: 1h\n", encoding="utf-8")
+    with pytest.raises(SpecError, match="binding"):
+        load_config(config)
+
+
+def test_an_unconfigured_daemon_never_learns(tmp_path):
+    daemon = Daemon(_learning_config(tmp_path, learn=""))
+    assert daemon._ready_to_learn() is False
+
+
+def test_a_daemon_without_a_memory_folder_never_learns(tmp_path):
+    daemon = Daemon(_learning_config(tmp_path, memory=False))
+    assert daemon._ready_to_learn() is False
+
+
+def test_a_busy_daemon_waits_its_turn(tmp_path):
+    from types import SimpleNamespace
+
+    daemon = Daemon(_learning_config(tmp_path))
+    assert daemon._ready_to_learn() is True
+
+    daemon.runners = [SimpleNamespace(status="running")]
+    assert daemon._ready_to_learn() is False
+
+
+async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch):
+    import poieo.daemon.service as service
+    from poieo.binding import load_binding
+    from poieo.providers import ProviderPool
+
+    daemon = Daemon(_learning_config(tmp_path))
+
+    async def blow_up(*args, **kwargs):
+        raise RuntimeError("the model ate the homework")
+
+    monkeypatch.setattr(service, "learn_pass", blow_up)
+    spec = load_binding(EXAMPLES / "bindings/mock.yaml")
+    async with ProviderPool(spec) as pool:
+        await daemon._learn_once(spec, pool)  # must not raise
+
+
+def test_a_zero_learn_interval_fails_at_load(tmp_path):
+    # _sleep_or_cancel(0) returns without awaiting; a zero interval would
+    # spin the loop without ever yielding and starve the whole daemon.
+    with pytest.raises(SpecError, match="positive"):
+        _learning_config(tmp_path, "learn: 0s\n")

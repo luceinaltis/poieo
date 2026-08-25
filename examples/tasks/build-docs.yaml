@@ -1,0 +1,13 @@
+# Half of a pair: this one has news, `check-links` acts on it.
+#
+# `notes` is opt-in. With it this task gains one tool, `tell`, and its prompt
+# says which tasks it may use it on. A note is read on that task's next run --
+# it wakes nobody, which is why a pair like this cannot spin each other up.
+name: build the docs
+folder: ..
+enabled: false
+every: 1h
+tools: [files, shell, notes]
+prompt: |
+  If the source has changed since you last built the docs, rebuild them.
+  If you changed any links, leave check-links a note saying how many.

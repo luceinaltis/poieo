@@ -88,7 +88,9 @@ from poieo.tools import DEFAULT_TOOLSETS, TOOLSETS, LocalExecutor
 
 
 def test_registry_names():
-    assert set(TOOLSETS) == {"files", "shell"}
+    assert set(TOOLSETS) == {"files", "shell", "notes"}
+    # notes stays out of the default: on by default would let every task
+    # write into every other task's memory from the day it is created.
     assert DEFAULT_TOOLSETS == ["files", "shell"]
 
 
@@ -114,3 +116,64 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
     assert unknown.error and "fly" in unknown.text
     bad_args = await ex.execute(ToolCall(id="3", name="read_file", arguments={}))
     assert bad_args.error
+
+
+import sys
+
+from poieo.tools import Hands, Isolation, make_executor
+
+
+async def test_local_executor_works_as_a_context_manager(tmp_path):
+    (tmp_path / "a.txt").write_text("data")
+    async with LocalExecutor(tmp_path, DEFAULT_TOOLSETS) as ex:
+        result = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "a.txt"}))
+    assert result.text == "data"
+
+
+async def test_make_executor_returns_local_without_hands(tmp_path):
+    assert isinstance(make_executor(tmp_path, DEFAULT_TOOLSETS), LocalExecutor)
+
+
+def test_make_executor_does_not_import_docker_without_isolation(tmp_path, monkeypatch):
+    """The import lives inside the isolation branch, so the common path stays cheap.
+
+    monkeypatch.delitem, not sys.modules.pop: a bare pop would leave the module
+    unloaded for whatever test runs next, and re-importing it later would build
+    a second DockerExecutor class that fails identity checks.
+    """
+    monkeypatch.delitem(sys.modules, "poieo.tools.docker", raising=False)
+    make_executor(tmp_path, DEFAULT_TOOLSETS)
+    assert "poieo.tools.docker" not in sys.modules
+
+
+def test_make_executor_returns_a_boxed_executor_with_isolation(tmp_path):
+    iso = Isolation(image="alpine:3.20")
+    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, Hands(isolation=iso))
+    assert type(ex).__name__ == "DockerExecutor"
+    assert ex.isolation == iso
+
+
+def test_isolation_defaults_to_no_network():
+    assert Isolation(image="x").network == "none"
+
+
+def test_docker_available_treats_an_empty_version_as_unavailable(monkeypatch):
+    """`docker info` exits 0 with an unreachable daemon on Windows and writes the
+    failure to stderr, so the exit code alone says "available" when it is not.
+
+    Left uncaught, the user is told to `docker pull` an image at 3am when the
+    real problem is that docker is not running.
+    """
+    import subprocess
+
+    from poieo.tools import docker as docker_module
+
+    class _Done:
+        returncode = 0
+        stdout = "\n"
+        stderr = 'error during connect: open //./pipe/dockerDesktopLinuxEngine'
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
+    ok, reason = docker_module.docker_available()
+    assert not ok
+    assert "not running" in reason

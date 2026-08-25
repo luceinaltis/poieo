@@ -1,0 +1,11 @@
+# Half of a project that remembers. The memory/ folder beside this card is
+# read before every run: the page whole, then entries chosen for this card --
+# here batch-cap (scoped to it) and rate-limits (global), never old-batch-cap
+# (set aside). `poieo memory examples/remembering/importer.yaml` shows the
+# exact block.
+name: import the feeds
+folder: notebook
+every: 1h
+binding: ../bindings/mock.yaml
+prompt: |
+  Pull the feeds listed in feeds.md into the notebook, in batches.

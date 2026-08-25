@@ -3,6 +3,7 @@
 version: 1
 store: .poieo
 binding: bindings/mock.yaml       # swap for bindings/claude.yaml or bindings/local.yaml
+# tasks: tasks/                   # uncomment to run tasks/*.yaml as well
 
 flows:
   # Fires on a fixed period. A run that overruns its period skips the missed

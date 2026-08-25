@@ -67,6 +67,7 @@ async def execute(
     run_id: str | None = None,
     cancel: asyncio.Event | None = None,
     workdir: Path | None = None,
+    hands: Any = None,
     finalize: Callable[[RunResult], Awaitable[None]] | None = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
@@ -90,6 +91,7 @@ async def execute(
         iteration=iteration,
         cancel=cancel,
         workdir=workdir,
+        hands=hands,
     )
 
     started_at = utcnow()

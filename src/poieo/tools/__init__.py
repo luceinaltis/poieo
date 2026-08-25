@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Literal, Sequence
+
+from pydantic import BaseModel, ConfigDict
 
 from ..errors import PoieoError
 from ..providers.base import ToolCall, ToolDef
@@ -34,18 +36,58 @@ class Tool:
     run: Callable[[Path, dict[str, Any]], Awaitable[str]]
 
 
-class LocalExecutor:
-    """Runs tool calls directly on this machine, confined to one workdir.
+class Isolation(BaseModel):
+    """Where a task's shell commands may run.
 
-    The executor is the seam a future container-backed implementation slots
-    into: same definitions(), same execute(), different blast radius.
+    Deliberately backend-neutral and free of Docker words: a task's
+    ``isolation:`` block parses into this, and everything downstream -- the
+    factory, the box, the executor -- sees only this shape.
     """
 
-    def __init__(self, workdir: Path, toolsets: "Sequence[str]"):
-        self.workdir = workdir
-        self.tools: dict[str, Tool] = {}
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    image: str
+    network: Literal["none", "bridge"] = "none"
+    user: str | None = None
+
+
+@dataclass(slots=True)
+class Hands:
+    """Everything an agent node's tools need beyond a workdir and a toolset.
+
+    One object rather than one parameter each. Three separate ones -- where
+    commands may run, which boxes are kept, who may be told -- had reached the
+    point of being threaded through five modules apiece, and the next feature
+    would have added a fourth. What travels between the daemon and the factory
+    is this; what each field holds is nobody else's business, which is why two
+    of them are deliberately opaque.
+    """
+
+    isolation: Isolation | None = None
+    # The daemon's box keeper and this task's postbox. Untyped on purpose: only
+    # the tools package may know what they are.
+    boxes: Any = None
+    postbox: Any = None
+
+
+class Executor:
+    """Tool lookup, failure-to-text, and a lifecycle that costs nothing by default.
+
+    Subclasses differ in *where* the tools run, never in what a caller does
+    with them: ``async with``, then ``definitions()`` and ``execute()``.
+    """
+
+    workdir: Path
+    tools: dict[str, Tool]
+
+    def _load(self, toolsets: "Sequence[str]", postbox: Any = None) -> None:
+        self.tools = {}
         for name in toolsets:
-            for tool in TOOLSETS[name]:
+            entry = TOOLSETS[name]
+            # A toolset that must know who is running it is a factory, and is
+            # built per executor. The rest are shared module-level lists.
+            tools = entry(postbox) if callable(entry) else entry
+            for tool in tools:
                 self.tools[tool.definition.name] = tool
 
     def definitions(self) -> list[ToolDef]:
@@ -62,11 +104,97 @@ class LocalExecutor:
         except Exception as exc:  # a bad argument shape must not kill the run
             return ToolResult(f"{type(exc).__name__}: {exc}", error=True)
 
+    async def __aenter__(self) -> "Executor":
+        return self
+
+    async def __aexit__(self, *_exc_info: Any) -> None:
+        return None
+
+
+class LocalExecutor(Executor):
+    """Runs tool calls directly on this machine, confined to one workdir.
+
+    The default, and the one with nothing to set up or tear down -- its
+    lifecycle is inherited and does nothing.
+    """
+
+    def __init__(
+        self, workdir: Path, toolsets: "Sequence[str]", hands: "Hands | None" = None
+    ):
+        self.workdir = workdir
+        self._load(toolsets, hands.postbox if hands else None)
+
+
+def make_box_keeper() -> Any:
+    """The thing that keeps boxes between runs, shared across tasks.
+
+    Returned as ``Any`` on purpose: the daemon holds it and hands it back, and
+    nothing between here and the executor may learn what is inside it.
+    """
+    from .docker import BoxKeeper
+
+    return BoxKeeper()
+
+
+async def sweep_boxes(days: int = 7) -> int:
+    """Reclaim boxes an earlier poieo left behind. Returns how many went.
+
+    A clean shutdown removes every box it owns, so anything still standing
+    is from a crash, a power cut, or a kill -9. Swept at startup rather than
+    on a timer, because that is the only moment the answer can change.
+
+    Safe to run beside another daemon: a box it owns and is older than the
+    cutoff would be removed, and rebuilt on that task's next run. A box is
+    derived state, so the cost of being wrong here is one rebuild.
+    """
+    from datetime import timedelta
+
+    from .docker import sweep
+
+    return await sweep(older_than=timedelta(days=days))
+
+
+def make_executor(
+    workdir: Path, toolsets: "Sequence[str]", hands: Hands | None = None
+) -> Executor:
+    """The one place that decides where an agent node's tools run.
+
+    Callers hand over a setting and use what comes back, so nothing upstream
+    of here names a backend. The Docker import sits inside the branch: a
+    machine that never isolates never pays to load it.
+    """
+    isolation = hands.isolation if hands else None
+    if isolation is None:
+        return LocalExecutor(workdir, toolsets, hands)
+    from .docker import DockerExecutor
+
+    # With a keeper the box is the task's and survives the run; without one
+    # the executor makes its own and destroys it, which is `poieo run`.
+    boxes = hands.boxes if hands else None
+    box = boxes.get(workdir, isolation) if boxes is not None else None
+
+    return DockerExecutor(
+        workdir,
+        toolsets,
+        image=isolation.image,
+        network=isolation.network,
+        user=isolation.user,
+        box=box,
+        hands=hands,
+    )
+
 
 # Import toolset modules after Tool is defined, since they import Tool from this module
 # (same pattern as pydantic's late rebuild)
 from .files import FILES_TOOLS  # noqa: E402
+from .notes import notes_tools  # noqa: E402
 from .shell import SHELL_TOOLS  # noqa: E402
 
-TOOLSETS: dict[str, list[Tool]] = {"files": FILES_TOOLS, "shell": SHELL_TOOLS}
+# A value is either a fixed list, or a factory taking the postbox for a
+# toolset that has to know who is running it.
+TOOLSETS: dict[str, Any] = {
+    "files": FILES_TOOLS,
+    "shell": SHELL_TOOLS,
+    "notes": notes_tools,
+}
 DEFAULT_TOOLSETS: list[str] = ["files", "shell"]

@@ -1,0 +1,10 @@
+# The other half. It does not watch build-docs; it just reads its own journal,
+# where a note from build-docs turns up under "new since you last worked".
+name: check the links
+folder: ..
+enabled: false
+every: 1h
+tools: [files, shell, notes]
+prompt: |
+  Check the links in this folder's markdown. If build-docs left you a note
+  about changed links, start with those.

@@ -185,8 +185,15 @@ class _Evaluator(ast.NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         target = self.visit(node.value)
-        if isinstance(target, Mapping) and node.attr in target:
-            return target[node.attr]
+        if isinstance(target, Mapping):
+            if node.attr in target:
+                return target[node.attr]
+            if not hasattr(target, node.attr):
+                # Say what was actually there. A template naming a key the run
+                # does not carry is the commonest authoring mistake, and
+                # "journal" on its own tells nobody anything.
+                known = ", ".join(sorted(str(k) for k in target)) or "nothing"
+                raise ExpressionError(f"no '{node.attr}' here; this has: {known}")
         if isinstance(target, _ATTR_SAFE_TYPES):
             try:
                 return getattr(target, node.attr)

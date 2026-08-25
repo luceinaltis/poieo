@@ -45,7 +45,9 @@ into the same binding mechanism as an option, never as a prerequisite.
 ### 4. Everything is a file, everything is inspectable
 
 Graphs, bindings, task configuration, and run history are all human-readable
-files (YAML/JSONL). There is no database. Everything versions with git, and
+files (YAML/JSONL). There is no database of record — at most a derived index
+under `.poieo/`, rebuilt from the files at any time and safe to delete.
+Everything that means something versions with git, and
 the CLI and web UI read the same files — work started in one interface can be
 continued in any other.
 
@@ -120,6 +122,9 @@ What poieo offers the user stacks in layers:
 | **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
 | **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | next |
+| **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
+| **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
+| **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | after that |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
@@ -158,7 +163,10 @@ Autonomous execution needs explicit fences:
 
 - **Not a multi-user service.** One person's machine, that person's work.
   No auth, no permissions, no team features.
-- **No database.** Files are the source of truth.
+- **No database of record.** Files are the sole source of truth. A derived
+  index may exist under `.poieo/`, gitignored, rebuilt from the files at any
+  time; deleting it loses nothing, and nothing is ever true because the
+  index says so.
 - **Not a general-purpose agent framework.** The goal is not to compete with
   LangChain-style abstraction stacks, but to complete one experience: *my
   work keeps running on my machine*. Node types and tools grow only as far
@@ -181,9 +189,28 @@ Autonomous execution needs explicit fences:
    reviewable change; the board shows the diff and accepts or discards it.
    This is where the daemon stops being something you have to trust blindly.
    (`docs/superpowers/specs/2026-08-22-nightly-review-design.md`)
-4. **Web control plane** — task card CRUD and flow control (REST API); fold
+4. **The task card** — a task becomes one file (a name, a folder, a prompt),
+   and it keeps a journal of what it did and what the user told it, which it
+   reads before every run. This is what principle 2 promises and what the
+   board edits.
+   (`docs/superpowers/specs/2026-08-22-task-cards-design.md`)
+5. **Isolation** — a task can opt into running its commands in a container
+   that sees its folder and nothing else of the machine. The shell was the
+   one tool that could reach past path confinement; this closes it.
+   (`docs/superpowers/specs/2026-08-22-container-isolation-design.md`)
+6. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause.
-5. **Beyond (candidates)** — container isolation (Docker); delegating steps to
-   external agent CLIs (Claude Code, etc.); fan-out steps; dependencies
-   between tasks (roadmap ordering); run-log retention.
+7. **Tasks that work together** — a task can leave a line in another task's
+   journal, read on that task's next run. News, not orders, and no way to
+   spin: a note wakes nobody.
+   (`docs/superpowers/specs/2026-08-23-task-notes-design.md`)
+8. **A long memory** — the project keeps one page that is always in front of
+   every task, and a folder of things it has learned; every piece of work
+   leaves a full record behind, so anything remembered can be traced to the
+   run that taught it.
+   (`docs/superpowers/specs/2026-08-24-project-memory-design.md`)
+9. **Beyond (candidates)** — delegating steps to external agent CLIs
+   (Claude Code, etc.); fan-out steps; run-log retention; stronger isolation
+   backends (microVM, or the OS-level primitives Landlock and Seatbelt)
+   behind the same seam.

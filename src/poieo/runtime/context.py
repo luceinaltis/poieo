@@ -14,6 +14,7 @@ from ..expr import unwrap, wrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
+from ..tools import Hands
 
 
 def new_run_id() -> str:
@@ -42,6 +43,10 @@ class RunContext:
     cancel: asyncio.Event | None = None
     # Where agent nodes work unless they name a directory of their own.
     workdir: Path | None = None
+    # What those tools may reach, and who they may tell. The runtime carries
+    # it and never opens it -- which is how it stays unaware that containers,
+    # or journals, exist at all.
+    hands: Hands | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

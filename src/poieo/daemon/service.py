@@ -11,12 +11,17 @@ from typing import Any, Callable
 
 from ..checkpoint import Checkpoint, CheckpointError
 from ..errors import PoieoError, SpecError
+from ..learn import learn as learn_pass
+from ..memory import memory_root
 from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import Event, RunStore
+from ..task import record_run
+from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
+from .triggers import _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
 
@@ -54,6 +59,7 @@ class FlowRunner:
         store: RunStore,
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
+        hands: Any = None,
     ):
         self.flow = flow
         self.config = config
@@ -75,6 +81,9 @@ class FlowRunner:
             else None
         )
         self._tracking = False
+        # Where this task's tools work. Built by the daemon, because the box
+        # keeper is shared across tasks and the roster is only known there.
+        self.hands = hands
 
     @property
     def name(self) -> str:
@@ -165,11 +174,13 @@ class FlowRunner:
                     run_id=run_id,
                     cancel=self.cancel,
                     workdir=workdir,
+                    hands=self.hands,
                     finalize=self._close_change,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None
             self.results.append(result)
+            self._remember(result)
             if self.flow.spec.carry_state:
                 self.state = result.state
 
@@ -198,6 +209,11 @@ class FlowRunner:
 
         log.info("flow '%s' stopped", self.name)
 
+    def _remember(self, result: RunResult) -> None:
+        task = self.config.tasks_by_flow.get(self.name)
+        if task is not None:
+            record_run(task, result)
+
 
 class Daemon:
     """Owns the provider pools, the flow tasks, and the shutdown handshake."""
@@ -221,7 +237,49 @@ class Daemon:
         self.cancel = asyncio.Event()
         # One pool per distinct binding file: clients are reused across flows.
         self.pools: dict[str, ProviderPool] = {}
+        # One box per distinct folder-and-settings, for the same reason.
+        self.boxes: Any = (
+            make_box_keeper()
+            if any(f.spec.isolation for f in self.flows)
+            else None
+        )
         self.runners: list[FlowRunner] = []
+
+    def _postbox_for(self, flow: LoadedFlow) -> Any:
+        """A task that took the notes toolset gets one; nobody else does."""
+        task = self.config.tasks_by_flow.get(flow.spec.name)
+        if task is None or "notes" not in (task.tools or []):
+            return None
+        from ..tools.notes import Postbox
+
+        return Postbox(
+            sender=flow.spec.name,
+            recipients={
+                name: other.journal_path()
+                for name, other in self.config.tasks_by_flow.items()
+            },
+        )
+
+    def _hands_for(self, flow: LoadedFlow) -> Hands:
+        return Hands(
+            isolation=flow.spec.isolation,
+            boxes=self.boxes,
+            postbox=self._postbox_for(flow),
+        )
+
+    def _runners(self) -> list[FlowRunner]:
+        return [
+            FlowRunner(
+                flow,
+                self.config,
+                self._pool_for(flow),
+                self.store,
+                self.cancel,
+                self.on_run,
+                self._hands_for(flow),
+            )
+            for flow in self.flows
+        ]
 
     def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
         if flow.binding_key not in self.pools:
@@ -231,6 +289,52 @@ class Daemon:
     def stop(self) -> None:
         """Request a graceful shutdown; in-flight runs finish their current node."""
         self.cancel.set()
+
+    # -- learning while nothing else is running ------------------------------
+
+    def _ready_to_learn(self) -> bool:
+        """Double opt-in (the config key and the folder), and learning
+        always yields to work: not one runner may be mid-run."""
+        if self.config.learn is None or not self.config.tasks:
+            return False
+        if not memory_root(self.config.resolve_path(self.config.tasks)).is_dir():
+            return False
+        return all(runner.status == "waiting" for runner in self.runners)
+
+    async def _learn_once(self, spec: Any, pool: ProviderPool) -> None:
+        """One guarded attempt. Nothing that happens here may take the
+        daemon down -- the box-sweep rule, applied continuously."""
+        project = self.config.resolve_path(self.config.tasks)
+        try:
+            result = await learn_pass(project, spec, pool)
+        except Exception as exc:
+            log.warning("the learning pass failed: %s", exc)
+            return
+        if result is None:
+            return
+        if result.error is not None:
+            log.warning("the learning pass failed and will reread: %s", result.error)
+        else:
+            log.info(
+                "learned from %d record(s): kept %d, set aside %d",
+                result.read,
+                len(result.kept),
+                len(result.set_aside),
+            )
+
+    async def _learning_loop(self) -> None:
+        from ..binding import load_binding
+
+        try:
+            interval = parse_duration(self.config.learn)
+            spec = load_binding(self.config.resolve_path(self.config.binding))
+        except Exception as exc:
+            log.warning("learning is off: %s", exc)
+            return
+        async with ProviderPool(spec) as pool:
+            while await _sleep_or_cancel(interval, self.cancel):
+                if self._ready_to_learn():
+                    await self._learn_once(spec, pool)
 
     def _install_signals(self) -> None:
         loop = asyncio.get_running_loop()
@@ -272,17 +376,22 @@ class Daemon:
             web_task = asyncio.create_task(server.serve())
             log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
 
-        self.runners = [
-            FlowRunner(
-                flow,
-                self.config,
-                self._pool_for(flow),
-                self.store,
-                self.cancel,
-                self.on_run,
-            )
-            for flow in self.flows
-        ]
+        if self.boxes is not None:
+            # Whatever an earlier poieo left behind after a crash. Boxes it
+            # owned itself are already gone -- shutdown removes them.
+            try:
+                reclaimed = await sweep_boxes()
+                if reclaimed:
+                    log.info("reclaimed %d abandoned environment(s)", reclaimed)
+            except Exception as exc:
+                # Tidying is never worth refusing to start over.
+                log.warning("could not reclaim old environments: %s", exc)
+
+        self.runners = self._runners()
+        learn_task = None
+        if self.config.learn is not None:
+            learn_task = asyncio.create_task(self._learning_loop())
+            log.info("learning every %s, while nothing else is running", self.config.learn)
         log.info(
             "poieo daemon up: %d flow(s), store at %s",
             len(self.runners),
@@ -301,12 +410,19 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
+            if learn_task is not None:
+                try:
+                    await asyncio.wait_for(learn_task, timeout=5)
+                except (asyncio.TimeoutError, Exception):
+                    learn_task.cancel()
             if web_task is not None:
                 server.should_exit = True
                 try:
                     await asyncio.wait_for(web_task, timeout=5)
                 except (asyncio.TimeoutError, Exception):
                     web_task.cancel()
+            if self.boxes is not None:
+                await self.boxes.aclose()
             for pool in self.pools.values():
                 await pool.aclose()
             log.info("poieo daemon down")
