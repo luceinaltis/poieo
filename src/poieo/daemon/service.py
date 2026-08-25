@@ -17,7 +17,7 @@ from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import Event, RunStore
-from ..task import record_run
+from ..task import append_journal, record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
@@ -48,6 +48,12 @@ def _change_message(result: RunResult, flow: str) -> str:
     return f"poieo {flow} {result.run_id}"
 
 
+# Staying up is the default; staying up while failing identically is not
+# resilience, it is noise. A constant, not a setting -- a knob nobody asked
+# for would be configuration for its own sake.
+PAUSE_AFTER = 3
+
+
 class FlowRunner:
     """Drives one flow: trigger -> run -> carry state -> repeat."""
 
@@ -72,6 +78,9 @@ class FlowRunner:
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
+        # Consecutive failures sharing one cause; a completed run resets it.
+        self._repeat_key: str | None = None
+        self._repeat_count: int = 0
         self.current_run_id: str | None = None
         # A flow that says where it works keeps a private copy of it.
         workdir = config.workdir_path(flow.spec)
@@ -184,6 +193,7 @@ class FlowRunner:
             if self.flow.spec.carry_state:
                 self.state = result.state
 
+            pause = self._note_outcome(result)
             if result.status == "completed":
                 log.info(
                     "flow '%s' run %s completed in %d step(s) [%s]",
@@ -207,7 +217,51 @@ class FlowRunner:
             if self.on_run:
                 self.on_run(self.name, result)
 
+            if pause:
+                said = (result.cause or {}).get("said") or result.error or "the same failure"
+                log.error(
+                    "flow '%s' paused after %d identical failures: %s",
+                    self.name, PAUSE_AFTER, said,
+                )
+                self._journal_pause(said)
+                self.status = "paused"
+                break
+
         log.info("flow '%s' stopped", self.name)
+
+    def _note_outcome(self, result: Any) -> bool:
+        """Track consecutive identical failures; True when it is time to pause.
+
+        "Identical" means the same cause slug -- or the same raw error text
+        when nothing classified -- so Ollama down at 2am counts as one thing
+        however its message varies, while a genuinely new failure restarts
+        the count.
+        """
+        if result.status == "completed":
+            self._repeat_key, self._repeat_count = None, 0
+            return False
+        key = (result.cause or {}).get("slug") or result.error or result.status
+        if key == self._repeat_key:
+            self._repeat_count += 1
+        else:
+            self._repeat_key, self._repeat_count = key, 1
+        return self._repeat_count >= PAUSE_AFTER
+
+    def _journal_pause(self, said: str) -> None:
+        """The reason must survive to the morning, beside the failures."""
+        task = self.config.tasks_by_flow.get(self.name)
+        if task is None:
+            return
+        try:
+            append_journal(
+                task.journal_path(),
+                "failed",
+                f"paused after {PAUSE_AFTER} identical failures: {said}. "
+                f"Fix the cause and restart the daemon.",
+                title=task.name,
+            )
+        except OSError as exc:
+            log.warning("task '%s': could not journal the pause: %s", self.name, exc)
 
     def _remember(self, result: RunResult) -> None:
         task = self.config.tasks_by_flow.get(self.name)
