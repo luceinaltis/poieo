@@ -127,6 +127,18 @@ const HAMMER_LONG = 0.34
  */
 const HAMMER_CLEAR = HAMMER_LONG
 
+/**
+ * How far toward the floor a resting arm is pulled.
+ *
+ * Not a pose, a correction. The idle clip was captured on a body whose arms
+ * hung by its sides and retargeted onto one generated in an A-pose, and the
+ * difference survives: this rig's hand ends up 0.28 above the hips and 0.55
+ * out, where the previous smith's was 0.13 and 0.40 -- a man standing at his
+ * anvil with his palms up. Half way down reads as a smith waiting rather than
+ * as one being measured for a coat.
+ */
+const ARM_TUCK = 0.5
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -506,6 +518,20 @@ export function makeBench(
   const swinging = new THREE.Quaternion()
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
+  // The upper arms, and the wrist each one ends at, for the resting tuck.
+  const arms = ["Left", "Right"]
+    .map((side) => ({
+      bone: figure.getObjectByName(`${side}Arm`),
+      wrist: figure.getObjectByName(`${side}Hand`),
+    }))
+    .filter((arm) => arm.bone?.parent && arm.wrist)
+  const from = new THREE.Vector3()
+  const to = new THREE.Vector3()
+  const hangs = new THREE.Vector3()
+  const wanted = new THREE.Vector3()
+  const DOWNWARD = new THREE.Vector3(0, -1, 0)
+  const tucking = new THREE.Quaternion()
+  const spare = new THREE.Quaternion()
   const turned = new THREE.Quaternion()
   // Up in the room, carried into the forearm's frame by tick() below.
   const skyward = new THREE.Vector3()
@@ -741,9 +767,31 @@ export function makeBench(
       forearm.getWorldQuaternion(turned)
       skyward.set(0, 1, 0).applyQuaternion(turned.invert())
       hanging.setFromUnitVectors(HANDLE, skyward)
-      hammer.holder.quaternion
-        .copy(hanging)
-        .slerp(swinging, acts.working.getEffectiveWeight())
+      const working = acts.working.getEffectiveWeight()
+      hammer.holder.quaternion.copy(hanging).slerp(swinging, working)
+
+      // And his arms come down. The clip was captured on a body whose arms
+      // hung, and retargeted onto one generated in an A-pose, which leaves the
+      // hands a quarter of a metre higher and half again as far out as they
+      // should be -- a man standing at his anvil with his palms up. Rather
+      // than name an axis, which differs per rig, ask where the arm points now
+      // and turn it toward the floor. An arm already hanging barely moves.
+      const tuck = 1 - working
+      if (tuck > 0.01) {
+        for (const arm of arms) {
+          arm.bone.getWorldPosition(from)
+          arm.wrist.getWorldPosition(to)
+          if (from.distanceToSquared(to) < 1e-9) continue
+          hangs.copy(to).sub(from).normalize()
+          wanted.copy(hangs).lerp(DOWNWARD, ARM_TUCK * tuck).normalize()
+          tucking.setFromUnitVectors(hangs, wanted)
+          arm.bone.parent.getWorldQuaternion(turned)
+          arm.bone.quaternion.premultiply(
+            spare.copy(turned).invert().multiply(tucking).multiply(turned),
+          )
+          arm.bone.updateWorldMatrix(false, true)
+        }
+      }
 
       // Sparks fly for a moment after the hammer lands. Measured around the
       // loop: the blow lands a tenth of a second before the clip's seam, and
