@@ -27,15 +27,15 @@ flag → `find_project().store_path()` → `Path(".poieo")`.
 
 Tests (`tests/test_project.py`, plus `tests/test_cli.py` additions):
 
-- [ ] `find_project` finds `poieo.yaml` in the start dir; in a parent; returns
+- [x] `find_project` finds `poieo.yaml` in the start dir; in a parent; returns
       `None` when absent all the way up.
-- [ ] nearest file wins when two ancestors both hold one.
-- [ ] `poieo runs list` with no `--store` and no project exits cleanly with
+- [x] nearest file wins when two ancestors both hold one.
+- [x] `poieo runs list` with no `--store` and no project exits cleanly with
       "no runs recorded" — the current `TypeError` traceback, pinned first as
       a failing test.
-- [ ] `poieo runs list` with no `--store` inside a tmp project reads the
+- [x] `poieo runs list` with no `--store` inside a tmp project reads the
       project's store.
-- [ ] the empty-store message names the directory it searched.
+- [x] the empty-store message names the directory it searched.
 
 Steps: failing tests → run to see them fail → implement → suite green →
 self-review → PR `feat: a poieo.yaml marks a project; runs commands find its store`.
@@ -57,16 +57,16 @@ discovered `poieo.yaml`, else fail naming `poieo init`.
 
 Tests:
 
-- [ ] `poieo run card.yaml` with no `-b`, card silent, inside a project whose
+- [x] `poieo run card.yaml` with no `-b`, card silent, inside a project whose
       `poieo.yaml` names the mock binding: runs, and the output contains
       `(from` — the transparency line.
-- [ ] flag still beats project; card still beats project.
-- [ ] outside a project the failure message names `poieo init`.
-- [ ] `poieo run` on a card inside a project writes the run log into the
+- [x] flag still beats project; card still beats project.
+- [x] outside a project the failure message names `poieo init`.
+- [x] `poieo run` on a card inside a project writes the run log into the
       project store, not beside the card.
-- [ ] `poieo check` with no `-b` inside the project probes the project's
+- [x] `poieo check` with no `-b` inside the project probes the project's
       binding; outside, fails in the product's voice.
-- [ ] `poieo daemon --once` with no argument inside a project runs it;
+- [x] `poieo daemon --once` with no argument inside a project runs it;
       outside, fails naming `poieo init`. Same for `poieo flows`.
 
 PR `feat: run, check, learn and the daemon read the project's poieo.yaml`.
@@ -95,13 +95,13 @@ PR `feat: run, check, learn and the daemon read the project's poieo.yaml`.
 
 Tests (network probe stubbed):
 
-- [ ] empty dir + no key + no ollama → mock default; the generated project
+- [x] empty dir + no key + no ollama → mock default; the generated project
       passes `load_config`; `poieo run tasks/hello.yaml` completes offline.
-- [ ] `ANTHROPIC_API_KEY` set → default binding names the anthropic provider.
-- [ ] ollama stub answering with a model → ollama binding naming it.
-- [ ] second `init` reports `kept` for every file and changes nothing
+- [x] `ANTHROPIC_API_KEY` set → default binding names the anthropic provider.
+- [x] ollama stub answering with a model → ollama binding naming it.
+- [x] second `init` reports `kept` for every file and changes nothing
       (byte-compare).
-- [ ] `.gitignore` gains the line once, keeps existing content, and a third
+- [x] `.gitignore` gains the line once, keeps existing content, and a third
       run does not duplicate it.
 
 PR `feat: poieo init writes a working project from what the machine has`.
