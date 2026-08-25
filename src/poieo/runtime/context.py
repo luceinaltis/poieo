@@ -119,6 +119,9 @@ class RunResult:
     outputs: dict[str, Any]
     state: dict[str, Any]
     error: str | None = None
+    # The failure in the user's words ({slug, said, fix}), when one of the
+    # known causes matched. The raw error above is always kept beside it.
+    cause: dict[str, Any] | None = None
     iteration: int = 0
     # Set after the run by the daemon when the flow keeps a private copy.
     change: dict[str, Any] | None = None
@@ -140,4 +143,6 @@ class RunResult:
         # and the difference matters to the card that reads this.
         if self.change is not None:
             summary["change"] = self.change
+        if self.cause is not None:
+            summary["cause"] = self.cause
         return summary
