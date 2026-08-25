@@ -8,7 +8,7 @@ from poieo.graph import GraphSpec, load_graph
 from poieo.providers import ProviderPool
 from poieo.runtime.executor import execute, preflight
 from poieo.store import NullStore
-from poieo.errors import BindingError
+from poieo.errors import BindingError, SpecError
 
 
 def mock_binding(responses, fallback=""):
@@ -314,7 +314,7 @@ async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
 async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
     graph = load_graph(EXAMPLES / "graphs/agent-task.yaml")
     binding = load_binding(EXAMPLES / "bindings/mock.yaml")
-    result = await run_graph(graph, binding, input={"workdir": str(tmp_path)})
+    result = await run_graph(graph, binding, workdir=tmp_path)
     assert result.status == "completed"
     assert (tmp_path / "TODO.md").exists()
 
@@ -414,6 +414,77 @@ async def test_agent_node_emits_a_turn_event_per_model_turn(tmp_path):
     assert turns[0].data["thinking"] == "let me see"
     assert turns[1].data["text"] == "all done"
     assert turns[1].data["tool_call_count"] == 0
+
+
+def agent_graph_without_workdir(**node_overrides):
+    node = {
+        "id": "work",
+        "type": "agent",
+        "role": "worker",
+        "prompt": "do it",
+        "output": {"as": "report"},
+    }
+    node.update(node_overrides)
+    return GraphSpec.model_validate({"name": "ag", "entry": "work", "nodes": [node]})
+
+
+def writes_a_file(name="made.txt"):
+    return mock_binding(
+        {
+            "worker": [
+                {
+                    "tool_calls": [
+                        {
+                            "name": "write_file",
+                            "arguments": {"path": name, "content": "hi"},
+                        }
+                    ]
+                },
+                "done",
+            ]
+        }
+    )
+
+
+async def test_agent_node_inherits_the_run_workdir(tmp_path):
+    # The graph says what the work is; the flow says where it happens. A graph
+    # that hardcodes a path cannot be moved to another machine.
+    result = await run_graph(
+        agent_graph_without_workdir(), writes_a_file(), workdir=tmp_path
+    )
+
+    assert result.status == "completed"
+    assert (tmp_path / "made.txt").read_text(encoding="utf-8") == "hi"
+
+
+async def test_node_workdir_overrides_the_run_workdir(tmp_path):
+    chosen = tmp_path / "chosen"
+    chosen.mkdir()
+
+    result = await run_graph(agent_graph(chosen), writes_a_file(), workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert (chosen / "made.txt").exists()
+    assert not (tmp_path / "made.txt").exists()
+
+
+def test_preflight_rejects_an_agent_node_with_nowhere_to_work():
+    with pytest.raises(SpecError, match="work"):
+        preflight(agent_graph_without_workdir(), mock_binding({"worker": "hi"}))
+
+
+def test_preflight_accepts_a_run_workdir_on_the_nodes_behalf(tmp_path):
+    preflight(
+        agent_graph_without_workdir(), mock_binding({"worker": "hi"}), workdir=tmp_path
+    )
+
+
+async def test_a_run_with_nowhere_to_work_fails_before_the_model(tmp_path):
+    binding = writes_a_file()
+    # Misconfiguration raises rather than becoming a failed run: it is not
+    # flaky, and it must surface before a single token is spent.
+    with pytest.raises(SpecError):
+        await run_graph(agent_graph_without_workdir(), binding)
 
 
 async def test_the_executor_is_torn_down_even_when_the_node_fails(tmp_path, monkeypatch):

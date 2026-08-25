@@ -100,9 +100,11 @@ def test_agent_node_parses_with_defaults():
     assert node.tools is None  # None means every toolset
 
 
-def test_agent_node_requires_workdir():
-    with pytest.raises(ValidationError, match="workdir"):
-        GraphSpec.model_validate(_agent_graph(workdir=None))
+def test_agent_node_may_leave_workdir_to_the_flow():
+    # Where the work happens is physical, and the graph is the logical layer.
+    # A missing workdir is now preflight's business, not the schema's.
+    graph = GraphSpec.model_validate(_agent_graph(workdir=None))
+    assert graph.node("work").workdir is None
 
 
 def test_agent_node_rejects_unknown_toolset():

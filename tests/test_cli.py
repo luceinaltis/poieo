@@ -2,6 +2,8 @@ import json
 
 from typer.testing import CliRunner
 
+from test_checkpoint import make_repo
+
 from conftest import EXAMPLES
 from poieo.cli import app
 
@@ -573,3 +575,96 @@ def test_daemon_folder_stores_beside_the_cards(tmp_path):
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
     assert (folder / ".poieo" / "runs").is_dir()
+
+
+# -- where the work happens ---------------------------------------------------
+#
+# A graph is the logical layer and may leave its workdir open. A flow in a
+# daemon config may not: a directory that is not there has to be refused at
+# load, rather than discovered when the cron fires at 3am.
+
+
+def flow_config(tmp_path, workdir):
+    (tmp_path / "b.yaml").write_text(
+        "providers: {p: {type: mock}}" + chr(10) + "default: {provider: p, model: m}" + chr(10),
+        encoding="utf-8",
+    )
+    (tmp_path / "g.yaml").write_text(
+        "name: g" + chr(10)
+        + "entry: work" + chr(10)
+        + "nodes: [{id: work, type: agent, role: p, prompt: do it}]" + chr(10),
+        encoding="utf-8",
+    )
+    path = tmp_path / "d.yaml"
+    path.write_text(
+        "binding: b.yaml" + chr(10)
+        + f"flows: [{{name: chores, graph: g.yaml, workdir: {workdir}}}]" + chr(10),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_flows_fails_when_a_workdir_is_missing(tmp_path):
+    config = flow_config(tmp_path, "nowhere")
+
+    result = runner.invoke(app, ["flows", str(config)])
+
+    # Refused at load rather than discovered at 3am.
+    assert result.exit_code != 0
+    assert "workdir" in result.stderr  # errors go to stderr
+
+
+def test_flows_warns_when_the_work_cannot_be_reviewed(tmp_path):
+    (tmp_path / "project").mkdir()  # a real directory, but nothing tracks it
+    config = flow_config(tmp_path, "project")
+
+    result = runner.invoke(app, ["flows", str(config)])
+
+    # A degraded mode, not an error: the flow still runs tonight.
+    assert result.exit_code == 0
+    assert "reviewed or undone" in result.stdout
+
+
+def test_flows_is_quiet_when_the_work_can_be_reviewed(tmp_path):
+    make_repo(tmp_path)
+    config = flow_config(tmp_path, "project")
+
+    result = runner.invoke(app, ["flows", str(config)])
+
+    assert result.exit_code == 0
+    assert "reviewed or undone" not in result.stdout
+
+
+def test_run_takes_a_workdir_for_a_portable_graph(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(EXAMPLES / "graphs/agent-task.yaml"),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+            "--workdir",
+            str(tmp_path),
+            "--no-log",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    assert (tmp_path / "TODO.md").exists()
+
+
+def test_validate_accepts_a_graph_that_leaves_the_workdir_open():
+    # A graph is the logical layer: not saying where it runs is the point,
+    # not a defect. `validate` says what the graph will need, and passes.
+    result = runner.invoke(
+        app,
+        [
+            "validate",
+            str(EXAMPLES / "graphs/agent-task.yaml"),
+            "-b",
+            str(EXAMPLES / "bindings/mock.yaml"),
+        ],
+    )
+    assert result.exit_code == 0, result.stderr
+    assert "valid" in result.stdout
+    assert "workdir" in result.stdout  # but it says one will be needed
+    assert "work" in result.stdout  # and names the node that needs it

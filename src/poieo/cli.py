@@ -26,6 +26,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 from . import __version__
 from .binding import load_binding
+from .checkpoint import Checkpoint
 from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
@@ -33,7 +34,7 @@ from .graph import GraphSpec, load_graph
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import memory_report, memory_root, read_memory
 from .providers import ProviderPool
-from .runtime.executor import execute, preflight
+from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
 from .tools import Hands, Isolation
 from .task import (
@@ -181,9 +182,17 @@ def validate(
     typer.echo(f"entry      {graph.entry}")
     typer.echo(f"roles      {', '.join(sorted(graph.roles())) or '(none)'}")
 
+    homeless = needs_a_workdir(graph)
+    if homeless:
+        # Not a defect: a graph that names no directory is one that can move.
+        typer.echo(f"workdir    supplied at run time for {', '.join(homeless)}")
+
     if binding:
-        spec = load_binding(binding)
-        preflight(graph, spec)
+        try:
+            spec = load_binding(binding)
+            preflight(graph, spec, require_workdir=False)
+        except PoieoError as exc:
+            _fail(str(exc))
         typer.echo(f"binding    {spec.name}")
         for role in sorted(graph.roles()):
             typer.echo(f"           {spec.resolve(role).describe()}")
@@ -392,6 +401,9 @@ def run(
     set_: list[str] = typer.Option(
         [], "--set", "-s", help="Payload override, key=value. Repeatable."
     ),
+    workdir: Optional[Path] = typer.Option(
+        None, "--workdir", "-w", help="Where agent nodes work, if the graph leaves it open."
+    ),
     store: Optional[Path] = typer.Option(
         None, "--store",
         help="Run-log directory [default: beside the card, or ./.poieo].",
@@ -436,7 +448,13 @@ def run(
     async def _go():
         async with ProviderPool(spec) as pool:
             return await execute(
-                graph, spec, pool, run_store, input=payload, hands=hands
+                graph,
+                spec,
+                pool,
+                run_store,
+                input=payload,
+                workdir=workdir,
+                hands=hands,
             )
 
     result = asyncio.run(_go())
@@ -596,6 +614,14 @@ def flows(
         )
         for role in sorted(item.graph.roles()):
             typer.echo(f"        {item.binding.resolve(role).describe()}")
+
+        workdir = config.workdir_path(item.spec)
+        if workdir and not Checkpoint(workdir, item.spec.name, config.store_path()).available():
+            # Degraded, not broken: the flow still runs tonight.
+            typer.secho(
+                f"        note: changes in {workdir} can't be reviewed or undone",
+                fg=typer.colors.YELLOW,
+            )
 
 
 @app.command()

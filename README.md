@@ -443,10 +443,52 @@ poieo daemon examples/poieo.yaml     # stay up
 poieo daemon examples/poieo.yaml --once --flow triage
 ```
 
-While the daemon runs it serves a read-only observation page on
-`http://127.0.0.1:8484` (`--port` to change it, `--no-web` to turn it off).
-`GET /api/events` streams every run event live (SSE); `/api/flows` and
-`/api/runs` answer what is running and what already ran.
+While the daemon runs it serves a page on `http://127.0.0.1:8484` (`--port` to
+change it, `--no-web` to turn it off). It ships built, so there is nothing to
+install: open it to watch flows move, click one to read what it did turn by
+turn, and take or throw away what it left you. The picker in the corner switches
+skins; `ledger`, the plain one, is the default.
+
+Everything the page reads is plain HTTP too. `GET /api/events` streams every run
+event live (SSE), `/api/flows` and `/api/runs` answer what is running and what
+already ran, and `/api/runs/<id>/diff` shows what one run changed. Only two
+routes in the whole surface change anything, and they are the two below.
+
+To work on the page itself: `npm run build --workspace web-ui` refreshes what the
+daemon serves, `npm run dev --workspace web-ui` runs it on 5173 against a daemon
+on 8484, and `npm test --workspace web-ui` is its suite.
+
+## Work you look at in the morning
+
+A flow that names a `workdir` does not work in your project. It works in a
+private copy of it, and each run lands as one **change** carrying its own
+one-line summary of what it did.
+
+```yaml
+flows:
+  - name: chores
+    graph: graphs/agent-task.yaml
+    workdir: ../my-project      # where the work happens
+```
+
+Your project is never written to while you sleep. In the morning it is exactly
+as you left it, and the night's work is waiting:
+
+```bash
+curl     127.0.0.1:8484/api/flows                     # how much is waiting
+curl     127.0.0.1:8484/api/runs/<id>/diff            # what one run did
+curl -X POST 127.0.0.1:8484/api/flows/chores/accept   # take it
+curl -X POST 127.0.0.1:8484/api/flows/chores/discard  # throw it away
+```
+
+Accepting puts the work into your project. Discarding is recoverable -- nothing
+is ever thrown away for good. A run that found nothing to do is not a failure
+and leaves nothing to review, and a run that failed keeps its half-finished work
+aside instead of mixing it in.
+
+None of this is required. A flow with no `workdir` behaves exactly as it always
+has, and a `workdir` that nothing tracks still runs -- `poieo flows` says up
+front that its changes can't be reviewed or undone.
 
 ## Run logs
 
@@ -499,14 +541,22 @@ src/poieo/
   runtime/           context, node implementations, the graph walker
   daemon/            cron, triggers, flow config, the resident service
   store.py           append-only run log
+  checkpoint.py      the only module that knows git exists
+  web/               observation API, event fan-out, the built page
   cli.py             command line front end
+
+web-ui/              the page's source: state, skins, review
+  src/state/         events folded into one presentation-neutral model
+  src/skins/         how that model is drawn; adding one is a module and a line
+  src/review/        last night's work: the list, the diff, accept and discard
 ```
 
 ## Not built yet
 
 * The web editor. The graph schema is the contract it will produce; `poieo show --mermaid`
   renders a graph today.
-* A REST API for graph CRUD and run inspection.
+* Control from the page: pause, resume, run-now. The observation and review
+  surfaces are built; nothing yet starts or stops a flow from the browser.
 * Node types beyond `llm`, `router`, and `agent` (map/fan-out).
   `runtime/nodes.py` has a `NODE_TYPES` registry to add them to.
 

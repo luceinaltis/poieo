@@ -1,0 +1,132 @@
+.drawer {
+  background: #191612;
+  border-left: 1px solid #2e2820;
+  bottom: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  padding: 12px 16px;
+  position: fixed;
+  right: 0;
+  top: var(--bar-height);
+  width: min(440px, 100vw);
+}
+
+.drawer-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+/* Everything below the header scrolls together. Nested scroll panes inside a
+   fixed-height drawer are how content ends up unreachable. */
+.drawer-body {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  /* What a run said, what it changed, and why it failed are all worth
+     copying out of here. */
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.drawer-head h2 {
+  font-size: 1em;
+  margin: 0;
+}
+
+.drawer-head button,
+.drawer-run {
+  background: #221e18;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 3px 8px;
+}
+
+.drawer-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.drawer-run {
+  display: flex;
+  gap: 8px;
+}
+
+.drawer-run[data-picked="true"] {
+  border-color: #6b6257;
+}
+
+.drawer-summary,
+.drawer-empty {
+  color: #9a9086;
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.drawer-timeline {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.drawer-entry {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto 1fr;
+}
+
+.drawer-when {
+  color: #6b6257;
+  font-size: 0.75em;
+  white-space: nowrap;
+}
+
+.drawer-label {
+  font-size: 0.85em;
+}
+
+.drawer-entry[data-kind="node"] .drawer-label {
+  color: #9a9086;
+}
+
+.drawer-entry[data-error="true"] .drawer-label,
+.drawer-entry[data-error="true"] .drawer-text {
+  color: #d16d5a;
+}
+
+.drawer-text {
+  margin: 2px 0 0;
+}
+
+.drawer-thinking {
+  color: #9a9086;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .drawer {
+    border-left: 0;
+    width: 100vw;
+  }
+
+  /* Thumbs, not pointers. */
+  .drawer-head button,
+  .drawer-run,
+  .decide-take,
+  .decide-drop {
+    min-height: 34px;
+  }
+}

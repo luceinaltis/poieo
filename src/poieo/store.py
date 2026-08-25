@@ -92,6 +92,29 @@ class RunStore:
             rows.append(row)
         return rows
 
+    def run(self, run_id: str) -> dict[str, Any] | None:
+        """The index row for one run, or None if the store never saw it.
+
+        Scans the index rather than holding it: the log is append-only and a
+        long-lived daemon's is large, so building the whole list to find one
+        row costs memory nobody needed.
+        """
+        if not self.index_path.exists():
+            return None
+        found: dict[str, Any] | None = None
+        with self.index_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or run_id not in line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("run_id") == run_id:
+                    found = row  # keep the newest; a run may be re-recorded
+        return found
+
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         path = self.runs_dir / f"{run_id}.jsonl"
         if not path.exists():

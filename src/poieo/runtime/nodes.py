@@ -170,9 +170,15 @@ class AgentNode(Node):
         try:
             prompt = render(spec.prompt or "", scope)
             system = render(spec.system, scope) if spec.system else None
-            workdir = Path(render(spec.workdir or "", scope)).expanduser()
+            workdir = (
+                Path(render(spec.workdir, scope)).expanduser()
+                if spec.workdir
+                else ctx.workdir
+            )
         except ExpressionError as exc:
             raise NodeError(f"node '{spec.id}': {exc}", node_id=spec.id) from exc
+        if workdir is None:  # preflight should have caught this
+            raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
         if not workdir.is_dir():
             raise NodeError(
                 f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id

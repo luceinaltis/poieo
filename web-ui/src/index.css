@@ -1,0 +1,19 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  /* One source of truth: the drawer starts where the bar ends, so the skin
+     picker in the bar's right corner stays reachable with the drawer open. */
+  --bar-height: 42px;
+}
+
+body {
+  margin: 0;
+  background: #14120f;
+  color: #e8e2d8;
+  /* Holding a bench must not raise the phone's Copy / Look Up callout, and a
+     drag across the board must not paint half the page blue. Text worth
+     copying opts back in below. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

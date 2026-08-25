@@ -1,0 +1,86 @@
+.ledger {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  padding: 16px;
+}
+
+.ledger-card {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.ledger-card:hover {
+  border-color: #4a4034;
+}
+
+.ledger-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.ledger-name {
+  font-weight: 600;
+}
+
+.ledger-dot {
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+  background: #6b6257;
+}
+
+.ledger-card[data-status="running"] .ledger-dot {
+  background: #d8a657;
+}
+
+.ledger-card[data-status="error"] .ledger-dot {
+  background: #d16d5a;
+}
+
+.ledger-node,
+.ledger-last {
+  color: #9a9086;
+  font-size: 0.85em;
+}
+
+.ledger-text {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-text[data-thinking="true"] {
+  color: #9a9086;
+  font-style: italic;
+}
+
+.ledger-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger-tool {
+  background: #262019;
+  border-radius: 3px;
+  font-size: 0.8em;
+  padding: 1px 6px;
+}
+
+.ledger-tool[data-error="true"] {
+  color: #d16d5a;
+}

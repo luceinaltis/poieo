@@ -1,0 +1,81 @@
+.shell-bar {
+  align-items: center;
+  border-bottom: 1px solid #2e2820;
+  box-sizing: border-box;
+  display: flex;
+  gap: 12px;
+  height: var(--bar-height);
+  padding: 0 16px;
+}
+
+.shell-title {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.shell-status {
+  color: #9a9086;
+  font-size: 0.85em;
+  margin-right: auto;
+}
+
+.shell-status[data-status="live"] {
+  color: #a9b665;
+}
+
+.shell-status[data-status="lost"] {
+  color: #d16d5a;
+}
+
+.shell-pick {
+  align-items: center;
+  color: #9a9086;
+  display: flex;
+  font-size: 0.85em;
+  gap: 6px;
+}
+
+.shell-skin {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 3px 6px;
+}
+
+.shell-stage {
+  height: calc(100vh - var(--bar-height));
+  position: relative;
+}
+
+.shell-stage[data-drawer="true"] {
+  margin-right: min(440px, 100vw);
+}
+
+.shell-board {
+  inset: 0;
+  overflow: auto;
+  position: absolute;
+}
+
+.shell-empty {
+  align-content: center;
+  color: #9a9086;
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  margin: 0;
+  padding: 32px 16px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+}
+
+/* On a phone the drawer takes the whole screen, so there is nothing to make
+   room beside -- and reserving 100vw of margin left the board zero wide. */
+@media (max-width: 720px) {
+  .shell-stage[data-drawer="true"] {
+    margin-right: 0;
+  }
+}

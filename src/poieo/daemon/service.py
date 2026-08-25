@@ -6,15 +6,17 @@ import asyncio
 import logging
 import signal
 import socket
+from pathlib import Path
 from typing import Any, Callable
 
+from ..checkpoint import Checkpoint, CheckpointError
 from ..errors import PoieoError, SpecError
 from ..learn import learn as learn_pass
 from ..memory import memory_root
 from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
-from ..store import RunStore
+from ..store import Event, RunStore
 from ..task import record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
@@ -35,6 +37,15 @@ def _ensure_port_free(host: str, port: int) -> None:
             raise SpecError(
                 f"web port {port} is already in use on {host}: {exc}"
             ) from exc
+
+
+def _change_message(result: RunResult, flow: str) -> str:
+    """The model's own summary when it produced one -- that is what a reader sees."""
+    for node in reversed(result.path):
+        value = result.outputs.get(node)
+        if isinstance(value, str) and value.strip():
+            return value.strip().splitlines()[0][:72]
+    return f"poieo {flow} {result.run_id}"
 
 
 class FlowRunner:
@@ -62,6 +73,14 @@ class FlowRunner:
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
         self.current_run_id: str | None = None
+        # A flow that says where it works keeps a private copy of it.
+        workdir = config.workdir_path(flow.spec)
+        self.checkpoint = (
+            Checkpoint(workdir, flow.spec.name, config.store_path())
+            if workdir is not None
+            else None
+        )
+        self._tracking = False
         # Where this task's tools work. Built by the daemon, because the box
         # keeper is shared across tasks and the roster is only known there.
         self.hands = hands
@@ -69,6 +88,51 @@ class FlowRunner:
     @property
     def name(self) -> str:
         return self.flow.spec.name
+
+    async def _open_change(self) -> Path | None:
+        """Give the run a private copy of the project to work in."""
+        point = self.checkpoint
+        self._tracking = False
+        if point is None:
+            return None
+        try:
+            if not await asyncio.to_thread(point.available):
+                log.warning(
+                    "flow '%s': %s cannot be tracked -- the work will happen there "
+                    "directly, and its changes cannot be reviewed or undone",
+                    self.name,
+                    point.repo,
+                )
+                return point.repo
+            await asyncio.to_thread(point.prepare)
+        except CheckpointError as exc:
+            # A repository we cannot use is not a reason to stop working at 3am.
+            log.error("flow '%s': %s", self.name, exc)
+            return point.repo
+        self._tracking = True
+        return point.worktree
+
+    async def _close_change(self, result: RunResult) -> None:
+        """Land the run's work as one change, or leave the branch alone."""
+        if not self._tracking or self.checkpoint is None:
+            return
+        try:
+            change = await asyncio.to_thread(
+                self.checkpoint.commit,
+                result.run_id,
+                _change_message(result, self.name),
+                failed=result.status != "completed",
+            )
+        except CheckpointError as exc:
+            log.error("flow '%s': the change could not be recorded: %s", self.name, exc)
+            return
+        if change is None:
+            return  # nothing to do is not nothing done
+
+        result.change = change.as_dict()
+        self.store.append(
+            Event(run_id=result.run_id, type="run_change", data=dict(result.change))
+        )
 
     @property
     def last_result(self) -> RunResult | None:
@@ -95,6 +159,7 @@ class FlowRunner:
             )
             run_id = new_run_id()
             self.status, self.current_run_id = "running", run_id
+            workdir = await self._open_change()
             try:
                 result = await execute(
                     self.flow.graph,
@@ -108,7 +173,9 @@ class FlowRunner:
                     iteration=fire.iteration,
                     run_id=run_id,
                     cancel=self.cancel,
+                    workdir=workdir,
                     hands=self.hands,
+                    finalize=self._close_change,
                 )
             finally:
                 self.status, self.current_run_id = "waiting", None

@@ -1,0 +1,59 @@
+.atelier-note {
+  color: #9a9086;
+  font-size: 0.9em;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.atelier-canvas {
+  display: block;
+  touch-action: none;
+}
+
+.atelier-tidy {
+  background: #221e18;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  bottom: 12px;
+  color: #9a9086;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8em;
+  left: 12px;
+  min-height: 30px;
+  padding: 4px 10px;
+  position: absolute;
+}
+
+.atelier-labels {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.atelier-tag {
+  display: grid;
+  justify-items: center;
+  position: absolute;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+}
+
+.atelier-tag b {
+  color: #e8e2d8;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.atelier-tag span {
+  color: #9a9086;
+  font-size: 0.75em;
+}
+
+.atelier-tag[data-status="running"] b {
+  color: #ffb454;
+}
+
+.atelier-tag[data-status="error"] b {
+  color: #d16d5a;
+}
