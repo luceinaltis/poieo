@@ -738,3 +738,23 @@ async def test_two_entries_cannot_set_each_other_aside(tmp_path):
     assert result.set_aside == ["cap-a"]
     text = (project / "memory" / "facts" / "cap-b.md").read_text(encoding="utf-8")
     assert "superseded_by" not in text
+
+
+async def test_a_mention_does_not_wear_in_a_disputed_pair(tmp_path):
+    project = _project(tmp_path)
+    _entry(
+        project,
+        "batch-cap",
+        "---\nlinks:\n  contradicts: [retry-window]\n---\n"
+        "The importer caps batches at fifty, whatever [[retry-window]] says.",
+    )
+    _entry(project, "retry-window", "Retry refused batches after the window passes.")
+    _episode(
+        project,
+        "20260824T010000-aaaaaaaa",
+        summary=CITING,
+        shown=["batch-cap", "retry-window"],
+    )
+
+    await _learn(project, _proposal())
+    assert wear_of(project) == {}

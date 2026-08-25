@@ -363,3 +363,18 @@ def test_nothing_is_ever_written_inside_the_memory_folder(tmp_path):
     read_memory(project, task)
     after = sorted(p.name for p in (project / "memory").rglob("*"))
     assert after == before
+
+
+def test_a_mention_does_not_outvote_a_disagreement(tmp_path):
+    # "this disputes [[wild-claim]]" is an ordinary way to write a
+    # disagreement -- the mention must not smuggle the disputed entry in.
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "batch-cap",
+        "The api rejects batch sizes over 50, whatever [[wild-claim]] says.",
+        matter="links:\n  contradicts: [wild-claim]",
+    )
+    _fact(project, "wild-claim", "Nothing ever gets refused, honestly.")
+
+    assert "honestly" not in read_memory(project, task)

@@ -312,6 +312,23 @@ def test_changed_content_raises_the_no_longer_matches_line(tmp_path):
     assert "no longer matches" in result.stdout and "feeds-note" in result.stdout
 
 
+def test_updating_the_entry_clears_a_sealed_doubt(tmp_path):
+    # The documented gesture -- look, then touch -- must work for sealed
+    # anchors too: a person who revised the entry for the new content
+    # should not be nagged until they hand-compute a digest.
+    project, target, _ = _sealed_entry(tmp_path)
+    target.write_text("# feeds\n- a\n- b\n", encoding="utf-8")
+    changed = runner.invoke(app, ["memory", str(project)])
+    assert "no longer matches" in changed.stdout
+
+    # The person reads the doubt and updates the entry (its file is now
+    # newer than the changed target).
+    _aged(target, 7200)
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "no longer matches" not in result.stdout
+    assert "second look" not in result.stdout
+
+
 def test_a_lost_keepsake_falls_back_to_the_mtime_line(tmp_path):
     project, target, name = _sealed_entry(tmp_path)
     (project / ".poieo" / "blobs" / name).unlink()
@@ -413,3 +430,30 @@ def test_memory_is_still_read_only_with_connections(tmp_path):
     assert result.exit_code == 0
     assert sorted(str(p) for p in project.rglob("*")) == before
     assert not (project / ".poieo").exists()
+
+
+def test_editing_the_page_clears_the_suggestion(tmp_path):
+    import json
+
+    _, project = _project(tmp_path)
+    log = project / ".poieo"
+    log.mkdir(parents=True)
+    (log / "learning.jsonl").write_text(
+        json.dumps(
+            {"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a",
+             "error": None, "page": "Require ISO dates."}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    # The page is untouched since long before the pass: the suggestion shows.
+    _aged(project / "memory" / "constitution.md", 30 * 86400)
+    shown = runner.invoke(app, ["memory", str(project)])
+    assert "Require ISO dates." in shown.stdout
+
+    # The person edits the page (fresh mtime): they have seen it -- clears.
+    (project / "memory" / "constitution.md").write_text(
+        "Never push to main.\nDates are ISO.", encoding="utf-8"
+    )
+    result = runner.invoke(app, ["memory", str(project)])
+    assert "Require ISO dates." not in result.stdout

@@ -416,7 +416,14 @@ def _strengthen(
 
 def _followable(one: Fact, other: Fact) -> bool:
     """A connection retrieval would walk: mentions either way, leans-on
-    either side. Never disagrees -- a disputed pair must not wear in."""
+    either side. Never disagrees -- and a disagreement is a veto, not one
+    vote among the connections, or "this disputes [[x]]" would wear the
+    disputed pair in through its own mention."""
+    if (
+        other.slug in one.matter.links.contradicts
+        or one.slug in other.matter.links.contradicts
+    ):
+        return False
     return (
         other.slug in one.mentions
         or one.slug in other.mentions
@@ -510,7 +517,11 @@ def _let_go(project_dir: Path) -> list[str]:
 
 def last_suggestion(project_dir: Path) -> str | None:
     """What the most recent successful pass suggested for the page --
-    nothing if it suggested nothing, however loud an older pass was."""
+    nothing if it suggested nothing, however loud an older pass was, and
+    nothing once the page has been edited since: the clearing gesture is
+    the same as everywhere -- look, then touch."""
+    from .memory import CONSTITUTION, memory_root
+
     path = Path(project_dir) / ".poieo" / LOG_NAME
     if not path.is_file():
         return None
@@ -523,7 +534,17 @@ def last_suggestion(project_dir: Path) -> str | None:
         if isinstance(entry, dict) and entry.get("error") is None:
             latest = entry
     suggestion = latest.get("page")
-    return suggestion if isinstance(suggestion, str) and suggestion else None
+    if not isinstance(suggestion, str) or not suggestion:
+        return None
+    page = memory_root(project_dir) / CONSTITUTION
+    try:
+        if page.is_file():
+            edited = datetime.fromtimestamp(page.stat().st_mtime, timezone.utc)
+            if edited > datetime.fromisoformat(str(latest.get("at", ""))):
+                return None
+    except (OSError, ValueError):
+        pass  # an unreadable clock keeps the suggestion; showing beats hiding
+    return suggestion
 
 
 def _record(project_dir: Path, result: Pass) -> None:

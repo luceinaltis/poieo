@@ -161,6 +161,12 @@ def check_memory(project_dir: Path) -> None:
     """
     facts = load_facts(project_dir)
     known = {fact.slug for fact in facts}
+    attic = memory_root(project_dir) / "attic"
+    if attic.is_dir():
+        # Resting entries still exist: a restored file whose typed claims
+        # name them must load, or "move it back" would not be true. A
+        # genuine typo names something that exists nowhere and still fails.
+        known |= {path.stem for path in attic.glob("*.md")}
     for fact in facts:
         claims = [
             ("depends_on", target) for target in fact.matter.links.depends_on
@@ -354,10 +360,16 @@ def doubts(
                     continue
                 seal = fact.matter.sealed.get(part)
                 if seal is not None and kept(project_dir, seal) is not None:
-                    # Sealed: doubt by content, not clocks. A touched-but-
-                    # identical file raises nothing; the line only fires
-                    # when the bytes really differ from the keepsake.
-                    if digest(named) != seal:
+                    # Sealed: doubt by content, not clocks -- a touched-but-
+                    # identical file raises nothing. But the clearing
+                    # gesture stays the same as everywhere: a person who
+                    # revised the entry after the content changed has
+                    # looked, and must not be nagged until they hand-
+                    # compute a digest.
+                    if (
+                        digest(named) != seal
+                        and named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns
+                    ):
                         out.append(
                             (
                                 fact.slug,
@@ -514,6 +526,9 @@ def _connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
     symmetric), leans-on forward only (what you chose needs what it leans
     on, not the reverse), disagrees never (its consumer is the report --
     dragging a disputed entry in by association is how confusion spreads).
+    A disagreement is a veto, not one vote among the connections: "this
+    disputes [[x]]" is an ordinary way to write one, and the mention in it
+    must not smuggle the disputed entry in.
     """
     named = set(fact.mentions) | set(fact.matter.links.depends_on)
     return sorted(
@@ -522,6 +537,8 @@ def _connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
             for other in eligible
             if other.slug != fact.slug
             and (other.slug in named or fact.slug in other.mentions)
+            and other.slug not in fact.matter.links.contradicts
+            and fact.slug not in other.matter.links.contradicts
         ),
         key=lambda other: other.slug,
     )

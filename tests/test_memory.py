@@ -406,6 +406,23 @@ def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
         check_memory(project)
 
 
+def test_a_restored_entry_naming_an_attic_entry_still_loads(tmp_path):
+    # Restoring from the attic is "move the file back" -- so a typed claim
+    # naming an entry that is resting in the attic must not fail the load.
+    _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once.")
+    attic = tmp_path / "tasks" / "memory" / "attic"
+    attic.mkdir()
+    (attic / "new-cap.md").write_text("Caps sit at 50 now.", encoding="utf-8")
+
+    check_memory(tmp_path / "tasks")  # must not raise
+    # A genuine typo -- a name that exists nowhere -- still fails.
+    project = _learn(
+        tmp_path, "typo", "---\nlinks:\n  depends_on: [ghost]\n---\nLeans on air."
+    )
+    with pytest.raises(SpecError, match="ghost"):
+        check_memory(project)
+
+
 def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
     _learn(tmp_path, "new-cap", "Batches cap at 500 now.")
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nBatches cap at 50.")
