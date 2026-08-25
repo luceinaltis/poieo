@@ -59,18 +59,13 @@ SUBJECTS = {
     #   no matter what the body is doing; tools/hood_eyes.py can paint a lid on
     #   afterwards, but it is better not to need it.
     "smith-kr": (
-        "A-pose reference model of a Korean master blacksmith, Joseon period. "
-        "The arms matter more than anything else: both arms perfectly straight "
-        "from shoulder to fingertip, held away from the torso at forty degrees "
-        "so there is a wide open gap of empty space between each arm and the "
-        "side of the body, like the letter A. Arms not touching the body, not "
-        "bent, not raised to shoulder height. Hands empty, no tools. Standing "
-        "still, feet apart, facing forward. An older craftsman, weathered and "
-        "dignified: black hair in a topknot under a dark headband, short grey "
-        "beard, narrow deep-set eyes, heavy brows. A "
-        "scorched leather apron over an undyed jeogori with sleeves rolled to "
-        "the elbow, indigo trousers tied at the ankle, straw sandals. Stylized "
-        "game character, clean topology, PBR textures."
+        "An old Korean blacksmith of the Joseon period. His grey hair is tied "
+        "in a topknot on top of his head with a black cloth headband, and he "
+        "has a grey beard. He wears a thick scorched leather apron over a "
+        "short hemp jacket with the sleeves rolled above the elbow. Baggy "
+        "indigo trousers tied at the ankle, straw sandals. No long robe, no "
+        "coat. Weathered face, narrow deep-set eyes. Hands empty, fingers "
+        "apart. Stylized game character, clean topology, PBR textures."
     ),
     "anvil": (
         "A blacksmith's anvil on a thick worn wooden stump, dark pitted iron with a "
@@ -101,6 +96,30 @@ SUBJECTS = {
         "Laid out straight along one axis, not held, no hand, no anvil, no "
         "stand, no other tools. Game-ready prop, clean topology, PBR textures."
     ),
+}
+
+
+# Anything that is going to be rigged has to leave the generator standing in a
+# neutral pose, and `pose_mode` is the only thing that decides it. Asking in
+# the prompt does nothing at all: three goes at "a wide open gap of empty space
+# between each arm and the side of the body, like the letter A" came back with
+# the arms hanging against the ribs every time, because the prompt is not where
+# that switch lives. Meshy's own advice about prompts is worth heeding too --
+# three to six details, or the ones that matter get diluted.
+POSED = {
+    "smith": {"pose_mode": "a-pose"},
+    # The remesh is the thing to get right, and both extremes were tried. Left
+    # on at its default thirty thousand polygons it came back with a blank
+    # face and webbed fingers. Turned off it came back beautiful and two
+    # million triangles, which the rigger will not take -- it caps at three
+    # hundred thousand faces. So: remesh, but to a number that can still hold
+    # a hand.
+    "smith-kr": {
+        "pose_mode": "a-pose",
+        "ai_model": "latest",
+        "should_remesh": True,
+        "target_polycount": 120000,
+    },
 }
 
 
@@ -164,9 +183,9 @@ def preview(names):
             "/v2/text-to-3d",
             {
                 "mode": "preview",
-                "art_style": "realistic",
                 "should_remesh": True,
                 "prompt": SUBJECTS[name],
+                **POSED.get(name, {}),
             },
         )
         remember(name, "preview", result["result"])

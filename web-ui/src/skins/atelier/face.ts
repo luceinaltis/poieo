@@ -147,6 +147,34 @@ export interface Face {
  * not blink in unison. It is derived from the flow's name rather than drawn at
  * random, so a replay blinks where the live run did.
  */
+/** Is every lid within `reach` of the skin it is supposed to be lying on? */
+function touching(THREE: any, figure: any, lids: any, reach: number): boolean {
+  // Whatever has vertices, not specifically a SkinnedMesh: the question is
+  // whether there is skin under the lid, and the tests hang one on a box.
+  let mesh: any = null
+  figure.traverse((node: any) => {
+    if (!mesh && node.geometry?.attributes?.position) mesh = node
+  })
+  const position = mesh?.geometry?.attributes?.position
+  if (!position) return false
+
+  figure.updateWorldMatrix(true, true)
+  const eyes = lids.children.map((eye: any) => eye.getWorldPosition(new THREE.Vector3()))
+  const near: number[] = eyes.map(() => Infinity)
+  const at = new THREE.Vector3()
+  // Twenty thousand samples, however many vertices there are: enough that a
+  // face is dense with them, cheap enough on a model that arrives with a
+  // hundred thousand, and every one of them on a rig small enough to count.
+  const step = Math.max(1, Math.floor(position.count / 20000))
+  for (let v = 0; v < position.count; v += step) {
+    at.fromBufferAttribute(position, v).applyMatrix4(mesh.matrixWorld)
+    eyes.forEach((eye: any, i: number) => {
+      near[i] = Math.min(near[i], at.distanceToSquared(eye))
+    })
+  }
+  return near.every((away: number) => away <= reach * reach)
+}
+
 export function makeFace(
   THREE: any,
   figure: any,
@@ -196,6 +224,20 @@ export function makeFace(
     eye.add(crease)
 
     lids.add(eye)
+  }
+
+  // Do they land on him? Every measurement above is a proportion of a skull
+  // read off a skeleton, and skeletons disagree: on one rig the lids sat over
+  // the eyes and on the next they hung in the air beside his cheek, a pair of
+  // skin-coloured cards floating in the room. So look. If the nearest scrap
+  // of the man is more than a third of a skull away, the frame cannot be
+  // trusted, and blinking is not worth a card hanging in mid-air.
+  if (!touching(THREE, figure, lids, tall * 0.35)) {
+    shape.dispose()
+    line.dispose()
+    skin.dispose()
+    lash.dispose()
+    return null
   }
 
   // Placed in world space, then handed to the bone with that placement intact,

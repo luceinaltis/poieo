@@ -11,8 +11,9 @@ import { headFrame, makeFace } from "./face"
 function stickFigure() {
   const figure = new THREE.Group()
 
-  // Something with a silhouette, so the crown can be measured at all.
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.8, 0.3))
+  // Something with a silhouette, so the crown can be measured at all, and
+  // enough vertices on it to answer "is the lid touching him".
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.8, 0.3, 6, 20, 4))
   body.position.y = 0.9
   figure.add(body)
 
@@ -94,4 +95,21 @@ test("two smiths do not blink in step", () => {
 
   expect(lidsOf(one)).toBe(true)
   expect(lidsOf(other)).toBe(false)
+})
+
+test("no lids at all when they would not land on the face", () => {
+  // Two rigs measured the same way put the lids in two different places, and
+  // on the second they hung in the room beside his cheek. A skull that cannot
+  // be read is a reason to skip blinking, not to hang a card in mid-air.
+  //
+  // Here the skin and the skeleton disagree: the bones say the middle of him
+  // is at the origin and the body says it is a metre to the left, which is the
+  // shape the real failure had.
+  const figure = stickFigure()
+  const body = figure.children.find((node) => (node as any).geometry)!
+  body.position.x += 1
+  figure.updateWorldMatrix(true, true)
+
+  expect(makeFace(THREE, figure)).toBeNull()
+  expect(figure.getObjectByName("blink")).toBeUndefined()
 })

@@ -168,9 +168,15 @@ export interface Props {
  * The middle of a closed fist, in that hand bone's own frame.
  *
  * Where to put a tool, in other words. The bone's own origin is the wrist,
- * which is a knuckle's width short of where a handle actually sits, and the
- * rig has no finger bones to ask instead -- so the fist is measured from the
- * skin: the vertices this bone owns, averaged.
+ * which is a knuckle's width short of where a handle actually sits, and these
+ * rigs have no finger bones to ask instead -- so the fist is measured from the
+ * skin: the vertices this bone owns.
+ *
+ * Only the ones near it, though. What a hand bone owns is up to the rigger,
+ * and they do not agree: one gave the hand 503 vertices reaching a tenth of a
+ * unit, the next gave it 3,970 and half a sleeve, reaching nearly a fifth.
+ * Averaging everything it owned put the grip a hand's width up the forearm and
+ * the hammer floated beside the man. A fist is a fist.
  */
 export function fistOf(THREE: Three, figure: any, boneName: string): any {
   const mesh = figure.getObjectByProperty("type", "SkinnedMesh")
@@ -180,9 +186,18 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
   if (slot < 0) return middle
 
   const intoBone = mesh.skeleton.boneInverses[slot]
+  const wrist = new THREE.Vector3().setFromMatrixPosition(
+    new THREE.Matrix4().copy(intoBone).invert(),
+  )
   const position = mesh.geometry.attributes.position
   const bones = mesh.geometry.attributes.skinIndex
   const pull = mesh.geometry.attributes.skinWeight
+  mesh.geometry.computeBoundingBox()
+  const box = mesh.geometry.boundingBox
+  // A fist, as a fraction of the figure: this rig exports at neither
+  // centimetres nor metres, and the next one will not either.
+  const reach = (box.max.y - box.min.y) * 0.06
+
   const rest = new THREE.Vector3()
   let found = 0
   for (let v = 0; v < position.count; v += 1) {
@@ -197,10 +212,11 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
     }
     if (follows !== slot) continue
     rest.fromBufferAttribute(position, v).applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone)
+    if (rest.distanceTo(wrist) > reach) continue
     middle.add(rest)
     found += 1
   }
-  return found ? middle.divideScalar(found) : middle
+  return found ? middle.divideScalar(found) : wrist
 }
 
 /** The dominant direction of a cloud of points, by power iteration. */
