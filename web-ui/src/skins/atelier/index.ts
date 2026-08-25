@@ -165,6 +165,25 @@ export interface Props {
 }
 
 /**
+ * How wide a fist is, in the units a bone's own frame counts in.
+ *
+ * Two spaces, and they are not the same one. Vertices are measured in the
+ * mesh's units -- this figure is 1.70 of them tall -- and then carried into a
+ * bone's frame, which on a rig exported from centimetres is a hundred times
+ * larger. Comparing a distance in one against a radius from the other quietly
+ * matches nothing at all: `fistOf` fell back to the wrist on this character
+ * for as long as he has been in the room, and it took printing the numbers to
+ * see it, because a silent fallback looks exactly like a slightly wrong grip.
+ */
+function fistReach(THREE: Three, mesh: any, intoBone: any): number {
+  mesh.geometry.computeBoundingBox()
+  const box = mesh.geometry.boundingBox
+  const into = new THREE.Matrix4().copy(intoBone).multiply(mesh.bindMatrix)
+  const scale = new THREE.Vector3().setFromMatrixScale(into).x || 1
+  return (box.max.y - box.min.y) * 0.06 * scale
+}
+
+/**
  * The middle of a closed fist, in that hand bone's own frame.
  *
  * Where to put a tool, in other words. The bone's own origin is the wrist,
@@ -192,11 +211,7 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
   const position = mesh.geometry.attributes.position
   const bones = mesh.geometry.attributes.skinIndex
   const pull = mesh.geometry.attributes.skinWeight
-  mesh.geometry.computeBoundingBox()
-  const box = mesh.geometry.boundingBox
-  // A fist, as a fraction of the figure: this rig exports at neither
-  // centimetres nor metres, and the next one will not either.
-  const reach = (box.max.y - box.min.y) * 0.06
+  const reach = fistReach(THREE, mesh, intoBone)
 
   const rest = new THREE.Vector3()
   let found = 0
@@ -217,6 +232,63 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
     found += 1
   }
   return found ? middle.divideScalar(found) : wrist
+}
+
+/**
+ * Which way a hand's palm faces, in that hand bone's own frame.
+ *
+ * A hand is a flat thing, so the direction it is flattest along is the way the
+ * palm looks. Read off the skin rather than off the bone's axes, which no two
+ * riggers agree about, and needed because this character was generated in an
+ * A-pose with his palms turned up -- the retargeted idle inherits that, and he
+ * stands at his anvil holding an invisible tray.
+ */
+export function palmOf(THREE: Three, figure: any, boneName: string): any {
+  const mesh = figure.getObjectByProperty("type", "SkinnedMesh")
+  const bone = figure.getObjectByName(boneName)
+  const slot = mesh && bone ? mesh.skeleton.bones.indexOf(bone) : -1
+  if (slot < 0) return null
+
+  const intoBone = mesh.skeleton.boneInverses[slot]
+  const wrist = new THREE.Vector3().setFromMatrixPosition(
+    new THREE.Matrix4().copy(intoBone).invert(),
+  )
+  const position = mesh.geometry.attributes.position
+  const bones = mesh.geometry.attributes.skinIndex
+  const pull = mesh.geometry.attributes.skinWeight
+  const reach = fistReach(THREE, mesh, intoBone)
+
+  const rest = new THREE.Vector3()
+  const hand: any[] = []
+  for (let v = 0; v < position.count; v += 1) {
+    let most = 0
+    let follows = -1
+    for (let s = 0; s < 4; s += 1) {
+      const share = pull.getComponent(v, s)
+      if (share > most) {
+        most = share
+        follows = bones.getComponent(v, s)
+      }
+    }
+    if (follows !== slot) continue
+    rest.fromBufferAttribute(position, v).applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone)
+    if (rest.distanceTo(wrist) > reach) continue
+    hand.push(rest.clone())
+  }
+  if (hand.length < 24) return null
+
+  const middle = hand
+    .reduce((sum: any, p: any) => sum.add(p), new THREE.Vector3())
+    .divideScalar(hand.length)
+  // Longest way through the hand, then the longest of what is left across it:
+  // the palm's normal is what neither of them points along.
+  const along = longestWay(THREE, hand, middle)
+  const flat = hand.map((p: any) => {
+    const off = p.clone().sub(middle)
+    return off.addScaledVector(along, -off.dot(along)).add(middle)
+  })
+  const across = longestWay(THREE, flat, middle)
+  return new THREE.Vector3().crossVectors(along, across).normalize()
 }
 
 /** The dominant direction of a cloud of points, by power iteration. */
@@ -506,6 +578,24 @@ export function makeBench(
   const swinging = new THREE.Quaternion()
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
+  // Each hand, the palm's own direction in its frame, and the elbow it turns
+  // about. Only what can be measured is kept; a rig without one is left alone.
+  const palms = ["Left", "Right"]
+    .map((side) => ({
+      bone: figure.getObjectByName(`${side}Hand`),
+      elbow: figure.getObjectByName(`${side}ForeArm`),
+      faces: palmOf(THREE, figure, `${side}Hand`),
+    }))
+    .filter((palm) => palm.bone?.parent && palm.elbow && palm.faces)
+  const axis = new THREE.Vector3()
+  const looks = new THREE.Vector3()
+  const inward = new THREE.Vector3()
+  const flatly = new THREE.Vector3()
+  const middleOf = new THREE.Vector3()
+  const handAt = new THREE.Vector3()
+  const turning = new THREE.Quaternion()
+  const parented = new THREE.Quaternion()
+  const spare = new THREE.Quaternion()
   const turned = new THREE.Quaternion()
   // Up in the room, carried into the forearm's frame by tick() below.
   const skyward = new THREE.Vector3()
@@ -743,6 +833,53 @@ export function makeBench(
       hanging.setFromUnitVectors(HANDLE, skyward)
       const working = acts.working.getEffectiveWeight()
       hammer.holder.quaternion.copy(hanging).slerp(swinging, working)
+
+      // Turn the palms in. He was generated in an A-pose with his hands turned
+      // up, and every clip retargeted onto him inherits it, so at rest he holds
+      // an invisible tray. This is a roll about the forearm and nothing else --
+      // the arm keeps the angle the clip gave it. Turning arms was tried twice
+      // and both times folded him into his own chest; the wrist is where the
+      // difference actually was.
+      const rest = 1 - working
+      if (rest > 0.01) {
+        figure.getWorldPosition(middleOf)
+        for (const palm of palms) {
+          palm.elbow.getWorldPosition(axis)
+          palm.bone.getWorldPosition(handAt)
+          axis.subVectors(handAt, axis)
+          if (axis.lengthSq() < 1e-9) continue
+          axis.normalize()
+
+          // Where the palm looks now, and where it should: at his own middle.
+          looks.copy(palm.faces).applyQuaternion(palm.bone.getWorldQuaternion(parented))
+          inward.subVectors(middleOf, handAt).setY(0)
+          if (inward.lengthSq() < 1e-9) continue
+          inward.normalize()
+
+          // Both flattened onto the plane the roll turns in, so this is one
+          // signed angle rather than a rotation that could tip the wrist.
+          looks.addScaledVector(axis, -looks.dot(axis))
+          flatly.copy(inward).addScaledVector(axis, -inward.dot(axis))
+          if (looks.lengthSq() < 1e-6 || flatly.lengthSq() < 1e-6) continue
+          looks.normalize()
+          flatly.normalize()
+          const roll =
+            Math.atan2(
+              flatly.clone().cross(looks).dot(axis) * -1,
+              looks.dot(flatly),
+            ) * rest
+
+          palm.bone.parent.getWorldQuaternion(parented)
+          palm.bone.quaternion.premultiply(
+            turning
+              .copy(parented)
+              .invert()
+              .multiply(spare.setFromAxisAngle(axis, roll))
+              .multiply(parented),
+          )
+          palm.bone.updateWorldMatrix(false, true)
+        }
+      }
 
       // Sparks fly for a moment after the hammer lands. Measured around the
       // loop: the blow lands a tenth of a second before the clip's seam, and
