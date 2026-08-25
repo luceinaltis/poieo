@@ -109,7 +109,8 @@ def create_app(daemon: Any) -> Starlette:
 
     async def run_diff(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
-        summary = daemon.store.run(run_id)
+        # An index scan, like the git work below: off the loop it shares.
+        summary = await asyncio.to_thread(daemon.store.run, run_id)
         if summary is None:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
@@ -144,7 +145,7 @@ def create_app(daemon: Any) -> Starlette:
         run_id = (body or {}).get(key)
         target = None
         if run_id:
-            summary = daemon.store.run(run_id)
+            summary = await asyncio.to_thread(daemon.store.run, run_id)
             change = (summary or {}).get("change")
             if not change:
                 return JSONResponse(

@@ -76,3 +76,66 @@ def test_a_limit_beyond_history_returns_everything(tmp_path):
     for i in range(3):
         store.record_summary({"run_id": f"r{i}"})
     assert len(store.list_runs(limit=50)) == 3
+
+
+def test_events_are_not_fsynced_one_by_one(tmp_path, monkeypatch):
+    """An agent run emits an event per model turn and per tool call, and every
+    fsync stalls the loop the daemon shares with the web server. Durability is
+    bought once, at the run boundary, where the index line lands."""
+    import poieo.store as store_module
+
+    synced = []
+    monkeypatch.setattr(store_module.os, "fsync", lambda fd: synced.append(fd))
+    store = RunStore(tmp_path / "logs")
+    for _ in range(5):
+        store.append(Event(run_id="r1", type="node_turn"))
+    assert synced == []
+    store.record_summary({"run_id": "r1", "status": "completed"})
+    assert len(synced) == 1
+
+
+def test_run_returns_the_newest_and_stops_there(tmp_path, monkeypatch):
+    """run() fires on every diff view and every accept click; scanning the
+    whole index per click grows with daemon uptime."""
+    store = RunStore(tmp_path / "logs")
+    store.record_summary({"run_id": "r1", "status": "failed"})
+    store.record_summary({"run_id": "r1", "status": "completed"})  # re-recorded
+    for i in range(50):
+        store.record_summary({"run_id": f"busy{i}", "status": "completed"})
+
+    import poieo.store as store_module
+
+    parsed = []
+    real = json.loads
+    monkeypatch.setattr(store_module.json, "loads", lambda s: parsed.append(1) or real(s))
+    row = store.run("r1")
+    assert row["status"] == "completed"  # the newest record still wins
+    assert len(parsed) == 1  # the answer, not everything before or after it
+
+
+def test_list_runs_reads_the_tail_not_the_file(tmp_path, monkeypatch):
+    """Parsing was already lazy; the read was not. read_text loads a month of
+    history into memory to show twenty rows."""
+    from pathlib import Path
+
+    store = RunStore(tmp_path / "logs")
+    for i in range(30):
+        store.record_summary({"run_id": f"r{i}"})
+
+    def boom(self, *args, **kwargs):
+        raise AssertionError("list_runs materialized the whole index")
+
+    monkeypatch.setattr(Path, "read_text", boom)
+    rows = store.list_runs(limit=5)
+    assert [r["run_id"] for r in rows] == [f"r{29 - i}" for i in range(5)]
+
+
+def test_a_row_larger_than_one_read_block_still_parses(tmp_path):
+    """Reading backwards works in fixed-size blocks; a summary row bigger than
+    one block (and full of multi-byte text) must reassemble intact."""
+    store = RunStore(tmp_path / "logs")
+    store.record_summary({"run_id": "big", "note": "메모 " * 40_000})
+    store.record_summary({"run_id": "after"})
+    rows = store.list_runs(limit=2)
+    assert [r["run_id"] for r in rows] == ["after", "big"]
+    assert rows[1]["note"].startswith("메모")
