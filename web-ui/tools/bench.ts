@@ -156,12 +156,16 @@ if (asked.get("close") !== null) {
   // ends up aimed at the roof.
   bench.tick(0)
   bench.group.updateMatrixWorld(true)
-  const head = bench.group.getObjectByName("Head") ?? bench.group
+  // `headfront` when the rigger left one -- it is on the face, which is the
+  // point. `Head` sits at the crown on one rig and the jaw on the next, so
+  // aiming at it frames a cap, or a beard.
+  const head =
+    bench.group.getObjectByName("headfront") ??
+    bench.group.getObjectByName("Head") ??
+    bench.group
   head.getWorldPosition(middle)
   const half = 0.16
-  // The rig puts its head bone at the crown, so aiming at the bone frames a
-  // cap and half a forehead. The face is a bone's-length below it.
-  middle.y -= half
+  if (head.name !== "headfront") middle.y -= half
   camera.left = -half
   camera.right = half
   camera.top = half

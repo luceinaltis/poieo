@@ -9,7 +9,7 @@ header, and never printed or written anywhere.
     python meshy.py refine smith-striking   # textures, once the shape is right
     python meshy.py fetch hammer            # download it; no name means all of them
 
-Names: smith, anvil, forge, props, hammer
+Names: smith, smith-kr, anvil, forge, props, hammer
 """
 
 import json
@@ -45,6 +45,32 @@ SUBJECTS = {
         "Stylized game character, slightly cartoon proportions, clean topology, "
         "PBR textures. This is a rigging reference stance, not an action pose: "
         "he is not swinging, not bending, not leaning over anything."
+    ),
+    # The second smith, and the one the room is meant to keep. Two things are
+    # deliberate and both were learned the hard way:
+    #
+    # - His hands are empty. Asking the generator for a tool welds it into the
+    #   fist as one mesh with one material, and what came back last time was a
+    #   13 cm lump with no handle that could not be hidden at run time. The
+    #   hammer is its own prop now and the skin puts it in his fist, so there
+    #   is no reason to ask for one here.
+    # - His eyes are asked for narrow and lidded. The generator's default is a
+    #   full circle of white with a small dark centre, which reads as startled
+    #   no matter what the body is doing; tools/hood_eyes.py can paint a lid on
+    #   afterwards, but it is better not to need it.
+    "smith-kr": (
+        "A-pose reference model of a Korean master blacksmith, Joseon period. "
+        "The arms matter more than anything else: both arms perfectly straight "
+        "from shoulder to fingertip, held away from the torso at forty degrees "
+        "so there is a wide open gap of empty space between each arm and the "
+        "side of the body, like the letter A. Arms not touching the body, not "
+        "bent, not raised to shoulder height. Hands empty, no tools. Standing "
+        "still, feet apart, facing forward. An older craftsman, weathered and "
+        "dignified: black hair in a topknot under a dark headband, short grey "
+        "beard, narrow deep-set eyes, heavy brows. A "
+        "scorched leather apron over an undyed jeogori with sleeves rolled to "
+        "the elbow, indigo trousers tied at the ankle, straw sandals. Stylized "
+        "game character, clean topology, PBR textures."
     ),
     "anvil": (
         "A blacksmith's anvil on a thick worn wooden stump, dark pitted iron with a "
@@ -110,6 +136,12 @@ def tasks() -> dict:
 
 def remember(name: str, stage: str, task_id: str) -> None:
     state = tasks()
+    # A fresh preview retires the refine that was made from the last one.
+    # Without this, `fetch` prefers a refine that belongs to a shape nobody
+    # asked for any more, and two generations get quietly mixed -- which is
+    # exactly what happened the third time this smith was regenerated.
+    if stage == "preview":
+        state[name] = {}
     state.setdefault(name, {})[stage] = task_id
     STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 

@@ -5,6 +5,8 @@ library retargets motion-captured clips onto a rigged character, and it has
 exactly the two this room needs: Heavy_Hammer_Swing for a flow that is
 working, Idle for one that is not.
 
+    python animate.py rig smith-kr     # auto-rig a subject meshy.py finished
+    python animate.py rigwait
     python animate.py rigs             # list rigging tasks, to pick the right model
     python animate.py start <rig_id>   # queue both clips against that rig
     python animate.py wait
@@ -21,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import meshy  # noqa: E402
 
 STATE = Path("C:/Users/82109/poieo-demo/anim-tasks.json")
+RIGS = Path("C:/Users/82109/poieo-demo/rig-tasks.json")
 OUT = Path("C:/Users/82109/poieo-demo/models")
 
 # From the animation library reference; the names are Meshy's.
@@ -33,6 +36,42 @@ def rigs() -> None:
     rows = tasks if isinstance(tasks, list) else tasks.get("result", tasks.get("data", []))
     for task in rows:
         print(f"  {task.get('id')}  {task.get('status'):9}  input {task.get('input_task_id')}")
+
+
+def rig(name: str, tall: float = 1.7) -> None:
+    """Queue an auto-rig for a subject meshy.py has already finished.
+
+    Takes the name rather than a task id, because the id is in meshy.py's own
+    store and copying it by hand is one more thing to get wrong. The height is
+    what the rigger scales the skeleton against; it is not the height the room
+    draws him at, which the skin measures off the model itself.
+    """
+    finished = meshy.tasks().get(name, {})
+    source = finished.get("refine") or finished.get("preview")
+    if not source:
+        raise SystemExit(f"no finished {name}; run meshy.py preview/refine first")
+    result = meshy.call("/v1/rigging", {"input_task_id": source, "height_meters": tall})
+    state = json.loads(RIGS.read_text(encoding="utf-8")) if RIGS.exists() else {}
+    state[name] = result["result"]
+    RIGS.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    print(f"  {name}: rigging queued against {source}")
+
+
+def rigwait(minutes=15) -> None:
+    """Poll every rig we have queued until they settle."""
+    state = json.loads(RIGS.read_text(encoding="utf-8")) if RIGS.exists() else {}
+    deadline = time.monotonic() + minutes * 60
+    while time.monotonic() < deadline:
+        pending = False
+        for name, task_id in state.items():
+            task = meshy.call(f"/v1/rigging/{task_id}")
+            status = task.get("status")
+            print(f"  {name}: {status} {task.get('progress', 0)}%", flush=True)
+            pending = pending or status in ("PENDING", "IN_PROGRESS")
+        if not pending:
+            return
+        time.sleep(15)
+    print("  still running")
 
 
 def start(rig_id: str) -> None:
@@ -91,6 +130,10 @@ if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "rigs"
     if what == "rigs":
         rigs()
+    elif what == "rig":
+        rig(sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 1.7)
+    elif what == "rigwait":
+        rigwait()
     elif what == "start":
         start(sys.argv[2])
     elif what == "wait":
