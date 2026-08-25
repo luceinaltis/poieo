@@ -157,7 +157,7 @@ def init() -> None:
 
 _NO_BINDING = (
     "no binding: pass one with -b, add `binding: <file>` to the card, "
-    "or set a default in a poieo.yaml"
+    "or set a default in a poieo.yaml (`poieo init` writes one)"
 )
 
 
@@ -583,7 +583,10 @@ def daemon(
     if config_path is None:
         config_path = find_project_file()
         if config_path is None:
-            _fail("no poieo.yaml found here or above; pass a config file")
+            _fail(
+                "no poieo.yaml found here or above; pass a config file, "
+                "or run `poieo init`"
+            )
     if config_path.is_dir():
         # `poieo daemon tasks/` is the natural guess once cards exist,
         # so it is a spelling of the same thing, not an error.
@@ -672,7 +675,10 @@ def flows(
     if config_path is None:
         config_path = find_project_file()
         if config_path is None:
-            _fail("no poieo.yaml found here or above; pass a config file")
+            _fail(
+                "no poieo.yaml found here or above; pass a config file, "
+                "or run `poieo init`"
+            )
     config = load_config(config_path)
     loaded = load_flows(config, enabled_only=False)
 

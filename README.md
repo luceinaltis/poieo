@@ -24,6 +24,27 @@ pip install -e .          # or: pip install anthropic pydantic pyyaml httpx type
 poieo --help              # also runnable as: python main.py --help
 ```
 
+## Start a project
+
+A folder becomes a poieo project the way a folder becomes a git repository:
+one marker file, `poieo.yaml`. `poieo init` looks at the machine once — an
+API key means Claude, an answering Ollama means local, neither means mock —
+and writes what it found into ordinary files:
+
+```
+poieo.yaml               store · default binding · tasks folder
+bindings/default.yaml    what detection found (plus mock.yaml, always)
+tasks/hello.yaml         a sample card, disabled; run it by hand
+.gitignore               gains a `.poieo/` line
+```
+
+Inside a project, commands need no flags. `poieo run tasks/hello.yaml` takes
+the project's binding (and says so), `poieo runs list` reads the project's
+store, `poieo daemon` finds the config, `poieo check` probes the project's
+providers. A flag always wins when passed; discovery only fills silence, and
+detection never runs again after init — run time reads files, nothing else.
+Existing files are never touched, so `init` in a full project changes nothing.
+
 ## Try it without spending a token
 
 The `mock` provider answers from a script in the binding file, so the wiring can be
