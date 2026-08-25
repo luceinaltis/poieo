@@ -307,6 +307,32 @@ def test_init_twice_keeps_every_existing_file(tmp_path, monkeypatch):
     assert before == after
 
 
+def test_init_writes_the_agents_manual(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    manual = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    # The loop an agent must know: edit a file, then prove it loads.
+    assert "poieo validate" in manual
+    assert "poieo run" in manual
+    assert ".poieo/" in manual
+    # Claude Code loads the same page through its own file.
+    assert "@AGENTS.md" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+
+
+def test_init_never_touches_an_existing_claude_md(tmp_path, monkeypatch):
+    _no_machine(monkeypatch)
+    ours = "# my rules\nnever push on friday\n"
+    (tmp_path / "CLAUDE.md").write_text(ours, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == ours
+    # The manual itself still arrives; only the user's file is sacred.
+    assert (tmp_path / "AGENTS.md").exists()
+
+
 def test_init_appends_to_gitignore_without_clobbering_it(tmp_path, monkeypatch):
     _no_machine(monkeypatch)
     (tmp_path / ".gitignore").write_text("node_modules/\n", encoding="utf-8")

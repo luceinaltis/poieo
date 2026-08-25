@@ -117,6 +117,52 @@ prompt: |
   Look around this folder and write one sentence about what you see.
 """
 
+_AGENTS_MD = """\
+# Operating this poieo project
+
+This folder is a poieo project: LLM workflows kept running by a resident
+daemon. A coding agent manages it by editing files and running the commands
+below -- there is no API to learn beyond this page.
+
+## The files
+
+- `poieo.yaml` -- the project: store, default binding, tasks folder.
+- `tasks/*.yaml` -- one card per standing task: `name`, `folder`, `prompt`
+  (optionally `every`/`at` for schedule, `binding`, `enabled`, `tools`).
+  A card's identity is its filename. `tasks/<card>.md` is that task's
+  journal: append a line to leave it a note; never rewrite its history.
+- `bindings/*.yaml` -- which physical model serves each role.
+  `bindings/mock.yaml` answers from a script: free, offline.
+- `.poieo/` -- derived state (run logs, episodes). Read freely, never edit.
+
+## The loop
+
+Edit a file, then prove it loads -- a typo must fail now, not at 3am:
+
+    poieo validate tasks/<card>.yaml     # after editing a card or a graph
+    poieo check -b bindings/<name>.yaml  # after editing a binding (probes it)
+    poieo flows                          # after editing poieo.yaml (loads all)
+
+Try a card once, without the daemon:
+
+    poieo run tasks/<card>.yaml                          # --json for structure
+    poieo run tasks/<card>.yaml -b bindings/mock.yaml    # spends nothing
+
+See what happened:
+
+    poieo runs list
+    poieo runs show <run_id>
+
+## What is not yours
+
+Starting `poieo daemon`, and accepting or discarding a night's work on the
+web board, belong to the person. Add and edit cards; leave the daemon and
+`.poieo/` alone.
+"""
+
+# Claude Code reads CLAUDE.md; the import points it at the same page.
+_CLAUDE_MD = "@AGENTS.md\n"
+
 _GITIGNORE_LINE = ".poieo/"
 
 
@@ -161,6 +207,8 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
         ("bindings/default.yaml", default_body),
         ("bindings/mock.yaml", _MOCK_BINDING),
         ("tasks/hello.yaml", _HELLO_CARD),
+        ("AGENTS.md", _AGENTS_MD),
+        ("CLAUDE.md", _CLAUDE_MD),
     ]
     report: list[tuple[str, str]] = []
     for relative, body in files:
