@@ -3,6 +3,7 @@ copy; a torn write cannot leave a wrong body under a right name; and
 nothing here is worth raising over.
 """
 
+from conftest import at
 import poieo.blob as blob
 from poieo.blob import digest, keep, kept
 
@@ -16,7 +17,7 @@ def test_the_same_content_kept_twice_is_one_keepsake(tmp_path):
     first = keep(tmp_path, one)
     second = keep(tmp_path, other)
     assert first == second
-    assert len(list((tmp_path / ".poieo" / "blobs").iterdir())) == 1
+    assert len(list(at(tmp_path).blobs().iterdir())) == 1
 
 
 def test_a_kept_file_reads_back_byte_identical(tmp_path):
@@ -34,7 +35,7 @@ def test_an_over_cap_file_is_declined(tmp_path, monkeypatch):
     fat.write_bytes(b"x" * 11)
 
     assert keep(tmp_path, fat) is None
-    assert not (tmp_path / ".poieo" / "blobs").exists()
+    assert not at(tmp_path).blobs().exists()
 
 
 def test_the_name_always_matches_the_bytes_actually_kept(tmp_path, monkeypatch):
@@ -60,8 +61,9 @@ def test_the_name_always_matches_the_bytes_actually_kept(tmp_path, monkeypatch):
 
 
 def test_keep_never_raises(tmp_path):
-    # A file where .poieo should be: every write must fail, quietly.
-    (tmp_path / ".poieo").write_text("in the way", encoding="utf-8")
+    # A file where the store's folder should be: every write must fail,
+    # quietly.
+    at(tmp_path).memory().write_text("in the way", encoding="utf-8")
     source = tmp_path / "a.txt"
     source.write_text("bytes", encoding="utf-8")
 

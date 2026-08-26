@@ -6,6 +6,7 @@ back to the run that taught it. The harness writes it -- there is no tool, so
 nothing depends on a model remembering to remember.
 """
 
+from conftest import at
 import json
 from dataclasses import replace
 
@@ -163,9 +164,9 @@ TODAY_WITHOUT_MEMORY = (
 
 
 def _remember(tmp_path, text="Never push to main."):
-    memory = tmp_path / "tasks" / "memory"
-    memory.mkdir(parents=True, exist_ok=True)
-    (memory / "constitution.md").write_text(text, encoding="utf-8")
+    memory = at(tmp_path / "tasks")
+    memory.longterm().mkdir(parents=True, exist_ok=True)
+    memory.constitution().write_text(text, encoding="utf-8")
     return memory
 
 
@@ -233,13 +234,13 @@ def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
     flow, config = _daemon_flow(tmp_path)
     assert "Never push to main." in flow.read_input(config)["memory"]
 
-    (memory / "constitution.md").write_text("Ship one change at a time.", encoding="utf-8")
+    memory.constitution().write_text("Ship one change at a time.", encoding="utf-8")
     assert "Ship one change at a time." in flow.read_input(config)["memory"]
 
 
 def test_a_malformed_fact_fails_at_load_naming_the_file(tmp_path):
     _task(tmp_path)
-    facts = _remember(tmp_path) / "facts"
+    facts = _remember(tmp_path).facts()
     facts.mkdir()
     (facts / "batch-sizes.md").write_text(
         "---\nscope: [global]\nseverity: high\n---\nThe API caps batches at 50.\n",
@@ -274,11 +275,28 @@ def test_editor_notes_in_the_page_never_reach_the_prompt(tmp_path):
 
 def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     task = _task(tmp_path)
-    (tmp_path / "tasks" / "memory").mkdir()
+    at(tmp_path / "tasks").longterm().mkdir(parents=True)
 
     assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
         name=task.name, folder=task.folder_path()
     )
+    assert "memory" not in task_payload(task)
+
+
+def test_a_journal_alone_does_not_turn_the_long_memory_on(tmp_path):
+    """The one hazard in moving the journals under `memory/`: the folder now
+    arrives by itself, the first time any task runs. So the opt-in cannot be
+    `memory/` -- a signal that switches itself on is not consent. It is
+    `memory/longterm/`, which only a person makes.
+    """
+    from poieo.memory import keeps_memory
+
+    task = _task(tmp_path)
+    project = tmp_path / "tasks"
+    at(project).shortterm().mkdir(parents=True)
+    at(project).journal(task.slug).write_text("- did: something\n", encoding="utf-8")
+
+    assert keeps_memory(project) is False
     assert "memory" not in task_payload(task)
 
 
@@ -342,7 +360,7 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
 
 
 def _learn(tmp_path, slug, text):
-    facts = tmp_path / "tasks" / "memory" / "facts"
+    facts = at(tmp_path / "tasks").facts()
     facts.mkdir(parents=True, exist_ok=True)
     (facts / f"{slug}.md").write_text(text, encoding="utf-8")
     return tmp_path / "tasks"
@@ -430,7 +448,7 @@ def test_a_restored_entry_naming_an_attic_entry_still_loads(tmp_path):
     # Restoring from the attic is "move the file back" -- so a typed claim
     # naming an entry that is resting in the attic must not fail the load.
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once.")
-    attic = tmp_path / "tasks" / "memory" / "attic"
+    attic = at(tmp_path / "tasks").attic()
     attic.mkdir()
     (attic / "new-cap.md").write_text("Caps sit at 50 now.", encoding="utf-8")
 

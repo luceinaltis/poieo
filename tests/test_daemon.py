@@ -1,3 +1,4 @@
+from conftest import at
 import asyncio
 import socket
 from datetime import datetime
@@ -505,7 +506,7 @@ def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
         encoding="utf-8",
     )
     if memory:
-        (tasks / "memory").mkdir(exist_ok=True)
+        at(tasks).longterm().mkdir(parents=True, exist_ok=True)
     config = tmp_path / "poieo.yaml"
     config.write_text(
         f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"

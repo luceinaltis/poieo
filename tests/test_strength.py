@@ -5,6 +5,7 @@ a failure to write is logged and swallowed, and the fan cap plus decay make
 runaway impossible by construction.
 """
 
+from conftest import at
 from datetime import datetime, timedelta, timezone
 
 from poieo.strength import FAN_CAP, wear, wear_of
@@ -43,9 +44,9 @@ def test_the_fan_cap_holds_an_entrys_total_however_often_it_is_fed(tmp_path):
 
 
 def test_a_corrupt_file_reads_as_empty_and_heals_on_next_wear(tmp_path):
-    store = tmp_path / ".poieo"
-    store.mkdir()
-    (store / "strength.json").write_text("{ not json", encoding="utf-8")
+    store = at(tmp_path).cache()
+    store.mkdir(parents=True)
+    at(tmp_path).strength().write_text("{ not json", encoding="utf-8")
 
     assert wear_of(tmp_path) == {}
     wear(tmp_path, [("a", "b")])
@@ -53,8 +54,9 @@ def test_a_corrupt_file_reads_as_empty_and_heals_on_next_wear(tmp_path):
 
 
 def test_wear_never_raises(tmp_path):
-    # A file where .poieo should be: every write must fail, quietly.
-    (tmp_path / ".poieo").write_text("in the way", encoding="utf-8")
+    # A file where the store's folder should be: every write must fail,
+    # quietly.
+    at(tmp_path).memory().write_text("in the way", encoding="utf-8")
     wear(tmp_path, [("a", "b")])  # must not raise
     assert wear_of(tmp_path) == {}
 
@@ -68,7 +70,7 @@ def test_one_bad_entry_does_not_wipe_the_rest(tmp_path):
     import json
 
     wear(tmp_path, [("a", "b")])
-    path = tmp_path / ".poieo" / "strength.json"
+    path = at(tmp_path).strength()
     data = json.loads(path.read_text(encoding="utf-8"))
     data["pairs"]["x|y"] = {"w": "abc", "at": "2026-08-24T00:00:00+00:00"}
     path.write_text(json.dumps(data), encoding="utf-8")

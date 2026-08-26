@@ -61,8 +61,9 @@ class DaemonConfig(ProjectSpec):
     what this adds is reading ``flows`` as flows rather than as whatever the
     document happened to say.
 
-    (``learn``'s other half stays the tasks folder's ``memory/``: a config key
-    alone must not conjure the feature for a project that never chose it.)
+    (``learn``'s other half stays the tasks folder's ``memory/longterm/``: a
+    config key alone must not conjure the feature for a project that never
+    chose it.)
     """
 
     flows: list[FlowSpec] = Field(default_factory=list)

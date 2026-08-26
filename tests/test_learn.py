@@ -9,6 +9,7 @@ success, and one bad proposal never wastes the night's good entries.
 import json
 import os
 
+from conftest import at
 from poieo.binding import BindingSpec
 from poieo.learn import learn
 from poieo.providers import ProviderPool
@@ -18,9 +19,9 @@ import poieo.learn as learning
 
 def _project(tmp_path, page="Never push to main."):
     project = tmp_path / "tasks"
-    (project / "memory" / "facts").mkdir(parents=True)
+    at(project).facts().mkdir(parents=True)
     if page is not None:
-        (project / "memory" / "constitution.md").write_text(page, encoding="utf-8")
+        at(project).constitution().write_text(page, encoding="utf-8")
     return project
 
 
@@ -42,7 +43,7 @@ def _episode(
 
 
 def _entry(project, slug, text):
-    (project / "memory" / "facts" / f"{slug}.md").write_text(text, encoding="utf-8")
+    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
 
 
 def _binding(script):
@@ -68,7 +69,7 @@ async def _learn(project, script):
 
 
 def _facts(project):
-    return sorted(p.name for p in (project / "memory" / "facts").glob("*.md"))
+    return sorted(p.name for p in at(project).facts().glob("*.md"))
 
 
 async def test_an_entry_learned_carries_the_runs_that_taught_it(tmp_path):
@@ -82,7 +83,7 @@ async def test_an_entry_learned_carries_the_runs_that_taught_it(tmp_path):
     )
 
     assert result.kept == ["batch-cap"]
-    text = (project / "memory" / "facts" / "batch-cap.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "batch-cap.md").read_text(encoding="utf-8")
     assert one in text
     assert "bbbbbbbb" not in text
     assert "Batches cap at 50." in text
@@ -100,7 +101,7 @@ async def test_a_forged_from_is_cut_to_the_records_actually_shown(tmp_path):
         ),
     )
 
-    text = (project / "memory" / "facts" / "cap.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "cap.md").read_text(encoding="utf-8")
     # Nothing it named was shown, so the whole night is the source.
     assert one in text and two in text
     assert "ffffffff" not in text
@@ -167,7 +168,7 @@ async def test_a_colliding_slug_never_overwrites(tmp_path):
     )
 
     assert result.kept == []
-    text = (project / "memory" / "facts" / "batch-cap.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "batch-cap.md").read_text(encoding="utf-8")
     assert text == "What a person wrote."
 
 
@@ -201,7 +202,7 @@ async def test_a_set_aside_changes_one_line_and_keeps_the_body(tmp_path):
     )
 
     assert result.set_aside == ["old-cap"]
-    text = (project / "memory" / "facts" / "old-cap.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "old-cap.md").read_text(encoding="utf-8")
     assert "superseded_by: new-cap" in text
     assert text.endswith(body)
     assert "scope: [importer]" in text
@@ -239,7 +240,7 @@ async def test_an_empty_proposal_is_a_success(tmp_path):
     result = await _learn(project, _proposal())
     assert result.error is None and result.upto == one and result.kept == []
 
-    record = (project / ".poieo" / "learning.jsonl").read_text(encoding="utf-8")
+    record = at(project).learning_log().read_text(encoding="utf-8")
     assert one in record
 
 
@@ -250,7 +251,7 @@ async def test_non_json_fails_the_pass_and_moves_nothing(tmp_path):
     result = await _learn(project, "the night was uneventful, thanks")
     assert result.error is not None
     assert _facts(project) == []
-    record = (project / ".poieo" / "learning.jsonl").read_text(encoding="utf-8")
+    record = at(project).learning_log().read_text(encoding="utf-8")
     assert "uneventful" not in record  # the record says it failed, not what the model said
 
 
@@ -259,7 +260,7 @@ async def test_the_page_is_never_written(tmp_path):
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal(entries=[{"slug": "cap", "body": "Caps hold."}]))
-    page = (project / "memory" / "constitution.md").read_text(encoding="utf-8")
+    page = at(project).constitution().read_text(encoding="utf-8")
     assert page == "Never push to main."
 
 
@@ -270,7 +271,7 @@ async def test_a_memoryless_project_never_gains_a_folder(tmp_path):
 
     result = await _learn(project, ["never called"])
     assert result is None
-    assert not (project / "memory").exists()
+    assert not at(project).longterm().exists()
 
 
 # -- the pass wears in what helped -------------------------------------------
@@ -446,7 +447,9 @@ async def test_a_doubted_entry_can_be_set_aside_by_the_pass(tmp_path):
 async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
     project = _project(tmp_path)
     _episode(project, "20260824T010000-aaaaaaaa")
-    before = sorted(str(p) for p in (project / "memory").rglob("*"))
+    # The layer a person audits, not the whole of `memory/`: `cache/` is
+    # under there too, and it is the one folder the machine owns.
+    before = sorted(str(p) for p in at(project).longterm().rglob("*"))
 
     result = await _learn(
         project,
@@ -456,11 +459,11 @@ async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
     )
 
     assert result.page == "Require ISO dates in the notebook."
-    record = (project / ".poieo" / "learning.jsonl").read_text(encoding="utf-8")
+    record = at(project).learning_log().read_text(encoding="utf-8")
     assert "Require ISO dates" in record
-    assert sorted(str(p) for p in (project / "memory").rglob("*")) == before
+    assert sorted(str(p) for p in at(project).longterm().rglob("*")) == before
     assert (
-        (project / "memory" / "constitution.md").read_text(encoding="utf-8")
+        at(project).constitution().read_text(encoding="utf-8")
         == "Never push to main."
     )
 
@@ -479,7 +482,7 @@ def _aged(path, days):
 def _old_aside(project, slug="old-cap", because="new-cap", days=120):
     _entry(project, because, "Caps sit at 50 now.")
     _entry(project, slug, f"---\nsuperseded_by: {because}\n---\nCaps sat at 10 once.")
-    _aged(project / "memory" / "facts" / f"{slug}.md", days)
+    _aged(at(project).facts() / f"{slug}.md", days)
 
 
 async def test_an_old_unreferenced_set_aside_moves_to_the_attic_whole(tmp_path):
@@ -488,8 +491,8 @@ async def test_an_old_unreferenced_set_aside_moves_to_the_attic_whole(tmp_path):
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal())
-    assert not (project / "memory" / "facts" / "old-cap.md").exists()
-    moved = (project / "memory" / "attic" / "old-cap.md").read_text(encoding="utf-8")
+    assert not (at(project).facts() / "old-cap.md").exists()
+    moved = (at(project).attic() / "old-cap.md").read_text(encoding="utf-8")
     assert moved == "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once."
 
 
@@ -504,7 +507,7 @@ async def test_a_referenced_set_aside_stays_however_old(tmp_path):
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal())
-    assert (project / "memory" / "facts" / "old-cap.md").exists()
+    assert (at(project).facts() / "old-cap.md").exists()
 
 
 async def test_a_fresh_set_aside_stays(tmp_path):
@@ -513,7 +516,7 @@ async def test_a_fresh_set_aside_stays(tmp_path):
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal())
-    assert (project / "memory" / "facts" / "old-cap.md").exists()
+    assert (at(project).facts() / "old-cap.md").exists()
 
 
 async def test_attic_entries_reach_no_load_no_report_no_prompt(tmp_path):
@@ -533,7 +536,7 @@ async def test_attic_entries_reach_no_load_no_report_no_prompt(tmp_path):
 async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
     project = _project(tmp_path)
     _old_aside(project)
-    attic = project / "memory" / "attic"
+    attic = at(project).attic()
     attic.mkdir()
     (attic / "old-cap.md").write_text("already here", encoding="utf-8")
     _episode(project, "20260824T010000-aaaaaaaa")
@@ -541,7 +544,7 @@ async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
     with caplog.at_level("WARNING", logger="poieo.learn"):
         await _learn(project, _proposal())
 
-    assert (project / "memory" / "facts" / "old-cap.md").exists()
+    assert (at(project).facts() / "old-cap.md").exists()
     assert (attic / "old-cap.md").read_text(encoding="utf-8") == "already here"
     assert any("attic" in message for message in caplog.messages)
 
@@ -571,7 +574,7 @@ async def test_a_file_anchor_is_sealed_when_the_pass_writes(tmp_path):
         ),
     )
 
-    text = (project / "memory" / "facts" / "feeds-note.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "feeds-note.md").read_text(encoding="utf-8")
     name = digest(notebook / "feeds.md")
     assert f'"notebook/feeds.md": "{name}"' in text
     assert kept(project, name).read_text(encoding="utf-8") == "# feeds\n- a\n- b\n"
@@ -592,7 +595,7 @@ async def test_a_directory_anchor_is_not_sealed_and_the_entry_lands(tmp_path):
     )
 
     assert result.kept == ["place-note"]
-    text = (project / "memory" / "facts" / "place-note.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "place-note.md").read_text(encoding="utf-8")
     assert "sealed" not in text
 
 
@@ -616,7 +619,7 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
     )
 
     assert result.kept == ["fat-note"]
-    text = (project / "memory" / "facts" / "fat-note.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "fat-note.md").read_text(encoding="utf-8")
     assert "sealed" not in text
     assert any("fat.bin" in note for note in result.dropped)
 
@@ -627,7 +630,7 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
 def _stale_blob(project, content=b"old bytes"):
     import hashlib
 
-    store = project / ".poieo" / "blobs"
+    store = at(project).blobs()
     store.mkdir(parents=True, exist_ok=True)
     name = hashlib.sha256(content).hexdigest()
     (store / name).write_bytes(content)
@@ -642,13 +645,13 @@ async def test_an_old_unreferenced_keepsake_is_let_go_and_listed(tmp_path):
 
     result = await _learn(project, _proposal())
     assert result.let_go == [name]
-    assert not (project / ".poieo" / "blobs" / name).exists()
+    assert not (at(project).blobs() / name).exists()
 
 
 async def test_a_keepsake_referenced_from_the_attic_survives(tmp_path):
     project = _project(tmp_path)
     name = _stale_blob(project)
-    attic = project / "memory" / "attic"
+    attic = at(project).attic()
     attic.mkdir()
     (attic / "old-note.md").write_text(
         "---\nanchors: ['notebook/feeds.md']\nsuperseded_by: old-note\n"
@@ -659,14 +662,14 @@ async def test_a_keepsake_referenced_from_the_attic_survives(tmp_path):
 
     result = await _learn(project, _proposal())
     assert result.let_go == []
-    assert (project / ".poieo" / "blobs" / name).exists()
+    assert (at(project).blobs() / name).exists()
 
 
 async def test_a_fresh_keepsake_survives(tmp_path):
     import hashlib
 
     project = _project(tmp_path)
-    store = project / ".poieo" / "blobs"
+    store = at(project).blobs()
     store.mkdir(parents=True)
     name = hashlib.sha256(b"fresh bytes").hexdigest()
     (store / name).write_bytes(b"fresh bytes")
@@ -696,10 +699,10 @@ async def test_a_damaged_pass_log_stops_neither_reader(tmp_path):
     # The page was written by the fixture a moment before the pass ran, and a
     # suggestion is withheld once the page is newer than it. Backdate the page
     # so this test is about the damaged log and nothing else.
-    page = project / "memory" / "constitution.md"
+    page = at(project).constitution()
     os.utime(page, (0, 0))
 
-    log = project / ".poieo" / "learn.jsonl"
+    log = at(project).learning_log()
     with log.open("a", encoding="utf-8") as handle:
         handle.write("\n[1, 2, 3]\n{ half a line\n")
 
@@ -744,7 +747,7 @@ async def test_the_same_entry_cannot_be_set_aside_twice_in_one_answer(tmp_path):
     )
 
     assert result.set_aside == ["old-cap"]
-    text = (project / "memory" / "facts" / "old-cap.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "old-cap.md").read_text(encoding="utf-8")
     assert "superseded_by: new-cap" in text and "other-cap" not in text
     assert any("already set aside" in line for line in result.dropped)
 
@@ -767,7 +770,7 @@ async def test_two_entries_cannot_set_each_other_aside(tmp_path):
 
     # The first aside stands; the second would lean the memory on nothing.
     assert result.set_aside == ["cap-a"]
-    text = (project / "memory" / "facts" / "cap-b.md").read_text(encoding="utf-8")
+    text = (at(project).facts() / "cap-b.md").read_text(encoding="utf-8")
     assert "superseded_by" not in text
 
 

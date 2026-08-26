@@ -6,7 +6,7 @@ away: every weight decays by age (a half-life, applied whenever it is
 read), and no entry's total can exceed the fan cap -- an entry connected to
 everything has weak claims on each.
 
-Deleting `.poieo/strength.json` loses which paths were worn, and nothing
+Deleting `memory/cache/strength.json` loses which paths were worn, and nothing
 else; the project relearns them by working. Accordingly, nothing in here is
 ever worth failing anything over: corrupt reads as empty, failed writes are
 logged and swallowed.
@@ -23,9 +23,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from .layout import Layout
+
 log = logging.getLogger("poieo.memory")
 
-FILE_NAME = "strength.json"
 # One reinforcement is worth 1.0 and halves every HALF_LIFE days untouched.
 HALF_LIFE_DAYS = 30.0
 # The most total wear one entry's connections may carry (the fan effect).
@@ -42,7 +43,7 @@ def _now() -> datetime:
 
 
 def _path(project_dir: Path) -> Path:
-    return Path(project_dir) / ".poieo" / FILE_NAME
+    return Layout(root=Path(project_dir)).strength()
 
 
 def _decayed(weight: float, since: str, now: datetime) -> float:

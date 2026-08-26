@@ -32,7 +32,7 @@ from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .learn import last_suggestion, learn as run_learning_pass
-from .memory import memory_report, memory_root, read_memory
+from .memory import keeps_memory, memory_report, read_memory
 from .project import find_project, find_project_file, init_project
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
@@ -847,7 +847,7 @@ def learn(
         _fail(_NO_BINDING)
     spec = load_binding(binding)
 
-    if not memory_root(project).is_dir():
+    if not keeps_memory(project):
         typer.echo(
             f"no memory here yet. Start one with {project / 'memory' / 'constitution.md'}"
         )
@@ -870,7 +870,7 @@ def learn(
     if result.dropped:
         typer.echo(
             f"let go     {len(result.dropped)} suggestion"
-            f"{'s' if len(result.dropped) != 1 else ''} (.poieo/learning.jsonl says why)"
+            f"{'s' if len(result.dropped) != 1 else ''} (memory/cache/learning.jsonl says why)"
         )
 
 

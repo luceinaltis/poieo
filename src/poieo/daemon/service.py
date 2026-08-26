@@ -14,7 +14,7 @@ from typing import Any, AsyncIterator, Callable
 from ..checkpoint import Checkpoint, CheckpointError
 from ..errors import PoieoError, SpecError
 from ..learn import learn as learn_pass
-from ..memory import memory_root
+from ..memory import keeps_memory
 from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
@@ -511,7 +511,7 @@ class Daemon:
         always yields to work: not one runner may be mid-run."""
         if self.config.learn is None or not self.config.tasks:
             return False
-        if not memory_root(self.config.resolve_path(self.config.tasks)).is_dir():
+        if not keeps_memory(self.config.resolve_path(self.config.tasks)):
             return False
         return all(runner.status == "waiting" for runner in self.runners)
 
