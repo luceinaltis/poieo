@@ -18,7 +18,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js"
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js"
 
-import { makeBench, standAnvil, turnAnvil, turnFigure } from "../src/skins/atelier/index"
+import { fistOf, makeBench, standAnvil, turnAnvil, turnFigure } from "../src/skins/atelier/index"
 import { SPARK_LIFE } from "../src/skins/atelier/strike"
 import anvilUrl from "../src/skins/atelier/anvil.glb?url"
 import forgeUrl from "../src/skins/atelier/forge.glb?url"
@@ -298,7 +298,17 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
       const out = across.clone().multiplyScalar(side === "Left" ? 1 : -1)
       const bend = (Math.acos(Math.max(-1, Math.min(1, u.dot(l)))) * 180) / Math.PI
       const away = (Math.atan2(u.dot(out), -u.dot(up)) * 180) / Math.PI
-      lines.push(`  ${side}: elbow bent ${bend.toFixed(1)} deg, upper arm ${away.toFixed(1)} deg out from the body`)
+      // Where the hand points: the middle of the flesh the wrist bone owns,
+      // because this rig has no finger bone to read a direction off.
+      const fist = fistOf(THREE, bench.group, side + "Hand")
+      const hand = bench.group.getObjectByName(side + "Hand")!
+      hand.localToWorld(fist)
+      const h = fist.clone().sub(wr).normalize()
+      const wrist = (Math.acos(Math.max(-1, Math.min(1, l.dot(h)))) * 180) / Math.PI
+      lines.push(
+        `  ${side}: elbow bent ${bend.toFixed(1)} deg, upper arm ${away.toFixed(1)} deg ` +
+        `out from the body, wrist off the forearm by ${wrist.toFixed(1)} deg`,
+      )
     }
   }
   const sheet = document.createElement("pre")
