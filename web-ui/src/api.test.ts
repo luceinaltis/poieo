@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
-import { fetchFlows, fetchRunEvents, fetchRuns, openFeed } from "./api"
+import { fetchFlows, fetchRunEvents, fetchRuns, openFeed, pause, resume, runNow } from "./api"
 import type { PoieoEvent } from "./types"
 
 class FakeEventSource {
@@ -38,7 +38,7 @@ class FakeEventSource {
 }
 
 function stubFetch(routes: Record<string, { status?: number; body: unknown }>) {
-  const fetchStub = vi.fn(async (path: string) => {
+  const fetchStub = vi.fn(async (path: string, _init?: RequestInit) => {
     const hit = routes[path]
     const status = hit ? (hit.status ?? 200) : 404
     return {
@@ -85,6 +85,36 @@ test("fetchRunEvents returns [] for a 404 run", async () => {
   stubFetch({})
   // A fresh daemon has no runs at all -- that is an empty board, not an error.
   await expect(fetchRunEvents("nope")).resolves.toEqual([])
+})
+
+test("the control verbs post to their routes and unwrap the answer", async () => {
+  const fetchStub = stubFetch({
+    "/api/flows/chores/pause": { body: { status: "paused" } },
+    "/api/flows/chores/resume": { body: { status: "waiting" } },
+    "/api/flows/chores/run": { body: { status: "starting" } },
+  })
+
+  expect(await pause("chores")).toEqual({ ok: true, status: "paused" })
+  expect(await resume("chores")).toEqual({ ok: true, status: "waiting" })
+  expect(await runNow("chores")).toEqual({ ok: true, status: "starting" })
+  for (const call of fetchStub.mock.calls) {
+    expect(call[1]).toEqual({ method: "POST" })
+  }
+})
+
+test("a refused run comes back as an answer, not a throw", async () => {
+  stubFetch({
+    "/api/flows/chores/run": {
+      status: 409,
+      body: { error: "a run is in flight", run_id: "r7" },
+    },
+  })
+
+  expect(await runNow("chores")).toEqual({
+    ok: false,
+    error: "a run is in flight",
+    run_id: "r7",
+  })
 })
 
 test("openFeed parses frames and reports status", () => {
