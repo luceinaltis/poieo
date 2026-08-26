@@ -45,17 +45,25 @@ flows:
       - when: "run.change"
         to: quick-review
         label: small
-      default: null
 
   - name: quick-review
     graph: graphs/review.yaml
     trigger: {type: manual}
 ```
 
-`when` / `to` / `label` / `default` are `graph.Branch`, imported, not
-re-declared. **First match wins and only one fires**, exactly as a `router` node
-routes. `to: null` and `default: null` mean *stop here* — the same null the
-router already uses to end a run.
+`when` / `to` / `label` are `graph.Branch`, imported, not re-declared. **First
+match wins and only one fires**, exactly as a `router` node routes.
+
+**There is no `default`.** A router needs one because a run has to go
+*somewhere*; a finished run does not, and handing off to nobody is what most
+flows do. So falling off the end of the list means "nothing happens", and a
+catch-all is a last branch whose condition is `"true"`. `to: null` still means
+*stop here* — the router's own null — which is how a branch says "matched, and
+deliberately no further" ahead of later branches.
+
+(A `default:` key beside the list would not even parse: YAML cannot hold a
+sequence and a named key at the same level. `NodeSpec` gets away with it because
+`branches` and `default` are two fields of the node, not one.)
 
 This is principle 7 doing its job: a user who has read one graph can read this
 block without being told anything. No new words enter the vocabulary.
