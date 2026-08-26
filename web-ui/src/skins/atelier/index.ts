@@ -128,6 +128,13 @@ const HAMMER_LONG = 0.34
  */
 const HAMMER_CLEAR = HAMMER_LONG
 
+/**
+ * How much of the generator's hand to keep. He models hands wide open with
+ * the fingers spread, and rigs them without finger bones, so they can never
+ * close; at three-quarter size they read as hands rather than as claws.
+ */
+const HAND_EASE = 0.78
+
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
 
@@ -803,6 +810,13 @@ export function makeBench(
       hanging.setFromUnitVectors(HANDLE, skyward)
       const working = acts.working.getEffectiveWeight()
       hammer.holder.quaternion.copy(hanging).slerp(swinging, working)
+
+      // Smaller hands, every frame. The generator drew them big and spread --
+      // there are no finger bones to close them with, and at any zoom a pair
+      // of splayed hands is the first thing the eye lands on. The clips carry
+      // scale tracks, so the mixer writes 1 back every update and this
+      // multiply stays a multiply rather than compounding.
+      for (const palm of palms) palm.bone.scale.multiplyScalar(HAND_EASE)
 
       // Turn the palms in. He was generated in an A-pose with his hands turned
       // up, and every clip retargeted onto him inherits it, so at rest he holds
