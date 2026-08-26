@@ -12,6 +12,7 @@
 
 import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { INSIDE, makeCabin } from "./cabin"
+import { step } from "./clock"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
 import { flexion, sideways, stretcher } from "./reach"
@@ -1205,9 +1206,13 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   }
 
   let running = true
-  const loop = () => {
+  // The clock takes its step from the frame's own timestamp; see clock.ts for
+  // what counting frames instead did to a phone.
+  let drawn = -1
+  const loop = (now: number) => {
     if (!running) return
-    elapsed += 16
+    elapsed += step(now, drawn)
+    drawn = now
     for (const bench of benches.values()) bench.tick(elapsed)
     draw()
     requestAnimationFrame(loop)
