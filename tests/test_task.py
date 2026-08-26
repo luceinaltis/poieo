@@ -359,8 +359,26 @@ def test_only_the_tail_reaches_the_prompt(tmp_path):
 
 def test_a_hand_written_line_is_read_like_any_other(tmp_path):
     task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    # By hand, in an editor, before the task has ever run -- so the folder is
+    # made the same way a person would make it.
+    task.journal_path().parent.mkdir(parents=True, exist_ok=True)
     task.journal_path().write_text("# t\n\nstop touching the README\n", encoding="utf-8")
     assert "stop touching the README" in read_journal(task.journal_path())
+
+
+def test_a_run_leaves_no_journal_among_the_definitions(tmp_path):
+    """Why the journal moved at all. A card is a thing a person edits; a
+    journal grows every night. Side by side, the folder of definitions went
+    dirty in git on every run, whether or not a definition had changed."""
+    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    definitions = sorted(p.name for p in (tmp_path / "tasks").glob("*.yaml"))
+
+    append_journal(task.journal_path(), "did", "tidied one file")
+
+    assert sorted(p.name for p in (tmp_path / "tasks").glob("*.yaml")) == definitions
+    assert list((tmp_path / "tasks").glob("*.md")) == []
+    assert task.journal_path() == at(tmp_path / "tasks").journal("t")
+    assert "tidied one file" in task.journal_path().read_text(encoding="utf-8")
 
 
 def test_the_generated_prompt_carries_the_journal(tmp_path):

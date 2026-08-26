@@ -6,13 +6,12 @@ back to the run that taught it. The harness writes it -- there is no tool, so
 nothing depends on a model remembering to remember.
 """
 
-from conftest import at
 import json
 from dataclasses import replace
 
 import pytest
 
-from conftest import EXAMPLES
+from conftest import EXAMPLES, at
 from poieo.binding import BindingSpec
 from poieo.daemon.config import load_config, load_flows
 from poieo.errors import SpecError

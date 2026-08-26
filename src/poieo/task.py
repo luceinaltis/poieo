@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
+from .layout import Layout
 from .memory import read_memory, write_episode
 from .tools import DEFAULT_TOOLSETS, Isolation
 
@@ -167,8 +168,17 @@ class TaskSpec(BaseModel):
         return self.resolve(self.folder)
 
     def journal_path(self) -> Path:
-        """Where this task remembers: beside it, under the same name."""
-        return self.dir / f"{self.slug}.md"
+        """Where this task remembers, under its own name.
+
+        Not beside the card any more. A card is a thing a person edits; a
+        journal is a thing that grows every night, and mixing the two meant
+        the folder of definitions went dirty in git on every run, whether or
+        not anyone had changed a definition. It sits with the rest of what
+        the project remembers instead, in the short-term room -- which is
+        what it always was: `memory/__init__` calls the journal the
+        short-term half in the same breath as calling `facts/` the long one.
+        """
+        return Layout(root=self.dir).journal(self.slug)
 
 
 def load_task(path: str | Path) -> TaskSpec:
@@ -484,5 +494,9 @@ def append_journal(
     stamp = (when or datetime.now()).strftime("%Y-%m-%d %H:%M")
 
     opening = "" if path.exists() else f"# {title or path.stem}\n\n"
+    # The journal used to sit beside the card, in a folder that had to exist
+    # for the card to have been read at all. `memory/shortterm/` need not,
+    # and the first line a task ever writes is the one that makes it.
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{opening}- {stamp} · {kind:<8}{one_line}\n")
