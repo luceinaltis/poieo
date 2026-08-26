@@ -263,8 +263,11 @@ resolve against the task file itself.
 
 ### What a task remembers
 
-Each task keeps a journal beside it -- `tasks/keep-improving.md` -- and reads it
-before every run.
+Each task keeps a journal -- `memory/shortterm/keep-improving.md`, named for the
+card -- and reads it before every run. It sits with the rest of what the project
+remembers, not among the cards: a card is a thing you edit, a journal is a thing
+that grows every night, and side by side the folder of definitions went dirty in
+git on every run.
 
 ```
 - 2026-08-22 03:14 . did     fixed the flaky interval test on Windows

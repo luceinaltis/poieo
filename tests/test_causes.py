@@ -1,5 +1,6 @@
 """A failed run says why in words -- classified once, shown everywhere."""
 
+from conftest import at
 import json
 
 from typer.testing import CliRunner
@@ -188,7 +189,7 @@ def test_a_failed_task_journals_the_sentence_not_the_repr(tmp_path):
     )
     result = runner.invoke(app, ["run", str(card), "--no-log"])
     assert result.exit_code == 1
-    journal = (tmp_path / "card.md").read_text(encoding="utf-8")
+    journal = at(tmp_path).journal("card").read_text(encoding="utf-8")
     assert "failed" in journal
     assert "ran out of turns" in journal
     assert "NodeError" not in journal

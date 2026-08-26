@@ -1,4 +1,3 @@
-from conftest import at
 import asyncio
 import socket
 from datetime import datetime
@@ -6,7 +5,7 @@ from datetime import datetime
 import httpx
 import pytest
 
-from conftest import EXAMPLES
+from conftest import EXAMPLES, at
 from poieo.daemon import Daemon, load_config, load_flows
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free

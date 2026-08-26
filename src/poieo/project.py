@@ -211,8 +211,10 @@ below -- there is no API to learn beyond this page.
 - `poieo.yaml` -- the project: store, default binding, tasks folder.
 - `tasks/*.yaml` -- one card per standing task: `name`, `folder`, `prompt`
   (optionally `every`/`at` for schedule, `binding`, `enabled`, `tools`).
-  A card's identity is its filename. `tasks/<card>.md` is that task's
-  journal: append a line to leave it a note; never rewrite its history.
+  A card's identity is its filename.
+- `memory/shortterm/<card>.md` -- that task's journal: append a line to
+  leave it a note; never rewrite its history. It lives here rather than
+  beside the card so that `tasks/` holds definitions and nothing else.
 - `bindings/*.yaml` -- which physical model serves each role.
   `bindings/mock.yaml` answers from a script: free, offline.
 - `.poieo/` -- derived state (run logs, episodes). Read freely, never edit.

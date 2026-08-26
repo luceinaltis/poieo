@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from test_checkpoint import make_repo
 
-from conftest import EXAMPLES
+from conftest import EXAMPLES, at
 from poieo.cli import app
 
 runner = CliRunner()
@@ -357,7 +357,7 @@ def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
 
     noted = runner.invoke(app, ["note", str(path), "leave the README alone"])
     assert noted.exit_code == 0
-    assert "leave the README alone" in (tmp_path / "tasks" / "tidy.md").read_text(
+    assert "leave the README alone" in at(tmp_path / "tasks").journal("tidy").read_text(
         encoding="utf-8"
     )
 
@@ -611,7 +611,7 @@ def test_run_writes_the_journal(tmp_path):
     card = _self_bound_card(tmp_path)
     result = runner.invoke(app, ["run", str(card), "--no-log"])
     assert result.exit_code == 0, result.output
-    journal = (tmp_path / "card.md").read_text(encoding="utf-8")
+    journal = at(tmp_path).journal("card").read_text(encoding="utf-8")
     assert "did" in journal
 
 
