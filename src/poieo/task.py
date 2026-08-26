@@ -333,6 +333,11 @@ def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
 
 # What a task writes at the end of its own run. The last such line is the
 # bookmark: everything after it arrived while the task was not looking.
+#
+# "nothing" is DESIGN.md's third outcome for a piece of work -- succeeded,
+# failed, or found nothing to do -- and no writer produces it yet. It is here
+# so that the day one does, old journals and new read alike; it is reserved,
+# not dead.
 OWN_KINDS = ("did", "nothing")
 # One entry looks like: `- <date> <time> {sep} <kind padded> <text>`.
 PREFIX = "- "
@@ -442,7 +447,12 @@ def append_journal(
     title: str | None = None,
     when: datetime | None = None,
 ) -> None:
-    """Add one line. ``kind`` is did / nothing / failed / you."""
+    """Add one line.
+
+    ``kind`` is what wrote it: ``did`` or ``failed`` for a run of this task,
+    ``you`` for the user, ``task`` for a note from a sibling. Only the first
+    two count as the task's own; see OWN_KINDS.
+    """
     one_line = " ".join(str(text).split()) or "(nothing said)"
     if len(one_line) > JOURNAL_WIDTH:
         one_line = one_line[: JOURNAL_WIDTH - 3] + "..."

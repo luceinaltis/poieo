@@ -6,7 +6,7 @@ import { atelier } from "./atelier"
 import type { Skin } from "./contract"
 import { ledger } from "./ledger"
 
-// Listing a skin here must not pull its renderer in: atelier's PixiJS stays
+// Listing a skin here must not pull its renderer in: atelier's three.js stays
 // behind a dynamic import inside its own module.
 export const SKINS: Skin[] = [atelier, ledger]
 
