@@ -12,6 +12,7 @@ from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec, load_document, load_graph
 from ..memory import check_memory, read_memory
+from ..project import ProjectSpec
 from ..tools import Isolation
 from ..task import TaskSpec, expand, load_tasks, read_journal
 from .triggers import TriggerSpec
@@ -51,26 +52,21 @@ class FlowSpec(BaseModel):
         return self
 
 
-class DaemonConfig(BaseModel):
-    """The whole daemon: shared defaults plus a list of flows."""
+class DaemonConfig(ProjectSpec):
+    """A project, plus the flows something intends to actually run.
 
-    model_config = ConfigDict(extra="forbid")
+    The paths -- store, binding, tasks, learn -- and how they resolve are the
+    project's and live in :class:`~poieo.project.ProjectSpec`. One schema, so
+    a key cannot mean one thing to `poieo run` and another to `poieo daemon`;
+    what this adds is reading ``flows`` as flows rather than as whatever the
+    document happened to say.
 
-    version: int = 1
-    # Where run logs are written.
-    store: str = ".poieo"
-    # Default binding for flows that do not name one.
-    binding: str | None = None
+    (``learn``'s other half stays the tasks folder's ``memory/``: a config key
+    alone must not conjure the feature for a project that never chose it.)
+    """
+
     flows: list[FlowSpec] = Field(default_factory=list)
-    # A folder of task files; each one expands into a flow. See poieo.task.
-    tasks: str | None = None
-    # How often the project sits down to learn from its run records
-    # (a duration: "1d"). Absent means never. The tasks folder's memory/
-    # stays the other half of the opt-in -- a config key alone must not
-    # conjure the feature for a project that never chose it.
-    learn: str | None = None
 
-    source_path: Path | None = Field(default=None, exclude=True)
     # What each task-backed flow came from, by flow name. Filled by
     # load_config; anything a document puts here is discarded.
     task_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
@@ -100,19 +96,7 @@ class DaemonConfig(BaseModel):
                 )
         return self
 
-    # -- path helpers --------------------------------------------------------
-    @property
-    def base_dir(self) -> Path:
-        return self.source_path.parent if self.source_path else Path.cwd()
-
-    def resolve_path(self, relative: str) -> Path:
-        """Resolve a path relative to the config file, not the cwd."""
-        path = Path(relative)
-        return path if path.is_absolute() else (self.base_dir / path)
-
-    def store_path(self) -> Path:
-        return self.resolve_path(self.store)
-
+    # -- path helpers the flows need; the rest are the project's -------------
     def workdir_path(self, flow: FlowSpec) -> Path | None:
         # Resolved: this one is handed to a subprocess and shown in warnings,
         # so "examples/.." helps nobody.
