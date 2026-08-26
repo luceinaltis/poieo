@@ -84,6 +84,47 @@ def _review_state(runner: Any) -> dict[str, Any]:
         return {"pending": 0, "into": None}
 
 
+def _branches(branches: Any) -> list[dict[str, Any]]:
+    """How an arrow is drawn: where it goes, and the word on it.
+
+    One shape for a router's branches and for a flow's `then:`, because they
+    are the same `Branch` one level apart -- a view that can draw one can draw
+    the other, and the reader learns one arrow rather than two.
+
+    The label falls back to the condition exactly as `RouterNode` does when it
+    records which arm it took, so the board and the run record never disagree
+    about what to call an arrow.
+    """
+    return [{"to": branch.to, "label": branch.label or branch.when} for branch in branches]
+
+
+def _shape(graph: Any) -> dict[str, Any]:
+    """A graph's wiring: enough to draw it, and nothing else.
+
+    Deliberately not the whole GraphSpec. Prompts and system messages are long,
+    are of no use to a drawing, and this rides on every board paint to every
+    browser watching -- a graph's text is exactly the sort of thing a person
+    would be surprised to have broadcast.
+    """
+    return {
+        "entry": graph.entry,
+        "nodes": [
+            {
+                "id": node.id,
+                "type": node.type,
+                "next": node.next,
+                "default": node.default,
+                "branches": _branches(node.branches),
+                # Absent rather than null when the editor never placed it: a
+                # view that lays out unplaced nodes itself needs to tell the
+                # difference between "at the origin" and "nowhere yet".
+                **({"ui": {"x": node.ui.x, "y": node.ui.y}} if node.ui else {}),
+            }
+            for node in graph.nodes
+        ],
+    }
+
+
 def create_app(daemon: Any) -> Starlette:
     """Build the app over a daemon-shaped object (.runners, .store)."""
 
@@ -105,6 +146,10 @@ def create_app(daemon: Any) -> Starlette:
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
                     **state,
+                    # The two halves of the work graph: which flow this one
+                    # hands to, and what it walks on the way there.
+                    "then": _branches(runner.flow.spec.then),
+                    "shape": _shape(runner.flow.graph),
                 }
             )
         return JSONResponse({"flows": rows})

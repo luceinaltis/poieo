@@ -14,6 +14,8 @@ const row = (name: string): FlowRow => ({
   last_run: null,
   pending: 0,
   into: null,
+  then: [],
+  shape: { entry: "", nodes: [] },
 })
 
 test("every worker is changed the first time a skin sees it", () => {

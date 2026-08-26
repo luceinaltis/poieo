@@ -15,6 +15,8 @@ const FLOWS: FlowRow[] = [
     last_run: null,
     pending: 0,
     into: null,
+    then: [],
+    shape: { entry: "", nodes: [] },
   },
   {
     name: "revision",
@@ -25,6 +27,8 @@ const FLOWS: FlowRow[] = [
     last_run: null,
     pending: 0,
     into: null,
+    then: [],
+    shape: { entry: "", nodes: [] },
   },
 ]
 

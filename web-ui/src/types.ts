@@ -32,10 +32,43 @@ export interface RunSummary {
   finished_at: string
   steps: number
   iteration: number
+  /** What actually fired this run -- a schedule, "run now", or "after <flow>". */
+  trigger: string
   usage: Usage
   error: string | null
   /** Absent when the run altered nothing -- which is not the same as null. */
   change?: Change
+}
+
+/**
+ * One arrow, wherever it is drawn.
+ *
+ * A router's branches and a flow's `then:` are the same `Branch` one level
+ * apart, so the wire gives them the same shape and a view learns one arrow
+ * rather than two. `to` is null when the branch deliberately ends there, and
+ * `label` falls back to the condition when the author named no word for it --
+ * the same fallback the run record uses.
+ */
+export interface Arrow {
+  to: string | null
+  label: string
+}
+
+/** One node of a graph, as much of it as a drawing needs. */
+export interface NodeShape {
+  id: string
+  type: string
+  next: string | null
+  default: string | null
+  branches: Arrow[]
+  /** Absent -- not zeroed -- when the editor never placed this node. */
+  ui?: { x: number; y: number }
+}
+
+/** A graph's wiring. No prompts: they are long, and this rides every paint. */
+export interface GraphShape {
+  entry: string
+  nodes: NodeShape[]
 }
 
 export interface FlowRow {
@@ -49,6 +82,10 @@ export interface FlowRow {
   pending: number
   /** What accepting them would add to; null when the flow keeps no copy. */
   into: string | null
+  /** Which flow works next, and on what condition. Empty for most flows. */
+  then: Arrow[]
+  /** What this flow walks on the way there. */
+  shape: GraphShape
 }
 
 /**

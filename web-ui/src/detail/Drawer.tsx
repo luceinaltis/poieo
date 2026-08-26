@@ -151,6 +151,8 @@ export const Drawer = memo(function Drawer({
         last_run: null,
         pending: 0,
         into: null,
+        then: [],
+        shape: { entry: "", nodes: [] },
       },
     ])
     return replay(scratch, events).workers[flow] ?? null
