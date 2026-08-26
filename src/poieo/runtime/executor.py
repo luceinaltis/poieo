@@ -166,6 +166,7 @@ async def execute(
         usage=ctx.usage.as_dict(),
         outputs=unwrap(ctx.outputs),
         state=unwrap(ctx.state),
+        trigger=trigger,
         error=error,
         cause=cause.as_dict() if cause else None,
         iteration=iteration,

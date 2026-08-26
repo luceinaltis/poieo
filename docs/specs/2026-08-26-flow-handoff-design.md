@@ -57,7 +57,8 @@ match wins and only one fires**, exactly as a `router` node routes.
 **There is no `default`.** A router needs one because a run has to go
 *somewhere*; a finished run does not, and handing off to nobody is what most
 flows do. So falling off the end of the list means "nothing happens", and a
-catch-all is a last branch whose condition is `"true"`. `to: null` still means
+catch-all is a last branch whose condition is `"True"` -- the Python
+literal, not YAML's, because a condition is parsed as Python. `to: null` still means
 *stop here* — the router's own null — which is how a branch says "matched, and
 deliberately no further" ahead of later branches.
 
@@ -133,23 +134,29 @@ Waking a flow without telling it why is half a feature: `quick-review` has to
 know *what* to review.
 
 The upstream result arrives in the downstream run's input under one key,
-`from`. `LoadedFlow.read_input` merges it last, beside `input:`, `input_file:`
-and the task payload it already merges. The receiving graph reads it with the
-templating it already has:
+`sender`. `LoadedFlow.read_input` merges it last, beside `input:`,
+`input_file:` and the task payload it already merges. The receiving graph
+reads it with the templating it already has:
 
 ```yaml
 prompt: |
   Review what chores just did.
-  It said: {{ input.from.change.message }}
-  Files: {{ input.from.change.files }}
+  It said: {{ input.sender.change.message }}
+  Files: {{ input.sender.change.files }}
 ```
 
 **`input:` is not templated and does not become templated here.** It is a plain
 mapping today (`read_input` returns `dict(self.spec.input)` and nothing else),
 and prompts are where poieo expands things. Adding a second expansion site so
-`input:` could say `{{ from.… }}` would buy nothing the prompt cannot already do.
+`input:` could say `{{ sender.… }}` would buy nothing the prompt cannot
+already do.
 
-`from` carries the same object the condition saw, minus `usage`, which is
+**`sender`, not `from`.** Conditions and templates are parsed as Python, where
+`from` is a keyword -- `input.from.change` does not even parse. `sender` is
+also what `tools/notes.py` already calls the other end of a message, so the
+word costs nothing to learn.
+
+`sender` carries the same object the condition saw, minus `usage`, which is
 machinery. One rule, no second list to keep in sync: **whatever the branch could
 test, the next run can read.**
 
@@ -249,6 +256,6 @@ Three PRs, in this order, each green on its own:
 1. **The block and its checks** — `then:` on `FlowSpec` reusing `Branch`; load-time
    validation and warnings (§5). No runtime behaviour: a wired config loads,
    validates, and does nothing yet.
-2. **The handoff** — evaluate on run end, park the kick, merge `from` into the
+2. **The handoff** — evaluate on run end, park the kick, merge `sender` into the
    next payload, depth counter, `fire.reason` into the run record (§2–§5).
 3. **The wire** — `then` on `/api/flows` (§6).
