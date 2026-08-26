@@ -1,10 +1,16 @@
-"""The observation API served from inside the daemon.
+"""The observation and control API served from inside the daemon.
 
-Almost everything here answers "what is happening / what happened". The two
-exceptions are accept and discard, which are the morning review: the moment
-the user's own files are allowed to change, and the only routes in this file
-that write anything. They are marked again where they are registered. If you
-are adding a third, stop.
+Almost everything here answers "what is happening / what happened". The
+routes that change anything come in exactly two kinds, one fence each:
+
+- **The review** -- accept and discard. The moment the user's own files are
+  allowed to change, and the only routes that may ever touch them. If you
+  are adding a third of these, stop.
+- **Control** -- pause, resume, run-now. These touch the daemon's runtime
+  state and nothing else: no file, no schedule on disk, nothing that
+  survives a restart.
+
+Both kinds are marked again where they are registered.
 """
 
 from __future__ import annotations
@@ -175,6 +181,36 @@ def create_app(daemon: Any) -> Starlette:
     async def flow_discard(request: Request) -> JSONResponse:
         return await _decide(request, "discard", "from_run_id")
 
+    def _no_flow(request: Request) -> JSONResponse:
+        flow = request.path_params["flow"]
+        return JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+
+    async def flow_pause(request: Request) -> JSONResponse:
+        runner = _runner_for(daemon, request.path_params["flow"])
+        if runner is None:
+            return _no_flow(request)
+        return JSONResponse({"status": runner.pause()})
+
+    async def flow_resume(request: Request) -> JSONResponse:
+        runner = _runner_for(daemon, request.path_params["flow"])
+        if runner is None:
+            return _no_flow(request)
+        return JSONResponse({"status": runner.resume()})
+
+    async def flow_run(request: Request) -> JSONResponse:
+        runner = _runner_for(daemon, request.path_params["flow"])
+        if runner is None:
+            return _no_flow(request)
+        if not runner.run_now():
+            # Iterations never overlap; the refusal names the run in the way.
+            return JSONResponse(
+                {"error": "a run is in flight", "run_id": runner.current_run_id},
+                status_code=409,
+            )
+        # "starting", not "running": the runner picks the fire up on the next
+        # turn of the shared event loop, after this response is already gone.
+        return JSONResponse({"status": "starting"})
+
     async def events(request: Request) -> StreamingResponse:
         flow = request.query_params.get("flow")
         return StreamingResponse(
@@ -199,10 +235,14 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/events", events),
-        # The only two routes in this file that change anything. Everything
-        # else answers "what happened"; if you are adding a third, stop.
+        # The review: the only routes that may touch the user's own files.
+        # If you are adding a third of these, stop.
         Route("/api/flows/{flow}/accept", flow_accept, methods=["POST"]),
         Route("/api/flows/{flow}/discard", flow_discard, methods=["POST"]),
+        # Control: the daemon's runtime state and nothing else.
+        Route("/api/flows/{flow}/pause", flow_pause, methods=["POST"]),
+        Route("/api/flows/{flow}/resume", flow_resume, methods=["POST"]),
+        Route("/api/flows/{flow}/run", flow_run, methods=["POST"]),
         Route("/", index),
     ]
     # Vite emits static/assets/<hashed name> and references it as /assets/...,
