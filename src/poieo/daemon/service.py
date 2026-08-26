@@ -7,12 +7,15 @@ import logging
 import signal
 import socket
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
 from ..checkpoint import Checkpoint, CheckpointError
-from ..errors import PoieoError, SpecError
+from ..errors import ExpressionError, PoieoError, SpecError
+from ..expr import evaluate, wrap
+from ..graph import Branch
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
 from ..providers import ProviderPool
@@ -86,6 +89,55 @@ PAUSE_AFTER = 3
 # otherwise accumulates every output of every night for the daemon's lifetime.
 RESULTS_KEPT = 20
 
+# How far one chain of handoffs may reach. `max_steps` guards a cycle inside a
+# graph; this is the same guard one level up, and for the same reason: a loop
+# between flows is legitimate, running forever is not. A constant like
+# PAUSE_AFTER, and for the same reason.
+MAX_CHAIN = 10
+
+
+def handoff_scope(result: RunResult) -> dict[str, Any]:
+    """What a `then:` branch may test, and what the next run reads as `sender`.
+
+    One shape, not two, so there is no second list to keep in sync: whatever
+    the condition could ask about, the run it starts can read. ``usage`` is
+    left out because it is machinery and nothing branches on a token count.
+
+    ``change`` is present and None when a run altered nothing -- unlike
+    :meth:`RunResult.summary`, which drops the key. ``when: "run.change"`` is
+    the commonest branch there is, and it has to read false rather than raise.
+    """
+    return {
+        "run_id": result.run_id,
+        "flow": result.flow,
+        "graph": result.graph,
+        "status": result.status,
+        "started_at": result.started_at,
+        "finished_at": result.finished_at,
+        "steps": result.steps,
+        "iteration": result.iteration,
+        "path": list(result.path),
+        "outputs": result.outputs,
+        "state": result.state,
+        "error": result.error,
+        "cause": result.cause,
+        "change": result.change,
+    }
+
+
+@dataclass(slots=True)
+class Handoff:
+    """One flow's finished run, offered to the flow it named.
+
+    Carries the depth so a chain can be bounded without any flow having to know
+    how it was reached, and the reason so the next run can record what fired it
+    rather than the schedule it did not use.
+    """
+
+    result: dict[str, Any]
+    reason: str
+    depth: int
+
 
 class FlowRunner:
     """Drives one flow: trigger -> run -> carry state -> repeat."""
@@ -99,6 +151,7 @@ class FlowRunner:
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
         hands: Any = None,
+        handoff: Callable[["FlowRunner", RunResult, int], None] | None = None,
     ):
         self.flow = flow
         self.config = config
@@ -122,6 +175,11 @@ class FlowRunner:
         self._kick = False
         self._wake = asyncio.Event()
         self._manual_fires = 0
+        # A handoff waiting for this flow to be free, and the depth of the run
+        # currently in flight. At most one waits: see `hand`.
+        self._handed: Handoff | None = None
+        self._depth = 0
+        self.handoff = handoff
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
         self._pending: asyncio.Task[Fire] | None = None
@@ -222,6 +280,29 @@ class FlowRunner:
         self._wake.set()
         return True
 
+    @property
+    def holding(self) -> bool:
+        """Whether a hold is on -- by hand, or by this flow's own failures."""
+        return self._hold
+
+    def hand(self, handoff: Handoff) -> Handoff | None:
+        """Take a handoff, and say which one it displaced.
+
+        Unlike run_now this does not refuse mid-run: it parks, and the run
+        loop finds it when the current run ends. But **one** parks. This is
+        the interval trigger's own rule one level up -- a run that overran its
+        period skips the missed ticks rather than queuing them -- because a
+        flow that has fallen behind should work on the latest thing, not grind
+        through a backlog it can never clear.
+
+        The newest wins, and the caller logs what it lost: a handoff that
+        disappears without a word is the one outcome this must not have.
+        """
+        displaced, self._handed = self._handed, handoff
+        self._kick = True
+        self._wake.set()
+        return displaced
+
     async def _woken(self) -> None:
         """Parked: wait for a verb or shutdown, the trigger left unconsumed."""
         woke = asyncio.ensure_future(self._wake.wait())
@@ -256,8 +337,11 @@ class FlowRunner:
             if self._kick:
                 self._kick = False
                 self._manual_fires += 1
+                # A handoff and a run-now are the same kick; only the reason
+                # differs, and the reason is what the run will record.
+                reason = self._handed.reason if self._handed else "run now"
                 return Fire(
-                    iteration=self._manual_fires, at=datetime.now(), reason="run now"
+                    iteration=self._manual_fires, at=datetime.now(), reason=reason
                 )
             if self._hold:
                 self.status = "paused"
@@ -313,11 +397,24 @@ class FlowRunner:
 
     async def _one_run(self, fire: Fire) -> bool:
         """One firing, end to end. False when the runner should stand down."""
+        # Taken whether or not the read below succeeds: a handoff left parked
+        # would ride along with whatever fired next, which is not what it was.
+        handed, self._handed = self._handed, None
+        self._depth = handed.depth if handed is not None else 0
         try:
             payload = self.flow.read_input(self.config)
         except PoieoError as exc:
             log.error("flow '%s': %s", self.name, exc)
             return self.flow.spec.on_error != "stop"
+        if handed is not None:
+            # Merged last, after the static input and the task payload: what
+            # woke this run is the most specific thing it knows.
+            #
+            # `sender`, not `from`: conditions and templates are parsed as
+            # Python, where `from` is a keyword, so `input.from.change`
+            # would not even parse. `sender` is what notes.py already calls
+            # the other end of a message.
+            payload["sender"] = handed.result
 
         log.info(
             "flow '%s' firing (iteration %d, %s)",
@@ -337,7 +434,10 @@ class FlowRunner:
                 input=payload,
                 state=dict(self.state) if self.flow.spec.carry_state else None,
                 flow=self.name,
-                trigger=self.trigger.describe,
+                # What actually fired this run, not the schedule it may not
+                # have used: a run-now on a cron flow used to record the cron,
+                # and a handoff would have recorded a schedule that never rang.
+                trigger=fire.reason,
                 iteration=fire.iteration,
                 run_id=run_id,
                 cancel=self.cancel,
@@ -353,6 +453,13 @@ class FlowRunner:
             self.state = result.state
 
         pause = self._note_outcome(result)
+        if self.handoff is not None and self.flow.spec.then:
+            # Ahead of the stand-down below: the run happened, and what it says
+            # should work next does not depend on whether this runner carries
+            # on. A flow that pauses itself on a third failure is exactly the
+            # one whose `broke` branch someone wanted.
+            self.handoff(self, result, self._depth)
+
         if result.status == "completed":
             log.info(
                 "flow '%s' run %s completed in %d step(s) [%s]",
@@ -491,9 +598,83 @@ class Daemon:
                 self.cancel,
                 self.on_run,
                 self._hands_for(flow),
+                # Bound, so it resolves against self.runners at call time --
+                # which is after this list has been built and assigned.
+                self._hand_off,
             )
             for flow in self.flows
         ]
+
+    # -- handing one flow's finished work to the flow it named ---------------
+
+    def _chosen(self, sender: FlowRunner, run: dict[str, Any]) -> Branch | None:
+        """The first branch that matches, router-style, or None.
+
+        A branch that cannot be evaluated is skipped rather than fatal. A
+        router raises and takes the run with it, which is right while a run is
+        still going; here the sender has already finished and landed its
+        change, so there is nothing left to fail. The next branch gets its
+        turn, and the mistake is logged against the flow that made it.
+        """
+        scope = {"run": wrap(run)}
+        for index, branch in enumerate(sender.flow.spec.then):
+            try:
+                if evaluate(branch.when, scope):
+                    return branch
+            except ExpressionError as exc:
+                log.warning(
+                    "flow '%s' then[%d] (%r): %s -- treating it as no match.",
+                    sender.name,
+                    index,
+                    branch.when,
+                    exc,
+                )
+        return None
+
+    def _hand_off(self, sender: FlowRunner, result: RunResult, depth: int) -> None:
+        run = handoff_scope(result)
+        branch = self._chosen(sender, run)
+        if branch is None or branch.to is None:
+            return  # nothing matched, or a branch that deliberately stops
+
+        if depth >= MAX_CHAIN:
+            log.warning(
+                "flow '%s' would hand off to '%s', but this chain has already "
+                "made %d handoffs and stops here. Check for a loop.",
+                sender.name,
+                branch.to,
+                depth,
+            )
+            return
+
+        target = next((r for r in self.runners if r.name == branch.to), None)
+        if target is None:
+            # Disabled, so it has no runner. check_handoffs already said so at
+            # load; saying it again per run would be noise.
+            return
+        if target.holding:
+            log.warning(
+                "flow '%s' handed off to '%s', which is paused: dropped. "
+                "Resume it and the next handoff lands.",
+                sender.name,
+                branch.to,
+            )
+            return
+
+        label = branch.label or branch.when
+        displaced = target.hand(
+            Handoff(result=run, reason=f"after {sender.name} ({label})", depth=depth + 1)
+        )
+        if displaced is not None:
+            # Said out loud, always: the whole reason only one handoff waits is
+            # that a backlog cannot be worked off, and a loss nobody hears
+            # about is the failure mode that buys.
+            log.warning(
+                "flow '%s' was still busy, so an earlier handoff (%s) was "
+                "dropped in favour of this one.",
+                branch.to,
+                displaced.reason,
+            )
 
     def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
         if flow.binding_key not in self.pools:

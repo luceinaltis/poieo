@@ -113,6 +113,10 @@ class RunResult:
     # known causes matched. The raw error above is always kept beside it.
     cause: dict[str, Any] | None = None
     iteration: int = 0
+    # What actually fired this run -- "cron 0 2 * * *", "run now", "after
+    # chores (changed)". Not the flow's configured schedule, which may well not
+    # be what rang: a run-now and a handoff both happen outside it.
+    trigger: str = ""
     # Set after the run by the daemon when the flow keeps a private copy.
     change: dict[str, Any] | None = None
 
@@ -126,6 +130,7 @@ class RunResult:
             "finished_at": self.finished_at,
             "steps": self.steps,
             "iteration": self.iteration,
+            "trigger": self.trigger,
             "usage": self.usage,
             "error": self.error,
         }
