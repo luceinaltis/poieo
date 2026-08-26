@@ -747,3 +747,20 @@ def test_validate_accepts_a_graph_that_leaves_the_workdir_open():
     assert "valid" in result.stdout
     assert "workdir" in result.stdout  # but it says one will be needed
     assert "work" in result.stdout  # and names the node that needs it
+
+
+def test_both_commands_that_look_for_a_project_say_the_same_thing(tmp_path, monkeypatch):
+    """`daemon` and `flows` each fall back to the project's poieo.yaml, and
+    each has to refuse when there is none. The refusal is a sentence the user
+    reads, so there is one wording of it, not one per command."""
+    monkeypatch.chdir(tmp_path)  # no poieo.yaml here or above
+
+    refusals = []
+    for command in (["daemon"], ["flows"]):
+        result = runner.invoke(app, command)
+        assert result.exit_code == 1, command
+        refusals.append(result.stderr.strip())
+
+    assert "no poieo.yaml found here or above" in refusals[0]
+    assert "poieo init" in refusals[0]
+    assert refusals[0] == refusals[1]

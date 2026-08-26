@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 
 import typer
 import yaml
@@ -82,7 +82,7 @@ def _guarded(fn):
     return wrapper
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     typer.secho(f"error: {message}", fg=typer.colors.RED, err=True)
     raise typer.Exit(code=1)
 
@@ -178,6 +178,24 @@ def _find_binding(
     if project is not None and project.binding:
         return project.resolve_path(project.binding), project.source_path
     return None, None
+
+
+def _project_file(named: "Path | None") -> Path:
+    """The config to work from: the one the user named, or the project's.
+
+    Both callers used to spell this refusal out themselves, in the same eight
+    lines. A sentence the user reads is a thing with one wording, and two
+    copies of it are two chances for that to stop being true.
+    """
+    if named is not None:
+        return named
+    found = find_project_file()
+    if found is None:
+        _fail(
+            "no poieo.yaml found here or above; pass a config file, "
+            "or run `poieo init`"
+        )
+    return found
 
 
 def _load_card(path: Path) -> "TaskSpec | None":
@@ -613,13 +631,7 @@ def daemon(
 ) -> None:
     """Start the resident scheduler and keep flows running."""
     _setup_logging(verbose)
-    if config_path is None:
-        config_path = find_project_file()
-        if config_path is None:
-            _fail(
-                "no poieo.yaml found here or above; pass a config file, "
-                "or run `poieo init`"
-            )
+    config_path = _project_file(config_path)
     if config_path.is_dir():
         # `poieo daemon tasks/` is the natural guess once cards exist,
         # so it is a spelling of the same thing, not an error.
@@ -714,14 +726,7 @@ def flows(
     ),
 ) -> None:
     """List the flows a daemon config would run, with their triggers and bindings."""
-    if config_path is None:
-        config_path = find_project_file()
-        if config_path is None:
-            _fail(
-                "no poieo.yaml found here or above; pass a config file, "
-                "or run `poieo init`"
-            )
-    config = load_config(config_path)
+    config = load_config(_project_file(config_path))
     loaded = load_flows(config, enabled_only=False)
 
     for item in loaded:
