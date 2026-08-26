@@ -1,9 +1,11 @@
-"""A folder is a project when it holds a ``poieo.yaml``.
+"""What a ``poieo.yaml`` says, and how a folder comes to have one.
 
-Discovery walks from a starting directory upward and stops at the first
-marker, the way git finds ``.git``. Commands use it to fill flags the user
-left silent -- the flag always wins, and discovery only fills silence, so a
-folder with no marker behaves exactly as it always has.
+Discovery -- walking upward for the marker, the way git finds ``.git`` --
+lives in :mod:`poieo.layout`, beside the rest of the answer to "where does
+this project keep things"; it is re-exported here because that is where its
+callers have always found it. Commands use it to fill flags the user left
+silent: the flag always wins, and discovery only fills silence, so a folder
+with no marker behaves exactly as it always has.
 
 **A project is the paths its marker names, and nothing more.** What a command
 wants from discovery is where the store is and which binding to default to;
@@ -23,7 +25,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from .errors import SpecError, describe_invalid
 from .graph import load_document
 
-MARKER = "poieo.yaml"
+# Where a project keeps things is one question with one answer, and it lives
+# in layout.py. What is re-exported here is what already had callers.
+from .layout import MARKER, Layout, find_project_file
+
+__all__ = [
+    "MARKER",
+    "ProjectSpec",
+    "detect_default_binding",
+    "find_project",
+    "find_project_file",
+    "init_project",
+    "load_project",
+]
 
 
 class ProjectSpec(BaseModel):
@@ -66,6 +80,18 @@ class ProjectSpec(BaseModel):
     def store_path(self) -> Path:
         return self.resolve_path(self.store)
 
+    def layout(self) -> Layout:
+        """Where this project keeps things.
+
+        ``store:`` counts only when the document actually named it: a default
+        that happened to match is not a decision, and treating it as one would
+        make every silent project look like it had asked for something.
+        """
+        return Layout(
+            root=self.base_dir,
+            runs_override=self.store_path() if "store" in self.model_fields_set else None,
+        )
+
 
 def load_project(path: str | Path) -> ProjectSpec:
     """Parse a ``poieo.yaml`` for its paths. Flows are not read."""
@@ -80,17 +106,6 @@ def load_project(path: str | Path) -> ProjectSpec:
         ) from exc
     project.source_path = path.resolve()
     return project
-
-
-def find_project_file(start: str | Path | None = None) -> Path | None:
-    """The nearest ``poieo.yaml`` at or above ``start`` (default: cwd)."""
-    here = Path(start) if start is not None else Path.cwd()
-    here = here.resolve()
-    for candidate in (here, *here.parents):
-        marker = candidate / MARKER
-        if marker.is_file():
-            return marker
-    return None
 
 
 def find_project(start: str | Path | None = None) -> ProjectSpec | None:
