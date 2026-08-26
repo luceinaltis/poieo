@@ -292,6 +292,23 @@ async def test_agent_node_survives_tool_errors(tmp_path):
     assert result.outputs["work"] == "recovered"
 
 
+async def test_a_broken_workdir_expression_fails_in_the_nodes_voice(tmp_path):
+    """A workdir template is a template like the prompt and the system block.
+
+    All three are rendered inside the node's own error wrap, so a typo in
+    any of them reads the same way in a run log rather than escaping as a
+    bare ExpressionError.
+    """
+    graph = agent_graph("{{ nowhere.at.all }}")
+    result = await run_graph(graph, mock_binding({"worker": "done"}))
+
+    assert result.status == "failed"
+    assert "node 'work': unknown name 'nowhere'" in (result.error or "")
+    # Not folder_gone: the template never got as far as naming a folder,
+    # and a run log that said otherwise would send the reader after mkdir.
+    assert (result.cause or {}).get("slug") == "bad_expression"
+
+
 async def test_agent_node_stops_at_max_turns(tmp_path):
     graph = agent_graph(tmp_path, max_turns=3)
     # The script's last entry repeats forever, so the model never finishes.
