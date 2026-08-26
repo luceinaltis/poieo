@@ -117,6 +117,31 @@ class _HttpProvider(Provider):
                 provider=self.name,
             ) from exc
 
+    async def _list_health(self, path: str, key: str, field: str) -> tuple[bool, str]:
+        """Is the server there, and what has it got?
+
+        Both local backends answer this the same way -- a GET that returns a
+        list of models -- and differ only in the path and in what the list and
+        its entries are called.
+
+        Every outcome is a return value, never an exception: a probe is a
+        question, and `poieo check` asks it about endpoints that are quite
+        possibly down. That includes a 200 that is not JSON at all, which is
+        what a proxy or a captive portal answers with.
+        """
+        try:
+            response = await self.client.get(path)
+        except httpx.RequestError as exc:
+            return False, f"unreachable: {exc}"
+        if response.status_code >= 400:
+            return False, f"HTTP {response.status_code}"
+        try:
+            listed = response.json().get(key) or []
+        except ValueError:
+            return False, f"reachable, but the answer was not JSON: {response.text[:80]}"
+        names = [str(entry.get(field)) for entry in listed if entry.get(field)]
+        return True, f"reachable ({', '.join(names[:5]) or 'no models'})"
+
     async def aclose(self) -> None:
         await self.client.aclose()
 
@@ -177,14 +202,7 @@ class OpenAICompatibleProvider(_HttpProvider):
         )
 
     async def health(self) -> tuple[bool, str]:
-        try:
-            response = await self.client.get("/models")
-        except httpx.RequestError as exc:
-            return False, f"unreachable: {exc}"
-        if response.status_code >= 400:
-            return False, f"HTTP {response.status_code}"
-        names = [m.get("id") for m in (response.json().get("data") or [])]
-        return True, f"reachable ({', '.join(filter(None, names[:5])) or 'no models'})"
+        return await self._list_health("/models", key="data", field="id")
 
 
 class OllamaProvider(_HttpProvider):
@@ -239,11 +257,4 @@ class OllamaProvider(_HttpProvider):
         )
 
     async def health(self) -> tuple[bool, str]:
-        try:
-            response = await self.client.get("/api/tags")
-        except httpx.RequestError as exc:
-            return False, f"unreachable: {exc}"
-        if response.status_code >= 400:
-            return False, f"HTTP {response.status_code}"
-        names = [m.get("name") for m in (response.json().get("models") or [])]
-        return True, f"reachable ({', '.join(filter(None, names[:5])) or 'no models'})"
+        return await self._list_health("/api/tags", key="models", field="name")

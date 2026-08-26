@@ -145,6 +145,72 @@ async def test_ollama_provider_moves_params_into_options():
     assert response.text == "hey"
 
 
+async def test_each_local_backend_lists_its_own_models_when_probed():
+    """`poieo check` asks every declared endpoint whether it is there. The two
+    local backends answer the same question at different paths, with the model
+    names under different keys."""
+    vllm = build_provider(
+        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+    asked = {}
+
+    def openai_handler(request: httpx.Request) -> httpx.Response:
+        asked["path"] = request.url.path
+        return httpx.Response(200, json={"data": [{"id": "qwen"}, {"id": "llama"}]})
+
+    _mock_client(vllm, openai_handler)
+    ok, said = await vllm.health()
+    await vllm.aclose()
+    assert ok and asked["path"].endswith("/models")
+    assert "qwen, llama" in said
+
+    ollama = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+
+    def ollama_handler(request: httpx.Request) -> httpx.Response:
+        asked["path"] = request.url.path
+        return httpx.Response(200, json={"models": [{"name": "llama3"}]})
+
+    _mock_client(ollama, ollama_handler)
+    ok, said = await ollama.health()
+    await ollama.aclose()
+    assert ok and asked["path"] == "/api/tags"
+    assert "llama3" in said
+
+
+async def test_a_probe_says_no_rather_than_raising():
+    """A health check is a question, so every answer is a return value.
+
+    `poieo check` guards against PoieoError, not against anything a provider
+    might throw, so a probe that raises prints a traceback at the user -- the
+    one thing the CLI's guard exists to prevent.
+    """
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+
+    _mock_client(provider, lambda request: httpx.Response(500, text="down"))
+    assert await provider.health() == (False, "HTTP 500")
+
+    # A proxy or a captive portal answering 200 with a login page.
+    _mock_client(provider, lambda request: httpx.Response(200, text="<html>hi</html>"))
+    ok, said = await provider.health()
+    assert ok is False and "not JSON" in said
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    _mock_client(provider, refuse)
+    ok, said = await provider.health()
+    await provider.aclose()
+    assert ok is False and "unreachable" in said
+
+
+async def test_a_reachable_backend_with_nothing_pulled_says_so():
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+    _mock_client(provider, lambda request: httpx.Response(200, json={"models": []}))
+    ok, said = await provider.health()
+    await provider.aclose()
+    assert ok and "no models" in said
+
+
 async def test_http_errors_are_marked_retryable_only_when_they_are():
     provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
     _mock_client(provider, lambda request: httpx.Response(503, text="busy"))
