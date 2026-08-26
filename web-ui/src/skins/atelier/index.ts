@@ -14,6 +14,7 @@ import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { INSIDE, makeCabin } from "./cabin"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
+import { stretcher } from "./reach"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
   REST_PACE,
@@ -127,6 +128,12 @@ const HAMMER_LONG = 0.34
  * the backswing goes up behind that shoulder.
  */
 const HAMMER_CLEAR = HAMMER_LONG
+
+/**
+ * How much further out to set this rig's elbow and wrist. 1.33 takes his
+ * upper arm from 12% of his height to 16%; a person's is 18% to 19%.
+ */
+const ARM_STRETCH = 1.33
 
 const CLICK_SLOP = 14
 const PICK_UP_MS = 380
@@ -515,6 +522,17 @@ export function makeBench(
   const swing = clipNamed("swing")
   const hand = figure.getObjectByName(`${HAMMER_HAND}Hand`) ?? figure
 
+  // His arms are two thirds of a person's; see reach.ts. Set the elbow and
+  // the wrist out along their own bones, and call it after every write the
+  // mixer makes -- the clips carry translation tracks for these.
+  const stretchArms = stretcher(
+    ["LeftForeArm", "LeftHand", "RightForeArm", "RightHand"]
+      .map((name) => figure.getObjectByName(name))
+      .filter(Boolean),
+    ARM_STRETCH,
+  )
+  stretchArms()
+
   /** The lowest the hand goes, and when -- the blow, near enough to aim by. */
   const bottom = (probe: (moment: number) => any) => {
     const at = new THREE.Vector3()
@@ -524,6 +542,7 @@ export function makeBench(
     for (let step = 0; step <= 60; step += 1) {
       const moment = (step / 60) * swing.duration
       mixer.setTime(moment)
+      stretchArms()
       figure.updateWorldMatrix(true, true)
       at.copy(probe(moment))
       if (at.y < lowest) {
@@ -574,6 +593,7 @@ export function makeBench(
   const hammer = hammerHeld(THREE, props.hammer, HAMMER_LONG / boneScale)
 
   mixer.setTime(swung.when)
+  stretchArms()
   figure.updateWorldMatrix(true, true)
   {
     // The fist is measured in the hand's frame; the hammer lives in the
@@ -618,6 +638,7 @@ export function makeBench(
     const intoWall = { x: 0, z: 0 }
     for (let step = 0; step <= 60; step += 1) {
       mixer.setTime((step / 60) * swing.duration)
+      stretchArms()
       figure.updateWorldMatrix(true, true)
       for (const local of hammer.corners) {
         corner.copy(local)
@@ -632,6 +653,7 @@ export function makeBench(
     strike.at.z += intoWall.z
   }
   mixer.setTime(0)
+  stretchArms()
 
   bench.position.set(strike.at.x, 0, strike.at.z)
   // Only after the probe: setTime works in unscaled clip seconds, and slowing
@@ -785,6 +807,7 @@ export function makeBench(
       // a filmed replay strikes exactly where the live run did.
       if (was < 0) was = elapsed
       mixer.update((elapsed - was) / 1000)
+      stretchArms()
       was = elapsed
 
       face?.at(elapsed)
