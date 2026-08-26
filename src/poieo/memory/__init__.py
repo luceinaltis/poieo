@@ -19,7 +19,7 @@ itself is deliberately not: ``recall.recall`` would shadow the module of the
 same name, and reaching for it from outside this package means reaching past
 ``read_memory``, which is the answer everything else wants.
 
-Spec: docs/specs/2026-08-24-project-memory-design.md
+Design: docs/memory.md
 """
 
 from .results import results_dir, used_in, write_result

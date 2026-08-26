@@ -12,7 +12,7 @@ The bookmark -- the last record successfully read -- lives in the pass log
 and moves only on success, so a failed pass rereads rather than skips.
 Repeating is recoverable; losing is not.
 
-Spec: docs/specs/2026-08-24-learning-pass-design.md
+Design: docs/memory.md
 """
 
 from __future__ import annotations

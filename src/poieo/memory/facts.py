@@ -4,7 +4,7 @@ Truth lives here, in markdown under git, under ``memory/longterm/``.
 Everything a machine derives from these files lives one folder over, in
 ``memory/cache/``, and can be deleted without loss.
 
-Spec: docs/specs/2026-08-24-project-memory-design.md
+Design: docs/memory.md
 """
 
 from __future__ import annotations

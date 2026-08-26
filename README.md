@@ -482,7 +482,8 @@ While the daemon runs it serves a page on `http://127.0.0.1:8484` (`--port` to
 change it, `--no-web` to turn it off). It ships built, so there is nothing to
 install: open it to watch flows move, click one to read what it did turn by
 turn, and take or throw away what it left you. The picker in the corner switches
-skins; `ledger`, the plain one, is the default.
+skins; `atelier`, the workshop, is the default, and `basic` draws the work as a
+graph — the flows, their nodes, and the model each one calls.
 
 Everything the page reads is plain HTTP too. `GET /api/events` streams every run
 event live (SSE), `/api/flows` and `/api/runs` answer what is running and what
@@ -574,9 +575,11 @@ src/poieo/
   binding.py         physical layer: providers, roles, param merging
   providers/         anthropic · openai_compatible · ollama · mock
   runtime/           context, node implementations, the graph walker
+  tools/             the hands: files, shell, notes; the isolation seam
   daemon/            cron, triggers, flow config, the resident service
-  store.py           append-only run log
+  layout.py          where a project keeps things; store.py is the run log
   checkpoint.py      the only module that knows git exists
+  memory/            the long memory; learn.py is the pass that fills it
   web/               observation API, event fan-out, the built page
   cli.py             command line front end
 
@@ -586,12 +589,16 @@ web-ui/              the page's source: state, skins, review
   src/review/        last night's work: the list, the diff, accept and discard
 ```
 
+`docs/` has one document per component, describing how it works and why it is
+shaped that way. Start at `docs/architecture.md`.
+
 ## Not built yet
 
-* The web editor. The graph schema is the contract it will produce; `poieo show --mermaid`
-  renders a graph today.
-* Control from the page: pause, resume, run-now. The observation and review
-  surfaces are built; nothing yet starts or stops a flow from the browser.
+* Task cards from the page. Observing, reviewing and controlling a flow all work
+  in the browser; creating or editing a card still means editing the file.
+* The editor folded into the board. `poieo edit` is a canvas over the graph schema
+  today, and `poieo show --mermaid` draws one; the board draws the work but does
+  not let you edit it.
 * Node types beyond `llm`, `router`, and `agent` (map/fan-out).
   `runtime/nodes.py` has a `NODE_TYPES` registry to add them to.
 

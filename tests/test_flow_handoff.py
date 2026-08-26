@@ -4,7 +4,7 @@ Two halves, in that order. Above the divider is what a config has to get right
 before the daemon will start at all; below it is what actually happens when a
 run ends -- which flow wakes, what it is told, and what is refused.
 
-Spec: docs/specs/2026-08-26-flow-handoff-design.md
+Design: docs/daemon.md
 """
 
 import asyncio

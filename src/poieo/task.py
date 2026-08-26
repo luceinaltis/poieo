@@ -9,7 +9,7 @@ short form from becoming a second, hidden configuration format.
 Paths inside a task file resolve against the task file itself, so a task is
 self-contained whether the daemon loads it or the CLI does.
 
-Spec: docs/specs/2026-08-22-task-cards-design.md
+Design: docs/tasks.md
 """
 
 from __future__ import annotations

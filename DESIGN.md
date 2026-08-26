@@ -1,8 +1,8 @@
 # poieo Design
 
 > This document describes **what poieo must provide to its user**.
-> Implementation detail lives in the per-feature specs under
-> `docs/specs/`.
+> How each component actually works lives in `docs/`, one document per
+> component; `docs/README.md` is the index.
 
 ## One line
 
@@ -187,44 +187,48 @@ Autonomous execution needs explicit fences:
 
 Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: flow control
 (pause / resume / run-now) is live end to end; task card CRUD is the open
-slice.
+slice. The link after each shipped item is the document describing how it
+works today.
 
 1. **Agent node** — build the hands: file and shell tools confined to a
    working directory. Tool execution sits behind a swappable seam from day
    one, so container isolation can arrive later without reshaping anything.
-   (`docs/specs/2026-08-21-agent-node-design.md`)
+   (`docs/tools.md`)
 2. **Observation** — an HTTP server inside the daemon streaming run events to
    a browser: what is running, which node, every tool call, what the model
    said. Read-only.
-   (`docs/specs/2026-08-22-web-observation-design.md`)
+   (`docs/web.md`)
 3. **The morning review** — the model works in a private copy; each run is one
    reviewable change; the board shows the diff and accepts or discards it.
    This is where the daemon stops being something you have to trust blindly.
-   (`docs/specs/2026-08-22-nightly-review-design.md`)
+   (`docs/checkpoint.md`)
 4. **The task card** — a task becomes one file (a name, a folder, a prompt),
    and it keeps a journal of what it did and what the user told it, which it
    reads before every run. This is what principle 2 promises and what the
    board edits.
-   (`docs/specs/2026-08-22-task-cards-design.md`)
+   (`docs/tasks.md`)
 5. **Isolation** — a task can opt into running its commands in a container
    that sees its folder and nothing else of the machine. The shell was the
    one tool that could reach past path confinement; this closes it.
-   (`docs/specs/2026-08-22-container-isolation-design.md`)
+   (`docs/tools.md`)
 6. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
    flow add/remove/pause. Flow control — pause, resume, run now, from runner
    to board — has shipped; CRUD and the editor fold-in remain.
-   (`docs/specs/2026-08-26-flow-control-design.md`)
+   (`docs/web.md`)
 7. **Tasks that work together** — a task can leave a line in another task's
    journal, read on that task's next run. News, not orders, and no way to
    spin: a note wakes nobody.
-   (`docs/specs/2026-08-23-task-notes-design.md`)
+   (`docs/tasks.md`)
 8. **A long memory** — the project keeps one page that is always in front of
    every task, and a folder of things it has learned; every run leaves a
    full record behind, so anything remembered can be traced to the run that
    taught it.
-   (`docs/specs/2026-08-24-project-memory-design.md`)
+   (`docs/memory.md`)
 9. **Beyond (candidates)** — delegating steps to external agent CLIs
    (Claude Code, etc.); fan-out steps; run-log retention; stronger isolation
    backends (microVM, or the OS-level primitives Landlock and Seatbelt)
    behind the same seam.
+
+The design specs and implementation plans these were built from are kept
+under `docs/archive/`.
