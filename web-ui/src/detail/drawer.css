@@ -66,6 +66,35 @@
   border-color: #6b6257;
 }
 
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.control button {
+  background: #221e18;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 3px 8px;
+}
+
+.control button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.control-refusal {
+  color: #d16d5a;
+  flex-basis: 100%;
+  font-size: 0.8em;
+  margin: 0;
+}
+
 .drawer-summary,
 .drawer-empty {
   color: #9a9086;
@@ -125,6 +154,7 @@
   /* Thumbs, not pointers. */
   .drawer-head button,
   .drawer-run,
+  .control button,
   .decide-take,
   .decide-drop {
     min-height: 34px;

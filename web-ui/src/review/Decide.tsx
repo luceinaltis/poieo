@@ -1,9 +1,9 @@
 /**
  * Taking the work, or throwing it away.
  *
- * The only component in the app allowed a non-GET request. Everything else
- * answers "what happened"; these two act, and both act on the reader's own
- * project, so both say plainly what they are about to do first.
+ * The only component whose requests can move the reader's own files --
+ * Control's verbs stop at the daemon. Both actions here are about the
+ * reader's project, so both say plainly what they are about to do first.
  */
 
 import { useState } from "react"

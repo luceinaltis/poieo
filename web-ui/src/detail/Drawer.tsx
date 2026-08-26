@@ -9,6 +9,7 @@
 import { memo, useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
+import { Control } from "./Control"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { WorkList } from "../review/WorkList"
@@ -89,12 +90,14 @@ function Entry({ event }: { event: PoieoEvent }) {
 // read must not re-reconcile its whole timeline because another flow spoke.
 export const Drawer = memo(function Drawer({
   flow,
+  status = "waiting",
   pending = 0,
   into = null,
   onClose,
   onDecided,
 }: {
   flow: string
+  status?: string
   pending?: number
   into?: string | null
   onClose(): void
@@ -167,6 +170,8 @@ export const Drawer = memo(function Drawer({
       </header>
 
       <div className="drawer-body">
+        <Control flow={flow} status={status} onActed={decided} />
+
         <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
 
         <WorkList

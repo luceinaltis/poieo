@@ -1,10 +1,12 @@
 /**
  * Everything that talks to the daemon.
  *
- * Reading is the whole of it but for two calls: accept and discard, at the
- * bottom, are the only POSTs the page can make and the only way anything it
- * shows can change the reader's own files. Keeping them here, beside the
- * reads, is what makes that easy to count.
+ * Reading is most of it. The calls that change anything come in exactly two
+ * kinds, one fence each, and keeping them all here beside the reads is what
+ * makes them easy to count: accept and discard are the only way anything the
+ * page shows can change the reader's own files, and the control verbs --
+ * pause, resume, run now -- touch the daemon's runtime state and nothing
+ * else.
  */
 
 import type { DiffReport, FlowRow, PoieoEvent, RunSummary } from "./types"
@@ -57,7 +59,7 @@ export async function fetchDiff(runId: string): Promise<DiffReport | null> {
 }
 
 /**
- * The only two calls in the app that change anything.
+ * The review: the only two calls that can move the reader's own files.
  *
  * Both answer with a decision rather than throwing: a refused accept is an
  * answer about the reader's own project -- uncommitted edits, or a file they
@@ -96,6 +98,39 @@ export function discard(flow: string, fromRunId?: string): Promise<Decision> {
   return post(`/api/flows/${encodeURIComponent(flow)}/discard`, {
     from_run_id: fromRunId,
   })
+}
+
+/**
+ * Control: the other kind of write. Pause and resume answer the resulting
+ * status; run answers "starting" or a refusal naming the run in flight.
+ */
+export interface ControlAnswer {
+  ok: boolean
+  status?: string
+  error?: string
+  run_id?: string
+}
+
+async function control(path: string): Promise<ControlAnswer> {
+  try {
+    const response = await fetch(path, { method: "POST" })
+    const payload = await response.json().catch(() => ({}))
+    return { ok: response.ok, ...payload }
+  } catch {
+    return { ok: false, error: "the daemon did not answer" }
+  }
+}
+
+export function pause(flow: string): Promise<ControlAnswer> {
+  return control(`/api/flows/${encodeURIComponent(flow)}/pause`)
+}
+
+export function resume(flow: string): Promise<ControlAnswer> {
+  return control(`/api/flows/${encodeURIComponent(flow)}/resume`)
+}
+
+export function runNow(flow: string): Promise<ControlAnswer> {
+  return control(`/api/flows/${encodeURIComponent(flow)}/run`)
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

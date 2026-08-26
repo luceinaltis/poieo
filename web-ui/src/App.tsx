@@ -103,6 +103,7 @@ export default function App({ store }: { store?: StageStore }) {
           // its expanded-failures toggle all belong to the flow being read.
           key={selected}
           flow={selected}
+          status={flows.find((row) => row.name === selected)?.status ?? "waiting"}
           pending={flows.find((row) => row.name === selected)?.pending ?? 0}
           into={flows.find((row) => row.name === selected)?.into ?? null}
           onClose={closeDrawer}
