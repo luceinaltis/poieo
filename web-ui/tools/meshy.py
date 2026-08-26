@@ -59,13 +59,16 @@ SUBJECTS = {
     #   no matter what the body is doing; tools/hood_eyes.py can paint a lid on
     #   afterwards, but it is better not to need it.
     "smith-kr": (
-        "An old Korean blacksmith of the Joseon period. His grey hair is tied "
-        "in a topknot on top of his head with a black cloth headband, and he "
-        "has a grey beard. He wears a thick scorched leather apron over a "
-        "short hemp jacket with the sleeves rolled above the elbow. Baggy "
-        "indigo trousers tied at the ankle, straw sandals. No long robe, no "
-        "coat. Weathered face, narrow deep-set eyes. Hands empty, fingers "
-        "apart. Stylized game character, clean topology, PBR textures."
+        "An old Korean man whose long grey hair is pulled up and tied in a "
+        "small round topknot bun on the very top of his head, wrapped at its "
+        "base with a dark cloth band. A single standing figure and nothing "
+        "else: no hammer, no tools, no anvil, no objects floating near him, "
+        "nothing held. Arms straight, hands relaxed and low, palms toward the "
+        "ground, fingers together. A Joseon master blacksmith: short grey "
+        "beard, weathered face, narrow eyes. Scorched leather apron over a "
+        "short hemp jacket with sleeves rolled above the elbow, baggy indigo "
+        "trousers tied at the ankle, straw sandals. Stylized game character, "
+        "clean topology, PBR textures."
     ),
     "anvil": (
         "A blacksmith's anvil on a thick worn wooden stump, dark pitted iron with a "
@@ -207,9 +210,15 @@ def refine(names):
 
 
 def status():
+    # Old tasks expire on Meshy's side. One 404 must not silence the rest --
+    # it did, and `wait` looked stuck while the answer was one dead id away.
     for name, stages in tasks().items():
         for stage, task_id in stages.items():
-            task = call(f"/v2/text-to-3d/{task_id}")
+            try:
+                task = call(f"/v2/text-to-3d/{task_id}")
+            except SystemExit:
+                print(f"  {name} {stage}: gone (expired on the server)")
+                continue
             print(f"  {name} {stage}: {task.get('status')} {task.get('progress', 0)}%")
 
 
@@ -220,7 +229,10 @@ def wait(minutes=12):
         pending = False
         for name, stages in tasks().items():
             for stage, task_id in stages.items():
-                task = call(f"/v2/text-to-3d/{task_id}")
+                try:
+                    task = call(f"/v2/text-to-3d/{task_id}")
+                except SystemExit:
+                    continue
                 state = task.get("status")
                 print(f"  {name} {stage}: {state} {task.get('progress', 0)}%", flush=True)
                 if state in ("PENDING", "IN_PROGRESS"):
