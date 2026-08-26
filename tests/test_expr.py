@@ -71,3 +71,39 @@ def test_a_missing_key_names_itself_and_what_was_there():
         render("{{ input.journal }}", {"input": wrap({"message": "hi", "count": 2})})
     assert "journal" in str(exc.value)
     assert "count, message" in str(exc.value)
+
+
+# -- the words a YAML author already types ----------------------------------
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        ("true", True),
+        ("false", False),
+        ("null", None),
+        ("true and not false", True),
+        ("category if true else 'no'", "Bug"),
+        ("review.approved == false", True),
+    ],
+)
+def test_yaml_spells_its_literals_in_lower_case(source, expected, scope):
+    """Every expression poieo evaluates was typed into a YAML file.
+
+    Python's `True` still works and is what the source is parsed as; these are
+    aliases, so an author who writes what the file format taught them gets what
+    they meant rather than `unknown name 'true'` at 3am. That mistake is
+    especially quiet in a flow's `then:` block, where an unreadable condition
+    is logged and skipped rather than raised.
+    """
+    assert evaluate(source, scope) is expected
+
+
+def test_a_scope_of_its_own_outranks_the_literals(scope):
+    """Aliases must not shadow real data: the scope is checked first."""
+    assert evaluate("true", wrap({"true": "mine"})) == "mine"
+
+
+def test_python_spelling_still_works(scope):
+    assert evaluate("True and not False", scope) is True
+    assert evaluate("None == None", scope) is True

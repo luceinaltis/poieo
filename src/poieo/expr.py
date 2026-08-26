@@ -1,15 +1,19 @@
-"""A small sandboxed expression language shared by prompts and routers.
+"""A small sandboxed expression language shared by prompts, routers and flows.
 
 Graphs are authored by hand (and, later, by a web editor), so they must be able
-to reference run data without giving the author arbitrary Python. Two surfaces
-use this module:
+to reference run data without giving the author arbitrary Python. Three
+surfaces use this module:
 
 * prompt templates -- ``"Classify: {{ input.text }}"``
 * router conditions -- ``"category.lower() == 'bug' and state.retries < 3"``
+* a flow's ``then:`` branches -- ``"run.change and run.steps > 2"``
 
-Both go through :func:`evaluate`, which walks a whitelist of AST nodes. Anything
-outside the whitelist (imports, lambdas, comprehensions, dunder access, ...) is
-rejected at parse time rather than at run time.
+All three go through :func:`evaluate`, which walks a whitelist of AST nodes.
+Anything outside the whitelist (imports, lambdas, comprehensions, dunder
+access, ...) is rejected at parse time rather than at run time.
+
+Every one of those three was typed into a YAML file, so ``true``, ``false``
+and ``null`` are accepted alongside Python's own spelling.
 """
 
 from __future__ import annotations
@@ -86,6 +90,14 @@ _SAFE_BUILTINS: dict[str, Any] = {
     "json_loads": json.loads,
     "json_dumps": json.dumps,
 }
+
+# Every expression poieo evaluates was typed into a YAML file, where these are
+# how the three literals are spelled. Aliases, not replacements: the source is
+# still parsed as Python and `True` still works. Without them a condition
+# reading `when: "true"` fails with "unknown name" -- and in a flow's `then:`
+# block that failure is logged and skipped rather than raised, which is the
+# quietest possible way to have a branch that never fires.
+_YAML_LITERALS: dict[str, Any] = {"true": True, "false": False, "null": None}
 
 # Attribute access is allowed, but only on plain data and only for public names.
 # This keeps ``"BUG".lower()`` working without exposing ``().__class__`` walks.
@@ -181,6 +193,9 @@ class _Evaluator(ast.NodeVisitor):
             return self.scope[node.id]
         if node.id in _SAFE_BUILTINS:
             return _SAFE_BUILTINS[node.id]
+        # Last, so run data named `true` is still that flow's own data.
+        if node.id in _YAML_LITERALS:
+            return _YAML_LITERALS[node.id]
         raise ExpressionError(f"unknown name '{node.id}'")
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:

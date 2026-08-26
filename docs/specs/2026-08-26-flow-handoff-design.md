@@ -57,8 +57,7 @@ match wins and only one fires**, exactly as a `router` node routes.
 **There is no `default`.** A router needs one because a run has to go
 *somewhere*; a finished run does not, and handing off to nobody is what most
 flows do. So falling off the end of the list means "nothing happens", and a
-catch-all is a last branch whose condition is `"True"` -- the Python
-literal, not YAML's, because a condition is parsed as Python. `to: null` still means
+catch-all is a last branch whose condition is `"true"`. `to: null` still means
 *stop here* — the router's own null — which is how a branch says "matched, and
 deliberately no further" ahead of later branches.
 
