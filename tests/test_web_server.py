@@ -8,6 +8,7 @@ from starlette.testclient import TestClient
 from test_checkpoint import git, head, make_repo
 
 from poieo.checkpoint import Checkpoint
+from poieo.graph import GraphSpec
 from poieo.store import Event, RunStore
 from poieo.web.events import BroadcastStore
 from poieo.web import server
@@ -19,7 +20,33 @@ def stub_daemon(tmp_path, runners=()):
     return SimpleNamespace(runners=list(runners), store=store)
 
 
-def stub_runner(name="triage", status="waiting", current=None, last=None, checkpoint=None):
+# A real GraphSpec, not a stub: the wiring the board is served comes straight
+# off it, and a stub would let the shape drift from the schema unnoticed.
+STUB_GRAPH = {
+    "name": "support-triage",
+    "entry": "classify",
+    "nodes": [
+        {"id": "classify", "type": "llm", "prompt": "x", "next": "route"},
+        {
+            "id": "route",
+            "type": "router",
+            "branches": [{"when": "category == 'bug'", "to": "answer", "label": "bug"}],
+            "default": "answer",
+        },
+        {"id": "answer", "type": "llm", "prompt": "y", "ui": {"x": 40, "y": 8}},
+    ],
+}
+
+
+def stub_runner(
+    name="triage",
+    status="waiting",
+    current=None,
+    last=None,
+    checkpoint=None,
+    then=(),
+    graph=None,
+):
     return SimpleNamespace(
         name=name,
         status=status,
@@ -27,7 +54,10 @@ def stub_runner(name="triage", status="waiting", current=None, last=None, checkp
         last_result=last,
         checkpoint=checkpoint,
         trigger=SimpleNamespace(describe=f"interval 30s"),
-        flow=SimpleNamespace(graph=SimpleNamespace(name="support-triage")),
+        flow=SimpleNamespace(
+            graph=GraphSpec.model_validate(graph or STUB_GRAPH),
+            spec=SimpleNamespace(then=list(then)),
+        ),
     )
 
 
@@ -47,8 +77,68 @@ def test_flows_lists_runner_state(tmp_path):
             "last_run": {"run_id": "r0", "status": "completed"},
             "pending": 0,
             "into": None,
+            "then": [],
+            "shape": {
+                "entry": "classify",
+                "nodes": [
+                    {
+                        "id": "classify",
+                        "type": "llm",
+                        "next": "route",
+                        "default": None,
+                        "branches": [],
+                    },
+                    {
+                        "id": "route",
+                        "type": "router",
+                        "next": None,
+                        "default": "answer",
+                        "branches": [{"to": "answer", "label": "bug"}],
+                    },
+                    {
+                        "id": "answer",
+                        "type": "llm",
+                        "next": None,
+                        "default": None,
+                        "branches": [],
+                        "ui": {"x": 40.0, "y": 8.0},
+                    },
+                ],
+            },
         }
     ]
+
+
+def test_a_flow_serves_the_handoffs_it_declared(tmp_path):
+    """Drawn the same way a router's branches are, because they are the same
+    thing one level up -- so the view has one arrow to learn, not two."""
+    then = [SimpleNamespace(when="run.change", to="review", label="changed")]
+    daemon = stub_daemon(tmp_path, [stub_runner(then=then)])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/flows").json()["flows"][0]
+    assert row["then"] == [{"to": "review", "label": "changed"}]
+
+
+def test_a_branch_with_no_label_is_drawn_with_its_condition(tmp_path):
+    """The same fallback RouterNode uses when it records which arm it took, so
+    the board and the run record never disagree about what to call an arrow."""
+    then = [SimpleNamespace(when="run.steps > 2", to="review", label=None)]
+    daemon = stub_daemon(tmp_path, [stub_runner(then=then)])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/flows").json()["flows"][0]
+    assert row["then"] == [{"to": "review", "label": "run.steps > 2"}]
+
+
+def test_the_wiring_carries_no_prompts(tmp_path):
+    """A board paint reaches every browser watching. Prompts are long, are of
+    no use to a drawing, and are the kind of thing a graph hides secrets in."""
+    daemon = stub_daemon(tmp_path, [stub_runner()])
+    client = TestClient(create_app(daemon))
+
+    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    assert not any("prompt" in node or "system" in node for node in shape["nodes"])
 
 
 def test_flows_asks_every_runner_at_once(tmp_path):

@@ -20,6 +20,7 @@ function run(over: Partial<RunSummary> = {}): RunSummary {
     finished_at: "2026-08-22T02:00:04+00:00",
     steps: 1,
     iteration: 1,
+    trigger: "cron 0 2 * * *",
     usage: USAGE,
     error: null,
     ...over,

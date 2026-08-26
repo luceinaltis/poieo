@@ -15,6 +15,8 @@ const CHORES: FlowRow = {
   last_run: null,
   pending: 0,
   into: null,
+  then: [],
+  shape: { entry: "", nodes: [] },
 }
 
 function harness(overrides: Partial<StageApi> = {}) {
@@ -100,6 +102,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
     finished_at: "2026-08-22T07:00:01+00:00",
     steps: 4,
     iteration: 1,
+    trigger: "cron 0 2 * * *",
     usage: {
       input_tokens: 0,
       output_tokens: 0,
@@ -204,6 +207,7 @@ test("the store tallies each flow's recent work from the run index", async () =>
       finished_at: "t",
       steps: 1,
       iteration: 1,
+      trigger: "cron 0 2 * * *",
       usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
       error: null,
       change: {
