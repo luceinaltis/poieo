@@ -40,6 +40,28 @@ def _ensure_port_free(host: str, port: int) -> None:
             ) from exc
 
 
+SHUTDOWN_GRACE = 5.0
+
+
+async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
+    """Wait out one background task on the way down, and say what it did.
+
+    ``wait_for`` cancels the task and awaits that cancellation before it
+    raises, so there is nothing left here to cancel afterwards. What is left
+    is the reason, and shutdown used to swallow it: a learning pass that blew
+    up at 3am went down with the daemon without leaving a word behind.
+
+    Nothing here may keep the daemon from finishing -- the pools and the boxes
+    still have to be closed below.
+    """
+    try:
+        await asyncio.wait_for(task, timeout=SHUTDOWN_GRACE)
+    except asyncio.TimeoutError:
+        log.warning("the %s did not stop within %gs; leaving it", what, SHUTDOWN_GRACE)
+    except Exception as exc:
+        log.warning("the %s stopped badly: %s", what, exc)
+
+
 def _change_message(result: RunResult, flow: str) -> str:
     """The model's own summary when it produced one -- that is what a reader sees.
 
@@ -475,16 +497,10 @@ class Daemon:
         finally:
             self.cancel.set()
             if learn_task is not None:
-                try:
-                    await asyncio.wait_for(learn_task, timeout=5)
-                except (asyncio.TimeoutError, Exception):
-                    learn_task.cancel()
+                await _stopped(learn_task, "learning pass")
             if web_task is not None:
                 server.should_exit = True
-                try:
-                    await asyncio.wait_for(web_task, timeout=5)
-                except (asyncio.TimeoutError, Exception):
-                    web_task.cancel()
+                await _stopped(web_task, "web server")
             if self.boxes is not None:
                 await self.boxes.aclose()
             for pool in self.pools.values():
