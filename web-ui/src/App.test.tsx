@@ -119,7 +119,7 @@ beforeEach(() => {
   localStorage.clear()
   // The shell is driven here by clicking a worker on the board, so these ask
   // for the DOM skin explicitly. The default is the canvas one.
-  localStorage.setItem("poieo.skin", "ledger")
+  localStorage.setItem("poieo.skin", "basic")
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -149,9 +149,9 @@ test("the picker lists the registered skins and the board carries the workers", 
   const picker = container.querySelector("select")!
   expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual([
     "atelier",
-    "ledger",
+    "basic",
   ])
-  expect(picker.value).toBe("ledger")
+  expect(picker.value).toBe("basic")
   expect(container.querySelectorAll("[data-flow]")).toHaveLength(2)
 })
 
@@ -160,7 +160,7 @@ test("a stale stored skin id still renders a board", async () => {
   await render(initialStage(FLOWS))
 
   // The registry falls back rather than blanking the page.
-  expect(container.querySelector("select")!.value).toBe("ledger")
+  expect(container.querySelector("select")!.value).toBe("basic")
   expect(container.querySelectorAll("[data-flow]").length).toBeGreaterThan(0)
 })
 
@@ -169,7 +169,7 @@ test("selecting a worker opens the drawer, and reading it leaves the board alone
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
@@ -184,7 +184,7 @@ test("closing the drawer puts it away", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
   })
   await act(async () => {
     container.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
@@ -200,13 +200,13 @@ test("opening a different worker does not show the previous one's work", async (
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
   })
   expect(container.querySelector(".drawer")!.getAttribute("data-flow")).toBe("chores")
   const first = container.querySelector("[data-run][data-selected='true']")
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="revision"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="revision"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
@@ -224,7 +224,7 @@ test("a frame for another flow leaves the open drawer alone", async () => {
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
   })
   expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
 
@@ -244,7 +244,7 @@ test("the drawer opens on the work that changed something", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
   })
 
   const selected = container.querySelector("[data-run][data-selected='true']")!

@@ -82,8 +82,8 @@ test("a skin mounted mid-run is handed the current stage at once", () => {
 test("the skin preference survives a reload and an unknown value", () => {
   expect(readSkinPreference()).toBe(DEFAULT_SKIN_ID)
 
-  writeSkinPreference("ledger")
-  expect(readSkinPreference()).toBe("ledger")
+  writeSkinPreference("basic")
+  expect(readSkinPreference()).toBe("basic")
 
   localStorage.setItem("poieo.skin", "kitchen")
   // readSkinPreference reports what is stored; the registry decides whether it

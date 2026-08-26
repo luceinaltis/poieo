@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { ledger } from "./ledger"
+import { basic } from "./basic"
 import { DEFAULT_SKIN_ID, SKINS, skinById } from "./registry"
 import { AGENT_RUN } from "../state/fixtures"
 import { initialStage, replay } from "../state/stage"
@@ -16,8 +16,11 @@ const FLOWS: FlowRow[] = [
     last_run: null,
     pending: 0,
     into: null,
-    then: [],
-    shape: { entry: "", nodes: [] },
+    then: [{ to: "revision", label: "changed" }],
+    shape: {
+      entry: "work",
+      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [] }],
+    },
   },
   {
     name: "revision",
@@ -29,7 +32,10 @@ const FLOWS: FlowRow[] = [
     pending: 0,
     into: null,
     then: [],
-    shape: { entry: "", nodes: [] },
+    shape: {
+      entry: "draft",
+      nodes: [{ id: "draft", type: "llm", next: null, default: null, branches: [] }],
+    },
   },
 ]
 
@@ -50,16 +56,16 @@ test("the workshop is what opens by default", () => {
   expect(DEFAULT_SKIN_ID).toBe("atelier")
 })
 
-test("skinById falls back to ledger for an unknown id", () => {
+test("skinById falls back to basic for an unknown id", () => {
   // A stale localStorage value must not blank the page.
-  expect(skinById("kitchen").id).toBe("ledger")
-  expect(skinById(null).id).toBe("ledger")
-  expect(skinById("ledger").id).toBe("ledger")
+  expect(skinById("kitchen").id).toBe("basic")
+  expect(skinById(null).id).toBe("basic")
+  expect(skinById("basic").id).toBe("basic")
 })
 
 test("mount/update/destroy leaves the element empty", () => {
   const el = document.createElement("div")
-  const handle = ledger.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectWorker: () => {} })
   handle.update(midRun())
   expect(el.childElementCount).toBeGreaterThan(0)
 
@@ -67,24 +73,24 @@ test("mount/update/destroy leaves the element empty", () => {
   expect(el.childElementCount).toBe(0)
 })
 
-test("ledger renders one card per worker and reflects status", () => {
+test("basic renders one box per flow and reflects status", () => {
   const el = document.createElement("div")
-  const handle = ledger.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectWorker: () => {} })
   handle.update(midRun())
 
-  const cards = el.querySelectorAll("[data-flow]")
-  expect(cards).toHaveLength(2)
+  expect(el.querySelectorAll("[data-flow]")).toHaveLength(2)
   expect(el.querySelector('[data-flow="chores"]')!.getAttribute("data-status")).toBe("running")
   expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-status")).toBe("waiting")
-  // the node the agent is on shows up somewhere on its card
+  // A running flow opens itself, so the node it is on is visible without
+  // anyone having asked -- detail where something is happening, and only there.
   expect(el.querySelector('[data-flow="chores"]')!.textContent).toContain("work")
 
   handle.destroy()
 })
 
-test("the latest thinking and tool call surface on the card", () => {
+test("the latest thinking and tool call surface on an open flow", () => {
   const el = document.createElement("div")
-  const handle = ledger.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectWorker: () => {} })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN))
 
   const card = el.querySelector('[data-flow="chores"]')!
@@ -92,13 +98,13 @@ test("the latest thinking and tool call surface on the card", () => {
   handle.destroy()
 })
 
-test("clicking a card selects that worker", () => {
+test("clicking a flow's name selects it; the chevron is for opening", () => {
   const el = document.createElement("div")
   const picked: string[] = []
-  const handle = ledger.mount(el, { onSelectWorker: (flow) => picked.push(flow) })
+  const handle = basic.mount(el, { onSelectWorker: (flow) => picked.push(flow) })
   handle.update(midRun())
 
-  el.querySelector<HTMLElement>('[data-flow="revision"]')!.click()
+  el.querySelector<HTMLElement>('[data-flow="revision"] .basic-pick')!.click()
   expect(picked).toEqual(["revision"])
 
   handle.destroy()

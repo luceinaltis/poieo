@@ -97,8 +97,11 @@ change and the next agent's afternoon. Run the gate; do not assume it.
 # Python — the global pytest plugin on this machine is broken, hence the flags
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
 
-# Frontend, once web-ui/ exists — run mode, never watch (watch mode hangs an agent)
+# Frontend — run mode, never watch (watch mode hangs an agent)
 npm test --workspace web-ui
+# ...and the types, which vitest does not check. A broken FlowRow fixture
+# passes `npm test` and fails only here.
+cd web-ui && npx tsc -b
 ```
 
 **Review your own diff before merging.** There is one GitHub account here and no second
