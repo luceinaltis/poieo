@@ -24,16 +24,20 @@ function heights(burst: number, since: number): number[] {
 
 test("the burst lasts long enough to be seen on a phone", () => {
   // The complaint that started this: on a handset the sparks were gone before
-  // an eye found them. A tenth of a second is a frame or six; a second is a
-  // thing that happened.
-  expect(SPARK_LIFE).toBeGreaterThan(1)
+  // an eye found them. A tenth of a second is a frame or six; half a second is
+  // thirty, and a thing that happened. It was over a whole second while a blow
+  // landed every three; at one every 0.75 there is neither room nor need.
+  expect(SPARK_LIFE).toBeGreaterThan(0.3)
 })
 
-test("the burst is over well before the next blow lands", () => {
+test("the burst is over before the next blow, and the anvil is seen bare", () => {
   // Sparks still in the air when the hammer comes down again read as a fire,
-  // not as a strike.
+  // not as a strike -- and a bench keeps one set of embers, which the next
+  // blow resets, so a burst that overran would be cut off in mid-flight too.
+  // The gap is what makes it a rhythm rather than a glow.
   const period = SWING / WORK_PACE
-  expect(SPARK_LIFE).toBeLessThan(period * 0.5)
+  expect(SPARK_LIFE).toBeLessThan(period)
+  expect(period - SPARK_LIFE).toBeGreaterThan(0.2)
 })
 
 test("the flash outlives its own light, and the sparks outlive both", () => {
