@@ -2,7 +2,7 @@
 
 import asyncio
 
-from poieo.store import Event, RunStore
+from poieo.store import Event, NullStore, RunStore
 from poieo.web.events import BroadcastStore
 
 
@@ -54,6 +54,20 @@ async def test_slow_subscriber_is_evicted_not_blocking(tmp_path):
     store.append(Event(run_id="r1", type="node_started", data={"step": 9}))
     assert slow.qsize() == 2          # no longer receiving
     assert fast.get_nowait()["data"]["step"] == 9
+
+
+async def test_reads_answer_from_the_wrapped_store(tmp_path, monkeypatch):
+    """The wrapper is a decorator, so every read must reach the store it was
+    handed. `poieo daemon --no-log` wraps a NullStore, and the web API served
+    over it used to answer from whatever `./.poieo` happened to hold."""
+    monkeypatch.chdir(tmp_path)
+    RunStore(".poieo").append(Event(run_id="r1", type="run_started"))
+    RunStore(".poieo").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
+
+    store = BroadcastStore(NullStore())
+    assert store.list_runs() == []
+    assert store.run("r1") is None
+    assert list(store.events("r1")) == []
 
 
 async def test_unsubscribe_stops_delivery(tmp_path):

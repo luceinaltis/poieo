@@ -43,6 +43,19 @@ def test_null_store_writes_nothing(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_null_store_reads_nothing_either(tmp_path, monkeypatch):
+    """A store that drops every write must not answer reads from somebody
+    else's history. `poieo run --no-log` in a folder that already has a
+    `.poieo/` would otherwise report runs it never recorded."""
+    monkeypatch.chdir(tmp_path)
+    RunStore(".poieo").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
+
+    store = NullStore()
+    assert store.list_runs() == []
+    assert store.run("r1") is None
+    assert list(store.events("r1")) == []
+
+
 def test_list_runs_parses_only_what_it_returns(tmp_path, monkeypatch):
     """The index grows for the daemon's lifetime and the web UI reads it per
     request; parsing all of history to show the last 20 is what made a month

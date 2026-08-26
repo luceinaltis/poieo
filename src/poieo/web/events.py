@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Iterator
 
 from ..store import Event, RunStore
 
@@ -14,6 +14,12 @@ class BroadcastStore(RunStore):
     Subscribers are asyncio queues on the daemon's loop. The store never
     waits on a subscriber: a full queue means the browser stopped reading,
     and that subscriber is evicted (EventSource reconnects on its own).
+
+    It subclasses RunStore to *be* one where a RunStore is expected, but every
+    method routes to ``_inner`` -- reads included. Inheriting the reads made
+    them read ``self.root`` instead, which is only the same file by accident:
+    over a NullStore the wrapper answered the web API from whatever ``.poieo``
+    the daemon happened to be standing in.
     """
 
     def __init__(self, inner: RunStore, queue_limit: int = 1000):
@@ -52,3 +58,14 @@ class BroadcastStore(RunStore):
         self._inner.record_summary(summary)
         self.run_flows.pop(summary.get("run_id"), None)
         self._publish({"type": "run_summary", **summary})
+
+    # -- reads: the wrapped store answers, never this one --------------------
+
+    def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
+        return self._inner.list_runs(limit=limit, flow=flow)
+
+    def run(self, run_id: str) -> dict[str, Any] | None:
+        return self._inner.run(run_id)
+
+    def events(self, run_id: str) -> Iterator[dict[str, Any]]:
+        return self._inner.events(run_id)
