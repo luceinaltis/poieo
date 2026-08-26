@@ -6,7 +6,7 @@
  * split by file, with added and removed lines marked.
  */
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { fetchDiff } from "../api"
 import type { DiffReport } from "../types"
@@ -69,6 +69,9 @@ export function Diff({ runId }: { runId: string }) {
 
   useEffect(read, [read])
 
+  // Split once per report, not on every open-a-file toggle of a large patch.
+  const byFile = useMemo(() => splitPatch(report?.patch ?? ""), [report])
+
   if (report === undefined) return <p className="diff-note">reading…</p>
 
   if (report === null) {
@@ -86,8 +89,6 @@ export function Diff({ runId }: { runId: string }) {
   if (files.length === 0) {
     return <p className="diff-note">This work changed no files.</p>
   }
-
-  const byFile = splitPatch(report.patch ?? "")
 
   return (
     <div className="diff">

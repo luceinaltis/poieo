@@ -6,6 +6,7 @@
  * with no canvas and no framework.
  */
 
+import { changedWorkers } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import "./ledger.css"
@@ -99,10 +100,11 @@ export const ledger: Skin = {
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
     const board = element("div", "ledger", el)
     const cards = new Map<string, Card>()
+    const painted = new Map<string, Worker>()
 
     return {
       update(stage: StageState) {
-        for (const [flow, worker] of Object.entries(stage.workers)) {
+        for (const [flow, worker] of changedWorkers(stage.workers, painted)) {
           let card = cards.get(flow)
           if (!card) {
             card = buildCard(flow, callbacks)

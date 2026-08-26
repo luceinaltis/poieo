@@ -58,7 +58,7 @@ vi.mock("./api", () => ({
 
 import App from "./App"
 import { AGENT_RUN } from "./state/fixtures"
-import { initialStage, replay } from "./state/stage"
+import { initialStage, reduce, replay } from "./state/stage"
 import type { StageState } from "./state/stage"
 import type { StageStore } from "./shell/stageStore"
 import type { FlowRow } from "./types"
@@ -86,10 +86,11 @@ const FLOWS: FlowRow[] = [
   },
 ]
 
-function fakeStore(stage: StageState): StageStore {
+function fakeStore(stage: StageState): StageStore & { push(next: StageState): void } {
+  let current = stage
   const listeners = new Set<() => void>()
   return {
-    getStage: () => stage,
+    getStage: () => current,
     getFlows: () => FLOWS,
     getStatus: () => "live",
     subscribe: (listener) => {
@@ -99,6 +100,10 @@ function fakeStore(stage: StageState): StageStore {
     start: vi.fn(async () => {}),
     resync: vi.fn(async () => {}),
     stop: vi.fn(),
+    push(next: StageState) {
+      current = next
+      for (const listener of listeners) listener()
+    },
   }
 }
 
@@ -204,6 +209,28 @@ test("opening a different worker does not show the previous one's work", async (
   expect(drawer.getAttribute("data-flow")).toBe("revision")
   // nothing carried over from the worker we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+})
+
+
+test("a frame for another flow leaves the open drawer alone", async () => {
+  // A busy board streams frames while someone reads a drawer. Every entry in
+  // the timeline formats its timestamp on render, so "the drawer did not
+  // re-render" is observable as "no timestamp was formatted again".
+  const stage = replay(initialStage(FLOWS), AGENT_RUN)
+  const store = await render(stage)
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-flow="chores"]')!.click()
+  })
+  expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
+
+  const formatted = vi.spyOn(Date.prototype, "toLocaleTimeString")
+  await act(async () => {
+    store.push(reduce(stage, { run_id: "rr", type: "run_started", data: { flow: "revision" } }))
+  })
+
+  expect(formatted).not.toHaveBeenCalled()
+  formatted.mockRestore()
 })
 
 
