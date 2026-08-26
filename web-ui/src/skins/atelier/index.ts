@@ -36,6 +36,7 @@ import {
   place,
 } from "../layout"
 import type { Cell } from "../layout"
+import { changedWorkers } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import "./atelier.css"
@@ -1017,6 +1018,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   el.append(tidy)
 
   const benches = new Map<string, Bench>()
+  const painted = new Map<string, Worker>()
   let spots: Record<string, Cell> = {}
   let arrangedFor = ""
   let handled = false
@@ -1249,7 +1251,10 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   // -- drawing ----------------------------------------------------------------
   const render = (stage: StageState) => {
     const flows = Object.keys(stage.workers)
-    const arranged = place(flows, savedSpots(), columnsFor(el.clientWidth))
+    // localStorage, parsed once per frame rather than once per use of it.
+    const saved = savedSpots()
+    const arranged = place(flows, saved, columnsFor(el.clientWidth))
+    const changed = new Set(changedWorkers(stage.workers, painted).map(([flow]) => flow))
 
     for (const [flow, bench] of benches) {
       if (!(flow in stage.workers)) {
@@ -1260,7 +1265,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     }
 
     const signature = `${flows.join("|")}@${el.clientWidth}x${el.clientHeight}`
-    if (signature !== arrangedFor && !handled && Object.keys(savedSpots()).length === 0) {
+    if (signature !== arrangedFor && !handled && Object.keys(saved).length === 0) {
       arrangedFor = signature
       const box = bounds(Object.values(arranged))
       centre.x = (box.x + box.width / 2) / PER_UNIT
@@ -1280,6 +1285,11 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       }
       spots[flow] = arranged[flow]
       if (dragging !== flow) bench.place(arranged[flow])
+
+      // Placement follows every frame; the bench and its tag only follow the
+      // frames that touched this worker. paint() rebuilds shelf geometry, so
+      // repainting a whole board because one flow spoke is GPU churn.
+      if (!changed.has(flow)) continue
       bench.paint(stage.workers[flow])
 
       const worker = stage.workers[flow]
@@ -1298,7 +1308,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       }
     }
 
-    tidy.hidden = !handled && Object.keys(savedSpots()).length === 0
+    tidy.hidden = !handled && Object.keys(saved).length === 0
   }
 
   let latest: StageState | null = null

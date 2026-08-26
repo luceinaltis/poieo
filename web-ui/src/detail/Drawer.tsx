@@ -6,7 +6,7 @@
  * live board.
  */
 
-import { useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
 import { Decide } from "../review/Decide"
@@ -85,7 +85,9 @@ function Entry({ event }: { event: PoieoEvent }) {
   return null
 }
 
-export function Drawer({
+// Memoized because the shell re-renders on every SSE frame: a drawer being
+// read must not re-reconcile its whole timeline because another flow spoke.
+export const Drawer = memo(function Drawer({
   flow,
   pending = 0,
   into = null,
@@ -202,4 +204,4 @@ export function Drawer({
       </div>
     </aside>
   )
-}
+})

@@ -4,7 +4,7 @@
  * plain DOM behind a contract, so a new one never touches this file.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 
 import { Drawer } from "./detail/Drawer"
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell/skinHost"
@@ -58,6 +58,10 @@ export default function App({ store }: { store?: StageStore }) {
     writeSkinPreference(id)
   }
 
+  // Stable, so the memoized drawer sees the same props while frames stream by.
+  const closeDrawer = useCallback(() => setSelected(null), [])
+  const decided = useCallback(() => void theStore.resync(), [theStore])
+
   const empty = Object.keys(stage.workers).length === 0
 
   return (
@@ -101,8 +105,8 @@ export default function App({ store }: { store?: StageStore }) {
           flow={selected}
           pending={flows.find((row) => row.name === selected)?.pending ?? 0}
           into={flows.find((row) => row.name === selected)?.into ?? null}
-          onClose={() => setSelected(null)}
-          onDecided={() => void theStore.resync()}
+          onClose={closeDrawer}
+          onDecided={decided}
         />
       ) : null}
     </>
