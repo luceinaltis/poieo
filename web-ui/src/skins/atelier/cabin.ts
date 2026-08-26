@@ -10,6 +10,13 @@
  *
  * Variation is hashed from each part's index, never drawn from Math.random,
  * so every bench builds the same cabin every time and replays match live.
+ *
+ * All that repetition is ninety-odd meshes per bench, and nothing in the room
+ * ever moves. So the last thing makeCabin does is weld it into a handful of
+ * meshes, built once at the origin. The colours -- twenty-odd shades of plank,
+ * log and flagstone -- go into the vertices, so a shade is no longer a reason
+ * to draw a separate mesh. On a desktop the difference does not show; a phone
+ * counts draw calls long before it counts triangles.
  */
 
 /** The footprint the bench already uses; the cabin wraps it exactly. */
@@ -54,6 +61,151 @@ const drift = (seed: number) => {
  * Build the cabin: plank floor, two log walls with crossed corner ends, top
  * plates, and a shuttered window. Returns a group standing on y = 0.
  */
+
+/**
+ * The attributes every primitive in here carries, and the only ones welding
+ * knows how to carry across.
+ */
+const WELDED = ["position", "normal", "uv"]
+
+/**
+ * What actually makes two materials different to draw, once colour has been
+ * moved into the vertices. Everything in this room is untextured, so the
+ * shade was the only thing keeping most of these meshes apart.
+ */
+export function likeness(material: any): string {
+  return [
+    material.type,
+    material.roughness,
+    material.metalness,
+    material.transparent,
+    material.opacity,
+    material.side,
+    material.emissive ? material.emissive.getHexString() : "-",
+    material.map ? "textured" : "-",
+  ].join("|")
+}
+
+/** One piece on its way into a merged geometry. */
+export interface Piece {
+  index: ArrayLike<number>
+  vertices: number
+}
+
+/**
+ * Write the merged index buffer: each piece's indices point into its own
+ * vertices, so they have to be shifted past every vertex that came before.
+ *
+ * Getting this wrong does not throw. It draws triangles between corners of
+ * different planks, and the room comes out as a spray of shards -- which is
+ * why it is a function with a test rather than two nested loops in the middle
+ * of another one.
+ */
+export function threaded(into: { [i: number]: number }, pieces: Piece[]): void {
+  let at = 0
+  let base = 0
+  for (const piece of pieces) {
+    for (let i = 0; i < piece.index.length; i += 1) into[at + i] = piece.index[i] + base
+    at += piece.index.length
+    base += piece.vertices
+  }
+}
+
+/**
+ * One geometry from many, or nothing if any of them is not the plain indexed
+ * primitive this expects. Nothing is not a failure -- the caller keeps the
+ * room it already has, which draws slowly and correctly.
+ */
+function weld(THREE: any, pieces: any[]): any {
+  let vertices = 0
+  let indices = 0
+  for (const piece of pieces) {
+    if (!piece.index) return null
+    for (const name of WELDED) {
+      const attribute = piece.attributes[name]
+      // Interleaved or packed attributes cannot be copied straight across,
+      // and no primitive built here produces one.
+      if (!attribute || attribute.isInterleavedBufferAttribute) return null
+      if (!(attribute.array instanceof Float32Array)) return null
+      if (attribute.itemSize !== pieces[0].attributes[name].itemSize) return null
+    }
+    vertices += piece.attributes.position.count
+    indices += piece.index.count
+  }
+
+  const merged = new THREE.BufferGeometry()
+  for (const name of WELDED.concat(pieces[0].attributes.color ? ["color"] : [])) {
+    const width = pieces[0].attributes[name].itemSize
+    const all = new Float32Array(vertices * width)
+    let at = 0
+    for (const piece of pieces) {
+      all.set(piece.attributes[name].array, at)
+      at += piece.attributes[name].count * width
+    }
+    merged.setAttribute(name, new THREE.BufferAttribute(all, width))
+  }
+
+  const index = vertices > 65535 ? new Uint32Array(indices) : new Uint16Array(indices)
+  threaded(
+    index,
+    pieces.map((piece: any) => ({
+      index: piece.index.array,
+      vertices: piece.attributes.position.count,
+    })),
+  )
+  merged.setIndex(new THREE.BufferAttribute(index, 1))
+  return merged
+}
+
+/**
+ * Collapse a group of static meshes into one mesh per material, in place.
+ *
+ * Each part's own transform is baked into its vertices first, which is what
+ * lets them share a mesh at all -- and is why this only works on a room that
+ * never moves a plank again.
+ */
+function fuse(THREE: any, room: any): void {
+  room.updateMatrixWorld(true)
+  const parts: any[] = []
+  room.traverse((piece: any) => {
+    if (piece.isMesh && !Array.isArray(piece.material)) parts.push(piece)
+  })
+
+  const byLikeness = new Map<string, { material: any; pieces: any[] }>()
+  for (const part of parts) {
+    const baked = part.geometry.clone().applyMatrix4(part.matrixWorld)
+    // The part's own colour, written once per vertex, so the merged mesh can
+    // keep twenty shades of plank under one material.
+    const count = baked.attributes.position.count
+    const shade = new Float32Array(count * 3)
+    const { r, g, b } = part.material.color ?? { r: 1, g: 1, b: 1 }
+    for (let v = 0; v < count; v += 1) shade.set([r, g, b], v * 3)
+    baked.setAttribute("color", new THREE.BufferAttribute(shade, 3))
+
+    const key = likeness(part.material)
+    const already = byLikeness.get(key)
+    if (already) already.pieces.push(baked)
+    else byLikeness.set(key, { material: part.material, pieces: [baked] })
+  }
+
+  const welded: any[] = []
+  for (const { material, pieces } of byLikeness.values()) {
+    const merged = weld(THREE, pieces)
+    if (!merged) return
+    const shared = material.clone()
+    shared.vertexColors = true
+    // White, because the shade now arrives per vertex and three multiplies
+    // the two together.
+    if (shared.color) shared.color.setRGB(1, 1, 1)
+    welded.push(new THREE.Mesh(merged, shared))
+  }
+
+  // Shared between many parts, so disposing twice is normal and harmless.
+  for (const part of parts) part.geometry.dispose()
+  room.clear()
+  for (const mesh of welded) room.add(mesh)
+}
+
 export function makeCabin(THREE: any): any {
   const cabin = new THREE.Group()
 
@@ -329,5 +481,6 @@ export function makeCabin(THREE: any): any {
     cabin.add(mark)
   }
 
+  fuse(THREE, cabin)
   return cabin
 }

@@ -15,6 +15,7 @@ import { INSIDE, makeCabin } from "./cabin"
 import { step } from "./clock"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
+import { reading } from "./meter"
 import { flexion, sideways, stretcher } from "./reach"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
@@ -1042,6 +1043,30 @@ export function makeBench(
   }
 }
 
+/** The `?fps` readout: a line in the corner, rewritten once a second. */
+function showMeter(el: HTMLElement) {
+  const box = document.createElement("div")
+  box.style.cssText =
+    "position:fixed;left:8px;top:8px;z-index:9;padding:5px 9px;border-radius:4px;" +
+    "background:rgba(0,0,0,.72);color:#9f9;pointer-events:none;" +
+    "font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace"
+  box.textContent = "..."
+  el.append(box)
+
+  let since = -1
+  let clockThen = 0
+  let frames = 0
+  return (now: number, clock: number, cost: { calls: number; triangles: number }) => {
+    frames += 1
+    if (since < 0 || now - since >= 1000) {
+      if (since >= 0) box.textContent = reading(frames, now - since, clock - clockThen, cost)
+      frames = 0
+      since = now
+      clockThen = clock
+    }
+  }
+}
+
 async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js")
   const { MeshoptDecoder } = await import("three/examples/jsm/libs/meshopt_decoder.module.js")
@@ -1205,6 +1230,10 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     placeLabels()
   }
 
+  // `?fps` puts a readout in the corner, because the device that is slow is
+  // never the one with the profiler on it. See meter.ts.
+  const meter = new URLSearchParams(location.search).has("fps") ? showMeter(el) : null
+
   let running = true
   // The clock takes its step from the frame's own timestamp; see clock.ts for
   // what counting frames instead did to a phone.
@@ -1215,6 +1244,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     drawn = now
     for (const bench of benches.values()) bench.tick(elapsed)
     draw()
+    meter?.(now, elapsed, renderer.info.render)
     requestAnimationFrame(loop)
   }
   requestAnimationFrame(loop)
