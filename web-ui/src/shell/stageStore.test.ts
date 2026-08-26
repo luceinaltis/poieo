@@ -159,6 +159,40 @@ test("feed status is reported through", async () => {
 })
 
 
+test("a resync asks the flows together, not one after another", async () => {
+  // Resync fires on every reconnect -- exactly when the board is already
+  // stale -- and live frames queue until it finishes. One round trip per flow,
+  // in single file, holds the board hostage for flows x latency.
+  const flows = ["a", "b", "c"].map((name) => ({
+    ...CHORES,
+    name,
+    current_run_id: `run-${name}`,
+  }))
+
+  let active = 0
+  let peak = 0
+  const slow = async <T,>(value: T): Promise<T> => {
+    active += 1
+    peak = Math.max(peak, active)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    active -= 1
+    return value
+  }
+
+  const { store } = harness({
+    fetchFlows: vi.fn(async () => flows),
+    fetchRuns: vi.fn(() => slow([])),
+    fetchRunEvents: vi.fn(() => slow([] as PoieoEvent[])),
+  })
+  await store.start()
+
+  peak = 0 // measure the resync alone, not start()'s own tally
+  await store.resync()
+  expect(peak).toBeGreaterThan(1) // overlapping, not sequential
+  store.stop()
+})
+
+
 test("the store tallies each flow's recent work from the run index", async () => {
   const runs = [
     {

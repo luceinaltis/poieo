@@ -102,11 +102,20 @@ export function createStageStore(api: StageApi = {
     announce()
   }
 
-  /** The run index knows what a night amounted to; the event stream does not. */
+  /** The run index knows what a night amounted to; the event stream does not.
+   *
+   * Asked together, not one flow after another: live frames queue until the
+   * catch-up read finishes, so it should cost one round trip's latency, not N.
+   */
   async function tally(current: StageState, rows: FlowRow[]): Promise<StageState> {
+    const tallies = await Promise.all(
+      rows.map(async (row) => ({
+        row,
+        runs: await api.fetchRuns({ flow: row.name, limit: REVIEW_LIMIT }),
+      })),
+    )
     let next = current
-    for (const row of rows) {
-      const runs = await api.fetchRuns({ flow: row.name, limit: REVIEW_LIMIT })
+    for (const { row, runs } of tallies) {
       next = setRecent(next, row.name, rollup(runs, row.into !== null))
     }
     return next
@@ -118,12 +127,16 @@ export function createStageStore(api: StageApi = {
     try {
       flows = await api.fetchFlows()
       stage = seed(stage, flows)
-      stage = await tally(stage, flows)
 
-      for (const row of flows) {
-        if (!row.current_run_id) continue
-        stage = replay(stage, await api.fetchRunEvents(row.current_run_id))
-      }
+      // Both reads are independent of each other; fetch everything at once
+      // and fold in the same order the sequential code did.
+      const running = flows.filter((row) => row.current_run_id)
+      const [tallied, histories] = await Promise.all([
+        tally(stage, flows),
+        Promise.all(running.map((row) => api.fetchRunEvents(row.current_run_id!))),
+      ])
+      stage = tallied
+      for (const events of histories) stage = replay(stage, events)
     } finally {
       const queued = held
       holding = false
