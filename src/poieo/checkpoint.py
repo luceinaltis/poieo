@@ -103,10 +103,14 @@ def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
 class Checkpoint:
     """A flow's private copy of one repository, and the change it is building."""
 
-    def __init__(self, repo: Path, flow: str, poieo_root: Path):
+    def __init__(self, repo: Path, flow: str, worktrees: Path):
         self.repo = Path(repo)
         self.flow = flow
-        self.poieo_root = Path(poieo_root)
+        # The folder that holds every flow's copy, not the project root: this
+        # used to be handed the run-log store and append `worktrees` itself,
+        # which meant pointing the logs at another disk quietly took the
+        # working copies along. A copy of a repository is not a log.
+        self.worktrees = Path(worktrees)
 
     @property
     def branch(self) -> str:
@@ -114,7 +118,7 @@ class Checkpoint:
 
     @property
     def worktree(self) -> Path:
-        return self.poieo_root / "worktrees" / self.flow
+        return self.worktrees / self.flow
 
     # -- inspection ---------------------------------------------------------
 

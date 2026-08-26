@@ -1,9 +1,13 @@
-"""The record every run leaves behind.
+"""What a run leaves behind when it is over.
 
 One file per run, written once and never rewritten, so anything remembered
 can be traced to the work that taught it. The harness writes these, never the
 model: there is no tool for it, so nothing depends on a model remembering to
 remember.
+
+It sits in ``runs/results/``, beside the event stream the same run wrote to
+``runs/events/``. They share a run id and are two halves of one account: the
+stream as it happened, and what was left when it stopped.
 """
 
 from __future__ import annotations
@@ -13,15 +17,24 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from ..layout import layout_for
 from .facts import Fact, keeps_memory, tokens
 from .recall import recall
 
 log = logging.getLogger("poieo.memory")
 
 
-def episodes_dir(project_dir: Path) -> Path:
-    """Records live with the project's other machinery, never in `memory/`."""
-    return project_dir / ".poieo" / "episodes"
+def results_dir(project_dir: Path) -> Path:
+    """Beside the events of the same runs, never in `memory/`: what a person
+    keeps and what a night produced are different kinds of thing.
+
+    ``layout_for``, not a layout rooted here: the events of these same runs
+    are written by ``RunStore``, which is handed the project's ``runs/`` --
+    and that folder answers to ``store:``. Rooting this at the folder it was
+    asked from instead put the result of a run in one place and its events in
+    another, which is a run history split down the middle by nothing.
+    """
+    return layout_for(project_dir).results()
 
 
 def used_in(fact: Fact, record: dict[str, Any]) -> bool:
@@ -36,7 +49,7 @@ def used_in(fact: Fact, record: dict[str, Any]) -> bool:
     return len(tokens(fact.body) & said) >= 2
 
 
-def write_episode(task: Any, result: Any) -> Path | None:
+def write_result(task: Any, result: Any) -> Path | None:
     """One record per run, written once and never rewritten.
 
     Anchored to the task's own folder rather than wherever the run log was
@@ -51,7 +64,7 @@ def write_episode(task: Any, result: Any) -> Path | None:
     # belongs there, beside the journal it also feeds.
     from ..task import closing_line
 
-    path = episodes_dir(task.dir) / f"{result.run_id}.json"
+    path = results_dir(task.dir) / f"{result.run_id}.json"
     record = {
         "run_id": result.run_id,
         "task": task.slug,
@@ -85,6 +98,6 @@ def write_episode(task: Any, result: Any) -> Path | None:
             encoding="utf-8",
         )
     except OSError as exc:
-        log.warning("task '%s': could not write the episode: %s", task.slug, exc)
+        log.warning("task '%s': could not write the result: %s", task.slug, exc)
         return None
     return path

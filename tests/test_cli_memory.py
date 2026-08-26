@@ -120,7 +120,7 @@ def test_learn_runs_one_pass_and_says_what_it_kept(tmp_path):
     import json
 
     _, project = _project(tmp_path)
-    episodes = project / ".poieo" / "episodes"
+    episodes = at(project).results()
     episodes.mkdir(parents=True)
     (episodes / "20260824T010000-aaaaaaaa.json").write_text(
         json.dumps(
@@ -343,7 +343,7 @@ def test_a_lost_keepsake_falls_back_to_the_mtime_line(tmp_path):
 def _record_run(project, run_id, summary, shown, status="completed"):
     import json
 
-    episodes = project / ".poieo" / "episodes"
+    episodes = at(project).results()
     episodes.mkdir(parents=True, exist_ok=True)
     (episodes / f"{run_id}.json").write_text(
         json.dumps(

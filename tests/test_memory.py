@@ -53,15 +53,15 @@ def _result(**over):
     return replace(result, **over)
 
 
-def _episode(task, result):
-    return task.dir / ".poieo" / "episodes" / f"{result.run_id}.json"
+def _record_file(task, result):
+    return at(task.dir).results() / f"{result.run_id}.json"
 
 
 def test_a_completed_run_leaves_an_episode(tmp_path):
     task, result = _task(tmp_path), _result()
     record_run(task, result)
 
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert data["run_id"] == result.run_id
     assert data["task"] == "tidy"
     assert data["status"] == "completed"
@@ -75,7 +75,7 @@ def test_a_failed_run_leaves_an_episode_too(tmp_path):
     result = _result(status="failed", error="the tests would not pass", outputs={})
     record_run(task, result)
 
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert data["status"] == "failed"
     assert data["error"] == "the tests would not pass"
 
@@ -86,7 +86,7 @@ def test_the_episode_summary_is_not_clipped(tmp_path):
     result = _result(outputs={"work": said})
     record_run(task, result)
 
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert data["summary"] == said
     # The journal keeps its one bounded line; the record is the unclipped copy.
     journal = task.journal_path().read_text(encoding="utf-8")
@@ -97,7 +97,7 @@ def test_the_episode_joins_the_run_log_by_run_id(tmp_path):
     task, result = _task(tmp_path), _result()
     record_run(task, result)
 
-    path = _episode(task, result)
+    path = _record_file(task, result)
     assert path.stem == result.run_id
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["run_id"] == result.run_id
@@ -117,26 +117,26 @@ async def test_a_graph_without_a_task_leaves_no_episode(tmp_path):
         }
     )
     async with ProviderPool(binding) as pool:
-        result = await execute(graph, binding, pool, RunStore(tmp_path / ".poieo"))
+        result = await execute(graph, binding, pool, RunStore(at(tmp_path).runs()))
 
     assert result.status == "completed"
-    assert not (tmp_path / ".poieo" / "episodes").exists()
+    assert not at(tmp_path).results().exists()
 
 
 def test_an_existing_episode_is_never_rewritten(tmp_path):
     task, result = _task(tmp_path), _result()
     record_run(task, result)
 
-    _episode(task, result).write_text('{"kept": true}', encoding="utf-8")
+    _record_file(task, result).write_text('{"kept": true}', encoding="utf-8")
     record_run(task, result)
-    assert json.loads(_episode(task, result).read_text(encoding="utf-8")) == {"kept": True}
+    assert json.loads(_record_file(task, result).read_text(encoding="utf-8")) == {"kept": True}
 
 
 def test_an_unwritable_episode_is_logged_and_the_result_stands(tmp_path, caplog):
     task, result = _task(tmp_path), _result()
-    # A file where the episodes folder should be: every write must fail.
-    (task.dir / ".poieo").mkdir()
-    (task.dir / ".poieo" / "episodes").write_text("in the way", encoding="utf-8")
+    # A file where the results folder should be: every write must fail.
+    at(task.dir).runs().mkdir(parents=True)
+    at(task.dir).results().write_text("in the way", encoding="utf-8")
 
     with caplog.at_level("WARNING", logger="poieo.memory"):
         record_run(task, result)
@@ -307,7 +307,7 @@ def test_listing_a_project_writes_nothing(tmp_path):
     _learn(tmp_path, "tidy-order", "Tidy the project one file at a time.")
 
     system_block(task)
-    assert not (tmp_path / "tasks" / ".poieo").exists()
+    assert not at(tmp_path / "tasks").runs().exists()
 
 
 # -- the record says what the run had in mind --------------------------------
@@ -320,7 +320,7 @@ def test_an_episode_records_what_the_run_was_shown(tmp_path):
     _learn(tmp_path, "elsewhere", "The exporter flushes nightly.", )
 
     record_run(task, result)
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert "tidy-order" in data["shown"]
     assert "elsewhere" not in data["shown"]
 
@@ -329,12 +329,12 @@ def test_a_memoryless_projects_episode_records_nothing_new(tmp_path):
     task, result = _task(tmp_path), _result()
     record_run(task, result)
 
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert "shown" not in data
 
 
 def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
-    import poieo.memory.episodes as episodes_module
+    import poieo.memory.results as results_module
 
     task, result = _task(tmp_path), _result()
     _remember(tmp_path)
@@ -343,10 +343,10 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
         raise RuntimeError("selection went sideways")
 
     # Patched where the record is written, which is where it is looked up.
-    monkeypatch.setattr(episodes_module, "recall", blow_up)
+    monkeypatch.setattr(results_module, "recall", blow_up)
     record_run(task, result)  # must not raise
 
-    data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
     assert data["run_id"] == result.run_id
     assert "tidied the docs folder" in task.journal_path().read_text(encoding="utf-8")
 
@@ -481,7 +481,7 @@ def test_the_package_does_not_shadow_its_own_submodules():
 
     import poieo.memory as memory
 
-    for name in ("facts", "index", "recall", "episodes", "upkeep"):
+    for name in ("facts", "index", "recall", "results", "upkeep"):
         __import__(f"poieo.memory.{name}")
         assert isinstance(getattr(memory, name), types.ModuleType), (
             f"poieo.memory.{name} is shadowed by a re-export of the same name"

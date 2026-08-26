@@ -382,7 +382,7 @@ def test_a_task_run_reads_its_journal(tmp_path):
         ],
     )
     assert result.exit_code == 0
-    events = (tmp_path / "logs" / "runs").glob("*.jsonl")
+    events = (tmp_path / "logs" / "events").glob("*.jsonl")
     written = "\n".join(p.read_text(encoding="utf-8") for p in events)
     assert "only touch the tests" in written
 
@@ -635,8 +635,8 @@ def test_run_stores_beside_the_card(tmp_path, monkeypatch):
     monkeypatch.chdir(elsewhere)
     result = runner.invoke(app, ["run", str(card)])
     assert result.exit_code == 0, result.output
-    assert (tmp_path / ".poieo" / "runs").is_dir()
-    assert not (elsewhere / ".poieo").exists()
+    assert (tmp_path / "runs" / "events").is_dir()
+    assert not (elsewhere / "runs").exists()
 
 
 def test_run_store_flag_still_wins(tmp_path):
@@ -645,7 +645,7 @@ def test_run_store_flag_still_wins(tmp_path):
         app, ["run", str(card), "--store", str(tmp_path / "mystore")]
     )
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "mystore" / "runs").is_dir()
+    assert (tmp_path / "mystore" / "events").is_dir()
 
 
 def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
@@ -657,7 +657,7 @@ def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
          "-b", str(EXAMPLES / "bindings/mock.yaml"), "--set", "message=hi"],
     )
     assert result.exit_code == 0, result.output
-    assert (tmp_path / ".poieo" / "runs").is_dir()
+    assert (tmp_path / "runs" / "events").is_dir()
 
 
 def test_daemon_folder_stores_beside_the_cards(tmp_path):
@@ -670,7 +670,7 @@ def test_daemon_folder_stores_beside_the_cards(tmp_path):
     )
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
-    assert (folder / ".poieo" / "runs").is_dir()
+    assert (folder / "runs" / "events").is_dir()
 
 
 # -- where the work happens ---------------------------------------------------

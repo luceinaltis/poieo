@@ -6,7 +6,7 @@ prompt. This package is the long-term half, in five parts:
 ``facts``     the files it is made of: the page, and one entry per lesson
 ``index``     a derived sqlite lookup over them, safe to delete at any time
 ``recall``    choosing which entries a task is shown, and building the block
-``episodes``  the full record every run leaves behind
+``results``   the full record every run leaves behind
 ``upkeep``    what the memory would like a person to look at
 
 Truth lives in markdown under git -- the journals in ``memory/shortterm/``
@@ -22,7 +22,7 @@ same name, and reaching for it from outside this package means reaching past
 Spec: docs/specs/2026-08-24-project-memory-design.md
 """
 
-from .episodes import episodes_dir, used_in, write_episode
+from .results import results_dir, used_in, write_result
 from .facts import (
     Fact,
     check_memory,
@@ -39,14 +39,14 @@ __all__ = [
     "Fact",
     "check_memory",
     "doubts",
-    "episodes_dir",
     "keeps_memory",
     "load_fact",
     "load_facts",
     "memory_report",
     "read_memory",
     "read_page",
+    "results_dir",
     "readable_facts",
     "used_in",
-    "write_episode",
+    "write_result",
 ]

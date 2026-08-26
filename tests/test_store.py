@@ -23,7 +23,7 @@ def test_events_and_index_round_trip(tmp_path):
 def test_non_json_values_are_coerced_rather_than_crashing(tmp_path):
     store = RunStore(tmp_path / "logs")
     store.append(Event(run_id="r1", type="t", data={"when": object()}))
-    line = json.loads((store.runs_dir / "r1.jsonl").read_text())
+    line = json.loads((store.events_dir / "r1.jsonl").read_text())
     assert isinstance(line["data"]["when"], str)
 
 
@@ -46,9 +46,9 @@ def test_null_store_writes_nothing(tmp_path, monkeypatch):
 def test_null_store_reads_nothing_either(tmp_path, monkeypatch):
     """A store that drops every write must not answer reads from somebody
     else's history. `poieo run --no-log` in a folder that already has a
-    `.poieo/` would otherwise report runs it never recorded."""
+    `runs/` would otherwise report runs it never recorded."""
     monkeypatch.chdir(tmp_path)
-    RunStore(".poieo").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
+    RunStore("runs").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
 
     store = NullStore()
     assert store.list_runs() == []
@@ -147,7 +147,7 @@ def test_a_damaged_line_never_costs_the_lines_around_it(tmp_path):
 def test_events_survive_the_same_damage(tmp_path):
     store = RunStore(tmp_path / "logs")
     store.append(Event(run_id="r1", type="run_started"))
-    with (store.runs_dir / "r1.jsonl").open("a", encoding="utf-8") as handle:
+    with (store.events_dir / "r1.jsonl").open("a", encoding="utf-8") as handle:
         handle.write("\n[1, 2]\nnot json at all\n")
     store.append(Event(run_id="r1", type="run_finished"))
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .expr import unwrap
+from .layout import layout_for
 
 
 def utcnow() -> str:
@@ -82,18 +83,25 @@ class Event:
 
 
 class RunStore:
-    """Writes events under ``root/runs``. Safe for concurrent flows in one process."""
+    """Everything a run leaves behind, under the folder it is handed.
 
-    def __init__(self, root: str | Path = ".poieo"):
-        self.root = Path(root)
-        self.runs_dir = self.root / "runs"
-        self.index_path = self.runs_dir / "index.jsonl"
+    That folder is the project's ``runs/``, and this writes straight into
+    it -- it used to append a ``runs`` of its own, so a project that said
+    ``store: logs`` got ``logs/runs/``, one hop nobody asked for.
+
+    Safe for concurrent flows in one process.
+    """
+
+    def __init__(self, root: str | Path | None = None):
+        self.root = Path(root) if root is not None else layout_for().runs()
+        self.events_dir = self.root / "events"
+        self.index_path = self.root / "index.jsonl"
         self._lock = threading.Lock()
         self._ensured = False
 
     def _ensure(self) -> None:
         if not self._ensured:
-            self.runs_dir.mkdir(parents=True, exist_ok=True)
+            self.events_dir.mkdir(parents=True, exist_ok=True)
             self._ensured = True
 
     def _append(self, path: Path, record: dict[str, Any], sync: bool = False) -> None:
@@ -115,7 +123,7 @@ class RunStore:
                     os.fsync(handle.fileno())
 
     def append(self, event: Event) -> None:
-        self._append(self.runs_dir / f"{event.run_id}.jsonl", event.as_dict())
+        self._append(self.events_dir / f"{event.run_id}.jsonl", event.as_dict())
 
     def record_summary(self, summary: dict[str, Any]) -> None:
         self._append(self.index_path, summary, sync=True)
@@ -165,7 +173,7 @@ class RunStore:
         return None
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
-        path = self.runs_dir / f"{run_id}.jsonl"
+        path = self.events_dir / f"{run_id}.jsonl"
         if not path.exists():
             return iter(())
 
@@ -180,12 +188,12 @@ class NullStore(RunStore):
     """Drops everything -- used by ``poieo run --no-log`` and by tests.
 
     Empty on both sides. Dropping the writes but inheriting the reads would
-    leave it answering from whatever ``./.poieo`` a folder happens to hold,
+    leave it answering from whatever ``runs/`` a folder happens to hold,
     which is somebody else's history rather than none.
     """
 
     def __init__(self) -> None:
-        super().__init__(".poieo")
+        super().__init__("runs")
 
     def append(self, event: Event) -> None:  # noqa: D102
         return

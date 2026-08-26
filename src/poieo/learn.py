@@ -30,11 +30,11 @@ from .layout import Layout
 from .memory import (
     Fact,
     doubts,
-    episodes_dir,
     keeps_memory,
     load_fact,
     read_page,
     readable_facts,
+    results_dir,
     used_in,
 )
 from .providers import ProviderPool
@@ -156,7 +156,7 @@ def _bookmark(project_dir: Path) -> str:
 
 
 def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
-    root = episodes_dir(project_dir)
+    root = results_dir(project_dir)
     if not root.is_dir():
         return []
     records = []
