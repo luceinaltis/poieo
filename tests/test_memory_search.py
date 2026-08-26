@@ -7,7 +7,8 @@ entries, or the fallback is a different feature wearing the same name.
 
 import pytest
 
-import poieo.memory as memory
+import poieo.memory.index as memory_index
+import poieo.memory.recall as memory_recall
 from poieo.memory import read_memory
 from poieo.task import load_task
 
@@ -44,7 +45,7 @@ def test_the_fallback_returns_the_same_entries_as_fts(tmp_path, monkeypatch):
     _fact(project, "unrelated", "The deploy pipeline reruns twice on Mondays.")
 
     preferred = read_memory(project, task)
-    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    monkeypatch.setattr(memory_index, "fts_available", lambda: False)
     assert read_memory(project, task) == preferred
 
 
@@ -81,7 +82,7 @@ def test_an_anchored_entry_outranks_a_merely_similar_one(tmp_path, monkeypatch):
     _fact(project, "similar", "Another note about the api batch limit.")
 
     # Room for one entry only: rank decides who gets it.
-    monkeypatch.setattr(memory, "FACTS_BUDGET", 40)
+    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 40)
     block = read_memory(project, task)
     assert "Watch the api batch limit here." in block
     assert "Another note" not in block
@@ -94,7 +95,7 @@ def test_an_anchored_entry_arrives_even_without_a_shared_word(tmp_path, monkeypa
     block = read_memory(project, task)
     assert "Symlinks misbehave" in block
     # And the slower lookup agrees, or it is a different feature.
-    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    monkeypatch.setattr(memory_index, "fts_available", lambda: False)
     assert read_memory(project, task) == block
 
 
@@ -105,7 +106,7 @@ def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch
     _fact(project, "one", "The api batch importer note number one.")
     _fact(project, "two", "The api batch importer note number two.")
 
-    monkeypatch.setattr(memory, "FACTS_BUDGET", 45)
+    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 45)
     block = read_memory(project, task)
     # The page arrives whole however small the budget for learned entries is.
     assert page.strip() in block
@@ -115,7 +116,7 @@ def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch
 
 
 def test_a_deleted_index_is_rebuilt_silently(tmp_path):
-    if not memory._fts_available():
+    if not memory_index.fts_available():
         pytest.skip("this Python build has no FTS5, so there is no index file")
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
@@ -233,7 +234,7 @@ def test_the_budget_still_cuts_whole_entries_across_neighbors(tmp_path, monkeypa
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
     _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
 
-    monkeypatch.setattr(memory, "FACTS_BUDGET", 60)
+    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 60)
     block = read_memory(project, task)
     assert "over 50." in block
     assert "alphabetically" not in block
@@ -246,7 +247,7 @@ def test_the_fallback_still_returns_the_same_entries(tmp_path, monkeypatch):
     _fact(project, "quiet-note", "Digest ordering held steady. [[batch-cap]]")
 
     preferred = read_memory(project, task)
-    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    monkeypatch.setattr(memory_index, "fts_available", lambda: False)
     assert read_memory(project, task) == preferred
 
 
@@ -351,7 +352,7 @@ def test_the_scan_and_the_index_still_agree_on_worn_paths(tmp_path, monkeypatch)
     _worn(project, "near", "far")
 
     preferred = read_memory(project, task)
-    monkeypatch.setattr(memory, "_fts_available", lambda: False)
+    monkeypatch.setattr(memory_index, "fts_available", lambda: False)
     assert read_memory(project, task) == preferred
 
 
