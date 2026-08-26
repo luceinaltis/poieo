@@ -19,6 +19,7 @@ from poieo.task import (
     append_journal,
     expand,
     load_task,
+    load_tasks,
     read_journal,
     system_block,
 )
@@ -136,6 +137,69 @@ def test_an_ejected_task_names_its_graph_instead_of_generating_one(tmp_path):
     flow, graph = expand(load_task(path))
     assert graph is None
     assert Path(flow.graph) == (graphs / "t.yaml").resolve()
+
+
+# -- cards and graphs share a folder -----------------------------------------
+#
+# A card is a graph's short form, so the two are one kind of thing -- what a
+# person writes -- and live together. Which is which is a question the
+# document answers: a card has a folder, a graph has nodes.
+
+
+def write_graph(root: Path, stem: str) -> Path:
+    tasks = root / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    path = tasks / f"{stem}.graph.yaml"
+    path.write_text(
+        "name: g\nentry: a\nnodes:\n  - {id: a, type: llm, prompt: hi}\n", encoding="utf-8"
+    )
+    return path
+
+
+def test_a_graph_beside_a_card_is_not_read_as_a_card(tmp_path):
+    write_task(tmp_path, "tidy", "name: tidy\nprompt: go\n")
+    write_graph(tmp_path, "tidy")
+    assert [task.slug for task in load_tasks(tmp_path / "tasks")] == ["tidy"]
+
+
+def test_a_file_that_is_neither_says_so_instead_of_vanishing(tmp_path):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "confused.yaml").write_text("name: neither\nversion: 1\n", encoding="utf-8")
+    with pytest.raises(SpecError) as caught:
+        load_tasks(tasks)
+    # Both shapes are named, because "this is wrong" without "here is what
+    # right looks like" is where a person goes to read the source.
+    assert "folder:" in str(caught.value) and "nodes:" in str(caught.value)
+
+
+def test_a_file_answering_to_both_shapes_fails_rather_than_disappearing(tmp_path):
+    """A card that grew a `nodes:` key answers to no rule. Reading it as a
+    graph would drop a task from the roster without a word."""
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "both.yaml").write_text(
+        "name: both\nfolder: .\nnodes:\n  - {id: a, type: llm}\n", encoding="utf-8"
+    )
+    with pytest.raises(SpecError):
+        load_tasks(tasks)
+
+
+def test_a_card_whose_yaml_is_broken_still_fails_the_load(tmp_path):
+    """The trap this folder invites: sorting cards from graphs by *trying* to
+    parse would turn a typo into a silently absent task -- a card that stops
+    running at 3am with nothing said. It fails here instead."""
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tasks / "broken.yaml").write_text("name: broken\n  folder: .\n", encoding="utf-8")
+    with pytest.raises(SpecError):
+        load_tasks(tasks)
+
+
+def test_a_card_with_an_unknown_key_still_fails_the_load(tmp_path):
+    write_task(tmp_path, "tidy", "name: tidy\nprompt: go\nbogus: 1\n")
+    with pytest.raises(SpecError):
+        load_tasks(tmp_path / "tasks")
 
 
 def test_paths_resolve_against_the_task_file(tmp_path):

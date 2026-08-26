@@ -305,21 +305,38 @@ def test_tasks_lists_the_cards(tmp_path):
     assert "write docs" in result.stdout
 
 
-def test_eject_writes_the_graph_and_the_task_keeps_working(tmp_path):
+def test_eject_writes_the_graph_beside_the_card(tmp_path):
     path = _task(tmp_path, body="name: tidy\nprompt: go\nevery: 30m\n")
     result = runner.invoke(app, ["eject", str(path)])
     assert result.exit_code == 0
 
-    graph_file = tmp_path / "graphs" / "tidy.yaml"
+    # Beside the card, under its name: a graph is what a card expands to, so
+    # the two are one kind of thing and the pairing stays visible.
+    graph_file = tmp_path / "tasks" / "tidy.graph.yaml"
     assert "type: agent" in graph_file.read_text(encoding="utf-8")
     rewritten = path.read_text(encoding="utf-8")
-    assert "graph: ../graphs/tidy.yaml" in rewritten
+    assert "graph: tidy.graph.yaml" in rewritten
     assert "prompt" not in rewritten
     assert "every: 30m" in rewritten
 
     after = runner.invoke(app, ["show", str(path)])
     assert after.exit_code == 0
     assert "agent" in after.stdout
+
+
+def test_an_ejected_graph_does_not_become_a_second_task(tmp_path):
+    path = _task(tmp_path, body="name: tidy\nprompt: go\n")
+    config = tmp_path / "poieo.yaml"
+    config.write_text(
+        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        encoding="utf-8",
+    )
+    assert runner.invoke(app, ["eject", str(path)]).exit_code == 0
+
+    result = runner.invoke(app, ["tasks", str(config)])
+    assert result.exit_code == 0, result.output
+    # One status marker, so one card -- the graph beside it is not a task.
+    assert result.stdout.count("[on ]") + result.stdout.count("[off]") == 1
 
 
 def test_eject_refuses_to_overwrite(tmp_path):

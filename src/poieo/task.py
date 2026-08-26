@@ -268,13 +268,38 @@ def expand(
 
 
 def load_tasks(folder: str | Path) -> list[TaskSpec]:
-    """Every task file in a folder, in a stable order."""
+    """Every card in a folder, in a stable order.
+
+    Graphs live here too -- a card is a graph's short form, and `poieo eject`
+    writes one beside the card it came from -- so the document says which is
+    which: a card has a folder, a graph has nodes.
+
+    Note what this does *not* do: sort them by trying to parse each as a card
+    and taking silence for a no. That reading turns a typo into a task that
+    quietly stops running, which is the one failure this repo refuses. A file
+    that answers to neither shape says so.
+    """
     folder = Path(folder)
     suffixes = {".yaml", ".yml", ".json"}
     files = sorted(
         p for p in folder.iterdir() if p.suffix.lower() in suffixes and not p.name.startswith(".")
     )
-    return [load_task(p) for p in files]
+    tasks = []
+    for path in files:
+        data = load_document(path)
+        if is_task_document(data):
+            tasks.append(load_task(path))
+        elif "nodes" in data and "folder" not in data:
+            continue  # a graph: a card names it, or a flow in poieo.yaml does
+        else:
+            # Neither shape, or both at once. Both matters: a card that grew a
+            # `nodes:` key answers to no rule, and skipping it would be the
+            # silent disappearance this whole function is written to prevent.
+            raise SpecError(
+                f"{path}: this is neither a card (`folder:`, no `nodes:`) "
+                f"nor a graph (`nodes:`, no `folder:`)"
+            )
+    return tasks
 
 
 def record_run(task: TaskSpec, result: Any) -> None:

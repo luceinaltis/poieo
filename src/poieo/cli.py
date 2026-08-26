@@ -879,7 +879,7 @@ def learn(
 def eject(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
     to: Optional[Path] = typer.Option(
-        None, "--to", help="Where to write the graph [../graphs/<task>.yaml]."
+        None, "--to", help="Where to write the graph [<task>.graph.yaml, beside the card]."
     ),
 ) -> None:
     """Write out the graph a task stands for, and point the task at it."""
@@ -887,7 +887,10 @@ def eject(
 
     if task.graph:
         _fail(f"{task_path} already names a graph: {task.graph}")
-    target = to or (task.dir.parent / "graphs" / f"{task.slug}.yaml")
+    # Beside the card, under its name. A graph is what a card expands to, so
+    # they are one kind of thing -- what a person writes -- and the folder
+    # that holds one holds the other; `load_tasks` tells them apart by shape.
+    target = to or (task.dir / f"{task.slug}.graph.yaml")
     if target.exists():
         _fail(f"{target} already exists")
 
