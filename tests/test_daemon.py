@@ -518,3 +518,51 @@ def test_a_zero_learn_interval_fails_at_load(tmp_path):
     # spin the loop without ever yielding and starve the whole daemon.
     with pytest.raises(SpecError, match="positive"):
         _learning_config(tmp_path, "learn: 0s\n")
+
+
+# -- the way down ------------------------------------------------------------
+
+
+async def test_a_background_task_that_blew_up_says_so_on_the_way_down(caplog):
+    """Shutdown used to swallow whatever a background task raised. A learning
+    pass that failed at 3am went down with the daemon without leaving a word."""
+    from poieo.daemon.service import _stopped
+
+    async def explode():
+        raise RuntimeError("the learner fell over")
+
+    task = asyncio.ensure_future(explode())
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        await _stopped(task, "learning pass")
+
+    assert "learning pass stopped badly" in caplog.text
+    assert "the learner fell over" in caplog.text
+
+
+async def test_a_background_task_that_will_not_stop_is_left_behind(caplog, monkeypatch):
+    """Five seconds, then the daemon carries on: the pools and the boxes below
+    still have to be closed."""
+    from poieo.daemon import service
+
+    monkeypatch.setattr(service, "SHUTDOWN_GRACE", 0.05)
+
+    async def forever():
+        await asyncio.Event().wait()
+
+    task = asyncio.ensure_future(forever())
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        await service._stopped(task, "web server")
+
+    assert "web server did not stop" in caplog.text
+
+
+async def test_a_background_task_that_stopped_cleanly_says_nothing(caplog):
+    from poieo.daemon.service import _stopped
+
+    async def tidy():
+        return None
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        await _stopped(asyncio.ensure_future(tidy()), "learning pass")
+
+    assert caplog.text == ""
