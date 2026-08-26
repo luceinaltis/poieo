@@ -79,3 +79,18 @@ export function flexion(upper: Way, lower: Way): number {
 export function sideways(upper: Way, outward: Way, up: Way): number {
   return Math.atan2(dot(upper, outward), -dot(upper, up))
 }
+
+/**
+ * The same turn, taken the short way round: an angle in [0, 2pi) mapped into
+ * (-pi, pi].
+ *
+ * A search around the circle returns 300 degrees where -60 was meant, and the
+ * two are the same rotation -- until something scales them. Half of -60 is a
+ * hand half turned; half of 300 is a hand turned the wrong way and further
+ * than it started.
+ */
+export function shortestWay(angle: number): number {
+  const round = Math.PI * 2
+  const wrapped = ((angle % round) + round) % round
+  return wrapped > Math.PI ? wrapped - round : wrapped
+}
