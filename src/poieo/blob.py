@@ -21,7 +21,7 @@ import logging
 import os
 from pathlib import Path
 
-from .layout import Layout
+from .layout import layout_for
 
 log = logging.getLogger("poieo.memory")
 # Files past this are not kept: hoarding is an anti-goal, and so is a
@@ -59,7 +59,7 @@ def keep(project_dir: Path, path: Path) -> str | None:
             log.info("not keeping %s: over the size cap", path)
             return None
         name = hashlib.sha256(data).hexdigest()
-        store = Layout(root=Path(project_dir)).blobs()
+        store = layout_for(project_dir).blobs()
         target = store / name
         if target.exists():
             return name
@@ -75,5 +75,5 @@ def keep(project_dir: Path, path: Path) -> str | None:
 
 def kept(project_dir: Path, name: str) -> Path | None:
     """Where the keepsake lives, or None if it is gone."""
-    target = Layout(root=Path(project_dir)).blobs() / name
+    target = layout_for(project_dir).blobs() / name
     return target if target.is_file() else None

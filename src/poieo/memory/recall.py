@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..layout import layout_for
 from .facts import Fact, read_page, readable_facts, tokens
 from .index import candidates
 
@@ -54,17 +55,18 @@ def _in_scope(fact: Fact, task: Any, project_dir: Path) -> bool:
     for entry in fact.matter.scope:
         if entry in ("global", task.slug):
             return True
-        base = (project_dir / entry).resolve()
+        base = (layout_for(project_dir).root / entry).resolve()
         if folder == base or folder.is_relative_to(base):
             return True
     return False
 
 
 def _anchored(fact: Fact, task: Any, project_dir: Path) -> bool:
-    """Anchor paths are written relative to the project (the tasks folder)."""
+    """Anchor paths are written relative to the project -- the folder the
+    `poieo.yaml` sits in, which is also where `memory/` does."""
     folder = task.folder_path()
     for anchor in fact.matter.anchors:
-        target = (project_dir / anchor.split("::", 1)[0]).resolve()
+        target = (layout_for(project_dir).root / anchor.split("::", 1)[0]).resolve()
         if target == folder or target.is_relative_to(folder) or folder.is_relative_to(target):
             return True
     return False

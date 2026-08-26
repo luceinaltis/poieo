@@ -1,6 +1,6 @@
 """A flow that fails the same way three times pauses itself and says so."""
 
-from conftest import at
+from poieo.layout import layout_for
 import asyncio
 from types import SimpleNamespace
 
@@ -146,7 +146,7 @@ async def test_a_paused_task_says_why_in_its_journal(tmp_path):
     await _paused(daemon)
 
     assert daemon.runners[0].status == "paused"
-    journal = at(tasks).journal("doomed").read_text(encoding="utf-8")
+    journal = layout_for(tasks).journal("doomed").read_text(encoding="utf-8")
     # The reason survives to the next morning, beside the failures themselves.
     assert "paused after 3 identical failures" in journal
     assert "ran out of turns" in journal

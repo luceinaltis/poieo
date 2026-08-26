@@ -14,7 +14,7 @@ import sqlite3
 from functools import lru_cache
 from pathlib import Path
 
-from ..layout import Layout
+from ..layout import layout_for
 from .facts import Fact
 
 log = logging.getLogger("poieo.memory")
@@ -62,7 +62,7 @@ def _fingerprint(facts: list[Fact]) -> str:
 
 
 def _open_index(project_dir: Path, facts: list[Fact]) -> sqlite3.Connection:
-    path = Layout(root=Path(project_dir)).index()
+    path = layout_for(project_dir).index()
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = _fingerprint(facts)
     con = sqlite3.connect(path, timeout=5)

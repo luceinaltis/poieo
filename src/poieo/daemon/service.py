@@ -511,7 +511,7 @@ class Daemon:
         always yields to work: not one runner may be mid-run."""
         if self.config.learn is None or not self.config.tasks:
             return False
-        if not keeps_memory(self.config.resolve_path(self.config.tasks)):
+        if not keeps_memory(self.config.base_dir):
             return False
         return all(runner.status == "waiting" for runner in self.runners)
 

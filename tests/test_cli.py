@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from test_checkpoint import make_repo
 
 from conftest import EXAMPLES, at
+from poieo.layout import layout_for
 from poieo.cli import app
 
 runner = CliRunner()
@@ -357,7 +358,7 @@ def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
 
     noted = runner.invoke(app, ["note", str(path), "leave the README alone"])
     assert noted.exit_code == 0
-    assert "leave the README alone" in at(tmp_path / "tasks").journal("tidy").read_text(
+    assert "leave the README alone" in layout_for(tmp_path / "tasks").journal("tidy").read_text(
         encoding="utf-8"
     )
 

@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .layout import Layout
+from .layout import layout_for
 
 log = logging.getLogger("poieo.memory")
 
@@ -43,7 +43,7 @@ def _now() -> datetime:
 
 
 def _path(project_dir: Path) -> Path:
-    return Layout(root=Path(project_dir)).strength()
+    return layout_for(project_dir).strength()
 
 
 def _decayed(weight: float, since: str, now: datetime) -> float:
