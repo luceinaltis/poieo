@@ -6,6 +6,7 @@ import asyncio
 import logging
 import signal
 import socket
+from collections import deque
 from pathlib import Path
 from typing import Any, Callable
 
@@ -53,6 +54,12 @@ def _change_message(result: RunResult, flow: str) -> str:
 # for would be configuration for its own sake.
 PAUSE_AFTER = 3
 
+# How many finished runs a runner keeps in memory. A RunResult carries the
+# run's whole outputs and state, and only the tail is ever read: last_result
+# by the web API, one pass's worth by --once. A loop flow with no cooldown
+# otherwise accumulates every output of every night for the daemon's lifetime.
+RESULTS_KEPT = 20
+
 
 class FlowRunner:
     """Drives one flow: trigger -> run -> carry state -> repeat."""
@@ -74,7 +81,7 @@ class FlowRunner:
         self.cancel = cancel
         self.on_run = on_run
         self.trigger = flow.spec.trigger.build()
-        self.results: list[RunResult] = []
+        self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"

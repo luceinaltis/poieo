@@ -79,8 +79,13 @@ def create_app(daemon: Any) -> Starlette:
     """Build the app over a daemon-shaped object (.runners, .store)."""
 
     async def flows(request: Request) -> JSONResponse:
+        # Each review state is two git subprocesses; asked one runner at a
+        # time, the board's first paint waits for all of them in single file.
+        states = await asyncio.gather(
+            *(asyncio.to_thread(_review_state, runner) for runner in daemon.runners)
+        )
         rows = []
-        for runner in daemon.runners:
+        for runner, state in zip(daemon.runners, states):
             last = runner.last_result
             rows.append(
                 {
@@ -90,7 +95,7 @@ def create_app(daemon: Any) -> Starlette:
                     "status": runner.status,
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
-                    **await asyncio.to_thread(_review_state, runner),
+                    **state,
                 }
             )
         return JSONResponse({"flows": rows})

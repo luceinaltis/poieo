@@ -51,6 +51,41 @@ def test_flows_lists_runner_state(tmp_path):
     ]
 
 
+def test_flows_asks_every_runner_at_once(tmp_path):
+    """Each runner's review state costs two git subprocesses, ~100ms of spawn
+    on Windows. Asked one runner at a time, the first paint of a board of N
+    flows waits ~2N spawns; asked together it waits for the slowest one."""
+    import threading
+    import time
+
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    class SlowPoint:
+        def pending(self):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.05)
+            with lock:
+                active -= 1
+            return []
+
+        def into(self):
+            return "main"
+
+    runners = [
+        stub_runner(name=f"flow{i}", checkpoint=SlowPoint()) for i in range(4)
+    ]
+    client = TestClient(create_app(stub_daemon(tmp_path, runners)))
+
+    body = client.get("/api/flows").json()
+    assert [row["name"] for row in body["flows"]] == [f"flow{i}" for i in range(4)]
+    assert peak > 1  # overlapping, not one after another
+
+
 def test_runs_index_and_detail_and_404(tmp_path):
     daemon = stub_daemon(tmp_path)
     daemon.store.append(Event(run_id="r1", type="run_started", data={"flow": "t"}))
