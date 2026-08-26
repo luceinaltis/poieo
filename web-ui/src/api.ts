@@ -1,6 +1,10 @@
 /**
- * Everything that talks to the daemon. Read-only by construction: there is no
- * route to call that changes anything, so there is no verb here but GET.
+ * Everything that talks to the daemon.
+ *
+ * Reading is the whole of it but for two calls: accept and discard, at the
+ * bottom, are the only POSTs the page can make and the only way anything it
+ * shows can change the reader's own files. Keeping them here, beside the
+ * reads, is what makes that easy to count.
  */
 
 import type { DiffReport, FlowRow, PoieoEvent, RunSummary } from "./types"
