@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..binding import BindingSpec
-from ..expr import unwrap, wrap
+from ..expr import wrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
@@ -83,16 +83,6 @@ class RunContext:
         self.store.append(
             Event(run_id=self.run_id, type=type_, node_id=node_id, data=data)
         )
-
-    def snapshot(self) -> dict[str, Any]:
-        return {
-            "run_id": self.run_id,
-            "flow": self.flow,
-            "iteration": self.iteration,
-            "state": unwrap(self.state),
-            "outputs": unwrap(self.outputs),
-            "aliases": unwrap(self.aliases),
-        }
 
 
 @dataclass(slots=True)

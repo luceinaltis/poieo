@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..binding import ProviderSpec, ResolvedModel
+from ..binding import ProviderSpec
 from ..errors import ProviderError
 
 
@@ -118,12 +118,3 @@ class Provider(abc.ABC):
 
     async def aclose(self) -> None:
         """Release sockets/clients. Always called on daemon shutdown."""
-
-    def build_request(self, resolved: ResolvedModel, messages, system) -> LLMRequest:
-        return LLMRequest(
-            model=resolved.model,
-            messages=messages,
-            system=system,
-            params=dict(resolved.params),
-            role=resolved.role,
-        )

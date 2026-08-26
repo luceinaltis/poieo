@@ -11,9 +11,9 @@ from __future__ import annotations
 import asyncio
 import random
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, AsyncIterator, Literal
+from typing import AsyncIterator, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -42,8 +42,6 @@ class Fire:
     iteration: int
     at: datetime
     reason: str
-    # Carried forward from the previous run when the flow keeps state.
-    state: dict[str, Any] = field(default_factory=dict)
 
 
 class TriggerSpec(BaseModel):

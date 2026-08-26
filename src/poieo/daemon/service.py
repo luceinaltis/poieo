@@ -507,7 +507,3 @@ class Daemon:
                 await pool.aclose()
             log.info("poieo daemon down")
         return [result for runner in self.runners for result in runner.results]
-
-
-async def serve(config: DaemonConfig, **kwargs: Any) -> list[RunResult]:
-    return await Daemon(config, **kwargs).serve()
