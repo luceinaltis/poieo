@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
 from .memory import read_memory, write_episode
-from .tools import Isolation
+from .tools import DEFAULT_TOOLSETS, Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .daemon.config import FlowSpec
@@ -32,7 +32,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 log = logging.getLogger("poieo.task")
 
 DEFAULT_EVERY = "1h"
-DEFAULT_TOOLS = ["files", "shell"]
 DEFAULT_MAX_TURNS = 40
 
 # How many journal entries reach the prompt. The file keeps everything; this
@@ -84,7 +83,7 @@ def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
     for the notes toolset is told nothing at all -- not even that others are
     there -- and one whose siblings are none gets no awkward empty sentence.
     """
-    if "notes" not in (task.tools or DEFAULT_TOOLS):
+    if "notes" not in (task.tools or DEFAULT_TOOLSETS):
         return ""
     others = [name for name in (roster or []) if name != task.slug]
     if not others:
@@ -223,7 +222,7 @@ def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
                 type="agent",
                 role=task.role,
                 workdir=str(task.folder_path()),
-                tools=task.tools or list(DEFAULT_TOOLS),
+                tools=task.tools or list(DEFAULT_TOOLSETS),
                 max_turns=task.max_turns,
                 system=system_block(task, roster),
                 prompt=task.prompt,
