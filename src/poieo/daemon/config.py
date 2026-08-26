@@ -215,9 +215,11 @@ def check_isolation(flows: list[FlowSpec]) -> None:
     not discover it at 3am.
 
     Flows that never asked are not merely skipped, they are not probed at all,
-    so a machine with no docker pays nothing and fails nowhere. Neither are
-    disabled flows: they are not going to run, and refusing to *list* one
-    would be the check getting in the way of the fix.
+    so a machine with no docker pays nothing and fails nowhere.
+
+    Whether *disabled* flows reach here is the caller's business, and
+    load_flows keeps them out: they are not going to run, and refusing to
+    *list* one would be the check getting in the way of the fix.
     """
     wanted = [f for f in flows if f.isolation]
     if not wanted:

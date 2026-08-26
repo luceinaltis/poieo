@@ -2,10 +2,10 @@
  * How the smithy looks at any moment: how the smith stands, whether the forge
  * is lit, where the hammer is in its arc.
  *
- * Pure functions of the stage. index.ts turns them into PixiJS, and
- * tools/preview.py draws the same shapes so a change can be looked at. Where
- * benches stand is not here -- that is shared with every other skin, in
- * ../layout.
+ * Pure functions of the stage. index.ts turns them into three.js, and
+ * tools/bench.ts renders one bench on its own so a change can be looked at.
+ * Where benches stand is not here -- that is shared with every other skin,
+ * in ../layout.
  */
 
 import type { Worker } from "../../state/stage"
@@ -28,10 +28,11 @@ export type { Cell, Spot } from "../layout"
 export type Pose = "sitting" | "working" | "alarmed"
 
 /**
- * Where the hammer sits at each point of its arc.
+ * How the smith stands: at the anvil, sat waiting, or looking up from it.
  *
- * The pivot is the shoulder and the hammer is long, so a strike much past zero
- * swings the head forward over the anvil instead of down onto the work.
+ * Three poses and no more. A worker has more states than this, but a figure
+ * seen across a room can only say so much, and the drawer is where the rest
+ * is read.
  */
 export function figurePose(worker: Worker): Pose {
   if (worker.status === "error") return "alarmed"
