@@ -183,11 +183,23 @@ default:
 
 _MARKER_BODY = """\
 # The project: which flows run, on what trigger, against which binding.
-# Paths resolve relative to this file.
+# This file's folder is the project -- everything below resolves from here.
 version: 1
-store: runs
-binding: bindings/default.yaml
-tasks: tasks/
+store: runs                       # where a run's events and result go
+binding: models/default.yaml      # which model serves each role, by default
+tasks: tasks/                     # the cards, and the graphs they name
+"""
+
+_CONSTITUTION = """\
+<!--
+This page is read whole by every run of every task in this project. Before
+adding a line, ask: does it apply to every task? is violating it expensive?
+would lookup fail to bring it up when needed? is it invisible in the code?
+Four yeses earn the page; anything less belongs in memory/longterm/facts/.
+
+Delete this file, and its folder, if the project keeps no long memory. The
+folder is the whole opt-in -- nothing else turns the feature on.
+-->
 """
 
 _HELLO_CARD = """\
@@ -210,46 +222,64 @@ below -- there is no API to learn beyond this page.
 
 ## The files
 
-- `poieo.yaml` -- the project: store, default binding, tasks folder.
-- `tasks/*.yaml` -- one card per standing task: `name`, `folder`, `prompt`
-  (optionally `every`/`at` for schedule, `binding`, `enabled`, `tools`).
-  A card's identity is its filename.
-- `memory/shortterm/<card>.md` -- that task's journal: append a line to
-  leave it a note; never rewrite its history. It lives here rather than
-  beside the card so that `tasks/` holds definitions and nothing else.
-- `bindings/*.yaml` -- which physical model serves each role.
-  `bindings/mock.yaml` answers from a script: free, offline.
-- `.poieo/` -- derived state (run logs, episodes). Read freely, never edit.
+This folder is the project. Every path below hangs off it, and one folder
+answers one question.
+
+- `poieo.yaml` -- the marker: store, default binding, tasks folder.
+- `models/*.yaml` -- **which model** serves each role.
+  `models/mock.yaml` answers from a script: free, offline.
+- `tasks/` -- **what to do**. `<card>.yaml` is one standing task (`name`,
+  `folder`, `prompt`; optionally `every`/`at`, `binding`, `enabled`,
+  `tools`); a card's identity is its filename. `<card>.graph.yaml` is a
+  graph, which a card may name instead of carrying a prompt.
+- `memory/` -- **what the project remembers**.
+  - `shortterm/<card>.md` -- that task's journal. Append a line to leave it
+    a note; never rewrite its history.
+  - `longterm/constitution.md` -- read whole before every run of every task.
+  - `longterm/facts/*.md` -- one file per thing learned. This folder
+    existing is what makes the project keep a long memory at all.
+  - `cache/` -- rebuilt from the above. Delete it and lose nothing.
+- `runs/` -- **what happened**. `events/<id>.jsonl` as it happened,
+  `results/<id>.json` when it was over. Read freely, never edit.
+- `worktrees/` -- each flow's private copy of the repository it works on.
+
+`memory/cache/`, `runs/` and `worktrees/` are gitignored; everything else
+is yours and belongs in git.
 
 ## The loop
 
 Edit a file, then prove it loads -- a typo must fail now, not at 3am:
 
-    poieo validate tasks/<card>.yaml     # after editing a card or a graph
-    poieo check -b bindings/<name>.yaml  # after editing a binding (probes it)
-    poieo flows                          # after editing poieo.yaml (loads all)
+    poieo validate tasks/<card>.yaml   # after editing a card or a graph
+    poieo check -b models/<name>.yaml  # after editing a binding (probes it)
+    poieo flows                        # after editing poieo.yaml (loads all)
 
 Try a card once, without the daemon:
 
-    poieo run tasks/<card>.yaml                          # --json for structure
-    poieo run tasks/<card>.yaml -b bindings/mock.yaml    # spends nothing
+    poieo run tasks/<card>.yaml                        # --json for structure
+    poieo run tasks/<card>.yaml -b models/mock.yaml    # spends nothing
 
-See what happened:
+See what happened, and what the project has in mind:
 
     poieo runs list
     poieo runs show <run_id>
+    poieo memory                       # the page, the counts, what to look at
+    poieo memory tasks/<card>.yaml     # the exact block its next run gets
 
 ## What is not yours
 
 Starting `poieo daemon`, and accepting or discarding a night's work on the
-web board, belong to the person. Add and edit cards; leave the daemon and
-`.poieo/` alone.
+web board, belong to the person. Add and edit cards; leave the daemon,
+`runs/` and `worktrees/` alone.
 """
 
 # Claude Code reads CLAUDE.md; the import points it at the same page.
 _CLAUDE_MD = "@AGENTS.md\n"
 
-_GITIGNORE_LINE = ".poieo/"
+# What the machine makes and can make again, or history it keeps for you.
+# Three ordinary names rather than one hidden folder, so a project living
+# inside somebody else's repository takes three lines and not a rename.
+_GITIGNORE_LINES = ("memory/cache/", "runs/", "worktrees/")
 
 
 def _ollama_models() -> list[str]:
@@ -290,9 +320,14 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
     default_body, reason = detect_default_binding()
     files = [
         ("poieo.yaml", _MARKER_BODY),
-        ("bindings/default.yaml", default_body),
-        ("bindings/mock.yaml", _MOCK_BINDING),
+        ("models/default.yaml", default_body),
+        ("models/mock.yaml", _MOCK_BINDING),
         ("tasks/hello.yaml", _HELLO_CARD),
+        # An empty page, so the memory is a folder you can see rather than
+        # a feature you have to be told about. Nothing switches on: the
+        # page is comments, comments are stripped before the prompt, and
+        # learning needs a `learn:` key this file does not write.
+        ("memory/longterm/constitution.md", _CONSTITUTION),
         ("AGENTS.md", _AGENTS_MD),
         ("CLAUDE.md", _CLAUDE_MD),
     ]
@@ -308,11 +343,14 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
 
     gitignore = root / ".gitignore"
     existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
-    if _GITIGNORE_LINE in existing.splitlines():
+    missing = [line for line in _GITIGNORE_LINES if line not in existing.splitlines()]
+    if not missing:
         report.append(("kept", ".gitignore"))
     else:
         joined = existing + ("" if existing.endswith("\n") or not existing else "\n")
-        gitignore.write_text(joined + _GITIGNORE_LINE + "\n", encoding="utf-8")
+        gitignore.write_text(
+            joined + "".join(f"{line}\n" for line in missing), encoding="utf-8"
+        )
         report.append(("wrote", ".gitignore"))
 
     # A generated project that cannot load is an init bug, caught here and

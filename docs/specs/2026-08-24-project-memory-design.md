@@ -351,3 +351,26 @@ memory page and its injection (with the zero-config invariant); retrieval
 (index, scope, budget, fallback); `poieo memory` (read-only, shows what a
 task would see and why); documentation and a worked example of a project
 that remembers.
+
+## Superseded, 2026-08-27: where the memory lives
+
+The decisions above about *storage* have been replaced by the project layout
+refactor. They are left in place because they are still the argument for the
+shape; only the addresses changed.
+
+| Was decided here | Now |
+|---|---|
+| "One memory per project, and the project is the tasks folder" (`:70`, `:96`) | The project is the folder holding `poieo.yaml`. Without a marker, the tasks folder still stands in — so a bare `poieo daemon tasks/` is unchanged. |
+| `<tasks>/memory/constitution.md`, `<tasks>/memory/facts/` | `<root>/memory/longterm/constitution.md`, `.../longterm/facts/`. |
+| `memory/` existing is the whole opt-in (`:91`) | `memory/longterm/` existing is. Journals moved to `memory/shortterm/`, so `memory/` now arrives on its own the first time any task runs, and a signal that switches itself on is not consent. |
+| Episodes anchor to the tasks folder's own `.poieo/`, never following `store:` (`:124`) | Results live in `runs/results/`, beside the events of the same runs in `runs/events/`, and `store:` moves both together. |
+| `.poieo/memory.sqlite3` and the rest of the derived layer | `memory/cache/`, which is the only folder under `memory/` the machine owns. `.poieo/` no longer exists. |
+
+The one thing `:124` was written to prevent — a memory split by a config key —
+is prevented differently now: two `poieo.yaml` files mean two roots and two
+memories, which is visible, rather than one tasks folder quietly serving two.
+
+**What did not change:** task separation is still a filter at read time and
+never a second store; the folder is still the whole opt-in, with no config key
+able to conjure it; truth still lives in markdown under git and everything
+derived is still deletable without loss.
