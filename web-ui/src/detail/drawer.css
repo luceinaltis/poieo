@@ -39,37 +39,10 @@
   margin: 0;
 }
 
-.drawer-head button {
-  background: #221e18;
-  border: 1px solid #2e2820;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85em;
-  padding: 3px 8px;
-}
-
 .control {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.control button {
-  background: #221e18;
-  border: 1px solid #2e2820;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85em;
-  padding: 3px 8px;
-}
-
-.control button:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 .control-refusal {

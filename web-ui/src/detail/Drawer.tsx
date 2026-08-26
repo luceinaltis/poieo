@@ -16,12 +16,8 @@ import { WorkList } from "../review/WorkList"
 import { initialStage, replay } from "../state/stage"
 import type { Worker } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
+import { shortTime } from "../when"
 import "./drawer.css"
-
-function shortTime(iso: string): string {
-  const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString()
-}
 
 function Entry({ event }: { event: PoieoEvent }) {
   const data = event.data ?? {}

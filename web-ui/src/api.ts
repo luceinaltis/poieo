@@ -59,78 +59,80 @@ export async function fetchDiff(runId: string): Promise<DiffReport | null> {
 }
 
 /**
- * The review: the only two calls that can move the reader's own files.
+ * Every write answers rather than throwing.
  *
- * Both answer with a decision rather than throwing: a refused accept is an
- * answer about the reader's own project -- uncommitted edits, or a file they
- * changed too -- and the page has to say which.
+ * A refusal is information the reader needs -- uncommitted edits in their own
+ * project, or a run already in flight -- so it comes back as a value with
+ * `ok: false` and travels the same path as a success. A daemon that has gone
+ * away is the same kind of answer.
  */
-export interface Decision {
+export interface Answer {
   ok: boolean
+  error?: string
+}
+
+async function post<T extends Answer>(path: string, body?: unknown): Promise<T> {
+  try {
+    // No body, no content-type: the control verbs take their whole argument
+    // in the path, and a Content-Type on an empty request is a small lie.
+    const init: RequestInit =
+      body === undefined
+        ? { method: "POST" }
+        : {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          }
+    const response = await fetch(path, init)
+    const payload = await response.json().catch(() => ({}))
+    return { ok: response.ok, ...payload } as T
+  } catch {
+    return { ok: false, error: "the daemon did not answer" } as T
+  }
+}
+
+const flowUrl = (flow: string, verb: string) =>
+  `/api/flows/${encodeURIComponent(flow)}/${verb}`
+
+/**
+ * The review: the only two calls that can move the reader's own files. A
+ * refused accept is an answer about the reader's own project, and the page
+ * has to say which files stood in the way.
+ */
+export interface Decision extends Answer {
   accepted?: number
   discarded?: number
   dirty?: string[]
   conflict?: string[]
-  error?: string
-}
-
-async function post(path: string, body: unknown): Promise<Decision> {
-  try {
-    const response = await fetch(path, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    })
-    const payload = await response.json().catch(() => ({}))
-    return { ok: response.ok, ...payload }
-  } catch {
-    return { ok: false, error: "the daemon did not answer" }
-  }
 }
 
 export function accept(flow: string, throughRunId?: string): Promise<Decision> {
-  return post(`/api/flows/${encodeURIComponent(flow)}/accept`, {
-    through_run_id: throughRunId,
-  })
+  return post(flowUrl(flow, "accept"), { through_run_id: throughRunId })
 }
 
 export function discard(flow: string, fromRunId?: string): Promise<Decision> {
-  return post(`/api/flows/${encodeURIComponent(flow)}/discard`, {
-    from_run_id: fromRunId,
-  })
+  return post(flowUrl(flow, "discard"), { from_run_id: fromRunId })
 }
 
 /**
  * Control: the other kind of write. Pause and resume answer the resulting
  * status; run answers "starting" or a refusal naming the run in flight.
  */
-export interface ControlAnswer {
-  ok: boolean
+export interface ControlAnswer extends Answer {
   status?: string
-  error?: string
   run_id?: string
 }
 
-async function control(path: string): Promise<ControlAnswer> {
-  try {
-    const response = await fetch(path, { method: "POST" })
-    const payload = await response.json().catch(() => ({}))
-    return { ok: response.ok, ...payload }
-  } catch {
-    return { ok: false, error: "the daemon did not answer" }
-  }
-}
-
 export function pause(flow: string): Promise<ControlAnswer> {
-  return control(`/api/flows/${encodeURIComponent(flow)}/pause`)
+  return post(flowUrl(flow, "pause"))
 }
 
 export function resume(flow: string): Promise<ControlAnswer> {
-  return control(`/api/flows/${encodeURIComponent(flow)}/resume`)
+  return post(flowUrl(flow, "resume"))
 }
 
 export function runNow(flow: string): Promise<ControlAnswer> {
-  return control(`/api/flows/${encodeURIComponent(flow)}/run`)
+  return post(flowUrl(flow, "run"))
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

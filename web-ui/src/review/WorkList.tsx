@@ -10,12 +10,8 @@ import { useState } from "react"
 
 import { outcomeOf } from "./rollup"
 import type { RunSummary } from "../types"
+import { shortTime } from "../when"
 import "./review.css"
-
-function shortTime(iso: string): string {
-  const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString()
-}
 
 function size(run: RunSummary): string {
   const change = run.change
