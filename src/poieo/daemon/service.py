@@ -7,8 +7,9 @@ import logging
 import signal
 import socket
 from collections import deque
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 
 from ..checkpoint import Checkpoint, CheckpointError
 from ..errors import PoieoError, SpecError
@@ -22,7 +23,7 @@ from ..task import append_journal, closing_line, record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
-from .triggers import _sleep_or_cancel, parse_duration
+from .triggers import Fire, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
 
@@ -114,6 +115,16 @@ class FlowRunner:
         self._repeat_key: str | None = None
         self._repeat_count: int = 0
         self.current_run_id: str | None = None
+        # The control seam: the board's three verbs poke these, and the run
+        # loop reads them between runs. All on one event loop -- the web
+        # server shares it -- so flags and an Event are the whole mechanism.
+        self._hold = False
+        self._kick = False
+        self._wake = asyncio.Event()
+        self._manual_fires = 0
+        # The trigger's next fire, once armed. While holding it stays put:
+        # the generator sits suspended at its yield instead of spinning.
+        self._pending: asyncio.Task[Fire] | None = None
         # A flow that says where it works keeps a private copy of it.
         workdir = config.workdir_path(flow.spec)
         self.checkpoint = (
@@ -179,87 +190,204 @@ class FlowRunner:
     def last_result(self) -> RunResult | None:
         return self.results[-1] if self.results else None
 
-    async def run(self) -> None:
-        log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
-        async for fire in self.trigger.fires(self.cancel):
-            if self.cancel.is_set():
-                break
-            try:
-                payload = self.flow.read_input(self.config)
-            except PoieoError as exc:
-                log.error("flow '%s': %s", self.name, exc)
-                if self.flow.spec.on_error == "stop":
-                    break
-                continue
+    # -- the control seam: the board's three verbs ---------------------------
 
-            log.info(
-                "flow '%s' firing (iteration %d, %s)",
-                self.name,
-                fire.iteration,
-                fire.reason,
-            )
-            run_id = new_run_id()
-            self.status, self.current_run_id = "running", run_id
-            workdir = await self._open_change()
+    def pause(self) -> str:
+        """Hold the schedule. Takes effect between runs; due fires are skipped."""
+        self._hold = True
+        if self.status == "waiting":
+            self.status = "paused"
+        self._wake.set()
+        return self.status
+
+    def resume(self) -> str:
+        """Rearm the schedule; the next fire is the next scheduled one.
+
+        Works the same on a flow that paused itself: the failure counter
+        starts over rather than tripping again on the first bad run.
+        """
+        self._hold = False
+        self._repeat_key, self._repeat_count = None, 0
+        if self.status == "paused":
+            self.status = "waiting"
+        self._wake.set()
+        return self.status
+
+    def run_now(self) -> bool:
+        """One fire, immediately, outside the schedule -- or False mid-run:
+        iterations never overlap, exactly as the triggers promise."""
+        if self.status == "running":
+            return False
+        self._kick = True
+        self._wake.set()
+        return True
+
+    async def _woken(self) -> None:
+        """Parked: wait for a verb or shutdown, the trigger left unconsumed."""
+        woke = asyncio.ensure_future(self._wake.wait())
+        down = asyncio.ensure_future(self.cancel.wait())
+        try:
+            await asyncio.wait({woke, down}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            woke.cancel()
+            down.cancel()
+            self._wake.clear()
+
+    def _drop_pending(self) -> None:
+        """Skip a fire that came due while holding: skipped, not queued."""
+        assert self._pending is not None and self._pending.done()
+        try:
+            self._pending.result()
+        except (StopAsyncIteration, asyncio.CancelledError):
+            pass
+        self._pending = None
+
+    async def _next_fire(self, fires: AsyncIterator[Fire]) -> Fire | None:
+        """The runner's ear: the trigger raced against the board's verbs.
+
+        Returns the fire to run next, or None when the daemon is shutting
+        down or the schedule is over. A run-now wins over everything, even a
+        hold; a hold stops the trigger from being consumed at all, so a loop
+        trigger sits suspended at its yield instead of spinning through a
+        pause, and at most one already-due fire is dropped in favour of the
+        next scheduled one.
+        """
+        while not self.cancel.is_set():
+            if self._kick:
+                self._kick = False
+                self._manual_fires += 1
+                return Fire(
+                    iteration=self._manual_fires, at=datetime.now(), reason="run now"
+                )
+            if self._hold:
+                self.status = "paused"
+                if self._pending is not None and self._pending.done():
+                    self._drop_pending()
+                await self._woken()
+                continue
+            if self._pending is None:
+                self._pending = asyncio.ensure_future(anext(fires))
+            woke = asyncio.ensure_future(self._wake.wait())
             try:
-                result = await execute(
-                    self.flow.graph,
-                    self.flow.binding,
-                    self.pool,
-                    self.store,
-                    input=payload,
-                    state=dict(self.state) if self.flow.spec.carry_state else None,
-                    flow=self.name,
-                    trigger=self.trigger.describe,
-                    iteration=fire.iteration,
-                    run_id=run_id,
-                    cancel=self.cancel,
-                    workdir=workdir,
-                    hands=self.hands,
-                    finalize=self._close_change,
+                await asyncio.wait(
+                    {self._pending, woke}, return_when=asyncio.FIRST_COMPLETED
                 )
             finally:
-                self.status, self.current_run_id = "waiting", None
-            self.results.append(result)
-            self._remember(result)
-            if self.flow.spec.carry_state:
-                self.state = result.state
+                woke.cancel()
+                self._wake.clear()
+            if self._pending.done() and not self._hold and not self._kick:
+                try:
+                    fire = self._pending.result()
+                except StopAsyncIteration:
+                    return None
+                self._pending = None
+                if self.cancel.is_set():
+                    return None
+                return fire
+        return None
 
-            pause = self._note_outcome(result)
-            if result.status == "completed":
-                log.info(
-                    "flow '%s' run %s completed in %d step(s) [%s]",
-                    self.name,
-                    result.run_id,
-                    result.steps,
-                    " -> ".join(result.path),
-                )
-            else:
-                log.error(
-                    "flow '%s' run %s %s: %s",
-                    self.name,
-                    result.run_id,
-                    result.status,
-                    result.error,
-                )
-                if self.flow.spec.on_error == "stop" and result.status == "failed":
-                    log.error("flow '%s' stopping (on_error: stop)", self.name)
+    async def _quiet(self, fires: AsyncIterator[Fire]) -> None:
+        """Leave nothing running behind: the held anext, then the generator."""
+        if self._pending is not None:
+            self._pending.cancel()
+            try:
+                await self._pending
+            except (asyncio.CancelledError, StopAsyncIteration):
+                pass
+            self._pending = None
+        close = getattr(fires, "aclose", None)
+        if close is not None:  # every real trigger is an async generator
+            await close()
+
+    async def run(self) -> None:
+        log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
+        fires = self.trigger.fires(self.cancel)
+        try:
+            while True:
+                fire = await self._next_fire(fires)
+                if fire is None or not await self._one_run(fire):
                     break
-
-            if self.on_run:
-                self.on_run(self.name, result)
-
-            if pause:
-                said = (result.cause or {}).get("said") or result.error or "the same failure"
-                log.error(
-                    "flow '%s' paused after %d identical failures: %s",
-                    self.name, PAUSE_AFTER, said,
-                )
-                self._journal_pause(said)
-                self.status = "paused"
-                break
-
+        finally:
+            await self._quiet(fires)
         log.info("flow '%s' stopped", self.name)
+
+    async def _one_run(self, fire: Fire) -> bool:
+        """One firing, end to end. False when the runner should stand down."""
+        try:
+            payload = self.flow.read_input(self.config)
+        except PoieoError as exc:
+            log.error("flow '%s': %s", self.name, exc)
+            return self.flow.spec.on_error != "stop"
+
+        log.info(
+            "flow '%s' firing (iteration %d, %s)",
+            self.name,
+            fire.iteration,
+            fire.reason,
+        )
+        run_id = new_run_id()
+        self.status, self.current_run_id = "running", run_id
+        workdir = await self._open_change()
+        try:
+            result = await execute(
+                self.flow.graph,
+                self.flow.binding,
+                self.pool,
+                self.store,
+                input=payload,
+                state=dict(self.state) if self.flow.spec.carry_state else None,
+                flow=self.name,
+                trigger=self.trigger.describe,
+                iteration=fire.iteration,
+                run_id=run_id,
+                cancel=self.cancel,
+                workdir=workdir,
+                hands=self.hands,
+                finalize=self._close_change,
+            )
+        finally:
+            self.status, self.current_run_id = "waiting", None
+        self.results.append(result)
+        self._remember(result)
+        if self.flow.spec.carry_state:
+            self.state = result.state
+
+        pause = self._note_outcome(result)
+        if result.status == "completed":
+            log.info(
+                "flow '%s' run %s completed in %d step(s) [%s]",
+                self.name,
+                result.run_id,
+                result.steps,
+                " -> ".join(result.path),
+            )
+        else:
+            log.error(
+                "flow '%s' run %s %s: %s",
+                self.name,
+                result.run_id,
+                result.status,
+                result.error,
+            )
+            if self.flow.spec.on_error == "stop" and result.status == "failed":
+                log.error("flow '%s' stopping (on_error: stop)", self.name)
+                return False
+
+        if self.on_run:
+            self.on_run(self.name, result)
+
+        if pause:
+            said = (result.cause or {}).get("said") or result.error or "the same failure"
+            log.error(
+                "flow '%s' paused after %d identical failures: %s",
+                self.name, PAUSE_AFTER, said,
+            )
+            self._journal_pause(said)
+            # Parks at the next _next_fire rather than standing down: the
+            # coroutine has to stay alive for resume() to have anyone to wake.
+            self._hold = True
+            self.status = "paused"
+        return True
 
     def _note_outcome(self, result: Any) -> bool:
         """Track consecutive identical failures; True when it is time to pause.
@@ -289,7 +417,7 @@ class FlowRunner:
                 task.journal_path(),
                 "failed",
                 f"paused after {PAUSE_AFTER} identical failures: {said}. "
-                f"Fix the cause and restart the daemon.",
+                f"Fix the cause, then resume it from the board or restart the daemon.",
                 title=task.name,
             )
         except OSError as exc:
