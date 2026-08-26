@@ -14,7 +14,7 @@ from typing import Any
 
 from ..blob import digest, kept
 from .episodes import episodes_dir, used_in
-from .facts import PAGE_BUDGET, Fact, memory_root, read_page, readable_facts
+from .facts import PAGE_BUDGET, Fact, keeps_memory, read_page, readable_facts
 from .index import fts_available
 
 # How far back the accounting reads, and how often an entry must have been
@@ -25,7 +25,7 @@ UNUSED_FLOOR = 3
 
 def memory_report(project_dir: Path) -> dict[str, Any] | None:
     """What `poieo memory` prints, or None when the project keeps none."""
-    if not memory_root(project_dir).is_dir():
+    if not keeps_memory(project_dir):
         return None
     text = read_page(project_dir)
     facts = readable_facts(project_dir)

@@ -3,6 +3,7 @@ touching anything. Authoring stays with the editor and git; rebuilding the
 lookup machinery is automatic, so no command exists for either.
 """
 
+from conftest import at
 from typer.testing import CliRunner
 
 from poieo.cli import app
@@ -18,13 +19,13 @@ def _project(tmp_path):
     path = write_task(
         tmp_path, "importer", "name: mind the importer\nprompt: review the api batches\n"
     )
-    memory = tmp_path / "tasks" / "memory"
-    (memory / "facts").mkdir(parents=True)
-    (memory / "constitution.md").write_text("Never push to main.", encoding="utf-8")
-    (memory / "facts" / "batch-cap.md").write_text(
+    memory = at(tmp_path / "tasks")
+    memory.facts().mkdir(parents=True)
+    memory.constitution().write_text("Never push to main.", encoding="utf-8")
+    (memory.facts() / "batch-cap.md").write_text(
         "The api rejects batches over 50.\n", encoding="utf-8"
     )
-    (memory / "facts" / "old-cap.md").write_text(
+    (memory.facts() / "old-cap.md").write_text(
         "---\nsuperseded_by: batch-cap\n---\nThe api rejects batches over 10.\n",
         encoding="utf-8",
     )
@@ -73,7 +74,7 @@ def test_a_project_without_memory_says_so_plainly_and_exits_zero(tmp_path):
 
 
 def _entry(project, slug, text):
-    (project / "memory" / "facts" / f"{slug}.md").write_text(text, encoding="utf-8")
+    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
 
 
 def test_memory_lists_a_disagreement_once(tmp_path):
@@ -149,7 +150,7 @@ def test_learn_runs_one_pass_and_says_what_it_kept(tmp_path):
     result = runner.invoke(app, ["learn", str(project), "-b", str(binding)])
     assert result.exit_code == 0
     assert "kept" in result.stdout and "feed-cap" in result.stdout
-    assert (project / "memory" / "facts" / "feed-cap.md").is_file()
+    assert (at(project).facts() / "feed-cap.md").is_file()
 
 
 def test_learn_says_when_there_is_nothing_to_read(tmp_path):
@@ -211,7 +212,7 @@ def test_a_target_changed_after_the_entry_earns_a_second_look(tmp_path):
         "feeds-note",
         "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
     )
-    _aged(project / "memory" / "facts" / "feeds-note.md", 3600)
+    _aged(at(project).facts() / "feeds-note.md", 3600)
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "feeds-note" in result.stdout and "changed after" in result.stdout
@@ -253,19 +254,19 @@ def test_memory_shows_the_last_suggestion_and_only_the_last(tmp_path):
     import json
 
     _, project = _project(tmp_path)
-    log = project / ".poieo"
+    log = at(project).cache()
     log.mkdir(parents=True)
     lines = [
         {"at": "t1", "read": 1, "upto": "a", "error": None, "page": "Old idea."},
         {"at": "t2", "read": 1, "upto": "b", "error": None, "page": None},
     ]
-    (log / "learning.jsonl").write_text(
+    at(project).learning_log().write_text(
         "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
     )
     quiet = runner.invoke(app, ["memory", str(project)])
     assert "suggests" not in quiet.stdout
 
-    with (log / "learning.jsonl").open("a", encoding="utf-8") as handle:
+    with at(project).learning_log().open("a", encoding="utf-8") as handle:
         handle.write(
             json.dumps(
                 {"at": "t3", "read": 1, "upto": "c", "error": None, "page": "New idea."}
@@ -292,7 +293,7 @@ def _sealed_entry(tmp_path):
         "---\nanchors: ['notebook/feeds.md']\n"
         f'sealed: {{"notebook/feeds.md": "{name}"}}\n---\nFeeds land in one file.',
     )
-    _aged(project / "memory" / "facts" / "feeds-note.md", 3600)
+    _aged(at(project).facts() / "feeds-note.md", 3600)
     return project, target, name
 
 
@@ -331,7 +332,7 @@ def test_updating_the_entry_clears_a_sealed_doubt(tmp_path):
 
 def test_a_lost_keepsake_falls_back_to_the_mtime_line(tmp_path):
     project, target, name = _sealed_entry(tmp_path)
-    (project / ".poieo" / "blobs" / name).unlink()
+    (at(project).blobs() / name).unlink()
     target.write_text("# feeds\n- a\n", encoding="utf-8")  # touched after the entry
 
     result = runner.invoke(app, ["memory", str(project)])
@@ -436,9 +437,9 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
     import json
 
     _, project = _project(tmp_path)
-    log = project / ".poieo"
+    log = at(project).cache()
     log.mkdir(parents=True)
-    (log / "learning.jsonl").write_text(
+    at(project).learning_log().write_text(
         json.dumps(
             {"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a",
              "error": None, "page": "Require ISO dates."}
@@ -447,12 +448,12 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
         encoding="utf-8",
     )
     # The page is untouched since long before the pass: the suggestion shows.
-    _aged(project / "memory" / "constitution.md", 30 * 86400)
+    _aged(at(project).constitution(), 30 * 86400)
     shown = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." in shown.stdout
 
     # The person edits the page (fresh mtime): they have seen it -- clears.
-    (project / "memory" / "constitution.md").write_text(
+    at(project).constitution().write_text(
         "Never push to main.\nDates are ISO.", encoding="utf-8"
     )
     result = runner.invoke(app, ["memory", str(project)])

@@ -9,8 +9,10 @@ prompt. This package is the long-term half, in five parts:
 ``episodes``  the full record every run leaves behind
 ``upkeep``    what the memory would like a person to look at
 
-Truth lives in markdown under git (``memory/``); everything a machine
-derives lives under ``.poieo/`` and can be deleted without loss.
+Truth lives in markdown under git -- the journals in ``memory/shortterm/``
+and the rest in ``memory/longterm/``, whose existence is the whole opt-in.
+Everything a machine derives lives in ``memory/cache/`` and can be deleted
+without loss.
 
 What is re-exported here is what the rest of poieo asks for. The ranking
 itself is deliberately not: ``recall.recall`` would shadow the module of the
@@ -22,12 +24,11 @@ Spec: docs/specs/2026-08-24-project-memory-design.md
 
 from .episodes import episodes_dir, used_in, write_episode
 from .facts import (
-    CONSTITUTION,
     Fact,
     check_memory,
+    keeps_memory,
     load_fact,
     load_facts,
-    memory_root,
     read_page,
     readable_facts,
 )
@@ -35,15 +36,14 @@ from .recall import read_memory
 from .upkeep import doubts, memory_report
 
 __all__ = [
-    "CONSTITUTION",
     "Fact",
     "check_memory",
     "doubts",
     "episodes_dir",
+    "keeps_memory",
     "load_fact",
     "load_facts",
     "memory_report",
-    "memory_root",
     "read_memory",
     "read_page",
     "readable_facts",

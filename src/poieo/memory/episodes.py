@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .facts import Fact, memory_root, tokens
+from .facts import Fact, keeps_memory, tokens
 from .recall import recall
 
 log = logging.getLogger("poieo.memory")
@@ -72,7 +72,7 @@ def write_episode(task: Any, result: Any) -> Path | None:
         # What the project had in mind: the same selection that built the
         # run's block, recomputed at record time. Emphasis-grade, so it may
         # fail without costing the record, let alone the run.
-        if memory_root(task.dir).is_dir():
+        if keeps_memory(task.dir):
             record["shown"] = [fact.slug for fact in recall(task.dir, task)]
     except Exception as exc:
         log.warning("task '%s': could not record what was shown: %s", task.slug, exc)

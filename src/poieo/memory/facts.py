@@ -1,7 +1,8 @@
 """The files the memory is made of: the page, and one entry per thing learned.
 
-Truth lives here, in markdown under git. Everything a machine derives from
-these files lives under ``.poieo/`` and can be deleted without loss.
+Truth lives here, in markdown under git, under ``memory/longterm/``.
+Everything a machine derives from these files lives one folder over, in
+``memory/cache/``, and can be deleted without loss.
 
 Spec: docs/specs/2026-08-24-project-memory-design.md
 """
@@ -18,11 +19,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..errors import SpecError, describe_invalid
+from ..layout import Layout
 
 log = logging.getLogger("poieo.memory")
 
-MEMORY_DIR = "memory"
-CONSTITUTION = "constitution.md"
 # Character budget (~3k tokens) for the always-present page. Advisory: the
 # page is the user's to trim, and refusing to run over page length would
 # make the memory a way to break the daemon.
@@ -74,7 +74,7 @@ class _Frontmatter(BaseModel):
     links: _Links = Field(default_factory=_Links)
     # Anchor path -> the digest of the content the entry was written
     # against. Written by the pass when it seals; a person may write one
-    # by hand. Bytes live under .poieo/blobs/, never here.
+    # by hand. Bytes live under memory/cache/blobs/, never here.
     sealed: dict[str, str] = Field(default_factory=dict)
 
 
@@ -92,8 +92,16 @@ class Fact(BaseModel):
     mentions: list[str] = Field(default_factory=list)
 
 
-def memory_root(project_dir: Path) -> Path:
-    return project_dir / MEMORY_DIR
+def keeps_memory(project_dir: Path) -> bool:
+    """Whether this project keeps a long memory. The folder is the whole
+    opt-in, and one rule in one place is what keeps the five callers that ask
+    from drifting apart.
+
+    The folder is ``memory/longterm/`` and not ``memory/`` because journals
+    live under ``memory/`` too and arrive on their own, the first time a task
+    runs. A signal that switches itself on is not consent.
+    """
+    return Layout(root=Path(project_dir)).longterm().is_dir()
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -133,7 +141,7 @@ def load_fact(path: Path) -> Fact:
 def load_facts(project_dir: Path) -> list[Fact]:
     """Every learned entry, in a stable order. Malformed ones raise, so the
     caller decides whether that is a load failure or a 3am shrug."""
-    root = memory_root(project_dir) / "facts"
+    root = Layout(root=Path(project_dir)).facts()
     if not root.is_dir():
         return []
     return [load_fact(p) for p in sorted(root.glob("*.md"))]
@@ -143,7 +151,7 @@ def readable_facts(project_dir: Path) -> list[Fact]:
     """Every entry that still reads, for the run path. A malformed one is a
     load failure when loading (check_memory); mid-residency it is skipped --
     a run with less in mind beats no run at all."""
-    root = memory_root(project_dir) / "facts"
+    root = Layout(root=Path(project_dir)).facts()
     if not root.is_dir():
         return []
     facts = []
@@ -165,7 +173,7 @@ def check_memory(project_dir: Path) -> None:
     """
     facts = load_facts(project_dir)
     known = {fact.slug for fact in facts}
-    attic = memory_root(project_dir) / "attic"
+    attic = Layout(root=Path(project_dir)).attic()
     if attic.is_dir():
         # Resting entries still exist: a restored file whose typed claims
         # name them must load, or "move it back" would not be true. A
@@ -192,7 +200,7 @@ def check_memory(project_dir: Path) -> None:
 
 def read_page(project_dir: Path) -> str | None:
     """The always-present page as text, or None when the project keeps none."""
-    path = memory_root(project_dir) / CONSTITUTION
+    path = Layout(root=Path(project_dir)).constitution()
     try:
         text = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
     except OSError as exc:

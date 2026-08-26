@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import at
 from poieo.daemon.config import FlowSpec, load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
@@ -369,9 +370,9 @@ def test_the_generated_prompt_carries_the_journal(tmp_path):
 
 def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
     path = write_task(tmp_path, "t", "name: t\nprompt: go\n")
-    memory = tmp_path / "tasks" / "memory"
-    memory.mkdir()
-    (memory / "constitution.md").write_text("Never push to main.", encoding="utf-8")
+    memory = at(tmp_path / "tasks")
+    memory.longterm().mkdir(parents=True)
+    memory.constitution().write_text("Never push to main.", encoding="utf-8")
 
     _, graph = expand(load_task(path))
     system = graph.nodes[0].system

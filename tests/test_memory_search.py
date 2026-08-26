@@ -5,6 +5,7 @@ speed -- and the plain scan behind the same interface must return the same
 entries, or the fallback is a different feature wearing the same name.
 """
 
+from conftest import at
 import pytest
 
 import poieo.memory.index as memory_index
@@ -18,13 +19,13 @@ from test_task import write_task
 def _project(tmp_path, prompt="review the api batch sizes in the importer"):
     """A card, its folder, and a memory folder beside it."""
     path = write_task(tmp_path, "importer", f"name: mind the importer\nprompt: {prompt}\n")
-    (tmp_path / "tasks" / "memory" / "facts").mkdir(parents=True)
+    at(tmp_path / "tasks").facts().mkdir(parents=True)
     return load_task(path), tmp_path / "tasks"
 
 
 def _fact(project, slug, body, matter=""):
     text = f"---\n{matter}\n---\n{body}\n" if matter else f"{body}\n"
-    (project / "memory" / "facts" / f"{slug}.md").write_text(text, encoding="utf-8")
+    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
 
 
 def test_a_relevant_entry_reaches_the_block(tmp_path):
@@ -102,7 +103,7 @@ def test_an_anchored_entry_arrives_even_without_a_shared_word(tmp_path, monkeypa
 def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch):
     task, project = _project(tmp_path)
     page = "Never push to main.\n" + "x" * 300
-    (project / "memory" / "constitution.md").write_text(page, encoding="utf-8")
+    at(project).constitution().write_text(page, encoding="utf-8")
     _fact(project, "one", "The api batch importer note number one.")
     _fact(project, "two", "The api batch importer note number two.")
 
@@ -122,7 +123,7 @@ def test_a_deleted_index_is_rebuilt_silently(tmp_path):
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
 
     first = read_memory(project, task)
-    index = project / ".poieo" / "memory.sqlite3"
+    index = at(project).index()
     assert index.is_file()
 
     index.unlink()
@@ -356,13 +357,17 @@ def test_the_scan_and_the_index_still_agree_on_worn_paths(tmp_path, monkeypatch)
     assert read_memory(project, task) == preferred
 
 
-def test_nothing_is_ever_written_inside_the_memory_folder(tmp_path):
+def test_nothing_is_ever_written_inside_the_audited_layer(tmp_path):
+    """Reading builds an index, and the index lives in `memory/cache/` --
+    inside `memory/`, one folder over. So the guarantee is not "nothing is
+    written under memory/" but the one that matters: the entries a person
+    wrote and reads are never touched by the machinery that reads them."""
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
-    before = sorted(p.name for p in (project / "memory").rglob("*"))
+    before = sorted(p.name for p in at(project).longterm().rglob("*"))
 
     read_memory(project, task)
-    after = sorted(p.name for p in (project / "memory").rglob("*"))
+    after = sorted(p.name for p in at(project).longterm().rglob("*"))
     assert after == before
 
 

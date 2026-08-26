@@ -26,13 +26,13 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .binding import BindingSpec
+from .layout import Layout
 from .memory import (
-    CONSTITUTION,
     Fact,
     doubts,
     episodes_dir,
+    keeps_memory,
     load_fact,
-    memory_root,
     read_page,
     readable_facts,
     used_in,
@@ -47,7 +47,6 @@ LEARNER_ROLE = "learner"
 # Records per pass. What does not fit arrives next pass, and the bookmark
 # only moves as far as what was shown -- the journal's batching rule.
 PASS_CAP = 20
-LOG_NAME = "learning.jsonl"
 
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
@@ -75,7 +74,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     stays the one opt-in, and a pass must never create it) or when there is
     nothing unread -- in which case no completion is even attempted."""
     project_dir = Path(project_dir)
-    if not memory_root(project_dir).is_dir():
+    if not keeps_memory(project_dir):
         return None
     records = _unread(project_dir, _bookmark(project_dir))
     if not records:
@@ -139,7 +138,7 @@ def _passes(project_dir: Path) -> Iterator[dict[str, Any]]:
     guarded against a line holding something other than a mapping and the
     other did not.
     """
-    path = Path(project_dir) / ".poieo" / LOG_NAME
+    path = Layout(root=Path(project_dir)).learning_log()
     if not path.is_file():
         return
     yield from json_records(path.read_text(encoding="utf-8").splitlines())
@@ -382,7 +381,7 @@ def _write_entry(
                 lines.append("links:")
             lines.append(f"  {kind}: {json.dumps(links[kind])}")
     lines += ["---", raw["body"].strip(), ""]
-    path = memory_root(project_dir) / "facts" / f"{raw['slug']}.md"
+    path = Layout(root=Path(project_dir)).facts() / f"{raw['slug']}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -475,7 +474,7 @@ def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
         try:
             if (now - fact.path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
                 continue
-            attic = memory_root(project_dir) / "attic"
+            attic = Layout(root=Path(project_dir)).attic()
             attic.mkdir(exist_ok=True)
             target = attic / fact.path.name
             if target.exists():
@@ -496,15 +495,13 @@ def _let_go(project_dir: Path) -> list[str]:
     meaning a keepsake backed is either alive and keeps its name, or moved
     to the attic with its name intact -- so an unnamed keepsake backs
     nothing."""
-    from . import blob
-
-    store = Path(project_dir) / ".poieo" / blob.STORE
+    layout = Layout(root=Path(project_dir))
+    store = layout.blobs()
     if not store.is_dir():
         return []
 
     referenced: set[str] = set()
-    for folder in ("facts", "attic"):
-        root = memory_root(project_dir) / folder
+    for root in (layout.facts(), layout.attic()):
         if not root.is_dir():
             continue
         for path in sorted(root.glob("*.md")):
@@ -541,7 +538,7 @@ def last_suggestion(project_dir: Path) -> str | None:
     suggestion = latest.get("page")
     if not isinstance(suggestion, str) or not suggestion:
         return None
-    page_path = memory_root(project_dir) / CONSTITUTION
+    page_path = Layout(root=Path(project_dir)).constitution()
     try:
         if page_path.is_file():
             edited = datetime.fromtimestamp(page_path.stat().st_mtime, timezone.utc)
@@ -553,7 +550,7 @@ def last_suggestion(project_dir: Path) -> str | None:
 
 
 def _record(project_dir: Path, result: Pass) -> None:
-    path = project_dir / ".poieo" / LOG_NAME
+    path = Layout(root=Path(project_dir)).learning_log()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(asdict(result), ensure_ascii=False) + "\n")
