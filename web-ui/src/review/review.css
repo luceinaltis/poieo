@@ -1,15 +1,15 @@
-.work {
+.run {
   display: grid;
   gap: 6px;
 }
 
-.work-empty {
+.run-empty {
   color: #9a9086;
   font-size: 0.85em;
   margin: 0;
 }
 
-.work-list {
+.run-list {
   display: grid;
   gap: 4px;
   list-style: none;
@@ -17,25 +17,25 @@
   padding: 0;
 }
 
-.work-row {
+.run-row {
   border-left: 2px solid #4a4034;
   padding-left: 8px;
 }
 
-.work-row[data-outcome="nothing"] {
+.run-row[data-outcome="nothing"] {
   border-left-color: #3a332a;
 }
 
-.work-row[data-outcome="failed"] {
+.run-row[data-outcome="failed"] {
   border-left-color: #d16d5a;
 }
 
-.work-row[data-selected="true"] {
+.run-row[data-selected="true"] {
   background: #262019;
   border-left-color: #d8a657;
 }
 
-.work-open {
+.run-open {
   background: none;
   border: 0;
   color: inherit;
@@ -49,18 +49,18 @@
   width: 100%;
 }
 
-.work-when,
-.work-size {
+.run-when,
+.run-size {
   color: #9a9086;
   font-size: 0.8em;
   white-space: nowrap;
 }
 
-.work-row[data-outcome="nothing"] .work-what {
+.run-row[data-outcome="nothing"] .run-what {
   color: #9a9086;
 }
 
-.work-failed {
+.run-failed {
   background: none;
   border: 0;
   color: #d16d5a;
@@ -71,7 +71,7 @@
   padding: 2px 0;
 }
 
-.work-controls {
+.run-controls {
   display: flex;
   gap: 6px;
   padding-bottom: 4px;
@@ -171,13 +171,13 @@
 }
 
 @media (max-width: 720px) {
-  .work-open {
+  .run-open {
     grid-template-columns: 1fr;
     gap: 2px;
     padding: 8px 2px;
   }
 
-  .work-size {
+  .run-size {
     justify-self: start;
   }
 

@@ -12,7 +12,7 @@ import { fetchRunEvents, fetchRuns } from "../api"
 import { Control } from "./Control"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
-import { WorkList } from "../review/WorkList"
+import { RunList } from "../review/RunList"
 import { initialStage, replay } from "../state/stage"
 import type { Worker } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
@@ -172,7 +172,7 @@ export const Drawer = memo(function Drawer({
 
         <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
 
-        <WorkList
+        <RunList
           runs={runs}
           selected={picked}
           onSelect={setPicked}

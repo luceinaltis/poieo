@@ -172,8 +172,8 @@ test("replay equals folding one at a time", () => {
 test("a run summary adds to the flow's recent tally", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
 
-  expect(stage.workers.chores.recent.works).toBe(1)
-  // the fixture run changed nothing the store recorded, so it is quiet work
+  expect(stage.workers.chores.recent.runs).toBe(1)
+  // the fixture run changed nothing the store recorded, so it is a quiet run
   expect(stage.workers.chores.recent.failed).toBe(0)
 })
 
@@ -186,7 +186,7 @@ test("a failed run's summary is tallied as failed", () => {
 
 test("setRecent seeds a tally the events cannot supply", () => {
   const seeded = setRecent(start(), "chores", {
-    works: 3,
+    runs: 3,
     succeeded: 2,
     failed: 1,
     nothingToDo: 0,
@@ -194,7 +194,7 @@ test("setRecent seeds a tally the events cannot supply", () => {
     deletions: 2,
   })
 
-  expect(seeded.workers.chores.recent.works).toBe(3)
-  expect(seeded.workers.revision.recent.works).toBe(0)
+  expect(seeded.workers.chores.recent.runs).toBe(3)
+  expect(seeded.workers.revision.recent.runs).toBe(0)
   expect(setRecent(seeded, "ghost", NOTHING)).toBe(seeded)
 })

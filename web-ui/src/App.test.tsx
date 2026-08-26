@@ -194,8 +194,8 @@ test("closing the drawer puts it away", async () => {
 })
 
 
-test("opening a different worker does not show the previous one's work", async () => {
-  // The drawer keeps a selected piece of work. Without a fresh instance per
+test("opening a different worker does not show the previous one's runs", async () => {
+  // The drawer keeps a selected run. Without a fresh instance per
   // flow, switching workers leaves the last flow's run in the diff pane.
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
@@ -238,9 +238,9 @@ test("a frame for another flow leaves the open drawer alone", async () => {
 })
 
 
-test("the drawer opens on the work that changed something", async () => {
+test("the drawer opens on the run that changed something", async () => {
   // The newest run found nothing to do. Opening on it greets the reader with
-  // "this work changed no files", which is not what they came for.
+  // "this run changed no files", which is not what they came for.
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {

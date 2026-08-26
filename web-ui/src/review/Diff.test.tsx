@@ -114,11 +114,11 @@ test("a truncated patch says so instead of passing a fragment off as whole", asy
   expect(container.querySelectorAll("[data-file]")).toHaveLength(2)
 })
 
-test("work that changed no files says that, rather than showing an empty box", async () => {
+test("a run that changed no files says that, rather than showing an empty box", async () => {
   fetchDiff.mockResolvedValue({ run_id: "quiet", change: null })
   await render("quiet")
 
-  expect(container.textContent).toMatch(/changed no files/i)
+  expect(container.textContent).toMatch(/this run changed no files/i)
   expect(container.querySelectorAll("[data-file]")).toHaveLength(0)
 })
 

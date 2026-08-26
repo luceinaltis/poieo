@@ -73,13 +73,18 @@ answerable from a single log file.
 
 Minimal configuration (principle 2) is worth little if understanding the
 result takes a manual. The user learns three words and no more: a **task**
-(a name, a prompt, a folder), a piece of **work** (one run of it — succeeded,
-failed, or found nothing to do), and a **change** (what that work did to the
+(a name, a prompt, a folder), a **run** (one pass through it — succeeded,
+failed, or found nothing to do), and a **change** (what that run did to the
 files, which you accept or discard).
 
-Everything underneath — how work is isolated, how a change is stored, how it is
-undone — is machinery, and machinery does not appear in the interface. The one
-exception is the moment the user's own files are about to change: there,
+A run is one pass from the entry node to a node with nowhere left to go, and
+it is called that everywhere — on screen, in `poieo runs`, and in the log. The
+board used to say "a piece of work" for what the files called a run: one thing
+with two names, which is the exact tax this principle exists to refuse.
+
+Everything underneath — how a run is isolated, how a change is stored, how it
+is undone — is machinery, and machinery does not appear in the interface. The
+one exception is the moment the user's own files are about to change: there,
 poieo says exactly what will happen to them. **Hide the mechanism, never the
 result.**
 
@@ -108,9 +113,9 @@ is serving. From there the user can:
   Unopened, it all stays on defaults.
 - **Control** — pause/resume, run once right now.
 - **Observe** — replay run history, including the model's tool activity.
-- **Review the night** — open a piece of work, read the change it made as a
-  diff, and accept it or throw it away. Until it is accepted, nothing the
-  model wrote has touched the user's own files.
+- **Review the night** — open a run, read the change it made as a diff, and
+  accept it or throw it away. Until it is accepted, nothing the model wrote
+  has touched the user's own files.
 
 Edits are saved to files and picked up by the daemon from the next run.
 No restarts.
@@ -215,9 +220,9 @@ slice.
    spin: a note wakes nobody.
    (`docs/specs/2026-08-23-task-notes-design.md`)
 8. **A long memory** — the project keeps one page that is always in front of
-   every task, and a folder of things it has learned; every piece of work
-   leaves a full record behind, so anything remembered can be traced to the
-   run that taught it.
+   every task, and a folder of things it has learned; every run leaves a
+   full record behind, so anything remembered can be traced to the run that
+   taught it.
    (`docs/specs/2026-08-24-project-memory-design.md`)
 9. **Beyond (candidates)** — delegating steps to external agent CLIs
    (Claude Code, etc.); fan-out steps; run-log retention; stronger isolation

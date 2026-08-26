@@ -782,7 +782,7 @@ def note(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
     text: str = typer.Argument(..., help="What you want it to do differently."),
 ) -> None:
-    """Tell a task something. It reads this before its next piece of work."""
+    """Tell a task something. It reads this before its next run."""
     task = load_task(task_path)
     append_journal(task.journal_path(), "you", text, title=task.name)
     _ok(f"noted in {task.journal_path()}")

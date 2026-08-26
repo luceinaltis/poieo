@@ -142,7 +142,9 @@ board's.
 - **Automatic layout of the graph inside a border.** `ui: {x, y}` is authored,
   and a graph with no coordinates gets a simple left-to-right walk from `entry`
   rather than a layout engine.
-- **The card's remaining machine vocabulary** — `review · llm · step 2`, and
-  counting runs as "pieces of work". Real, and its own change.
+- **The card's remaining machine vocabulary** — `review · llm · step 2`. Real,
+  and its own change. (The other half of this bullet, counting runs as
+  "pieces of work", has since landed: the board says *run* now, as DESIGN
+  principle 7 does.)
 - **Very large boards.** Ten flows is the shape being designed for. A hundred
   wants search and filtering, which is a different screen.

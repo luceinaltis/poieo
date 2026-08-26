@@ -49,18 +49,18 @@ test("counts and sums across a night", () => {
     run({ run_id: "b", change: change({ insertions: 3, deletions: 1, files: ["x", "y"] }) }),
   ])
 
-  expect(summary.works).toBe(2)
+  expect(summary.runs).toBe(2)
   expect(summary.succeeded).toBe(2)
   expect(summary.insertions).toBe(45)
   expect(summary.deletions).toBe(12)
 })
 
-test("a run that changed nothing is work, not a failure", () => {
+test("a run that changed nothing succeeded, it did not fail", () => {
   const summary = rollup([run({ run_id: "quiet" })])
 
   // It ran, it looked, there was nothing to do. Counting that as failed would
   // make a quiet night look broken.
-  expect(summary.works).toBe(1)
+  expect(summary.runs).toBe(1)
   expect(summary.nothingToDo).toBe(1)
   expect(summary.failed).toBe(0)
   expect(summary.insertions).toBe(0)
@@ -75,7 +75,7 @@ test("a failed run is counted as failed", () => {
 })
 
 test("a failed run that got partway still contributes no lines", () => {
-  // Its work is parked, not on the branch, so it is not part of what is waiting.
+  // Its change is parked, not on the branch, so it is not part of what is waiting.
   const summary = rollup([run({ status: "failed", change: change() })])
 
   expect(summary.failed).toBe(1)
@@ -99,7 +99,7 @@ test("fold adds one run at a time, matching rollup", () => {
 
 test("NOTHING is not mutated by folding", () => {
   fold(NOTHING, run({ change: change() }))
-  expect(NOTHING.works).toBe(0)
+  expect(NOTHING.runs).toBe(0)
 })
 
 
@@ -109,7 +109,7 @@ test("a flow that keeps no private copy has no 'nothing to do' at all", () => {
   // only moves text look like it wasted the night, every night.
   const summary = rollup([run({ run_id: "a" }), run({ run_id: "b" })], false)
 
-  expect(summary.works).toBe(2)
+  expect(summary.runs).toBe(2)
   expect(summary.nothingToDo).toBe(0)
   expect(summary.succeeded).toBe(2)
 })

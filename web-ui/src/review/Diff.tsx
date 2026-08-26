@@ -1,5 +1,5 @@
 /**
- * One piece of work, read as a diff.
+ * One run, read as a diff.
  *
  * Folded by file, because the question is "what did it touch" before it is
  * "what did it write". No highlighting and no new dependency: a unified patch
@@ -87,7 +87,7 @@ export function Diff({ runId }: { runId: string }) {
 
   const files = report.files ?? []
   if (files.length === 0) {
-    return <p className="diff-note">This work changed no files.</p>
+    return <p className="diff-note">This run changed no files.</p>
   }
 
   return (
