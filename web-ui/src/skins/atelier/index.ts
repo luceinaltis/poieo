@@ -237,58 +237,26 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
 /**
  * Which way a hand's palm faces, in that hand bone's own frame.
  *
- * A hand is a flat thing, so the direction it is flattest along is the way the
- * palm looks. Read off the skin rather than off the bone's axes, which no two
- * riggers agree about, and needed because this character was generated in an
- * A-pose with his palms turned up -- the retargeted idle inherits that, and he
- * stands at his anvil holding an invisible tray.
+ * Not measured off the skin. That was tried: the palm was taken to be the
+ * flattest direction through the hand's vertices, and it failed twice over --
+ * the sign of a cross product is arbitrary, so the mirrored left and right
+ * hands came out facing opposite ways, and a half-closed fist is round enough
+ * that its flattest direction wanders toward the fingertips, which no roll
+ * about the forearm can fix. The probes printed a right hand 65 degrees from
+ * where it was told to face.
+ *
+ * What is actually known is simpler. This generator poses its characters with
+ * their palms turned up -- every preview sheet showed it -- so while the
+ * figure still stands in its bind pose, "up" carried into the bone's frame IS
+ * the palm. Call it before any mixer has moved a bone.
  */
 export function palmOf(THREE: Three, figure: any, boneName: string): any {
-  const mesh = figure.getObjectByProperty("type", "SkinnedMesh")
   const bone = figure.getObjectByName(boneName)
-  const slot = mesh && bone ? mesh.skeleton.bones.indexOf(bone) : -1
-  if (slot < 0) return null
-
-  const intoBone = mesh.skeleton.boneInverses[slot]
-  const wrist = new THREE.Vector3().setFromMatrixPosition(
-    new THREE.Matrix4().copy(intoBone).invert(),
-  )
-  const position = mesh.geometry.attributes.position
-  const bones = mesh.geometry.attributes.skinIndex
-  const pull = mesh.geometry.attributes.skinWeight
-  const reach = fistReach(THREE, mesh, intoBone)
-
-  const rest = new THREE.Vector3()
-  const hand: any[] = []
-  for (let v = 0; v < position.count; v += 1) {
-    let most = 0
-    let follows = -1
-    for (let s = 0; s < 4; s += 1) {
-      const share = pull.getComponent(v, s)
-      if (share > most) {
-        most = share
-        follows = bones.getComponent(v, s)
-      }
-    }
-    if (follows !== slot) continue
-    rest.fromBufferAttribute(position, v).applyMatrix4(mesh.bindMatrix).applyMatrix4(intoBone)
-    if (rest.distanceTo(wrist) > reach) continue
-    hand.push(rest.clone())
-  }
-  if (hand.length < 24) return null
-
-  const middle = hand
-    .reduce((sum: any, p: any) => sum.add(p), new THREE.Vector3())
-    .divideScalar(hand.length)
-  // Longest way through the hand, then the longest of what is left across it:
-  // the palm's normal is what neither of them points along.
-  const along = longestWay(THREE, hand, middle)
-  const flat = hand.map((p: any) => {
-    const off = p.clone().sub(middle)
-    return off.addScaledVector(along, -off.dot(along)).add(middle)
-  })
-  const across = longestWay(THREE, flat, middle)
-  return new THREE.Vector3().crossVectors(along, across).normalize()
+  if (!bone) return null
+  figure.updateWorldMatrix(true, true)
+  const turned = new THREE.Quaternion()
+  bone.getWorldQuaternion(turned)
+  return new THREE.Vector3(0, 1, 0).applyQuaternion(turned.invert()).normalize()
 }
 
 /** The dominant direction of a cloud of points, by power iteration. */
@@ -499,6 +467,16 @@ export function makeBench(
   group.add(figure)
   const face = makeFace(THREE, figure, blinkOffset)
 
+  // Captured here, while the figure still stands in its bind pose: the first
+  // mixer probe below moves the bones, and the palms' rest direction with it.
+  const palms = ["Left", "Right"]
+    .map((side) => ({
+      bone: figure.getObjectByName(`${side}Hand`),
+      elbow: figure.getObjectByName(`${side}ForeArm`),
+      faces: palmOf(THREE, figure, `${side}Hand`),
+    }))
+    .filter((palm) => palm.bone?.parent && palm.elbow && palm.faces)
+
   // -- finished work on a shelf
   const shelf = new THREE.Group()
   // On the board the cabin nailed to its back wall.
@@ -578,15 +556,6 @@ export function makeBench(
   const swinging = new THREE.Quaternion()
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
-  // Each hand, the palm's own direction in its frame, and the elbow it turns
-  // about. Only what can be measured is kept; a rig without one is left alone.
-  const palms = ["Left", "Right"]
-    .map((side) => ({
-      bone: figure.getObjectByName(`${side}Hand`),
-      elbow: figure.getObjectByName(`${side}ForeArm`),
-      faces: palmOf(THREE, figure, `${side}Hand`),
-    }))
-    .filter((palm) => palm.bone?.parent && palm.elbow && palm.faces)
   const axis = new THREE.Vector3()
   const looks = new THREE.Vector3()
   const inward = new THREE.Vector3()
@@ -856,18 +825,26 @@ export function makeBench(
           if (inward.lengthSq() < 1e-9) continue
           inward.normalize()
 
-          // Both flattened onto the plane the roll turns in, so this is one
-          // signed angle rather than a rotation that could tip the wrist.
-          looks.addScaledVector(axis, -looks.dot(axis))
-          flatly.copy(inward).addScaledVector(axis, -inward.dot(axis))
-          if (looks.lengthSq() < 1e-6 || flatly.lengthSq() < 1e-6) continue
-          looks.normalize()
-          flatly.normalize()
-          const roll =
-            Math.atan2(
-              flatly.clone().cross(looks).dot(axis) * -1,
-              looks.dot(flatly),
-            ) * rest
+          // The angle is found by trying, not solved. It was solved once, with
+          // a projection and an atan2, and the applied roll landed the palm
+          // sixty degrees from where the arithmetic said it would -- some sign
+          // convention between bone frames disagreed with the derivation, and
+          // a probe is how it was caught. Thirty-six candidates around the
+          // circle cannot be wrong about a convention.
+          let bestRoll = 0
+          let bestDot = -2
+          for (let step = 0; step < 36; step += 1) {
+            const angle = (step / 36) * Math.PI * 2
+            flatly
+              .copy(looks)
+              .applyQuaternion(spare.setFromAxisAngle(axis, angle))
+            const dot = flatly.dot(inward)
+            if (dot > bestDot) {
+              bestDot = dot
+              bestRoll = angle
+            }
+          }
+          const roll = bestRoll * rest
 
           palm.bone.parent.getWorldQuaternion(parented)
           palm.bone.quaternion.premultiply(
