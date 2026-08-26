@@ -1,14 +1,12 @@
 # Memory Connections Implementation Plan (Plan G)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** An entry a person judged related arrives beside the entry that names it, even when the two share no word — provable by one test where a mentioned entry with zero token overlap joins the block, and by the fallback still returning byte-identical results.
 
 **Architecture:** Connections live in the entry files: `[[slug]]` mentions in prose, `links: {depends_on: [...], contradicts: [...]}` in frontmatter. Nothing new is stored anywhere — expansion is plain code over the parsed entries both lookup backends already share, and the report's two new sections are computed from the files at read time. `supersedes` keeps its existing spelling (`superseded_by:`); `caused_by` does not ship (no consumer yet).
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio (asyncio_mode=auto). No new dependencies, no new index tables.
 
-**Spec:** docs/superpowers/specs/2026-08-24-memory-connections-design.md
+**Spec:** docs/specs/2026-08-24-memory-connections-design.md
 
 ## Global Constraints
 

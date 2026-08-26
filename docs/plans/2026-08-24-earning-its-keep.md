@@ -1,14 +1,12 @@
 # Earning Its Keep Implementation Plan (Plan L)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** `poieo memory` answers "is the memory earning its keep" from the run records alone — provable by the used-judgment being the wear system's shared function (not a twin), by an entry shown three times and never used being named, and by a recordless project showing nothing at all.
 
 **Architecture:** One read: the most recent run records (bounded window), tallied against the entries that exist, using the same distinctive-words-in-the-output judgment `_strengthen` already trusts — extracted to one shared function so the two can never disagree about what "used" means. No state, no counters stored, no action taken on the numbers.
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio. No new dependencies.
 
-**Spec:** docs/superpowers/specs/2026-08-24-earning-its-keep-design.md
+**Spec:** docs/specs/2026-08-24-earning-its-keep-design.md
 
 ## Global Constraints
 

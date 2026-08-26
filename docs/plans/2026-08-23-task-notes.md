@@ -1,14 +1,12 @@
 # Task Notes Implementation Plan (Plan E)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A task can leave a line in another task's journal, and that line is read on the recipient's next run no matter how long the journal has grown — provable by one test where a note sits behind hundreds of older entries and still arrives.
 
 **Architecture:** Nothing new is stored. A journal stays one append-only markdown file; the change is in how it is *read*. A task's own last entry is a bookmark: everything after it is new and is shown in full, everything before it is bounded history. One new toolset, `notes`, with one tool that appends a stamped line to another task's journal.
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio (asyncio_mode=auto).
 
-**Spec:** docs/superpowers/specs/2026-08-23-task-notes-design.md
+**Spec:** docs/specs/2026-08-23-task-notes-design.md
 
 ## Global Constraints
 

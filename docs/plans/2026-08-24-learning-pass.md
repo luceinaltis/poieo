@@ -1,14 +1,12 @@
 # Learning Pass Implementation Plan (Plan H)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** The project reads the records its runs left behind and writes down what stays true — provable by one test where an entry written by a pass carries `source:` run ids stamped by the harness, and by a failed pass rereading the same records where a successful one never does.
 
 **Architecture:** One new module, `src/poieo/learn.py`: an async `learn(project_dir, binding, pool)` that collects unread episode records oldest-first (capped), makes one completion under the `learner` binding role, validates the JSON proposal line by line, writes accepted entries (source stamped by the harness) and applies set-asides (one frontmatter line, body byte-identical), then appends one line to `.poieo/learning.jsonl` — which is also where the bookmark lives, moved only on success. The CLI command and the daemon's idle loop are thin callers. The pass never touches `constitution.md`, never deletes, never overwrites, and does not run at all without a `memory/` folder.
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio (asyncio_mode=auto), MockProvider scripted by role. No new dependencies.
 
-**Spec:** docs/superpowers/specs/2026-08-24-learning-pass-design.md
+**Spec:** docs/specs/2026-08-24-learning-pass-design.md
 
 ## Global Constraints
 

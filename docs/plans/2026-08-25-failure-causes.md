@@ -1,6 +1,6 @@
 # Failure Causes — Implementation Plan
 
-**Spec:** `docs/superpowers/specs/2026-08-25-failure-causes-design.md`
+**Spec:** `docs/specs/2026-08-25-failure-causes-design.md`
 **Branches:** `failure-causes`, then `flow-self-pause` (one PR each)
 
 Gate before every merge:

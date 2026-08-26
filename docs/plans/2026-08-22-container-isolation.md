@@ -1,14 +1,12 @@
 # Container Isolation Implementation Plan (Plan D)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A task with an `isolation` block runs its shell commands inside a container that can see only its folder — provable by one pair of tests where the same command succeeds without isolation and fails with it.
 
 **Architecture:** `poieo.tools.docker` is the only module that knows Docker exists. `LocalExecutor` and `DockerExecutor` are async context managers behind one factory; `runtime/nodes.py` acquires its executor from that factory and never learns which it got. A box outlives a run, so `FlowRunner` owns it — the same object that owns the task's private working copy. File tools stay on the host, confined by `resolve_path`; only `run_command` moves inside.
 
 **Tech Stack:** Python 3.10, subprocess-invoked `docker`, pytest + pytest-asyncio (asyncio_mode=auto).
 
-**Spec:** docs/superpowers/specs/2026-08-22-container-isolation-design.md
+**Spec:** docs/specs/2026-08-22-container-isolation-design.md
 
 ## Revision, 2026-08-23
 

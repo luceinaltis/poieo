@@ -1,14 +1,12 @@
 # Web Frontend Implementation Plan (Plan B)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Point a browser at `http://127.0.0.1:8484` while `poieo daemon` runs and watch the work happen — which flow is on which node, every tool call as it fires, what the model said and thought each turn — and replay any past run the same way.
 
 **Architecture:** One reducer (`StageState`) folds the event stream into a presentation-neutral model; skins render that model and nothing else. Live SSE and replayed history run through the same reducer, so replay is the live path at a different speed. `ledger` (plain DOM) is the default skin; the review screen — work list, diff, accept/discard — is shared React UI outside the skins. *(See the amendment: `atelier` is optional and last.)*
 
 **Tech Stack:** Vite + React + TypeScript, vitest for the reducer, PixiJS for `atelier`. Node v24.14.0 / npm 11.9.0 on this machine.
 
-**Spec:** docs/superpowers/specs/2026-08-22-web-observation-design.md
+**Spec:** docs/specs/2026-08-22-web-observation-design.md
 
 **Depends on:** Plan A, merged to main at `87c01fb`. Its API is live and verified by curl; nothing in this plan changes backend behaviour except the one static-mount fix in Task 1.
 
@@ -16,7 +14,7 @@
 
 ## Amendment 2026-08-22 — the review screen comes first
 
-`docs/superpowers/specs/2026-08-22-nightly-review-design.md` resequenced this
+`docs/specs/2026-08-22-nightly-review-design.md` resequenced this
 plan. The first question the page must answer is not *what is it doing* but
 **what did it do last night, and do I want it** — so the review screen is now
 part of v1 and `atelier` is not.

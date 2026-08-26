@@ -6,8 +6,8 @@ commit in a session.
 ## The shape of the repo
 
 - `src/poieo/` — the package. `tests/` mirrors it.
-- `docs/superpowers/specs/` — design specs, written before any code.
-- `docs/superpowers/plans/` — task-by-task implementation plans derived from a spec.
+- `docs/specs/` — design specs, written before any code.
+- `docs/plans/` — task-by-task implementation plans derived from a spec.
 - `.claude/worktrees/` — throwaway session worktrees, gitignored.
 
 The remote is **public** (`github.com/luceinaltis/poieo`). Never commit an API key, a
@@ -20,7 +20,7 @@ Work happens on a branch. `main` is the only long-lived one.
 
 - Name a branch after its topic, no prefix: `agent-node`, `observation-backend`,
   `web-frontend`. When the work executes a plan, reuse the plan's slug —
-  `docs/superpowers/plans/2026-08-22-web-frontend.md` → `web-frontend`.
+  `docs/plans/2026-08-22-web-frontend.md` → `web-frontend`.
 - Small standalone fixes take a `fix-` prefix: `fix-windows-codepage`.
 - **Branches named `worktree-*` are harness scratch.** The session worktree tool creates
   them with a random suffix. Never push one and never open a PR from one. If you are

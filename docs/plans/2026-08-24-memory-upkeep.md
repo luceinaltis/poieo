@@ -1,14 +1,12 @@
 # Memory Upkeep Implementation Plan (Plan J)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Rot is noticed, the second look actually happens, and the long-set-aside step out of the way — nothing deleted — provable by a gone anchor earning its report line, the pass prompt carrying the doubt, and an old unreferenced set-aside moving whole to `memory/attic/` while a referenced one stays.
 
 **Architecture:** No new state anywhere. Rot (anchor target gone, or changed after the entry's own mtime) is computed at read time beside the existing second-look logic. The pass prompt gains the doubt section; the recheck uses the pass's existing verbs. The attic move happens on a successful pass: set-aside entries older than the grace, not named by any typed reference, `git mv`-style file move to `memory/attic/` (content untouched). The pass answer's optional `page` line is recorded in the pass log and surfaced by `poieo memory`; it never touches `memory/`.
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio. No new dependencies.
 
-**Spec:** docs/superpowers/specs/2026-08-24-memory-upkeep-design.md
+**Spec:** docs/specs/2026-08-24-memory-upkeep-design.md
 
 ## Global Constraints
 

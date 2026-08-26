@@ -1,14 +1,12 @@
 # Checkpoint Backend Implementation Plan (Plan C)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A daemon flow with a `workdir` works in a private copy of the project, and every run lands as one reviewable change that can be diffed, accepted, or discarded over HTTP — verifiable with curl and `git log` alone.
 
 **Architecture:** A new `poieo.checkpoint` module is the only thing in the codebase that knows git exists. `FlowRunner` asks it for a private worktree before a run and hands that directory to `execute()`, which passes it down as the default workdir for agent nodes; after the run it asks for a commit. The run summary gains a `change` key holding two commit ids, and the web layer grows one read route and two mutation routes on top of it.
 
 **Tech Stack:** Python 3.10, subprocess-invoked `git`, Starlette, pytest + pytest-asyncio (asyncio_mode=auto).
 
-**Spec:** docs/superpowers/specs/2026-08-22-nightly-review-design.md
+**Spec:** docs/specs/2026-08-22-nightly-review-design.md
 
 ## Global Constraints
 
