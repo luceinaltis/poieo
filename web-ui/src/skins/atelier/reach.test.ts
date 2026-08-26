@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { stretcher } from "./reach"
+import { flexion, sideways, stretcher } from "./reach"
 
 /** Just enough of a Vector3 for the joints this moves. */
 function at(x: number, y: number, z: number) {
@@ -52,5 +52,48 @@ describe("stretcher", () => {
     const joints = [{ position: at(0, 20, 0) }, { position: at(0, 18, 0) }]
     stretcher(joints, 2)()
     expect(joints.map((j) => j.position.y)).toEqual([40, 36])
+  })
+})
+
+describe("flexion", () => {
+  const straight = { x: 0, y: -1, z: 0 }
+
+  it("is nothing when the arm is straight", () => {
+    expect(flexion(straight, { x: 0, y: -2, z: 0 })).toBeCloseTo(0)
+  })
+
+  it("is a right angle when the forearm turns square", () => {
+    expect(flexion(straight, { x: 0, y: 0, z: 1 })).toBeCloseTo(Math.PI / 2)
+  })
+
+  it("does not care how long either bone is", () => {
+    const near = flexion({ x: 0, y: -1, z: 0 }, { x: 0, y: -1, z: 1 })
+    const far = flexion({ x: 0, y: -9, z: 0 }, { x: 0, y: -3, z: 3 })
+    expect(far).toBeCloseTo(near)
+  })
+})
+
+describe("sideways", () => {
+  const up = { x: 0, y: 1, z: 0 }
+  const outward = { x: 1, y: 0, z: 0 }
+
+  it("is nothing for an arm hanging straight down", () => {
+    expect(sideways({ x: 0, y: -1, z: 0 }, outward, up)).toBeCloseTo(0)
+  })
+
+  it("is positive for an arm held clear of the body", () => {
+    expect(sideways({ x: 1, y: -1, z: 0 }, outward, up)).toBeCloseTo(Math.PI / 4)
+  })
+
+  it("is negative for an arm pressed into it", () => {
+    expect(sideways({ x: -1, y: -1, z: 0 }, outward, up)).toBeCloseTo(-Math.PI / 4)
+  })
+
+  it("ignores what the arm does front to back", () => {
+    // The clip swings the arm forward all through the idle; only the tuck
+    // against the ribs is this correction's business.
+    const flat = sideways({ x: 1, y: -1, z: 0 }, outward, up)
+    const forward = sideways({ x: 1, y: -1, z: 4 }, outward, up)
+    expect(forward).toBeCloseTo(flat)
   })
 })

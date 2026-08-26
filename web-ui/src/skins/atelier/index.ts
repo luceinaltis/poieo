@@ -14,7 +14,7 @@ import { forgetSpots, savedSpots, saveSpot } from "./placement"
 import { INSIDE, makeCabin } from "./cabin"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
-import { stretcher } from "./reach"
+import { flexion, sideways, stretcher } from "./reach"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
   REST_PACE,
@@ -128,6 +128,18 @@ const HAMMER_LONG = 0.34
  * the backswing goes up behind that shoulder.
  */
 const HAMMER_CLEAR = HAMMER_LONG
+
+/**
+ * How far a resting upper arm hangs clear of the ribs. A person's is 5 to 10
+ * degrees; this rig's idle presses it 9 to 18 degrees the other way.
+ */
+const ARM_OUT = (8 * Math.PI) / 180
+
+/**
+ * How much a resting elbow bends. A person's is 10 to 20 degrees; this rig's
+ * idle bends it 45, which crosses the forearms over the belly.
+ */
+const ELBOW_REST = (15 * Math.PI) / 180
 
 /**
  * How much further out to set this rig's elbow and wrist. 1.33 takes his
@@ -533,6 +545,86 @@ export function makeBench(
   )
   stretchArms()
 
+  // What a man's arms do while he stands still: the upper arm hangs a few
+  // degrees clear of the ribs and the elbow is nearly straight. This rig's
+  // idle does neither, and the two together are what read as a man tied up.
+  // Both are turned to an absolute target rather than nudged, so running it
+  // every frame lands in the same place -- nudging compounds, because the
+  // mixer does not rewrite a track whose value has not changed.
+  const arms = (["Left", "Right"] as const)
+    .map((side) => ({
+      side,
+      arm: figure.getObjectByName(`${side}Arm`),
+      fore: figure.getObjectByName(`${side}ForeArm`),
+      fist: figure.getObjectByName(`${side}Hand`),
+    }))
+    .filter((a) => a.arm && a.fore && a.fist)
+  const hips = figure.getObjectByName("Hips")
+  const nape = figure.getObjectByName("neck") ?? figure.getObjectByName("Neck")
+
+  const bodyUp = new THREE.Vector3()
+  const across = new THREE.Vector3()
+  const outward = new THREE.Vector3()
+  const upper = new THREE.Vector3()
+  const lower = new THREE.Vector3()
+  const hinge = new THREE.Vector3()
+  const spotA = new THREE.Vector3()
+  const spotB = new THREE.Vector3()
+
+  /** Turn a bone about a direction in the room, not one in its own frame. */
+  const turnBone = (bone: any, about: any, angle: number) => {
+    if (Math.abs(angle) < 0.002 || !bone.parent) return
+    bone.parent.getWorldQuaternion(parented)
+    bone.quaternion.premultiply(
+      turning
+        .copy(parented)
+        .invert()
+        .multiply(spare.setFromAxisAngle(about, angle))
+        .multiply(parented),
+    )
+  }
+
+  const easeArms = (rest: number) => {
+    if (arms.length < 2 || !hips || !nape) return
+    hips.getWorldPosition(spotA)
+    nape.getWorldPosition(spotB)
+    bodyUp.subVectors(spotB, spotA)
+    arms[0].arm.getWorldPosition(spotA)
+    arms[1].arm.getWorldPosition(spotB)
+    across.subVectors(spotA, spotB)
+    if (bodyUp.lengthSq() < 1e-9 || across.lengthSq() < 1e-9) return
+    bodyUp.normalize()
+    across.normalize()
+
+    for (const limb of arms) {
+      limb.arm.getWorldPosition(spotA)
+      limb.fore.getWorldPosition(spotB)
+      upper.subVectors(spotB, spotA)
+      limb.fist.getWorldPosition(spotA)
+      lower.subVectors(spotA, spotB)
+      if (upper.lengthSq() < 1e-9 || lower.lengthSq() < 1e-9) continue
+      upper.normalize()
+      lower.normalize()
+      outward.copy(across).multiplyScalar(limb.side === "Left" ? 1 : -1)
+
+      // The elbow first: it lands in the forearm's own local rotation, which
+      // the shoulder turn below then carries along unchanged. The hinge is
+      // `l x u` and not the `u x l` it looks like it should be -- a vector
+      // rotated about `u x l` travels away from `u`, not toward it, and taking
+      // that on trust gave a man shrugging at his forge.
+      hinge.crossVectors(lower, upper)
+      if (hinge.lengthSq() > 1e-9) {
+        hinge.normalize()
+        turnBone(limb.fore, hinge, (flexion(upper, lower) - ELBOW_REST) * rest)
+      }
+
+      // Then the shoulder, sideways only: about the axis that runs front to
+      // back, so whatever lean the clip has is left where it is.
+      hinge.crossVectors(outward, bodyUp).normalize()
+      turnBone(limb.arm, hinge, (ARM_OUT - sideways(upper, outward, bodyUp)) * rest)
+    }
+  }
+
   /** The lowest the hand goes, and when -- the blow, near enough to aim by. */
   const bottom = (probe: (moment: number) => any) => {
     const at = new THREE.Vector3()
@@ -810,6 +902,20 @@ export function makeBench(
       stretchArms()
       was = elapsed
 
+      // easeArms aims at an absolute angle, so it has to read the pose the
+      // mixer just wrote and not the one on screen, which already carries the
+      // last frame's correction -- hence the update before it. And the update
+      // after, so the hammer and the palms below aim at the arms as corrected
+      // rather than as the clip left them. Both are skipped while he is
+      // swinging, when there is no correction to see.
+      const working = acts.working.getEffectiveWeight()
+      const rest = 1 - working
+      if (rest > 0.01) {
+        figure.updateWorldMatrix(true, true)
+        easeArms(rest)
+        figure.updateWorldMatrix(true, true)
+      }
+
       face?.at(elapsed)
 
       flame.tick(elapsed)
@@ -824,17 +930,14 @@ export function makeBench(
       forearm.getWorldQuaternion(turned)
       skyward.set(0, 1, 0).applyQuaternion(turned.invert())
       hanging.setFromUnitVectors(HANDLE, skyward)
-      const working = acts.working.getEffectiveWeight()
       hammer.holder.quaternion.copy(hanging).slerp(swinging, working)
 
 
       // Turn the palms in. He was generated in an A-pose with his hands turned
       // up, and every clip retargeted onto him inherits it, so at rest he holds
-      // an invisible tray. This is a roll about the forearm and nothing else --
-      // the arm keeps the angle the clip gave it. Turning arms was tried twice
-      // and both times folded him into his own chest; the wrist is where the
-      // difference actually was.
-      const rest = 1 - working
+      // an invisible tray. This is a roll about the forearm and nothing else:
+      // where the arm hangs is easeArms' business, above, and how far round
+      // the palm is turned within it is this one's.
       if (rest > 0.01) {
         figure.getWorldPosition(middleOf)
         for (const palm of palms) {

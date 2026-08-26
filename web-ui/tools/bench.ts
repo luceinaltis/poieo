@@ -273,5 +273,39 @@ for (let frame = 0; frame < FRAMES; frame += 1) {
   }
 }
 
+// And the two angles that decide whether a standing man looks like one, read
+// off the figure as rendered rather than off the clip. The elbow correction
+// went in with its hinge the wrong way round and opened the joint instead of
+// closing it; the stills showed a man shrugging and nobody could say by how
+// much. A person hangs 5 to 10 degrees clear of the ribs and bends the elbow
+// 10 to 20.
+{
+  const at = (n: string) => {
+    const o = bench.group.getObjectByName(n)
+    return o ? o.getWorldPosition(new THREE.Vector3()) : null
+  }
+  const lines: string[] = ["resting arms, as rendered:"]
+  for (let step = 0; step < 6; step += 1) bench.tick(20000 + step * 200)
+  const hips = at("Hips"), nape = at("neck")
+  const la = at("LeftArm"), ra = at("RightArm")
+  if (hips && nape && la && ra) {
+    const up = nape.clone().sub(hips).normalize()
+    const across = la.clone().sub(ra).normalize()
+    for (const side of ["Left", "Right"]) {
+      const sh = at(side + "Arm")!, el = at(side + "ForeArm")!, wr = at(side + "Hand")!
+      const u = el.clone().sub(sh).normalize()
+      const l = wr.clone().sub(el).normalize()
+      const out = across.clone().multiplyScalar(side === "Left" ? 1 : -1)
+      const bend = (Math.acos(Math.max(-1, Math.min(1, u.dot(l)))) * 180) / Math.PI
+      const away = (Math.atan2(u.dot(out), -u.dot(up)) * 180) / Math.PI
+      lines.push(`  ${side}: elbow bent ${bend.toFixed(1)} deg, upper arm ${away.toFixed(1)} deg out from the body`)
+    }
+  }
+  const sheet = document.createElement("pre")
+  sheet.style.cssText = "margin:12px 16px;font-size:16px;color:#9f9"
+  sheet.textContent = lines.join(String.fromCharCode(10))
+  document.body.append(sheet)
+}
+
 // Playwright waits on this rather than on a timer.
 document.body.dataset.ready = "yes"
