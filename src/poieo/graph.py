@@ -14,7 +14,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .errors import ExpressionError, SpecError
+from .errors import ExpressionError, SpecError, describe_invalid
 from .expr import compile_expr, validate_template
 
 
@@ -249,6 +249,11 @@ def load_graph(path: str | Path) -> GraphSpec:
     try:
         graph = GraphSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(f"{path}: invalid graph: {exc}") from exc
+        # A node's settings are as much a part of a graph file as the graph's
+        # own, so both sets are what a near-miss is measured against.
+        raise SpecError(
+            f"{path}: invalid graph: "
+            f"{describe_invalid(exc, tuple(GraphSpec.model_fields) + tuple(NodeSpec.model_fields))}"
+        ) from exc
     graph.source_path = path
     return graph

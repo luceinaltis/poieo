@@ -159,7 +159,11 @@ def describe_invalid(exc: Exception, known_keys: "tuple[str, ...]" = ()) -> str:
         kind = err.get("type", "")
         if kind == "extra_forbidden":
             line = f"'{key}' is not a setting here"
-            close = get_close_matches(key, known_keys, n=1)
+            # Matched on the last segment, so a typo nested inside a list --
+            # `nodes.0.promt` in a graph file -- gets the same help it would
+            # get at the top level. The reader is told the full path and
+            # asked about the word they actually mistyped.
+            close = get_close_matches(key.rsplit(".", 1)[-1], known_keys, n=1)
             if close:
                 line += f" -- did you mean '{close[0]}'?"
         elif kind == "missing":

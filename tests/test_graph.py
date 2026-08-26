@@ -81,6 +81,37 @@ def test_missing_file_is_a_spec_error(tmp_path):
         load_graph(tmp_path / "nope.yaml")
 
 
+def test_a_typo_in_a_node_is_explained_and_a_near_miss_suggested(tmp_path):
+    """A graph file's typo has to read like a task file's typo.
+
+    Every other spec loader runs its failure through describe_invalid; the
+    graph loader used to hand the reader pydantic's own rendering, which is
+    the exact thing describe_invalid exists to stop.
+    """
+    path = tmp_path / "g.yaml"
+    path.write_text(
+        "name: g\nentry: a\nnodes: [{id: a, type: llm, promt: hi}]\n", encoding="utf-8"
+    )
+
+    with pytest.raises(SpecError) as caught:
+        load_graph(path)
+
+    message = str(caught.value)
+    assert "'nodes.0.promt' is not a setting here" in message
+    # The suggestion has to survive the nesting: a node's settings are as
+    # much a part of a graph file as the graph's own.
+    assert "did you mean 'prompt'?" in message
+    assert "errors.pydantic.dev" not in message
+
+
+def test_a_missing_graph_key_is_named_plainly(tmp_path):
+    path = tmp_path / "g.yaml"
+    path.write_text("entry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n", encoding="utf-8")
+
+    with pytest.raises(SpecError, match="'name' is required"):
+        load_graph(path)
+
+
 def _agent_graph(**overrides):
     node = {
         "id": "work",
