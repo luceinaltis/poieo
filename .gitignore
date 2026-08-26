@@ -7,9 +7,10 @@ dist/
 .venv/
 venv/
 
-# run logs
-.poieo/
-examples/.poieo/
+# what a run leaves, and what the memory rebuilds
+runs/
+worktrees/
+memory/cache/
 
 # secrets
 .env

@@ -32,11 +32,16 @@ API key means Claude, an answering Ollama means local, neither means mock —
 and writes what it found into ordinary files:
 
 ```
-poieo.yaml               store · default binding · tasks folder
-bindings/default.yaml    what detection found (plus mock.yaml, always)
-tasks/hello.yaml         a sample card, disabled; run it by hand
-.gitignore               gains a `.poieo/` line
+poieo.yaml                       store · default binding · tasks folder
+models/default.yaml              what detection found (plus mock.yaml, always)
+tasks/hello.yaml                 a sample card, disabled; run it by hand
+memory/longterm/constitution.md  an empty page, with the rule for filling it
+.gitignore                       gains memory/cache/, runs/, worktrees/
 ```
+
+That folder is the project. Everything hangs off it, and each folder answers one
+question — `models/` which model, `tasks/` what to do, `memory/` what it
+remembers, `runs/` what happened, `worktrees/` where it works.
 
 Inside a project, commands need no flags. `poieo run tasks/hello.yaml` takes
 the project's binding (and says so), `poieo runs list` reads the project's
@@ -52,8 +57,8 @@ exercised offline.
 
 ```bash
 poieo show     examples/graphs/support-triage.yaml
-poieo validate examples/graphs/support-triage.yaml -b examples/bindings/claude.yaml
-poieo run      examples/graphs/support-triage.yaml -b examples/bindings/mock.yaml \
+poieo validate examples/graphs/support-triage.yaml -b examples/models/claude.yaml
+poieo run      examples/graphs/support-triage.yaml -b examples/models/mock.yaml \
                --set message="the export button crashes on 2.1"
 poieo daemon   examples/poieo.yaml --once
 ```
@@ -107,7 +112,7 @@ recorded as a `node_tool_call` event in the run log.
 Path confinement prevents accidents, not malice: a shell command can still
 name absolute paths. Point `workdir` only at a directory you would let a
 junior contributor loose in — or turn on isolation, below. `poieo run
-examples/graphs/agent-task.yaml -b examples/bindings/mock.yaml --set
+examples/graphs/agent-task.yaml -b examples/models/mock.yaml --set
 workdir=/tmp/demo` exercises the loop offline.
 
 ### Isolation
@@ -214,7 +219,7 @@ Add a backend with `poieo.providers.register("my_type", MyProvider)`; binding fi
 name it from that point on.
 
 ```bash
-poieo check -b examples/bindings/local.yaml      # probe every declared endpoint
+poieo check -b examples/models/local.yaml      # probe every declared endpoint
 ```
 
 ## The short form: a task
@@ -233,8 +238,8 @@ prompt: |
 Point a daemon config at the folder, and every file in it becomes a flow:
 
 ```yaml
-store: .poieo
-binding: bindings/local.yaml
+store: runs
+binding: models/local.yaml
 tasks: tasks/
 ```
 
@@ -248,7 +253,7 @@ and `binding` are there when a task outgrows the defaults.
 |---|---|
 | `poieo tasks tasks/` | list the cards, with their schedules (a daemon config works too) |
 | `poieo show tasks/keep-improving.yaml` | render the flow the task expands to |
-| `poieo run tasks/keep-improving.yaml -b bindings/mock.yaml` | run it once |
+| `poieo run tasks/keep-improving.yaml -b models/mock.yaml` | run it once |
 | `poieo eject tasks/keep-improving.yaml` | write that flow out as a real graph; the task names it from then on |
 
 The sugar is not a second configuration format: a task expands into exactly the
@@ -299,16 +304,21 @@ screen ships.
 
 ### What a project remembers
 
-The journal is short-term on purpose -- old lines age out of the prompt. The
-long-term half lives beside the cards, and creating the folder is the whole
-opt-in:
+The journal is short-term on purpose -- old lines age out of the prompt. Both
+halves live under `memory/`, and `longterm/` existing is the whole opt-in:
 
 ```
-tasks/
-  memory/
-    constitution.md      one page, in front of every run of every task
-    facts/batch-cap.md   one file per learned entry
+memory/
+  shortterm/keep-improving.md     one journal per card, named for it
+  longterm/
+    constitution.md               one page, in front of every run of every task
+    facts/batch-cap.md            one file per learned entry
+  cache/                          rebuilt from the above; delete it freely
 ```
+
+`poieo init` writes an empty `constitution.md` -- comments only, which are
+stripped before any prompt sees it, so a project that leaves it alone runs
+exactly as one with no memory at all. Delete the folder if you want none.
 
 The page is read whole, every run, first -- put the rules there that every
 task must hold and that nothing would think to look up. The entries under
@@ -317,13 +327,14 @@ task's name, or a path), by the words they share with what the task is about,
 and above all by naming the code the task is working on. A wrong entry is not
 deleted; set `superseded_by:` and it steps aside, file and history intact.
 
-Every run also leaves a full record under `.poieo/episodes/`, unclipped where
+Every run also leaves a full record under `runs/results/`, beside the event
+stream the same run wrote to `runs/events/` -- unclipped where
 the run log clips, so an entry's `source:` can name the run that taught it --
 anything the project claims to remember can be walked back to the work it
 came from. Ask what a task will actually see, and why:
 
 ```bash
-poieo memory tasks/                      # the page, the counts, the lookup
+poieo memory                             # the page, the counts, the lookup
 poieo memory tasks/keep-improving.yaml   # the exact block its next run gets
 ```
 
@@ -355,7 +366,7 @@ The pass keeps entries and sets entries aside; it never deletes, never
 overwrites, and never touches the constitution -- that page stays yours.
 The model that reads the night is the binding's `learner` role (unbound, it
 falls through to the default), so pointing your best model at it is one
-line. `.poieo/learning.jsonl` says what every pass did, and an empty pass
+line. `memory/cache/learning.jsonl` says what every pass did, and an empty pass
 is a fine answer: most nights teach nothing.
 
 Connections wear in with use. When two connected entries both did real work
@@ -363,7 +374,7 @@ in a run that succeeded -- their own words in what the run produced, not
 merely having been shown -- the path between them wears a little, and later
 retrievals carry it sooner and one step further. Wear fades on its own,
 no entry's connections can hoard it, and it lives outside git in
-`.poieo/strength.json`: delete the file and the project forgets which paths
+`memory/cache/strength.json`: delete the file and the project forgets which paths
 were worn, relearns them by working, and loses not one word of meaning.
 
 And the memory keeps itself honest. `poieo memory` flags what deserves a
@@ -377,7 +388,7 @@ deleted never. A pass may also *suggest* one line for the constitution;
 poieo records and shows it, and only you ever edit that page.
 
 Entries the project learns are sealed to the files they were written
-about: the pass keeps the exact bytes under `.poieo/blobs/`, so a doubt
+about: the pass keeps the exact bytes under `memory/cache/blobs/`, so a doubt
 means the content really differs -- a merely-touched file raises nothing --
 and the original an entry was written against is always there to open.
 Keepsakes are copies, never meaning: one that nothing references anymore
@@ -432,8 +443,8 @@ triggers and cannot spin each other up.
 ## The resident layer
 
 ```yaml
-store: .poieo
-binding: bindings/hybrid.yaml
+store: runs
+binding: models/hybrid.yaml
 flows:
   - name: triage
     graph: graphs/support-triage.yaml
@@ -520,8 +531,8 @@ Every run appends a JSONL event stream under `<store>/runs/<run_id>.jsonl` plus 
 line in `<store>/runs/index.jsonl`.
 
 ```bash
-poieo runs list --store examples/.poieo
-poieo runs show 20260820T130243-36ef0db5 --store examples/.poieo
+poieo runs list --store examples/runs
+poieo runs show 20260820T130243-36ef0db5 --store examples/runs
 ```
 
 Each `node_finished` event records which binding served it, the model that answered, the
@@ -538,11 +549,11 @@ import asyncio
 from poieo import load_graph, load_binding, execute, ProviderPool, RunStore
 
 graph = load_graph("examples/graphs/support-triage.yaml")
-binding = load_binding("examples/bindings/hybrid.yaml")
+binding = load_binding("examples/models/hybrid.yaml")
 
 async def main():
     async with ProviderPool(binding) as pool:
-        result = await execute(graph, binding, pool, RunStore(".poieo"),
+        result = await execute(graph, binding, pool, RunStore("runs"),
                                input={"message": "the export button crashes"})
         print(result.status, result.path, result.outputs)
 

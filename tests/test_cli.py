@@ -132,15 +132,20 @@ def test_check_probes_every_provider():
 
 
 def test_help_tells_two_stories_not_seventeen():
-    """Six commands visible -- the person's and the agent's story. The rest
-    keep working, hidden: plumbing, files the user edits directly, or views
-    the web board owns."""
+    """A short list -- the person's and the agent's story. The rest keep
+    working, hidden: plumbing, files the user edits directly, or views the
+    web board owns.
+
+    `memory` and `learn` are on it. A feature nobody can find is a feature
+    nobody has, and these two are how a person sees what the project has
+    come to believe and decides whether it should.
+    """
     visible = {
         info.name or info.callback.__name__
         for info in app.registered_commands
         if not info.hidden
     }
-    assert visible == {"init", "daemon", "run", "validate", "check"}
+    assert visible == {"init", "daemon", "run", "validate", "check", "memory", "learn"}
     # `runs` rides along as a sub-app.
     result = runner.invoke(app, ["--help"])
     assert "runs" in result.stdout

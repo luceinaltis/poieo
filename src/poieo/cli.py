@@ -146,7 +146,7 @@ def init() -> None:
     report, reason = init_project(Path.cwd())
     for action, relative in report:
         line = f"{action}  {relative}"
-        if relative == "bindings/default.yaml":
+        if relative == "models/default.yaml":
             line += f"   ({reason})"
         typer.echo(line)
     typer.echo("")
@@ -788,25 +788,39 @@ def note(
     _ok(f"noted in {task.journal_path()}")
 
 
-@app.command(hidden=True)
+def _memory_target(path: "Path | None") -> "tuple[TaskSpec | None, Path]":
+    """The card being asked about, and the project it belongs to.
+
+    A card, a folder, or nothing at all -- and in every case the answer is
+    the project's root, because that is where its memory is. `poieo memory`
+    from inside `tasks/` and from the folder above must not disagree.
+    """
+    if path is None:
+        return None, layout_for().root
+    task = _load_card(path) if path.is_file() else None
+    if task is None and not path.is_dir():
+        _fail(f"no such folder or card: {path}")
+    return task, layout_for(task.dir if task is not None else path).root
+
+
+@app.command()
 @_guarded
 def memory(
-    path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
+    path: Optional[Path] = typer.Argument(
+        None, help="A card, or a folder in the project [default: here]."
+    ),
 ) -> None:
     """What this project remembers, and what a task would be shown.
 
     Read-only on purpose: authoring belongs to the editor and git, and the
     lookup machinery rebuilds itself, so there is nothing here to run.
     """
-    task = _load_card(path) if path.is_file() else None
-    if task is None and not path.is_dir():
-        _fail(f"no such folder or card: {path}")
-    project = task.dir if task is not None else path
+    task, project = _memory_target(path)
 
     report = memory_report(project)
     if report is None:
         typer.echo(
-            f"no memory here yet. Start one with {project / 'memory' / 'constitution.md'}"
+            f"no memory here yet. Start one with {layout_for(project).constitution()}"
         )
         return
 
@@ -834,19 +848,18 @@ def memory(
         typer.echo(read_memory(project, task, preview=True) or "(nothing)")
 
 
-@app.command(hidden=True)
+@app.command()
 @_guarded
 def learn(
-    path: Path = typer.Argument(..., help="Tasks folder, or one task card."),
+    path: Optional[Path] = typer.Argument(
+        None, help="A card, or a folder in the project [default: here]."
+    ),
     binding: Optional[Path] = typer.Option(
         None, "--binding", "-b", help="Binding whose `learner` role reads the night."
     ),
 ) -> None:
     """Run one learning pass: read the run records, keep what stays true."""
-    task = _load_card(path) if path.is_file() else None
-    if task is None and not path.is_dir():
-        _fail(f"no such folder or card: {path}")
-    project = task.dir if task is not None else path
+    task, project = _memory_target(path)
 
     binding, _ = _find_binding(binding, task)
     if binding is None:
@@ -855,7 +868,7 @@ def learn(
 
     if not keeps_memory(project):
         typer.echo(
-            f"no memory here yet. Start one with {project / 'memory' / 'constitution.md'}"
+            f"no memory here yet. Start one with {layout_for(project).constitution()}"
         )
         return
 

@@ -281,7 +281,7 @@ def test_init_on_a_bare_machine_defaults_to_mock(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
-    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
     assert "mock" in default
     # The last lines orient the user: the next two commands to type.
     assert "poieo run tasks/hello.yaml" in result.stdout
@@ -295,7 +295,7 @@ def test_an_initialized_project_loads_and_runs_offline(tmp_path, monkeypatch):
     from poieo.daemon import load_config
 
     config = load_config(tmp_path / "poieo.yaml")  # a project that cannot load is an init bug
-    assert config.binding == "bindings/default.yaml"
+    assert config.binding == "models/default.yaml"
     result = runner.invoke(app, ["run", "tasks/hello.yaml"])
     assert result.exit_code == 0, result.output
     assert "completed" in result.stdout
@@ -307,7 +307,7 @@ def test_init_with_an_api_key_writes_a_claude_binding(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
-    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
     assert "anthropic" in default
 
 
@@ -319,7 +319,7 @@ def test_init_with_ollama_writes_a_binding_naming_an_installed_model(tmp_path, m
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
-    default = (tmp_path / "bindings" / "default.yaml").read_text(encoding="utf-8")
+    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
     assert "ollama" in default
     assert "llama3.2:3b" in default
 
@@ -347,7 +347,10 @@ def test_init_writes_the_agents_manual(tmp_path, monkeypatch):
     # The loop an agent must know: edit a file, then prove it loads.
     assert "poieo validate" in manual
     assert "poieo run" in manual
-    assert ".poieo/" in manual
+    # The layout, so an agent looks in the right folders.
+    assert "models/" in manual
+    assert "longterm/constitution.md" in manual
+    assert "runs/" in manual and "memory/cache/" in manual
     # Claude Code loads the same page through its own file.
     assert "@AGENTS.md" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
 
@@ -372,7 +375,10 @@ def test_init_appends_to_gitignore_without_clobbering_it(tmp_path, monkeypatch):
     assert runner.invoke(app, ["init"]).exit_code == 0
     lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "node_modules/" in lines
-    assert lines.count(".poieo/") == 1
+    # Every line poieo needs, and each of them exactly once however many
+    # times init is run.
+    for ignored in ("memory/cache/", "runs/", "worktrees/"):
+        assert lines.count(ignored) == 1, ignored
 
 
 def test_the_store_flag_still_wins_over_the_project(tmp_path, monkeypatch):
