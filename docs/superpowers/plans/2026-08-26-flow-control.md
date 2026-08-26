@@ -32,16 +32,16 @@ npm test --workspace web-ui        # Task 3 only; run mode, never watch
 
 Tests:
 
-- [ ] pausing a waiting flow skips the fire that comes due; resume rearms and
+- [x] pausing a waiting flow skips the fire that comes due; resume rearms and
       the next scheduled fire runs (interval trigger: the grid, not a make-up).
-- [ ] a paused `loop`-trigger flow does not spin (no runs, bounded wall-clock).
-- [ ] `run_now` on a waiting `manual`-trigger flow runs it once — the first
+- [x] a paused `loop`-trigger flow does not spin (no runs, bounded wall-clock).
+- [x] `run_now` on a waiting `manual`-trigger flow runs it once — the first
       way a manual flow has ever run inside the daemon.
-- [ ] `run_now` on a paused flow runs once; the flow is still paused after.
-- [ ] `run_now` while a run is in flight is refused and no second run starts.
-- [ ] a flow that paused itself after 3 identical failures resumes via
+- [x] `run_now` on a paused flow runs once; the flow is still paused after.
+- [x] `run_now` while a run is in flight is refused and no second run starts.
+- [x] a flow that paused itself after 3 identical failures resumes via
       `resume()` and its failure counter starts over.
-- [ ] shutdown while paused, and while holding a due fire, exits cleanly.
+- [x] shutdown while paused, and while holding a due fire, exits cleanly.
 
 PR `feat: a flow can be paused, resumed, and run right now`.
 
@@ -60,9 +60,9 @@ PR `feat: a flow can be paused, resumed, and run right now`.
 
 Tests:
 
-- [ ] each verb against a live test daemon changes what `/api/flows` reports.
-- [ ] pause twice → 200 both times; resume a waiting flow → 200.
-- [ ] `/run` during a run → 409 naming the run; unknown flow → 404 on all three.
+- [x] each verb against a live test daemon changes what `/api/flows` reports.
+- [x] pause twice → 200 both times; resume a waiting flow → 200.
+- [x] `/run` during a run → 409 naming the run; unknown flow → 404 on all three.
 
 PR `feat: pause, resume and run-now land on the web API`.
 
@@ -82,8 +82,8 @@ PR `feat: pause, resume and run-now land on the web API`.
 
 Tests:
 
-- [ ] vitest: the toggle sends pause when waiting and resume when paused; the
+- [x] vitest: the toggle sends pause when waiting and resume when paused; the
       buttons reflect a 409 refusal instead of pretending.
-- [ ] vitest: run-now disabled while running.
+- [x] vitest: run-now disabled while running.
 
 PR `feat: the board can hold a task, wake it, and run it right now`.

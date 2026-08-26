@@ -128,7 +128,7 @@ What poieo offers the user stacks in layers:
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
 | **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
-| **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | half: observe and review are live; control is next |
+| **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | most: observe, review and control are live; creating a card from the board is next |
 
 The key insight: **"keeps working" is a property of the flow, not of a node.**
 An agent node is one step of the flow using its hands; running forever is the
@@ -180,7 +180,8 @@ Autonomous execution needs explicit fences:
 
 ## Roadmap
 
-Items 1–5, 7 and 8 have shipped; 6 — the web control plane — is the open
+Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: flow control
+(pause / resume / run-now) is live end to end; task card CRUD is the open
 slice.
 
 1. **Agent node** — build the hands: file and shell tools confined to a
@@ -206,7 +207,9 @@ slice.
    (`docs/superpowers/specs/2026-08-22-container-isolation-design.md`)
 6. **Web control plane** — task card CRUD and flow control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
-   flow add/remove/pause.
+   flow add/remove/pause. Flow control — pause, resume, run now, from runner
+   to board — has shipped; CRUD and the editor fold-in remain.
+   (`docs/superpowers/specs/2026-08-26-flow-control-design.md`)
 7. **Tasks that work together** — a task can leave a line in another task's
    journal, read on that task's next run. News, not orders, and no way to
    spin: a note wakes nobody.

@@ -82,12 +82,14 @@ Three routes beside accept and discard:
 ```
 POST /api/flows/{flow}/pause    -> 200 {"status": "paused"}
 POST /api/flows/{flow}/resume   -> 200 {"status": "waiting"}
-POST /api/flows/{flow}/run      -> 200 {"status": "running"}
+POST /api/flows/{flow}/run      -> 200 {"status": "starting"}
 ```
 
 Unknown flow: 404. Pausing a paused flow and resuming a waiting one are
-idempotent 200s — the answer is the state, not a scolding. `run` on a flow
-mid-run: 409, with the current run's id in the body.
+idempotent 200s — the answer is the state, not a scolding. `run` answers
+"starting" rather than "running" because the runner picks the fire up on
+the next turn of the shared event loop, after the response is gone; `run`
+on a flow mid-run: 409, with the current run's id in the body.
 
 `web/server.py` opens with a standing rule: accept and discard are the only
 routes that write anything, "if you are adding a third, stop." The rule is
