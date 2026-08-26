@@ -180,6 +180,27 @@ async def test_carry_state_feeds_the_next_iteration():
     assert results[1].state.get("latest_draft")
 
 
+async def test_results_are_a_window_not_a_history(monkeypatch):
+    """A RunResult carries the run's whole outputs and state. A loop flow with
+    no cooldown makes one per fire for the daemon's lifetime, and only the tail
+    is ever read -- last_result by the API, one pass's worth by --once."""
+    from poieo.daemon import service
+
+    monkeypatch.setattr(service, "RESULTS_KEPT", 3)
+
+    config = load_config(EXAMPLES / "poieo.yaml")
+    config.flows = [f for f in config.flows if f.name == "triage"]
+    config.flows[0].trigger = TriggerSpec(type="loop", max_iterations=8)
+
+    daemon = Daemon(config, store=NullStore())
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=30)
+
+    runner = daemon.runners[0]
+    assert len(runner.results) == 3  # the window, not all eight
+    assert runner.last_result is results[-1]
+    assert runner.last_result.iteration == 8
+
+
 async def test_flow_runner_exposes_live_status():
     config = load_config(EXAMPLES / "poieo.yaml")
     config.flows = [f for f in config.flows if f.name == "triage"]
