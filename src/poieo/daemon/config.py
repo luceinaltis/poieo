@@ -269,6 +269,7 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
     Called at startup so a typo in any flow surfaces immediately rather than at
     3am when its cron finally fires.
     """
+    from ..providers import check_credentials
     from ..runtime.executor import preflight
 
     selected = [f for f in config.flows if f.enabled or not enabled_only]
@@ -299,6 +300,10 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         graph, binding = generated, bindings[binding_path]
         try:
             preflight(graph, binding, workdir=workdir)
+            # A key the machine does not have is a misconfiguration, and it
+            # reads the environment rather than a server -- so it belongs
+            # here, beside the other things that must not wait until 3am.
+            check_credentials(binding, graph.roles())
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 

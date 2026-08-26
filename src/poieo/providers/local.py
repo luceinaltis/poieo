@@ -7,7 +7,6 @@ These speak their own native HTTP APIs over httpx. (The Claude backend lives in
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from typing import Any
 
@@ -15,7 +14,15 @@ import httpx
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, ToolCall, ToolDef, Usage
+from .base import (
+    LLMRequest,
+    LLMResponse,
+    Provider,
+    ToolCall,
+    ToolDef,
+    Usage,
+    credential_for,
+)
 
 _RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
@@ -78,12 +85,8 @@ class _HttpProvider(Provider):
     def __init__(self, name: str, spec: ProviderSpec):
         super().__init__(name, spec)
         headers = {"content-type": "application/json"}
-        if spec.api_key_env:
-            key = os.environ.get(spec.api_key_env)
-            if not key:
-                raise ProviderError(
-                    f"provider '{name}': ${spec.api_key_env} is not set", provider=name
-                )
+        key = credential_for(name, spec)
+        if key:
             headers["authorization"] = f"Bearer {key}"
         self.client = httpx.AsyncClient(
             base_url=(spec.base_url or "").rstrip("/"),

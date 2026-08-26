@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import anthropic
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, ToolCall, ToolDef, Usage
+from .base import (
+    LLMRequest,
+    LLMResponse,
+    Provider,
+    ToolCall,
+    ToolDef,
+    Usage,
+    credential_for,
+)
 
 # Model families that take `thinking: {type: "adaptive"}`. Older models use the
 # removed `budget_tokens` form, so we omit `thinking` for them entirely rather
@@ -105,13 +112,8 @@ class AnthropicProvider(Provider):
         }
         if spec.base_url:
             kwargs["base_url"] = spec.base_url
-        if spec.api_key_env:
-            key = os.environ.get(spec.api_key_env)
-            if not key:
-                raise ProviderError(
-                    f"provider '{name}': ${spec.api_key_env} is not set",
-                    provider=name,
-                )
+        key = credential_for(name, spec)
+        if key:
             kwargs["api_key"] = key
         # With no explicit key the SDK resolves ANTHROPIC_API_KEY, an auth token,
         # or an `ant auth login` profile on its own.

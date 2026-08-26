@@ -169,6 +169,26 @@ def test_missing_api_key_env_is_reported_at_construction():
         )
 
 
+def test_credential_for_reads_the_environment_without_opening_anything(monkeypatch):
+    """The rule in one place, so it can be checked before anything is armed.
+    A provider that names no variable resolves its own credential and is not
+    this function's business."""
+    from poieo.providers import credential_for
+
+    spec = ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    assert credential_for("vllm", spec) is None
+
+    keyed = ProviderSpec(
+        type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY"
+    )
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-whatever")
+    assert credential_for("vllm", keyed) == "sk-whatever"
+
+    monkeypatch.delenv("POIEO_TEST_KEY")
+    with pytest.raises(ProviderError, match=r"\$POIEO_TEST_KEY is not set"):
+        credential_for("vllm", keyed)
+
+
 def test_unknown_provider_type_is_rejected():
     with pytest.raises(Exception):
         ProviderSpec(type="telepathy")
