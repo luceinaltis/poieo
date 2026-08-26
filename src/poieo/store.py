@@ -165,7 +165,12 @@ class RunStore:
 
 
 class NullStore(RunStore):
-    """Drops everything -- used by ``poieo run --no-log`` and by tests."""
+    """Drops everything -- used by ``poieo run --no-log`` and by tests.
+
+    Empty on both sides. Dropping the writes but inheriting the reads would
+    leave it answering from whatever ``./.poieo`` a folder happens to hold,
+    which is somebody else's history rather than none.
+    """
 
     def __init__(self) -> None:
         super().__init__(".poieo")
@@ -175,3 +180,12 @@ class NullStore(RunStore):
 
     def record_summary(self, summary: dict[str, Any]) -> None:  # noqa: D102
         return
+
+    def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
+        return []
+
+    def run(self, run_id: str) -> dict[str, Any] | None:  # noqa: D102
+        return None
+
+    def events(self, run_id: str) -> Iterator[dict[str, Any]]:  # noqa: D102
+        return iter(())
