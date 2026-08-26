@@ -3,10 +3,31 @@
 from __future__ import annotations
 
 import abc
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..binding import ProviderSpec, ResolvedModel
+from ..errors import ProviderError
+
+
+def credential_for(name: str, spec: ProviderSpec) -> str | None:
+    """The key this provider needs from the environment, or None when it names
+    no variable and lets its own SDK resolve one.
+
+    One place, so that reading the rule costs nothing: no client is opened and
+    no request is made, which is what lets the daemon check every credential
+    before it arms a single flow rather than discovering a missing key when a
+    trigger fires at 3am.
+    """
+    if not spec.api_key_env:
+        return None
+    key = os.environ.get(spec.api_key_env)
+    if not key:
+        raise ProviderError(
+            f"provider '{name}': ${spec.api_key_env} is not set", provider=name
+        )
+    return key
 
 
 @dataclass(slots=True)

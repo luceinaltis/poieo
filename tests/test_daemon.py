@@ -153,6 +153,66 @@ def test_startup_validates_every_flow_up_front(tmp_path):
         load_flows(load_config(path))
 
 
+def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
+    (tmp_path / "b.yaml").write_text(
+        f"providers: {{p: {{type: openai_compatible, base_url: 'http://x/v1', "
+        f"api_key_env: {variable}}}}}\n"
+        "default: {provider: p, model: m}\n"
+    )
+    (tmp_path / "g.yaml").write_text(
+        "name: g\nentry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n"
+    )
+    path = tmp_path / "d.yaml"
+    path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
+    return path
+
+
+def test_startup_refuses_a_flow_whose_credential_is_missing(tmp_path, monkeypatch):
+    """A binding naming an environment variable the machine does not have is
+    a misconfiguration, and it must surface where `poieo daemon` starts --
+    not eight turns into the run its trigger fires at 3am."""
+    monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
+    with pytest.raises(SpecError, match=r"flow 'f'.*\$POIEO_TEST_KEY is not set"):
+        load_flows(load_config(_keyed_config(tmp_path)))
+
+
+def test_startup_accepts_the_same_flow_once_the_key_is_there(tmp_path, monkeypatch):
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-whatever")
+    assert len(load_flows(load_config(_keyed_config(tmp_path)))) == 1
+
+
+def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypatch):
+    """The same rule check_isolation follows: a flow that is not going to run
+    must still show up in `poieo flows`, or the check gets in the way of the
+    fix it is asking for."""
+    monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
+    path = _keyed_config(tmp_path)
+    path.write_text(
+        "binding: b.yaml\nflows: [{name: f, graph: g.yaml, enabled: false}]\n"
+    )
+    assert len(load_flows(load_config(path), enabled_only=False)) == 1
+
+
+def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
+    """Only what the graph will actually call. An extra endpoint declared in
+    the binding but bound to no role must not hold the daemon down."""
+    monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
+    (tmp_path / "b.yaml").write_text(
+        "providers:\n"
+        "  used: {type: mock}\n"
+        "  spare: {type: openai_compatible, base_url: 'http://x/v1', "
+        "api_key_env: POIEO_TEST_KEY}\n"
+        "default: {provider: used, model: m}\n"
+    )
+    (tmp_path / "g.yaml").write_text(
+        "name: g\nentry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n"
+    )
+    path = tmp_path / "d.yaml"
+    path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
+
+    assert len(load_flows(load_config(path))) == 1
+
+
 async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch):
     config = load_config(EXAMPLES / "poieo.yaml")
     for flow in config.flows:

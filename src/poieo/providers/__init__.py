@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..binding import KNOWN_PROVIDER_TYPES, BindingSpec, ProviderSpec
 from ..errors import ProviderError
 from .anthropic_provider import AnthropicProvider
-from .base import LLMRequest, LLMResponse, Provider, Usage
+from .base import LLMRequest, LLMResponse, Provider, Usage, credential_for
 from .local import OllamaProvider, OpenAICompatibleProvider
 from .mock import MockProvider
 
@@ -31,6 +31,26 @@ def build_provider(name: str, spec: ProviderSpec) -> Provider:
     if cls is None:
         raise ProviderError(f"unknown provider type '{spec.type}'", provider=name)
     return cls(name, spec)
+
+
+def check_credentials(binding: BindingSpec, roles: set[str]) -> None:
+    """Every credential the given roles will ask for, before anything is armed.
+
+    Reads the environment and opens nothing, so this is a load-time check
+    rather than a probe: `poieo check` is the one that talks to a server.
+
+    Only the roles a graph actually names -- a spare endpoint declared in the
+    binding but bound to nothing is not going to be called, and holding the
+    daemon down for its key would make the binding file harder to keep than
+    the flows it serves.
+    """
+    checked: set[str] = set()
+    for role in sorted(roles):
+        resolved = binding.resolve(role)
+        if resolved.provider_name in checked:
+            continue
+        checked.add(resolved.provider_name)
+        credential_for(resolved.provider_name, resolved.provider)
 
 
 class ProviderPool:
@@ -74,5 +94,7 @@ __all__ = [
     "ProviderPool",
     "Usage",
     "build_provider",
+    "check_credentials",
+    "credential_for",
     "register",
 ]
