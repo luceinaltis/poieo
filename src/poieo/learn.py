@@ -30,6 +30,7 @@ from .memory import (
     CONSTITUTION,
     Fact,
     doubts,
+    episodes_dir,
     load_fact,
     memory_root,
     read_page,
@@ -145,7 +146,7 @@ def _bookmark(project_dir: Path) -> str:
 
 
 def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
-    root = project_dir / ".poieo" / "episodes"
+    root = episodes_dir(project_dir)
     if not root.is_dir():
         return []
     records = []

@@ -91,6 +91,18 @@ def test_optional_keys_land_on_the_node(tmp_path):
     assert (node.role, node.tools, node.max_turns) == ("worker", ["files"], 5)
 
 
+def test_a_card_that_names_no_tools_gets_the_one_default_toolset(tmp_path):
+    """The card's default and the agent node's default are one constant.
+
+    They used to be two lists spelled the same in two modules, which is a
+    thing that stays true right up until it doesn't.
+    """
+    from poieo.tools import DEFAULT_TOOLSETS
+
+    _, graph = expand(load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n")))
+    assert graph.nodes[0].tools == DEFAULT_TOOLSETS
+
+
 @pytest.mark.parametrize(
     "body, expected",
     [
