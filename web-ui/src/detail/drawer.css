@@ -39,8 +39,7 @@
   margin: 0;
 }
 
-.drawer-head button,
-.drawer-run {
+.drawer-head button {
   background: #221e18;
   border: 1px solid #2e2820;
   border-radius: 4px;
@@ -49,21 +48,6 @@
   font: inherit;
   font-size: 0.85em;
   padding: 3px 8px;
-}
-
-.drawer-runs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.drawer-run {
-  display: flex;
-  gap: 8px;
-}
-
-.drawer-run[data-picked="true"] {
-  border-color: #6b6257;
 }
 
 .control {
@@ -153,7 +137,6 @@
 
   /* Thumbs, not pointers. */
   .drawer-head button,
-  .drawer-run,
   .control button,
   .decide-take,
   .decide-drop {
