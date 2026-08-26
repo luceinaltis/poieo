@@ -7,10 +7,9 @@
  * daemon is shown, never swallowed.
  */
 
-import { useState } from "react"
-
 import { pause, resume, runNow } from "../api"
 import type { ControlAnswer } from "../api"
+import { useAct } from "../useAct"
 
 export function Control({
   flow,
@@ -21,18 +20,7 @@ export function Control({
   status: string
   onActed(): void
 }) {
-  const [busy, setBusy] = useState(false)
-  const [refusal, setRefusal] = useState<string | null>(null)
-
-  const act = async (go: () => Promise<ControlAnswer>) => {
-    if (busy) return
-    setBusy(true)
-    setRefusal(null)
-    const answer = await go()
-    setBusy(false)
-    if (answer.ok) onActed()
-    else setRefusal(answer.error || "That didn't work.")
-  }
+  const { busy, refused, act } = useAct<ControlAnswer>(onActed)
 
   const paused = status === "paused"
   const running = status === "running"
@@ -58,7 +46,9 @@ export function Control({
         {running ? "running…" : "run now"}
       </button>
 
-      {refusal ? <p className="control-refusal">{refusal}</p> : null}
+      {refused ? (
+        <p className="control-refusal">{refused.error || "That didn't work."}</p>
+      ) : null}
     </div>
   )
 }

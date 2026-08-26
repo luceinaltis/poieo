@@ -181,26 +181,32 @@ def create_app(daemon: Any) -> Starlette:
     async def flow_discard(request: Request) -> JSONResponse:
         return await _decide(request, "discard", "from_run_id")
 
-    def _no_flow(request: Request) -> JSONResponse:
+    def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
+        """The runner a control route is about, or the 404 saying there isn't one."""
         flow = request.path_params["flow"]
-        return JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+        runner = _runner_for(daemon, flow)
+        if runner is None:
+            return None, JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+        return runner, None
+
+    async def _hold(request: Request, verb: str) -> JSONResponse:
+        """pause and resume differ only in which verb; both answer the state."""
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        return JSONResponse({"status": getattr(runner, verb)()})
 
     async def flow_pause(request: Request) -> JSONResponse:
-        runner = _runner_for(daemon, request.path_params["flow"])
-        if runner is None:
-            return _no_flow(request)
-        return JSONResponse({"status": runner.pause()})
+        return await _hold(request, "pause")
 
     async def flow_resume(request: Request) -> JSONResponse:
-        runner = _runner_for(daemon, request.path_params["flow"])
-        if runner is None:
-            return _no_flow(request)
-        return JSONResponse({"status": runner.resume()})
+        return await _hold(request, "resume")
 
     async def flow_run(request: Request) -> JSONResponse:
-        runner = _runner_for(daemon, request.path_params["flow"])
-        if runner is None:
-            return _no_flow(request)
+        # Not folded in with the other two: its refusal is a different answer.
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
         if not runner.run_now():
             # Iterations never overlap; the refusal names the run in the way.
             return JSONResponse(

@@ -89,12 +89,6 @@
 }
 
 .diff-note button {
-  background: #221e18;
-  border: 1px solid #2e2820;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
   font-size: 0.9em;
   margin-top: 4px;
   padding: 2px 8px;
@@ -155,26 +149,8 @@
   gap: 6px;
 }
 
-.decide-take,
-.decide-drop {
-  background: #221e18;
-  border: 1px solid #2e2820;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85em;
-  padding: 3px 8px;
-}
-
 .decide-take {
   border-color: #4a4034;
-}
-
-.decide-take:disabled,
-.decide-drop:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 .decide-drop[data-do="discard-confirm"] {

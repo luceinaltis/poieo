@@ -10,6 +10,7 @@ import { useState } from "react"
 
 import { accept, discard } from "../api"
 import type { Decision } from "../api"
+import { useAct } from "../useAct"
 import "./review.css"
 
 function Refusal({ decision }: { decision: Decision }) {
@@ -47,22 +48,18 @@ export function Decide({
   runId: string | null
   onDone(): void
 }) {
-  const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false)
-  const [refused, setRefused] = useState<Decision | null>(null)
+  const { busy, refused, act: send } = useAct<Decision>(onDone)
 
   // Per-work controls always apply; the card's only apply to a waiting pile.
   if (!runId && pending <= 0) return null
 
+  // Once a request has actually gone out the confirmation step is over: the
+  // reader either got what they asked for or got told why not, and being
+  // asked again is noise. A click that found one already in flight changes
+  // nothing, including this.
   const act = async (go: () => Promise<Decision>) => {
-    if (busy) return
-    setBusy(true)
-    setRefused(null)
-    const decision = await go()
-    setBusy(false)
-    setAsking(false)
-    if (decision.ok) onDone()
-    else setRefused(decision)
+    if (await send(go)) setAsking(false)
   }
 
   const preview =
