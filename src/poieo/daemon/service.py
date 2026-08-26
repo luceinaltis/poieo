@@ -128,7 +128,7 @@ class FlowRunner:
         # A flow that says where it works keeps a private copy of it.
         workdir = config.workdir_path(flow.spec)
         self.checkpoint = (
-            Checkpoint(workdir, flow.spec.name, config.store_path())
+            Checkpoint(workdir, flow.spec.name, config.layout().worktrees())
             if workdir is not None
             else None
         )
@@ -442,7 +442,7 @@ class Daemon:
     ):
         self.config = config
         self.flows = load_flows(config)
-        base_store = store or RunStore(config.store_path())
+        base_store = store or RunStore(config.layout().runs())
         if web_port is not None and not isinstance(base_store, BroadcastStore):
             base_store = BroadcastStore(base_store)
         self.store = base_store

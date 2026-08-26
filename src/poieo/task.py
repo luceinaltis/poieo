@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
 from .layout import Layout
-from .memory import read_memory, write_episode
+from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -325,7 +325,7 @@ def record_run(task: TaskSpec, result: Any) -> None:
     """
     # The journal keeps the line; the episode keeps the whole result. Both
     # swallow their own failures, so neither can cost the other.
-    write_episode(task, result)
+    write_result(task, result)
     if result.status == "completed":
         kind, text = "did", closing_line(result)
     else:

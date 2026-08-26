@@ -61,13 +61,13 @@ def test_runs_list_without_store_outside_a_project_says_so(tmp_path, monkeypatch
     # The product's voice, never a traceback -- and the message names where
     # it looked, so an empty answer is still an informative one.
     assert "no runs recorded" in result.stdout
-    assert ".poieo" in result.stdout
+    assert "runs" in result.stdout
     assert "TypeError" not in result.stdout
 
 
 def test_runs_list_without_store_reads_the_projects_store(tmp_path, monkeypatch):
     _mark(tmp_path, "version: 1\nstore: logs\n")
-    index = tmp_path / "logs" / "runs" / "index.jsonl"
+    index = tmp_path / "logs" / "index.jsonl"
     index.parent.mkdir(parents=True)
     index.write_text(
         json.dumps({"run_id": "r-1", "status": "completed", "steps": 3}) + "\n",
@@ -83,7 +83,7 @@ def test_runs_list_without_store_reads_the_projects_store(tmp_path, monkeypatch)
 
 def test_runs_show_without_store_reads_the_projects_store(tmp_path, monkeypatch):
     _mark(tmp_path, "version: 1\nstore: logs\n")
-    log = tmp_path / "logs" / "runs" / "r-2.jsonl"
+    log = tmp_path / "logs" / "events" / "r-2.jsonl"
     log.parent.mkdir(parents=True)
     log.write_text(
         json.dumps({"run_id": "r-2", "type": "run_started", "at": "t0"}) + "\n",
@@ -138,11 +138,39 @@ def test_run_inside_a_project_logs_into_the_projects_store(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["run", str(card)])
     assert result.exit_code == 0, result.output
-    assert (tmp_path / ".poieo" / "runs" / "index.jsonl").exists()
+    assert (tmp_path / "runs" / "index.jsonl").exists()
     # One history, not two: the run log lands in the project store, never
     # beside the card. (Episodes stay beside the card -- the memory system
     # reads them there, and that is a different record.)
-    assert not (card.parent / ".poieo" / "runs").exists()
+    assert not (card.parent / "runs").exists()
+
+
+def test_a_runs_events_and_its_result_land_under_one_roof(tmp_path, monkeypatch):
+    """Two halves of one account, keyed by the same run id. They are written
+    by different code -- `RunStore` from the executor, `write_result` from
+    `record_run` -- and if the two disagree about where `runs/` is, a
+    learning pass can read one and not the other."""
+    card = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["run", str(card)]).exit_code == 0
+
+    events = list((tmp_path / "runs" / "events").glob("*.jsonl"))
+    results = list((tmp_path / "runs" / "results").glob("*.json"))
+    assert len(events) == 1 and len(results) == 1
+    assert events[0].stem == results[0].stem
+
+
+def test_store_moves_the_events_and_the_results_together(tmp_path, monkeypatch):
+    card = _project(tmp_path)
+    (tmp_path / "poieo.yaml").write_text(
+        "version: 1\nbinding: bindings/mock.yaml\nstore: elsewhere\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["run", str(card)]).exit_code == 0
+
+    assert list((tmp_path / "elsewhere" / "events").glob("*.jsonl"))
+    assert list((tmp_path / "elsewhere" / "results").glob("*.json"))
+    assert not (tmp_path / "runs").exists()
 
 
 def test_the_binding_flag_still_beats_the_project(tmp_path, monkeypatch):
@@ -350,7 +378,7 @@ def test_init_appends_to_gitignore_without_clobbering_it(tmp_path, monkeypatch):
 def test_the_store_flag_still_wins_over_the_project(tmp_path, monkeypatch):
     _mark(tmp_path, "version: 1\nstore: logs\n")
     elsewhere = tmp_path / "elsewhere"
-    index = elsewhere / "runs" / "index.jsonl"
+    index = elsewhere / "index.jsonl"
     index.parent.mkdir(parents=True)
     index.write_text(
         json.dumps({"run_id": "r-3", "status": "completed", "steps": 1}) + "\n",
@@ -372,7 +400,7 @@ def _project_with_cards(root, *, card_body="name: {n}\nfolder: .\nprompt: do {n}
         "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
     )
     (root / "poieo.yaml").write_text(
-        "version: 1\nstore: .poieo\nbinding: bindings/b.yaml\ntasks: tasks/\n"
+        "version: 1\nstore: runs\nbinding: bindings/b.yaml\ntasks: tasks/\n"
     )
     for name in ("alpha", "beta", "gamma"):
         (root / "tasks" / f"{name}.yaml").write_text(card_body.format(n=name))
@@ -397,7 +425,7 @@ def test_finding_a_project_does_not_read_its_cards(tmp_path, monkeypatch):
 
     assert parsed == []
     assert project is not None
-    assert project.store_path() == tmp_path / ".poieo"
+    assert project.store_path() == tmp_path / "runs"
     assert project.binding == "bindings/b.yaml"
 
 

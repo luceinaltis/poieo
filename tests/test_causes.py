@@ -162,7 +162,7 @@ def test_the_summary_row_carries_the_cause(tmp_path):
     )
     assert result.exit_code == 1
     row = json.loads(
-        (store / "runs" / "index.jsonl").read_text(encoding="utf-8").splitlines()[-1]
+        (store / "index.jsonl").read_text(encoding="utf-8").splitlines()[-1]
     )
     assert row["cause"]["slug"] == "bad_output"
 

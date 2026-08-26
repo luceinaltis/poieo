@@ -33,7 +33,7 @@ def _episode(
     status="completed",
     shown=None,
 ):
-    episodes = project / ".poieo" / "episodes"
+    episodes = at(project).results()
     episodes.mkdir(parents=True, exist_ok=True)
     record = {"run_id": run_id, "task": task, "status": status, "summary": summary}
     if shown is not None:
@@ -715,7 +715,7 @@ async def test_a_damaged_pass_log_stops_neither_reader(tmp_path):
 
 async def test_a_record_without_a_run_id_cannot_jam_the_bookmark(tmp_path):
     project = _project(tmp_path)
-    episodes = project / ".poieo" / "episodes"
+    episodes = at(project).results()
     episodes.mkdir(parents=True)
     (episodes / "20260824T010000-aaaaaaaa.json").write_text(
         json.dumps({"task": "importer", "status": "completed", "summary": "quiet"}),

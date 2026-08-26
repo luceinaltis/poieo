@@ -52,8 +52,10 @@ class ProjectSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     version: int = 1
-    # Where run logs are written.
-    store: str = ".poieo"
+    # Where a run's events and its result are written. Moving this moves
+    # the whole run history and nothing else -- the memory stays with the
+    # project, and so do the working copies.
+    store: str = "runs"
     # Default binding for flows -- and for tasks, and for `poieo run`.
     binding: str | None = None
     # A folder of task files; each one expands into a flow. See poieo.task.
@@ -183,7 +185,7 @@ _MARKER_BODY = """\
 # The project: which flows run, on what trigger, against which binding.
 # Paths resolve relative to this file.
 version: 1
-store: .poieo
+store: runs
 binding: bindings/default.yaml
 tasks: tasks/
 """

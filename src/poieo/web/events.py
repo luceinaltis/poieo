@@ -18,7 +18,7 @@ class BroadcastStore(RunStore):
     It subclasses RunStore to *be* one where a RunStore is expected, but every
     method routes to ``_inner`` -- reads included. Inheriting the reads made
     them read ``self.root`` instead, which is only the same file by accident:
-    over a NullStore the wrapper answered the web API from whatever ``.poieo``
+    over a NullStore the wrapper answered the web API from whatever ``runs/``
     the daemon happened to be standing in.
     """
 

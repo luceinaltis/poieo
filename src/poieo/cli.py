@@ -31,6 +31,7 @@ from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
+from .layout import layout_for
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
 from .project import find_project, find_project_file, init_project
@@ -324,7 +325,7 @@ def view(
         None, "--binding", "-b", help="Show which model each role resolves to."
     ),
     output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Where to write the page [.poieo/views/<name>.html]."
+        None, "--output", "-o", help="Where to write the page [./<name>.html]."
     ),
     serve: bool = typer.Option(
         False, "--serve", help="Serve the page over http instead of just writing it."
@@ -339,7 +340,11 @@ def view(
     title = graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows"
     page = render_page(graphs, spec, title=title)
 
-    target = output or Path(".poieo/views") / f"{graphs[0].name}.html"
+    # A page you asked for, in the folder you asked from. There was a
+    # default hidden under `.poieo/views/`, resolved against the cwd
+    # rather than the project -- so where it landed depended on which
+    # folder you happened to be standing in. Nothing else reads it.
+    target = output or Path(f"{graphs[0].name}.html")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(page, encoding="utf-8")
     _ok(f"wrote {target}")
@@ -453,7 +458,7 @@ def edit(
             _fail("no running Jupyter server found; pass --token and --jupyter-root")
 
     page = render_editor(graph, spec, save=save)
-    target = output or Path(".poieo/views") / f"{graph.name}-edit.html"
+    target = output or Path(f"{graph.name}-edit.html")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(page, encoding="utf-8")
     _ok(f"wrote {target}")
@@ -491,7 +496,7 @@ def run(
     ),
     store: Optional[Path] = typer.Option(
         None, "--store",
-        help="Run-log directory [default: beside the card, or ./.poieo].",
+        help="Where a run's events and result go [default: the project's runs/].",
     ),
     no_log: bool = typer.Option(False, "--no-log", help="Do not write a run log."),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
@@ -517,14 +522,13 @@ def run(
     card_input = task_payload(task) if task is not None else {}
     payload = {**card_input, **_parse_input(input_json, set_)}
     if store is None:
-        # The project's store first, so a card run by hand and the same card
-        # run by the daemon write one history, not two. Outside a project the
-        # old rule holds: history lives beside the task.
-        project = find_project()
-        if project is not None:
-            store = project.store_path()
-        else:
-            store = task.dir / ".poieo" if task is not None else Path(".poieo")
+        # A card run by hand and the same card run by the daemon write one
+        # history, not two -- so this asks from the card's own folder, and
+        # `layout_for` answers with the project's `runs/` if the card is in
+        # one, or the folder's own if it is not. That used to be two branches
+        # here, and the first of them looked from the cwd rather than from
+        # the card: standing somewhere else changed where the history went.
+        store = layout_for(task.dir if task is not None else Path.cwd()).runs()
     run_store = NullStore() if no_log else RunStore(store)
 
     hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
@@ -729,7 +733,9 @@ def flows(
             typer.echo(f"        {item.binding.resolve(role).describe()}")
 
         workdir = config.workdir_path(item.spec)
-        if workdir and not Checkpoint(workdir, item.spec.name, config.store_path()).available():
+        if workdir and not Checkpoint(
+            workdir, item.spec.name, config.layout().worktrees()
+        ).available():
             # Degraded, not broken: the flow still runs tonight.
             typer.secho(
                 f"        note: changes in {workdir} can't be reviewed or undone",
@@ -930,11 +936,10 @@ def eject(
 
 
 def _resolve_store(store: "Path | None") -> Path:
-    """Flag, then the project's ``store:``, then ``./.poieo``."""
+    """Flag, then the project's ``store:``, then ``./runs``."""
     if store is not None:
         return store
-    project = find_project()
-    return project.store_path() if project is not None else Path(".poieo")
+    return layout_for().runs()
 
 
 @runs_app.command("list")
@@ -942,7 +947,7 @@ def _resolve_store(store: "Path | None") -> Path:
 def runs_list(
     store: Optional[Path] = typer.Option(
         None, "--store",
-        help="Run-log directory [default: the project's store, or ./.poieo].",
+        help="Where the run history lives [default: the project's runs/].",
     ),
     limit: int = typer.Option(20, "--limit", "-n"),
     flow: Optional[str] = typer.Option(None, "--flow"),
@@ -976,7 +981,7 @@ def runs_show(
     run_id: str = typer.Argument(..., help="Run id from `poieo runs list`."),
     store: Optional[Path] = typer.Option(
         None, "--store",
-        help="Run-log directory [default: the project's store, or ./.poieo].",
+        help="Where the run history lives [default: the project's runs/].",
     ),
     as_json: bool = typer.Option(False, "--json", help="Print raw events."),
 ) -> None:

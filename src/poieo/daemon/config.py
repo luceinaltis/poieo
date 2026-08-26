@@ -201,7 +201,7 @@ def config_for_tasks_folder(folder: Path) -> DaemonConfig:
     card follows the same rule.
     """
     folder = folder.resolve()
-    config = DaemonConfig(store=str(folder / ".poieo"), tasks=str(folder))
+    config = DaemonConfig(store=str(folder / "runs"), tasks=str(folder))
     config.source_path = folder / "poieo.yaml"  # anchors relative paths
     _load_tasks(config)
     return config

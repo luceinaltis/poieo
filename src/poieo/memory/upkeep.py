@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..blob import digest, kept
-from .episodes import episodes_dir, used_in
+from .results import results_dir, used_in
 from .facts import PAGE_BUDGET, Fact, keeps_memory, read_page, readable_facts
 from .index import fts_available
 
@@ -55,7 +55,7 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
 def accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
     """Is the memory earning its keep? A read over the recent run records,
     never a stored counter, and nothing anywhere acts on it."""
-    root = episodes_dir(project_dir)
+    root = results_dir(project_dir)
     if not root.is_dir():
         return None
     by_slug = {fact.slug: fact for fact in facts}
