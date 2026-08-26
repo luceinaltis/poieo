@@ -1,7 +1,10 @@
-"""Read-only observation API served from inside the daemon.
+"""The observation API served from inside the daemon.
 
-Everything here answers "what is happening / what happened" -- no route
-mutates anything. Control endpoints belong to the next roadmap slice.
+Almost everything here answers "what is happening / what happened". The two
+exceptions are accept and discard, which are the morning review: the moment
+the user's own files are allowed to change, and the only routes in this file
+that write anything. They are marked again where they are registered. If you
+are adding a third, stop.
 """
 
 from __future__ import annotations
