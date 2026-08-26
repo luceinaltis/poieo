@@ -48,6 +48,7 @@ from .task import (
     load_tasks,
     read_journal,
     record_run,
+    task_payload,
 )
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
@@ -211,17 +212,6 @@ def _load_spec(path: Path, task: "TaskSpec | None" = None) -> GraphSpec:
     if task.graph:
         return load_graph(task.resolve(task.graph))
     return build_graph(task)
-
-
-def _task_payload(task: "TaskSpec | None") -> dict[str, Any]:
-    """What a task's generated graph expects in its input, beyond the user's."""
-    if task is None:
-        return {}
-    payload = {"journal": read_journal(task.journal_path())}
-    memory = read_memory(task.dir, task)
-    if memory is not None:
-        payload["memory"] = memory
-    return payload
 
 
 @app.command()
@@ -524,7 +514,8 @@ def run(
     if supplied_by is not None and not as_json:
         typer.echo(f"binding    {binding}  (from {supplied_by})")
 
-    payload = {**_task_payload(task), **_parse_input(input_json, set_)}
+    card_input = task_payload(task) if task is not None else {}
+    payload = {**card_input, **_parse_input(input_json, set_)}
     if store is None:
         # The project's store first, so a card run by hand and the same card
         # run by the daemon write one history, not two. Outside a project the

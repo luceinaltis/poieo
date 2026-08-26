@@ -11,10 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec, load_document, load_graph
-from ..memory import check_memory, read_memory
+from ..memory import check_memory
 from ..project import ProjectSpec
 from ..tools import Isolation
-from ..task import TaskSpec, expand, load_tasks, read_journal
+from ..task import TaskSpec, expand, load_tasks, task_payload
 from .triggers import TriggerSpec
 
 
@@ -136,11 +136,7 @@ class LoadedFlow(BaseModel):
             payload.update(data)
         task = config.tasks_by_flow.get(self.spec.name)
         if task is not None:
-            # Re-read every run: a note left at 8am is in effect at 9am.
-            payload["journal"] = read_journal(task.journal_path())
-            memory = read_memory(task.dir, task)
-            if memory is not None:
-                payload["memory"] = memory
+            payload.update(task_payload(task))
         return payload
 
 
