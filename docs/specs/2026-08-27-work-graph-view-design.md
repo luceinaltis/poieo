@@ -45,9 +45,14 @@ This is deliberately *not* two levels with a mode switch. A mode makes the
 reader remember which one they are in; nesting does not. The vocabulary a reader
 has to learn is: **a node, and some nodes open.**
 
-Opening also buys information. Collapsed, the handoff arrow leaves the border —
-"when chores finishes". Expanded, it leaves the node it actually leaves from —
-"when chores reaches `gate`".
+Opening also buys information. Shut, a handoff is an arrow between two borders
+and says "when chores finishes". Open, the nodes a run can *stop* on are marked
+inside the border, so the same arrow now says which of them it leaves from.
+
+The arrow itself stays border to border rather than anchoring on the node. Its
+geometry is then arithmetic over the layout instead of a measurement of the
+DOM, which is what lets it be tested at all — and a box that grows when it
+opens does not drag its arrows around the screen.
 
 ## 2. One rule explains the whole picture
 

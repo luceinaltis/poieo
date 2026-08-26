@@ -57,6 +57,11 @@ function seed(state: StageState, flows: FlowRow[]): StageState {
     workers[name] = {
       ...existing,
       tracked: blank.tracked,
+      // Structure is the listing's to state, not the event stream's: a graph
+      // edited while the page was open arrives here or nowhere.
+      then: blank.then,
+      shape: blank.shape,
+      trigger: blank.trigger,
       lastRun: blank.lastRun ?? existing.lastRun,
       status:
         blank.status === "running"

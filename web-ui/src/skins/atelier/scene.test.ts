@@ -31,6 +31,9 @@ function worker(over: Partial<Worker> = {}): Worker {
     lastRun: null,
     recent: NOTHING,
     tracked: true,
+    then: [],
+    shape: { entry: "", nodes: [] },
+    trigger: "",
     ...over,
   }
 }

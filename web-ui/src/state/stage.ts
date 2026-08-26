@@ -9,7 +9,7 @@
 
 import { NOTHING, fold } from "../review/rollup"
 import type { Rollup } from "../review/rollup"
-import type { FlowRow, PoieoEvent, RunSummary } from "../types"
+import type { Arrow, FlowRow, GraphShape, PoieoEvent, RunSummary } from "../types"
 
 export interface ToolCall {
   name: string
@@ -43,6 +43,18 @@ export interface Worker {
   recent: Rollup
   /** Whether this flow keeps a private copy, and so can have changes at all. */
   tracked: boolean
+  /**
+   * The wiring: which flow works next, and what this one walks on the way.
+   *
+   * Structure rather than state -- it changes only when a file does, while
+   * everything above it moves every few seconds. A view that draws both keeps
+   * them apart for exactly that reason: the layout is settled once, and only
+   * the highlight moves after that.
+   */
+  then: Arrow[]
+  shape: GraphShape
+  /** How this flow is scheduled, as the daemon describes it. Structure too. */
+  trigger: string
 }
 
 export interface StageState {
@@ -74,6 +86,9 @@ function blankWorker(): Worker {
     lastRun: null,
     recent: NOTHING,
     tracked: false,
+    then: [],
+    shape: { entry: "", nodes: [] },
+    trigger: "",
   }
 }
 
@@ -83,6 +98,9 @@ export function initialStage(flows: FlowRow[]): StageState {
     workers[row.name] = {
       ...blankWorker(),
       tracked: row.into !== null,
+      then: row.then,
+      shape: row.shape,
+      trigger: row.trigger,
       status: row.status === "running" ? "running" : "waiting",
       lastRun: row.last_run
         ? {

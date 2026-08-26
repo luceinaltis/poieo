@@ -1,0 +1,179 @@
+.basic {
+  position: relative;
+  padding: 24px;
+}
+
+.basic-wires {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+}
+
+.basic-wire {
+  fill: none;
+  stroke: #4a4034;
+  stroke-width: 1.5;
+}
+
+.basic-word {
+  fill: #9a9086;
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.basic-flow {
+  position: absolute;
+  width: 260px;
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.basic-flow:hover {
+  border-color: #4a4034;
+}
+
+.basic-head {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.basic-pick {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  font: inherit;
+  gap: 8px;
+  padding: 0;
+  text-align: left;
+}
+
+.basic-name {
+  font-weight: 600;
+}
+
+.basic-dot {
+  border-radius: 50%;
+  flex: none;
+  height: 8px;
+  width: 8px;
+  background: #6b6257;
+}
+
+.basic-flow[data-status="running"] .basic-dot {
+  background: #d8a657;
+}
+
+.basic-flow[data-status="error"] .basic-dot {
+  background: #d16d5a;
+}
+
+.basic-toggle {
+  background: none;
+  border: 0;
+  color: #6b6257;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.basic-toggle:hover {
+  color: #d8c8a8;
+}
+
+.basic-when,
+.basic-tally {
+  color: #9a9086;
+  font-size: 0.85em;
+}
+
+/* Shut, a flow is a border with a name on it and nothing else -- which is all
+   a node says until you open it. */
+.basic-flow[data-open="false"] .basic-inside,
+.basic-flow[data-open="false"] .basic-tools,
+.basic-flow[data-open="false"] .basic-said {
+  display: none;
+}
+
+.basic-inside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 2px 0;
+}
+
+.basic-node {
+  background: #262019;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: #9a9086;
+  font-size: 0.8em;
+  padding: 1px 7px;
+  position: relative;
+}
+
+/* The step from one node to the next: the same arrow as the one between two
+   borders, at the scale where it costs nothing to draw. */
+.basic-node + .basic-node::before {
+  color: #4a4034;
+  content: "→";
+  left: -9px;
+  position: absolute;
+}
+
+.basic-node[data-here="true"] {
+  background: #3a2f1e;
+  border-color: #d8a657;
+  color: #e8dcc8;
+}
+
+/* Where the run can stop, and so where a handoff leaves from. */
+.basic-node[data-exit="true"] {
+  border-color: #4a4034;
+  border-style: dashed;
+}
+
+.basic-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.basic-tool {
+  background: #262019;
+  border-radius: 3px;
+  font-size: 0.8em;
+  padding: 1px 6px;
+}
+
+.basic-tool[data-error="true"] {
+  color: #d16d5a;
+}
+
+.basic-said {
+  color: inherit;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.basic-said[data-thinking="true"] {
+  color: #9a9086;
+  font-style: italic;
+}
