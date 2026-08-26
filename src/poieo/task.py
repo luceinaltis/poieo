@@ -385,6 +385,23 @@ def _bookmark(lines: list[str]) -> int:
     return 0
 
 
+def task_payload(task: TaskSpec) -> dict[str, Any]:
+    """What a card's generated graph is given, beyond the user's own input.
+
+    One statement of the rule, because there are two runners: `poieo run` on
+    a card by hand, and the daemon on the same card at 3am. They have to
+    agree, and a rule written twice is a rule that eventually doesn't.
+
+    Both halves are re-read on every call rather than cached: a note left at
+    8am is in effect at 9am.
+    """
+    payload: dict[str, Any] = {"journal": read_journal(task.journal_path())}
+    memory = read_memory(task.dir, task)
+    if memory is not None:
+        payload["memory"] = memory
+    return payload
+
+
 def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
     """The journal as a prompt sees it: what is new, then what came before.
 

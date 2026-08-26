@@ -13,7 +13,6 @@ import pytest
 
 from conftest import EXAMPLES
 from poieo.binding import BindingSpec
-from poieo.cli import _task_payload
 from poieo.daemon.config import load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
@@ -22,7 +21,13 @@ from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
 from poieo.memory import check_memory, load_facts
-from poieo.task import JOURNAL_WIDTH, load_task, record_run, system_block
+from poieo.task import (
+    JOURNAL_WIDTH,
+    load_task,
+    record_run,
+    system_block,
+    task_payload,
+)
 
 from test_task import write_task
 
@@ -181,7 +186,7 @@ def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
     assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
         name=task.name, folder=task.folder_path()
     )
-    assert "memory" not in _task_payload(task)
+    assert "memory" not in task_payload(task)
 
     flow, config = _daemon_flow(tmp_path)
     assert "memory" not in flow.read_input(config)
@@ -204,8 +209,22 @@ def test_the_constitution_reaches_the_prompt_on_the_cli_path(tmp_path):
     _remember(tmp_path)
 
     assert "{{ input.memory }}" in system_block(task)
-    block = _task_payload(task)["memory"]
+    block = task_payload(task)["memory"]
     assert "Never push to main." in block
+
+
+def test_both_runners_hand_a_card_the_same_input(tmp_path):
+    """`poieo run` on a card and the daemon on that card must agree.
+
+    The two used to spell the rule out separately, once in cli.py and once in
+    daemon/config.py, so a third input key could reach one runner and not the
+    other -- and the daemon's half only shows up at 3am.
+    """
+    task = _task(tmp_path)
+    _remember(tmp_path)
+    flow, config = _daemon_flow(tmp_path)
+
+    assert flow.read_input(config) == task_payload(task)
 
 
 def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
@@ -236,7 +255,7 @@ def test_an_oversized_page_warns_and_still_loads_whole(tmp_path, caplog):
     _remember(tmp_path, long_page)
 
     with caplog.at_level("WARNING", logger="poieo.memory"):
-        block = _task_payload(task)["memory"]
+        block = task_payload(task)["memory"]
 
     assert long_page.strip() in block
     assert any("trim" in message for message in caplog.messages)
@@ -248,7 +267,7 @@ def test_editor_notes_in_the_page_never_reach_the_prompt(tmp_path):
         tmp_path,
         "<!-- ask the four questions before adding a line -->\nNever push to main.",
     )
-    block = _task_payload(task)["memory"]
+    block = task_payload(task)["memory"]
     assert "Never push to main." in block
     assert "four questions" not in block
 
@@ -260,7 +279,7 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
         name=task.name, folder=task.folder_path()
     )
-    assert "memory" not in _task_payload(task)
+    assert "memory" not in task_payload(task)
 
 
 def test_listing_a_project_writes_nothing(tmp_path):
