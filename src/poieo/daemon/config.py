@@ -303,7 +303,11 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
             # A key the machine does not have is a misconfiguration, and it
             # reads the environment rather than a server -- so it belongs
             # here, beside the other things that must not wait until 3am.
-            check_credentials(binding, graph.roles())
+            # Enabled flows only, for the reason check_isolation gives: a
+            # flow that is not going to run must still be listable, or the
+            # check gets in the way of the fix.
+            if flow.enabled:
+                check_credentials(binding, graph.roles())
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 

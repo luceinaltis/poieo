@@ -181,6 +181,18 @@ def test_startup_accepts_the_same_flow_once_the_key_is_there(tmp_path, monkeypat
     assert len(load_flows(load_config(_keyed_config(tmp_path)))) == 1
 
 
+def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypatch):
+    """The same rule check_isolation follows: a flow that is not going to run
+    must still show up in `poieo flows`, or the check gets in the way of the
+    fix it is asking for."""
+    monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
+    path = _keyed_config(tmp_path)
+    path.write_text(
+        "binding: b.yaml\nflows: [{name: f, graph: g.yaml, enabled: false}]\n"
+    )
+    assert len(load_flows(load_config(path), enabled_only=False)) == 1
+
+
 def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     """Only what the graph will actually call. An extra endpoint declared in
     the binding but bound to no role must not hold the daemon down."""
