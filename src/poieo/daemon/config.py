@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
-from ..graph import GraphSpec, load_document, load_graph
+from ..graph import Branch, GraphSpec, load_document, load_graph
 from ..layout import find_project_file
 from ..memory import check_memory, keeps_memory
 from ..project import ProjectSpec, load_project
@@ -48,6 +48,15 @@ class FlowSpec(BaseModel):
     # Where this flow's commands may run. Absent means the host, as before.
     isolation: Isolation | None = None
     on_error: Literal["continue", "stop"] = "continue"
+
+    # Which flow should work next, and on what condition. The router's own
+    # when/to/label, one level up: first match wins, and `to: null` is the
+    # router's own null -- matched, and deliberately no further.
+    #
+    # There is no `default`, because a finished run does not have to go
+    # anywhere. Falling off the end means nothing happens, which is what
+    # almost every flow does; a catch-all is a last branch reading `"true"`.
+    then: list[Branch] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check_name(self) -> FlowSpec:
@@ -157,6 +166,7 @@ def load_config(path: str | Path) -> DaemonConfig:
         ) from exc
     config.source_path = path.resolve()
     _load_tasks(config)
+    check_handoffs(config)
     return config
 
 
@@ -237,7 +247,98 @@ def config_for_tasks_folder(folder: Path) -> DaemonConfig:
         config = DaemonConfig(store=str(folder / "runs"), tasks=str(folder))
         config.source_path = folder / "poieo.yaml"  # anchors relative paths
     _load_tasks(config)
+    check_handoffs(config)
     return config
+
+
+def _first_cycle(edges: dict[str, list[str]]) -> list[str] | None:
+    """One cycle in the handoff wiring, as the names on it, or None.
+
+    One is enough: a person shown the first loop fixes it and runs again, and
+    listing every loop in a tangle is a wall of text nobody reads.
+    """
+    open_: set[str] = set()
+    done: set[str] = set()
+    path: list[str] = []
+
+    def walk(name: str) -> list[str] | None:
+        open_.add(name)
+        path.append(name)
+        for target in edges.get(name, ()):
+            if target in open_:
+                return [*path[path.index(target) :], target]
+            if target not in done:
+                found = walk(target)
+                if found is not None:
+                    return found
+        path.pop()
+        open_.discard(name)
+        done.add(name)
+        return None
+
+    for name in edges:
+        if name not in done:
+            found = walk(name)
+            if found is not None:
+                return found
+    return None
+
+
+def check_handoffs(config: DaemonConfig) -> None:
+    """Every `then:` target exists and is not the sender; the rest is warnings.
+
+    Not a validator on the config: a task card becomes a flow only after the
+    tasks folder has been read, and a handoff is entitled to name one. So this
+    runs once every flow is known, which is also the last moment before a
+    trigger could fire.
+    """
+    known = {flow.name: flow for flow in config.flows}
+
+    for flow in config.flows:
+        for index, branch in enumerate(flow.then):
+            if branch.to is None:
+                continue  # matched, and deliberately no further
+            if branch.to == flow.name:
+                raise SpecError(
+                    f"flow '{flow.name}' then[{index}] hands off to itself. A "
+                    f"flow's own next run is what `loop` and `carry_state` are for."
+                )
+            target = known.get(branch.to)
+            if target is None:
+                # Say what was there. A handoff naming a flow that does not
+                # exist is a typo far more often than it is a missing flow.
+                roster = ", ".join(sorted(n for n in known if n != flow.name))
+                raise SpecError(
+                    f"flow '{flow.name}' then[{index}] hands off to unknown flow "
+                    f"'{branch.to}'. There is: {roster or '(nothing else)'}"
+                )
+            if not target.enabled:
+                log.warning(
+                    "flow '%s' hands off to '%s', which is disabled: those "
+                    "handoffs will be dropped. `enabled: false` is the off "
+                    "switch, so this may well be deliberate.",
+                    flow.name,
+                    branch.to,
+                )
+        if flow.then and flow.trigger.type == "loop":
+            log.warning(
+                "flow '%s' hands off and runs on a `loop` trigger, so everything "
+                "downstream inherits that pace. At most one handoff waits, and "
+                "the rest are dropped.",
+                flow.name,
+            )
+
+    cycle = _first_cycle(
+        {f.name: [b.to for b in f.then if b.to is not None] for f in config.flows}
+    )
+    if cycle is not None:
+        # A warning, not a failure: review -> fix -> review is a legitimate
+        # feedback loop, and the chain-depth guard is what keeps it finite.
+        log.warning(
+            "handoffs form a cycle: %s. That is allowed -- the chain depth "
+            "limit bounds it -- but check it is what you meant.",
+            " -> ".join(cycle),
+        )
 
 
 def check_isolation(flows: list[FlowSpec]) -> None:
