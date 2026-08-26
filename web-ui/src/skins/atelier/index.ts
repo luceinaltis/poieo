@@ -16,7 +16,7 @@ import { step } from "./clock"
 import { makeFace } from "./face"
 import { makeFire } from "./fire"
 import { reading } from "./meter"
-import { flexion, sideways, stretcher } from "./reach"
+import { flexion, shortestWay, sideways, stretcher } from "./reach"
 import { figurePose, lampLit, shelfCount } from "./scene"
 import {
   REST_PACE,
@@ -130,6 +130,23 @@ const HAMMER_LONG = 0.34
  * the backswing goes up behind that shoulder.
  */
 const HAMMER_CLEAR = HAMMER_LONG
+
+/**
+ * How far to turn a resting palm back from where the model leaves it.
+ *
+ * Look at smith.glb on its own -- tools/prop.html?of=smith -- and the pose it
+ * was generated in is not the A-pose it was asked for: the arms come out
+ * almost level, and the palms are turned up. It is baked into the bind, so
+ * every clip retargeted onto the rig inherits it and no idle from the library
+ * will ever fix it.
+ *
+ * Turning them the whole way, to face his own middle, is anatomically right
+ * and looks wrong: the rig has no finger bone, so the hand is a flat splayed
+ * paddle, and edge-on to an isometric camera that is what it reads as. Half
+ * way is where a relaxed hand actually hangs anyway -- thumb forward, palm
+ * facing back and in -- and it is the one that reads as a hand.
+ */
+const PALM_TURN = 0.5
 
 /**
  * How far a resting upper arm hangs clear of the ribs. A person's is 5 to 10
@@ -254,6 +271,27 @@ export function fistOf(THREE: Three, figure: any, boneName: string): any {
     found += 1
   }
   return found ? middle.divideScalar(found) : wrist
+}
+
+/**
+ * Which way a hand's palm faces, in that hand bone's own frame.
+ *
+ * Not measured off the skin. That was tried: the palm was taken to be the
+ * flattest direction through the hand's vertices, and it failed twice over --
+ * the sign of a cross product is arbitrary, so the mirrored left and right
+ * hands came out facing opposite ways, and a half-closed fist is round enough
+ * that its flattest direction wanders toward the fingertips. What is known is
+ * simpler: this generator poses its characters palms-up, so while the figure
+ * still stands in its bind pose, "up" carried into the bone's frame IS the
+ * palm. Call it before any mixer has moved a bone.
+ */
+function palmOf(THREE: Three, figure: any, boneName: string): any {
+  const bone = figure.getObjectByName(boneName)
+  if (!bone) return null
+  figure.updateWorldMatrix(true, true)
+  const turned = new THREE.Quaternion()
+  bone.getWorldQuaternion(turned)
+  return new THREE.Vector3(0, 1, 0).applyQuaternion(turned.invert()).normalize()
 }
 
 /** The dominant direction of a cloud of points, by power iteration. */
@@ -464,6 +502,16 @@ export function makeBench(
   group.add(figure)
   const face = makeFace(THREE, figure, blinkOffset)
 
+  // Captured here, while the figure still stands in its bind pose: the first
+  // mixer probe below moves the bones, and the palms' rest direction with it.
+  const palms = ["Left", "Right"]
+    .map((side) => ({
+      bone: figure.getObjectByName(`${side}Hand`),
+      elbow: figure.getObjectByName(`${side}ForeArm`),
+      faces: palmOf(THREE, figure, `${side}Hand`),
+    }))
+    .filter((palm) => palm.bone?.parent && palm.elbow && palm.faces)
+
   // -- finished work on a shelf
   const shelf = new THREE.Group()
   // On the board the cabin nailed to its back wall.
@@ -635,6 +683,12 @@ export function makeBench(
   const swinging = new THREE.Quaternion()
   /** And while he is not: hanging from the fist, whatever the arm is doing. */
   const hanging = new THREE.Quaternion()
+  const axis = new THREE.Vector3()
+  const looks = new THREE.Vector3()
+  const inward = new THREE.Vector3()
+  const flatly = new THREE.Vector3()
+  const middleOf = new THREE.Vector3()
+  const handAt = new THREE.Vector3()
   const turning = new THREE.Quaternion()
   const parented = new THREE.Quaternion()
   const spare = new THREE.Quaternion()
@@ -892,6 +946,46 @@ export function makeBench(
       skyward.set(0, 1, 0).applyQuaternion(turned.invert())
       hanging.setFromUnitVectors(HANDLE, skyward)
       hammer.holder.quaternion.copy(hanging).slerp(swinging, working)
+
+      // Half a turn of the palms, about the forearm and nothing else: where
+      // the arm hangs is easeArms' business above, and how far round the palm
+      // is turned within it is this one's.
+      if (rest > 0.01) {
+        figure.getWorldPosition(middleOf)
+        for (const palm of palms) {
+          palm.elbow.getWorldPosition(axis)
+          palm.bone.getWorldPosition(handAt)
+          axis.subVectors(handAt, axis)
+          if (axis.lengthSq() < 1e-9) continue
+          axis.normalize()
+          // Where the palm looks now, and where it would look if it faced him.
+          looks.copy(palm.faces).applyQuaternion(palm.bone.getWorldQuaternion(parented))
+          inward.subVectors(middleOf, handAt).setY(0)
+          if (inward.lengthSq() < 1e-9) continue
+          inward.normalize()
+          // Found by trying, not solved. It was solved once, with a
+          // projection and an atan2, and the applied roll landed the palm
+          // sixty degrees from where the arithmetic said it would -- some sign
+          // convention between bone frames disagreed with the derivation, and
+          // a probe is how it was caught. Candidates around the circle cannot
+          // be wrong about a convention.
+          let bestRoll = 0
+          let bestDot = -2
+          for (let step = 0; step < 72; step += 1) {
+            const angle = (step / 72) * Math.PI * 2
+            flatly.copy(looks).applyQuaternion(spare.setFromAxisAngle(axis, angle))
+            const dot = flatly.dot(inward)
+            if (dot > bestDot) { bestDot = dot; bestRoll = angle }
+          }
+          const roll = shortestWay(bestRoll) * rest * PALM_TURN
+          palm.bone.parent.getWorldQuaternion(parented)
+          palm.bone.quaternion.premultiply(
+            turning.copy(parented).invert()
+              .multiply(spare.setFromAxisAngle(axis, roll))
+              .multiply(parented))
+          palm.bone.updateWorldMatrix(false, true)
+        }
+      }
 
       // Sparks fly for a moment after the hammer lands. Measured around the
       // loop: the blow lands a tenth of a second before the clip's seam, and

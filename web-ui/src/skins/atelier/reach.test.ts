@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { flexion, sideways, stretcher } from "./reach"
+import { flexion, shortestWay, sideways, stretcher } from "./reach"
 
 /** Just enough of a Vector3 for the joints this moves. */
 function at(x: number, y: number, z: number) {
@@ -95,5 +95,26 @@ describe("sideways", () => {
     const flat = sideways({ x: 1, y: -1, z: 0 }, outward, up)
     const forward = sideways({ x: 1, y: -1, z: 4 }, outward, up)
     expect(forward).toBeCloseTo(flat)
+  })
+})
+
+describe("shortestWay", () => {
+  it("leaves a small turn alone", () => {
+    expect(shortestWay(0.4)).toBeCloseTo(0.4)
+  })
+
+  it("takes a turn past half a circle backwards instead", () => {
+    expect(shortestWay((300 * Math.PI) / 180)).toBeCloseTo((-60 * Math.PI) / 180)
+  })
+
+  it("is what makes a fraction of a turn mean anything", () => {
+    // Half of 300 degrees is 150 -- the wrong way, and further round than the
+    // hand started. Half of -60 is -30, which is a hand half turned.
+    expect(shortestWay((300 * Math.PI) / 180) / 2).toBeCloseTo((-30 * Math.PI) / 180)
+  })
+
+  it("wraps an angle from outside one circle", () => {
+    expect(shortestWay(Math.PI * 2 + 0.3)).toBeCloseTo(0.3)
+    expect(shortestWay(-0.3)).toBeCloseTo(-0.3)
   })
 })
