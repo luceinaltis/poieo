@@ -23,7 +23,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .binding import BindingSpec
 from .memory import (
@@ -39,6 +39,7 @@ from .memory import (
 )
 from .providers import ProviderPool
 from .providers.base import LLMRequest
+from .store import json_records
 
 log = logging.getLogger("poieo.learn")
 
@@ -130,19 +131,29 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
 # -- what has not been read yet ----------------------------------------------
 
 
+def _passes(project_dir: Path) -> Iterator[dict[str, Any]]:
+    """Every pass this project has recorded, oldest first.
+
+    Two readers want this -- the bookmark and the page suggestion -- and each
+    used to open and decode the log itself. They had already drifted: one
+    guarded against a line holding something other than a mapping and the
+    other did not.
+    """
+    path = Path(project_dir) / ".poieo" / LOG_NAME
+    if not path.is_file():
+        return
+    yield from json_records(path.read_text(encoding="utf-8").splitlines())
+
+
+def _succeeded(project_dir: Path) -> Iterator[dict[str, Any]]:
+    """The passes that finished. A failed one is not a thing to build on."""
+    return (entry for entry in _passes(project_dir) if entry.get("error") is None)
+
+
 def _bookmark(project_dir: Path) -> str:
     """The last record a successful pass reached. Failed lines do not count."""
-    path = project_dir / ".poieo" / LOG_NAME
-    mark = ""
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if entry.get("error") is None and entry.get("upto"):
-                mark = max(mark, entry["upto"])
-    return mark
+    reached = [entry["upto"] for entry in _succeeded(project_dir) if entry.get("upto")]
+    return max(reached, default="")
 
 
 def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
@@ -524,17 +535,9 @@ def last_suggestion(project_dir: Path) -> str | None:
     nothing if it suggested nothing, however loud an older pass was, and
     nothing once the page has been edited since: the clearing gesture is
     the same as everywhere -- look, then touch."""
-    path = Path(project_dir) / ".poieo" / LOG_NAME
-    if not path.is_file():
-        return None
     latest: dict[str, Any] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(entry, dict) and entry.get("error") is None:
-            latest = entry
+    for entry in _succeeded(project_dir):
+        latest = entry
     suggestion = latest.get("page")
     if not isinstance(suggestion, str) or not suggestion:
         return None

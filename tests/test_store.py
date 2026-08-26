@@ -126,6 +126,34 @@ def test_run_returns_the_newest_and_stops_there(tmp_path, monkeypatch):
     assert len(parsed) == 1  # the answer, not everything before or after it
 
 
+def test_a_damaged_line_never_costs_the_lines_around_it(tmp_path):
+    """A run log is appended to by a daemon and openable by the user, so a
+    blank line, a half-written last one, or something that is not a mapping
+    at all are all things that happen. None is worth refusing to answer over
+    -- and a bare list used to reach a caller that would ask it for a key."""
+    store = RunStore(tmp_path / "logs")
+    store.record_summary({"run_id": "r1", "flow": "chores"})
+    store.record_summary({"run_id": "r2", "flow": "chores"})
+    with store.index_path.open("a", encoding="utf-8") as handle:
+        handle.write("\n")
+        handle.write("[1, 2, 3]\n")
+        handle.write('{"run_id": "half-writ')  # a torn tail, no newline
+
+    assert [row["run_id"] for row in store.list_runs()] == ["r2", "r1"]
+    assert store.run("r1")["flow"] == "chores"
+    assert store.run("nope") is None
+
+
+def test_events_survive_the_same_damage(tmp_path):
+    store = RunStore(tmp_path / "logs")
+    store.append(Event(run_id="r1", type="run_started"))
+    with (store.runs_dir / "r1.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write("\n[1, 2]\nnot json at all\n")
+    store.append(Event(run_id="r1", type="run_finished"))
+
+    assert [e["type"] for e in store.events("r1")] == ["run_started", "run_finished"]
+
+
 def test_list_runs_reads_the_tail_not_the_file(tmp_path, monkeypatch):
     """Parsing was already lazy; the read was not. read_text loads a month of
     history into memory to show twenty rows."""

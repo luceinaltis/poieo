@@ -13,7 +13,7 @@ import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from .expr import unwrap
 
@@ -44,6 +44,29 @@ def _lines_backwards(path: Path, block: int = 65536) -> Iterator[str]:
                 yield raw.decode("utf-8", errors="replace")
         if tail:
             yield tail.decode("utf-8", errors="replace")
+
+
+def json_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
+    """The JSON objects among some lines, skipping anything that is not one.
+
+    The one reading rule for every JSONL file poieo writes -- the run index,
+    a run's events, the learning pass log. They are appended to by a
+    long-lived daemon and are plain files the user may open, so a blank line
+    or a half-written last one is a thing that happens, and neither is worth
+    refusing to answer over. Nor is a line holding a bare list: every reader
+    here asks a record for a key, so a record that cannot be asked is not
+    one.
+    """
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            yield record
 
 
 @dataclass(slots=True)
@@ -98,6 +121,19 @@ class RunStore:
         self._append(self.index_path, summary, sync=True)
 
     # -- reads ---------------------------------------------------------------
+    def _index_backwards(self, containing: str | None = None) -> Iterator[dict[str, Any]]:
+        """Index rows, newest first, from an index that may not exist yet.
+
+        ``containing`` is a cheap pre-filter on the raw line, so a lookup by
+        run id skips the JSON parse for every row that cannot be the answer.
+        """
+        if not self.index_path.exists():
+            return
+        lines = _lines_backwards(self.index_path)
+        if containing is not None:
+            lines = (line for line in lines if containing in line)
+        yield from json_records(lines)
+
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
         """The newest ``limit`` summaries, newest first.
 
@@ -106,19 +142,10 @@ class RunStore:
         parsing all of history to show the last twenty would make a month of
         uptime cost half a second per call -- measured, not feared.
         """
-        if not self.index_path.exists():
-            return []
         rows: list[dict[str, Any]] = []
-        for line in _lines_backwards(self.index_path):
+        for row in self._index_backwards():
             if len(rows) >= limit:
                 break
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
             if flow and row.get("flow") != flow:
                 continue
             rows.append(row)
@@ -132,16 +159,7 @@ class RunStore:
         first one found -- without scanning a long-lived daemon's whole log
         for every diff view and accept click.
         """
-        if not self.index_path.exists():
-            return None
-        for line in _lines_backwards(self.index_path):
-            line = line.strip()
-            if not line or run_id not in line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        for row in self._index_backwards(containing=run_id):
             if row.get("run_id") == run_id:
                 return row  # newest first; a run may be re-recorded
         return None
@@ -153,13 +171,7 @@ class RunStore:
 
         def _iter() -> Iterator[dict[str, Any]]:
             with path.open(encoding="utf-8") as handle:
-                for line in handle:
-                    line = line.strip()
-                    if line:
-                        try:
-                            yield json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
+                yield from json_records(handle)
 
         return _iter()
 
