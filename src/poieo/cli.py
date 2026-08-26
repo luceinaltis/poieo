@@ -61,8 +61,6 @@ app = typer.Typer(
 runs_app = typer.Typer(name="runs", help="Inspect past runs.", no_args_is_help=True)
 app.add_typer(runs_app)
 
-err = typer.style
-
 
 def _guarded(fn):
     """Every command fails in the product's voice, never with a traceback.

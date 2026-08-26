@@ -23,8 +23,6 @@ Spec: docs/superpowers/specs/2026-08-24-project-memory-design.md
 from .episodes import episodes_dir, used_in, write_episode
 from .facts import (
     CONSTITUTION,
-    MEMORY_DIR,
-    PAGE_BUDGET,
     Fact,
     check_memory,
     load_fact,
@@ -32,28 +30,16 @@ from .facts import (
     memory_root,
     read_page,
     readable_facts,
-    tokens,
 )
-from .index import INDEX_NAME, fts_available
-from .recall import FACTS_BUDGET, LEARNED_HEADER, PAGE_HEADER, read_memory
-from .upkeep import ACCOUNT_WINDOW, UNUSED_FLOOR, accounting, doubts, memory_report
+from .recall import read_memory
+from .upkeep import doubts, memory_report
 
 __all__ = [
-    "ACCOUNT_WINDOW",
     "CONSTITUTION",
-    "FACTS_BUDGET",
-    "INDEX_NAME",
-    "LEARNED_HEADER",
-    "MEMORY_DIR",
-    "PAGE_BUDGET",
-    "PAGE_HEADER",
-    "UNUSED_FLOOR",
     "Fact",
-    "accounting",
     "check_memory",
     "doubts",
     "episodes_dir",
-    "fts_available",
     "load_fact",
     "load_facts",
     "memory_report",
@@ -61,7 +47,6 @@ __all__ = [
     "read_memory",
     "read_page",
     "readable_facts",
-    "tokens",
     "used_in",
     "write_episode",
 ]
