@@ -28,7 +28,6 @@ export function writeSkinPreference(id: string): void {
 export interface SkinHost {
   show(id: string): void
   update(stage: StageState): void
-  currentId(): string
   destroy(): void
 }
 
@@ -57,8 +56,6 @@ export function createSkinHost(
       latest = stage
       handle?.update(stage)
     },
-
-    currentId: () => currentId,
 
     destroy() {
       handle?.destroy()

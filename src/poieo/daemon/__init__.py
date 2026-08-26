@@ -2,7 +2,7 @@
 
 from .config import DaemonConfig, FlowSpec, LoadedFlow, load_config, load_flows
 from .cron import CronSchedule
-from .service import Daemon, FlowRunner, serve
+from .service import Daemon, FlowRunner
 from .triggers import Fire, Trigger, TriggerSpec, parse_duration
 
 __all__ = [
@@ -18,5 +18,4 @@ __all__ = [
     "load_config",
     "load_flows",
     "parse_duration",
-    "serve",
 ]
