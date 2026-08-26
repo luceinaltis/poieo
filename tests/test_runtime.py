@@ -33,7 +33,7 @@ async def run_graph(graph, binding, **kwargs):
 
 
 async def test_router_picks_the_matching_arm():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     binding = mock_binding({"classifier": "feature", "writer": "ack"})
     result = await run_graph(graph, binding, input={"message": "please add dark mode"})
 
@@ -43,14 +43,14 @@ async def test_router_picks_the_matching_arm():
 
 
 async def test_router_falls_through_to_default():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     binding = mock_binding({"classifier": "question", "writer": "answer"})
     result = await run_graph(graph, binding, input={"message": "how do I log in?"})
     assert result.path[-1] == "draft_answer"
 
 
 async def test_cycle_exits_when_the_critic_approves():
-    graph = load_graph(EXAMPLES / "graphs/draft-review.yaml")
+    graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
     binding = mock_binding(
         {
             "writer": ["first draft", "revised draft"],
@@ -65,7 +65,7 @@ async def test_cycle_exits_when_the_critic_approves():
 
 
 async def test_cycle_gives_up_after_two_revisions():
-    graph = load_graph(EXAMPLES / "graphs/draft-review.yaml")
+    graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
     binding = mock_binding(
         {"writer": ["d"], "critic": ['{"approved": false, "feedback": "no"}']}
     )
@@ -128,7 +128,7 @@ async def test_bad_json_output_fails_the_run():
 
 
 async def test_state_carries_into_the_next_run():
-    graph = load_graph(EXAMPLES / "graphs/draft-review.yaml")
+    graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
     binding = mock_binding(
         {"writer": ["d"], "critic": ['{"approved": true, "feedback": "ok"}']}
     )
@@ -156,7 +156,7 @@ async def test_prompt_sees_the_run_payload():
 
 
 def test_preflight_rejects_an_incomplete_binding():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     binding = BindingSpec.model_validate({"providers": {"p": {"type": "mock"}}})
     with pytest.raises(BindingError, match="cannot resolve role"):
         preflight(graph, binding)
@@ -329,8 +329,8 @@ async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
 
 
 async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
-    graph = load_graph(EXAMPLES / "graphs/agent-task.yaml")
-    binding = load_binding(EXAMPLES / "bindings/mock.yaml")
+    graph = load_graph(EXAMPLES / "tasks/agent-task.graph.yaml")
+    binding = load_binding(EXAMPLES / "models/mock.yaml")
     result = await run_graph(graph, binding, workdir=tmp_path)
     assert result.status == "completed"
     assert (tmp_path / "TODO.md").exists()

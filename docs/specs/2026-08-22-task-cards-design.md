@@ -91,7 +91,7 @@ Three required keys. Everything below is optional and defaulted:
 
 ```yaml
 store: .poieo
-binding: bindings/local.yaml
+binding: models/local.yaml
 tasks: tasks/          # every *.yaml in here is a card
 flows: [ ... ]         # unchanged
 ```

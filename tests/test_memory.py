@@ -169,7 +169,7 @@ def _mark(tmp_path):
     config = tmp_path / "poieo.yaml"
     if not config.exists():
         config.write_text(
-            f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+            f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
             f"store: {(tmp_path / 'logs').as_posix()}\n"
             "tasks: tasks/\n",
             encoding="utf-8",

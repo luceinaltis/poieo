@@ -36,7 +36,7 @@ tests/test_tools.py           NEW
 tests/test_graph.py           MOD
 tests/test_providers.py       MOD
 tests/test_runtime.py         MOD
-examples/graphs/agent-task.yaml, examples/bindings/mock.yaml, README.md, DESIGN.md  (final task)
+examples/tasks/agent-task.graph.yaml, examples/models/mock.yaml, README.md, DESIGN.md  (final task)
 ```
 
 ---
@@ -1393,8 +1393,8 @@ git commit -m "feat: tool calling for the anthropic provider"
 ### Task 10: end-to-end example, docs, status
 
 **Files:**
-- Create: `examples/graphs/agent-task.yaml`
-- Modify: `examples/bindings/mock.yaml`, `README.md`, `DESIGN.md`
+- Create: `examples/tasks/agent-task.graph.yaml`
+- Modify: `examples/models/mock.yaml`, `README.md`, `DESIGN.md`
 - Test: `tests/test_runtime.py`
 
 **Interfaces:** none new — this task proves the whole feature through the public surface and documents it.
@@ -1403,8 +1403,8 @@ git commit -m "feat: tool calling for the anthropic provider"
 
 ```python
 async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
-    graph = load_graph(EXAMPLES / "graphs/agent-task.yaml")
-    binding = load_binding(EXAMPLES / "bindings/mock.yaml")
+    graph = load_graph(EXAMPLES / "tasks/agent-task.graph.yaml")
+    binding = load_binding(EXAMPLES / "models/mock.yaml")
     result = await run_graph(graph, binding, input={"workdir": str(tmp_path)})
     assert result.status == "completed"
     assert (tmp_path / "TODO.md").exists()
@@ -1412,7 +1412,7 @@ async def test_agent_example_graph_runs_on_the_mock_binding(tmp_path):
 
 Run: `pytest tests/test_runtime.py -q` — Expected: FAIL (file not found).
 
-- [ ] **Step 2: Create `examples/graphs/agent-task.yaml`:**
+- [ ] **Step 2: Create `examples/tasks/agent-task.graph.yaml`:**
 
 ```yaml
 name: agent-task
@@ -1431,7 +1431,7 @@ nodes:
     output: {as: report}
 ```
 
-- [ ] **Step 3: Extend `examples/bindings/mock.yaml`** — add a `worker` script to its `responses` (keep everything already there; match the file's existing structure, adding under the mock provider's `options.responses`):
+- [ ] **Step 3: Extend `examples/models/mock.yaml`** — add a `worker` script to its `responses` (keep everything already there; match the file's existing structure, adding under the mock provider's `options.responses`):
 
 ```yaml
       worker:
@@ -1465,8 +1465,8 @@ recorded as a `node_tool_call` event in the run log.
 
 Path confinement prevents accidents, not malice: a shell command can still
 name absolute paths. Point `workdir` only at a directory you would let a
-junior contributor loose in. `poieo run examples/graphs/agent-task.yaml -b
-examples/bindings/mock.yaml --set workdir=/tmp/demo` exercises the loop
+junior contributor loose in. `poieo run examples/tasks/agent-task.graph.yaml -b
+examples/models/mock.yaml --set workdir=/tmp/demo` exercises the loop
 offline.
 ```
 

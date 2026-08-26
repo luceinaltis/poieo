@@ -12,8 +12,8 @@ def boot_of(page: str) -> dict:
 
 
 def test_boot_payload_carries_the_whole_graph():
-    graph = load_graph(EXAMPLES / "graphs/draft-review.yaml")
-    binding = load_binding(EXAMPLES / "bindings/hybrid.yaml")
+    graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
+    binding = load_binding(EXAMPLES / "models/hybrid.yaml")
     payload = _boot_payload(graph, binding, {"mode": "none"})
 
     ids = [n["id"] for n in payload["graph"]["nodes"]]
@@ -27,15 +27,15 @@ def test_boot_payload_carries_the_whole_graph():
 def test_every_node_has_the_fields_the_editor_expects():
     # The editor writes into node.output / node.retry / node.branches without
     # guarding, so the payload must always supply them.
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     payload = _boot_payload(graph, None, {"mode": "none"})
     for node in payload["graph"]["nodes"]:
         assert "branches" in node and "output" in node and "retry" in node
 
 
 def test_unbound_roles_are_reported_not_raised():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
-    binding = load_binding(EXAMPLES / "bindings/mock.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
+    binding = load_binding(EXAMPLES / "models/mock.yaml")
     binding.default.model = None                  # break the fallback
     payload = _boot_payload(graph, binding, {"mode": "none"})
     assert set(payload["bindings"].values()) == {"unbound"}
@@ -54,7 +54,7 @@ def test_ui_coordinates_round_trip_through_the_schema():
 
 
 def test_page_is_a_complete_document_with_the_save_config():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     save = {"mode": "jupyter", "url": "/api/contents/g.yaml", "token": "t", "path": "g.yaml"}
     page = render_editor(graph, None, save=save)
 

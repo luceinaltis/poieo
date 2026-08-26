@@ -56,9 +56,9 @@ The `mock` provider answers from a script in the binding file, so the wiring can
 exercised offline.
 
 ```bash
-poieo show     examples/graphs/support-triage.yaml
-poieo validate examples/graphs/support-triage.yaml -b examples/models/claude.yaml
-poieo run      examples/graphs/support-triage.yaml -b examples/models/mock.yaml \
+poieo show     examples/tasks/support-triage.graph.yaml
+poieo validate examples/tasks/support-triage.graph.yaml -b examples/models/claude.yaml
+poieo run      examples/tasks/support-triage.graph.yaml -b examples/models/mock.yaml \
                --set message="the export button crashes on 2.1"
 poieo daemon   examples/poieo.yaml --once
 ```
@@ -112,7 +112,7 @@ recorded as a `node_tool_call` event in the run log.
 Path confinement prevents accidents, not malice: a shell command can still
 name absolute paths. Point `workdir` only at a directory you would let a
 junior contributor loose in — or turn on isolation, below. `poieo run
-examples/graphs/agent-task.yaml -b examples/models/mock.yaml --set
+examples/tasks/agent-task.graph.yaml -b examples/models/mock.yaml --set
 workdir=/tmp/demo` exercises the loop offline.
 
 ### Isolation
@@ -172,7 +172,7 @@ Names in scope:
 (tolerating a markdown fence), `path: a.b` digs into it, and `into_state: k` also writes it
 to `state` so the next iteration can read it.
 
-**Cycles are allowed.** `examples/graphs/draft-review.yaml` loops draft → review → revise
+**Cycles are allowed.** `examples/tasks/draft-review.graph.yaml` loops draft → review → revise
 until the critic approves, counting its own attempts with `run.path.count('revise')`.
 `max_steps` bounds any graph that forgets to exit.
 
@@ -447,12 +447,12 @@ store: runs
 binding: models/hybrid.yaml
 flows:
   - name: triage
-    graph: graphs/support-triage.yaml
+    graph: tasks/support-triage.graph.yaml
     trigger: {type: interval, every: 30s}
     input: {message: "…"}
 
   - name: revision
-    graph: graphs/draft-review.yaml
+    graph: tasks/draft-review.graph.yaml
     trigger: {type: loop, cooldown: 10s}
     carry_state: true                  # each run starts where the last one ended
 ```
@@ -502,7 +502,7 @@ one-line summary of what it did.
 ```yaml
 flows:
   - name: chores
-    graph: graphs/agent-task.yaml
+    graph: tasks/agent-task.graph.yaml
     workdir: ../my-project      # where the work happens
 ```
 
@@ -548,7 +548,7 @@ functions.
 import asyncio
 from poieo import load_graph, load_binding, execute, ProviderPool, RunStore
 
-graph = load_graph("examples/graphs/support-triage.yaml")
+graph = load_graph("examples/tasks/support-triage.graph.yaml")
 binding = load_binding("examples/models/hybrid.yaml")
 
 async def main():

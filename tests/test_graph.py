@@ -7,14 +7,14 @@ from poieo.graph import GraphSpec, load_graph
 
 
 def test_loads_example_graphs():
-    graph = load_graph(EXAMPLES / "graphs/support-triage.yaml")
+    graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     assert graph.entry == "classify"
     assert graph.roles() == {"classifier", "writer"}
     assert graph.node("route").type == "router"
 
 
 def test_cycles_are_allowed():
-    graph = load_graph(EXAMPLES / "graphs/draft-review.yaml")
+    graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
     assert graph.node("revise").next == "review"
 
 

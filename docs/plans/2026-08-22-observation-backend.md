@@ -897,7 +897,7 @@ git commit -m "feat: daemon serves the observation API on 127.0.0.1"
 ### Task 7: demo thinking in the mock example and README
 
 **Files:**
-- Modify: `examples/bindings/mock.yaml` (worker script: add a `thinking` line to the first entry)
+- Modify: `examples/models/mock.yaml` (worker script: add a `thinking` line to the first entry)
 - Modify: `README.md` (daemon section: two short paragraphs — the web UI URL/flags, and that `/api/events` streams run events live; match the README's plain tone)
 - Test: existing suite only (the example file is loaded by `test_runtime`'s example test — it must still pass)
 
@@ -907,7 +907,7 @@ git commit -m "feat: daemon serves the observation API on 127.0.0.1"
 
 - [ ] **Step 1: Edit the example**
 
-In `examples/bindings/mock.yaml`, find the `worker` script's first entry (the one with the `list_dir` tool call) and add a sibling key:
+In `examples/models/mock.yaml`, find the `worker` script's first entry (the one with the `list_dir` tool call) and add a sibling key:
 
 ```yaml
         thinking: "First see what is in this directory."
@@ -932,6 +932,6 @@ Expected: all pass.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add examples/bindings/mock.yaml README.md
+git add examples/models/mock.yaml README.md
 git commit -m "docs: observation API in README; mock demo shows thinking"
 ```

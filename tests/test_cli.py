@@ -16,9 +16,9 @@ def test_validate_reports_the_resolved_bindings():
         app,
         [
             "validate",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/claude.yaml"),
+            str(EXAMPLES / "models/claude.yaml"),
         ],
     )
     assert result.exit_code == 0
@@ -31,7 +31,7 @@ def test_validate_fails_when_a_role_is_unbound(tmp_path):
     binding.write_text("providers: {p: {type: mock}}\n")
     result = runner.invoke(
         app,
-        ["validate", str(EXAMPLES / "graphs/support-triage.yaml"), "-b", str(binding)],
+        ["validate", str(EXAMPLES / "tasks/support-triage.graph.yaml"), "-b", str(binding)],
     )
     assert result.exit_code == 1
     assert "cannot resolve role" in result.stderr  # errors go to stderr
@@ -42,9 +42,9 @@ def test_run_executes_a_graph_and_prints_the_path(tmp_path):
         app,
         [
             "run",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--set",
             "message=the export button crashes",
             "--no-log",
@@ -59,9 +59,9 @@ def test_run_json_output_is_machine_readable():
         app,
         [
             "run",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "-i",
             '{"message": "hi"}',
             "--no-log",
@@ -81,7 +81,7 @@ def test_run_reports_a_failure_with_a_nonzero_exit(tmp_path):
         "  - {id: a, type: llm, prompt: go, output: {format: json}}\n"
     )
     result = runner.invoke(
-        app, ["run", str(graph), "-b", str(EXAMPLES / "bindings/mock.yaml"), "--no-log"]
+        app, ["run", str(graph), "-b", str(EXAMPLES / "models/mock.yaml"), "--no-log"]
     )
     assert result.exit_code == 1
     assert "failed" in result.stdout
@@ -92,9 +92,9 @@ def test_set_parses_json_scalars():
         app,
         [
             "run",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--set",
             "message=hi",
             "--set",
@@ -111,7 +111,7 @@ def test_set_parses_json_scalars():
 
 def test_show_emits_a_mermaid_diagram():
     result = runner.invoke(
-        app, ["show", str(EXAMPLES / "graphs/draft-review.yaml"), "--mermaid"]
+        app, ["show", str(EXAMPLES / "tasks/draft-review.graph.yaml"), "--mermaid"]
     )
     assert result.exit_code == 0
     assert "flowchart TD" in result.stdout
@@ -126,7 +126,7 @@ def test_flows_lists_disabled_flows_too():
 
 
 def test_check_probes_every_provider():
-    result = runner.invoke(app, ["check", "-b", str(EXAMPLES / "bindings/mock.yaml")])
+    result = runner.invoke(app, ["check", "-b", str(EXAMPLES / "models/mock.yaml")])
     assert result.exit_code == 0
     assert "ok   fake" in result.stdout
 
@@ -153,7 +153,7 @@ def test_help_tells_two_stories_not_seventeen():
 
 
 def test_hidden_commands_still_work():
-    result = runner.invoke(app, ["show", str(EXAMPLES / "graphs/support-triage.yaml")])
+    result = runner.invoke(app, ["show", str(EXAMPLES / "tasks/support-triage.graph.yaml")])
     assert result.exit_code == 0
     assert "classify" in result.stdout
 
@@ -163,9 +163,9 @@ def test_validate_json_is_machine_readable():
         app,
         [
             "validate",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--json",
         ],
     )
@@ -179,7 +179,7 @@ def test_validate_json_is_machine_readable():
 
 def test_check_json_is_machine_readable():
     result = runner.invoke(
-        app, ["check", "-b", str(EXAMPLES / "bindings/mock.yaml"), "--json"]
+        app, ["check", "-b", str(EXAMPLES / "models/mock.yaml"), "--json"]
     )
     assert result.exit_code == 0, result.output
     rows = json.loads(result.stdout)
@@ -192,9 +192,9 @@ def test_runs_list_json_is_machine_readable(tmp_path):
         app,
         [
             "run",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--set",
             "message=hi",
             "--store",
@@ -218,11 +218,11 @@ def test_runs_list_json_is_machine_readable(tmp_path):
 def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
         "flows:\n"
         f"  - name: t\n"
-        f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}\n"
+        f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
         "    trigger: {type: interval, every: 60s}\n"
         "    input: {message: hi}\n"
     )
@@ -250,9 +250,9 @@ def test_view_writes_a_page(tmp_path):
         app,
         [
             "view",
-            str(EXAMPLES / "graphs/support-triage.yaml"),
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/hybrid.yaml"),
+            str(EXAMPLES / "models/hybrid.yaml"),
             "-o",
             str(out),
         ],
@@ -287,7 +287,7 @@ def test_run_executes_a_task_file(tmp_path):
             "run",
             str(_task(tmp_path)),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--store",
             str(tmp_path / "logs"),
         ],
@@ -301,7 +301,7 @@ def test_tasks_lists_the_cards(tmp_path):
     _task(tmp_path, "docs", "name: write docs\nprompt: go\nevery: loop\nenabled: false\n")
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\ntasks: tasks/\n",
         encoding="utf-8",
     )
     result = runner.invoke(app, ["tasks", str(config)])
@@ -334,7 +334,7 @@ def test_an_ejected_graph_does_not_become_a_second_task(tmp_path):
     path = _task(tmp_path, body="name: tidy\nprompt: go\n")
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\ntasks: tasks/\n",
         encoding="utf-8",
     )
     assert runner.invoke(app, ["eject", str(path)]).exit_code == 0
@@ -357,7 +357,7 @@ def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
     path = _task(tmp_path)
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: tasks/\n",
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\ntasks: tasks/\n",
         encoding="utf-8",
     )
 
@@ -381,7 +381,7 @@ def test_a_task_run_reads_its_journal(tmp_path):
             "run",
             str(path),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--store",
             str(tmp_path / "logs"),
             "--json",
@@ -467,8 +467,8 @@ def test_run_isolate_preflights_before_the_first_model_call(tmp_path, monkeypatc
     result = runner.invoke(
         app,
         [
-            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
-            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-b", str(EXAMPLES / "models/mock.yaml"),
             "--set", "message=hi",
             "--no-log",
             "--isolate", "python:3.12-slim",
@@ -486,8 +486,8 @@ def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
-            "run", str(EXAMPLES / "graphs/support-triage.yaml"),
-            "-b", str(EXAMPLES / "bindings/mock.yaml"),
+            "run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-b", str(EXAMPLES / "models/mock.yaml"),
             "--set", "message=hi",
             "--no-log",
         ],
@@ -530,7 +530,7 @@ def _self_bound_card(tmp_path):
     card = tmp_path / "card.yaml"
     card.write_text(
         "name: hello\nfolder: work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     return card
 
@@ -555,7 +555,7 @@ def test_run_flag_still_wins_over_the_card(tmp_path):
     result = runner.invoke(
         app,
         ["run", str(_self_bound_card(tmp_path)), "--no-log",
-         "-b", str(EXAMPLES / "bindings/mock.yaml")],
+         "-b", str(EXAMPLES / "models/mock.yaml")],
     )
     assert result.exit_code == 0, result.output
 
@@ -568,7 +568,7 @@ def test_daemon_given_a_folder_runs_the_cards_in_it(tmp_path):
     (tmp_path / "work").mkdir()
     (folder / "hello.yaml").write_text(
         "name: hello\nfolder: ../work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
@@ -659,8 +659,8 @@ def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(
         app,
-        ["run", str(EXAMPLES / "graphs/support-triage.yaml"),
-         "-b", str(EXAMPLES / "bindings/mock.yaml"), "--set", "message=hi"],
+        ["run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+         "-b", str(EXAMPLES / "models/mock.yaml"), "--set", "message=hi"],
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "runs" / "events").is_dir()
@@ -672,7 +672,7 @@ def test_daemon_folder_stores_beside_the_cards(tmp_path):
     (tmp_path / "work").mkdir()
     (folder / "hello.yaml").write_text(
         "name: hello\nfolder: ../work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
@@ -742,9 +742,9 @@ def test_run_takes_a_workdir_for_a_portable_graph(tmp_path):
         app,
         [
             "run",
-            str(EXAMPLES / "graphs/agent-task.yaml"),
+            str(EXAMPLES / "tasks/agent-task.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
             "--workdir",
             str(tmp_path),
             "--no-log",
@@ -761,9 +761,9 @@ def test_validate_accepts_a_graph_that_leaves_the_workdir_open():
         app,
         [
             "validate",
-            str(EXAMPLES / "graphs/agent-task.yaml"),
+            str(EXAMPLES / "tasks/agent-task.graph.yaml"),
             "-b",
-            str(EXAMPLES / "bindings/mock.yaml"),
+            str(EXAMPLES / "models/mock.yaml"),
         ],
     )
     assert result.exit_code == 0, result.stderr
