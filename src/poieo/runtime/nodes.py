@@ -7,9 +7,11 @@ import asyncio
 import json
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..binding import ResolvedModel
 from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
@@ -101,51 +103,107 @@ def shape_output(spec: NodeSpec, text: str) -> Any:
     return data
 
 
+def _rendered(spec: NodeSpec, template: str, scope: dict[str, Any]) -> str:
+    """Render one of a node's templates, failing in the node's own voice.
+
+    Every template a node carries goes through here, so a typo in a prompt,
+    a system block or a workdir all read the same way in a run log.
+    """
+    try:
+        return render(template, scope)
+    except ExpressionError as exc:
+        raise NodeError(f"node '{spec.id}': {exc}", node_id=spec.id) from exc
+
+
+@dataclass(slots=True)
+class _Bound:
+    """What a node that talks to a model works out before its first request.
+
+    The logical half of the node (its role, its templates) already met the
+    physical half (a provider and a model) by the time this exists.
+    """
+
+    role: str
+    resolved: ResolvedModel
+    provider: Any
+    prompt: str
+    system: str | None
+    scope: dict[str, Any]
+
+    def request(self, messages: list[dict[str, Any]], **extra: Any) -> LLMRequest:
+        return LLMRequest(
+            model=self.resolved.model,
+            messages=messages,
+            system=self.system,
+            params=dict(self.resolved.params),
+            role=self.role,
+            **extra,
+        )
+
+
+def _prepare(spec: NodeSpec, ctx: RunContext) -> _Bound:
+    """Pick the role, resolve it, take the provider, render the templates.
+
+    Both model-calling node types open identically; only what they do with
+    the answer differs.
+    """
+    role = spec.role or ctx.graph.default_role
+    resolved = ctx.binding.resolve(role, spec.params or None)
+    scope = ctx.scope()
+    return _Bound(
+        role=role,
+        resolved=resolved,
+        provider=ctx.pool.get(resolved.provider_name),
+        prompt=_rendered(spec, spec.prompt or "", scope),
+        system=_rendered(spec, spec.system, scope) if spec.system else None,
+        scope=scope,
+    )
+
+
+def _finish(
+    spec: NodeSpec,
+    ctx: RunContext,
+    bound: _Bound,
+    response: LLMResponse,
+    **extra: Any,
+) -> NodeResult:
+    """Shape what the model said, record it, and describe the step.
+
+    Also identical between the two, but for what each adds to ``meta``: an
+    agent counts its turns and its tool calls, an llm node has neither.
+    """
+    output = shape_output(spec, response.text)
+    ctx.record_output(spec.id, output, spec.output.as_)
+    if spec.output.into_state:
+        ctx.state[spec.output.into_state] = unwrap(output)
+
+    return NodeResult(
+        node_id=spec.id,
+        next_node=spec.next,
+        output=output,
+        meta={
+            "role": bound.role,
+            "binding": bound.resolved.describe(),
+            "model": response.model,
+            "usage": response.usage.as_dict(),
+            "stop_reason": response.stop_reason,
+            **extra,
+        },
+    )
+
+
 class LLMNode(Node):
     """Renders a prompt, calls the model bound to this node's role, stores the result."""
 
     async def run(self, ctx: RunContext) -> NodeResult:
         spec = self.spec
-        role = spec.role or ctx.graph.default_role
-        resolved = ctx.binding.resolve(role, spec.params or None)
-        provider = ctx.pool.get(resolved.provider_name)
+        bound = _prepare(spec, ctx)
 
-        scope = ctx.scope()
-        try:
-            prompt = render(spec.prompt or "", scope)
-            system = render(spec.system, scope) if spec.system else None
-        except ExpressionError as exc:
-            raise NodeError(f"node '{spec.id}': {exc}", node_id=spec.id) from exc
-
-        request = LLMRequest(
-            model=resolved.model,
-            messages=[{"role": "user", "content": prompt}],
-            system=system,
-            params=dict(resolved.params),
-            role=role,
-        )
-
-        response = await call_with_retry(self.spec, provider, request, ctx)
-
+        request = bound.request([{"role": "user", "content": bound.prompt}])
+        response = await call_with_retry(spec, bound.provider, request, ctx)
         ctx.usage = ctx.usage.merge(response.usage)
-        output = shape_output(self.spec, response.text)
-        ctx.record_output(spec.id, output, spec.output.as_)
-        if spec.output.into_state:
-            ctx.state[spec.output.into_state] = unwrap(output)
 
-        return NodeResult(
-            node_id=spec.id,
-            next_node=spec.next,
-            output=output,
-            meta={
-                "role": role,
-                "binding": resolved.describe(),
-                "model": response.model,
-                "usage": response.usage.as_dict(),
-                "stop_reason": response.stop_reason,
-            },
-        )
-
+        return _finish(spec, ctx, bound, response)
 
 
 def _clip(value: Any, limit: int = 400) -> str:
@@ -162,21 +220,13 @@ class AgentNode(Node):
 
     async def run(self, ctx: RunContext) -> NodeResult:
         spec = self.spec
-        role = spec.role or ctx.graph.default_role
-        resolved = ctx.binding.resolve(role, spec.params or None)
-        provider = ctx.pool.get(resolved.provider_name)
+        bound = _prepare(spec, ctx)
 
-        scope = ctx.scope()
-        try:
-            prompt = render(spec.prompt or "", scope)
-            system = render(spec.system, scope) if spec.system else None
-            workdir = (
-                Path(render(spec.workdir, scope)).expanduser()
-                if spec.workdir
-                else ctx.workdir
-            )
-        except ExpressionError as exc:
-            raise NodeError(f"node '{spec.id}': {exc}", node_id=spec.id) from exc
+        workdir = (
+            Path(_rendered(spec, spec.workdir, bound.scope)).expanduser()
+            if spec.workdir
+            else ctx.workdir
+        )
         if workdir is None:  # preflight should have caught this
             raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
         if not workdir.is_dir():
@@ -187,7 +237,7 @@ class AgentNode(Node):
         async with make_executor(
             workdir, spec.tools or DEFAULT_TOOLSETS, ctx.hands
         ) as executor:
-            messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+            messages: list[dict[str, Any]] = [{"role": "user", "content": bound.prompt}]
             turns = 0
             tool_call_count = 0
 
@@ -195,15 +245,8 @@ class AgentNode(Node):
                 if ctx.cancel is not None and ctx.cancel.is_set():
                     raise RunAborted(f"cancelled during agent node '{spec.id}'")
                 turns += 1
-                request = LLMRequest(
-                    model=resolved.model,
-                    messages=list(messages),
-                    system=system,
-                    params=dict(resolved.params),
-                    role=role,
-                    tools=executor.definitions(),
-                )
-                response = await call_with_retry(spec, provider, request, ctx)
+                request = bound.request(list(messages), tools=executor.definitions())
+                response = await call_with_retry(spec, bound.provider, request, ctx)
                 ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(
                     "node_turn",
@@ -255,24 +298,10 @@ class AgentNode(Node):
                         {"role": "tool", "tool_call_id": call.id, "content": result.text}
                     )
 
-        output = shape_output(spec, response.text)
-        ctx.record_output(spec.id, output, spec.output.as_)
-        if spec.output.into_state:
-            ctx.state[spec.output.into_state] = unwrap(output)
-
-        return NodeResult(
-            node_id=spec.id,
-            next_node=spec.next,
-            output=output,
-            meta={
-                "role": role,
-                "binding": resolved.describe(),
-                "model": response.model,
-                "usage": response.usage.as_dict(),
-                "stop_reason": response.stop_reason,
-                "turns": turns,
-                "tool_calls": tool_call_count,
-            },
+        # `response` is deliberately the loop's last one, read after the
+        # executor has closed: the turn that answered without a tool call.
+        return _finish(
+            spec, ctx, bound, response, turns=turns, tool_calls=tool_call_count
         )
 
 
