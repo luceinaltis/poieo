@@ -2,6 +2,9 @@
 one marker file, found by walking up."""
 
 import json
+from pathlib import Path
+
+import pytest
 
 from typer.testing import CliRunner
 
@@ -357,3 +360,86 @@ def test_the_store_flag_still_wins_over_the_project(tmp_path, monkeypatch):
     result = runner.invoke(app, ["runs", "list", "--store", str(elsewhere)])
     assert result.exit_code == 0
     assert "r-3" in result.stdout
+
+
+# -- a project is its paths, read no deeper ----------------------------------
+
+
+def _project_with_cards(root, *, card_body="name: {n}\nfolder: .\nprompt: do {n}\n"):
+    (root / "tasks").mkdir(parents=True, exist_ok=True)
+    (root / "bindings").mkdir(parents=True, exist_ok=True)
+    (root / "bindings" / "b.yaml").write_text(
+        "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
+    )
+    (root / "poieo.yaml").write_text(
+        "version: 1\nstore: .poieo\nbinding: bindings/b.yaml\ntasks: tasks/\n"
+    )
+    for name in ("alpha", "beta", "gamma"):
+        (root / "tasks" / f"{name}.yaml").write_text(card_body.format(n=name))
+    return root
+
+
+def test_finding_a_project_does_not_read_its_cards(tmp_path, monkeypatch):
+    """Discovery answers "where is the store" and "which binding". It used to
+    parse every card in the folder, cross-check the memory and build a graph
+    per task to do it -- on `poieo run`, `poieo runs list`, everything."""
+    import poieo.task as task_module
+
+    _project_with_cards(tmp_path)
+
+    parsed = []
+    real = task_module.load_task
+    monkeypatch.setattr(
+        task_module, "load_task", lambda p: parsed.append(Path(p).name) or real(p)
+    )
+
+    project = find_project(tmp_path)
+
+    assert parsed == []
+    assert project is not None
+    assert project.store_path() == tmp_path / ".poieo"
+    assert project.binding == "bindings/b.yaml"
+
+
+def test_a_card_with_a_typo_no_longer_breaks_an_unrelated_command(tmp_path, monkeypatch):
+    """A broken card is the daemon's business. It used to fail `poieo runs
+    list`, which never looks at a card, because discovery loaded them all."""
+    _project_with_cards(tmp_path, card_body="name: {n}\nfolder: .\npromt: oops\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["runs", "list"])
+
+    assert result.exit_code == 0
+    assert "no runs recorded" in result.stdout
+
+    # The daemon still refuses, naming the card and the typo.
+    refused = runner.invoke(app, ["flows"])
+    assert refused.exit_code == 1
+    assert "promt" in refused.stderr
+
+
+def test_a_broken_marker_still_fails_wherever_it_is_consulted(tmp_path):
+    from poieo.errors import SpecError
+
+    _mark(tmp_path, "version: 1\nstoer: logs\n")  # a typo in the marker itself
+    with pytest.raises(SpecError, match="store"):
+        find_project(tmp_path)
+
+
+def test_the_daemon_config_is_a_project_and_reads_the_same_keys(tmp_path):
+    """One schema, extended -- so `store` cannot mean one thing to `poieo run`
+    and another to `poieo daemon`."""
+    from poieo.daemon.config import DaemonConfig, load_config
+    from poieo.project import ProjectSpec, load_project
+
+    _project_with_cards(tmp_path)
+    marker = tmp_path / "poieo.yaml"
+
+    assert issubclass(DaemonConfig, ProjectSpec)
+    shallow, full = load_project(marker), load_config(marker)
+    assert shallow.store_path() == full.store_path()
+    assert shallow.resolve_path("x") == full.resolve_path("x")
+    assert (shallow.binding, shallow.tasks) == (full.binding, full.tasks)
+    # ...and only the full load expands the cards into flows.
+    assert [f.name for f in full.flows] == ["alpha", "beta", "gamma"]
+    assert shallow.flows == []

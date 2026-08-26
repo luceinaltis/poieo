@@ -4,16 +4,82 @@ Discovery walks from a starting directory upward and stops at the first
 marker, the way git finds ``.git``. Commands use it to fill flags the user
 left silent -- the flag always wins, and discovery only fills silence, so a
 folder with no marker behaves exactly as it always has.
+
+**A project is the paths its marker names, and nothing more.** What a command
+wants from discovery is where the store is and which binding to default to;
+it does not want the flows read, the task folder expanded, or the memory
+cross-checked. The daemon wants all of that, and :class:`DaemonConfig`
+extends this with it -- one schema, read to the depth the caller needs.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
-from .daemon.config import DaemonConfig, load_config
+from pydantic import BaseModel, ConfigDict, Field
+
+from .errors import SpecError, describe_invalid
+from .graph import load_document
 
 MARKER = "poieo.yaml"
+
+
+class ProjectSpec(BaseModel):
+    """The shared defaults a ``poieo.yaml`` declares: where things live.
+
+    Deliberately shallow. ``flows`` is accepted but left as written -- parsing
+    one needs a trigger, a binding and a graph, and a command asking "where is
+    the store" has no business loading any of them. ``DaemonConfig`` narrows
+    the field when something actually intends to run them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = 1
+    # Where run logs are written.
+    store: str = ".poieo"
+    # Default binding for flows -- and for tasks, and for `poieo run`.
+    binding: str | None = None
+    # A folder of task files; each one expands into a flow. See poieo.task.
+    tasks: str | None = None
+    # How often the project sits down to learn from its run records
+    # (a duration: "1d"). Absent means never. Validated by the daemon, which
+    # is the only thing that acts on it.
+    learn: str | None = None
+    # Read to the depth the caller needs: see the class docstring.
+    flows: list[Any] = Field(default_factory=list)
+
+    source_path: Path | None = Field(default=None, exclude=True)
+
+    # -- path helpers --------------------------------------------------------
+    @property
+    def base_dir(self) -> Path:
+        return self.source_path.parent if self.source_path else Path.cwd()
+
+    def resolve_path(self, relative: str) -> Path:
+        """Resolve a path relative to the config file, not the cwd."""
+        path = Path(relative)
+        return path if path.is_absolute() else (self.base_dir / path)
+
+    def store_path(self) -> Path:
+        return self.resolve_path(self.store)
+
+
+def load_project(path: str | Path) -> ProjectSpec:
+    """Parse a ``poieo.yaml`` for its paths. Flows are not read."""
+    path = Path(path)
+    data = load_document(path)
+    try:
+        project = ProjectSpec.model_validate(data)
+    except Exception as exc:
+        raise SpecError(
+            f"{path}: invalid project file: "
+            f"{describe_invalid(exc, tuple(ProjectSpec.model_fields))}"
+        ) from exc
+    project.source_path = path.resolve()
+    return project
 
 
 def find_project_file(start: str | Path | None = None) -> Path | None:
@@ -27,15 +93,16 @@ def find_project_file(start: str | Path | None = None) -> Path | None:
     return None
 
 
-def find_project(start: str | Path | None = None) -> DaemonConfig | None:
-    """The loaded config of the nearest project, or None outside one.
+def find_project(start: str | Path | None = None) -> ProjectSpec | None:
+    """The nearest project's paths, or None outside one.
 
-    A marker that fails to load raises the same ``SpecError`` an explicit
-    ``poieo daemon poieo.yaml`` would -- a broken project file should fail
-    loudly wherever it is consulted, not be silently skipped over.
+    A marker that cannot be parsed still raises -- a broken project file
+    should fail loudly wherever it is consulted. What no longer fails here is
+    a problem *inside* something the marker points at: a card with a typo is
+    the daemon's business, and used to break an unrelated `poieo run`.
     """
     marker = find_project_file(start)
-    return load_config(marker) if marker else None
+    return load_project(marker) if marker else None
 
 
 # -- poieo init ---------------------------------------------------------------
@@ -231,5 +298,10 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
 
     # A generated project that cannot load is an init bug, caught here and
     # not at 3am. Also re-checks a kept, hand-edited poieo.yaml still parses.
+    # The full load, flows and cards included -- init is the one caller that
+    # wants that depth, and it is the only reason this module knows the
+    # daemon exists. Late, because DaemonConfig extends ProjectSpec above.
+    from .daemon.config import load_config
+
     load_config(root / "poieo.yaml")
     return report, reason
