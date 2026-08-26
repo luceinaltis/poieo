@@ -33,7 +33,7 @@ words exactly:
 ```yaml
 flows:
   - name: chores
-    graph: graphs/agent-task.yaml
+    graph: tasks/agent-task.graph.yaml
     trigger: {type: cron, expression: "0 2 * * *"}
     then:
       - when: "run.status != 'completed'"

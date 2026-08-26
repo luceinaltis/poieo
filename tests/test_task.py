@@ -246,7 +246,7 @@ def test_a_missing_folder_fails_at_load(tmp_path):
 def _config(tmp_path: Path, extra: str = "") -> Path:
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
         f"store: {(tmp_path / 'logs').as_posix()}\n"
         "tasks: tasks/\n" + extra,
         encoding="utf-8",
@@ -274,7 +274,7 @@ def test_tasks_and_explicit_flows_live_side_by_side(tmp_path):
             tmp_path,
             "flows:\n"
             "  - name: legacy\n"
-            f"    graph: {(EXAMPLES / 'graphs/support-triage.yaml').as_posix()}\n",
+            f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
         )
     )
     assert sorted(f.name for f in config.flows) == ["legacy", "one"]
@@ -286,7 +286,7 @@ def test_a_task_colliding_with_a_flow_fails_at_load(tmp_path):
         tmp_path,
         "flows:\n"
         "  - name: one\n"
-        f"    graph: {(EXAMPLES / 'graphs/support-triage.yaml').as_posix()}\n",
+        f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
     )
     with pytest.raises(SpecError, match="already a flow"):
         load_config(config_path)
@@ -295,7 +295,7 @@ def test_a_task_colliding_with_a_flow_fails_at_load(tmp_path):
 def test_a_missing_tasks_folder_fails_at_load(tmp_path):
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\ntasks: nope/\n",
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\ntasks: nope/\n",
         encoding="utf-8",
     )
     with pytest.raises(SpecError, match="tasks folder does not exist"):
@@ -305,10 +305,10 @@ def test_a_missing_tasks_folder_fails_at_load(tmp_path):
 def test_a_config_without_tasks_is_untouched(tmp_path):
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
         "flows:\n"
         "  - name: legacy\n"
-        f"    graph: {(EXAMPLES / 'graphs/support-triage.yaml').as_posix()}\n",
+        f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
         encoding="utf-8",
     )
     loaded = load_config(config)

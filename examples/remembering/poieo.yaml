@@ -1,0 +1,6 @@
+# A project that remembers, complete and standalone. Its own marker, so
+# the examples/ project above does not swallow it -- the nearest marker
+# wins, exactly as the nearest .git does.
+version: 1
+binding: ../models/mock.yaml
+tasks: tasks/

@@ -122,7 +122,7 @@ def test_a_failing_pass_never_takes_the_daemon_down(): ...
 ### Task 4: document it and show it working
 
 **Files:**
-- Modify: `README.md` (the memory section learns), `examples/bindings/mock.yaml` (a scripted `learner` answer)
+- Modify: `README.md` (the memory section learns), `examples/models/mock.yaml` (a scripted `learner` answer)
 - Test: by hand, per Step 4
 
 - [x] **Step 1: The scripted learner** — mock.yaml gains a `learner` response proposing one entry (empty `from`, so the harness stamps the batch); the `"*"` fallback stays non-JSON, which is itself the failure path demo

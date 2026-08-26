@@ -1,15 +1,15 @@
 # The daemon: which logical flows stay alive, and on what trigger.
 # Paths are resolved relative to this file.
 version: 1
-store: .poieo
-binding: bindings/mock.yaml       # swap for bindings/claude.yaml or bindings/local.yaml
+store: runs
+binding: models/mock.yaml         # swap for models/claude.yaml or models/local.yaml
 # tasks: tasks/                   # uncomment to run tasks/*.yaml as well
 
 flows:
   # Fires on a fixed period. A run that overruns its period skips the missed
   # ticks rather than queuing them up.
   - name: triage
-    graph: graphs/support-triage.yaml
+    graph: tasks/support-triage.graph.yaml
     trigger:
       type: interval
       every: 30s
@@ -19,7 +19,7 @@ flows:
 
   # Runs back to back forever, carrying the previous run's state forward.
   - name: revision
-    graph: graphs/draft-review.yaml
+    graph: tasks/draft-review.graph.yaml
     trigger:
       type: loop
       cooldown: 10s
@@ -32,7 +32,7 @@ flows:
   # morning, and this checkout is never written to.
   # Disabled here because it would commit -- flip `enabled` to try it.
   - name: chores
-    graph: graphs/agent-task.yaml
+    graph: tasks/agent-task.graph.yaml
     workdir: ..
     trigger:
       type: cron
@@ -41,8 +41,8 @@ flows:
 
   # Disabled here; flip `enabled` to arm it. Re-reads its payload every night.
   - name: nightly-digest
-    graph: graphs/support-triage.yaml
-    binding: bindings/mock.yaml
+    graph: tasks/support-triage.graph.yaml
+    binding: models/mock.yaml
     trigger:
       type: cron
       expression: "0 3 * * *"

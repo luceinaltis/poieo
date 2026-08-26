@@ -124,7 +124,7 @@ def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
 
     assert [f.spec.name for f in flows] == ["triage", "revision"]  # disabled one skipped
     assert flows[0].graph.name == "support-triage"
-    assert config.store_path() == (EXAMPLES / ".poieo").resolve()
+    assert config.store_path() == (EXAMPLES / "runs").resolve()
 
 
 def test_config_rejects_duplicate_flow_names(tmp_path):
@@ -365,14 +365,14 @@ def test_flow_workdir_is_optional(tmp_path):
 
 def _isolated_config(tmp_path, image="python:3.12-slim", count=1):
     body = [
-        f"binding: {EXAMPLES / 'bindings/mock.yaml'}",
+        f"binding: {EXAMPLES / 'models/mock.yaml'}",
         f"store: {tmp_path / 'logs'}",
         "flows:",
     ]
     for i in range(count):
         body += [
             f"  - name: t{i}",
-            f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}",
+            f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}",
             "    trigger: {type: interval, every: 60s}",
             "    isolation:",
             f"      image: {image}",
@@ -416,11 +416,11 @@ def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
     monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
         "flows:\n"
         "  - name: plain\n"
-        f"    graph: {EXAMPLES / 'graphs/support-triage.yaml'}\n"
+        f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
         "    trigger: {type: interval, every: 60s}\n"
     )
     assert len(load_flows(load_config(config))) == 1
@@ -460,7 +460,7 @@ def _tasks_config(tmp_path, tools="[files, notes]"):
         )
     path = tmp_path / "poieo.yaml"
     path.write_text(
-        f"binding: {EXAMPLES / 'bindings/mock.yaml'}\n"
+        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
         "tasks: tasks\n"
         "flows: []\n"
@@ -508,7 +508,7 @@ def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
         at(tmp_path).longterm().mkdir(parents=True, exist_ok=True)
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
         f"store: {(tmp_path / 'logs').as_posix()}\n"
         "tasks: tasks/\n" + learn,
         encoding="utf-8",
@@ -528,7 +528,7 @@ def test_learning_needs_the_daemon_default_binding(tmp_path):
     tasks.mkdir()
     (tasks / "one.yaml").write_text(
         f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\n"
-        f"prompt: go\nbinding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n",
+        f"prompt: go\nbinding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n",
         encoding="utf-8",
     )
     config = tmp_path / "poieo.yaml"
@@ -568,7 +568,7 @@ def test_a_bare_tasks_folder_outside_a_project_is_its_own(tmp_path):
     (tmp_path / "project").mkdir()
     (tasks / "one.yaml").write_text(
         f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\n"
-        f"prompt: go\nbinding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n",
+        f"prompt: go\nbinding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n",
         encoding="utf-8",
     )
     bare = config_for_tasks_folder(tasks)
@@ -620,7 +620,7 @@ async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch)
         raise RuntimeError("the model ate the homework")
 
     monkeypatch.setattr(service, "learn_pass", blow_up)
-    spec = load_binding(EXAMPLES / "bindings/mock.yaml")
+    spec = load_binding(EXAMPLES / "models/mock.yaml")
     async with ProviderPool(spec) as pool:
         await daemon._learn_once(spec, pool)  # must not raise
 

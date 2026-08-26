@@ -321,10 +321,10 @@ replay(state: StageState, events: PoieoEvent[]): StageState
 python main.py daemon examples/poieo.yaml --once --flow revision
 ```
 
-Copy the resulting `examples/.poieo/runs/<run_id>.jsonl` lines into `fixtures.ts` as a typed array, plus a hand-written `run_summary` frame (the store does not put summaries in that file) and one agent run captured from `examples/graphs/agent-task.yaml` so `node_turn` and `node_tool_call` are covered with real `thinking` text:
+Copy the resulting `examples/.poieo/runs/<run_id>.jsonl` lines into `fixtures.ts` as a typed array, plus a hand-written `run_summary` frame (the store does not put summaries in that file) and one agent run captured from `examples/tasks/agent-task.graph.yaml` so `node_turn` and `node_tool_call` are covered with real `thinking` text:
 
 ```bash
-python main.py run examples/graphs/agent-task.yaml -b examples/bindings/mock.yaml \
+python main.py run examples/tasks/agent-task.graph.yaml -b examples/models/mock.yaml \
   --set workdir=<a scratch dir> --store <a scratch store>
 ```
 
@@ -599,7 +599,7 @@ Stub the dynamic import in these tests (`vi.mock("pixi.js", ...)`) — vitest mu
 
 - [ ] **Step 5: Manual check**
 
-Run the dev server against a daemon with `examples/graphs/agent-task.yaml` wired into a flow so tool calls and thinking actually appear. Confirm: bubble on the mock worker's first turn (`"First see what is in this directory."`), the reach-to-wall on `list_dir` and `write_file`, a piece shelved at the end. Then reload with reduced motion forced on. Report what you saw.
+Run the dev server against a daemon with `examples/tasks/agent-task.graph.yaml` wired into a flow so tool calls and thinking actually appear. Confirm: bubble on the mock worker's first turn (`"First see what is in this directory."`), the reach-to-wall on `list_dir` and `write_file`, a piece shelved at the end. Then reload with reduced motion forced on. Report what you saw.
 
 - [ ] **Step 6: Commit**
 
