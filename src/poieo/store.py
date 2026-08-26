@@ -22,6 +22,30 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def _lines_backwards(path: Path, block: int = 65536) -> Iterator[str]:
+    """Lines of a file, last line first, reading only as far as consumed.
+
+    The index is append-only and answers are almost always near the end, so
+    readers walk fixed-size blocks from EOF instead of loading a month of
+    history. Splitting on newlines happens on bytes; a line is only decoded
+    once it is whole, so multi-byte text spanning a block boundary is safe.
+    """
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        position = handle.tell()
+        tail = b""
+        while position > 0:
+            step = min(block, position)
+            position -= step
+            handle.seek(position)
+            lines = (handle.read(step) + tail).split(b"\n")
+            tail = lines[0]
+            for raw in reversed(lines[1:]):
+                yield raw.decode("utf-8", errors="replace")
+        if tail:
+            yield tail.decode("utf-8", errors="replace")
+
+
 @dataclass(slots=True)
 class Event:
     run_id: str
@@ -49,20 +73,29 @@ class RunStore:
             self.runs_dir.mkdir(parents=True, exist_ok=True)
             self._ensured = True
 
-    def _append(self, path: Path, record: dict[str, Any]) -> None:
+    def _append(self, path: Path, record: dict[str, Any], sync: bool = False) -> None:
+        """Append one line; fsync only when asked.
+
+        Events arrive one per model turn and per tool call, from coroutines on
+        the loop the daemon shares with the web server, and an fsync is
+        milliseconds of everything standing still. So events settle for the OS
+        cache (close flushes them), and durability is bought once per run: the
+        index line is synced, and it is the index that answers "what ran".
+        """
         self._ensure()
         line = json.dumps(unwrap(record), ensure_ascii=False, default=str)
         with self._lock:
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(line + "\n")
-                handle.flush()
-                os.fsync(handle.fileno())
+                if sync:
+                    handle.flush()
+                    os.fsync(handle.fileno())
 
     def append(self, event: Event) -> None:
         self._append(self.runs_dir / f"{event.run_id}.jsonl", event.as_dict())
 
     def record_summary(self, summary: dict[str, Any]) -> None:
-        self._append(self.index_path, summary)
+        self._append(self.index_path, summary, sync=True)
 
     # -- reads ---------------------------------------------------------------
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
@@ -75,9 +108,8 @@ class RunStore:
         """
         if not self.index_path.exists():
             return []
-        lines = self.index_path.read_text(encoding="utf-8").splitlines()
         rows: list[dict[str, Any]] = []
-        for line in reversed(lines):
+        for line in _lines_backwards(self.index_path):
             if len(rows) >= limit:
                 break
             line = line.strip()
@@ -95,25 +127,24 @@ class RunStore:
     def run(self, run_id: str) -> dict[str, Any] | None:
         """The index row for one run, or None if the store never saw it.
 
-        Scans the index rather than holding it: the log is append-only and a
-        long-lived daemon's is large, so building the whole list to find one
-        row costs memory nobody needed.
+        Walks the index backwards and stops at the first hit: a run may be
+        re-recorded, and reading from the end makes the newest record the
+        first one found -- without scanning a long-lived daemon's whole log
+        for every diff view and accept click.
         """
         if not self.index_path.exists():
             return None
-        found: dict[str, Any] | None = None
-        with self.index_path.open(encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line or run_id not in line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if row.get("run_id") == run_id:
-                    found = row  # keep the newest; a run may be re-recorded
-        return found
+        for line in _lines_backwards(self.index_path):
+            line = line.strip()
+            if not line or run_id not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("run_id") == run_id:
+                return row  # newest first; a run may be re-recorded
+        return None
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         path = self.runs_dir / f"{run_id}.jsonl"
