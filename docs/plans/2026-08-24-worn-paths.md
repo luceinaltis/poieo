@@ -1,14 +1,12 @@
 # Worn Paths Implementation Plan (Plan I)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Connections wear in with use — a pair of entries that helped together in work that succeeded arrives sooner and reaches further — provable by one test where the worn neighbor outranks its unworn sibling, one where a worn two-hop path arrives while an unworn one never does, and by every connections-slice test passing unchanged with an empty strength store.
 
 **Architecture:** Three factors or nothing: cited (distinctive-token overlap with the run's own output — the declared proxy until attention instrumentation), succeeded, and decay-plus-fan-cap at every write. Strength lives in `.poieo/strength.json` (runtime emphasis, never meaning, never in markdown, never in the derived index — which stays deletable-loses-nothing). Reinforcement runs inside the learning pass (already the serialized single writer with exactly-once batches via the bookmark). Retrieval's neighbor pass becomes a spread: declared connections carry at full base value (zero strength ≡ the connections slice, byte for byte), wear adds carry within the first hop, and only wear carries to a second hop.
 
 **Tech Stack:** Python 3.10, pytest + pytest-asyncio (asyncio_mode=auto). No new dependencies, no new index tables.
 
-**Spec:** docs/superpowers/specs/2026-08-24-worn-paths-design.md
+**Spec:** docs/specs/2026-08-24-worn-paths-design.md
 
 ## Global Constraints
 

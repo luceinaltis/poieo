@@ -1,14 +1,12 @@
 # Project Memory Implementation Plan (Plan F)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A project keeps what it has learned, every task reads it before working, and anything remembered can be traced to the run that taught it — provable by one test where a project without a `memory/` folder produces prompts byte-identical to today, and one walk where an injected entry is followed back to the run that taught it.
 
 **Architecture:** Truth in markdown under git (`memory/constitution.md` + `memory/facts/*.md`), machine layer under the gitignored `.poieo/` (one episode file per run, one derived index that rebuilds from the facts). One new module, `src/poieo/memory.py`, owns the format, the retrieval, and the composed block; the rest of the codebase gains one gated section in the generated system prompt, one guarded line at each of the two input sites, one call in `record_run`, and one read-only CLI command.
 
 **Tech Stack:** Python 3.10, stdlib sqlite3 (FTS5 when the build has it, plain scan when not), pytest + pytest-asyncio (asyncio_mode=auto).
 
-**Spec:** docs/superpowers/specs/2026-08-24-project-memory-design.md
+**Spec:** docs/specs/2026-08-24-project-memory-design.md
 
 ## Global Constraints
 

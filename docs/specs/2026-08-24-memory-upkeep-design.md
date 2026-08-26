@@ -3,7 +3,7 @@
 **Date:** 2026-08-24
 **Status:** Approved for planning
 **Roadmap:** a long memory — the lifecycle slice
-**Builds on:** docs/superpowers/specs/2026-08-24-memory-connections-design.md, docs/superpowers/specs/2026-08-24-learning-pass-design.md
+**Builds on:** docs/specs/2026-08-24-memory-connections-design.md, docs/specs/2026-08-24-learning-pass-design.md
 
 ## Goal
 

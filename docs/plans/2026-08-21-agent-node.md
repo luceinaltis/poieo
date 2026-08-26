@@ -1,14 +1,12 @@
 # Agent Node Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Add an `agent` node type whose model can call file/shell tools inside a confined workdir, looping until it answers without a tool call.
 
 **Architecture:** Neutral `ToolDef`/`ToolCall` types extend the provider contract; each backend translates them to its wire format. A `LocalExecutor` owns tool execution and path confinement. `AgentNode` runs the call→execute→feed-back loop bounded by `max_turns`.
 
 **Tech Stack:** Python 3.10+, pydantic v2, httpx, anthropic SDK, pytest (asyncio auto mode). **No new dependencies.**
 
-**Spec:** `docs/superpowers/specs/2026-08-21-agent-node-design.md`
+**Spec:** `docs/specs/2026-08-21-agent-node-design.md`
 
 ## Global Constraints
 

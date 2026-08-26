@@ -1,6 +1,6 @@
 # Project Folders — Implementation Plan
 
-**Spec:** `docs/superpowers/specs/2026-08-25-project-folders-design.md`
+**Spec:** `docs/specs/2026-08-25-project-folders-design.md`
 **Branch slug:** `project-folders` (one PR per task, squash-merged)
 
 Verification gate for every task, before its PR merges:

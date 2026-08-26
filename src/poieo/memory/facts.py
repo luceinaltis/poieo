@@ -3,7 +3,7 @@
 Truth lives here, in markdown under git. Everything a machine derives from
 these files lives under ``.poieo/`` and can be deleted without loss.
 
-Spec: docs/superpowers/specs/2026-08-24-project-memory-design.md
+Spec: docs/specs/2026-08-24-project-memory-design.md
 """
 
 from __future__ import annotations

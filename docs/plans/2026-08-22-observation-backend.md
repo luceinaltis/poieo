@@ -1,14 +1,12 @@
 # Observation Backend Implementation Plan (Plan A)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A read-only HTTP + SSE surface inside `poieo daemon` that streams run events live and serves run history — verifiable with curl alone.
 
 **Architecture:** A `BroadcastStore` wraps the daemon's `RunStore` so every stored event also lands on live subscriber queues. `AgentNode` emits a new turn-level event; providers capture separated "thinking" into response meta. A Starlette app on the daemon's own asyncio loop exposes flows/runs/events; uvicorn serves it on 127.0.0.1.
 
 **Tech Stack:** Python 3.10, Starlette, uvicorn, pytest + pytest-asyncio (asyncio_mode=auto).
 
-**Spec:** docs/superpowers/specs/2026-08-22-web-observation-design.md
+**Spec:** docs/specs/2026-08-22-web-observation-design.md
 
 ## Global Constraints
 

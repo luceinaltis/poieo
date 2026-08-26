@@ -1,14 +1,12 @@
 # Keepsakes Implementation Plan (Plan K)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Point, don't remember — an entry the pass writes is sealed to the exact content it was written against, doubt compares content instead of clocks, the original is one pointer away, and keepsakes nobody references are let go — provable by a touched-but-identical file raising nothing, a changed one raising the no-longer-matches line, and a lost keepsake falling back to the mtime line rather than silence.
 
 **Architecture:** `src/poieo/blob.py`: a flat content-addressed store under `.poieo/blobs/` (sha256 names, tmp+rename, idempotent put, size cap). The pass seals its own entries' file anchors at write time (`sealed: {"path": "sha"}` in frontmatter — harness-written, inside the existing door). `doubts()` prefers the content comparison for sealed anchors. After the attic move, a successful pass lets go keepsakes referenced by nothing in `facts/` or `attic/` and older than the grace. Bytes never enter `memory/` or any prompt.
 
 **Tech Stack:** Python 3.10, stdlib hashlib, pytest + pytest-asyncio. No new dependencies.
 
-**Spec:** docs/superpowers/specs/2026-08-24-keepsakes-design.md
+**Spec:** docs/specs/2026-08-24-keepsakes-design.md
 
 ## Global Constraints
 

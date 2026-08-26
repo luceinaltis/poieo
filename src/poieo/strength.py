@@ -11,7 +11,7 @@ else; the project relearns them by working. Accordingly, nothing in here is
 ever worth failing anything over: corrupt reads as empty, failed writes are
 logged and swallowed.
 
-Spec: docs/superpowers/specs/2026-08-24-worn-paths-design.md
+Spec: docs/specs/2026-08-24-worn-paths-design.md
 """
 
 from __future__ import annotations

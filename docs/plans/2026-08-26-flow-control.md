@@ -1,6 +1,6 @@
 # Flow Control — Implementation Plan
 
-**Spec:** `docs/superpowers/specs/2026-08-26-flow-control-design.md`
+**Spec:** `docs/specs/2026-08-26-flow-control-design.md`
 **Branches:** `flow-control`, `flow-control-api`, `flow-control-board` (one PR each)
 
 Gate before every merge:

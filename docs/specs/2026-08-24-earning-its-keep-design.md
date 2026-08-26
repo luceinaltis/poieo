@@ -3,7 +3,7 @@
 **Date:** 2026-08-24
 **Status:** Approved for planning
 **Roadmap:** a long memory — the measurement slice
-**Builds on:** docs/superpowers/specs/2026-08-24-worn-paths-design.md
+**Builds on:** docs/specs/2026-08-24-worn-paths-design.md
 
 ## Goal
 

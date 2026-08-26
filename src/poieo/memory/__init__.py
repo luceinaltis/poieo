@@ -17,7 +17,7 @@ itself is deliberately not: ``recall.recall`` would shadow the module of the
 same name, and reaching for it from outside this package means reaching past
 ``read_memory``, which is the answer everything else wants.
 
-Spec: docs/superpowers/specs/2026-08-24-project-memory-design.md
+Spec: docs/specs/2026-08-24-project-memory-design.md
 """
 
 from .episodes import episodes_dir, used_in, write_episode
