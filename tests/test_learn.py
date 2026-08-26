@@ -7,6 +7,7 @@ success, and one bad proposal never wastes the night's good entries.
 """
 
 import json
+import os
 
 from poieo.binding import BindingSpec
 from poieo.learn import learn
@@ -677,6 +678,36 @@ async def test_a_fresh_keepsake_survives(tmp_path):
 
 
 # -- hardening ---------------------------------------------------------------
+
+
+async def test_a_damaged_pass_log_stops_neither_reader(tmp_path):
+    """The bookmark and the page suggestion read the same log, and used to
+    open it separately -- one guarding against a line that is not a mapping
+    and the other not, so the same file could answer one and crash the other."""
+    from poieo.learn import last_suggestion
+
+    project = _project(tmp_path)
+    _episode(project, "20260824T010000-aaaaaaaa")
+    await _learn(
+        project,
+        json.dumps({"entries": [], "set_aside": [], "page": "Keep the caps in mind."}),
+    )
+
+    # The page was written by the fixture a moment before the pass ran, and a
+    # suggestion is withheld once the page is newer than it. Backdate the page
+    # so this test is about the damaged log and nothing else.
+    page = project / "memory" / "constitution.md"
+    os.utime(page, (0, 0))
+
+    log = project / ".poieo" / "learn.jsonl"
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write("\n[1, 2, 3]\n{ half a line\n")
+
+    assert last_suggestion(project) == "Keep the caps in mind."
+    # And the bookmark still sees the pass, so nothing is read twice.
+    _episode(project, "20260824T020000-bbbbbbbb")
+    again = await _learn(project, _proposal())
+    assert again is not None and again.upto == "20260824T020000-bbbbbbbb"
 
 
 async def test_a_record_without_a_run_id_cannot_jam_the_bookmark(tmp_path):
