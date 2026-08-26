@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Literal
 
@@ -11,11 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec, load_document, load_graph
-from ..memory import check_memory
-from ..project import ProjectSpec
+from ..layout import find_project_file
+from ..memory import check_memory, keeps_memory
+from ..project import ProjectSpec, load_project
 from ..tools import Isolation
 from ..task import TaskSpec, expand, load_tasks, task_payload
 from .triggers import TriggerSpec
+
+log = logging.getLogger("poieo.daemon")
 
 
 class FlowSpec(BaseModel):
@@ -61,7 +65,7 @@ class DaemonConfig(ProjectSpec):
     what this adds is reading ``flows`` as flows rather than as whatever the
     document happened to say.
 
-    (``learn``'s other half stays the tasks folder's ``memory/longterm/``: a
+    (``learn``'s other half stays ``memory/longterm/`` beside the marker: a
     config key alone must not conjure the feature for a project that never
     chose it.)
     """
@@ -167,7 +171,19 @@ def _load_tasks(config: DaemonConfig) -> None:
         raise SpecError(f"tasks folder does not exist: {folder}")
     # A typo in the project's memory fails here, where `poieo validate` and
     # the daemon's load can see it, never when a trigger fires at 3am.
-    check_memory(folder)
+    check_memory(config.base_dir)
+    if config.learn is not None and not keeps_memory(config.base_dir):
+        # Half an opt-in is the one way this feature dies quietly: the
+        # key says learn, the folder says nothing is kept, and a person
+        # waits a week for entries that were never going to arrive.
+        # A warning, not a failure -- the folder is still the opt-in.
+        log.warning(
+            "%s says `learn: %s`, but %s does not exist, so nothing will be "
+            "learned. Make that folder to keep a long memory.",
+            config.source_path,
+            config.learn,
+            config.layout().longterm(),
+        )
 
     taken = {flow.name for flow in config.flows}
     # Two passes: a task's generated prompt names the tasks it may tell, and
@@ -195,14 +211,31 @@ def _load_tasks(config: DaemonConfig) -> None:
 def config_for_tasks_folder(folder: Path) -> DaemonConfig:
     """The config `poieo daemon <folder>` stands for: run the cards in it.
 
-    Each card names its own binding, because there is no config file to hold
-    a default. The store lands inside the folder, beside what it remembers, so
-    everything about the cards travels with them -- and `poieo run` on one
-    card follows the same rule.
+    The argument says *which cards to run*. It was never a claim about where
+    the project begins, so a ``poieo.yaml`` above still answers that -- and
+    when there is one, this is that project with its tasks folder swapped:
+    same store, same binding, same memory. Joining a project halfway, taking
+    its memory but not the model it reads with, is the kind of rule nobody
+    can hold in their head.
+
+    Without a marker there is nothing to join. The folder is the project,
+    the history lands inside it, and each card names its own binding because
+    there is no file to hold a default.
     """
     folder = folder.resolve()
-    config = DaemonConfig(store=str(folder / "runs"), tasks=str(folder))
-    config.source_path = folder / "poieo.yaml"  # anchors relative paths
+    marker = find_project_file(folder)
+    if marker is not None:
+        project = load_project(marker)
+        config = DaemonConfig(
+            store=project.store,
+            binding=project.binding,
+            learn=project.learn,
+            tasks=str(folder),
+        )
+        config.source_path = marker
+    else:
+        config = DaemonConfig(store=str(folder / "runs"), tasks=str(folder))
+        config.source_path = folder / "poieo.yaml"  # anchors relative paths
     _load_tasks(config)
     return config
 

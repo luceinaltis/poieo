@@ -19,7 +19,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..errors import SpecError, describe_invalid
-from ..layout import Layout
+from ..layout import layout_for
 
 log = logging.getLogger("poieo.memory")
 
@@ -101,7 +101,7 @@ def keeps_memory(project_dir: Path) -> bool:
     live under ``memory/`` too and arrive on their own, the first time a task
     runs. A signal that switches itself on is not consent.
     """
-    return Layout(root=Path(project_dir)).longterm().is_dir()
+    return layout_for(project_dir).longterm().is_dir()
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -141,7 +141,7 @@ def load_fact(path: Path) -> Fact:
 def load_facts(project_dir: Path) -> list[Fact]:
     """Every learned entry, in a stable order. Malformed ones raise, so the
     caller decides whether that is a load failure or a 3am shrug."""
-    root = Layout(root=Path(project_dir)).facts()
+    root = layout_for(project_dir).facts()
     if not root.is_dir():
         return []
     return [load_fact(p) for p in sorted(root.glob("*.md"))]
@@ -151,7 +151,7 @@ def readable_facts(project_dir: Path) -> list[Fact]:
     """Every entry that still reads, for the run path. A malformed one is a
     load failure when loading (check_memory); mid-residency it is skipped --
     a run with less in mind beats no run at all."""
-    root = Layout(root=Path(project_dir)).facts()
+    root = layout_for(project_dir).facts()
     if not root.is_dir():
         return []
     facts = []
@@ -173,7 +173,7 @@ def check_memory(project_dir: Path) -> None:
     """
     facts = load_facts(project_dir)
     known = {fact.slug for fact in facts}
-    attic = Layout(root=Path(project_dir)).attic()
+    attic = layout_for(project_dir).attic()
     if attic.is_dir():
         # Resting entries still exist: a restored file whose typed claims
         # name them must load, or "move it back" would not be true. A
@@ -200,7 +200,7 @@ def check_memory(project_dir: Path) -> None:
 
 def read_page(project_dir: Path) -> str | None:
     """The always-present page as text, or None when the project keeps none."""
-    path = Layout(root=Path(project_dir)).constitution()
+    path = layout_for(project_dir).constitution()
     try:
         text = path.read_text(encoding="utf-8-sig") if path.is_file() else ""
     except OSError as exc:

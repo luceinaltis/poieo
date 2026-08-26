@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
 from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
-from .layout import Layout
+from .layout import layout_for
 from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
 
@@ -178,7 +178,7 @@ class TaskSpec(BaseModel):
         what it always was: `memory/__init__` calls the journal the
         short-term half in the same breath as calling `facts/` the long one.
         """
-        return Layout(root=self.dir).journal(self.slug)
+        return layout_for(self.dir).journal(self.slug)
 
 
 def load_task(path: str | Path) -> TaskSpec:

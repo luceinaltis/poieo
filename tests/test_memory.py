@@ -12,6 +12,7 @@ from dataclasses import replace
 import pytest
 
 from conftest import EXAMPLES, at
+from poieo.layout import layout_for
 from poieo.binding import BindingSpec
 from poieo.daemon.config import load_config, load_flows
 from poieo.errors import SpecError
@@ -54,7 +55,7 @@ def _result(**over):
 
 
 def _record_file(task, result):
-    return at(task.dir).results() / f"{result.run_id}.json"
+    return layout_for(task.dir).results() / f"{result.run_id}.json"
 
 
 def test_a_completed_run_leaves_an_episode(tmp_path):
@@ -162,22 +163,30 @@ TODAY_WITHOUT_MEMORY = (
 )
 
 
+def _mark(tmp_path):
+    """A poieo.yaml, so the test and the code agree on where the project
+    begins -- which is also where `memory/` goes."""
+    config = tmp_path / "poieo.yaml"
+    if not config.exists():
+        config.write_text(
+            f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
+            f"store: {(tmp_path / 'logs').as_posix()}\n"
+            "tasks: tasks/\n",
+            encoding="utf-8",
+        )
+    return config
+
+
 def _remember(tmp_path, text="Never push to main."):
-    memory = at(tmp_path / "tasks")
+    _mark(tmp_path)
+    memory = at(tmp_path)
     memory.longterm().mkdir(parents=True, exist_ok=True)
     memory.constitution().write_text(text, encoding="utf-8")
     return memory
 
 
 def _daemon_flow(tmp_path):
-    config = tmp_path / "poieo.yaml"
-    config.write_text(
-        f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
-        f"store: {(tmp_path / 'logs').as_posix()}\n"
-        "tasks: tasks/\n",
-        encoding="utf-8",
-    )
-    loaded_config = load_config(config)
+    loaded_config = load_config(_mark(tmp_path))
     return load_flows(loaded_config)[0], loaded_config
 
 
@@ -191,6 +200,29 @@ def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
     flow, config = _daemon_flow(tmp_path)
     assert "memory" not in flow.read_input(config)
     assert "{{ input.memory }}" not in flow.graph.nodes[0].system
+
+
+def test_the_memory_hangs_off_the_marker_not_the_tasks_folder(tmp_path):
+    """One project, one memory. `poieo.yaml` says where the project begins,
+    and everything the project keeps hangs off there -- so cards in `tasks/`
+    and a `flows:` entry beside them read the same page."""
+    task = _task(tmp_path)
+    _remember(tmp_path)
+
+    assert (tmp_path / "memory" / "longterm" / "constitution.md").is_file()
+    assert not (tmp_path / "tasks" / "memory").exists()
+    assert "Never push to main." in task_payload(task)["memory"]
+
+
+def test_without_a_marker_the_tasks_folder_still_stands_in(tmp_path):
+    """`poieo daemon tasks/` on a bare folder keeps working exactly as it
+    did: no marker, so that folder is the project and its memory is its own."""
+    task = _task(tmp_path)
+    memory = at(tmp_path / "tasks")
+    memory.longterm().mkdir(parents=True)
+    memory.constitution().write_text("Keep it tidy.", encoding="utf-8")
+
+    assert "Keep it tidy." in task_payload(task)["memory"]
 
 
 def test_the_constitution_reaches_the_prompt_on_the_daemon_path(tmp_path):
@@ -359,10 +391,11 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
 
 
 def _learn(tmp_path, slug, text):
-    facts = at(tmp_path / "tasks").facts()
+    _mark(tmp_path)
+    facts = at(tmp_path).facts()
     facts.mkdir(parents=True, exist_ok=True)
     (facts / f"{slug}.md").write_text(text, encoding="utf-8")
-    return tmp_path / "tasks"
+    return tmp_path
 
 
 def test_a_mention_in_the_body_is_read(tmp_path):
@@ -447,8 +480,8 @@ def test_a_restored_entry_naming_an_attic_entry_still_loads(tmp_path):
     # Restoring from the attic is "move the file back" -- so a typed claim
     # naming an entry that is resting in the attic must not fail the load.
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once.")
-    attic = at(tmp_path / "tasks").attic()
-    attic.mkdir()
+    attic = at(tmp_path).attic()
+    attic.mkdir(parents=True)
     (attic / "new-cap.md").write_text("Caps sit at 50 now.", encoding="utf-8")
 
     check_memory(tmp_path / "tasks")  # must not raise

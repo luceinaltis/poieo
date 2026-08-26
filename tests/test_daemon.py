@@ -505,7 +505,7 @@ def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
         encoding="utf-8",
     )
     if memory:
-        at(tasks).longterm().mkdir(parents=True, exist_ok=True)
+        at(tmp_path).longterm().mkdir(parents=True, exist_ok=True)
     config = tmp_path / "poieo.yaml"
     config.write_text(
         f"binding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n"
@@ -542,9 +542,61 @@ def test_an_unconfigured_daemon_never_learns(tmp_path):
     assert daemon._ready_to_learn() is False
 
 
+def test_a_bare_tasks_folder_inside_a_project_joins_it(tmp_path):
+    """`poieo daemon tasks/` names which cards to run. It was never a claim
+    about where the project begins, so a marker above still answers that --
+    and the cards keep one history and one memory rather than starting a
+    second set beside themselves."""
+    from poieo.daemon.config import config_for_tasks_folder
+
+    config = _learning_config(tmp_path)  # writes a poieo.yaml at tmp_path
+    bare = config_for_tasks_folder(tmp_path / "tasks")
+
+    assert bare.base_dir == tmp_path.resolve()
+    assert bare.layout().memory() == tmp_path.resolve() / "memory"
+    # ...and the model it reads with, not just where things live: joining
+    # a project halfway is a rule nobody can hold in their head.
+    assert bare.binding == config.binding
+    assert [flow.name for flow in bare.flows] == ["one"]
+
+
+def test_a_bare_tasks_folder_outside_a_project_is_its_own(tmp_path):
+    from poieo.daemon.config import config_for_tasks_folder
+
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+    (tmp_path / "project").mkdir()
+    (tasks / "one.yaml").write_text(
+        f"name: one\nfolder: {(tmp_path / 'project').as_posix()}\n"
+        f"prompt: go\nbinding: {(EXAMPLES / 'bindings/mock.yaml').as_posix()}\n",
+        encoding="utf-8",
+    )
+    bare = config_for_tasks_folder(tasks)
+    assert bare.layout().memory() == tasks.resolve() / "memory"
+
+
 def test_a_daemon_without_a_memory_folder_never_learns(tmp_path):
     daemon = Daemon(_learning_config(tmp_path, memory=False))
     assert daemon._ready_to_learn() is False
+
+
+def test_half_an_opt_in_says_so_at_load(tmp_path, caplog):
+    """`learn:` set and no folder to learn into is the one way this feature
+    dies quietly -- the key says learn, nothing is kept, and a person waits a
+    week for entries that were never coming. A warning, not a failure: the
+    folder is still the opt-in, and a config key must not conjure it."""
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        _learning_config(tmp_path, memory=False)
+
+    said = " ".join(caplog.messages)
+    assert "nothing will be learned" in said
+    assert "longterm" in said
+
+
+def test_a_folder_that_is_kept_warns_about_nothing(tmp_path, caplog):
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        _learning_config(tmp_path, memory=True)
+    assert not [m for m in caplog.messages if "nothing will be learned" in m]
 
 
 def test_a_busy_daemon_waits_its_turn(tmp_path):
