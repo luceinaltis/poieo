@@ -26,7 +26,16 @@ from pathlib import Path
 from typing import Any
 
 from .binding import BindingSpec
-from .memory import Fact, _facts_or_less, _page, memory_root
+from .memory import (
+    CONSTITUTION,
+    Fact,
+    doubts,
+    load_fact,
+    memory_root,
+    read_page,
+    readable_facts,
+    used_in,
+)
 from .providers import ProviderPool
 from .providers.base import LLMRequest
 
@@ -71,9 +80,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         log.debug("nothing new to learn from in %s", project_dir)
         return None
 
-    from .memory import doubts
-
-    facts = _facts_or_less(project_dir)
+    facts = readable_facts(project_dir)
     doubtful = doubts(project_dir, facts)
     result = Pass(
         at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -87,7 +94,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         messages=[
             {
                 "role": "user",
-                "content": _prompt(_page(project_dir), facts, records, doubtful),
+                "content": _prompt(read_page(project_dir), facts, records, doubtful),
             }
         ],
         system=None,
@@ -394,7 +401,6 @@ def _strengthen(
     the run completed, and a declared connection between them. Co-presence
     alone earns nothing -- reinforcing what retrieval already picks is how
     a memory talks itself into a rut."""
-    from .memory import _used_in
     from .strength import wear
 
     by_slug = {fact.slug: fact for fact in facts}
@@ -405,7 +411,7 @@ def _strengthen(
         shown = [slug for slug in record.get("shown") or [] if slug in by_slug]
         if len(shown) < 2:
             continue
-        cited = [slug for slug in shown if _used_in(by_slug[slug], record)]
+        cited = [slug for slug in shown if used_in(by_slug[slug], record)]
         for i, one in enumerate(cited):
             for other in cited[i + 1 :]:
                 if _followable(by_slug[one], by_slug[other]):
@@ -442,8 +448,6 @@ def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
     content untouched, reversible by moving it back. Typed references hold
     an entry in place however old -- moving a named entry would break the
     load-time cross-check -- and the attic never overwrites either."""
-    from .memory import memory_root
-
     referenced: set[str] = set()
     for fact in facts:
         referenced |= set(fact.matter.links.depends_on)
@@ -481,7 +485,6 @@ def _let_go(project_dir: Path) -> list[str]:
     to the attic with its name intact -- so an unnamed keepsake backs
     nothing."""
     from . import blob
-    from .memory import _load_fact, memory_root
 
     store = Path(project_dir) / ".poieo" / blob.STORE
     if not store.is_dir():
@@ -494,7 +497,7 @@ def _let_go(project_dir: Path) -> list[str]:
             continue
         for path in sorted(root.glob("*.md")):
             try:
-                referenced |= set(_load_fact(path).matter.sealed.values())
+                referenced |= set(load_fact(path).matter.sealed.values())
             except Exception:
                 # An unreadable entry protects nothing it does not name --
                 # but collection must not fail over it either.
@@ -520,8 +523,6 @@ def last_suggestion(project_dir: Path) -> str | None:
     nothing if it suggested nothing, however loud an older pass was, and
     nothing once the page has been edited since: the clearing gesture is
     the same as everywhere -- look, then touch."""
-    from .memory import CONSTITUTION, memory_root
-
     path = Path(project_dir) / ".poieo" / LOG_NAME
     if not path.is_file():
         return None
@@ -536,10 +537,10 @@ def last_suggestion(project_dir: Path) -> str | None:
     suggestion = latest.get("page")
     if not isinstance(suggestion, str) or not suggestion:
         return None
-    page = memory_root(project_dir) / CONSTITUTION
+    page_path = memory_root(project_dir) / CONSTITUTION
     try:
-        if page.is_file():
-            edited = datetime.fromtimestamp(page.stat().st_mtime, timezone.utc)
+        if page_path.is_file():
+            edited = datetime.fromtimestamp(page_path.stat().st_mtime, timezone.utc)
             if edited > datetime.fromisoformat(str(latest.get("at", ""))):
                 return None
     except (OSError, ValueError):

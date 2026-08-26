@@ -298,7 +298,7 @@ def test_a_memoryless_projects_episode_records_nothing_new(tmp_path):
 
 
 def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
-    import poieo.memory as memory_module
+    import poieo.memory.episodes as episodes_module
 
     task, result = _task(tmp_path), _result()
     _remember(tmp_path)
@@ -306,7 +306,8 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
     def blow_up(*args, **kwargs):
         raise RuntimeError("selection went sideways")
 
-    monkeypatch.setattr(memory_module, "_recall", blow_up)
+    # Patched where the record is written, which is where it is looked up.
+    monkeypatch.setattr(episodes_module, "recall", blow_up)
     record_run(task, result)  # must not raise
 
     data = json.loads(_episode(task, result).read_text(encoding="utf-8"))
@@ -430,3 +431,39 @@ def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
         tmp_path, "retry", "---\nlinks:\n  depends_on: [old-cap]\n---\nRetry once."
     )
     check_memory(project)  # legal; the report will flag it, nothing breaks
+
+
+# -- the shape of the package ------------------------------------------------
+
+
+def test_the_package_does_not_shadow_its_own_submodules():
+    """A `from .recall import recall` in __init__ makes `poieo.memory.recall`
+    the *function*, so `import poieo.memory.recall as m` hands back something
+    with no module attributes on it. That is not theoretical -- it is how the
+    first draft of this split broke three tests that patch a module global."""
+    import types
+
+    import poieo.memory as memory
+
+    for name in ("facts", "index", "recall", "episodes", "upkeep"):
+        __import__(f"poieo.memory.{name}")
+        assert isinstance(getattr(memory, name), types.ModuleType), (
+            f"poieo.memory.{name} is shadowed by a re-export of the same name"
+        )
+
+
+def test_the_learning_pass_reaches_for_nothing_private():
+    """learn.py used to import four underscore names from memory. Each one was
+    a signal that the package's public surface was drawn in the wrong place,
+    and the split is what moved it -- so nothing should need them again."""
+    import pathlib
+
+    import poieo.learn
+
+    source = pathlib.Path(poieo.learn.__file__).read_text(encoding="utf-8")
+    offenders = [
+        line.strip()
+        for line in source.splitlines()
+        if "memory import" in line and " _" in line
+    ]
+    assert offenders == []
