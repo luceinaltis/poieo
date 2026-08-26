@@ -651,7 +651,7 @@ def write_episode(task: Any, result: Any) -> Path | None:
     """
     # Late: task.py imports this module, and the closing line's shape
     # belongs there, beside the journal it also feeds.
-    from .task import _closing_line
+    from .task import closing_line
 
     path = episodes_dir(task.dir) / f"{result.run_id}.json"
     record = {
@@ -667,7 +667,7 @@ def write_episode(task: Any, result: Any) -> Path | None:
         "usage": dict(result.usage),
         "started_at": result.started_at,
         "finished_at": result.finished_at,
-        "summary": _closing_line(result),
+        "summary": closing_line(result),
         "outputs": result.outputs,
     }
     try:

@@ -18,7 +18,7 @@ from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import Event, RunStore
-from ..task import append_journal, record_run
+from ..task import append_journal, closing_line, record_run
 from ..tools import Hands, make_box_keeper, sweep_boxes
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
@@ -41,12 +41,15 @@ def _ensure_port_free(host: str, port: int) -> None:
 
 
 def _change_message(result: RunResult, flow: str) -> str:
-    """The model's own summary when it produced one -- that is what a reader sees."""
-    for node in reversed(result.path):
-        value = result.outputs.get(node)
-        if isinstance(value, str) and value.strip():
-            return value.strip().splitlines()[0][:72]
-    return f"poieo {flow} {result.run_id}"
+    """The model's own summary when it produced one -- that is what a reader sees.
+
+    The same reading the journal and the run record use, shaped for a commit
+    subject: one line, and short enough to sit in a `git log --oneline`.
+    """
+    said = closing_line(result, fallback="")
+    if not said:
+        return f"poieo {flow} {result.run_id}"
+    return said.strip().splitlines()[0][:72]
 
 
 # Staying up is the default; staying up while failing identically is not

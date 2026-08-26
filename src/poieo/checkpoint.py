@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 from .errors import PoieoError
 
@@ -69,20 +70,33 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout
 
 
-def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
-    files: list[str] = []
-    insertions = deletions = 0
+def _numstat_rows(raw: str) -> Iterator[tuple[str, int, int]]:
+    """``git diff --numstat`` as ``(path, insertions, deletions)`` per file.
+
+    Binary files report ``-`` for both counts; they still changed, so they are
+    reported with zeroes rather than skipped. A rename reads
+    ``R100<tab>old<tab>new``, and the last field is where the change lands,
+    which is the path worth naming.
+    """
     for line in raw.splitlines():
         parts = line.split("\t")
         if len(parts) < 3:
             continue
-        added, removed, path = parts[0], parts[1], parts[-1]
+        added, removed = parts[0], parts[1]
+        yield (
+            parts[-1],
+            int(added) if added.isdigit() else 0,
+            int(removed) if removed.isdigit() else 0,
+        )
+
+
+def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
+    files: list[str] = []
+    insertions = deletions = 0
+    for path, added, removed in _numstat_rows(raw):
         files.append(path)
-        # Binary files report "-" for both counts; they still changed.
-        if added.isdigit():
-            insertions += int(added)
-        if removed.isdigit():
-            deletions += int(removed)
+        insertions += added
+        deletions += removed
     return files, insertions, deletions
 
 
@@ -133,20 +147,15 @@ class Checkpoint:
                 # the change lands, which is the path worth reporting.
                 statuses[parts[-1]] = parts[0][:1]
 
-        files = []
-        for line in numstat.splitlines():
-            parts = line.split("\t")
-            if len(parts) < 3:
-                continue
-            added, removed, path = parts[0], parts[1], parts[-1]
-            files.append(
-                {
-                    "path": path,
-                    "status": statuses.get(path, "M"),
-                    "insertions": int(added) if added.isdigit() else 0,
-                    "deletions": int(removed) if removed.isdigit() else 0,
-                }
-            )
+        files = [
+            {
+                "path": path,
+                "status": statuses.get(path, "M"),
+                "insertions": added,
+                "deletions": removed,
+            }
+            for path, added, removed in _numstat_rows(numstat)
+        ]
 
         patch = _git(self.repo, "diff", base, head)
         truncated = len(patch) > max_bytes

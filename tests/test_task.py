@@ -539,3 +539,60 @@ def test_an_empty_roster_is_not_an_awkward_sentence(tmp_path):
     task = _card(tmp_path, "build-docs", "tools: [files, notes]\n")
     block = system_block(task, roster=[])
     assert "tell" not in block.lower()
+
+
+# -- what the model said last ------------------------------------------------
+
+
+def _finished(**over):
+    from dataclasses import replace
+
+    from poieo.runtime.context import RunResult
+
+    result = RunResult(
+        run_id="20260824T120000-abcd1234",
+        flow="tidy",
+        graph="tidy",
+        status="completed",
+        started_at="2026-08-24T12:00:00+00:00",
+        finished_at="2026-08-24T12:00:05+00:00",
+        steps=2,
+        path=["look", "work"],
+        usage={"input_tokens": 10, "output_tokens": 5},
+        outputs={"look": "poked around", "work": "fixed the parser\nand tidied up\n"},
+        state={},
+    )
+    return replace(result, **over)
+
+
+def test_the_journal_the_record_and_the_commit_read_one_line():
+    """Three readers, one reading. The journal entry, the run record's summary
+    and the change's commit subject all come from the last node that said
+    anything -- so they can never tell a reader three stories about one run."""
+    from poieo.daemon.service import _change_message
+    from poieo.task import closing_line
+
+    result = _finished()
+    assert closing_line(result) == "fixed the parser\nand tidied up\n"
+    # The commit subject is the same sentence, shaped for `git log --oneline`.
+    assert _change_message(result, "tidy") == "fixed the parser"
+
+
+def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
+    from poieo.daemon.service import _change_message
+    from poieo.task import closing_line
+
+    silent = _finished(path=["work"], outputs={"work": "   "})
+    assert closing_line(silent) == "(said nothing)"
+    # A commit cannot say "(said nothing)" usefully; it names the run instead.
+    assert _change_message(silent, "tidy") == "poieo tidy 20260824T120000-abcd1234"
+
+
+def test_a_long_line_is_clipped_for_the_commit_but_not_for_the_record():
+    from poieo.daemon.service import _change_message
+    from poieo.task import closing_line
+
+    said = "went through every file and " + "x" * 200
+    result = _finished(path=["work"], outputs={"work": said})
+    assert closing_line(result) == said          # the record keeps all of it
+    assert len(_change_message(result, "tidy")) == 72

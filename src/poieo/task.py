@@ -293,7 +293,7 @@ def record_run(task: TaskSpec, result: Any) -> None:
     # swallow their own failures, so neither can cost the other.
     write_episode(task, result)
     if result.status == "completed":
-        kind, text = "did", _closing_line(result)
+        kind, text = "did", closing_line(result)
     else:
         kind = "failed"
         cause = getattr(result, "cause", None)
@@ -311,13 +311,19 @@ def record_run(task: TaskSpec, result: Any) -> None:
         log.warning("task '%s': could not write the journal: %s", task.slug, exc)
 
 
-def _closing_line(result: Any) -> str:
-    """What the model said last: its own one-line summary of the work."""
+def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
+    """What the model said last: its own one-line summary of the work.
+
+    The last node on the run's path that produced any text at all -- which is
+    what the journal shows, what the run record keeps, and what the commit
+    message of the change says. One reading, so those three can never tell a
+    reader three different stories about the same run.
+    """
     for node_id in reversed(result.path):
         value = result.outputs.get(node_id)
         if isinstance(value, str) and value.strip():
             return value
-    return "(said nothing)"
+    return fallback
 
 
 # -- the journal -------------------------------------------------------------
