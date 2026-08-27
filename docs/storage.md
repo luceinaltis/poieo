@@ -144,6 +144,14 @@ models each reported, and touching a file is the caller's business. Detection
 never runs again — **run time reads files, nothing else.** A binding names an
 endpoint because somebody wrote it there, not because a port answered tonight.
 
+The order in `CANDIDATES` is the order a picker shows, and the order an
+unattended `init` takes its answer from. **Local servers lead**, for
+[DESIGN.md](../DESIGN.md) principle 3's own reason: a resident that runs around
+the clock has to be able to do it without anybody watching the token spend, so
+the metered endpoint is not what a project falls into by default. A machine with
+both a Claude credential and an answering Ollama declares both and binds the
+Ollama. Moving that is `poieo config use`, one command.
+
 `models_for(type, base_url)` is the one place that knows how each backend lists
 what it has — `/api/tags` for Ollama, `/models` for anything OpenAI-shaped, the
 SDK for Claude. Keyed by **provider type** rather than by address, because the
