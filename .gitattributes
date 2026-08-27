@@ -1,0 +1,9 @@
+# The built frontend is output, not source. `core.autocrlf` is true on this
+# machine, so git kept the assets LF in the index and CRLF in the working
+# tree -- and every `npm run build --workspace web-ui` then reported files
+# vite had written byte-for-byte identically as modified. A 724 kB three.js
+# chunk showed up in `git status` on every rebuild with nothing in it changed,
+# which is exactly the noise that teaches a reader to skim past `git status`.
+#
+# Bytes as the bundler wrote them, no conversion either way.
+src/poieo/web/static/** -text
