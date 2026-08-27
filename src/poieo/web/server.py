@@ -65,15 +65,15 @@ def _runner_for(daemon: Any, flow: str | None) -> Any:
     return None
 
 
-def _checkpoint_for(daemon: Any, flow: str | None) -> Any:
+def _workspace_for(daemon: Any, flow: str | None) -> Any:
     """The private copy behind a flow, if it keeps one."""
     runner = _runner_for(daemon, flow)
-    return getattr(runner, "checkpoint", None) if runner else None
+    return getattr(runner, "workspace", None) if runner else None
 
 
 def _review_state(runner: Any) -> dict[str, Any]:
     """How much is waiting, and what accepting it would add to."""
-    point = getattr(runner, "checkpoint", None)
+    point = getattr(runner, "workspace", None)
     if point is None:
         return {"pending": 0, "into": None}
     try:
@@ -191,12 +191,12 @@ def create_app(daemon: Any) -> Starlette:
     async def run_diff(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
         # An index scan, like the git work below: off the loop it shares.
-        summary = await asyncio.to_thread(daemon.store.run, run_id)
+        summary = await asyncio.to_thread(daemon.store.summary, run_id)
         if summary is None:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
         change = summary.get("change")
-        point = _checkpoint_for(daemon, summary.get("flow"))
+        point = _workspace_for(daemon, summary.get("flow"))
         if not change or point is None:
             # A run that altered nothing has nothing to review. That is an
             # answer, not a failure.
@@ -212,7 +212,7 @@ def create_app(daemon: Any) -> Starlette:
         if runner is None:
             return JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
 
-        point = getattr(runner, "checkpoint", None)
+        point = getattr(runner, "workspace", None)
         if point is None:
             return JSONResponse(
                 {"error": f"flow '{flow}' keeps no reviewable copy"}, status_code=409
@@ -226,7 +226,7 @@ def create_app(daemon: Any) -> Starlette:
         run_id = (body or {}).get(key)
         target = None
         if run_id:
-            summary = await asyncio.to_thread(daemon.store.run, run_id)
+            summary = await asyncio.to_thread(daemon.store.summary, run_id)
             change = (summary or {}).get("change")
             if not change:
                 return JSONResponse(

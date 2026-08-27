@@ -280,7 +280,7 @@ async def test_a_memoryless_project_never_gains_a_folder(tmp_path):
 # output), succeeded, and a declared connection between the pair.
 
 
-from poieo.strength import wear_of
+from poieo.strength import strengths
 
 
 def _connected_pair(project):
@@ -306,7 +306,7 @@ async def test_connected_cited_entries_in_a_completed_run_wear_in(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project)[frozenset(("batch-cap", "retry-window"))] > 0
+    assert strengths(project)[frozenset(("batch-cap", "retry-window"))] > 0
 
 
 async def test_shown_but_uncited_earns_nothing(tmp_path):
@@ -320,7 +320,7 @@ async def test_shown_but_uncited_earns_nothing(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project) == {}
+    assert strengths(project) == {}
 
 
 async def test_a_failed_run_earns_nothing(tmp_path):
@@ -335,7 +335,7 @@ async def test_a_failed_run_earns_nothing(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project) == {}
+    assert strengths(project) == {}
 
 
 async def test_an_unconnected_cited_pair_earns_nothing(tmp_path):
@@ -350,7 +350,7 @@ async def test_an_unconnected_cited_pair_earns_nothing(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project) == {}
+    assert strengths(project) == {}
 
 
 async def test_a_disagreeing_pair_never_wears_in(tmp_path):
@@ -370,7 +370,7 @@ async def test_a_disagreeing_pair_never_wears_in(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project) == {}
+    assert strengths(project) == {}
 
 
 async def test_a_failed_pass_earns_nothing_and_the_reread_earns_once(tmp_path):
@@ -384,11 +384,11 @@ async def test_a_failed_pass_earns_nothing_and_the_reread_earns_once(tmp_path):
     )
 
     await _learn(project, ["this is not json"])
-    assert wear_of(project) == {}
+    assert strengths(project) == {}
 
     await _learn(project, [_proposal()])
-    worn = wear_of(project)[frozenset(("batch-cap", "retry-window"))]
-    assert 0.9 < worn <= 1.0
+    strength = strengths(project)[frozenset(("batch-cap", "retry-window"))]
+    assert 0.9 < strength <= 1.0
 
 
 # -- the second look, and the page suggestion --------------------------------
@@ -520,14 +520,14 @@ async def test_a_fresh_set_aside_stays(tmp_path):
 
 
 async def test_attic_entries_reach_no_load_no_report_no_prompt(tmp_path):
-    from poieo.memory import load_facts, memory_report, read_memory
+    from poieo.memory import load_entries, memory_report, read_memory
 
     project = _project(tmp_path)
     _old_aside(project)
     _episode(project, "20260824T010000-aaaaaaaa")
     await _learn(project, _proposal())
 
-    assert "old-cap" not in {fact.slug for fact in load_facts(project)}
+    assert "old-cap" not in {entry.slug for entry in load_entries(project)}
     assert memory_report(project)["set_aside"] == 0
     block = read_memory(project) or ""
     assert "sat at 10" not in block
@@ -553,7 +553,7 @@ async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
 
 
 async def test_a_file_anchor_is_sealed_when_the_pass_writes(tmp_path):
-    from poieo.blob import digest, kept
+    from poieo.blob import digest, path_for
 
     project = _project(tmp_path)
     notebook = project / "notebook"
@@ -577,7 +577,7 @@ async def test_a_file_anchor_is_sealed_when_the_pass_writes(tmp_path):
     text = (at(project).facts() / "feeds-note.md").read_text(encoding="utf-8")
     name = digest(notebook / "feeds.md")
     assert f'"notebook/feeds.md": "{name}"' in text
-    assert kept(project, name).read_text(encoding="utf-8") == "# feeds\n- a\n- b\n"
+    assert path_for(project, name).read_text(encoding="utf-8") == "# feeds\n- a\n- b\n"
 
 
 async def test_a_directory_anchor_is_not_sealed_and_the_entry_lands(tmp_path):
@@ -791,4 +791,4 @@ async def test_a_mention_does_not_wear_in_a_disputed_pair(tmp_path):
     )
 
     await _learn(project, _proposal())
-    assert wear_of(project) == {}
+    assert strengths(project) == {}

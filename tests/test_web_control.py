@@ -22,7 +22,7 @@ class StubRunner:
         self.status = status
         self.current_run_id = "r7" if status == "running" else None
         self.last_result = None
-        self.checkpoint = None
+        self.workspace = None
         self.trigger = SimpleNamespace(describe="interval 30s")
         self.flow = SimpleNamespace(graph=SimpleNamespace(name="support-triage"))
         self.calls = []

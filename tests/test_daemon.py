@@ -473,10 +473,10 @@ async def test_a_task_can_actually_reach_its_sibling(tmp_path):
     config = _tasks_config(tmp_path)
     daemon = Daemon(config)
     runner = next(r for r in daemon._runners() if r.name == "build-docs")
-    box = runner.hands.postbox
-    assert box is not None
-    assert box.sender == "build-docs"
-    assert "check-links" in box.recipients
+    container = runner.tool_context.postbox
+    assert container is not None
+    assert container.sender == "build-docs"
+    assert "check-links" in container.recipients
 
 
 def test_the_roster_reaches_the_generated_prompt(tmp_path):
@@ -490,7 +490,7 @@ def test_the_roster_reaches_the_generated_prompt(tmp_path):
 def test_a_task_without_notes_gets_no_postbox(tmp_path):
     config = _tasks_config(tmp_path, tools="[files, shell]")
     daemon = Daemon(config)
-    assert all(r.hands.postbox is None for r in daemon._runners())
+    assert all(r.tool_context.postbox is None for r in daemon._runners())
 
 
 # -- learning while nothing else is running ----------------------------------
@@ -652,7 +652,7 @@ async def test_a_background_task_that_blew_up_says_so_on_the_way_down(caplog):
 
 
 async def test_a_background_task_that_will_not_stop_is_left_behind(caplog, monkeypatch):
-    """Five seconds, then the daemon carries on: the pools and the boxes below
+    """Five seconds, then the daemon carries on: the pools and the containers below
     still have to be closed."""
     from poieo.daemon import service
 

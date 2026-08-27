@@ -21,7 +21,7 @@ from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
-from poieo.memory import check_memory, load_facts
+from poieo.memory import check_memory, load_entries
 from poieo.task import (
     JOURNAL_WIDTH,
     load_task,
@@ -271,9 +271,9 @@ def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
 
 def test_a_malformed_fact_fails_at_load_naming_the_file(tmp_path):
     _task(tmp_path)
-    facts = _remember(tmp_path).facts()
-    facts.mkdir()
-    (facts / "batch-sizes.md").write_text(
+    entries = _remember(tmp_path).facts()
+    entries.mkdir()
+    (entries / "batch-sizes.md").write_text(
         "---\nscope: [global]\nseverity: high\n---\nThe API caps batches at 50.\n",
         encoding="utf-8",
     )
@@ -392,17 +392,17 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
 
 def _learn(tmp_path, slug, text):
     _mark(tmp_path)
-    facts = at(tmp_path).facts()
-    facts.mkdir(parents=True, exist_ok=True)
-    (facts / f"{slug}.md").write_text(text, encoding="utf-8")
+    entries = at(tmp_path).facts()
+    entries.mkdir(parents=True, exist_ok=True)
+    (entries / f"{slug}.md").write_text(text, encoding="utf-8")
     return tmp_path
 
 
 def test_a_mention_in_the_body_is_read(tmp_path):
     project = _learn(tmp_path, "retry", "Retry once, after the window. See [[rate-limits]].")
 
-    (fact,) = load_facts(project)
-    assert fact.mentions == ["rate-limits"]
+    (entry,) = load_entries(project)
+    assert entry.mentions == ["rate-limits"]
 
 
 def test_typed_links_in_frontmatter_are_read(tmp_path):
@@ -414,9 +414,9 @@ def test_typed_links_in_frontmatter_are_read(tmp_path):
         "---\nlinks:\n  depends_on: [batch-cap]\n  contradicts: [old-advice]\n---\nRetry once.",
     )
 
-    fact = next(f for f in load_facts(project) if f.slug == "retry")
-    assert fact.matter.links.depends_on == ["batch-cap"]
-    assert fact.matter.links.contradicts == ["old-advice"]
+    entry = next(f for f in load_entries(project) if f.slug == "retry")
+    assert entry.matter.links.depends_on == ["batch-cap"]
+    assert entry.matter.links.contradicts == ["old-advice"]
 
 
 def test_an_unknown_link_kind_fails_at_load_naming_the_file(tmp_path):
@@ -424,7 +424,7 @@ def test_an_unknown_link_kind_fails_at_load_naming_the_file(tmp_path):
         tmp_path, "retry", "---\nlinks:\n  caused_by: [something]\n---\nRetry once."
     )
     with pytest.raises(SpecError, match="retry.md"):
-        load_facts(project)
+        load_entries(project)
 
 
 def test_a_typed_link_to_nothing_fails_at_load_naming_both(tmp_path):
@@ -446,8 +446,8 @@ def test_a_body_mention_of_nothing_is_legal(tmp_path):
     project = _learn(tmp_path, "retry", "Retry once. [[worth-writing-someday]]")
 
     check_memory(project)
-    (fact,) = load_facts(project)
-    assert fact.mentions == ["worth-writing-someday"]
+    (entry,) = load_entries(project)
+    assert entry.mentions == ["worth-writing-someday"]
 
 
 def test_an_entry_saved_with_a_bom_keeps_its_frontmatter(tmp_path):
@@ -459,9 +459,9 @@ def test_an_entry_saved_with_a_bom_keeps_its_frontmatter(tmp_path):
         "retry",
         "﻿---\nlinks:\n  depends_on: [other]\n---\nRetry once.",
     )
-    fact = next(f for f in load_facts(project) if f.slug == "retry")
-    assert fact.matter.links.depends_on == ["other"]
-    assert "---" not in fact.body
+    entry = next(f for f in load_entries(project) if f.slug == "retry")
+    assert entry.matter.links.depends_on == ["other"]
+    assert "---" not in entry.body
 
 
 def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
@@ -514,7 +514,7 @@ def test_the_package_does_not_shadow_its_own_submodules():
 
     import poieo.memory as memory
 
-    for name in ("facts", "index", "recall", "results", "upkeep"):
+    for name in ("entries", "index", "recall", "results", "upkeep"):
         __import__(f"poieo.memory.{name}")
         assert isinstance(getattr(memory, name), types.ModuleType), (
             f"poieo.memory.{name} is shadowed by a re-export of the same name"

@@ -1,6 +1,6 @@
 """The project's memory: what it always requires, and what it has learned.
 
-``facts``     the files it is made of: the page, and one entry per lesson
+``entries``   the files it is made of: the page, and one entry per lesson
 ``index``     a derived sqlite lookup over them, safe to delete at any time
 ``recall``    choosing which entries a task is shown, and building the block
 ``results``   the full record every run leaves behind
@@ -17,30 +17,30 @@ Design: docs/memory.md
 """
 
 from .results import results_dir, used_in, write_result
-from .facts import (
-    Fact,
+from .entries import (
+    Entry,
     check_memory,
     keeps_memory,
-    load_fact,
-    load_facts,
+    load_entry,
+    load_entries,
     read_page,
-    readable_facts,
+    readable_entries,
 )
 from .recall import read_memory
 from .upkeep import doubts, memory_report
 
 __all__ = [
-    "Fact",
+    "Entry",
     "check_memory",
     "doubts",
     "keeps_memory",
-    "load_fact",
-    "load_facts",
+    "load_entry",
+    "load_entries",
     "memory_report",
     "read_memory",
     "read_page",
     "results_dir",
-    "readable_facts",
+    "readable_entries",
     "used_in",
     "write_result",
 ]

@@ -42,7 +42,7 @@ test("seeds from the flow list, then subscribes", async () => {
 
   expect(api.fetchFlows).toHaveBeenCalled()
   expect(api.openFeed).toHaveBeenCalled()
-  expect(Object.keys(store.getStage().workers)).toEqual(["chores"])
+  expect(Object.keys(store.getStage().flows)).toEqual(["chores"])
   store.stop()
 })
 
@@ -50,7 +50,7 @@ test("no flows leaves an empty board, not an error", async () => {
   const { store } = harness({ fetchFlows: vi.fn(async () => []) })
   await store.start()
 
-  expect(store.getStage().workers).toEqual({})
+  expect(store.getStage().flows).toEqual({})
   store.stop()
 })
 
@@ -59,8 +59,8 @@ test("live events fold into the stage", async () => {
   await store.start()
 
   for (const event of AGENT_RUN.slice(0, 4)) feed().onEvent(event)
-  expect(store.getStage().workers.chores.status).toBe("running")
-  expect(store.getStage().workers.chores.currentNode).toBe("work")
+  expect(store.getStage().flows.chores.status).toBe("running")
+  expect(store.getStage().flows.chores.currentNode).toBe("work")
   store.stop()
 })
 
@@ -87,8 +87,8 @@ test("a resync applies the run's history before the live frames that overlapped 
   releaseHistory(history)
   await resynced
 
-  expect(store.getStage().workers.chores.status).toBe("waiting")
-  expect(store.getStage().workers.chores.currentNode).toBeNull()
+  expect(store.getStage().flows.chores.status).toBe("waiting")
+  expect(store.getStage().flows.chores.currentNode).toBeNull()
   store.stop()
 })
 
@@ -118,7 +118,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
   await store.resync()
 
   // The run_summary frame for that run was missed; /api/flows still knows.
-  expect(store.getStage().workers.chores.lastRun).toEqual({
+  expect(store.getStage().flows.chores.lastRun).toEqual({
     status: "completed",
     steps: 4,
     finished_at: "2026-08-22T07:00:01+00:00",
@@ -226,7 +226,7 @@ test("the store tallies each flow's recent work from the run index", async () =>
 
   // The event stream never carries this: a browser opened at noon has to be
   // told what happened at 3am.
-  expect(store.getStage().workers.chores.recent).toMatchObject({
+  expect(store.getStage().flows.chores.recent).toMatchObject({
     runs: 1,
     succeeded: 1,
     insertions: 9,

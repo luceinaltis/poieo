@@ -22,7 +22,7 @@ memory/
     attic/                  entries at rest
   cache/                    derived; delete it freely
     index.sqlite3           the lookup
-    strength.json           how worn each connection is
+    strength.json           how strong each connection is
     blobs/                  copies of what entries were written against
     learning.jsonl          what every pass did
 runs/results/<run_id>.json  the full record of one run
@@ -35,13 +35,13 @@ without being asked; nothing is ever true because the cache says so.
 
 | module | is |
 |---|---|
-| `facts.py` | the files: parsing, frontmatter, the page, load-time checks |
+| `entries.py` | the files: parsing, frontmatter, the page, load-time checks |
 | `index.py` | a derived sqlite/FTS lookup over them |
 | `recall.py` | choosing what a card is shown, and assembling the block |
 | `results.py` | the full record every run leaves behind |
 | `upkeep.py` | what the memory would like a person to look at |
 | `learn.py` | the pass that reads records and proposes entries |
-| `strength.py` | how worn each connection is |
+| `strength.py` | how strong each connection is |
 | `blob.py` | kept copies of the bytes an entry was written against |
 
 `memory/__init__` re-exports what the rest of poieo asks for. The ranking
@@ -74,7 +74,7 @@ exists is a startup error. Attic entries count as existing, or "move the file
 back" would not be true. **Prose `[[mentions]]` are deliberately not checked**: a
 mention of an entry that does not exist yet marks something worth writing.
 
-Mid-residency the rule flips: `readable_facts()` skips a malformed entry with a
+Mid-residency the rule flips: `readable_entries()` skips a malformed entry with a
 warning, because a run with less in mind beats no run at all.
 
 ## What a run is shown
@@ -90,7 +90,7 @@ What earlier work here has learned:     the entries this card earned
 ```
 
 The page comes first and whole so the stable part of the prompt stays stable, and
-it never competes with entries for room — `FACTS_BUDGET` (4 000 characters)
+it never competes with entries for room — `ENTRIES_BUDGET` (4 000 characters)
 bounds only what follows it. Markdown comments are stripped from the page before
 any prompt sees it, which is what lets `poieo init` write an empty
 `constitution.md` that costs a project nothing.
@@ -109,8 +109,8 @@ any prompt sees it, which is what lets `poieo init` write an empty
    rather than depending on the index finding a shared word
 4. **associate** — a neighbour of a chosen entry has no score of its own to argue
    with; its claim is its seed's, divided by the seed's rank and multiplied by
-   how worn that connection is. A **second** hop is taken only across a worn
-   connection, so with no wear anywhere one hop means one hop
+   how strong that connection is. A **second** hop is taken only across a strong
+   connection, so with nothing reinforced one hop means one hop
 5. **cut** — best first, on whole-entry boundaries. Half a lesson is worse than
    none
 
@@ -134,7 +134,7 @@ so the two can never disagree.
 It cannot run away: every weight halves every 30 days untouched (applied when
 read), no entry's connections may total more than `FAN_CAP` (an entry connected
 to everything has weak claims on each), and pairs below a floor are dropped on the
-next write. Delete `strength.json` and the project forgets which paths were worn,
+next write. Delete `strength.json` and the project forgets which paths were strong,
 relearns them by working, and loses not one word of meaning — so nothing in that
 module is ever worth failing anything over.
 

@@ -279,14 +279,14 @@ def test_memory_shows_the_last_suggestion_and_only_the_last(tmp_path):
 
 
 def _sealed_entry(tmp_path):
-    from poieo.blob import keep
+    from poieo.blob import store
 
     _, project = _project(tmp_path)
     notebook = project / "notebook"
     notebook.mkdir()
     target = notebook / "feeds.md"
     target.write_text("# feeds\n- a\n", encoding="utf-8")
-    name = keep(project, target)
+    name = store(project, target)
     _entry(
         project,
         "feeds-note",

@@ -35,7 +35,7 @@ _GLUE = frozenset(
 )
 
 
-def tokens(text: str) -> set[str]:
+def words(text: str) -> set[str]:
     """An entry's distinctive words. The vocabulary both retrieval and the
     accounting judge by, so they cannot disagree about what an entry says."""
     return set(re.findall(r"[a-z0-9_]+", text.lower())) - _GLUE
@@ -76,7 +76,7 @@ class _Frontmatter(BaseModel):
     sealed: dict[str, str] = Field(default_factory=dict)
 
 
-class Fact(BaseModel):
+class Entry(BaseModel):
     """One learned entry: a slug, a body, and its frontmatter."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -113,7 +113,7 @@ def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     raise ValueError("the frontmatter never closes")
 
 
-def load_fact(path: Path) -> Fact:
+def load_entry(path: Path) -> Entry:
     """One entry file, parsed and validated. Raises SpecError on a typo."""
     try:
         # utf-8-sig: Notepad and friends write a BOM, and an invisible first
@@ -131,32 +131,32 @@ def load_fact(path: Path) -> Fact:
         ) from exc
     body = body.strip()
     mentions = list(dict.fromkeys(m.strip() for m in re.findall(r"\[\[([^\[\]]+)\]\]", body)))
-    return Fact(slug=path.stem, body=body, matter=parsed, path=path, mentions=mentions)
+    return Entry(slug=path.stem, body=body, matter=parsed, path=path, mentions=mentions)
 
 
-def load_facts(project_dir: Path) -> list[Fact]:
+def load_entries(project_dir: Path) -> list[Entry]:
     """Every learned entry, in a stable order. Malformed ones raise, so the
     caller decides whether that is a load failure or a 3am shrug."""
     root = layout_for(project_dir).facts()
     if not root.is_dir():
         return []
-    return [load_fact(p) for p in sorted(root.glob("*.md"))]
+    return [load_entry(p) for p in sorted(root.glob("*.md"))]
 
 
-def readable_facts(project_dir: Path) -> list[Fact]:
+def readable_entries(project_dir: Path) -> list[Entry]:
     """Every entry that still reads, for the run path. A malformed one is a
     load failure when loading (check_memory); mid-residency it is skipped --
     a run with less in mind beats no run at all."""
     root = layout_for(project_dir).facts()
     if not root.is_dir():
         return []
-    facts = []
+    entries = []
     for path in sorted(root.glob("*.md")):
         try:
-            facts.append(load_fact(path))
+            entries.append(load_entry(path))
         except SpecError as exc:
             log.warning("%s; leaving it out of this run", exc)
-    return facts
+    return entries
 
 
 def check_memory(project_dir: Path) -> None:
@@ -167,29 +167,29 @@ def check_memory(project_dir: Path) -> None:
     dangle, since one naming an entry that does not exist marks something worth
     writing.
     """
-    facts = load_facts(project_dir)
-    known = {fact.slug for fact in facts}
+    entries = load_entries(project_dir)
+    known = {entry.slug for entry in entries}
     attic = layout_for(project_dir).attic()
     if attic.is_dir():
         # Resting entries still exist, or "move the file back" would not be
         # true. A genuine typo names something that exists nowhere and fails.
         known |= {path.stem for path in attic.glob("*.md")}
-    for fact in facts:
+    for entry in entries:
         claims = [
-            ("depends_on", target) for target in fact.matter.links.depends_on
-        ] + [("contradicts", target) for target in fact.matter.links.contradicts]
-        if fact.matter.superseded_by is not None:
-            claims.append(("superseded_by", fact.matter.superseded_by))
+            ("depends_on", target) for target in entry.matter.links.depends_on
+        ] + [("contradicts", target) for target in entry.matter.links.contradicts]
+        if entry.matter.superseded_by is not None:
+            claims.append(("superseded_by", entry.matter.superseded_by))
         for kind, target in claims:
             if target not in known:
                 raise SpecError(
-                    f"{fact.path}: {kind} names '{target}', and no such entry exists"
+                    f"{entry.path}: {kind} names '{target}', and no such entry exists"
                 )
-        anchored = {anchor.split("::", 1)[0] for anchor in fact.matter.anchors}
-        for path in fact.matter.sealed:
+        anchored = {anchor.split("::", 1)[0] for anchor in entry.matter.anchors}
+        for path in entry.matter.sealed:
             if path not in anchored:
                 raise SpecError(
-                    f"{fact.path}: sealed names '{path}', which is not an anchor here"
+                    f"{entry.path}: sealed names '{path}', which is not an anchor here"
                 )
 
 

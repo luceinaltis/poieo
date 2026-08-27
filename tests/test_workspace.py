@@ -10,7 +10,7 @@ import subprocess
 
 import pytest
 
-from poieo.checkpoint import Change, Checkpoint, CheckpointError
+from poieo.workspace import Change, Workspace, WorkspaceError
 
 
 def git(cwd, *args):
@@ -36,8 +36,8 @@ def make_repo(tmp_path):
     return repo
 
 
-def checkpoint(tmp_path, repo, flow="chores"):
-    return Checkpoint(repo, flow, tmp_path / "store")
+def workspace(tmp_path, repo, flow="chores"):
+    return Workspace(repo, flow, tmp_path / "store")
 
 
 def head(repo, ref="HEAD"):
@@ -58,17 +58,17 @@ def do_run(point, run_id, name, body, *, failed=False):
 def test_unavailable_outside_a_repo(tmp_path):
     plain = tmp_path / "not-a-repo"
     plain.mkdir()
-    assert Checkpoint(plain, "chores", tmp_path / "store").available() is False
+    assert Workspace(plain, "chores", tmp_path / "store").available() is False
 
 
 def test_available_inside_a_repo(tmp_path):
     repo = make_repo(tmp_path)
-    assert checkpoint(tmp_path, repo).available() is True
+    assert workspace(tmp_path, repo).available() is True
 
 
 def test_prepare_creates_private_worktree(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
 
     base = point.prepare()
 
@@ -83,7 +83,7 @@ def test_prepare_creates_private_worktree(tmp_path):
 
 def test_prepare_is_idempotent(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
 
     first = point.prepare()
     (point.worktree / "marker.txt").write_text("still here", encoding="utf-8")
@@ -97,7 +97,7 @@ def test_prepare_repairs_a_deleted_worktree(tmp_path):
     import shutil
 
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     point.prepare()
 
     shutil.rmtree(point.worktree)  # the directory is disposable
@@ -108,7 +108,7 @@ def test_prepare_repairs_a_deleted_worktree(tmp_path):
 
 def test_commit_records_the_change(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     before = head(repo, "main")
 
     change = do_run(point, "r1", "new.py", "print(1)")
@@ -127,7 +127,7 @@ def test_commit_records_the_change(tmp_path):
 
 def test_commit_returns_none_when_nothing_changed(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     point.prepare()
     before = head(repo, "poieo/chores")
 
@@ -137,7 +137,7 @@ def test_commit_returns_none_when_nothing_changed(tmp_path):
 
 def test_failed_run_stays_off_the_branch(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     point.prepare()
     before = head(repo, "poieo/chores")
 
@@ -151,7 +151,7 @@ def test_failed_run_stays_off_the_branch(tmp_path):
 
 def test_prepare_fast_forwards_to_user_branch(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     point.prepare()
 
     (repo / "README.md").write_text("hello again", encoding="utf-8")
@@ -167,7 +167,7 @@ def test_prepare_fast_forwards_to_user_branch(tmp_path):
 
 def test_prepare_leaves_pending_work_alone(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     change = do_run(point, "r1", "new.py", "print(1)")
 
     (repo / "README.md").write_text("hello again", encoding="utf-8")
@@ -182,7 +182,7 @@ def test_prepare_leaves_pending_work_alone(tmp_path):
 
 def test_accept_fast_forwards_user_branch(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     do_run(point, "r1", "one.py", "print(1)")
     second = do_run(point, "r2", "two.py", "print(2)")
 
@@ -196,7 +196,7 @@ def test_accept_fast_forwards_user_branch(tmp_path):
 
 def test_accept_through_a_run_is_linear(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     first = do_run(point, "r1", "one.py", "print(1)")
     do_run(point, "r2", "two.py", "print(2)")
 
@@ -209,7 +209,7 @@ def test_accept_through_a_run_is_linear(tmp_path):
 
 def test_accept_refuses_a_dirty_checkout(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     do_run(point, "r1", "one.py", "print(1)")
     before = head(repo, "main")
 
@@ -221,7 +221,7 @@ def test_accept_refuses_a_dirty_checkout(tmp_path):
 
 def test_accept_reports_conflict_without_merging(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     do_run(point, "r1", "README.md", "written by the flow")
 
     (repo / "README.md").write_text("written by the user", encoding="utf-8")
@@ -238,7 +238,7 @@ def test_accept_reports_conflict_without_merging(tmp_path):
 
 def test_discard_moves_the_branch_back_and_parks_it(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     do_run(point, "r1", "one.py", "print(1)")
     last = do_run(point, "r2", "two.py", "print(2)")
 
@@ -253,7 +253,7 @@ def test_discard_moves_the_branch_back_and_parks_it(tmp_path):
 
 def test_discard_from_a_run_keeps_the_earlier_one(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     first = do_run(point, "r1", "one.py", "print(1)")
     second = do_run(point, "r2", "two.py", "print(2)")
 
@@ -265,7 +265,7 @@ def test_discard_from_a_run_keeps_the_earlier_one(tmp_path):
 
 def test_diff_reports_files_and_truncates(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     change = do_run(point, "r1", "new.py", "one" + chr(10) + "two" + chr(10))
 
     report = point.diff(change.base, change.head)
@@ -284,7 +284,7 @@ def test_diff_reports_files_and_truncates(tmp_path):
 
 def test_diff_survives_a_binary_file(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
     point.prepare()
     (point.worktree / "blob.bin").write_bytes(bytes(range(256)))
     change = point.commit("r1", "added a blob")
@@ -298,7 +298,7 @@ def test_diff_survives_a_binary_file(tmp_path):
 
 def test_a_broken_repository_raises_rather_than_corrupts(tmp_path):
     repo = make_repo(tmp_path)
-    point = checkpoint(tmp_path, repo)
+    point = workspace(tmp_path, repo)
 
-    with pytest.raises(CheckpointError):
+    with pytest.raises(WorkspaceError):
         point.diff("deadbeef", "cafebabe")

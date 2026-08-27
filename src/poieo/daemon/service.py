@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
-from ..checkpoint import Checkpoint, CheckpointError
+from ..workspace import Workspace, WorkspaceError
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch
@@ -23,10 +23,10 @@ from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import Event, RunStore
 from ..task import append_journal, closing_line, record_run
-from ..tools import Hands, make_box_keeper, sweep_boxes
+from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, create_app
 from .config import DaemonConfig, LoadedFlow, load_flows
-from .triggers import Fire, _sleep_or_cancel, parse_duration
+from .triggers import Firing, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
 
@@ -50,7 +50,7 @@ SHUTDOWN_GRACE = 5.0
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
     """Wait out one background task on the way down, and say what it did.
 
-    Nothing here may keep the daemon from finishing -- the pools and the boxes
+    Nothing here may keep the daemon from finishing -- the pools and the containers
     still have to be closed below -- so every outcome is logged, not raised.
     """
     try:
@@ -137,7 +137,7 @@ class FlowRunner:
         store: RunStore,
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
-        hands: Any = None,
+        tool_context: ToolContext | None = None,
         handoff: Callable[["FlowRunner", RunResult, int], None] | None = None,
     ):
         self.flow = flow
@@ -169,18 +169,18 @@ class FlowRunner:
         self.handoff = handoff
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
-        self._pending: asyncio.Task[Fire] | None = None
+        self._pending: asyncio.Task[Firing] | None = None
         # A flow that says where it works keeps a private copy of it.
         workdir = config.workdir_path(flow.spec)
-        self.checkpoint = (
-            Checkpoint(workdir, flow.spec.name, config.layout().worktrees())
+        self.workspace = (
+            Workspace(workdir, flow.spec.name, config.layout().worktrees())
             if workdir is not None
             else None
         )
         self._tracking = False
-        # Where this task's tools work. Built by the daemon, because the box
+        # Where this task's tools work. Built by the daemon, because the container
         # keeper is shared across tasks and the roster is only known there.
-        self.hands = hands
+        self.tool_context = tool_context
 
     @property
     def name(self) -> str:
@@ -188,7 +188,7 @@ class FlowRunner:
 
     async def _open_change(self) -> Path | None:
         """Give the run a private copy of the project to work in."""
-        point = self.checkpoint
+        point = self.workspace
         self._tracking = False
         if point is None:
             return None
@@ -202,7 +202,7 @@ class FlowRunner:
                 )
                 return point.repo
             await asyncio.to_thread(point.prepare)
-        except CheckpointError as exc:
+        except WorkspaceError as exc:
             # A repository we cannot use is not a reason to stop working at 3am.
             log.error("flow '%s': %s", self.name, exc)
             return point.repo
@@ -211,16 +211,16 @@ class FlowRunner:
 
     async def _close_change(self, result: RunResult) -> None:
         """Land the run's work as one change, or leave the branch alone."""
-        if not self._tracking or self.checkpoint is None:
+        if not self._tracking or self.workspace is None:
             return
         try:
             change = await asyncio.to_thread(
-                self.checkpoint.commit,
+                self.workspace.commit,
                 result.run_id,
                 _change_message(result, self.name),
                 failed=result.status != "completed",
             )
-        except CheckpointError as exc:
+        except WorkspaceError as exc:
             log.error("flow '%s': the change could not be recorded: %s", self.name, exc)
             return
         if change is None:
@@ -305,7 +305,7 @@ class FlowRunner:
             pass
         self._pending = None
 
-    async def _next_fire(self, fires: AsyncIterator[Fire]) -> Fire | None:
+    async def _next_fire(self, fires: AsyncIterator[Firing]) -> Firing | None:
         """The runner's ear: the trigger raced against the board's verbs.
 
         Returns the fire to run next, or None when the daemon is shutting down
@@ -320,7 +320,7 @@ class FlowRunner:
                 # A handoff and a run-now are the same kick; only the reason
                 # differs, and the reason is what the run will record.
                 reason = self._handed.reason if self._handed else "run now"
-                return Fire(
+                return Firing(
                     iteration=self._manual_fires, at=datetime.now(), reason=reason
                 )
             if self._hold:
@@ -350,7 +350,7 @@ class FlowRunner:
                 return fire
         return None
 
-    async def _quiet(self, fires: AsyncIterator[Fire]) -> None:
+    async def _quiet(self, fires: AsyncIterator[Firing]) -> None:
         """Leave nothing running behind: the held anext, then the generator."""
         if self._pending is not None:
             self._pending.cancel()
@@ -375,7 +375,7 @@ class FlowRunner:
             await self._quiet(fires)
         log.info("flow '%s' stopped", self.name)
 
-    async def _one_run(self, fire: Fire) -> bool:
+    async def _one_run(self, fire: Firing) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
@@ -417,7 +417,7 @@ class FlowRunner:
                 run_id=run_id,
                 cancel=self.cancel,
                 workdir=workdir,
-                hands=self.hands,
+                tool_context=self.tool_context,
                 finalize=self._close_change,
             )
         finally:
@@ -530,9 +530,9 @@ class Daemon:
         self.cancel = asyncio.Event()
         # One pool per distinct binding file: clients are reused across flows.
         self.pools: dict[str, ProviderPool] = {}
-        # One box per distinct folder-and-settings, for the same reason.
-        self.boxes: Any = (
-            make_box_keeper()
+        # One container per distinct folder-and-settings, for the same reason.
+        self.containers: Any = (
+            make_container_pool()
             if any(f.spec.isolation for f in self.flows)
             else None
         )
@@ -553,10 +553,10 @@ class Daemon:
             },
         )
 
-    def _hands_for(self, flow: LoadedFlow) -> Hands:
-        return Hands(
+    def _hands_for(self, flow: LoadedFlow) -> ToolContext:
+        return ToolContext(
             isolation=flow.spec.isolation,
-            boxes=self.boxes,
+            containers=self.containers,
             postbox=self._postbox_for(flow),
         )
 
@@ -739,11 +739,11 @@ class Daemon:
             web_task = asyncio.create_task(server.serve())
             log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
 
-        if self.boxes is not None:
+        if self.containers is not None:
             # Whatever an earlier poieo left behind after a crash. Boxes it
             # owned itself are already gone -- shutdown removes them.
             try:
-                reclaimed = await sweep_boxes()
+                reclaimed = await sweep_containers()
                 if reclaimed:
                     log.info("reclaimed %d abandoned environment(s)", reclaimed)
             except Exception as exc:
@@ -778,8 +778,8 @@ class Daemon:
             if web_task is not None:
                 server.should_exit = True
                 await _stopped(web_task, "web server")
-            if self.boxes is not None:
-                await self.boxes.aclose()
+            if self.containers is not None:
+                await self.containers.aclose()
             for pool in self.pools.values():
                 await pool.aclose()
             log.info("poieo daemon down")

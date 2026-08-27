@@ -48,7 +48,7 @@ afterEach(() => {
 })
 
 test("a frame for one flow does not rebuild the other flows' boxes", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   const stage = replay(initialStage(FLOWS), AGENT_RUN)
   handle.update(stage)
 
@@ -85,7 +85,7 @@ const WIRED: FlowRow[] = [
 ]
 
 test("a flow that is running opens itself; the rest stay shut", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4)))
 
   // Detail where something is happening, and only there: a board of ten flows
@@ -96,7 +96,7 @@ test("a flow that is running opens itself; the rest stay shut", () => {
 })
 
 test("opening a flow by hand outlasts the frames that follow", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   const stage = initialStage(FLOWS)
   handle.update(stage)
 
@@ -110,7 +110,7 @@ test("opening a flow by hand outlasts the frames that follow", () => {
 })
 
 test("a handoff is drawn as an arrow carrying the word on it", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // One arrow, not two: the branch that deliberately stops has nothing to
@@ -121,7 +121,7 @@ test("a handoff is drawn as an arrow carrying the word on it", () => {
 })
 
 test("a handoff says which way it goes", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // The whole board rests on one rule -- an arrow that crosses a border ends
@@ -135,7 +135,7 @@ test("a handoff says which way it goes", () => {
 })
 
 test("the word on an arrow sits on the line it names", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // Floated above the line it belonged to the box underneath it instead, and
@@ -146,7 +146,7 @@ test("the word on an arrow sits on the line it names", () => {
 })
 
 test("a flow to the right of its sender is not laid on top of it", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(WIRED))
 
   const from = el.querySelector<HTMLElement>('[data-flow="chores"]')!
@@ -158,7 +158,7 @@ test("a flow to the right of its sender is not laid on top of it", () => {
 })
 
 test("a flow that found nothing to do says so in one word, not a number", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   // Tracked: a flow that keeps a private copy is the one that can find
   // nothing to do. Without one there is nothing to change against, and a run
   // that ran is all there is to say.
@@ -219,7 +219,7 @@ const pill = (id: string) =>
   el.querySelector<HTMLElement>(`[data-flow="chores"] [data-node="${id}"]`)!
 
 test("a flow that resolves to one model says so once, beside the trigger", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage(["qwen3:8b", null, "qwen3:8b"])]))
 
   // Said once, on the line that is legible with the border shut: ten flows
@@ -231,7 +231,7 @@ test("a flow that resolves to one model says so once, beside the trigger", () =>
 })
 
 test("a flow on two models counts them, and each node carries its own", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
 
   // The header cannot answer it, so it stops trying and says how many;
@@ -243,7 +243,7 @@ test("a flow on two models counts them, and each node carries its own", () => {
 })
 
 test("a router carries no model, because it calls none", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
 
   // The gap is information: it is why branching is free.
@@ -252,7 +252,7 @@ test("a router carries no model, because it calls none", () => {
 })
 
 test("a flow that reports no model at all leaves the trigger line alone", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage([null, null, null])]))
 
   // A binding the board could not read is not a reason to write "· null".
@@ -262,7 +262,7 @@ test("a flow that reports no model at all leaves the trigger line alone", () => 
 
 
 test("a connector is drawn only where the run really goes", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
   // classify -> route is a step. route -> draft is the router's default, so
@@ -280,7 +280,7 @@ test("a border is exactly as wide as the arrows think it is", () => {
   // be the width that renders. Declared in the stylesheet it was free to
   // drift from BOX.width, and content-box padding had made it 26px wider:
   // every wire began that far inside the box it was leaving.
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(FLOWS))
 
   expect(el.querySelector<HTMLElement>('[data-flow="chores"]')!.style.width).toBe(

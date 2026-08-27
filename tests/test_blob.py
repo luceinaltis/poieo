@@ -5,7 +5,7 @@ nothing here is worth raising over.
 
 from conftest import at
 import poieo.blob as blob
-from poieo.blob import digest, keep, kept
+from poieo.blob import digest, path_for, store
 
 
 def test_the_same_content_kept_twice_is_one_keepsake(tmp_path):
@@ -14,8 +14,8 @@ def test_the_same_content_kept_twice_is_one_keepsake(tmp_path):
     one.write_text("the same bytes", encoding="utf-8")
     other.write_text("the same bytes", encoding="utf-8")
 
-    first = keep(tmp_path, one)
-    second = keep(tmp_path, other)
+    first = store(tmp_path, one)
+    second = store(tmp_path, other)
     assert first == second
     assert len(list(at(tmp_path).blobs().iterdir())) == 1
 
@@ -24,8 +24,8 @@ def test_a_kept_file_reads_back_byte_identical(tmp_path):
     source = tmp_path / "feeds.md"
     source.write_bytes(b"# feeds\x00\xffbinary-ish tail")
 
-    name = keep(tmp_path, source)
-    assert kept(tmp_path, name).read_bytes() == source.read_bytes()
+    name = store(tmp_path, source)
+    assert path_for(tmp_path, name).read_bytes() == source.read_bytes()
     assert digest(source) == name
 
 
@@ -34,7 +34,7 @@ def test_an_over_cap_file_is_declined(tmp_path, monkeypatch):
     fat = tmp_path / "fat.bin"
     fat.write_bytes(b"x" * 11)
 
-    assert keep(tmp_path, fat) is None
+    assert store(tmp_path, fat) is None
     assert not at(tmp_path).blobs().exists()
 
 
@@ -54,25 +54,25 @@ def test_the_name_always_matches_the_bytes_actually_kept(tmp_path, monkeypatch):
         return name
 
     monkeypatch.setattr(blob, "digest", racy_digest)
-    name = keep(tmp_path, source)
+    name = store(tmp_path, source)
 
-    kept_bytes = kept(tmp_path, name).read_bytes()
+    kept_bytes = path_for(tmp_path, name).read_bytes()
     assert hashlib.sha256(kept_bytes).hexdigest() == name
 
 
-def test_keep_never_raises(tmp_path):
+def test_store_never_raises(tmp_path):
     # A file where the store's folder should be: every write must fail,
     # quietly.
     at(tmp_path).memory().write_text("in the way", encoding="utf-8")
     source = tmp_path / "a.txt"
     source.write_text("bytes", encoding="utf-8")
 
-    assert keep(tmp_path, source) is None
-    assert keep(tmp_path, tmp_path / "missing.txt") is None
-    assert kept(tmp_path, "0" * 64) is None
+    assert store(tmp_path, source) is None
+    assert store(tmp_path, tmp_path / "missing.txt") is None
+    assert path_for(tmp_path, "0" * 64) is None
 
 
-def test_a_file_that_grows_past_the_cap_mid_keep_is_declined(tmp_path, monkeypatch):
+def test_a_file_that_grows_past_the_cap_mid_store_is_declined(tmp_path, monkeypatch):
     monkeypatch.setattr(blob, "KEEP_CAP", 10)
     source = tmp_path / "a.txt"
     source.write_text("small", encoding="utf-8")  # passes the stat check
@@ -84,4 +84,4 @@ def test_a_file_that_grows_past_the_cap_mid_keep_is_declined(tmp_path, monkeypat
         return data * 50 if self.name == "a.txt" else data
 
     monkeypatch.setattr(type(source), "read_bytes", grown)
-    assert keep(tmp_path, source) is None
+    assert store(tmp_path, source) is None

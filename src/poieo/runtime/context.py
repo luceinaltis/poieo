@@ -14,7 +14,7 @@ from ..expr import wrap
 from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
-from ..tools import Hands
+from ..tools import ToolContext
 
 
 def new_run_id() -> str:
@@ -46,7 +46,7 @@ class RunContext:
     # What those tools may reach, and who they may tell. The runtime carries
     # it and never opens it -- which is how it stays unaware that containers,
     # or journals, exist at all.
-    hands: Hands | None = None
+    tool_context: ToolContext | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

@@ -39,9 +39,9 @@ import {
   place,
 } from "../layout"
 import type { Cell } from "../layout"
-import { changedWorkers } from "../changed"
+import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
-import type { StageState, Worker } from "../../state/stage"
+import type { StageState, FlowState } from "../../state/stage"
 import "./atelier.css"
 // Imported rather than served from a fixed path, so Vite hashes it into
 // /assets with everything else: one cache policy, and a changed model
@@ -184,7 +184,7 @@ const HUE = {
 export interface Bench {
   group: any
   place(cell: Cell): void
-  paint(worker: Worker): void
+  paint(flowState: FlowState): void
   tick(elapsed: number): void
   dispose(): void
 }
@@ -865,10 +865,10 @@ export function makeBench(
       group.position.set(at.x / PER_UNIT, 0, at.y / PER_UNIT)
     },
 
-    paint(worker: Worker) {
-      const pose = figurePose(worker)
+    paint(flowState: FlowState) {
+      const pose = figurePose(flowState)
       const working = pose === "working"
-      hot = lampLit(worker)
+      hot = lampLit(flowState)
 
       // Cross-fade rather than cut, so a run starting reads as picking the
       // hammer up rather than teleporting it overhead.
@@ -898,7 +898,7 @@ export function makeBench(
         piece?.geometry?.dispose?.()
         piece?.material?.dispose?.()
       }
-      const stacked = Math.min(shelfCount(worker), 6)
+      const stacked = Math.min(shelfCount(flowState), 6)
       for (let i = 0; i < stacked; i += 1) {
         const piece = new THREE.Mesh(
           new THREE.BoxGeometry(0.1, 0.1, 0.1),
@@ -1170,7 +1170,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   el.append(tidy)
 
   const benches = new Map<string, Bench>()
-  const painted = new Map<string, Worker>()
+  const painted = new Map<string, FlowState>()
   let spots: Record<string, Cell> = {}
   let arrangedFor = ""
   let handled = false
@@ -1385,7 +1385,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     } else if (press) {
       const flow = press.flow
       dropPress()
-      if (lifted) callbacks.onSelectWorker(flow)
+      if (lifted) callbacks.onSelectFlow(flow)
     }
 
     pointers.delete(event.pointerId)
@@ -1411,14 +1411,14 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
 
   // -- drawing ----------------------------------------------------------------
   const render = (stage: StageState) => {
-    const flows = Object.keys(stage.workers)
+    const flows = Object.keys(stage.flows)
     // localStorage, parsed once per frame rather than once per use of it.
     const saved = savedSpots()
     const arranged = place(flows, saved, columnsFor(el.clientWidth))
-    const changed = new Set(changedWorkers(stage.workers, painted).map(([flow]) => flow))
+    const changed = new Set(changedFlows(stage.flows, painted).map(([flow]) => flow))
 
     for (const [flow, bench] of benches) {
-      if (!(flow in stage.workers)) {
+      if (!(flow in stage.flows)) {
         room.remove(bench.group)
         bench.dispose()
         benches.delete(flow)
@@ -1448,22 +1448,22 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       if (dragging !== flow) bench.place(arranged[flow])
 
       // Placement follows every frame; the bench and its tag only follow the
-      // frames that touched this worker. paint() rebuilds shelf geometry, so
+      // frames that touched this flowState. paint() rebuilds shelf geometry, so
       // repainting a whole board because one flow spoke is GPU churn.
       if (!changed.has(flow)) continue
-      bench.paint(stage.workers[flow])
+      bench.paint(stage.flows[flow])
 
-      const worker = stage.workers[flow]
+      const flowState = stage.flows[flow]
       const tag = tagFor(flow)
-      tag.dataset.status = worker.status
+      tag.dataset.status = flowState.status
       tag.querySelector("b")!.textContent = flow
-      tag.querySelector("span")!.textContent = worker.currentNode
-        ? `${worker.currentNode}${worker.turn > 0 ? ` · turn ${worker.turn}` : ""}`
+      tag.querySelector("span")!.textContent = flowState.currentNode
+        ? `${flowState.currentNode}${flowState.turn > 0 ? ` · turn ${flowState.turn}` : ""}`
         : "idle"
     }
 
     for (const [flow, tag] of tags) {
-      if (!(flow in stage.workers)) {
+      if (!(flow in stage.flows)) {
         tag.remove()
         tags.delete(flow)
       }

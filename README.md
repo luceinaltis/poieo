@@ -578,7 +578,7 @@ src/poieo/
   tools/             the hands: files, shell, notes; the isolation seam
   daemon/            cron, triggers, flow config, the resident service
   layout.py          where a project keeps things; store.py is the run log
-  checkpoint.py      the only module that knows git exists
+  workspace.py       the only module that knows git exists
   memory/            the long memory; learn.py is the pass that fills it
   web/               observation API, event fan-out, the built page
   cli.py             command line front end

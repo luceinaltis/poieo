@@ -149,7 +149,7 @@ class RunStore:
             rows.append(row)
         return rows
 
-    def run(self, run_id: str) -> dict[str, Any] | None:
+    def summary(self, run_id: str) -> dict[str, Any] | None:
         """The index row for one run, or None if the store never saw it."""
         for row in self._index_backwards(containing=run_id):
             if row.get("run_id") == run_id:
@@ -187,7 +187,7 @@ class NullStore(RunStore):
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
         return []
 
-    def run(self, run_id: str) -> dict[str, Any] | None:  # noqa: D102
+    def summary(self, run_id: str) -> dict[str, Any] | None:  # noqa: D102
         return None
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:  # noqa: D102

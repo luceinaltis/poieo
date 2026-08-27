@@ -13,16 +13,16 @@ from pathlib import Path
 from typing import Any
 
 from ..layout import layout_for
-from .facts import Fact, read_page, readable_facts, tokens
+from .entries import Entry, read_page, readable_entries, words
 from .index import candidates
 
 # Budget for the learned entries that follow the page. Cut on whole-entry
 # boundaries, best first -- half a lesson is worse than none.
-FACTS_BUDGET = 4_000
+ENTRIES_BUDGET = 4_000
 # An entry anchored where the task works beats any merely-similar one.
 _ANCHOR_BOOST = 1_000
 
-# Interface words only past this point: the machinery names (tiers, facts,
+# Interface words only past this point: the machinery names (tiers, entries,
 # retrieval) stay in this package and the spec.
 PAGE_HEADER = "What this project always requires:"
 LEARNED_HEADER = "What earlier work here has learned:"
@@ -43,15 +43,15 @@ def read_memory(
         parts.append(f"{PAGE_HEADER}\n{text}")
     chosen = recall(project_dir, task, use_index=not preview) if task is not None else []
     if chosen:
-        parts.append(LEARNED_HEADER + "\n\n" + "\n\n".join(fact.body for fact in chosen))
+        parts.append(LEARNED_HEADER + "\n\n" + "\n\n".join(entry.body for entry in chosen))
     return "\n\n".join(parts) or None
 
 
-def _in_scope(fact: Fact, task: Any, project_dir: Path) -> bool:
+def _in_scope(entry: Entry, task: Any, project_dir: Path) -> bool:
     """A filter over one store, never a wall: the word that means everyone,
     the task's own name, or a path that covers where it works."""
     folder = task.folder_path()
-    for entry in fact.matter.scope:
+    for entry in entry.matter.scope:
         if entry in ("global", task.slug):
             return True
         base = (layout_for(project_dir).root / entry).resolve()
@@ -60,90 +60,91 @@ def _in_scope(fact: Fact, task: Any, project_dir: Path) -> bool:
     return False
 
 
-def _anchored(fact: Fact, task: Any, project_dir: Path) -> bool:
+def _anchored(entry: Entry, task: Any, project_dir: Path) -> bool:
     """Anchor paths are written relative to the project -- the folder the
     `poieo.yaml` sits in, which is also where `memory/` does."""
     folder = task.folder_path()
-    for anchor in fact.matter.anchors:
+    for anchor in entry.matter.anchors:
         target = (layout_for(project_dir).root / anchor.split("::", 1)[0]).resolve()
         if target == folder or target.is_relative_to(folder) or folder.is_relative_to(target):
             return True
     return False
 
 
-def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Fact]:
+def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
     """The entries this task earned, ranked, in budget. Never the page's room."""
-    facts = [
-        fact
-        for fact in readable_facts(project_dir)
-        if fact.matter.superseded_by is None and _in_scope(fact, task, project_dir)
+    entries = [
+        entry
+        for entry in readable_entries(project_dir)
+        if entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
     ]
-    if not facts:
+    if not entries:
         return []
-    seed = tokens(f"{task.name} {task.prompt or ''} {task.folder}")
+    seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
 
     # An anchored entry is relevant by where it points, not by the words it
     # shares, so it must not depend on the index finding a shared word.
-    narrowed = candidates(project_dir, facts, seed) if use_index else facts
-    pool = {fact.slug: fact for fact in narrowed}
-    for fact in facts:
-        if _anchored(fact, task, project_dir):
-            pool.setdefault(fact.slug, fact)
+    narrowed = candidates(project_dir, entries, seed) if use_index else entries
+    pool = {entry.slug: entry for entry in narrowed}
+    for entry in entries:
+        if _anchored(entry, task, project_dir):
+            pool.setdefault(entry.slug, entry)
 
     scored = []
-    for fact in pool.values():
-        score = len(seed & tokens(fact.body))
-        if _anchored(fact, task, project_dir):
+    for entry in pool.values():
+        score = len(seed & words(entry.body))
+        if _anchored(entry, task, project_dir):
             score += _ANCHOR_BOOST
         if score > 0:
-            scored.append((score, fact))
+            scored.append((score, entry))
     scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
 
     # Association after evidence: a neighbour's claim is its seed's, divided by
-    # rank and scaled by how worn the connection is. Drawn from the already
+    # rank and scaled by how strong the connection is. Drawn from the already
     # filtered pool, so scope and set-aside hold through connections; a second
-    # hop needs a worn connection, so with no wear one hop means one hop.
-    from ..strength import WORN_FLOOR, wear_of
+    # hop needs a strong connection, so with nothing reinforced one hop means
+    # one hop.
+    from ..strength import STRONG_FLOOR, strengths
 
-    worn = wear_of(project_dir)
-    sequence = [fact for _, fact in scored]
-    taken = {fact.slug for fact in sequence}
+    strength = strengths(project_dir)
+    sequence = [entry for _, entry in scored]
+    taken = {entry.slug for entry in sequence}
 
     carry: dict[str, float] = {}
-    for rank, (_, fact) in enumerate(scored):
-        for neighbor in connected(fact, facts):
+    for rank, (_, entry) in enumerate(scored):
+        for neighbor in connected(entry, entries):
             if neighbor.slug in taken:
                 continue
-            wear = worn.get(frozenset((fact.slug, neighbor.slug)), 0.0)
-            carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + wear) / (1 + rank)
+            weight = strength.get(frozenset((entry.slug, neighbor.slug)), 0.0)
+            carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + weight) / (1 + rank)
 
-    by_slug = {fact.slug: fact for fact in facts}
+    by_slug = {entry.slug: entry for entry in entries}
     further: dict[str, float] = {}
     for slug, reached in carry.items():
-        for neighbor in connected(by_slug[slug], facts):
+        for neighbor in connected(by_slug[slug], entries):
             if neighbor.slug in taken or neighbor.slug in carry:
                 continue
-            wear = worn.get(frozenset((slug, neighbor.slug)), 0.0)
-            if wear >= WORN_FLOOR:
-                further[neighbor.slug] = further.get(neighbor.slug, 0.0) + reached * wear
+            weight = strength.get(frozenset((slug, neighbor.slug)), 0.0)
+            if weight >= STRONG_FLOOR:
+                further[neighbor.slug] = further.get(neighbor.slug, 0.0) + reached * weight
 
     carry.update(further)
     sequence += sorted(
         (by_slug[slug] for slug in carry),
-        key=lambda fact: (-carry[fact.slug], fact.slug),
+        key=lambda entry: (-carry[entry.slug], entry.slug),
     )
 
-    chosen: list[Fact] = []
+    chosen: list[Entry] = []
     spent = 0
-    for fact in sequence:
-        if spent + len(fact.body) > FACTS_BUDGET:
+    for entry in sequence:
+        if spent + len(entry.body) > ENTRIES_BUDGET:
             break
-        chosen.append(fact)
-        spent += len(fact.body)
+        chosen.append(entry)
+        spent += len(entry.body)
     return chosen
 
 
-def connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
+def connected(entry: Entry, eligible: list[Entry]) -> list[Entry]:
     """Who arrives beside this entry.
 
     Mentions count either way (nearness is symmetric); ``depends_on`` forward
@@ -152,15 +153,15 @@ def connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
     ordinary way to write a disagreement, and the mention in it must not
     smuggle the disputed entry into a prompt.
     """
-    named = set(fact.mentions) | set(fact.matter.links.depends_on)
+    named = set(entry.mentions) | set(entry.matter.links.depends_on)
     return sorted(
         (
             other
             for other in eligible
-            if other.slug != fact.slug
-            and (other.slug in named or fact.slug in other.mentions)
-            and other.slug not in fact.matter.links.contradicts
-            and fact.slug not in other.matter.links.contradicts
+            if other.slug != entry.slug
+            and (other.slug in named or entry.slug in other.mentions)
+            and other.slug not in entry.matter.links.contradicts
+            and entry.slug not in other.matter.links.contradicts
         ),
         key=lambda other: other.slug,
     )

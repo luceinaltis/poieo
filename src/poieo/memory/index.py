@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..layout import layout_for
-from .facts import Fact
+from .entries import Entry
 
 log = logging.getLogger("poieo.memory")
 
@@ -34,14 +34,14 @@ def fts_available() -> bool:
         return False
 
 
-def candidates(project_dir: Path, facts: list[Fact], seed: set[str]) -> list[Fact]:
+def candidates(project_dir: Path, entries: list[Entry], seed: set[str]) -> list[Entry]:
     """Who is worth scoring. The index narrows when it can; the final ranking
     is the same plain arithmetic either way, which is what makes the slower
     path the same feature."""
     if not seed or not fts_available():
-        return facts
+        return entries
     try:
-        con = _open_index(project_dir, facts)
+        con = _open_index(project_dir, entries)
         try:
             rows = con.execute(
                 "SELECT slug FROM facts_fts WHERE facts_fts MATCH ?",
@@ -50,21 +50,21 @@ def candidates(project_dir: Path, facts: list[Fact], seed: set[str]) -> list[Fac
         finally:
             con.close()
         hits = {row[0] for row in rows}
-        return [fact for fact in facts if fact.slug in hits]
+        return [entry for entry in entries if entry.slug in hits]
     except (sqlite3.Error, OSError) as exc:
         log.warning("memory index unavailable (%s); reading the files instead", exc)
-        return facts
+        return entries
 
 
-def _fingerprint(facts: list[Fact]) -> str:
-    parts = sorted(f"{fact.path.name}:{fact.path.stat().st_mtime_ns}" for fact in facts)
+def _fingerprint(entries: list[Entry]) -> str:
+    parts = sorted(f"{entry.path.name}:{entry.path.stat().st_mtime_ns}" for entry in entries)
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
-def _open_index(project_dir: Path, facts: list[Fact]) -> sqlite3.Connection:
+def _open_index(project_dir: Path, entries: list[Entry]) -> sqlite3.Connection:
     path = layout_for(project_dir).index()
     path.parent.mkdir(parents=True, exist_ok=True)
-    stamp = _fingerprint(facts)
+    stamp = _fingerprint(entries)
     con = sqlite3.connect(path, timeout=5)
     try:
         row = con.execute("SELECT value FROM meta WHERE key = 'fingerprint'").fetchone()
@@ -73,17 +73,17 @@ def _open_index(project_dir: Path, facts: list[Fact]) -> sqlite3.Connection:
     except sqlite3.Error:
         pass  # missing tables, or not even a database: rebuild below
     try:
-        _rebuild(con, facts, stamp)
+        _rebuild(con, entries, stamp)
         return con
     except sqlite3.Error:
         con.close()
         path.unlink(missing_ok=True)
         con = sqlite3.connect(path, timeout=5)
-        _rebuild(con, facts, stamp)
+        _rebuild(con, entries, stamp)
         return con
 
 
-def _rebuild(con: sqlite3.Connection, facts: list[Fact], stamp: str) -> None:
+def _rebuild(con: sqlite3.Connection, entries: list[Entry], stamp: str) -> None:
     con.executescript(
         "DROP TABLE IF EXISTS facts_fts;"
         "DROP TABLE IF EXISTS meta;"
@@ -92,7 +92,7 @@ def _rebuild(con: sqlite3.Connection, facts: list[Fact], stamp: str) -> None:
     )
     con.executemany(
         "INSERT INTO facts_fts(slug, body) VALUES(?, ?)",
-        [(fact.slug, fact.body) for fact in facts],
+        [(entry.slug, entry.body) for entry in entries],
     )
     con.execute("INSERT INTO meta VALUES('fingerprint', ?)", (stamp,))
     con.commit()

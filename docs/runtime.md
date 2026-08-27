@@ -43,7 +43,7 @@ store keeps. Nothing gets to amend that summary afterwards.
 
 `RunContext` is everything a node needs and everything a run accumulates: the
 graph, binding, pool and store; `input`, `state`, `iteration`; `workdir` and
-`hands`; and the running `outputs`, `aliases`, `usage` and `path`.
+`tool_context`; and the running `outputs`, `aliases`, `usage` and `path`.
 
 `ctx.scope()` builds the names expressions see:
 
@@ -59,7 +59,7 @@ Aliases use `setdefault`, so a graph cannot shadow `input` or `run` by naming an
 output after them. Everything is `wrap()`ped once here so `input.text` and
 `input["text"]` both work — see [graph.md](graph.md).
 
-`ctx.hands` is a `Hands` object the runtime carries and never opens. That is how
+`ctx.tool_context` is a `ToolContext` object the runtime carries and never opens. That is how
 the runtime stays unaware that containers, or journals, exist at all — see
 [tools.md](tools.md).
 

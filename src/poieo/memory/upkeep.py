@@ -12,9 +12,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..blob import digest, kept
+from ..blob import digest, path_for
 from .results import results_dir, used_in
-from .facts import PAGE_BUDGET, Fact, keeps_memory, read_page, readable_facts
+from .entries import PAGE_BUDGET, Entry, keeps_memory, read_page, readable_entries
 from .index import fts_available
 
 # How far back the accounting reads, and how often an entry must have been
@@ -28,15 +28,15 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
     if not keeps_memory(project_dir):
         return None
     text = read_page(project_dir)
-    facts = readable_facts(project_dir)
-    standing = [fact for fact in facts if fact.matter.superseded_by is None]
-    standing_slugs = {fact.slug for fact in standing}
+    entries = readable_entries(project_dir)
+    standing = [entry for entry in entries if entry.matter.superseded_by is None]
+    standing_slugs = {entry.slug for entry in standing}
 
     disagreements = sorted(
         {
-            tuple(sorted((fact.slug, other)))
-            for fact in standing
-            for other in fact.matter.links.contradicts
+            tuple(sorted((entry.slug, other)))
+            for entry in standing
+            for other in entry.matter.links.contradicts
             if other in standing_slugs
         }
     )
@@ -44,21 +44,21 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
         "page_chars": len(text or ""),
         "page_budget": PAGE_BUDGET,
         "kept": len(standing),
-        "set_aside": len(facts) - len(standing),
+        "set_aside": len(entries) - len(standing),
         "lookup": "fast" if fts_available() else "file-by-file",
         "disagreements": disagreements,
-        "second_look": [reason for _, reason in doubts(project_dir, facts)],
-        "accounting": accounting(project_dir, facts),
+        "second_look": [reason for _, reason in doubts(project_dir, entries)],
+        "accounting": accounting(project_dir, entries),
     }
 
 
-def accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
+def accounting(project_dir: Path, entries: list[Entry]) -> dict[str, Any] | None:
     """Is the memory earning its keep? A read over the recent run records,
     never a stored counter, and nothing anywhere acts on it."""
     root = results_dir(project_dir)
     if not root.is_dir():
         return None
-    by_slug = {fact.slug: fact for fact in facts}
+    by_slug = {entry.slug: entry for entry in entries}
     runs_shown = runs_used = 0
     shown_count: dict[str, int] = {}
     used_count: dict[str, int] = {}
@@ -76,8 +76,8 @@ def accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
         any_used = False
         for slug in shown:
             shown_count[slug] = shown_count.get(slug, 0) + 1
-            fact = by_slug.get(slug)
-            if fact is not None and used_in(fact, record):
+            entry = by_slug.get(slug)
+            if entry is not None and used_in(entry, record):
                 used_count[slug] = used_count.get(slug, 0) + 1
                 any_used = True
         if any_used:
@@ -98,7 +98,7 @@ def accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
 
 
 def doubts(
-    project_dir: Path, facts: list[Fact] | None = None
+    project_dir: Path, entries: list[Entry] | None = None
 ) -> list[tuple[str, str]]:
     """Every kept entry worth a second look, with the sentence saying why.
 
@@ -106,45 +106,45 @@ def doubts(
     changed after the entry was written -- and editing the entry is how a
     person clears that last one: look, then touch.
     """
-    facts = readable_facts(project_dir) if facts is None else facts
-    aside = {fact.slug for fact in facts if fact.matter.superseded_by is not None}
+    entries = readable_entries(project_dir) if entries is None else entries
+    aside = {entry.slug for entry in entries if entry.matter.superseded_by is not None}
     out: list[tuple[str, str]] = []
-    for fact in facts:
-        if fact.matter.superseded_by is not None:
+    for entry in entries:
+        if entry.matter.superseded_by is not None:
             continue
-        for target in fact.matter.links.depends_on:
+        for target in entry.matter.links.depends_on:
             if target in aside:
                 out.append(
-                    (fact.slug, f"{fact.slug} leans on {target}, which is set aside")
+                    (entry.slug, f"{entry.slug} leans on {target}, which is set aside")
                 )
-        for anchor in fact.matter.anchors:
+        for anchor in entry.matter.anchors:
             part = anchor.split("::", 1)[0]
             named = project_dir / part
             try:
                 if not named.exists():
-                    out.append((fact.slug, f"{fact.slug} names {anchor}, which is gone"))
+                    out.append((entry.slug, f"{entry.slug} names {anchor}, which is gone"))
                     continue
-                seal = fact.matter.sealed.get(part)
-                if seal is not None and kept(project_dir, seal) is not None:
+                seal = entry.matter.sealed.get(part)
+                if seal is not None and path_for(project_dir, seal) is not None:
                     # Sealed: doubt by content, not clocks, so a touched-but-
                     # identical file raises nothing. The mtime check stays
                     # so revising the entry still clears the flag.
                     if (
                         digest(named) != seal
-                        and named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns
+                        and named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns
                     ):
                         out.append(
                             (
-                                fact.slug,
-                                f"{fact.slug} names {anchor}, which no longer "
+                                entry.slug,
+                                f"{entry.slug} names {anchor}, which no longer "
                                 "matches what it was written against",
                             )
                         )
-                elif named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns:
+                elif named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns:
                     out.append(
                         (
-                            fact.slug,
-                            f"{fact.slug} names {anchor}, "
+                            entry.slug,
+                            f"{entry.slug} names {anchor}, "
                             "which changed after it was written",
                         )
                     )

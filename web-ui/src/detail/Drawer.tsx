@@ -1,5 +1,5 @@
 /**
- * What one worker has been doing, in detail.
+ * What one flowState has been doing, in detail.
  *
  * The drawer is shell UI, not a skin, so it is allowed to read the API. It
  * keeps its own state throughout: picking a past run here must never move the
@@ -14,7 +14,7 @@ import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { RunList } from "../review/RunList"
 import { initialStage, replay } from "../state/stage"
-import type { Worker } from "../state/stage"
+import type { FlowState } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
@@ -139,7 +139,7 @@ export const Drawer = memo(function Drawer({
   }, [picked])
 
   // A stage of its own: replaying here must leave the live board alone.
-  const replayed: Worker | null = useMemo(() => {
+  const replayed: FlowState | null = useMemo(() => {
     if (events.length === 0) return null
     const scratch = initialStage([
       {
@@ -155,7 +155,7 @@ export const Drawer = memo(function Drawer({
         shape: { entry: "", nodes: [] },
       },
     ])
-    return replay(scratch, events).workers[flow] ?? null
+    return replay(scratch, events).flows[flow] ?? null
   }, [events, flow])
 
   return (

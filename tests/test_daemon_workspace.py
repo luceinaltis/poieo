@@ -7,7 +7,7 @@ that only holds if git is actually involved.
 
 import asyncio
 
-from test_checkpoint import git, head, make_repo
+from test_workspace import git, head, make_repo
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import RunStore
@@ -130,7 +130,7 @@ async def test_the_recorded_summary_carries_the_change(tmp_path):
 
     _, result = await run_once(config)
 
-    row = RunStore(config.store_path()).run(result.run_id)
+    row = RunStore(config.store_path()).summary(result.run_id)
     assert row["change"]["head"] == head(repo, "poieo/chores")
 
 

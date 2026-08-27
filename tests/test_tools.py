@@ -120,7 +120,7 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
 
 import sys
 
-from poieo.tools import Hands, Isolation, make_executor
+from poieo.tools import ToolContext, Isolation, make_executor
 
 
 async def test_local_executor_works_as_a_context_manager(tmp_path):
@@ -148,7 +148,7 @@ def test_make_executor_does_not_import_docker_without_isolation(tmp_path, monkey
 
 def test_make_executor_returns_a_boxed_executor_with_isolation(tmp_path):
     iso = Isolation(image="alpine:3.20")
-    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, Hands(isolation=iso))
+    ex = make_executor(tmp_path, DEFAULT_TOOLSETS, ToolContext(isolation=iso))
     assert type(ex).__name__ == "DockerExecutor"
     assert ex.isolation == iso
 

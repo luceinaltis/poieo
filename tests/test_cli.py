@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from test_checkpoint import make_repo
+from test_workspace import make_repo
 
 from conftest import EXAMPLES, at
 from poieo.layout import layout_for
@@ -498,7 +498,7 @@ def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
 def test_reset_says_the_folder_was_not_touched(tmp_path, monkeypatch):
     removed = []
     monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
-    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: removed.append(folder) or 1)
+    monkeypatch.setattr("poieo.tools.docker.remove_containers_for", lambda folder: removed.append(folder) or 1)
     folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
     result = runner.invoke(app, ["reset", str(folder / "card.yaml")])
     assert result.exit_code == 0
@@ -507,7 +507,7 @@ def test_reset_says_the_folder_was_not_touched(tmp_path, monkeypatch):
 
 def test_reset_on_a_task_with_nothing_to_reset_is_not_an_error(tmp_path, monkeypatch):
     monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
-    monkeypatch.setattr("poieo.tools.docker.remove_boxes_for", lambda folder: 0)
+    monkeypatch.setattr("poieo.tools.docker.remove_containers_for", lambda folder: 0)
     folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n")
     assert runner.invoke(app, ["reset", str(folder / "card.yaml")]).exit_code == 0
 

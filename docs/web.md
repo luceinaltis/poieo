@@ -118,7 +118,7 @@ web-ui/src/
   shell/stageStore  fetch history, open the stream, hold the model
   state/stage.ts    the one place run events are interpreted
   skins/            how that model is drawn — atelier, basic
-  skins/wiring.ts   where a work graph's boxes go; pure, and tested alone
+  skins/wiring.ts   where a work graph's containers go; pure, and tested alone
   detail/           the drawer: one flow, turn by turn, plus control
   review/           last night's work: the list, the diff, accept and discard
 ```
@@ -142,8 +142,8 @@ The chosen skin lives in `localStorage`. `atelier` is the default; a stale or
 unknown id lands on `basic`, the plain fallback, rather than blanking the page.
 `basic` draws the work as a graph — the flows, their nodes, the arrows between
 them, and the model each node calls. `skins/wiring.ts` is the part of that with
-an answer capable of being wrong (where boxes go, in what order nodes are read),
-so it is pure and tested on its own; measuring boxes and running an arrow
+an answer capable of being wrong (where containers go, in what order nodes are read),
+so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it
 against anyway.
 

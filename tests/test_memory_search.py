@@ -83,7 +83,7 @@ def test_an_anchored_entry_outranks_a_merely_similar_one(tmp_path, monkeypatch):
     _fact(project, "similar", "Another note about the api batch limit.")
 
     # Room for one entry only: rank decides who gets it.
-    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 40)
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 40)
     block = read_memory(project, task)
     assert "Watch the api batch limit here." in block
     assert "Another note" not in block
@@ -107,7 +107,7 @@ def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch
     _fact(project, "one", "The api batch importer note number one.")
     _fact(project, "two", "The api batch importer note number two.")
 
-    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 45)
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 45)
     block = read_memory(project, task)
     # The page arrives whole however small the budget for learned entries is.
     assert page.strip() in block
@@ -235,7 +235,7 @@ def test_the_budget_still_cuts_whole_entries_across_neighbors(tmp_path, monkeypa
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
     _fact(project, "folder-layout", "Feeds land alphabetically, newest last.")
 
-    monkeypatch.setattr(memory_recall, "FACTS_BUDGET", 60)
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 60)
     block = read_memory(project, task)
     assert "over 50." in block
     assert "alphabetically" not in block
@@ -252,18 +252,18 @@ def test_the_fallback_still_returns_the_same_entries(tmp_path, monkeypatch):
     assert read_memory(project, task) == preferred
 
 
-# -- worn paths --------------------------------------------------------------
+# -- strength paths --------------------------------------------------------------
 #
-# Wear reorders neighbors and extends reach one worn hop; it never outranks
+# Wear reorders neighbors and extends reach one strength hop; it never outranks
 # direct evidence, crosses a filter, or diverges the two lookup backends.
-# With no wear anywhere, everything above this line is the whole behavior.
+# With nothing reinforced, everything above this line is the whole behavior.
 
 
 def _worn(project, a, b, times=1):
-    from poieo.strength import wear
+    from poieo.strength import reinforce
 
     for _ in range(times):
-        wear(project, [(a, b)])
+        reinforce(project, [(a, b)])
 
 
 def test_a_worn_neighbor_outranks_its_unworn_sibling(tmp_path):
@@ -312,7 +312,7 @@ def test_an_unworn_second_hop_is_never_taken(tmp_path):
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
     _fact(project, "near", "Feeds land alphabetically. [[far]]")
     _fact(project, "far", "Somewhere a bell rings twice.")
-    _worn(project, "batch-cap", "near")  # the first hop is worn; the second is not
+    _worn(project, "batch-cap", "near")  # the first hop is strength; the second is not
 
     assert "bell rings" not in read_memory(project, task)
 

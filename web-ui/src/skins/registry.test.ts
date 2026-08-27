@@ -65,7 +65,7 @@ test("skinById falls back to basic for an unknown id", () => {
 
 test("mount/update/destroy leaves the element empty", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectFlow: () => {} })
   handle.update(midRun())
   expect(el.childElementCount).toBeGreaterThan(0)
 
@@ -75,7 +75,7 @@ test("mount/update/destroy leaves the element empty", () => {
 
 test("basic renders one box per flow and reflects status", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectFlow: () => {} })
   handle.update(midRun())
 
   expect(el.querySelectorAll("[data-flow]")).toHaveLength(2)
@@ -90,7 +90,7 @@ test("basic renders one box per flow and reflects status", () => {
 
 test("the latest thinking and tool call surface on an open flow", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectWorker: () => {} })
+  const handle = basic.mount(el, { onSelectFlow: () => {} })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN))
 
   const card = el.querySelector('[data-flow="chores"]')!
@@ -101,7 +101,7 @@ test("the latest thinking and tool call surface on an open flow", () => {
 test("clicking a flow's name selects it; the chevron is for opening", () => {
   const el = document.createElement("div")
   const picked: string[] = []
-  const handle = basic.mount(el, { onSelectWorker: (flow) => picked.push(flow) })
+  const handle = basic.mount(el, { onSelectFlow: (flow) => picked.push(flow) })
   handle.update(midRun())
 
   el.querySelector<HTMLElement>('[data-flow="revision"] .basic-pick')!.click()
