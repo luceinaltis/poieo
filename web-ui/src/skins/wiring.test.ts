@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { BOX, exits, place, steps, walk, wire } from "./wiring"
+import { BOX, arrivals, depths, exits, place, walk, wire } from "./wiring"
 import type { GraphShape } from "../types"
 
 const LINE: GraphShape = {
@@ -139,18 +139,53 @@ const FORK: GraphShape = {
   ],
 }
 
-test("every node of a straight line leads on to the one drawn after it", () => {
-  expect(steps(LINE)).toEqual(["draft", "review", "gate"])
+test("every node of a straight line is arrived at, bar the one it starts on", () => {
+  expect(arrivals(LINE)).toEqual(["review", "gate", "revise"])
 })
 
-test("a router's arms are siblings, so neither leads on to the other", () => {
-  // `answer` is drawn beside `bug` because the walk reads them in turn, not
-  // because the run goes from one to the other. A connector between them
-  // would claim an edge the graph does not have.
-  expect(steps(FORK)).toEqual(["classify", "route"])
+test("every arm of a router is arrived at, not just the first", () => {
+  // The whole reason the connector hangs off the node being arrived at. On
+  // the router it could be drawn to one arm only, and the other would sit
+  // there looking like something nothing reaches.
+  expect(arrivals(FORK)).toEqual(["route", "answer", "bug"])
 })
 
-test("a node that loops back leads on to nothing drawn after it", () => {
-  // `revise` points at `review`, which the reader has already passed.
-  expect(steps(LINE)).not.toContain("revise")
+test("a loop back draws no arrow into a node already passed", () => {
+  // `revise` points at `review`, which sits to its left. An arrow there
+  // would run backwards through three nodes that have nothing to do with it.
+  expect(arrivals(LINE)).not.toContain("draft")
+})
+
+
+test("a straight line is one node per column, all on one row", () => {
+  expect(depths(LINE)).toEqual([
+    { id: "draft", column: 0, row: 0 },
+    { id: "review", column: 1, row: 0 },
+    { id: "gate", column: 2, row: 0 },
+    { id: "revise", column: 3, row: 0 },
+  ])
+})
+
+test("a router's arms share a column and stack under one another", () => {
+  // The one thing a wrapped row of pills could never say: these are
+  // alternatives at the same step, not four steps in a row.
+  expect(depths(FORK)).toEqual([
+    { id: "classify", column: 0, row: 0 },
+    { id: "route", column: 1, row: 0 },
+    { id: "answer", column: 2, row: 0 },
+    { id: "bug", column: 2, row: 1 },
+  ])
+})
+
+test("a loop back does not push its target into a further column", () => {
+  // `revise` points at `review`, which is already placed. Counting that as
+  // another step would march a cycle off the right of the border forever.
+  const looping: GraphShape = {
+    entry: "draft",
+    nodes: [
+      { id: "draft", type: "llm", next: "revise", default: null, branches: [], model: null },
+      { id: "revise", type: "llm", next: "draft", default: null, branches: [], model: null },
+    ],
+  }
+  expect(depths(looping).map((cell) => cell.column)).toEqual([0, 1])
 })
