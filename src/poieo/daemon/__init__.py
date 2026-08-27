@@ -1,8 +1,8 @@
-"""Resident scheduler: triggers, flow configuration, and the daemon itself."""
+"""Resident scheduler: triggers, task configuration, and the daemon itself."""
 
-from .config import DaemonConfig, FlowSpec, LoadedFlow, load_config, load_flows
+from .config import DaemonConfig, TaskSpec, LoadedTask, load_config, load_tasks
 from .cron import CronSchedule
-from .service import Daemon, FlowRunner
+from .service import Daemon, TaskRunner
 from .triggers import Firing, Trigger, TriggerSpec, parse_duration
 
 __all__ = [
@@ -10,12 +10,12 @@ __all__ = [
     "Daemon",
     "DaemonConfig",
     "Firing",
-    "FlowRunner",
-    "FlowSpec",
-    "LoadedFlow",
+    "TaskRunner",
+    "TaskSpec",
+    "LoadedTask",
     "Trigger",
     "TriggerSpec",
     "load_config",
-    "load_flows",
+    "load_tasks",
     "parse_duration",
 ]

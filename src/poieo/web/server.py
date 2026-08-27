@@ -162,7 +162,7 @@ def create_app(daemon: Any) -> Starlette:
             rows.append(
                 {
                     "name": runner.name,
-                    "graph": runner.flow.graph.name,
+                    "graph": runner.task.graph.name,
                     "trigger": runner.trigger.describe,
                     "status": runner.status,
                     "current_run_id": runner.current_run_id,
@@ -170,8 +170,8 @@ def create_app(daemon: Any) -> Starlette:
                     **state,
                     # The two halves of the work graph: which flow this one
                     # hands to, and what it walks on the way there.
-                    "then": _branches(runner.flow.spec.then),
-                    "shape": _shape(runner.flow),
+                    "then": _branches(runner.task.spec.then),
+                    "shape": _shape(runner.task),
                 }
             )
         return JSONResponse({"flows": rows})

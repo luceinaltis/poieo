@@ -14,7 +14,7 @@ import pytest
 from conftest import card, EXAMPLES, at
 from poieo.layout import layout_for
 from poieo.binding import BindingSpec
-from poieo.daemon.config import load_config, load_flows
+from poieo.daemon.config import load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
 from poieo.providers import ProviderPool
@@ -22,19 +22,19 @@ from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
 from poieo.memory import check_memory, load_entries
-from poieo.task import (
+from poieo.card import (
     JOURNAL_WIDTH,
-    load_task,
+    load_card,
     record_run,
     system_block,
-    task_payload,
+    card_payload,
 )
 
-from test_task import write_task
+from test_card import write_card
 
 
 def _task(tmp_path):
-    return load_task(write_task(tmp_path, "tidy", "name: tidy the project\nprompt: go\n"))
+    return load_card(write_card(tmp_path, "tidy", "name: tidy the project\nprompt: go\n"))
 
 
 def _result(**over):
@@ -187,7 +187,7 @@ def _remember(tmp_path, text="Never push to main."):
 
 def _daemon_flow(tmp_path):
     loaded_config = load_config(_mark(tmp_path))
-    return load_flows(loaded_config)[0], loaded_config
+    return load_tasks(loaded_config)[0], loaded_config
 
 
 def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
@@ -195,7 +195,7 @@ def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
     assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
         name=task.name, folder=task.folder_path()
     )
-    assert "memory" not in task_payload(task)
+    assert "memory" not in card_payload(task)
 
     flow, config = _daemon_flow(tmp_path)
     assert "memory" not in flow.read_input(config)
@@ -211,7 +211,7 @@ def test_the_memory_hangs_off_the_marker_not_the_tasks_folder(tmp_path):
 
     assert (tmp_path / "memory" / "longterm" / "constitution.md").is_file()
     assert not (tmp_path / "tasks" / "memory").exists()
-    assert "Never push to main." in task_payload(task)["memory"]
+    assert "Never push to main." in card_payload(task)["memory"]
 
 
 def test_without_a_marker_the_tasks_folder_still_stands_in(tmp_path):
@@ -222,7 +222,7 @@ def test_without_a_marker_the_tasks_folder_still_stands_in(tmp_path):
     memory.longterm().mkdir(parents=True)
     memory.constitution().write_text("Keep it tidy.", encoding="utf-8")
 
-    assert "Keep it tidy." in task_payload(task)["memory"]
+    assert "Keep it tidy." in card_payload(task)["memory"]
 
 
 def test_the_constitution_reaches_the_prompt_on_the_daemon_path(tmp_path):
@@ -241,7 +241,7 @@ def test_the_constitution_reaches_the_prompt_on_the_cli_path(tmp_path):
     _remember(tmp_path)
 
     assert "{{ input.memory }}" in system_block(task)
-    block = task_payload(task)["memory"]
+    block = card_payload(task)["memory"]
     assert "Never push to main." in block
 
 
@@ -256,7 +256,7 @@ def test_both_runners_hand_a_card_the_same_input(tmp_path):
     _remember(tmp_path)
     flow, config = _daemon_flow(tmp_path)
 
-    assert flow.read_input(config) == task_payload(task)
+    assert flow.read_input(config) == card_payload(task)
 
 
 def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
@@ -287,7 +287,7 @@ def test_an_oversized_page_warns_and_still_loads_whole(tmp_path, caplog):
     _remember(tmp_path, long_page)
 
     with caplog.at_level("WARNING", logger="poieo.memory"):
-        block = task_payload(task)["memory"]
+        block = card_payload(task)["memory"]
 
     assert long_page.strip() in block
     assert any("trim" in message for message in caplog.messages)
@@ -299,7 +299,7 @@ def test_editor_notes_in_the_page_never_reach_the_prompt(tmp_path):
         tmp_path,
         "<!-- ask the four questions before adding a line -->\nNever push to main.",
     )
-    block = task_payload(task)["memory"]
+    block = card_payload(task)["memory"]
     assert "Never push to main." in block
     assert "four questions" not in block
 
@@ -311,7 +311,7 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
         name=task.name, folder=task.folder_path()
     )
-    assert "memory" not in task_payload(task)
+    assert "memory" not in card_payload(task)
 
 
 def test_a_journal_alone_does_not_turn_the_long_memory_on(tmp_path):
@@ -328,7 +328,7 @@ def test_a_journal_alone_does_not_turn_the_long_memory_on(tmp_path):
     at(project).journal(task.slug).write_text("- did: something\n", encoding="utf-8")
 
     assert keeps_memory(project) is False
-    assert "memory" not in task_payload(task)
+    assert "memory" not in card_payload(task)
 
 
 def test_listing_a_project_writes_nothing(tmp_path):

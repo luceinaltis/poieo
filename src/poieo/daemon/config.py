@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from ..binding import BindingSpec, load_binding
 from ..errors import SpecError, describe_invalid
@@ -16,13 +16,13 @@ from ..layout import find_project_file
 from ..memory import check_memory, keeps_memory
 from ..project import ProjectSpec, load_project
 from ..tools import Isolation
-from ..task import TaskSpec, expand, load_tasks, task_payload
+from ..card import CardSpec, expand, load_cards, card_payload
 from .triggers import TriggerSpec
 
 log = logging.getLogger("poieo.daemon")
 
 
-class FlowSpec(BaseModel):
+class TaskSpec(BaseModel):
     """One logical workflow wired to a trigger and a binding."""
 
     model_config = ConfigDict(extra="forbid")
@@ -34,50 +34,62 @@ class FlowSpec(BaseModel):
     trigger: TriggerSpec = Field(default_factory=TriggerSpec)
     enabled: bool = True
 
-    # Where this flow's agent nodes work. Resolved against the config file, so
+    # Where this task's agent nodes work. Resolved against the config file, so
     # the graph can stay portable and say nothing about this machine.
     workdir: str | None = None
 
     # Static payload handed to every run.
     input: dict[str, Any] = Field(default_factory=dict)
-    # Re-read before each run, so an external process can feed the flow.
+    # Re-read before each run, so an external process can feed the task.
     input_file: str | None = None
     # Carry the ending state of one run into the next -- the memory that makes
-    # a looping flow accumulate instead of restarting from zero every time.
+    # a looping task accumulate instead of restarting from zero every time.
     carry_state: bool = False
-    # Where this flow's commands may run. Absent means the host, as before.
+    # Where this task's commands may run. Absent means the host, as before.
     isolation: Isolation | None = None
     on_error: Literal["continue", "stop"] = "continue"
 
-    # Which flow should work next: the router's own when/to/label, one level
+    # Which task should work next: the router's own when/to/label, one level
     # up. First match wins, and `to: null` means matched-and-no-further. No
     # `default`, because a finished run does not have to go anywhere; a
     # catch-all is a last branch reading `"true"`.
     then: list[Branch] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _check_name(self) -> FlowSpec:
+    def _check_name(self) -> TaskSpec:
         if not self.name.strip():
-            raise ValueError("flow name must not be empty")
+            raise ValueError("task name must not be empty")
         return self
 
 
 class DaemonConfig(ProjectSpec):
-    """A project, plus the flows something intends to actually run.
+    """A project, plus the tasks something intends to actually run.
 
     The paths live in :class:`~poieo.project.ProjectSpec`; what this adds is
-    reading ``flows`` as flows. One schema, so a key cannot mean one thing to
+    reading ``tasks`` as tasks. One schema, so a key cannot mean one thing to
     `poieo run` and another to `poieo daemon`.
     """
 
-    # Not a document key. A job is one file in the tasks folder; this is where
-    # `_load_tasks` puts them once it has read it.
-    flows: list[FlowSpec] = Field(default_factory=list, exclude=True)
+    # Not a document key -- `tasks:` in the file names the folder, and this is
+    # what was found in it. A property rather than a field so the two cannot
+    # collide over one word, which is the thing this whole naming is for.
+    _tasks: list[TaskSpec] = PrivateAttr(default_factory=list)
 
-    # What each task-backed flow came from, by flow name. Filled by
+    @property
+    def tasks(self) -> list[TaskSpec]:
+        """The jobs this project runs, once the cards have been read."""
+        return self._tasks
+
+    @tasks.setter
+    def tasks(self, value: list[TaskSpec]) -> None:
+        # `poieo daemon --task one` narrows the roster to one; nothing else
+        # replaces it wholesale.
+        self._tasks = value
+
+    # What each task-backed task came from, by task name. Filled by
     # load_config; anything a document puts here is discarded.
-    task_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
-    tasks_by_flow: dict[str, TaskSpec] = Field(default_factory=dict, exclude=True)
+    card_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
+    cards_by_task: dict[str, CardSpec] = Field(default_factory=dict, exclude=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -99,14 +111,14 @@ class DaemonConfig(ProjectSpec):
 
     @model_validator(mode="after")
     def _check_flows(self) -> DaemonConfig:
-        names = [f.name for f in self.flows]
+        names = [f.name for f in self.tasks]
         duplicates = {n for n in names if names.count(n) > 1}
         if duplicates:
-            raise ValueError(f"duplicate flow names: {sorted(duplicates)}")
-        for flow in self.flows:
-            if not flow.binding and not self.binding:
+            raise ValueError(f"duplicate task names: {sorted(duplicates)}")
+        for task in self.tasks:
+            if not task.binding and not self.binding:
                 raise ValueError(
-                    f"flow '{flow.name}' has no binding and the daemon declares no default"
+                    f"task '{task.name}' has no binding and the daemon declares no default"
                 )
         if self.learn is not None:
             from .triggers import parse_duration
@@ -121,24 +133,24 @@ class DaemonConfig(ProjectSpec):
                 )
         return self
 
-    # -- path helpers the flows need; the rest are the project's -------------
-    def workdir_path(self, flow: FlowSpec) -> Path | None:
+    # -- path helpers the tasks need; the rest are the project's -------------
+    def workdir_path(self, task: TaskSpec) -> Path | None:
         # Resolved: this one is handed to a subprocess and shown in warnings,
         # so "examples/.." helps nobody.
-        return self.resolve_path(flow.workdir).resolve() if flow.workdir else None
+        return self.resolve_path(task.workdir).resolve() if task.workdir else None
 
-    def binding_path(self, flow: FlowSpec) -> Path:
-        target = flow.binding or self.binding
+    def binding_path(self, task: TaskSpec) -> Path:
+        target = task.binding or self.binding
         assert target is not None  # guaranteed by _check_flows
         return self.resolve_path(target)
 
 
-class LoadedFlow(BaseModel):
-    """A flow with its graph and binding parsed and cross-checked."""
+class LoadedTask(BaseModel):
+    """A task with its graph and binding parsed and cross-checked."""
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    spec: FlowSpec
+    spec: TaskSpec
     graph: GraphSpec
     binding: BindingSpec
     binding_key: str
@@ -148,20 +160,20 @@ class LoadedFlow(BaseModel):
         if self.spec.input_file:
             path = config.resolve_path(self.spec.input_file)
             if not path.exists():
-                raise SpecError(f"flow '{self.spec.name}': input_file not found: {path}")
+                raise SpecError(f"task '{self.spec.name}': input_file not found: {path}")
             try:
                 text = path.read_text(encoding="utf-8")
                 data = json.loads(text) if path.suffix == ".json" else load_document(path)
             except json.JSONDecodeError as exc:
-                raise SpecError(f"flow '{self.spec.name}': {path}: {exc}") from exc
+                raise SpecError(f"task '{self.spec.name}': {path}: {exc}") from exc
             if not isinstance(data, dict):
                 raise SpecError(
-                    f"flow '{self.spec.name}': {path} must contain a mapping"
+                    f"task '{self.spec.name}': {path} must contain a mapping"
                 )
             payload.update(data)
-        task = config.tasks_by_flow.get(self.spec.name)
+        task = config.cards_by_task.get(self.spec.name)
         if task is not None:
-            payload.update(task_payload(task))
+            payload.update(card_payload(task))
         return payload
 
 
@@ -176,18 +188,18 @@ def load_config(path: str | Path) -> DaemonConfig:
             f"{describe_invalid(exc, tuple(DaemonConfig.model_fields))}"
         ) from exc
     config.source_path = path.resolve()
-    _load_tasks(config)
+    _load_cards(config)
     check_handoffs(config)
     return config
 
 
-def _load_tasks(config: DaemonConfig) -> None:
-    """Expand the tasks folder into flows, if the config names one."""
-    config.task_graphs = {}
-    config.tasks_by_flow = {}
-    if not config.tasks:
+def _load_cards(config: DaemonConfig) -> None:
+    """Expand the tasks folder into tasks, if the config names one."""
+    config.card_graphs = {}
+    config.cards_by_task = {}
+    if not config.cards:
         return
-    folder = config.resolve_path(config.tasks)
+    folder = config.resolve_path(config.cards)
     if not folder.is_dir():
         raise SpecError(f"tasks folder does not exist: {folder}")
     # A typo in the project's memory fails here, where `poieo validate` and
@@ -204,27 +216,27 @@ def _load_tasks(config: DaemonConfig) -> None:
             config.layout().longterm(),
         )
 
-    taken = {flow.name for flow in config.flows}
-    # Two passes: a task's generated prompt names the tasks it may tell, and
+    taken = {task.name for task in config.tasks}
+    # Two passes: a card's generated prompt names the tasks it may tell, and
     # that is not known until the whole folder has been read.
-    tasks = load_tasks(folder)
-    roster = [task.slug for task in tasks]
-    for task in tasks:
-        flow, graph = expand(task, roster=roster)
-        if flow.name in taken:
+    cards = load_cards(folder)
+    roster = [card.slug for card in cards]
+    for card in cards:
+        task, graph = expand(card, roster=roster)
+        if task.name in taken:
             raise SpecError(
-                f"task '{task.source_path}' is already a flow named '{flow.name}'"
+                f"card '{card.source_path}' is already a task named '{task.name}'"
             )
-        taken.add(flow.name)
-        if not flow.binding and not config.binding:
+        taken.add(task.name)
+        if not card.binding and not config.binding:
             raise SpecError(
-                f"task '{task.slug}' names no binding and there is no default. "
-                f"Add `binding: <file>` to the card, or to the daemon config."
+                f"card '{card.slug}' names no binding and there is no default. "
+                f"Add `binding: <file>` to the card, or to the project."
             )
-        config.flows.append(flow)
-        config.tasks_by_flow[flow.name] = task
+        config.tasks.append(task)
+        config.cards_by_task[task.name] = card
         if graph is not None:
-            config.task_graphs[flow.name] = graph
+            config.card_graphs[task.name] = graph
 
 
 def config_for_tasks_folder(folder: Path) -> DaemonConfig:
@@ -249,7 +261,7 @@ def config_for_tasks_folder(folder: Path) -> DaemonConfig:
     else:
         config = DaemonConfig(store=str(folder / "runs"), tasks=str(folder))
         config.source_path = folder / "poieo.yaml"  # anchors relative paths
-    _load_tasks(config)
+    _load_cards(config)
     check_handoffs(config)
     return config
 
@@ -289,47 +301,47 @@ def _first_cycle(edges: dict[str, list[str]]) -> list[str] | None:
 def check_handoffs(config: DaemonConfig) -> None:
     """Every `then:` target exists and is not the sender; the rest is warnings.
 
-    Not a validator on the config: a task card becomes a flow only after the
+    Not a validator on the config: a task card becomes a task only after the
     tasks folder has been read, and a handoff is entitled to name one.
     """
-    known = {flow.name: flow for flow in config.flows}
+    known = {task.name: task for task in config.tasks}
 
-    for flow in config.flows:
-        for index, branch in enumerate(flow.then):
+    for task in config.tasks:
+        for index, branch in enumerate(task.then):
             if branch.to is None:
                 continue  # matched, and deliberately no further
-            if branch.to == flow.name:
+            if branch.to == task.name:
                 raise SpecError(
-                    f"flow '{flow.name}' then[{index}] hands off to itself. A "
-                    f"flow's own next run is what `loop` and `carry_state` are for."
+                    f"task '{task.name}' then[{index}] hands off to itself. A "
+                    f"task's own next run is what `loop` and `carry_state` are for."
                 )
             target = known.get(branch.to)
             if target is None:
-                # Say what was there. A handoff naming a flow that does not
-                # exist is a typo far more often than it is a missing flow.
-                roster = ", ".join(sorted(n for n in known if n != flow.name))
+                # Say what was there. A handoff naming a task that does not
+                # exist is a typo far more often than it is a missing task.
+                roster = ", ".join(sorted(n for n in known if n != task.name))
                 raise SpecError(
-                    f"flow '{flow.name}' then[{index}] hands off to unknown flow "
+                    f"task '{task.name}' then[{index}] hands off to unknown task "
                     f"'{branch.to}'. There is: {roster or '(nothing else)'}"
                 )
             if not target.enabled:
                 log.warning(
-                    "flow '%s' hands off to '%s', which is disabled: those "
+                    "task '%s' hands off to '%s', which is disabled: those "
                     "handoffs will be dropped. `enabled: false` is the off "
                     "switch, so this may well be deliberate.",
-                    flow.name,
+                    task.name,
                     branch.to,
                 )
-        if flow.then and flow.trigger.type == "loop":
+        if task.then and task.trigger.type == "loop":
             log.warning(
-                "flow '%s' hands off and runs on a `loop` trigger, so everything "
+                "task '%s' hands off and runs on a `loop` trigger, so everything "
                 "downstream inherits that pace. At most one handoff waits, and "
                 "the rest are dropped.",
-                flow.name,
+                task.name,
             )
 
     cycle = _first_cycle(
-        {f.name: [b.to for b in f.then if b.to is not None] for f in config.flows}
+        {f.name: [b.to for b in f.then if b.to is not None] for f in config.tasks}
     )
     if cycle is not None:
         # A warning, not a failure: review -> fix -> review is a legitimate
@@ -341,18 +353,18 @@ def check_handoffs(config: DaemonConfig) -> None:
         )
 
 
-def check_isolation(flows: list[FlowSpec]) -> None:
+def check_isolation(tasks: list[TaskSpec]) -> None:
     """Docker present, answering, and every named image already here.
 
     The slowest preflight in the codebase, and the only one that reaches
     outside the process: a task whose image was pruned last week must not
-    discover it at 3am. Flows that never asked are not probed at all, so a
+    discover it at 3am. Tasks that never asked are not probed at all, so a
     machine with no docker pays nothing.
 
-    Which flows reach here is the caller's business; load_flows keeps disabled
+    Which tasks reach here is the caller's business; load_tasks keeps disabled
     ones out.
     """
-    wanted = [f for f in flows if f.isolation]
+    wanted = [f for f in tasks if f.isolation]
     if not wanted:
         return
 
@@ -361,51 +373,51 @@ def check_isolation(flows: list[FlowSpec]) -> None:
     ok, reason = docker.docker_available()
     if not ok:
         names = ", ".join(sorted(f.name for f in wanted))
-        raise SpecError(f"flow(s) {names} ask to run isolated, but {reason}")
+        raise SpecError(f"task(s) {names} ask to run isolated, but {reason}")
 
     checked: set[str] = set()
-    for flow in wanted:
-        image = flow.isolation.image
+    for task in wanted:
+        image = task.isolation.image
         if image in checked:
             continue
         checked.add(image)
         if not docker.image_present(image):
             raise SpecError(
-                f"flow '{flow.name}' runs isolated in '{image}', which is not on "
+                f"task '{task.name}' runs isolated in '{image}', which is not on "
                 f"this machine. Run: docker pull {image}"
             )
 
 
-def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[LoadedFlow]:
-    """Parse every flow's graph and binding, and verify roles resolve.
+def load_tasks(config: DaemonConfig, *, enabled_only: bool = True) -> list[LoadedTask]:
+    """Parse every task's graph and binding, and verify roles resolve.
 
-    Called at startup so a typo in any flow surfaces immediately rather than at
+    Called at startup so a typo in any task surfaces immediately rather than at
     3am when its cron finally fires.
     """
     from ..providers import check_credentials
     from ..runtime.executor import preflight
 
-    selected = [f for f in config.flows if f.enabled or not enabled_only]
-    # Only what will actually run: `poieo flows` loads disabled flows to list
-    # them, and a disabled flow whose image is gone must not block the listing.
+    selected = [f for f in config.tasks if f.enabled or not enabled_only]
+    # Only what will actually run: `poieo tasks` loads disabled tasks to list
+    # them, and a disabled task whose image is gone must not block the listing.
     check_isolation([f for f in selected if f.enabled])
 
     graphs: dict[Path, GraphSpec] = {}
     bindings: dict[Path, BindingSpec] = {}
-    loaded: list[LoadedFlow] = []
+    loaded: list[LoadedTask] = []
 
-    for flow in selected:
-        binding_path = config.binding_path(flow).resolve()
+    for task in selected:
+        binding_path = config.binding_path(task).resolve()
         if binding_path not in bindings:
             bindings[binding_path] = load_binding(binding_path)
 
-        workdir = config.workdir_path(flow)
+        workdir = config.workdir_path(task)
         if workdir is not None and not workdir.is_dir():
-            raise SpecError(f"flow '{flow.name}': workdir does not exist: {workdir}")
+            raise SpecError(f"task '{task.name}': workdir does not exist: {workdir}")
 
-        generated = config.task_graphs.get(flow.name)
+        generated = config.card_graphs.get(task.name)
         if generated is None:
-            graph_path = config.resolve_path(flow.graph).resolve()
+            graph_path = config.resolve_path(task.graph).resolve()
             if graph_path not in graphs:
                 graphs[graph_path] = load_graph(graph_path)
             generated = graphs[graph_path]
@@ -414,11 +426,11 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         try:
             preflight(graph, binding, workdir=workdir)
             # Reads the environment, not a server, so it belongs at load time.
-            # Enabled flows only: a disabled one must still be listable.
-            if flow.enabled:
+            # Enabled tasks only: a disabled one must still be listable.
+            if task.enabled:
                 check_credentials(binding, graph.roles())
         except Exception as exc:
-            raise SpecError(f"flow '{flow.name}': {exc}") from exc
+            raise SpecError(f"task '{task.name}': {exc}") from exc
 
         # `role: classifer` still runs, on whatever `default` is -- a warning,
         # not a refusal, because falling back is what a default is for.
@@ -432,10 +444,10 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         )
         if strangers:
             log.warning(
-                "flow '%s': graph '%s' asks for role(s) %s, which binding '%s' "
+                "task '%s': graph '%s' asks for role(s) %s, which binding '%s' "
                 "does not declare -- they will run on its default (%s). Check "
                 "for a typo.",
-                flow.name,
+                task.name,
                 graph.name,
                 ", ".join(strangers),
                 binding.name,
@@ -443,8 +455,8 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
             )
 
         loaded.append(
-            LoadedFlow(
-                spec=flow,
+            LoadedTask(
+                spec=task,
                 graph=graph,
                 binding=binding,
                 binding_key=str(binding_path),

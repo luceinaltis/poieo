@@ -4,7 +4,7 @@
 discovery (re-exported from :mod:`poieo.layout`) to fill flags the user left
 silent -- the flag always wins, and discovery only fills silence.
 
-A command asking "where is the store" does not want the flows read, the task
+A command asking "where is the store" does not want the cards read, the task
 folder expanded or the memory cross-checked. The daemon wants all of that, and
 :class:`DaemonConfig` extends this with it: one schema, read to the depth the
 caller needs.
@@ -43,25 +43,24 @@ __all__ = [
 class ProjectSpec(BaseModel):
     """The shared defaults a ``poieo.yaml`` declares: where things live.
 
-    Deliberately shallow: ``flows`` is accepted but left as written, and
-    ``DaemonConfig`` narrows the field when something intends to run them.
+    Deliberately shallow: it says where things are, and ``DaemonConfig`` is
+    what reads the cards it points at.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     version: int = 1
     # Where a run's events and its result are written. Moves the run history
     # and nothing else: the memory and the working copies stay with the project.
     store: str = "runs"
-    # Default binding for flows -- and for tasks, and for `poieo run`.
+    # Default binding for every task here, and for `poieo run`.
     binding: str | None = None
-    # A folder of task files; each one expands into a flow. See poieo.task.
-    tasks: str | None = None
+    # The folder of cards. Named for what is in it, while the document key
+    # stays `tasks:` -- that is the word a reader of the file wants.
+    cards: str | None = Field(default=None, alias="tasks")
     # How often the project learns from its run records ("1d"); absent means
     # never. Validated by the daemon, the only thing that acts on it.
     learn: str | None = None
-    # Read to the depth the caller needs: see the class docstring.
-    flows: list[Any] = Field(default_factory=list)
 
     source_path: Path | None = Field(default=None, exclude=True)
 
@@ -91,7 +90,7 @@ class ProjectSpec(BaseModel):
 
 
 def load_project(path: str | Path) -> ProjectSpec:
-    """Parse a ``poieo.yaml`` for its paths. Flows are not read."""
+    """Parse a ``poieo.yaml`` for its paths. Tasks are not read."""
     path = Path(path)
     data = load_document(path)
     try:
@@ -151,7 +150,7 @@ default:
 """
 
 _MARKER_BODY = """\
-# The project: which flows run, on what trigger, against which binding.
+# The project: where runs land, which models answer, and where the tasks are.
 # This file's folder is the project -- everything below resolves from here.
 version: 1
 store: runs                       # where a run's events and result go
@@ -210,7 +209,7 @@ answers one question.
   - `cache/` -- rebuilt from the above. Delete it and lose nothing.
 - `runs/` -- **what happened**. `events/<id>.jsonl` as it happened,
   `results/<id>.json` when it was over. Read freely, never edit.
-- `worktrees/` -- each flow's private copy of the repository it works on.
+- `worktrees/` -- each task's private copy of the repository it works on.
 
 `memory/cache/`, `runs/` and `worktrees/` are gitignored; everything else
 is yours and belongs in git.
@@ -221,7 +220,7 @@ Edit a file, then prove it loads -- a typo must fail now, not at 3am:
 
     poieo validate tasks/<card>.yaml   # after editing a card or a graph
     poieo check -b models/<name>.yaml  # after editing a binding (probes it)
-    poieo flows                        # after editing poieo.yaml (loads all)
+    poieo tasks                        # after editing poieo.yaml (loads all)
 
 Before naming a model in a binding, read what is actually there -- a model
 named from memory fails at 3am, not now:

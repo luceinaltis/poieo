@@ -11,16 +11,16 @@ import pytest
 import poieo.memory.index as memory_index
 import poieo.memory.recall as memory_recall
 from poieo.memory import read_memory
-from poieo.task import load_task
+from poieo.card import load_card
 
-from test_task import write_task
+from test_card import write_card
 
 
 def _project(tmp_path, prompt="review the api batch sizes in the importer"):
     """A card, its folder, and a memory folder beside it."""
-    path = write_task(tmp_path, "importer", f"name: mind the importer\nprompt: {prompt}\n")
+    path = write_card(tmp_path, "importer", f"name: mind the importer\nprompt: {prompt}\n")
     at(tmp_path / "tasks").facts().mkdir(parents=True)
-    return load_task(path), tmp_path / "tasks"
+    return load_card(path), tmp_path / "tasks"
 
 
 def _fact(project, slug, body, matter=""):

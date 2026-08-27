@@ -656,9 +656,9 @@ def test_run_consumes_a_note_the_way_a_daemon_run_does(tmp_path):
     card = _self_bound_card(tmp_path)
     runner.invoke(app, ["note", str(card), "look at the README first"])
     runner.invoke(app, ["run", str(card), "--no-log"])
-    from poieo.task import load_task, read_journal
+    from poieo.card import load_card, read_journal
 
-    shown = read_journal(load_task(card).journal_path())
+    shown = read_journal(load_card(card).journal_path())
     assert "Nothing new" in shown
     assert "look at the README" in shown       # consumed, not lost
 

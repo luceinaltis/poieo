@@ -16,7 +16,7 @@ from poieo.web.server import create_app
 
 
 class StubRunner:
-    """Answers the control verbs the way FlowRunner's contract promises."""
+    """Answers the control verbs the way TaskRunner's contract promises."""
 
     def __init__(self, name="triage", status="waiting"):
         self.name = name

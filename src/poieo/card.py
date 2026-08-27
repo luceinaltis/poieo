@@ -1,7 +1,7 @@
 """A task is a name, a folder, and a prompt -- the smallest thing that runs.
 
 Everything else has a default. A task is *sugar*: at load time it expands into
-a flow plus a one-node graph indistinguishable from hand-written ones, so
+a task plus a one-node graph indistinguishable from hand-written ones, so
 nothing downstream of the loader knows tasks exist. The expansion is visible
 (``poieo show``) and reversible (``poieo eject``), which is what keeps the
 short form from becoming a second, hidden configuration format.
@@ -28,9 +28,9 @@ from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from .daemon.config import FlowSpec
+    from .daemon.config import TaskSpec
 
-log = logging.getLogger("poieo.task")
+log = logging.getLogger("poieo.card")
 
 DEFAULT_EVERY = "1h"
 DEFAULT_MAX_TURNS = 40
@@ -42,7 +42,7 @@ JOURNAL_LIMIT = 20
 JOURNAL_WIDTH = 300
 
 
-def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
+def system_block(task: CardSpec, roster: list[str] | None = None) -> str:
     """The generated node's system prompt. User-visible, so it is fixed here.
 
     The journal arrives as run input rather than baked in, because it is
@@ -59,7 +59,7 @@ def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
     )
 
 
-def _memory_section(task: TaskSpec) -> str:
+def _memory_section(task: CardSpec) -> str:
     """The project's memory, for a project that keeps one.
 
     Gated on content, so a project that never made a memory sees no trace of
@@ -72,7 +72,7 @@ def _memory_section(task: TaskSpec) -> str:
     return "{{ input.memory }}\n\n"
 
 
-def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
+def _roster_block(task: CardSpec, roster: list[str] | None) -> str:
     """Who this task may leave a note for.
 
     A model cannot address a task it does not know exists, so one that did not
@@ -95,7 +95,7 @@ def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
 _NODE_KEYS = ("prompt", "role", "tools", "max_turns")
 
 
-class TaskSpec(BaseModel):
+class CardSpec(BaseModel):
     """One card: what to do, where, and how often."""
 
     model_config = ConfigDict(extra="forbid")
@@ -117,12 +117,12 @@ class TaskSpec(BaseModel):
     every: str | float | None = None
     at: str | None = None
     # Left as a mapping rather than a TriggerSpec: importing one here would
-    # close the loop with daemon.config, and FlowSpec validates it a moment
+    # close the loop with daemon.config, and TaskSpec validates it a moment
     # later anyway -- where the error can name the card it came from.
     trigger: dict[str, Any] | None = None
 
-    # What the work is handed, and what should work next. These were a flow's
-    # to say when a flow was a thing you wrote; a task is that thing now.
+    # What the work is handed, and what should work next. These were a task's
+    # to say when a task was a thing you wrote; a task is that thing now.
     input: dict[str, Any] = Field(default_factory=dict)
     input_file: str | None = None
     then: list[Branch] = Field(default_factory=list)
@@ -137,11 +137,11 @@ class TaskSpec(BaseModel):
     # Not a node key: it describes the task, so `poieo eject` keeps it.
     isolation: Isolation | None = None
 
-    # Populated by load_task; not part of the authored document.
+    # Populated by load_card; not part of the authored document.
     source_path: Path | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
-    def _check(self) -> TaskSpec:
+    def _check(self) -> CardSpec:
         if not self.name.strip():
             raise ValueError("task name must not be empty")
         if self.prompt and self.graph:
@@ -168,13 +168,13 @@ class TaskSpec(BaseModel):
     def slug(self) -> str:
         """The task's identity: its filename, never its rewritable title."""
         if self.source_path is None:
-            raise SpecError("task has no source path; load it with load_task()")
+            raise SpecError("task has no source path; load it with load_card()")
         return self.source_path.stem
 
     @property
     def dir(self) -> Path:
         if self.source_path is None:
-            raise SpecError("task has no source path; load it with load_task()")
+            raise SpecError("task has no source path; load it with load_card()")
         return self.source_path.parent
 
     def resolve(self, relative: str) -> Path:
@@ -192,16 +192,16 @@ class TaskSpec(BaseModel):
         return layout_for(self.dir).journal(self.slug)
 
 
-def load_task(path: str | Path) -> TaskSpec:
+def load_card(path: str | Path) -> CardSpec:
     """Load and fully validate a task file."""
     path = Path(path)
     data = load_document(path)
     try:
-        task = TaskSpec.model_validate(data)
+        task = CardSpec.model_validate(data)
     except Exception as exc:
         raise SpecError(
             f"{path}: invalid task: "
-            f"{describe_invalid(exc, tuple(TaskSpec.model_fields))}"
+            f"{describe_invalid(exc, tuple(CardSpec.model_fields))}"
         ) from exc
     task.source_path = path
     folder = task.folder_path()
@@ -215,7 +215,7 @@ def load_task(path: str | Path) -> TaskSpec:
 _CARD_KEYS = {"prompt", "folder", "every", "at", "then", "input", "input_file"}
 
 
-def is_task_document(data: dict[str, Any]) -> bool:
+def is_card_document(data: dict[str, Any]) -> bool:
     """A card says what to do; a graph says what the steps are.
 
     `nodes:` is the graph's word and no card has one; everything else in the
@@ -225,20 +225,20 @@ def is_task_document(data: dict[str, Any]) -> bool:
 
     Positive evidence, because this is asked of files that might be anything --
     a `poieo.yaml` has no `nodes:` either, and is not a card. Inside the tasks
-    folder `load_tasks` is laxer on purpose: there, a file with `promt:` is a
+    folder `load_cards` is laxer on purpose: there, a file with `promt:` is a
     card with a typo, and saying so beats deciding it was never a card.
     """
     return "nodes" not in data and bool(_CARD_KEYS & set(data))
 
 
-def is_task_file(path: str | Path) -> bool:
+def is_card_file(path: str | Path) -> bool:
     try:
-        return is_task_document(load_document(path))
+        return is_card_document(load_document(path))
     except SpecError:
         return False
 
 
-def _trigger(task: TaskSpec) -> Any:
+def _trigger(task: CardSpec) -> Any:
     if task.trigger is not None:
         return task.trigger
     if task.at is not None:
@@ -249,7 +249,7 @@ def _trigger(task: TaskSpec) -> Any:
     return {"type": "interval", "every": every}
 
 
-def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
+def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
     """The one-node graph a prompt-shaped task stands for."""
     return GraphSpec(
         name=task.slug,
@@ -276,23 +276,23 @@ def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
 
 
 def expand(
-    task: TaskSpec, roster: list[str] | None = None
-) -> tuple[FlowSpec, GraphSpec | None]:
-    """Desugar a task into the flow and graph the rest of poieo understands.
+    task: CardSpec, roster: list[str] | None = None
+) -> tuple[TaskSpec, GraphSpec | None]:
+    """Desugar a task into the task and graph the rest of poieo understands.
 
-    The graph is None when the task names one of its own; the flow then points
+    The graph is None when the task names one of its own; the task then points
     at that file and is loaded like any other.
     """
     from pydantic import ValidationError
 
-    from .daemon.config import FlowSpec  # late import: config imports this module
+    from .daemon.config import TaskSpec  # late import: config imports this module
 
     graph = None if task.graph else build_graph(task, roster)
     try:
-        flow = FlowSpec(
+        task = TaskSpec(
             name=task.slug,
-            # With no graph file, the flow points at the card standing in for
-            # one; load_flows prefers the generated graph handed alongside.
+            # With no graph file, the task points at the card standing in for
+            # one; load_tasks prefers the generated graph handed alongside.
             graph=str(task.resolve(task.graph) if task.graph else task.source_path),
             # Resolved here, against the card. `poieo run` already reads it
             # that way, and a path that meant one file to the CLI and another
@@ -315,10 +315,10 @@ def expand(
     except (ValidationError, SpecError) as exc:
         # Ten cards in a folder: the message has to say which one.
         raise SpecError(f"task '{task.slug}': {describe_invalid(exc)}") from exc
-    return flow, graph
+    return task, graph
 
 
-def load_tasks(folder: str | Path) -> list[TaskSpec]:
+def load_cards(folder: str | Path) -> list[CardSpec]:
     """Every card in a folder, in a stable order.
 
     Graphs live here too, so the document says which is which: a card has a
@@ -338,7 +338,7 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
             # In this folder, everything that is not a graph is a card -- so a
             # typo'd key is a card that says which key, not a file that quietly
             # stopped being a job.
-            tasks.append(load_task(path))
+            tasks.append(load_card(path))
         elif not _CARD_KEYS & set(data):
             continue  # a graph: a card names it, and that is how it is reached
         else:
@@ -352,7 +352,7 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
     return tasks
 
 
-def record_run(task: TaskSpec, result: Any) -> None:
+def record_run(task: CardSpec, result: Any) -> None:
     """Add one run to the task's journal, so the next one can read it.
 
     **Every runner of a task must land here** -- the daemon's and the CLI's
@@ -451,7 +451,7 @@ def _bookmark(lines: list[str]) -> int:
     return 0
 
 
-def task_payload(task: TaskSpec) -> dict[str, Any]:
+def card_payload(task: CardSpec) -> dict[str, Any]:
     """What a card's generated graph is given, beyond the user's own input.
 
     One statement of the rule, shared by the two runners -- `poieo run` and the

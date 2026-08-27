@@ -12,7 +12,7 @@ import asyncio
 import pytest
 
 from conftest import card
-from poieo.daemon import Daemon, load_config, load_flows
+from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.service import MAX_CHAIN
 from poieo.errors import SpecError
 from poieo.store import NullStore
@@ -45,7 +45,7 @@ def _config(tmp_path, jobs: dict, extra: str = ""):
 
 def _flow(config, name):
     """By name, never by position: cards are read in filename order."""
-    return next(f for f in config.flows if f.name == name)
+    return next(f for f in config.tasks if f.name == name)
 
 
 _THEN = 'then:\n  - when: "run.change"\n    to: receiver\n    label: changed\n'
@@ -122,7 +122,7 @@ def test_a_cycle_warns_and_still_loads(tmp_path, caplog):
     said = " ".join(caplog.messages)
     assert "sender" in said and "receiver" in said
     # A feedback loop is legitimate -- the depth counter is what makes it safe.
-    assert len(config.flows) == 2
+    assert len(config.tasks) == 2
 
 
 def test_a_loop_triggered_sender_warns(tmp_path, caplog):
@@ -143,7 +143,7 @@ def test_handing_off_to_a_disabled_flow_warns_rather_than_fails(tmp_path, caplog
         config = load_config(_config(tmp_path, jobs))
 
     assert "receiver" in " ".join(caplog.messages)
-    assert len(config.flows) == 2
+    assert len(config.tasks) == 2
 
 
 def test_a_prompt_shaped_card_is_a_target_like_any_other(tmp_path):
@@ -156,7 +156,7 @@ def test_a_prompt_shaped_card_is_a_target_like_any_other(tmp_path):
 
     config = load_config(_config(tmp_path, jobs))
 
-    assert {flow.name for flow in config.flows} == {"sender", "tidy"}
+    assert {flow.name for flow in config.tasks} == {"sender", "tidy"}
 
 
 # -- the handoff itself -----------------------------------------------------
@@ -436,7 +436,7 @@ def test_a_role_the_binding_never_heard_of_says_so_at_load(tmp_path, caplog):
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
-        load_flows(load_config(path))
+        load_tasks(load_config(path))
 
     said = " ".join(caplog.messages)
     assert "classifer" in said and "big" in said
@@ -447,7 +447,7 @@ def test_a_binding_that_declares_no_roles_is_not_asked(tmp_path, caplog):
     role legitimately falls through it. Warning there would be noise on the
     one setup that is meant to answer anything at all."""
     with caplog.at_level("WARNING", logger="poieo.daemon"):
-        load_flows(load_config(_config(tmp_path, _pair())))
+        load_tasks(load_config(_config(tmp_path, _pair())))
 
     assert "does not declare" not in " ".join(caplog.messages)
 
@@ -470,6 +470,6 @@ def test_a_node_that_names_no_role_asks_for_the_default_on_purpose(tmp_path, cap
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
-        load_flows(load_config(path))
+        load_tasks(load_config(path))
 
     assert "does not declare" not in " ".join(caplog.messages)

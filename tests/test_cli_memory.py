@@ -8,15 +8,15 @@ from typer.testing import CliRunner
 
 from poieo.cli import app
 from poieo.memory import read_memory
-from poieo.task import load_task
+from poieo.card import load_card
 
-from test_task import write_task
+from test_card import write_card
 
 runner = CliRunner()
 
 
 def _project(tmp_path):
-    path = write_task(
+    path = write_card(
         tmp_path, "importer", "name: mind the importer\nprompt: review the api batches\n"
     )
     memory = at(tmp_path / "tasks")
@@ -47,7 +47,7 @@ def test_memory_with_a_card_prints_exactly_what_the_run_would_see(tmp_path):
     result = runner.invoke(app, ["memory", str(card)])
 
     assert result.exit_code == 0
-    block = read_memory(project, load_task(card))
+    block = read_memory(project, load_card(card))
     assert block in result.stdout
 
 
@@ -63,7 +63,7 @@ def test_memory_is_read_only(tmp_path):
 
 
 def test_a_project_without_memory_says_so_plainly_and_exits_zero(tmp_path):
-    write_task(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
+    write_card(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
     result = runner.invoke(app, ["memory", str(tmp_path / "tasks")])
 
     assert result.exit_code == 0
@@ -168,7 +168,7 @@ def test_learn_says_when_there_is_nothing_to_read(tmp_path):
 
 
 def test_learn_without_memory_says_how_to_start_and_exits_zero(tmp_path):
-    write_task(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
+    write_card(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
     binding = tmp_path / "learner.yaml"
     binding.write_text(
         "name: mock\nproviders: {fake: {type: mock}}\n"

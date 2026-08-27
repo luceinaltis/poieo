@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from conftest import card, EXAMPLES, at
-from poieo.daemon import Daemon, load_config, load_flows
+from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
 from poieo.daemon.triggers import TriggerSpec, parse_duration
@@ -120,7 +120,7 @@ async def test_manual_trigger_never_fires_on_its_own():
 def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # cwd is deliberately somewhere else
     config = load_config(EXAMPLES / "poieo.yaml")
-    flows = load_flows(config)
+    flows = load_tasks(config)
 
     # Cards are read in filename order, and the disabled ones are skipped.
     assert [f.spec.name for f in flows] == ["keep-tidy", "revision", "triage"]
@@ -140,7 +140,7 @@ def test_startup_validates_every_flow_up_front(tmp_path):
     # The graph is broken (a model node with no prompt); the daemon must refuse
     # to arm rather than discover this when the trigger first fires.
     with pytest.raises(SpecError, match="requires a prompt"):
-        load_flows(load_config(path))
+        load_tasks(load_config(path))
 
 
 def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
@@ -163,13 +163,13 @@ def test_startup_refuses_a_flow_whose_credential_is_missing(tmp_path, monkeypatc
     a misconfiguration, and it must surface where `poieo daemon` starts --
     not eight turns into the run its trigger fires at 3am."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
-    with pytest.raises(SpecError, match=r"flow 'f'.*\$POIEO_TEST_KEY is not set"):
-        load_flows(load_config(_keyed_config(tmp_path)))
+    with pytest.raises(SpecError, match=r"task 'f'.*\$POIEO_TEST_KEY is not set"):
+        load_tasks(load_config(_keyed_config(tmp_path)))
 
 
 def test_startup_accepts_the_same_flow_once_the_key_is_there(tmp_path, monkeypatch):
     monkeypatch.setenv("POIEO_TEST_KEY", "sk-whatever")
-    assert len(load_flows(load_config(_keyed_config(tmp_path)))) == 1
+    assert len(load_tasks(load_config(_keyed_config(tmp_path)))) == 1
 
 
 def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypatch):
@@ -179,7 +179,7 @@ def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypat
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     path = _keyed_config(tmp_path)
     card(tmp_path / "cards", "f", f"graph: ../g.yaml\nenabled: false\n")
-    assert len(load_flows(load_config(path), enabled_only=False)) == 1
+    assert len(load_tasks(load_config(path), enabled_only=False)) == 1
 
 
 def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
@@ -200,12 +200,12 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     path = tmp_path / "d.yaml"
     path.write_text(f"binding: b.yaml\ntasks: cards\n")
 
-    assert len(load_flows(load_config(path))) == 1
+    assert len(load_tasks(load_config(path))) == 1
 
 
 async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch):
     config = load_config(EXAMPLES / "poieo.yaml")
-    for flow in config.flows:
+    for flow in config.tasks:
         flow.trigger.max_iterations = 1
 
     daemon = Daemon(config, store=NullStore())
@@ -219,9 +219,9 @@ async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch)
 
 async def test_carry_state_feeds_the_next_iteration():
     config = load_config(EXAMPLES / "poieo.yaml")
-    config.flows = [f for f in config.flows if f.name == "revision"]
-    config.flows[0].trigger.max_iterations = 2
-    config.flows[0].trigger.cooldown = 0
+    config.tasks = [f for f in config.tasks if f.name == "revision"]
+    config.tasks[0].trigger.max_iterations = 2
+    config.tasks[0].trigger.cooldown = 0
 
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
@@ -239,8 +239,8 @@ async def test_results_are_a_window_not_a_history(monkeypatch):
     monkeypatch.setattr(service, "RESULTS_KEPT", 3)
 
     config = load_config(EXAMPLES / "poieo.yaml")
-    config.flows = [f for f in config.flows if f.name == "triage"]
-    config.flows[0].trigger = TriggerSpec(type="loop", max_iterations=8)
+    config.tasks = [f for f in config.tasks if f.name == "triage"]
+    config.tasks[0].trigger = TriggerSpec(type="loop", max_iterations=8)
 
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=30)
@@ -253,8 +253,8 @@ async def test_results_are_a_window_not_a_history(monkeypatch):
 
 async def test_flow_runner_exposes_live_status():
     config = load_config(EXAMPLES / "poieo.yaml")
-    config.flows = [f for f in config.flows if f.name == "triage"]
-    config.flows[0].trigger.max_iterations = 1
+    config.tasks = [f for f in config.tasks if f.name == "triage"]
+    config.tasks[0].trigger.max_iterations = 1
 
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
@@ -287,10 +287,10 @@ def test_ensure_port_free_passes_on_free_port():
 
 async def test_daemon_with_web_port_wraps_store_and_serves():
     config = load_config(EXAMPLES / "poieo.yaml")
-    config.flows = [f for f in config.flows if f.name == "triage"]
+    config.tasks = [f for f in config.tasks if f.name == "triage"]
     # Two iterations 30s apart: the first fires at once, then the runner sits on
     # the second, so the API is still up when the poll below lands.
-    config.flows[0].trigger.max_iterations = 2
+    config.tasks[0].trigger.max_iterations = 2
 
     port = _free_port()
     daemon = Daemon(config, store=NullStore(), web_port=port)
@@ -333,14 +333,14 @@ def test_flow_spec_accepts_a_workdir(tmp_path):
 
     config = load_config(path)
 
-    assert config.flows[0].workdir == str(tmp_path / "project")
+    assert config.tasks[0].workdir == str(tmp_path / "project")
     # resolved against the config file, not whatever cwd the daemon started in
-    assert config.workdir_path(config.flows[0]) == tmp_path / "project"
+    assert config.workdir_path(config.tasks[0]) == tmp_path / "project"
 
 
 def test_flow_workdir_is_optional(tmp_path):
     config = load_config(EXAMPLES / "poieo.yaml")
-    by_name = {f.name: f for f in config.flows}
+    by_name = {f.name: f for f in config.tasks}
 
     # A flow that only moves text says nothing about the filesystem...
     assert by_name["triage"].workdir is None
@@ -377,14 +377,14 @@ def test_a_flow_with_isolation_fails_to_load_without_docker(tmp_path, monkeypatc
         "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
     )
     with pytest.raises(SpecError, match="docker is not on PATH"):
-        load_flows(_isolated_config(tmp_path))
+        load_tasks(_isolated_config(tmp_path))
 
 
 def test_a_missing_image_names_the_pull_command(tmp_path, monkeypatch):
     monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
     monkeypatch.setattr("poieo.tools.docker.image_present", lambda image: False)
     with pytest.raises(SpecError, match="docker pull python:3.12-slim"):
-        load_flows(_isolated_config(tmp_path))
+        load_tasks(_isolated_config(tmp_path))
 
 
 def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
@@ -394,7 +394,7 @@ def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "poieo.tools.docker.image_present", lambda image: seen.append(image) or True
     )
-    load_flows(_isolated_config(tmp_path, count=5))
+    load_tasks(_isolated_config(tmp_path, count=5))
     assert seen == ["python:3.12-slim"]
 
 
@@ -416,7 +416,7 @@ def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
         f"store: {tmp_path / 'logs'}\n"
         "tasks: cards\n"
     )
-    assert len(load_flows(load_config(config))) == 1
+    assert len(load_tasks(load_config(config))) == 1
 
 
 def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
@@ -425,8 +425,8 @@ def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
         "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
     )
     config = _isolated_config(tmp_path)
-    config.flows[0].enabled = False
-    assert load_flows(config) == []
+    config.tasks[0].enabled = False
+    assert load_tasks(config) == []
 
 
 def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypatch):
@@ -436,8 +436,8 @@ def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypat
         "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
     )
     config = _isolated_config(tmp_path)
-    config.flows[0].enabled = False
-    assert len(load_flows(config, enabled_only=False)) == 1
+    config.tasks[0].enabled = False
+    assert len(load_tasks(config, enabled_only=False)) == 1
 
 
 # -- notes reach the tasks that can send them --------------------------------
@@ -473,7 +473,7 @@ async def test_a_task_can_actually_reach_its_sibling(tmp_path):
 
 def test_the_roster_reaches_the_generated_prompt(tmp_path):
     config = _tasks_config(tmp_path)
-    flow = next(f for f in load_flows(config) if f.spec.name == "build-docs")
+    flow = next(f for f in load_tasks(config) if f.spec.name == "build-docs")
     system = flow.graph.nodes[0].system or ""
     assert "check-links" in system
     assert "build-docs" not in system.split("Other tasks")[-1]
@@ -549,7 +549,7 @@ def test_a_bare_tasks_folder_inside_a_project_joins_it(tmp_path):
     # ...and the model it reads with, not just where things live: joining
     # a project halfway is a rule nobody can hold in their head.
     assert bare.binding == config.binding
-    assert [flow.name for flow in bare.flows] == ["one"]
+    assert [flow.name for flow in bare.tasks] == ["one"]
 
 
 def test_a_bare_tasks_folder_outside_a_project_is_its_own(tmp_path):

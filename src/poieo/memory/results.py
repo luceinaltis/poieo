@@ -51,7 +51,7 @@ def write_result(task: Any, result: Any) -> Path | None:
     Returns the path written, or None when nothing was -- already recorded, or
     unwritable. Memory is not worth killing a night's work over.
     """
-    from ..task import closing_line  # late: task.py imports this package
+    from ..card import closing_line  # late: task.py imports this package
 
     path = results_dir(task.dir) / f"{result.run_id}.json"
     record = {

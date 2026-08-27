@@ -27,8 +27,8 @@ for _stream in (sys.stdout, sys.stderr):
 from . import __version__
 from .binding import load_binding
 from .workspace import Workspace
-from .daemon import Daemon, load_config, load_flows
-from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
+from .daemon import Daemon, load_config, load_tasks
+from .daemon.config import TaskSpec, check_isolation, config_for_tasks_folder
 from . import detect as engines
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
@@ -48,17 +48,17 @@ from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
 from .tools import ToolContext, Isolation
-from .task import (
-    TaskSpec,
+from .card import (
+    CardSpec,
     append_journal,
     build_graph,
     expand,
-    is_task_file,
-    load_task,
-    load_tasks,
+    is_card_file,
+    load_card,
+    load_cards,
     read_journal,
     record_run,
-    task_payload,
+    card_payload,
 )
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
@@ -214,7 +214,7 @@ def init(
         typer.echo(f"also declared, ready for a role to name: {', '.join(others)}")
     typer.echo("")
     typer.echo("next:")
-    typer.echo("  poieo run tasks/hello.yaml    run the sample task once")
+    typer.echo("  poieo run tasks/hello.yaml    run the sample card once")
     typer.echo("  poieo daemon                  keep this project's tasks running")
 
 
@@ -225,7 +225,7 @@ _NO_BINDING = (
 
 
 def _find_binding(
-    binding: "Path | None", task: "TaskSpec | None"
+    binding: "Path | None", task: "CardSpec | None"
 ) -> "tuple[Path | None, Path | None]":
     """The binding chain: the flag, then the card, then the project.
 
@@ -259,13 +259,13 @@ def _project_file(named: "Path | None") -> Path:
     return found
 
 
-def _load_card(path: Path) -> "TaskSpec | None":
+def _load_card(path: Path) -> "CardSpec | None":
     """The task a path names, or None for a plain graph. Load it once per
     command and pass it down; every helper here would otherwise reopen it."""
-    return load_task(path) if is_task_file(path) else None
+    return load_card(path) if is_card_file(path) else None
 
 
-def _load_spec(path: Path, task: "TaskSpec | None" = None) -> GraphSpec:
+def _load_spec(path: Path, task: "CardSpec | None" = None) -> GraphSpec:
     """Load a graph, or the graph a task file stands for."""
     task = task or _load_card(path)
     if task is None:
@@ -300,8 +300,8 @@ def validate(
     if task is not None:
         # The whole card, not just its graph: a schedule that cannot
         # parse must fail here, not when the daemon is armed.
-        flow, _ = expand(task)
-        report["schedule"] = flow.trigger.build().describe
+        task, _ = expand(task)
+        report["schedule"] = task.trigger.build().describe
 
     homeless = needs_a_workdir(graph)
     if homeless:
@@ -481,7 +481,7 @@ def edit(
     host: str = typer.Option("127.0.0.1", "--host"),
 ) -> None:
     """Open a graph in the drag-and-drop canvas editor."""
-    if is_task_file(graph_path):
+    if is_card_file(graph_path):
         # The editor saves back over what it opened, and a task is not a graph.
         _fail(f"{graph_path} is a task; run 'poieo eject' first, then edit the graph")
     graph = load_graph(graph_path)
@@ -581,7 +581,7 @@ def run(
     if workdir is None and task is not None and task.folder:
         workdir = task.folder_path()
 
-    card_input = task_payload(task) if task is not None else {}
+    card_input = card_payload(task) if task is not None else {}
     payload = {**card_input, **_parse_input(input_json, set_)}
     if store is None:
         # Asked from the card's own folder, not the cwd: a card run by hand and
@@ -594,7 +594,7 @@ def run(
     if isolation is not None:
         # The daemon's preflight, for the same reason: better here than eight
         # turns in. No container is kept -- a one-shot run has no next run.
-        check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
+        check_isolation([TaskSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
 
     async def _go():
         async with ProviderPool(spec) as pool:
@@ -643,7 +643,7 @@ def reset(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
 ) -> None:
     """Throw away a task's isolated environment. It is rebuilt on the next run."""
-    task = load_task(task_path)
+    task = load_card(task_path)
 
     if not task.isolation:
         _ok(f"'{task.name}' does not run isolated; there is nothing to reset")
@@ -656,7 +656,7 @@ def reset(
         _fail(reason)
     folder = task.folder_path()
     if folder is None:
-        return _say(f"task '{task.slug}' works on no folder; nothing to clean.")
+        return _ok(f"task '{task.slug}' works on no folder; nothing to clean.")
     removed = docker.remove_containers_for(folder)
     # The one thing the user needs to hear: their files are fine. Everything
     # this throws away is rebuilt the next time the task runs.
@@ -673,10 +673,10 @@ def daemon(
         None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
     ),
     once: bool = typer.Option(
-        False, "--once", help="Firing each flow a single time, then exit."
+        False, "--once", help="Firing each task a single time, then exit."
     ),
-    flow: Optional[str] = typer.Option(
-        None, "--flow", help="Run only this flow from the config."
+    task: Optional[str] = typer.Option(
+        None, "--task", help="Run only this task from the config."
     ),
     port: int = typer.Option(8484, "--port", help="Web observation UI port."),
     no_web: bool = typer.Option(False, "--no-web", help="Disable the web UI."),
@@ -689,7 +689,7 @@ def daemon(
         # `poieo daemon tasks/` is the natural guess once cards exist,
         # so it is a spelling of the same thing, not an error.
         config = config_for_tasks_folder(config_path)
-    elif is_task_file(config_path):
+    elif is_card_file(config_path):
         _fail(
             f"'{config_path}' is a single task. "
             f"`poieo run {config_path}` runs it once; to keep it "
@@ -699,16 +699,16 @@ def daemon(
     else:
         config = load_config(config_path)
 
-    if flow:
-        matching = [f for f in config.flows if f.name == flow]
+    if task:
+        matching = [f for f in config.tasks if f.name == task]
         if not matching:
-            _fail(f"no flow named '{flow}' in {config_path}")
-        config.flows = matching
+            _fail(f"no task named '{task}' in {config_path}")
+        config.tasks = matching
 
     if once:
-        # A single pass per flow: cap iterations and make interval flows fire
+        # A single pass per task: cap iterations and make interval tasks fire
         # immediately instead of waiting out their first period.
-        for spec in config.flows:
+        for spec in config.tasks:
             spec.trigger.max_iterations = 1
             spec.trigger.run_at_start = True
             if spec.trigger.type == "manual":
@@ -935,9 +935,13 @@ def flows(
         None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
     ),
 ) -> None:
-    """List the flows a daemon config would run, with their triggers and bindings."""
+    """List the tasks a daemon config would run, with their triggers and bindings.
+
+    Still `poieo flows` on the command line: what a person types is the other
+    half of this rename, and its own change.
+    """
     config = load_config(_project_file(config_path))
-    loaded = load_flows(config, enabled_only=False)
+    loaded = load_tasks(config, enabled_only=False)
 
     for item in loaded:
         state = "on " if item.spec.enabled else "off"
@@ -953,7 +957,7 @@ def flows(
         if workdir and not Workspace(
             workdir, item.spec.name, config.layout().worktrees()
         ).available():
-            # Degraded, not broken: the flow still runs tonight.
+            # Degraded, not broken: the task still runs tonight.
             typer.secho(
                 f"        note: changes in {workdir} can't be reviewed or undone",
                 fg=typer.colors.YELLOW,
@@ -974,26 +978,26 @@ def tasks(
         # Discovery only fills silence: named config, else the project's.
         source = target if target is not None else _project_file(None)
         config = load_config(source)
-        if not config.tasks:
+        if not config.cards:
             _fail(f"{source} names no tasks folder")
-        folder = config.resolve_path(config.tasks)
-    items = load_tasks(folder)
+        folder = config.resolve_path(config.cards)
+    items = load_cards(folder)
 
     if not items:
         typer.echo("(no tasks)")
         return
-    for task in items:
-        flow, _ = expand(task)
+    for card in items:
+        task, _ = expand(card)
         state = "on " if task.enabled else "off"
         typer.echo(
-            f"[{state}] {task.slug:<20} {flow.trigger.build().describe:<24} "
-            f"{task.folder_path()}"
+            f"[{state}] {card.slug:<20} {task.trigger.build().describe:<24} "
+            f"{card.folder_path()}"
         )
         # "isolated", never the image: naming it is licensed in configuration
         # and in errors, not in a listing.
-        boxed = " · isolated" if task.isolation else ""
-        typer.echo(f"        {task.name}{boxed}")
-        last = read_journal(task.journal_path(), limit=1).splitlines()[-1]
+        boxed = " · isolated" if card.isolation else ""
+        typer.echo(f"        {card.name}{boxed}")
+        last = read_journal(card.journal_path(), limit=1).splitlines()[-1]
         typer.echo(f"        {last}")
 
 
@@ -1004,12 +1008,12 @@ def note(
     text: str = typer.Argument(..., help="What you want it to do differently."),
 ) -> None:
     """Tell a task something. It reads this before its next run."""
-    task = load_task(task_path)
+    task = load_card(task_path)
     append_journal(task.journal_path(), "you", text, title=task.name)
     _ok(f"noted in {task.journal_path()}")
 
 
-def _memory_target(path: "Path | None") -> "tuple[TaskSpec | None, Path]":
+def _memory_target(path: "Path | None") -> "tuple[CardSpec | None, Path]":
     """The card being asked about, and the project it belongs to.
 
     Always the project's *root*, because that is where the memory is: `poieo
@@ -1122,11 +1126,11 @@ def eject(
     ),
 ) -> None:
     """Write out the graph a task stands for, and point the task at it."""
-    task = load_task(task_path)
+    task = load_card(task_path)
 
     if task.graph:
         _fail(f"{task_path} already names a graph: {task.graph}")
-    # Beside the card, under its name: `load_tasks` tells the two apart by
+    # Beside the card, under its name: `load_cards` tells the two apart by
     # shape, so one folder holds both.
     target = to or (task.dir / f"{task.slug}.graph.yaml")
     if target.exists():
@@ -1182,12 +1186,12 @@ def runs_list(
         help="Where the run history lives [default: the project's runs/].",
     ),
     limit: int = typer.Option(20, "--limit", "-n"),
-    flow: Optional[str] = typer.Option(None, "--flow"),
+    task: Optional[str] = typer.Option(None, "--task"),
     as_json: bool = typer.Option(False, "--json", help="Print the rows as JSON."),
 ) -> None:
     """List recent runs, newest first."""
     store = _resolve_store(store)
-    rows = RunStore(store).list_runs(limit=limit, flow=flow)
+    rows = RunStore(store).list_runs(limit=limit, flow=task)
     if as_json:
         # JSON stays JSON even when empty -- an agent parses, never greps.
         typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -1201,7 +1205,7 @@ def runs_list(
         usage = row.get("usage") or {}
         typer.secho(
             f"{row.get('run_id'):<26} {row.get('status'):<10} "
-            f"{row.get('flow','-'):<16} {row.get('graph','-'):<20} "
+            f"{row.get('task','-'):<16} {row.get('graph','-'):<20} "
             f"steps={row.get('steps')} out={usage.get('output_tokens', 0)}",
             fg=color,
         )
