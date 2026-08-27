@@ -432,3 +432,42 @@ test("a double click puts the board back where it started", () => {
   expect(transform()).toBe(fitted)
   handle.destroy()
 })
+
+
+test("the minimap carries one speck per flow, and keeps its window rectangle", () => {
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+
+  const map = el.querySelector(".basic-minimap")!
+  expect(map.querySelectorAll(".basic-speck")).toHaveLength(FLOWS.length)
+  expect(map.querySelectorAll("[data-speck]")).toHaveLength(FLOWS.length)
+  // Redrawing the specks must not take the window rectangle with them: it is
+  // replaced along with them and has to be put back.
+  expect(map.querySelector(".basic-seen")).not.toBeNull()
+
+  // `data-flow` already means "a border on the board". One selector answering
+  // with two kinds of thing is how a board of four flows counts as eight.
+  expect(el.querySelectorAll("[data-flow]")).toHaveLength(FLOWS.length)
+  handle.destroy()
+})
+
+test("pressing the minimap moves the view without also dragging the board", () => {
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+  const viewport = el.querySelector(".basic-viewport")!
+  const map = el.querySelector(".basic-minimap")!
+  letItGrab(map)
+
+  let grabbed = false
+  viewport.addEventListener("pointerdown", () => {
+    grabbed = true
+  })
+  map.dispatchEvent(
+    new PointerEvent("pointerdown", { clientX: 10, clientY: 5, button: 0, bubbles: true }),
+  )
+
+  // Without the stop, a press on the minimap would jump the view and then hand
+  // the same press to the board behind it as the start of a drag.
+  expect(grabbed).toBe(false)
+  handle.destroy()
+})

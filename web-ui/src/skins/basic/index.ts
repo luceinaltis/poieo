@@ -21,14 +21,17 @@ import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
 import {
-  BOX, arrivals, backWire, corner, depths, exits, fit, loops, pan, place, wire, zoom,
+  BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
+  place, wire, zoom,
 } from "../wiring"
-import type { Frame } from "../wiring"
-import type { Placed, View } from "../wiring"
+import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
 
 const SVG = "http://www.w3.org/2000/svg"
+
+/** How much corner the minimap may take. */
+const MAP = { width: 200, height: 140 }
 
 interface Box {
   root: HTMLElement
@@ -320,6 +323,15 @@ export const basic: Skin = {
     svg.setAttribute("class", "basic-wires")
     board.append(svg)
 
+    // The whole board, small, in a corner -- and a rectangle for the part of it
+    // the window is showing. Sits outside the board, because it must not be
+    // panned or scaled along with what it is describing.
+    const map = element("div", "basic-minimap", viewport)
+    const seen = element("div", "basic-seen", map)
+    // What the minimap is drawn at, kept from the last relayout so `show` can
+    // place the rectangle without measuring the board again on every frame.
+    let mapped = { zoom: 1, width: 0, height: 0 }
+
     const boxes = new Map<string, Box>()
     const painted = new Map<string, FlowState>()
     // Only flows the reader has touched. Everything else follows the rule
@@ -345,6 +357,27 @@ export const basic: Skin = {
     // on the box rather than a grab of the board behind it.
     const grabbable = (event: Event): boolean =>
       !(event.target as HTMLElement | null)?.closest("button")
+
+    map.addEventListener("pointerdown", (event) => {
+      event.stopPropagation()
+      const go = (to: PointerEvent) => {
+        const box = map.getBoundingClientRect()
+        chosen = centreOn(
+          where(),
+          { x: (to.clientX - box.left) / mapped.zoom, y: (to.clientY - box.top) / mapped.zoom },
+          { width: viewport.clientWidth, height: viewport.clientHeight },
+        )
+        show()
+      }
+      go(event)
+      map.setPointerCapture(event.pointerId)
+      const done = () => {
+        map.removeEventListener("pointermove", go)
+        map.removeEventListener("pointerup", done)
+      }
+      map.addEventListener("pointermove", go)
+      map.addEventListener("pointerup", done)
+    })
 
     viewport.addEventListener("pointerdown", (event) => {
       if (!grabbable(event) || event.button !== 0) return
@@ -421,7 +454,33 @@ export const basic: Skin = {
       // fit would size the board without it and the viewport would clip it.
       board.style.height = `${rows.bottom + BOX.gapY}px`
       drawWires(svg, stage, placed, rows)
+      drawMap(placed, rows)
       show()
+    }
+
+    /** The board again, small enough to sit in a corner: one speck per flow. */
+    function drawMap(placed: Placed[], rows: Frame): void {
+      mapped = minimap(
+        { width: board.offsetWidth, height: board.offsetHeight },
+        { width: MAP.width, height: MAP.height },
+      )
+      map.style.width = `${mapped.width}px`
+      map.style.height = `${mapped.height}px`
+
+      const specks = placed.map((one) => {
+        const spot = corner(one, rows)
+        const speck = document.createElement("div")
+        speck.className = "basic-speck"
+        // Not `data-flow`: that already means "a border on the board", and one
+        // selector answering with two different kinds of thing is a trap.
+        speck.dataset.speck = one.flow
+        speck.style.left = `${spot.x * mapped.zoom}px`
+        speck.style.top = `${spot.y * mapped.zoom}px`
+        speck.style.width = `${BOX.width * mapped.zoom}px`
+        speck.style.height = `${(rows.heights[one.flow] ?? BOX.height) * mapped.zoom}px`
+        return speck
+      })
+      map.replaceChildren(seen, ...specks)
     }
 
     /**
@@ -446,6 +505,20 @@ export const basic: Skin = {
     function show(): void {
       const view = where()
       board.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
+
+      const window = { width: viewport.clientWidth, height: viewport.clientHeight }
+      const patch = looking(view, window, {
+        zoom: mapped.zoom,
+        board: { width: board.offsetWidth, height: board.offsetHeight },
+      })
+      seen.style.left = `${patch.x}px`
+      seen.style.top = `${patch.y}px`
+      seen.style.width = `${patch.width}px`
+      seen.style.height = `${patch.height}px`
+      // Only worth the corner it takes when there is board off the screen. A
+      // minimap of something wholly visible is a second, smaller copy of it.
+      const all = patch.width >= mapped.width - 1 && patch.height >= mapped.height - 1
+      map.dataset.needed = String(!all && mapped.width > 0)
     }
 
     return {

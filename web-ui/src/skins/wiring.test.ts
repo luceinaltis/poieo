@@ -1,7 +1,8 @@
 import { expect, test } from "vitest"
 
 import {
-  BOX, arrivals, backWire, corner, depths, exits, fit, loops, pan, place, walk, wire, zoom,
+  BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
+  place, walk, wire, zoom,
 } from "./wiring"
 import type { GraphShape } from "../types"
 
@@ -328,4 +329,51 @@ test("zoom stops short of vanishing and of filling the screen with one box", () 
 
   expect(zoom(view, 100, { x: 0, y: 0 }).zoom).toBe(4)
   expect(zoom(view, 0.0001, { x: 0, y: 0 }).zoom).toBe(0.1)
+})
+
+
+test("the minimap shrinks the board to fit its own corner", () => {
+  const map = minimap({ width: 3000, height: 600 }, { width: 200, height: 140 })
+
+  // Widest side decides, so nothing is squashed out of proportion.
+  expect(map.zoom).toBeCloseTo(200 / 3000)
+  expect(map.width).toBeCloseTo(200)
+  expect(map.height).toBeCloseTo(40)
+})
+
+test("the minimap draws where the window is looking", () => {
+  // The board is at half scale with its top-left at the viewport's corner, so
+  // the window covers the left half of a 2000-wide board.
+  const seen = looking(
+    { x: 0, y: 0, zoom: 0.5 },
+    { width: 500, height: 250 },
+    { zoom: 0.1 },
+  )
+
+  expect(seen).toEqual({ x: 0, y: 0, width: 100, height: 50 })
+})
+
+test("a window looking past the board's edge is clipped, not drawn outside it", () => {
+  // Panned right, so part of what the window covers is off the board. Drawn
+  // unclipped the rectangle leaves the minimap, which reads as a bug.
+  const seen = looking(
+    { x: -400, y: 0, zoom: 1 },
+    { width: 500, height: 100 },
+    { zoom: 0.1, board: { width: 600, height: 100 } },
+  )
+
+  expect(seen.x).toBeCloseTo(40)
+  expect(seen.width).toBeCloseTo(20)
+})
+
+
+test("clicking the minimap puts that part of the board in the middle", () => {
+  // A minimap you can only read is half a minimap. Clicking (60, 20) on a map
+  // drawn at a tenth means board (600, 200), and that has to land in the
+  // middle of a 800x400 window.
+  const view = centreOn({ x: 0, y: 0, zoom: 0.5 }, { x: 600, y: 200 }, { width: 800, height: 400 })
+
+  expect(view.zoom).toBe(0.5)
+  expect(view.x).toBe(400 - 300)
+  expect(view.y).toBe(200 - 100)
 })
