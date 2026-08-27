@@ -14,7 +14,7 @@ import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { RunList } from "../review/RunList"
 import { initialStage, replay } from "../state/stage"
-import type { FlowState } from "../state/stage"
+import type { TaskState } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
@@ -83,16 +83,16 @@ function Entry({ event }: { event: PoieoEvent }) {
 }
 
 // Memoized because the shell re-renders on every SSE frame: a drawer being
-// read must not re-reconcile its whole timeline because another flow spoke.
+// read must not re-reconcile its whole timeline because another task spoke.
 export const Drawer = memo(function Drawer({
-  flow,
+  task,
   status = "waiting",
   pending = 0,
   into = null,
   onClose,
   onDecided,
 }: {
-  flow: string
+  task: string
   status?: string
   pending?: number
   into?: string | null
@@ -106,7 +106,7 @@ export const Drawer = memo(function Drawer({
 
   useEffect(() => {
     let live = true
-    void fetchRuns({ flow, limit: 10 }).then((rows) => {
+    void fetchRuns({ task, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
       setPicked(
@@ -117,7 +117,7 @@ export const Drawer = memo(function Drawer({
     return () => {
       live = false
     }
-  }, [flow, reload])
+  }, [task, reload])
 
   const decided = () => {
     setReload((n) => n + 1)
@@ -139,11 +139,11 @@ export const Drawer = memo(function Drawer({
   }, [picked])
 
   // A stage of its own: replaying here must leave the live board alone.
-  const replayed: FlowState | null = useMemo(() => {
+  const replayed: TaskState | null = useMemo(() => {
     if (events.length === 0) return null
     const scratch = initialStage([
       {
-        name: flow,
+        name: task,
         graph: "",
         trigger: "",
         status: "waiting",
@@ -155,22 +155,22 @@ export const Drawer = memo(function Drawer({
         shape: { entry: "", nodes: [] },
       },
     ])
-    return replay(scratch, events).flows[flow] ?? null
-  }, [events, flow])
+    return replay(scratch, events).tasks[task] ?? null
+  }, [events, task])
 
   return (
-    <aside className="drawer" data-flow={flow}>
+    <aside className="drawer" data-task={task}>
       <header className="drawer-head">
-        <h2>{flow}</h2>
+        <h2>{task}</h2>
         <button type="button" onClick={onClose} aria-label="Close">
           close
         </button>
       </header>
 
       <div className="drawer-body">
-        <Control flow={flow} status={status} onActed={decided} />
+        <Control task={task} status={status} onActed={decided} />
 
-        <Decide flow={flow} pending={pending} into={into} runId={null} onDone={decided} />
+        <Decide task={task} pending={pending} into={into} runId={null} onDone={decided} />
 
         <RunList
           runs={runs}
@@ -180,7 +180,7 @@ export const Drawer = memo(function Drawer({
           controls={(run) =>
             run.change ? (
               <Decide
-                flow={flow}
+                task={task}
                 pending={pending}
                 into={into}
                 runId={run.run_id}

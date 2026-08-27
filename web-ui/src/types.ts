@@ -2,7 +2,7 @@
  * The wire shapes the daemon's observation API produces.
  *
  * Kept deliberately close to the Python side: these mirror `poieo.store.Event`,
- * `RunResult.summary()` and the rows `/api/flows` builds. Nothing here is
+ * `RunResult.summary()` and the rows `/api/tasks` builds. Nothing here is
  * interpreted -- that is the reducer's job.
  */
 
@@ -25,14 +25,14 @@ export interface Change {
 
 export interface RunSummary {
   run_id: string
-  flow: string | null
+  task: string | null
   graph: string
   status: string
   started_at: string
   finished_at: string
   steps: number
   iteration: number
-  /** What actually fired this run -- a schedule, "run now", or "after <flow>". */
+  /** What actually fired this run -- a schedule, "run now", or "after <task>". */
   trigger: string
   usage: Usage
   error: string | null
@@ -43,7 +43,7 @@ export interface RunSummary {
 /**
  * One arrow, wherever it is drawn.
  *
- * A router's branches and a flow's `then:` are the same `Branch` one level
+ * A router's branches and a task's `then:` are the same `Branch` one level
  * apart, so the wire gives them the same shape and a view learns one arrow
  * rather than two. `to` is null when the branch deliberately ends there, and
  * `label` falls back to the condition when the author named no word for it --
@@ -73,7 +73,7 @@ export interface GraphShape {
   nodes: NodeShape[]
 }
 
-export interface FlowRow {
+export interface TaskRow {
   name: string
   graph: string
   trigger: string
@@ -82,11 +82,11 @@ export interface FlowRow {
   last_run: RunSummary | null
   /** How many changes are waiting to be looked at. */
   pending: number
-  /** What accepting them would add to; null when the flow keeps no copy. */
+  /** What accepting them would add to; null when the task keeps no copy. */
   into: string | null
-  /** Which flow works next, and on what condition. Empty for most flows. */
+  /** Which task works next, and on what condition. Empty for most tasks. */
   then: Arrow[]
-  /** What this flow walks on the way there. */
+  /** What this task walks on the way there. */
   shape: GraphShape
 }
 

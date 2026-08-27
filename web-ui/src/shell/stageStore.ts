@@ -6,18 +6,18 @@
  */
 
 import {
-  fetchFlows as defaultFetchFlows,
+  fetchTasks as defaultFetchFlows,
   fetchRunEvents as defaultFetchRunEvents,
   fetchRuns as defaultFetchRuns,
   openFeed as defaultOpenFeed,
 } from "../api"
 import type { FeedStatus } from "../api"
 import { WINDOW, initialStage, reduce, replay, setRuns } from "../state/stage"
-import type { StageState, FlowState } from "../state/stage"
-import type { FlowRow, PoieoEvent } from "../types"
+import type { StageState, TaskState } from "../state/stage"
+import type { TaskRow, PoieoEvent } from "../types"
 
 export interface StageApi {
-  fetchFlows: typeof defaultFetchFlows
+  fetchTasks: typeof defaultFetchFlows
   fetchRunEvents: typeof defaultFetchRunEvents
   fetchRuns: typeof defaultFetchRuns
   openFeed: typeof defaultOpenFeed
@@ -29,7 +29,7 @@ export const REVIEW_LIMIT = WINDOW
 
 export interface StageStore {
   getStage(): StageState
-  getFlows(): FlowRow[]
+  getFlows(): TaskRow[]
   getStatus(): FeedStatus
   subscribe(listener: () => void): () => void
   start(): Promise<void>
@@ -38,23 +38,23 @@ export interface StageStore {
 }
 
 /**
- * Fold a fresh flow listing into what we already have.
+ * Fold a fresh task listing into what we already have.
  *
- * `/api/flows` is authoritative about what finished -- a run that ended while
+ * `/api/tasks` is authoritative about what finished -- a run that ended while
  * the feed was down published a summary nobody heard, and this is where that
  * gap closes. Live-only detail (the current node, the last turn) is kept.
  */
-function seed(state: StageState, rows: FlowRow[]): StageState {
-  const fresh = initialStage(rows).flows
-  const flows: Record<string, FlowState> = {}
+function seed(state: StageState, rows: TaskRow[]): StageState {
+  const fresh = initialStage(rows).tasks
+  const tasks: Record<string, TaskState> = {}
 
   for (const [name, blank] of Object.entries(fresh)) {
-    const existing = state.flows[name]
+    const existing = state.tasks[name]
     if (!existing) {
-      flows[name] = blank
+      tasks[name] = blank
       continue
     }
-    flows[name] = {
+    tasks[name] = {
       ...existing,
       tracked: blank.tracked,
       // Structure is the listing's to state, not the event stream's: a graph
@@ -71,17 +71,17 @@ function seed(state: StageState, rows: FlowRow[]): StageState {
             : "waiting",
     }
   }
-  return { ...state, flows }
+  return { ...state, tasks }
 }
 
 export function createStageStore(api: StageApi = {
-  fetchFlows: defaultFetchFlows,
+  fetchTasks: defaultFetchFlows,
   fetchRunEvents: defaultFetchRunEvents,
   fetchRuns: defaultFetchRuns,
   openFeed: defaultOpenFeed,
 }): StageStore {
   let stage = initialStage([])
-  let flows: FlowRow[] = []
+  let tasks: TaskRow[] = []
   let status: FeedStatus = "connecting"
   let closeFeed: (() => void) | null = null
 
@@ -109,14 +109,14 @@ export function createStageStore(api: StageApi = {
 
   /** The run index knows what a night amounted to; the event stream does not.
    *
-   * Asked together, not one flow after another: live frames queue until the
+   * Asked together, not one task after another: live frames queue until the
    * catch-up read finishes, so it should cost one round trip's latency, not N.
    */
-  async function tally(current: StageState, rows: FlowRow[]): Promise<StageState> {
+  async function tally(current: StageState, rows: TaskRow[]): Promise<StageState> {
     const tallies = await Promise.all(
       rows.map(async (row) => ({
         row,
-        runs: await api.fetchRuns({ flow: row.name, limit: REVIEW_LIMIT }),
+        runs: await api.fetchRuns({ task: row.name, limit: REVIEW_LIMIT }),
       })),
     )
     let next = current
@@ -130,14 +130,14 @@ export function createStageStore(api: StageApi = {
     holding = true
     held = []
     try {
-      flows = await api.fetchFlows()
-      stage = seed(stage, flows)
+      tasks = await api.fetchTasks()
+      stage = seed(stage, tasks)
 
       // Both reads are independent of each other; fetch everything at once
       // and fold in the same order the sequential code did.
-      const running = flows.filter((row) => row.current_run_id)
+      const running = tasks.filter((row) => row.current_run_id)
       const [tallied, histories] = await Promise.all([
-        tally(stage, flows),
+        tally(stage, tasks),
         Promise.all(running.map((row) => api.fetchRunEvents(row.current_run_id!))),
       ])
       stage = tallied
@@ -153,7 +153,7 @@ export function createStageStore(api: StageApi = {
 
   return {
     getStage: () => stage,
-    getFlows: () => flows,
+    getFlows: () => tasks,
     getStatus: () => status,
 
     subscribe(listener) {
@@ -164,9 +164,9 @@ export function createStageStore(api: StageApi = {
     async start() {
       // Paint something before the socket opens: if the feed never connects,
       // the board should still say what the daemon is running.
-      flows = await api.fetchFlows()
-      stage = seed(stage, flows)
-      stage = await tally(stage, flows)
+      tasks = await api.fetchTasks()
+      stage = seed(stage, tasks)
+      stage = await tally(stage, tasks)
       announce()
 
       closeFeed = api.openFeed({

@@ -1,4 +1,4 @@
-"""A flow can be paused, resumed, and run right now -- the runner's control seam."""
+"""A task can be paused, resumed, and run right now -- the runner's control seam."""
 
 import asyncio
 

@@ -1,11 +1,11 @@
 import { expect, test } from "vitest"
 
-import { changedFlows } from "./changed"
+import { changedTasks } from "./changed"
 import { initialStage, reduce } from "../state/stage"
-import type { FlowState } from "../state/stage"
-import type { FlowRow } from "../types"
+import type { TaskState } from "../state/stage"
+import type { TaskRow } from "../types"
 
-const row = (name: string): FlowRow => ({
+const row = (name: string): TaskRow => ({
   name,
   graph: "g",
   trigger: "loop",
@@ -20,32 +20,32 @@ const row = (name: string): FlowRow => ({
 
 test("every flowState is changed the first time a skin sees it", () => {
   const stage = initialStage([row("a"), row("b")])
-  const painted = new Map<string, FlowState>()
-  expect(changedFlows(stage.flows, painted).map(([flow]) => flow)).toEqual(["a", "b"])
+  const painted = new Map<string, TaskState>()
+  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["a", "b"])
 })
 
-test("a frame that touched one flow repaints one flow", () => {
+test("a frame that touched one task repaints one task", () => {
   const stage = initialStage([row("a"), row("b")])
-  const painted = new Map<string, FlowState>()
-  changedFlows(stage.flows, painted)
+  const painted = new Map<string, TaskState>()
+  changedTasks(stage.tasks, painted)
 
   const next = reduce(stage, {
     run_id: "r1",
     type: "run_started",
-    data: { flow: "a" },
+    data: { task: "a" },
   })
-  expect(changedFlows(next.flows, painted).map(([flow]) => flow)).toEqual(["a"])
+  expect(changedTasks(next.tasks, painted).map(([task]) => task)).toEqual(["a"])
   // and painting it once is enough
-  expect(changedFlows(next.flows, painted)).toEqual([])
+  expect(changedTasks(next.tasks, painted)).toEqual([])
 })
 
-test("a flow that leaves the board is forgotten, so its return repaints", () => {
+test("a task that leaves the board is forgotten, so its return repaints", () => {
   const stage = initialStage([row("a")])
-  const painted = new Map<string, FlowState>()
-  changedFlows(stage.flows, painted)
+  const painted = new Map<string, TaskState>()
+  changedTasks(stage.tasks, painted)
 
-  changedFlows({}, painted) // the flow disappears
+  changedTasks({}, painted) // the task disappears
   expect(painted.size).toBe(0)
 
-  expect(changedFlows(stage.flows, painted).map(([flow]) => flow)).toEqual(["a"])
+  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["a"])
 })

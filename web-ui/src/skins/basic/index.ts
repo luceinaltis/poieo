@@ -1,7 +1,7 @@
 /**
  * The plain view: the work as a graph, with one noun on screen.
  *
- * Everything drawn here is a node. A flow is a node too -- shut it is a box
+ * Everything drawn here is a node. A task is a node too -- shut it is a box
  * with a name, open it is that box with its graph's nodes inside. There is no
  * mode to be in and nothing to remember about where you are; some nodes open.
  *
@@ -17,9 +17,9 @@
  * every frame would make the board unreadable as well as slow.
  */
 
-import { changedFlows } from "../changed"
+import { changedTasks } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
-import type { StageState, FlowState } from "../../state/stage"
+import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
   place, wire, zoom,
@@ -51,25 +51,25 @@ function element(tag: string, className: string, parent: Element): HTMLElement {
 }
 
 /**
- * What a flow has amounted to lately -- results, not attempts.
+ * What a task has amounted to lately -- results, not attempts.
  *
  * The line used to count every run, including the ones that looked and found
- * nothing to do. For a healthy flow that is nearly all of them, so the number
+ * nothing to do. For a healthy task that is nearly all of them, so the number
  * grew large and said nothing: "864 runs · 864 found nothing to do" is a
  * sentence a reader learns to skip.
  *
- * What is left is what happened. A flow that changed nothing says so in one
+ * What is left is what happened. A task that changed nothing says so in one
  * word and gives the time it last looked -- which is the whole of what tells
  * "fine, and there was nothing to do" apart from "stuck", and the only reason
  * the count was ever wanted.
  */
-function describeRecent(flowState: FlowState): string {
+function describeRecent(flowState: TaskState): string {
   const recent = flowState.recent
   if (recent.runs === 0) return "nothing has run yet"
 
   const parts: string[] = []
   if (recent.succeeded) {
-    // A flow with no private copy has nothing to change against, so a run
+    // A task with no private copy has nothing to change against, so a run
     // that ran is the whole of what there is to say about it.
     const what = flowState.tracked ? "change" : "run"
     parts.push(`${recent.succeeded} ${what}${recent.succeeded === 1 ? "" : "s"}`)
@@ -84,8 +84,8 @@ function describeRecent(flowState: FlowState): string {
   return last ? `quiet · last looked ${shortTime(last)}` : "quiet"
 }
 
-/** The distinct models a flow's nodes would call, in the order they appear. */
-function modelsOf(flowState: FlowState): string[] {
+/** The distinct models a task's nodes would call, in the order they appear. */
+function modelsOf(flowState: TaskState): string[] {
   const seen: string[] = []
   for (const node of flowState.shape.nodes) {
     if (node.model && !seen.includes(node.model)) seen.push(node.model)
@@ -97,33 +97,33 @@ function modelsOf(flowState: FlowState): string[] {
  * The trigger, and what will actually run on it.
  *
  * One model is the common case and the whole answer, so it is said once and
- * said here -- this line is legible with the border shut, and ten flows shut
+ * said here -- this line is legible with the border shut, and ten tasks shut
  * is the glance the board is for. More than one cannot be said in a word, so
  * the count says so and the nodes inside carry the detail. Opening buys the
  * answer, exactly as it does for a handoff arrow.
  */
-function describeWhen(flowState: FlowState): string {
+function describeWhen(flowState: TaskState): string {
   const models = modelsOf(flowState)
   if (models.length === 0) return flowState.trigger
   return `${flowState.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
 }
 
-function buildBox(flow: string, callbacks: SkinCallbacks): Box {
+function buildBox(task: string, callbacks: SkinCallbacks): Box {
   const root = document.createElement("div")
-  root.className = "basic-flow"
-  root.dataset.flow = flow
+  root.className = "basic-task"
+  root.dataset.task = task
   // The one width, from the constant the arrows are drawn against. Written in
   // the stylesheet it was free to drift from them, and it had.
   root.style.width = `${BOX.width}px`
 
   const head = element("div", "basic-head", root)
   // Two things to click, so neither has to mean two things: the name selects
-  // the flow, exactly as a card did, and the chevron opens the box.
+  // the task, exactly as a card did, and the chevron opens the box.
   const pick = element("button", "basic-pick", head)
   ;(pick as HTMLButtonElement).type = "button"
-  pick.addEventListener("click", () => callbacks.onSelectFlow(flow))
+  pick.addEventListener("click", () => callbacks.onSelectTask(task))
   element("span", "basic-dot", pick)
-  element("span", "basic-name", pick).textContent = flow
+  element("span", "basic-name", pick).textContent = task
 
   const toggle = element("button", "basic-toggle", head)
   ;(toggle as HTMLButtonElement).type = "button"
@@ -141,12 +141,12 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
 }
 
 /** The graph inside a border, drawn once: it moves only when a file does. */
-function fillInside(box: Box, flowState: FlowState): void {
+function fillInside(box: Box, flowState: TaskState): void {
   const leaves = new Set(exits(flowState.shape))
   // Which nodes something to their left points at. Hung on the arriving
   // node, so a router draws an arrow into every arm rather than one.
   const reached = new Set(arrivals(flowState.shape))
-  // Only when they differ. A flow on one model has already said so on the
+  // Only when they differ. A task on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
   const differ = modelsOf(flowState).length > 1
   const nodes = depths(flowState.shape).map((cell) => {
@@ -174,8 +174,8 @@ function fillInside(box: Box, flowState: FlowState): void {
   box.inside.replaceChildren(...nodes)
 }
 
-/** What moves: which node is lit, and what the flow has been saying. */
-function paint(box: Box, flowState: FlowState, open: boolean): void {
+/** What moves: which node is lit, and what the task has been saying. */
+function paint(box: Box, flowState: TaskState, open: boolean): void {
   box.root.dataset.status = flowState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
@@ -214,8 +214,8 @@ function measure(placed: Placed[], boxes: Map<string, Box>): Frame {
   const heights: Record<string, number> = {}
   const tall: number[] = []
   for (const one of placed) {
-    const height = boxes.get(one.flow)?.root.offsetHeight || BOX.height
-    heights[one.flow] = height
+    const height = boxes.get(one.task)?.root.offsetHeight || BOX.height
+    heights[one.task] = height
     tall[one.row] = Math.max(tall[one.row] ?? 0, height)
   }
 
@@ -234,12 +234,12 @@ function drawWires(
   placed: Placed[],
   frame: Frame,
 ): void {
-  const at = new Map(placed.map((one) => [one.flow, one]))
+  const at = new Map(placed.map((one) => [one.task, one]))
   const lastRow = placed.reduce((low, one) => Math.max(low, one.row), 0)
   const lines: SVGElement[] = []
 
-  for (const [flow, flowState] of Object.entries(stage.flows)) {
-    const from = at.get(flow)
+  for (const [task, flowState] of Object.entries(stage.tasks)) {
+    const from = at.get(task)
     if (from === undefined) continue
     for (const arrow of flowState.then) {
       const to = arrow.to === null ? undefined : at.get(arrow.to)
@@ -260,7 +260,7 @@ function drawWires(
       lines.push(path)
 
       // A head, because the rule the whole board rests on is that an arrow
-      // crosses a border. A bare line says two flows are related; it does not
+      // crosses a border. A bare line says two tasks are related; it does not
       // say which one ends and which one begins.
       //
       // Going back it points up instead, into an underside. A forward arrow
@@ -297,14 +297,14 @@ function drawWires(
  * What the layout depends on: who hands to whom, and which borders are open.
  *
  * Open belongs here because it changes a border's height, and the rows and the
- * arrows are measured off those heights. Left out, a flow that starts running
+ * arrows are measured off those heights. Left out, a task that starts running
  * grows and every arrow keeps the geometry of the board before it did.
  */
-function wiringKey(stage: StageState, open: (flow: string, at: FlowState) => boolean): string {
-  return Object.entries(stage.flows)
+function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boolean): string {
+  return Object.entries(stage.tasks)
     .map(
-      ([flow, flowState]) =>
-        `${flow}>${flowState.then.map((a) => a.to).join(",")}${open(flow, flowState) ? "+" : "-"}`,
+      ([task, flowState]) =>
+        `${task}>${flowState.then.map((a) => a.to).join(",")}${open(task, flowState) ? "+" : "-"}`,
     )
     .join("|")
 }
@@ -333,8 +333,8 @@ export const basic: Skin = {
     let mapped = { zoom: 1, width: 0, height: 0 }
 
     const boxes = new Map<string, Box>()
-    const painted = new Map<string, FlowState>()
-    // Only flows the reader has touched. Everything else follows the rule
+    const painted = new Map<string, TaskState>()
+    // Only tasks the reader has touched. Everything else follows the rule
     // below, so the board opens where something is happening and stays quiet
     // everywhere else.
     const byHand = new Map<string, boolean>()
@@ -426,21 +426,21 @@ export const basic: Skin = {
       show()
     })
 
-    const isOpen = (flow: string, flowState: FlowState): boolean =>
-      byHand.get(flow) ?? flowState.status === "running"
+    const isOpen = (task: string, flowState: TaskState): boolean =>
+      byHand.get(task) ?? flowState.status === "running"
 
     function relayout(stage: StageState): void {
-      const flows = Object.keys(stage.flows)
+      const tasks = Object.keys(stage.tasks)
       const handoffs: Record<string, string[]> = {}
-      for (const [flow, flowState] of Object.entries(stage.flows)) {
-        handoffs[flow] = flowState.then
+      for (const [task, flowState] of Object.entries(stage.tasks)) {
+        handoffs[task] = flowState.then
           .map((arrow) => arrow.to)
           .filter((to): to is string => to !== null)
       }
-      const placed = place(flows, handoffs)
+      const placed = place(tasks, handoffs)
       const rows = measure(placed, boxes)
       for (const one of placed) {
-        const box = boxes.get(one.flow)
+        const box = boxes.get(one.task)
         if (box === undefined) continue
         const spot = corner(one, rows)
         box.root.style.left = `${spot.x}px`
@@ -458,7 +458,7 @@ export const basic: Skin = {
       show()
     }
 
-    /** The board again, small enough to sit in a corner: one speck per flow. */
+    /** The board again, small enough to sit in a corner: one speck per task. */
     function drawMap(placed: Placed[], rows: Frame): void {
       mapped = minimap(
         { width: board.offsetWidth, height: board.offsetHeight },
@@ -471,13 +471,13 @@ export const basic: Skin = {
         const spot = corner(one, rows)
         const speck = document.createElement("div")
         speck.className = "basic-speck"
-        // Not `data-flow`: that already means "a border on the board", and one
+        // Not `data-task`: that already means "a border on the board", and one
         // selector answering with two different kinds of thing is a trap.
-        speck.dataset.speck = one.flow
+        speck.dataset.speck = one.task
         speck.style.left = `${spot.x * mapped.zoom}px`
         speck.style.top = `${spot.y * mapped.zoom}px`
         speck.style.width = `${BOX.width * mapped.zoom}px`
-        speck.style.height = `${(rows.heights[one.flow] ?? BOX.height) * mapped.zoom}px`
+        speck.style.height = `${(rows.heights[one.task] ?? BOX.height) * mapped.zoom}px`
         return speck
       })
       map.replaceChildren(seen, ...specks)
@@ -524,28 +524,28 @@ export const basic: Skin = {
     return {
       update(stage: StageState) {
         let moved = false
-        for (const [flow, flowState] of changedFlows(stage.flows, painted)) {
-          let box = boxes.get(flow)
+        for (const [task, flowState] of changedTasks(stage.tasks, painted)) {
+          let box = boxes.get(task)
           if (box === undefined) {
-            box = buildBox(flow, callbacks)
+            box = buildBox(task, callbacks)
             box.toggle.addEventListener("click", () => {
-              byHand.set(flow, !isOpen(flow, painted.get(flow) ?? flowState))
-              const now = painted.get(flow)
-              if (now !== undefined) paint(box!, now, isOpen(flow, now))
+              byHand.set(task, !isOpen(task, painted.get(task) ?? flowState))
+              const now = painted.get(task)
+              if (now !== undefined) paint(box!, now, isOpen(task, now))
               if (last !== null) relayout(last)
             })
-            boxes.set(flow, box)
+            boxes.set(task, box)
             board.append(box.root)
             moved = true
           }
           fillInside(box, flowState)
-          paint(box, flowState, isOpen(flow, flowState))
+          paint(box, flowState, isOpen(task, flowState))
         }
-        for (const [flow, box] of boxes) {
-          if (!(flow in stage.flows)) {
+        for (const [task, box] of boxes) {
+          if (!(task in stage.tasks)) {
             box.root.remove()
-            boxes.delete(flow)
-            byHand.delete(flow)
+            boxes.delete(task)
+            byHand.delete(task)
             moved = true
           }
         }

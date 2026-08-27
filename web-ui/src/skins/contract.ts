@@ -15,7 +15,7 @@
 import type { StageState } from "../state/stage"
 
 export interface SkinCallbacks {
-  onSelectFlow(flow: string): void
+  onSelectTask(task: string): void
 }
 
 export interface SkinHandle {

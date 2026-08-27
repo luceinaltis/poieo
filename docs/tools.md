@@ -76,7 +76,7 @@ ToolContext(isolation=…, containers=…, postbox=…)
 `containers` and `postbox` are typed `Any` deliberately: only the `tools` package may
 know what they are. The runtime carries `ctx.tool_context` and never opens it, which is
 how `runtime/` stays unaware that containers or journals exist. The daemon builds
-one per flow, because the container pool is shared across tasks and the roster of
+one per task, because the container pool is shared across tasks and the roster of
 tasks is only known there.
 
 ## Isolation
@@ -128,7 +128,7 @@ running daemon already made.)
 that every named image is already present — poieo never pulls for you. It is the
 slowest preflight in the codebase and the only one that reaches outside the
 process; what buys the cost is that a task whose image was pruned last week must
-not discover it at 3am. Flows that never asked for isolation are not probed at
+not discover it at 3am. Tasks that never asked for isolation are not probed at
 all, so a machine with no docker pays nothing.
 
 `IsolationError` is never recovered from by falling back to the host. A task that

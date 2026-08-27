@@ -27,7 +27,7 @@ however convenient.
    ┌────────┴──────────┐
    │                   │
  task.py           daemon/config.py         what to run
-   │  expands into       │  reads flows
+   │  expands into       │  reads tasks
    └────────┬────────────┘
             │
       graph.py + binding.py                 the two-file split, validated at load
@@ -49,10 +49,10 @@ only module that knows git exists.
 
 A trigger fires (or `poieo run` is typed). Then:
 
-1. **Payload.** The flow's static `input:`, plus `input_file:` if named, plus —
+1. **Payload.** The task's static `input:`, plus `input_file:` if named, plus —
    for a task card — its journal and the project's memory. Re-read every run, so
    a note left at 8am is in effect at 9am. → [tasks.md](tasks.md), [memory.md](memory.md)
-2. **A place to work.** If the flow names a `workdir`, the runner opens a private
+2. **A place to work.** If the task names a `workdir`, the runner opens a private
    copy of it — a git worktree on a branch of its own. The user's own checkout is
    never written to. → [workspace.md](workspace.md)
 3. **Preflight.** Every role the graph needs resolves against the binding; every
@@ -75,8 +75,8 @@ A trigger fires (or `poieo run` is typed). Then:
    → [workspace.md](workspace.md)
 8. **The journal.** A card appends one line to its journal — what it did, or why
    it failed — which is what the next run reads first. → [tasks.md](tasks.md)
-9. **The handoff.** If the flow's `then:` block has a branch that matches what
-   the run left behind, the flow it names wakes and reads this run as
+9. **The handoff.** If the task's `then:` block has a branch that matches what
+   the run left behind, the task it names wakes and reads this run as
    `input.sender`. → [daemon.md](daemon.md)
 
 ## Invariants
@@ -92,7 +92,7 @@ config loads. `load_flows()` is where this is enforced for the daemon; the
 **An in-run failure never kills the daemon.** `execute()` does not raise for a
 failure inside a run — the error lands on `RunResult.error`, classified into a
 user-facing `Cause`, and the next trigger starts fresh. Only spec and binding
-problems raise. A flow that fails the same way three times in a row pauses
+problems raise. A task that fails the same way three times in a row pauses
 itself rather than failing all night.
 
 **Files are the only source of truth.** Graphs, bindings, cards, journals and
@@ -117,7 +117,7 @@ stories about one night.
 ## Sugar, and what it expands to
 
 A *task card* is one file: a name, a folder, a prompt. At load time it expands
-into a flow plus a one-node graph indistinguishable from hand-written ones, so
+into a task plus a one-node graph indistinguishable from hand-written ones, so
 nothing below the loader knows cards exist. `poieo show` prints the expansion and
 `poieo eject` writes it out as a real graph. That visibility is what keeps the
 short form from becoming a second, hidden configuration format.

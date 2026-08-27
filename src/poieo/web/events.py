@@ -24,9 +24,9 @@ class BroadcastStore(RunStore):
         self._inner = inner
         self._queue_limit = queue_limit
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
-        # run_id -> flow, learned from run_started, so the SSE endpoint can
-        # filter by flow without parsing every payload.
-        self.run_flows: dict[str, str] = {}
+        # run_id -> task, learned from run_started, so the SSE endpoint can
+        # filter by task without parsing every payload.
+        self.run_tasks: dict[str, str] = {}
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=self._queue_limit)
@@ -46,20 +46,20 @@ class BroadcastStore(RunStore):
     def append(self, event: Event) -> None:
         self._inner.append(event)
         if event.type == "run_started":
-            flow = event.data.get("flow")
-            if flow:
-                self.run_flows[event.run_id] = flow
+            task = event.data.get("task")
+            if task:
+                self.run_tasks[event.run_id] = task
         self._publish(event.as_dict())
 
     def record_summary(self, summary: dict[str, Any]) -> None:
         self._inner.record_summary(summary)
-        self.run_flows.pop(summary.get("run_id"), None)
+        self.run_tasks.pop(summary.get("run_id"), None)
         self._publish({"type": "run_summary", **summary})
 
     # -- reads: the wrapped store answers, never this one --------------------
 
-    def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
-        return self._inner.list_runs(limit=limit, flow=flow)
+    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:
+        return self._inner.list_runs(limit=limit, task=task)
 
     def summary(self, run_id: str) -> dict[str, Any] | None:
         return self._inner.summary(run_id)

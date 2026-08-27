@@ -30,7 +30,7 @@ TaskSpec ──expand()──►  FlowSpec        name, graph, binding, trigger,
 Defaults the card does not have to state: hourly (`every: 1h`), the binding's
 default role, the `files` and `shell` toolsets, 40 turns, and `carry_state:
 true` — a card is a standing job, so what it learned last night is in scope
-tonight. Hand-written flows still opt into carrying state.
+tonight. Hand-written tasks still opt into carrying state.
 
 `every: loop`, `every: 30m` and `at: "0 3 * * *"` are the schedule sugar;
 `_trigger()` maps them onto the three real trigger types.

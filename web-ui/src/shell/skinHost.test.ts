@@ -4,9 +4,9 @@ import { createSkinHost, readSkinPreference, writeSkinPreference } from "./skinH
 import { DEFAULT_SKIN_ID } from "../skins/registry"
 import { initialStage } from "../state/stage"
 import type { Skin, SkinHandle } from "../skins/contract"
-import type { FlowRow } from "../types"
+import type { TaskRow } from "../types"
 
-const FLOWS: FlowRow[] = [
+const FLOWS: TaskRow[] = [
   {
     name: "chores",
     graph: "agent-task",
@@ -39,7 +39,7 @@ beforeEach(() => {
 test("switching skins destroys the old handle exactly once", () => {
   const a = fakeSkin("a")
   const b = fakeSkin("b")
-  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, (id) =>
+  const host = createSkinHost(document.createElement("div"), { onSelectTask: () => {} }, (id) =>
     id === "b" ? b.skin : a.skin,
   )
 
@@ -54,7 +54,7 @@ test("switching skins destroys the old handle exactly once", () => {
 
 test("showing the same skin again does not remount it", () => {
   const a = fakeSkin("a")
-  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, () => a.skin)
+  const host = createSkinHost(document.createElement("div"), { onSelectTask: () => {} }, () => a.skin)
 
   host.show("a")
   host.show("a")
@@ -65,7 +65,7 @@ test("showing the same skin again does not remount it", () => {
 test("a skin mounted mid-run is handed the current stage at once", () => {
   const a = fakeSkin("a")
   const b = fakeSkin("b")
-  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, (id) =>
+  const host = createSkinHost(document.createElement("div"), { onSelectTask: () => {} }, (id) =>
     id === "b" ? b.skin : a.skin,
   )
   const stage = initialStage(FLOWS)
@@ -75,7 +75,7 @@ test("a skin mounted mid-run is handed the current stage at once", () => {
   host.show("b")
 
   // Otherwise the new skin sits blank until the next event, which on a quiet
-  // flow can be minutes away.
+  // task can be minutes away.
   expect(b.update).toHaveBeenCalledWith(stage)
 })
 

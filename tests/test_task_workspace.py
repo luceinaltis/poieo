@@ -1,4 +1,4 @@
-"""A flow with a workdir works in a private copy and lands one change.
+"""A task with a workdir works in a private copy and lands one change.
 
 These run the real daemon against a real repository. The thing worth proving
 is a negative -- that the user's own checkout is exactly as they left it -- and
@@ -110,7 +110,7 @@ async def test_run_works_in_the_private_copy_not_the_users_folder(tmp_path):
     assert not (repo / "made.txt").exists()
     assert head(repo, "main") == before
     assert git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
-    # the work is on the flow's own branch
+    # the work is on the task's own branch
     assert git(repo, "show", "poieo/chores:made.txt").strip() == "hi"
 
 

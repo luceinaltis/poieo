@@ -4,11 +4,11 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 vi.mock("./api", () => ({
-  fetchFlows: vi.fn(async () => []),
+  fetchTasks: vi.fn(async () => []),
   fetchRuns: vi.fn(async () => [
     {
       run_id: "newest-but-quiet",
-      flow: "chores",
+      task: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-22T07:30:00+00:00",
@@ -25,7 +25,7 @@ vi.mock("./api", () => ({
     },
     {
       run_id: "20260822T072819-98a6708d",
-      flow: "chores",
+      task: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-22T07:28:19.836+00:00",
@@ -61,9 +61,9 @@ import { AGENT_RUN } from "./state/fixtures"
 import { initialStage, reduce, replay } from "./state/stage"
 import type { StageState } from "./state/stage"
 import type { StageStore } from "./shell/stageStore"
-import type { FlowRow } from "./types"
+import type { TaskRow } from "./types"
 
-const FLOWS: FlowRow[] = [
+const FLOWS: TaskRow[] = [
   {
     name: "chores",
     graph: "agent-task",
@@ -138,12 +138,12 @@ async function render(stage: StageState) {
   return store
 }
 
-test("no flows renders the invitation, not an error", async () => {
+test("no tasks renders the invitation, not an error", async () => {
   await render(initialStage([]))
   expect(container.textContent).toContain("Nothing is running yet")
 })
 
-test("the picker lists the registered skins and the board carries the flows", async () => {
+test("the picker lists the registered skins and the board carries the tasks", async () => {
   await render(initialStage(FLOWS))
 
   const picker = container.querySelector("select")!
@@ -152,7 +152,7 @@ test("the picker lists the registered skins and the board carries the flows", as
     "basic",
   ])
   expect(picker.value).toBe("basic")
-  expect(container.querySelectorAll("[data-flow]")).toHaveLength(2)
+  expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
 })
 
 test("a stale stored skin id still renders a board", async () => {
@@ -161,7 +161,7 @@ test("a stale stored skin id still renders a board", async () => {
 
   // The registry falls back rather than blanking the page.
   expect(container.querySelector("select")!.value).toBe("basic")
-  expect(container.querySelectorAll("[data-flow]").length).toBeGreaterThan(0)
+  expect(container.querySelectorAll("[data-task]").length).toBeGreaterThan(0)
 })
 
 test("selecting a flowState opens the drawer, and reading it leaves the board alone", async () => {
@@ -169,12 +169,12 @@ test("selecting a flowState opens the drawer, and reading it leaves the board al
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
   expect(drawer).not.toBeNull()
-  expect(drawer.getAttribute("data-flow")).toBe("chores")
+  expect(drawer.getAttribute("data-task")).toBe("chores")
   // the drawer read a past run through its own scratch stage
   expect(drawer.textContent).toContain("list_dir")
   expect(store.getStage()).toBe(stage)
@@ -184,7 +184,7 @@ test("closing the drawer puts it away", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
   })
   await act(async () => {
     container.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
@@ -196,27 +196,27 @@ test("closing the drawer puts it away", async () => {
 
 test("opening a different flowState does not show the previous one's runs", async () => {
   // The drawer keeps a selected run. Without a fresh instance per
-  // flow, switching flows leaves the last flow's run in the diff pane.
+  // task, switching tasks leaves the last task's run in the diff pane.
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
   })
-  expect(container.querySelector(".drawer")!.getAttribute("data-flow")).toBe("chores")
+  expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
   const first = container.querySelector("[data-run][data-selected='true']")
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="revision"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="revision"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
-  expect(drawer.getAttribute("data-flow")).toBe("revision")
+  expect(drawer.getAttribute("data-task")).toBe("revision")
   // nothing carried over from the flowState we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
 })
 
 
-test("a frame for another flow leaves the open drawer alone", async () => {
+test("a frame for another task leaves the open drawer alone", async () => {
   // A busy board streams frames while someone reads a drawer. Every entry in
   // the timeline formats its timestamp on render, so "the drawer did not
   // re-render" is observable as "no timestamp was formatted again".
@@ -224,13 +224,13 @@ test("a frame for another flow leaves the open drawer alone", async () => {
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
   })
   expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
 
   const formatted = vi.spyOn(Date.prototype, "toLocaleTimeString")
   await act(async () => {
-    store.push(reduce(stage, { run_id: "rr", type: "run_started", data: { flow: "revision" } }))
+    store.push(reduce(stage, { run_id: "rr", type: "run_started", data: { task: "revision" } }))
   })
 
   expect(formatted).not.toHaveBeenCalled()
@@ -244,7 +244,7 @@ test("the drawer opens on the run that changed something", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-flow="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
   })
 
   const selected = container.querySelector("[data-run][data-selected='true']")!

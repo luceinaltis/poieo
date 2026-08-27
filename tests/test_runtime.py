@@ -469,7 +469,7 @@ def writes_a_file(name="made.txt"):
 
 
 async def test_agent_node_inherits_the_run_workdir(tmp_path):
-    # The graph says what the work is; the flow says where it happens. A graph
+    # The graph says what the work is; the task says where it happens. A graph
     # that hardcodes a path cannot be moved to another machine.
     result = await run_graph(
         agent_graph_without_workdir(), writes_a_file(), workdir=tmp_path

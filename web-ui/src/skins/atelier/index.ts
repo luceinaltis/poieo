@@ -1,5 +1,5 @@
 /**
- * The workshop: a smithy, one forge per flow, in three dimensions.
+ * The workshop: a smithy, one forge per task, in three dimensions.
  *
  * Benches stand on the shared grid of squares. The forge is a real light, so
  * its warmth falls on the walls and on the smith rather than being painted on.
@@ -39,9 +39,9 @@ import {
   place,
 } from "../layout"
 import type { Cell } from "../layout"
-import { changedFlows } from "../changed"
+import { changedTasks } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
-import type { StageState, FlowState } from "../../state/stage"
+import type { StageState, TaskState } from "../../state/stage"
 import "./atelier.css"
 // Imported rather than served from a fixed path, so Vite hashes it into
 // /assets with everything else: one cache policy, and a changed model
@@ -184,15 +184,15 @@ const HUE = {
 export interface Bench {
   group: any
   place(cell: Cell): void
-  paint(flowState: FlowState): void
+  paint(flowState: TaskState): void
   tick(elapsed: number): void
   dispose(): void
 }
 
-/** A steady per-flow offset, so neighbouring smiths blink out of step. */
-function stagger(flow: string): number {
+/** A steady per-task offset, so neighbouring smiths blink out of step. */
+function stagger(task: string): number {
   let hash = 0
-  for (const letter of flow) hash = (hash * 31 + letter.charCodeAt(0)) % 3600
+  for (const letter of task) hash = (hash * 31 + letter.charCodeAt(0)) % 3600
   return hash
 }
 
@@ -865,7 +865,7 @@ export function makeBench(
       group.position.set(at.x / PER_UNIT, 0, at.y / PER_UNIT)
     },
 
-    paint(flowState: FlowState) {
+    paint(flowState: TaskState) {
       const pose = figurePose(flowState)
       const working = pose === "working"
       hot = lampLit(flowState)
@@ -1135,21 +1135,21 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   el.append(labels)
   const tags = new Map<string, HTMLElement>()
 
-  const tagFor = (flow: string) => {
-    let tag = tags.get(flow)
+  const tagFor = (task: string) => {
+    let tag = tags.get(task)
     if (!tag) {
       tag = document.createElement("div")
       tag.className = "atelier-tag"
       tag.innerHTML = `<b></b><span></span>`
       labels.append(tag)
-      tags.set(flow, tag)
+      tags.set(task, tag)
     }
     return tag
   }
 
   const placeLabels = () => {
-    for (const [flow, bench] of benches) {
-      const tag = tags.get(flow)
+    for (const [task, bench] of benches) {
+      const tag = tags.get(task)
       if (!tag) continue
       // The room's near corner, so the name sits under the bench rather than
       // across the anvil.
@@ -1170,7 +1170,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   el.append(tidy)
 
   const benches = new Map<string, Bench>()
-  const painted = new Map<string, FlowState>()
+  const painted = new Map<string, TaskState>()
   let spots: Record<string, Cell> = {}
   let arrangedFor = ""
   let handled = false
@@ -1256,7 +1256,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
   let panning: { x: number; y: number } | null = null
   let pinch: { gap: number; zoom: number } | null = null
   let pressedAt: { x: number; y: number } | null = null
-  let press: { flow: string; timer: number } | null = null
+  let press: { task: string; timer: number } | null = null
   let dragging: string | null = null
 
   const local = (event: PointerEvent | WheelEvent) => {
@@ -1272,7 +1272,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
     for (const hit of hits) {
       let node: any = hit.object
       while (node) {
-        for (const [flow, bench] of benches) if (bench.group === node) return flow
+        for (const [task, bench] of benches) if (bench.group === node) return task
         node = node.parent
       }
     }
@@ -1308,15 +1308,15 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       return
     }
 
-    const flow = pick(at)
+    const task = pick(at)
     pressedAt = at
-    if (flow) {
+    if (task) {
       press = {
-        flow,
+        task,
         timer: window.setTimeout(() => {
           press = null
           panning = null
-          dragging = flow
+          dragging = task
           handled = true
         }, PICK_UP_MS),
       }
@@ -1368,24 +1368,24 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
 
   const release = (event: PointerEvent, lifted: boolean) => {
     if (dragging) {
-      const flow = dragging
-      const bench = benches.get(flow)
+      const task = dragging
+      const bench = benches.get(task)
       dragging = null
       ghost.visible = false
       if (bench) {
         const cell = cellAt(bench.group.position.x * PER_UNIT, bench.group.position.z * PER_UNIT)
-        if (occupied(spots, cell, flow)) {
-          bench.place(spots[flow])
+        if (occupied(spots, cell, task)) {
+          bench.place(spots[task])
         } else {
-          spots[flow] = cell
-          saveSpot(flow, cell)
+          spots[task] = cell
+          saveSpot(task, cell)
           bench.place(cell)
         }
       }
     } else if (press) {
-      const flow = press.flow
+      const task = press.task
       dropPress()
-      if (lifted) callbacks.onSelectFlow(flow)
+      if (lifted) callbacks.onSelectTask(task)
     }
 
     pointers.delete(event.pointerId)
@@ -1411,21 +1411,21 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
 
   // -- drawing ----------------------------------------------------------------
   const render = (stage: StageState) => {
-    const flows = Object.keys(stage.flows)
+    const tasks = Object.keys(stage.tasks)
     // localStorage, parsed once per frame rather than once per use of it.
     const saved = savedSpots()
-    const arranged = place(flows, saved, columnsFor(el.clientWidth))
-    const changed = new Set(changedFlows(stage.flows, painted).map(([flow]) => flow))
+    const arranged = place(tasks, saved, columnsFor(el.clientWidth))
+    const changed = new Set(changedTasks(stage.tasks, painted).map(([task]) => task))
 
-    for (const [flow, bench] of benches) {
-      if (!(flow in stage.flows)) {
+    for (const [task, bench] of benches) {
+      if (!(task in stage.tasks)) {
         room.remove(bench.group)
         bench.dispose()
-        benches.delete(flow)
+        benches.delete(task)
       }
     }
 
-    const signature = `${flows.join("|")}@${el.clientWidth}x${el.clientHeight}`
+    const signature = `${tasks.join("|")}@${el.clientWidth}x${el.clientHeight}`
     if (signature !== arrangedFor && !handled && Object.keys(saved).length === 0) {
       arrangedFor = signature
       const box = bounds(Object.values(arranged))
@@ -1437,35 +1437,35 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       fitToContent()
     }
 
-    for (const flow of flows) {
-      let bench = benches.get(flow)
+    for (const task of tasks) {
+      let bench = benches.get(task)
       if (!bench) {
-        bench = makeBench(THREE, smith, cloneSkinned, stagger(flow), clips, props)
-        benches.set(flow, bench)
+        bench = makeBench(THREE, smith, cloneSkinned, stagger(task), clips, props)
+        benches.set(task, bench)
         room.add(bench.group)
       }
-      spots[flow] = arranged[flow]
-      if (dragging !== flow) bench.place(arranged[flow])
+      spots[task] = arranged[task]
+      if (dragging !== task) bench.place(arranged[task])
 
       // Placement follows every frame; the bench and its tag only follow the
       // frames that touched this flowState. paint() rebuilds shelf geometry, so
-      // repainting a whole board because one flow spoke is GPU churn.
-      if (!changed.has(flow)) continue
-      bench.paint(stage.flows[flow])
+      // repainting a whole board because one task spoke is GPU churn.
+      if (!changed.has(task)) continue
+      bench.paint(stage.tasks[task])
 
-      const flowState = stage.flows[flow]
-      const tag = tagFor(flow)
+      const flowState = stage.tasks[task]
+      const tag = tagFor(task)
       tag.dataset.status = flowState.status
-      tag.querySelector("b")!.textContent = flow
+      tag.querySelector("b")!.textContent = task
       tag.querySelector("span")!.textContent = flowState.currentNode
         ? `${flowState.currentNode}${flowState.turn > 0 ? ` · turn ${flowState.turn}` : ""}`
         : "idle"
     }
 
-    for (const [flow, tag] of tags) {
-      if (!(flow in stage.flows)) {
+    for (const [task, tag] of tags) {
+      if (!(task in stage.tasks)) {
         tag.remove()
-        tags.delete(flow)
+        tags.delete(task)
       }
     }
 

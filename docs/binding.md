@@ -132,7 +132,7 @@ They are easy to confuse, and both exist:
 - **`check_credentials(binding, roles)`** reads the environment and opens
   nothing. It runs at load time, for the roles a graph actually names — a spare
   endpoint bound to nothing is not going to be called, and holding the daemon
-  down for its key would make the binding harder to keep than the flows it
+  down for its key would make the binding harder to keep than the tasks it
   serves.
 - **`poieo check` / `Provider.health()`** actually talks to each endpoint. That
   costs a network round trip, so it is a command the user runs, never something

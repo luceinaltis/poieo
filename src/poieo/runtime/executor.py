@@ -55,7 +55,7 @@ def preflight(
         if homeless:
             raise SpecError(
                 f"agent node(s) {homeless} in graph '{graph.name}' have nowhere to "
-                f"work: give the node a workdir, or the flow one"
+                f"work: give the node a workdir, or the task one"
             )
 
 
@@ -67,7 +67,7 @@ async def execute(
     *,
     input: dict[str, Any] | None = None,
     state: dict[str, Any] | None = None,
-    flow: str = "adhoc",
+    task: str = "adhoc",
     trigger: str = "manual",
     iteration: int = 0,
     run_id: str | None = None,
@@ -79,8 +79,8 @@ async def execute(
     """Run ``graph`` once and return the outcome.
 
     Never raises for an in-run failure: the error is captured on the result so a
-    daemon flow can log it and stay up. Spec/binding problems still raise, since
-    those mean the flow is misconfigured rather than flaky.
+    daemon task can log it and stay up. Spec/binding problems still raise, since
+    those mean the task is misconfigured rather than flaky.
     """
     preflight(graph, binding, workdir=workdir)
 
@@ -90,7 +90,7 @@ async def execute(
         pool=pool,
         store=store,
         run_id=run_id or new_run_id(),
-        flow=flow,
+        task=task,
         trigger=trigger,
         input=dict(input or {}),
         state={**graph.state, **(state or {})},
@@ -104,7 +104,7 @@ async def execute(
     ctx.emit(
         "run_started",
         graph=graph.name,
-        flow=flow,
+        task=task,
         trigger=trigger,
         iteration=iteration,
         binding=binding.name,
@@ -162,7 +162,7 @@ async def execute(
     finished_at = utcnow()
     run_result = RunResult(
         run_id=ctx.run_id,
-        flow=flow,
+        task=task,
         graph=graph.name,
         status=status,
         started_at=started_at,

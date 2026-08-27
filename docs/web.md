@@ -15,16 +15,16 @@ server and the client keep them together so they stay easy to count.
 
 | route | does |
 |---|---|
-| `GET /api/flows` | every flow: status, trigger, last run, how much is waiting for review, and its wiring |
-| `GET /api/runs` | run summaries, newest first (`?flow=`, `?limit=`) |
+| `GET /api/tasks` | every task: status, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/runs` | run summaries, newest first (`?task=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
-| `GET /api/events` | every event, live (SSE; `?flow=` filters) |
-| `POST /api/flows/{f}/accept` | **review** — put the work in the user's own branch |
-| `POST /api/flows/{f}/discard` | **review** — throw it away, recoverably |
-| `POST /api/flows/{f}/pause` | **control** — hold the schedule |
-| `POST /api/flows/{f}/resume` | **control** — rearm it |
-| `POST /api/flows/{f}/run` | **control** — one fire, now |
+| `GET /api/events` | every event, live (SSE; `?task=` filters) |
+| `POST /api/tasks/{f}/accept` | **review** — put the work in the user's own branch |
+| `POST /api/tasks/{f}/discard` | **review** — throw it away, recoverably |
+| `POST /api/tasks/{f}/pause` | **control** — hold the schedule |
+| `POST /api/tasks/{f}/resume` | **control** — rearm it |
+| `POST /api/tasks/{f}/run` | **control** — one fire, now |
 
 **Review** routes are the only ones that may ever touch the user's own files. If
 you are adding a third of them, stop. **Control** routes touch the daemon's
@@ -34,16 +34,16 @@ survives a restart.
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`), which
 is what makes the API testable without a running daemon.
 
-### The wiring on `/api/flows`
+### The wiring on `/api/tasks`
 
 Two fields carry what a view needs to *draw* the work, with no new route and no
-second fetch — the flows route already had the graph in hand:
+second fetch — the tasks route already had the graph in hand:
 
-- **`then`** — which flow works next, and the word on that arrow
+- **`then`** — which task works next, and the word on that arrow
 - **`shape`** — `entry`, and each node's `next` / `branches` / `default` /
   `model`
 
-Both arrows have **one shape**, because a router's branches and a flow's `then:`
+Both arrows have **one shape**, because a router's branches and a task's `then:`
 are the same `Branch` one level apart: a view that can draw one can draw the
 other, and a reader learns one arrow rather than two. A branch with no label is
 drawn with its condition — the same fallback `RouterNode` uses when it records
@@ -82,10 +82,10 @@ unplaced nodes itself can tell "at the origin" from "nowhere yet".
 
 ### Off the loop
 
-The daemon, the web server and every flow share one asyncio loop, so anything
+The daemon, the web server and every task share one asyncio loop, so anything
 blocking is wrapped in `asyncio.to_thread`: the git work behind `diff`, `accept`
-and `discard`, and the index scan behind `run()`. `/api/flows` gathers the
-per-flow review states **concurrently** — each is two git subprocesses, and asked
+and `discard`, and the index scan behind `run()`. `/api/tasks` gathers the
+per-task review states **concurrently** — each is two git subprocesses, and asked
 one runner at a time the board's first paint would wait for all of them in single
 file.
 
@@ -103,8 +103,8 @@ them read `self.root` instead, which is only the same file by accident — over 
 `NullStore` the wrapper answered the web API from whatever `runs/` the daemon
 happened to be standing in.
 
-`run_flows` maps run id → flow, learned from `run_started`, so the SSE endpoint
-can filter by flow without parsing every payload.
+`run_flows` maps run id → task, learned from `run_started`, so the SSE endpoint
+can filter by task without parsing every payload.
 
 Static assets are served immutable (Vite emits content-hashed names), while
 `index.html` is `no-cache` — that document names the build, and a cached one
@@ -119,7 +119,7 @@ web-ui/src/
   state/stage.ts    the one place run events are interpreted
   skins/            how that model is drawn — atelier, basic
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
-  detail/           the drawer: one flow, turn by turn, plus control
+  detail/           the drawer: one task, turn by turn, plus control
   review/           last night's work: the list, the diff, accept and discard
 ```
 
@@ -142,7 +142,7 @@ The chosen skin lives in `localStorage`. `basic` is the default, and is also
 where a stale or unknown id lands rather than blanking the page -- so a reader
 with nothing stored and a reader with something unreadable stored get the same
 page. `atelier` is a click away.
-`basic` draws the work as a graph — the flows, their nodes, the arrows between
+`basic` draws the work as a graph — the tasks, their nodes, the arrows between
 them, and the model each node calls. `skins/wiring.ts` is the part of that with
 an answer capable of being wrong (where containers go, in what order nodes are read),
 so it is pure and tested on its own; measuring containers and running an arrow

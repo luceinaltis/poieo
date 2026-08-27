@@ -4,9 +4,9 @@ import { createStageStore } from "./stageStore"
 import type { StageApi } from "./stageStore"
 import { AGENT_RUN } from "../state/fixtures"
 import type { FeedHandlers } from "../api"
-import type { FlowRow, PoieoEvent } from "../types"
+import type { TaskRow, PoieoEvent } from "../types"
 
-const CHORES: FlowRow = {
+const CHORES: TaskRow = {
   name: "chores",
   graph: "agent-task",
   trigger: "loop",
@@ -22,7 +22,7 @@ const CHORES: FlowRow = {
 function harness(overrides: Partial<StageApi> = {}) {
   let handlers: FeedHandlers | null = null
   const api: StageApi = {
-    fetchFlows: vi.fn(async () => [CHORES]),
+    fetchTasks: vi.fn(async () => [CHORES]),
     fetchRunEvents: vi.fn(async () => [] as PoieoEvent[]),
     fetchRuns: vi.fn(async () => []),
     openFeed: vi.fn((h: FeedHandlers) => {
@@ -36,21 +36,21 @@ function harness(overrides: Partial<StageApi> = {}) {
   return { api, store: createStageStore(api), feed: () => handlers! }
 }
 
-test("seeds from the flow list, then subscribes", async () => {
+test("seeds from the task list, then subscribes", async () => {
   const { api, store } = harness()
   await store.start()
 
-  expect(api.fetchFlows).toHaveBeenCalled()
+  expect(api.fetchTasks).toHaveBeenCalled()
   expect(api.openFeed).toHaveBeenCalled()
-  expect(Object.keys(store.getStage().flows)).toEqual(["chores"])
+  expect(Object.keys(store.getStage().tasks)).toEqual(["chores"])
   store.stop()
 })
 
-test("no flows leaves an empty board, not an error", async () => {
-  const { store } = harness({ fetchFlows: vi.fn(async () => []) })
+test("no tasks leaves an empty board, not an error", async () => {
+  const { store } = harness({ fetchTasks: vi.fn(async () => []) })
   await store.start()
 
-  expect(store.getStage().flows).toEqual({})
+  expect(store.getStage().tasks).toEqual({})
   store.stop()
 })
 
@@ -59,8 +59,8 @@ test("live events fold into the stage", async () => {
   await store.start()
 
   for (const event of AGENT_RUN.slice(0, 4)) feed().onEvent(event)
-  expect(store.getStage().flows.chores.status).toBe("running")
-  expect(store.getStage().flows.chores.currentNode).toBe("work")
+  expect(store.getStage().tasks.chores.status).toBe("running")
+  expect(store.getStage().tasks.chores.currentNode).toBe("work")
   store.stop()
 })
 
@@ -77,7 +77,7 @@ test("a resync applies the run's history before the live frames that overlapped 
   })
 
   const { store, feed } = harness({
-    fetchFlows: vi.fn(async () => [{ ...CHORES, current_run_id: AGENT_RUN[0].run_id }]),
+    fetchTasks: vi.fn(async () => [{ ...CHORES, current_run_id: AGENT_RUN[0].run_id }]),
     fetchRunEvents: vi.fn(() => pending),
   })
   await store.start()
@@ -87,15 +87,15 @@ test("a resync applies the run's history before the live frames that overlapped 
   releaseHistory(history)
   await resynced
 
-  expect(store.getStage().flows.chores.status).toBe("waiting")
-  expect(store.getStage().flows.chores.currentNode).toBeNull()
+  expect(store.getStage().tasks.chores.status).toBe("waiting")
+  expect(store.getStage().tasks.chores.currentNode).toBeNull()
   store.stop()
 })
 
 test("a resync refreshes what finished while the feed was down", async () => {
   const summary = {
     run_id: "r-old",
-    flow: "chores",
+    task: "chores",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T07:00:00+00:00",
@@ -112,13 +112,13 @@ test("a resync refreshes what finished while the feed was down", async () => {
     error: null,
   }
   const { store } = harness({
-    fetchFlows: vi.fn(async () => [{ ...CHORES, last_run: summary }]),
+    fetchTasks: vi.fn(async () => [{ ...CHORES, last_run: summary }]),
   })
   await store.start()
   await store.resync()
 
-  // The run_summary frame for that run was missed; /api/flows still knows.
-  expect(store.getStage().flows.chores.lastRun).toEqual({
+  // The run_summary frame for that run was missed; /api/tasks still knows.
+  expect(store.getStage().tasks.chores.lastRun).toEqual({
     status: "completed",
     steps: 4,
     finished_at: "2026-08-22T07:00:01+00:00",
@@ -162,11 +162,11 @@ test("feed status is reported through", async () => {
 })
 
 
-test("a resync asks the flows together, not one after another", async () => {
+test("a resync asks the tasks together, not one after another", async () => {
   // Resync fires on every reconnect -- exactly when the board is already
-  // stale -- and live frames queue until it finishes. One round trip per flow,
-  // in single file, holds the board hostage for flows x latency.
-  const flows = ["a", "b", "c"].map((name) => ({
+  // stale -- and live frames queue until it finishes. One round trip per task,
+  // in single file, holds the board hostage for tasks x latency.
+  const tasks = ["a", "b", "c"].map((name) => ({
     ...CHORES,
     name,
     current_run_id: `run-${name}`,
@@ -183,7 +183,7 @@ test("a resync asks the flows together, not one after another", async () => {
   }
 
   const { store } = harness({
-    fetchFlows: vi.fn(async () => flows),
+    fetchTasks: vi.fn(async () => tasks),
     fetchRuns: vi.fn(() => slow([])),
     fetchRunEvents: vi.fn(() => slow([] as PoieoEvent[])),
   })
@@ -196,11 +196,11 @@ test("a resync asks the flows together, not one after another", async () => {
 })
 
 
-test("the store tallies each flow's recent work from the run index", async () => {
+test("the store tallies each task's recent work from the run index", async () => {
   const runs = [
     {
       run_id: "a",
-      flow: "chores",
+      task: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "t",
@@ -226,7 +226,7 @@ test("the store tallies each flow's recent work from the run index", async () =>
 
   // The event stream never carries this: a browser opened at noon has to be
   // told what happened at 3am.
-  expect(store.getStage().flows.chores.recent).toMatchObject({
+  expect(store.getStage().tasks.chores.recent).toMatchObject({
     runs: 1,
     succeeded: 1,
     insertions: 9,

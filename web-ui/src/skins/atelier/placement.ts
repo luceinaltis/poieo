@@ -21,10 +21,10 @@ export function savedSpots(): Record<string, Cell> {
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Record<string, Cell>
     const clean: Record<string, Cell> = {}
-    for (const [flow, cell] of Object.entries(parsed ?? {})) {
+    for (const [task, cell] of Object.entries(parsed ?? {})) {
       // Anything that is not a pair of whole numbers is someone else's data.
       if (cell && Number.isInteger(cell.col) && Number.isInteger(cell.row)) {
-        clean[flow] = { col: cell.col, row: cell.row }
+        clean[task] = { col: cell.col, row: cell.row }
       }
     }
     return clean
@@ -33,9 +33,9 @@ export function savedSpots(): Record<string, Cell> {
   }
 }
 
-export function saveSpot(flow: string, cell: Cell): void {
+export function saveSpot(task: string, cell: Cell): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...savedSpots(), [flow]: cell }))
+    localStorage.setItem(KEY, JSON.stringify({ ...savedSpots(), [task]: cell }))
   } catch {
     // A workshop that cannot remember its layout is still a workshop.
   }

@@ -144,7 +144,7 @@ export interface Face {
  * -- a rig that cannot be read is a reason to skip blinking, not to fail.
  *
  * `offset` staggers one figure against another, so a room full of smiths does
- * not blink in unison. It is derived from the flow's name rather than drawn at
+ * not blink in unison. It is derived from the task's name rather than drawn at
  * random, so a replay blinks where the live run did.
  */
 /** Is every lid within `reach` of the skin it is supposed to be lying on? */

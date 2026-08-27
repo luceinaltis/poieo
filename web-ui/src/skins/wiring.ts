@@ -10,7 +10,7 @@
 import type { GraphShape } from "../types"
 
 export interface Placed {
-  flow: string
+  task: string
   column: number
   row: number
 }
@@ -18,8 +18,8 @@ export interface Placed {
 /**
  * Flows laid out left to right, each one past whatever hands to it.
  *
- * Kahn's peeling, so a flow sits one column beyond its *furthest* sender
- * rather than its nearest -- otherwise a long arrow that skips a flow would
+ * Kahn's peeling, so a task sits one column beyond its *furthest* sender
+ * rather than its nearest -- otherwise a long arrow that skips a task would
  * point backwards on screen.
  *
  * Flows nothing points at start on the left, which is where a board with no
@@ -27,61 +27,61 @@ export interface Placed {
  * case today and it must not read as a failure to lay anything out.
  *
  * A cycle cannot be peeled at all -- nothing in one has all its senders
- * placed -- so peeling stalls and the loop is broken at the first flow
+ * placed -- so peeling stalls and the loop is broken at the first task
  * declared, which unrolls it into a line with one arrow coming back. Piling
  * the leftovers into a single column instead would make every arrow among
  * them run backwards, including the ones that go forwards.
  */
-export function place(flows: string[], handoffs: Record<string, string[]>): Placed[] {
-  const rank = new Map(flows.map((flow, index) => [flow, index]))
-  const targets = (flow: string): string[] =>
-    (handoffs[flow] ?? []).filter((to) => rank.has(to) && to !== flow)
+export function place(tasks: string[], handoffs: Record<string, string[]>): Placed[] {
+  const rank = new Map(tasks.map((task, index) => [task, index]))
+  const targets = (task: string): string[] =>
+    (handoffs[task] ?? []).filter((to) => rank.has(to) && to !== task)
 
-  const waiting = new Map(flows.map((flow) => [flow, 0]))
-  for (const flow of flows) {
-    for (const to of targets(flow)) waiting.set(to, waiting.get(to)! + 1)
+  const waiting = new Map(tasks.map((task) => [task, 0]))
+  for (const task of tasks) {
+    for (const to of targets(task)) waiting.set(to, waiting.get(to)! + 1)
   }
 
   const column = new Map<string, number>()
-  const left = new Set(flows)
-  let layer = flows.filter((flow) => waiting.get(flow) === 0)
+  const left = new Set(tasks)
+  let layer = tasks.filter((task) => waiting.get(task) === 0)
   let depth = 0
 
   while (left.size > 0) {
     if (layer.length === 0) {
       // Peeling has stalled, which means a cycle: nothing left has all its
-      // senders placed. Break it at the first flow declared and carry on.
+      // senders placed. Break it at the first task declared and carry on.
       // Left in a heap they would share one column, and then *every* arrow
       // between them would run backwards -- including the ones going
       // forwards, which is most of them.
-      const seed = flows.find((flow) => left.has(flow))
+      const seed = tasks.find((task) => left.has(task))
       if (seed === undefined) break
       layer = [seed]
     }
-    for (const flow of layer) {
-      column.set(flow, depth)
-      left.delete(flow)
+    for (const task of layer) {
+      column.set(task, depth)
+      left.delete(task)
     }
     const next: string[] = []
-    for (const flow of layer) {
-      for (const to of targets(flow)) {
+    for (const task of layer) {
+      for (const to of targets(task)) {
         if (!left.has(to)) continue
         waiting.set(to, waiting.get(to)! - 1)
         if (waiting.get(to) === 0) next.push(to)
       }
     }
     // Declared order decides who is above whom, at every depth, so the board
-    // does not rearrange itself when an unrelated flow is added.
+    // does not rearrange itself when an unrelated task is added.
     layer = next.sort((a, b) => rank.get(a)! - rank.get(b)!)
     depth += 1
   }
 
   const filled = new Map<number, number>()
-  return flows.map((flow) => {
-    const at = column.get(flow)!
+  return tasks.map((task) => {
+    const at = column.get(task)!
     const row = filled.get(at) ?? 0
     filled.set(at, row + 1)
-    return { flow, column: at, row }
+    return { task, column: at, row }
   })
 }
 
@@ -205,7 +205,7 @@ export function arrivals(shape: GraphShape): string[] {
 /**
  * The nodes a run can stop on, in walk order.
  *
- * What an outgoing handoff arrow leaves from once a flow is opened. Shut, the
+ * What an outgoing handoff arrow leaves from once a task is opened. Shut, the
  * arrow leaves the border and says "when chores finishes"; open, it leaves the
  * node it really leaves from and says "when chores reaches gate".
  *
@@ -223,7 +223,7 @@ export function exits(shape: GraphShape): string[] {
 }
 
 /**
- * How much room a flow takes, and where an arrow meets it.
+ * How much room a task takes, and where an arrow meets it.
  *
  * Fixed, so every arrow's geometry is arithmetic rather than a measurement --
  * which is what lets it be tested at all, jsdom having no layout to measure.
@@ -251,7 +251,7 @@ export interface Frame {
   tops: number[]
   /** The underside of the lowest box on the board. */
   bottom: number
-  /** How tall each box actually came out, by flow. */
+  /** How tall each box actually came out, by task. */
   heights: Record<string, number>
 }
 
@@ -398,7 +398,7 @@ export function centreOn(view: View, on: { x: number; y: number }, window: Size)
   }
 }
 
-/** The top-left corner of a flow's box. */
+/** The top-left corner of a task's box. */
 export function corner(at: Placed, frame?: Frame): Anchor {
   return {
     x: at.column * (BOX.width + BOX.gapX),
@@ -407,9 +407,9 @@ export function corner(at: Placed, frame?: Frame): Anchor {
 }
 
 /**
- * Whether a handoff runs backwards -- to a flow no further right than its own.
+ * Whether a handoff runs backwards -- to a task no further right than its own.
  *
- * `place` lays flows out by who hands to whom, so a handoff normally lands in
+ * `place` lays tasks out by who hands to whom, so a handoff normally lands in
  * a later column and the arrow has the gap between them to itself. A cycle has
  * no such order: `place` cannot peel one, and drops whatever is left into a
  * single column. Drawn as though it went forwards, such an arrow runs
@@ -459,7 +459,7 @@ export function backWire(
     under: floor + BOX.gapY / 2,
     // Up into the middle of the target's underside.
     x2: end.x + BOX.width / 2,
-    y2: end.y + (frame?.heights[to.flow] ?? BOX.height),
+    y2: end.y + (frame?.heights[to.task] ?? BOX.height),
   }
 }
 

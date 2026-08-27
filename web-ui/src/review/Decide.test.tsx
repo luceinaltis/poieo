@@ -29,7 +29,7 @@ afterEach(() => {
 function render(props: Record<string, unknown> = {}) {
   act(() => {
     root.render(
-      <Decide flow="chores" pending={3} into="main" runId={null} onDone={() => {}} {...props} />,
+      <Decide task="chores" pending={3} into="main" runId={null} onDone={() => {}} {...props} />,
     )
   })
 }

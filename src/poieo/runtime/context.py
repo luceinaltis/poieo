@@ -31,13 +31,13 @@ class RunContext:
     pool: ProviderPool
     store: RunStore
     run_id: str = field(default_factory=new_run_id)
-    flow: str = "adhoc"
+    task: str = "adhoc"
     trigger: str = "manual"
     # Payload supplied by the trigger or the CLI.
     input: dict[str, Any] = field(default_factory=dict)
     # Survives across iterations when a loop trigger carries state.
     state: dict[str, Any] = field(default_factory=dict)
-    # Which pass of a looping flow this is.
+    # Which pass of a looping task this is.
     iteration: int = 0
     # Set by execute(); agent loops poll it between turns.
     cancel: asyncio.Event | None = None
@@ -62,7 +62,7 @@ class RunContext:
             "run": wrap(
                 {
                     "id": self.run_id,
-                    "flow": self.flow,
+                    "task": self.task,
                     "trigger": self.trigger,
                     "iteration": self.iteration,
                     "path": list(self.path),
@@ -98,7 +98,7 @@ class NodeResult:
 @dataclass
 class RunResult:
     run_id: str
-    flow: str
+    task: str
     graph: str
     status: str  # completed | failed | aborted
     started_at: str
@@ -114,16 +114,16 @@ class RunResult:
     cause: dict[str, Any] | None = None
     iteration: int = 0
     # What actually fired this run -- "cron 0 2 * * *", "run now", "after
-    # chores (changed)". Not the flow's configured schedule, which may well not
+    # chores (changed)". Not the task's configured schedule, which may well not
     # be what rang: a run-now and a handoff both happen outside it.
     trigger: str = ""
-    # Set after the run by the daemon when the flow keeps a private copy.
+    # Set after the run by the daemon when the task keeps a private copy.
     change: dict[str, Any] | None = None
 
     def summary(self) -> dict[str, Any]:
         summary: dict[str, Any] = {
             "run_id": self.run_id,
-            "flow": self.flow,
+            "task": self.task,
             "graph": self.graph,
             "status": self.status,
             "started_at": self.started_at,

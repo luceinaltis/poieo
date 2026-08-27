@@ -259,7 +259,7 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
     marker = tmp_path / "poieo.yaml"
     card(tmp_path / "tasks", "f", "graph: ../g.yaml\n")
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["flows"])
+    result = runner.invoke(app, ["tasks"])
     assert result.exit_code == 0, result.output
     assert "f" in result.stdout
 
@@ -574,7 +574,7 @@ def test_a_card_with_a_typo_no_longer_breaks_an_unrelated_command(tmp_path, monk
     assert "no runs recorded" in result.stdout
 
     # The daemon still refuses, naming the card and the typo.
-    refused = runner.invoke(app, ["flows"])
+    refused = runner.invoke(app, ["tasks"])
     assert refused.exit_code == 1
     assert "promt" in refused.stderr
 

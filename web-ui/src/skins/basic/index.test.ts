@@ -3,10 +3,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import { basic } from "./index"
 import { AGENT_RUN } from "../../state/fixtures"
 import { initialStage, reduce, replay, setRuns } from "../../state/stage"
-import type { FlowRow } from "../../types"
+import type { TaskRow } from "../../types"
 import { BOX } from "../wiring"
 
-const FLOWS: FlowRow[] = [
+const FLOWS: TaskRow[] = [
   {
     name: "chores",
     graph: "agent-task",
@@ -47,33 +47,33 @@ afterEach(() => {
   el.remove()
 })
 
-test("a frame for one flow does not rebuild the other flows' boxes", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a frame for one task does not rebuild the other tasks' boxes", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   const stage = replay(initialStage(FLOWS), AGENT_RUN)
   handle.update(stage)
 
   // chores is drawn with its graph's nodes inside it.
-  const node = el.querySelector('[data-flow="chores"] .basic-node')
+  const node = el.querySelector('[data-task="chores"] .basic-node')
   expect(node).not.toBeNull()
 
-  // An event for the other flow arrives; chores was not touched, and the
+  // An event for the other task arrives; chores was not touched, and the
   // reducer keeps its object identity, so its DOM must survive untouched.
   const next = reduce(stage, {
     run_id: "rr",
     type: "run_started",
-    data: { flow: "revision" },
+    data: { task: "revision" },
   })
   handle.update(next)
 
-  expect(el.querySelector('[data-flow="chores"] .basic-node')).toBe(node)
-  // The flow the frame was for did repaint.
-  expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-status")).toBe(
+  expect(el.querySelector('[data-task="chores"] .basic-node')).toBe(node)
+  // The task the frame was for did repaint.
+  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-status")).toBe(
     "running",
   )
   handle.destroy()
 })
 
-const WIRED: FlowRow[] = [
+const WIRED: TaskRow[] = [
   {
     ...FLOWS[0],
     then: [
@@ -84,33 +84,33 @@ const WIRED: FlowRow[] = [
   FLOWS[1],
 ]
 
-test("a flow that is running opens itself; the rest stay shut", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a task that is running opens itself; the rest stay shut", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4)))
 
-  // Detail where something is happening, and only there: a board of ten flows
+  // Detail where something is happening, and only there: a board of ten tasks
   // opened all the way is sixty nodes, which is not a glance.
-  expect(el.querySelector('[data-flow="chores"]')!.getAttribute("data-open")).toBe("true")
-  expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-open")).toBe("false")
+  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-open")).toBe("true")
+  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("false")
   handle.destroy()
 })
 
-test("opening a flow by hand outlasts the frames that follow", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("opening a task by hand outlasts the frames that follow", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   const stage = initialStage(FLOWS)
   handle.update(stage)
 
-  el.querySelector<HTMLElement>('[data-flow="revision"] .basic-toggle')!.click()
-  expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-open")).toBe("true")
+  el.querySelector<HTMLElement>('[data-task="revision"] .basic-toggle')!.click()
+  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("true")
 
-  // A frame for that flow must not undo the reader's own choice.
-  handle.update(reduce(stage, { run_id: "r", type: "run_started", data: { flow: "revision" } }))
-  expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-open")).toBe("true")
+  // A frame for that task must not undo the reader's own choice.
+  handle.update(reduce(stage, { run_id: "r", type: "run_started", data: { task: "revision" } }))
+  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("true")
   handle.destroy()
 })
 
 test("a handoff is drawn as an arrow carrying the word on it", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // One arrow, not two: the branch that deliberately stops has nothing to
@@ -121,7 +121,7 @@ test("a handoff is drawn as an arrow carrying the word on it", () => {
 })
 
 test("a handoff says which way it goes", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // The whole board rests on one rule -- an arrow that crosses a border ends
@@ -129,13 +129,13 @@ test("a handoff says which way it goes", () => {
   // head, "chores hands to review" reads exactly like the reverse.
   const heads = el.querySelectorAll(".basic-tip")
   expect(heads).toHaveLength(1)
-  // Pointing at the flow being handed to, not away from it.
+  // Pointing at the task being handed to, not away from it.
   expect(heads[0].getAttribute("d")).toContain(String(BOX.width + BOX.gapX))
   handle.destroy()
 })
 
 test("the word on an arrow sits on the line it names", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
 
   // Floated above the line it belonged to the box underneath it instead, and
@@ -145,21 +145,21 @@ test("the word on an arrow sits on the line it names", () => {
   handle.destroy()
 })
 
-test("a flow to the right of its sender is not laid on top of it", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a task to the right of its sender is not laid on top of it", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
 
-  const from = el.querySelector<HTMLElement>('[data-flow="chores"]')!
-  const to = el.querySelector<HTMLElement>('[data-flow="revision"]')!
+  const from = el.querySelector<HTMLElement>('[data-task="chores"]')!
+  const to = el.querySelector<HTMLElement>('[data-task="revision"]')!
   expect(from.style.left).toBe("0px")
   expect(parseInt(to.style.left, 10)).toBeGreaterThan(0)
   expect(to.style.top).toBe(from.style.top)
   handle.destroy()
 })
 
-test("a flow that found nothing to do says so in one word, not a number", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
-  // Tracked: a flow that keeps a private copy is the one that can find
+test("a task that found nothing to do says so in one word, not a number", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  // Tracked: a task that keeps a private copy is the one that can find
   // nothing to do. Without one there is nothing to change against, and a run
   // that ran is all there is to say.
   const quiet = setRuns(
@@ -169,7 +169,7 @@ test("a flow that found nothing to do says so in one word, not a number", () => 
     // line the board used to print for it was "8 runs · 8 found nothing to do".
     Array.from({ length: 8 }, (_, i) => ({
       run_id: `r${i}`,
-      flow: "chores",
+      task: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-27T02:00:00+00:00",
@@ -183,15 +183,15 @@ test("a flow that found nothing to do says so in one word, not a number", () => 
   )
   handle.update(quiet)
 
-  const said = el.querySelector('[data-flow="chores"] .basic-tally')!.textContent!
+  const said = el.querySelector('[data-task="chores"] .basic-tally')!.textContent!
   expect(said).toContain("quiet")
   expect(said).not.toContain("8")
   handle.destroy()
 })
 
 
-/** A flow whose graph is a triage line: classify, route, then draft. */
-function triage(models: (string | null)[]): FlowRow {
+/** A task whose graph is a triage line: classify, route, then draft. */
+function triage(models: (string | null)[]): TaskRow {
   const [classify, route, draft] = models
   return {
     ...FLOWS[0],
@@ -214,15 +214,15 @@ function triage(models: (string | null)[]): FlowRow {
   }
 }
 
-const when = () => el.querySelector('[data-flow="chores"] .basic-when')!.textContent
+const when = () => el.querySelector('[data-task="chores"] .basic-when')!.textContent
 const pill = (id: string) =>
-  el.querySelector<HTMLElement>(`[data-flow="chores"] [data-node="${id}"]`)!
+  el.querySelector<HTMLElement>(`[data-task="chores"] [data-node="${id}"]`)!
 
-test("a flow that resolves to one model says so once, beside the trigger", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a task that resolves to one model says so once, beside the trigger", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["qwen3:8b", null, "qwen3:8b"])]))
 
-  // Said once, on the line that is legible with the border shut: ten flows
+  // Said once, on the line that is legible with the border shut: ten tasks
   // collapsed is the glance, and "what is running my board" is answered there.
   expect(when()).toBe("loop · qwen3:8b")
   // ...and not repeated on every node, which would be noise for one answer.
@@ -230,8 +230,8 @@ test("a flow that resolves to one model says so once, beside the trigger", () =>
   handle.destroy()
 })
 
-test("a flow on two models counts them, and each node carries its own", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a task on two models counts them, and each node carries its own", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
 
   // The header cannot answer it, so it stops trying and says how many;
@@ -243,7 +243,7 @@ test("a flow on two models counts them, and each node carries its own", () => {
 })
 
 test("a router carries no model, because it calls none", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
 
   // The gap is information: it is why branching is free.
@@ -251,8 +251,8 @@ test("a router carries no model, because it calls none", () => {
   handle.destroy()
 })
 
-test("a flow that reports no model at all leaves the trigger line alone", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("a task that reports no model at all leaves the trigger line alone", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage([null, null, null])]))
 
   // A binding the board could not read is not a reason to write "· null".
@@ -262,7 +262,7 @@ test("a flow that reports no model at all leaves the trigger line alone", () => 
 
 
 test("a connector is drawn only where the run really goes", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
   // The entry is arrived at from nowhere. route is arrived at from classify,
@@ -281,10 +281,10 @@ test("a border is exactly as wide as the arrows think it is", () => {
   // be the width that renders. Declared in the stylesheet it was free to
   // drift from BOX.width, and content-box padding had made it 26px wider:
   // every wire began that far inside the box it was leaving.
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
-  expect(el.querySelector<HTMLElement>('[data-flow="chores"]')!.style.width).toBe(
+  expect(el.querySelector<HTMLElement>('[data-task="chores"]')!.style.width).toBe(
     `${BOX.width}px`,
   )
   handle.destroy()
@@ -292,7 +292,7 @@ test("a border is exactly as wide as the arrows think it is", () => {
 
 
 test("a handoff that goes back does not run through what lies between", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(
     initialStage([
       { ...FLOWS[0], then: [{ to: "revision", label: "changed" }] },
@@ -327,11 +327,11 @@ test("opening a border by hand lays the board out again", () => {
   // measured off those heights. Left alone, every arrow keeps the geometry of
   // the board as it was before the click -- which is how a return leg ends up
   // drawn through the box it was meant to pass under.
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
   const before = el.querySelector(".basic-wire")
 
-  el.querySelector<HTMLElement>('[data-flow="revision"] .basic-toggle')!.click()
+  el.querySelector<HTMLElement>('[data-task="revision"] .basic-toggle')!.click()
 
   expect(el.querySelector(".basic-wire")).not.toBe(before)
   handle.destroy()
@@ -344,7 +344,7 @@ test("the board hangs in a viewport, and takes it with it when it goes", () => {
   // what is on screen. The viewport also has to be what `destroy` removes:
   // taking the board out and leaving the viewport would leave an empty div in
   // the host on every skin change.
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
   const viewport = el.querySelector(".basic-viewport")!
@@ -360,7 +360,7 @@ test("the board is placed by a transform, so nothing drawn has to know", () => {
   // jsdom measures nothing, so the numbers are all zero -- what this pins is
   // that a transform is written at all, and that it is finite. A NaN here
   // blanks the page, which is far harder to diagnose than a bad number.
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
   const style = el.querySelector<HTMLElement>(".basic")!.style.transform
@@ -379,7 +379,7 @@ function letItGrab(el: Element) {
 const transform = () => el.querySelector<HTMLElement>(".basic")!.style.transform
 
 test("a wheel over the board zooms it rather than scrolling the page", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
   const before = transform()
 
@@ -394,7 +394,7 @@ test("a wheel over the board zooms it rather than scrolling the page", () => {
 })
 
 test("dragging the board moves it; pressing a control does not", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
   const viewport = el.querySelector(".basic-viewport")!
   letItGrab(viewport)
@@ -409,8 +409,8 @@ test("dragging the board moves it; pressing a control does not", () => {
   }
 
   // A press that starts on a border's own button is that button's, not a grab
-  // of the board behind it -- otherwise selecting a flow would drag the board.
-  drag(el.querySelector('[data-flow="chores"] .basic-pick')!, 40)
+  // of the board behind it -- otherwise selecting a task would drag the board.
+  drag(el.querySelector('[data-task="chores"] .basic-pick')!, 40)
   expect(transform()).toBe(before)
 
   drag(viewport, 40)
@@ -420,7 +420,7 @@ test("dragging the board moves it; pressing a control does not", () => {
 
 test("a double click puts the board back where it started", () => {
   // A reader who has zoomed into a corner otherwise has only a page reload.
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
   const viewport = el.querySelector(".basic-viewport")!
   const fitted = transform()
@@ -434,8 +434,8 @@ test("a double click puts the board back where it started", () => {
 })
 
 
-test("the minimap carries one speck per flow, and keeps its window rectangle", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+test("the minimap carries one speck per task, and keeps its window rectangle", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
   const map = el.querySelector(".basic-minimap")!
@@ -445,14 +445,14 @@ test("the minimap carries one speck per flow, and keeps its window rectangle", (
   // replaced along with them and has to be put back.
   expect(map.querySelector(".basic-seen")).not.toBeNull()
 
-  // `data-flow` already means "a border on the board". One selector answering
-  // with two kinds of thing is how a board of four flows counts as eight.
-  expect(el.querySelectorAll("[data-flow]")).toHaveLength(FLOWS.length)
+  // `data-task` already means "a border on the board". One selector answering
+  // with two kinds of thing is how a board of four tasks counts as eight.
+  expect(el.querySelectorAll("[data-task]")).toHaveLength(FLOWS.length)
   handle.destroy()
 })
 
 test("pressing the minimap moves the view without also dragging the board", () => {
-  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
   const viewport = el.querySelector(".basic-viewport")!
   const map = el.querySelector(".basic-minimap")!

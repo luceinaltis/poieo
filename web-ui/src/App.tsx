@@ -24,7 +24,7 @@ export default function App({ store }: { store?: StageStore }) {
   const [theStore] = useState<StageStore>(() => store ?? createStageStore())
   const stage = useSyncExternalStore(theStore.subscribe, theStore.getStage)
   const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
-  const flows = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
+  const tasks = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
@@ -37,7 +37,7 @@ export default function App({ store }: { store?: StageStore }) {
   }, [theStore])
 
   useEffect(() => {
-    const host = createSkinHost(boardRef.current!, { onSelectFlow: setSelected })
+    const host = createSkinHost(boardRef.current!, { onSelectTask: setSelected })
     hostRef.current = host
     return () => {
       host.destroy()
@@ -62,8 +62,8 @@ export default function App({ store }: { store?: StageStore }) {
   const closeDrawer = useCallback(() => setSelected(null), [])
   const decided = useCallback(() => void theStore.resync(), [theStore])
 
-  const empty = Object.keys(stage.flows).length === 0
-  const openRow = selected ? flows.find((row) => row.name === selected) : undefined
+  const empty = Object.keys(stage.tasks).length === 0
+  const openRow = selected ? tasks.find((row) => row.name === selected) : undefined
 
   return (
     <>
@@ -101,9 +101,9 @@ export default function App({ store }: { store?: StageStore }) {
       {selected ? (
         <Drawer
           // A fresh drawer per flowState: its selected run, its opened files and
-          // its expanded-failures toggle all belong to the flow being read.
+          // its expanded-failures toggle all belong to the task being read.
           key={selected}
-          flow={selected}
+          task={selected}
           status={openRow?.status ?? "waiting"}
           pending={openRow?.pending ?? 0}
           into={openRow?.into ?? null}

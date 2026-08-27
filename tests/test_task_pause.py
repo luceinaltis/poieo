@@ -1,4 +1,4 @@
-"""A flow that fails the same way three times pauses itself and says so."""
+"""A task that fails the same way three times pauses itself and says so."""
 
 from poieo.layout import layout_for
 import asyncio
@@ -88,7 +88,7 @@ def _config(tmp_path):
 
 
 async def _paused(daemon, timeout=10.0):
-    """Serve until the flow parks itself, then shut down and hand back results.
+    """Serve until the task parks itself, then shut down and hand back results.
 
     A paused runner no longer ends its coroutine -- it parks and waits for
     resume -- so the daemon stays up and the test has to bring it down.

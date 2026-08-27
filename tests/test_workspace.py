@@ -36,8 +36,8 @@ def make_repo(tmp_path):
     return repo
 
 
-def workspace(tmp_path, repo, flow="chores"):
-    return Workspace(repo, flow, tmp_path / "store")
+def workspace(tmp_path, repo, task="chores"):
+    return Workspace(repo, task, tmp_path / "store")
 
 
 def head(repo, ref="HEAD"):
@@ -49,7 +49,7 @@ def clean(repo):
 
 
 def do_run(point, run_id, name, body, *, failed=False):
-    """One flow run: prepare, write something, commit."""
+    """One task run: prepare, write something, commit."""
     point.prepare()
     (point.worktree / name).write_text(body, encoding="utf-8")
     return point.commit(run_id, f"wrote {name}", failed=failed)
@@ -222,7 +222,7 @@ def test_accept_refuses_a_dirty_checkout(tmp_path):
 def test_accept_reports_conflict_without_merging(tmp_path):
     repo = make_repo(tmp_path)
     point = workspace(tmp_path, repo)
-    do_run(point, "r1", "README.md", "written by the flow")
+    do_run(point, "r1", "README.md", "written by the task")
 
     (repo / "README.md").write_text("written by the user", encoding="utf-8")
     git(repo, "commit", "-am", "user edit")

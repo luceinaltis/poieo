@@ -1,8 +1,8 @@
-"""A flow's `then:` block: the wiring, what must be true of it, and the handoff.
+"""A task's `then:` block: the wiring, what must be true of it, and the handoff.
 
 Two halves, in that order. Above the divider is what a config has to get right
 before the daemon will start at all; below it is what actually happens when a
-run ends -- which flow wakes, what it is told, and what is refused.
+run ends -- which task wakes, what it is told, and what is refused.
 
 Design: docs/daemon.md
 """
@@ -71,7 +71,7 @@ def test_a_then_block_carries_the_routers_own_fields(tmp_path):
 def test_a_flow_that_says_nothing_hands_off_to_nobody(tmp_path):
     config = load_config(_config(tmp_path, _pair()))
 
-    # Not None: every flow answers the same question, and the receiver's answer
+    # Not None: every task answers the same question, and the receiver's answer
     # is "nothing", which is the common case and must not need a special path.
     assert _flow(config, "receiver").then == []
 
@@ -147,7 +147,7 @@ def test_handing_off_to_a_disabled_flow_warns_rather_than_fails(tmp_path, caplog
 
 
 def test_a_prompt_shaped_card_is_a_target_like_any_other(tmp_path):
-    """Cards become flows only after the config validates, so the check that a
+    """Cards become tasks only after the config validates, so the check that a
     target exists cannot live in the config's own validator."""
     jobs = {
         "sender": 'graph: ../g.yaml\nthen:\n  - when: "True"\n    to: tidy\n',
@@ -156,7 +156,7 @@ def test_a_prompt_shaped_card_is_a_target_like_any_other(tmp_path):
 
     config = load_config(_config(tmp_path, jobs))
 
-    assert {flow.name for flow in config.tasks} == {"sender", "tidy"}
+    assert {task.name for task in config.tasks} == {"sender", "tidy"}
 
 
 # -- the handoff itself -----------------------------------------------------
@@ -170,7 +170,7 @@ default: {provider: fake, model: m}
 
 
 def _wired(tmp_path, then_block: str, *, takes: str = "hi", slow: bool = False):
-    """Two manual flows -- `sender` wired to `receiver` by the given block.
+    """Two manual tasks -- `sender` wired to `receiver` by the given block.
 
     Manual on both sides so nothing fires on its own: every run in these tests
     is either a kick or a handoff, which is what makes them assertable.
@@ -231,7 +231,7 @@ def _named(daemon, name):
 
 
 def _calls(daemon):
-    """Every request the mocks saw, whichever binding a flow used."""
+    """Every request the mocks saw, whichever binding a task used."""
     return [
         call
         for pool in daemon.pools.values()
@@ -290,9 +290,9 @@ then:
 
 
 async def test_the_next_run_reads_what_the_last_one_did(tmp_path):
-    """Waking a flow without telling it why is half a feature."""
+    """Waking a task without telling it why is half a feature."""
     config = load_config(
-        _wired(tmp_path, _TO_RECEIVER, takes="came from {{ input.sender.flow }}")
+        _wired(tmp_path, _TO_RECEIVER, takes="came from {{ input.sender.task }}")
     )
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
@@ -362,7 +362,7 @@ async def test_a_paused_target_is_not_woken(tmp_path, caplog):
 
 
 async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
-    """Two flows pointing at each other is legitimate; forever is not."""
+    """Two tasks pointing at each other is legitimate; forever is not."""
     path = _wired(tmp_path, _TO_RECEIVER)
     back = tmp_path / "cards" / "receiver.yaml"
     back.write_text(
