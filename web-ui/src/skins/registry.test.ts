@@ -19,7 +19,7 @@ const FLOWS: FlowRow[] = [
     then: [{ to: "revision", label: "changed" }],
     shape: {
       entry: "work",
-      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [] }],
+      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null }],
     },
   },
   {
@@ -34,7 +34,7 @@ const FLOWS: FlowRow[] = [
     then: [],
     shape: {
       entry: "draft",
-      nodes: [{ id: "draft", type: "llm", next: null, default: null, branches: [] }],
+      nodes: [{ id: "draft", type: "llm", next: null, default: null, branches: [], model: null }],
     },
   },
 ]

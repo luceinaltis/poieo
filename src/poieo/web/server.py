@@ -26,7 +26,7 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, S
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from ..errors import PoieoError
+from ..errors import BindingError, PoieoError
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -98,14 +98,46 @@ def _branches(branches: Any) -> list[dict[str, Any]]:
     return [{"to": branch.to, "label": branch.label or branch.when} for branch in branches]
 
 
-def _shape(graph: Any) -> dict[str, Any]:
+def _model(flow: Any, node: Any) -> str | None:
+    """The model id this node would actually call, or None if it calls none.
+
+    Resolved the way `runtime/nodes.py` resolves it, so the picture cannot
+    claim one model and the run make another. `params` are deliberately not
+    passed: they layer generation settings onto a role, never a different
+    model, and the board is answering "what runs this", not "how".
+
+    A role the binding never declares is not an error here -- `resolve` falls
+    back to `default` for any role at all, which is what makes `role: classifer`
+    a silent upgrade rather than a crash. The board reports what will really
+    run, which is how that typo becomes visible; `load_flows` says why.
+    """
+    if node.type == "router":
+        return None
+    role = node.role or flow.graph.default_role
+    try:
+        return flow.binding.resolve(role).model
+    except BindingError:
+        # Only a binding with no default to fall back on gets here. A board
+        # that cannot name the model is worth more than one that will not
+        # paint -- the same call `_review_state` makes.
+        return None
+
+
+def _shape(flow: Any) -> dict[str, Any]:
     """A graph's wiring: enough to draw it, and nothing else.
 
-    Deliberately not the whole GraphSpec. Prompts and system messages are long,
-    are of no use to a drawing, and this rides on every board paint to every
-    browser watching -- a graph's text is exactly the sort of thing a person
-    would be surprised to have broadcast.
+    Deliberately not the whole GraphSpec, and not the whole binding either.
+    Prompts and system messages are long, are of no use to a drawing, and this
+    rides on every board paint to every browser watching -- a graph's text is
+    exactly the sort of thing a person hides a secret in. From the binding,
+    only the bare model id crosses: a provider knows a base_url and the name of
+    the variable its key comes from, and a drawing needs neither.
+
+    It takes the flow rather than the graph because a role resolves against a
+    binding, the binding hangs off the flow, and the same graph under two flows
+    is two different answers.
     """
+    graph = flow.graph
     return {
         "entry": graph.entry,
         "nodes": [
@@ -115,6 +147,7 @@ def _shape(graph: Any) -> dict[str, Any]:
                 "next": node.next,
                 "default": node.default,
                 "branches": _branches(node.branches),
+                "model": _model(flow, node),
                 # Absent rather than null when the editor never placed it: a
                 # view that lays out unplaced nodes itself needs to tell the
                 # difference between "at the origin" and "nowhere yet".
@@ -149,7 +182,7 @@ def create_app(daemon: Any) -> Starlette:
                     # The two halves of the work graph: which flow this one
                     # hands to, and what it walks on the way there.
                     "then": _branches(runner.flow.spec.then),
-                    "shape": _shape(runner.flow.graph),
+                    "shape": _shape(runner.flow),
                 }
             )
         return JSONResponse({"flows": rows})

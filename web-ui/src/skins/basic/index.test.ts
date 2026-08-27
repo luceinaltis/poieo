@@ -18,7 +18,7 @@ const FLOWS: FlowRow[] = [
     then: [],
     shape: {
       entry: "work",
-      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [] }],
+      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null }],
     },
   },
   {

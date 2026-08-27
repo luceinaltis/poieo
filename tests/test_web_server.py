@@ -7,6 +7,7 @@ from starlette.testclient import TestClient
 
 from test_checkpoint import git, head, make_repo
 
+from poieo.binding import BindingSpec
 from poieo.checkpoint import Checkpoint
 from poieo.graph import GraphSpec
 from poieo.store import Event, RunStore
@@ -26,7 +27,7 @@ STUB_GRAPH = {
     "name": "support-triage",
     "entry": "classify",
     "nodes": [
-        {"id": "classify", "type": "llm", "prompt": "x", "next": "route"},
+        {"id": "classify", "type": "llm", "prompt": "x", "role": "classifier", "next": "route"},
         {
             "id": "route",
             "type": "router",
@@ -38,6 +39,18 @@ STUB_GRAPH = {
 }
 
 
+# Real too, and for the same reason: the model a node reports comes straight off
+# `resolve`, so a stub would let the board drift from what the run will do.
+STUB_BINDING = {
+    "providers": {
+        "ollama": {"type": "ollama", "base_url": "http://localhost:11434"},
+        "claude": {"type": "anthropic"},
+    },
+    "default": {"provider": "claude", "model": "claude-opus-5"},
+    "roles": {"classifier": {"provider": "ollama", "model": "llama3.2:3b"}},
+}
+
+
 def stub_runner(
     name="triage",
     status="waiting",
@@ -46,6 +59,7 @@ def stub_runner(
     checkpoint=None,
     then=(),
     graph=None,
+    binding=None,
 ):
     return SimpleNamespace(
         name=name,
@@ -56,6 +70,7 @@ def stub_runner(
         trigger=SimpleNamespace(describe=f"interval 30s"),
         flow=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
+            binding=BindingSpec.model_validate(binding or STUB_BINDING),
             spec=SimpleNamespace(then=list(then)),
         ),
     )
@@ -87,6 +102,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "next": "route",
                         "default": None,
                         "branches": [],
+                        "model": "llama3.2:3b",
                     },
                     {
                         "id": "route",
@@ -94,6 +110,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "next": None,
                         "default": "answer",
                         "branches": [{"to": "answer", "label": "bug"}],
+                        "model": None,
                     },
                     {
                         "id": "answer",
@@ -101,6 +118,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "next": None,
                         "default": None,
                         "branches": [],
+                        "model": "claude-opus-5",
                         "ui": {"x": 40.0, "y": 8.0},
                     },
                 ],
@@ -139,6 +157,83 @@ def test_the_wiring_carries_no_prompts(tmp_path):
 
     shape = client.get("/api/flows").json()["flows"][0]["shape"]
     assert not any("prompt" in node or "system" in node for node in shape["nodes"])
+
+
+def test_each_node_reports_the_model_it_would_call(tmp_path):
+    """The graph still names a role; the board resolves it, exactly as the
+    runtime does, so the picture cannot claim one model and the run make
+    another. A router calls nothing, and says so."""
+    daemon = stub_daemon(tmp_path, [stub_runner()])
+    client = TestClient(create_app(daemon))
+
+    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    models = {node["id"]: node["model"] for node in shape["nodes"]}
+    assert models == {
+        "classify": "llama3.2:3b",   # its role
+        "route": None,               # a router calls no model
+        "answer": "claude-opus-5",   # no role: through the graph's default_role
+    }
+
+
+def test_one_graph_on_two_bindings_reports_two_models(tmp_path):
+    """Which is why the model is drawn inside a flow's border and never on the
+    graph: the same file is a different afternoon under a different binding."""
+    local = {
+        "providers": {"ollama": {"type": "ollama", "base_url": "http://localhost:11434"}},
+        "default": {"provider": "ollama", "model": "qwen3:8b"},
+    }
+    daemon = stub_daemon(
+        tmp_path,
+        [stub_runner(name="triage"), stub_runner(name="nightly", binding=local)],
+    )
+    client = TestClient(create_app(daemon))
+
+    rows = {row["name"]: row["shape"] for row in client.get("/api/flows").json()["flows"]}
+    said = lambda shape: [n["model"] for n in shape["nodes"] if n["id"] == "answer"]
+    assert said(rows["triage"]) == ["claude-opus-5"]
+    assert said(rows["nightly"]) == ["qwen3:8b"]
+
+
+def test_a_role_the_binding_never_declares_reports_what_will_really_run(tmp_path):
+    """`resolve` falls back to `default` for any role at all, so `classifer` is
+    not an error -- it is the expensive model, quietly. The daemon warns about
+    it at load; this puts it in the picture, where two nodes that were meant to
+    differ show the same id side by side."""
+    typo = {
+        "name": "support-triage",
+        "entry": "classify",
+        "nodes": [{"id": "classify", "type": "llm", "prompt": "x", "role": "classifer"}],
+    }
+    daemon = stub_daemon(tmp_path, [stub_runner(graph=typo)])
+    client = TestClient(create_app(daemon))
+
+    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    assert [node["model"] for node in shape["nodes"]] == ["claude-opus-5"]
+
+
+def test_a_binding_with_no_default_leaves_the_model_unknown(tmp_path):
+    """A board that cannot say what runs a node is worth more than a board that
+    will not paint -- the same rule the review state already follows."""
+    bare = {"providers": {"claude": {"type": "anthropic"}}}
+    daemon = stub_daemon(tmp_path, [stub_runner(binding=bare)])
+    client = TestClient(create_app(daemon))
+
+    response = client.get("/api/flows")
+    assert response.status_code == 200
+    shape = response.json()["flows"][0]["shape"]
+    assert all(node["model"] is None for node in shape["nodes"])
+
+
+def test_the_wiring_carries_no_credentials(tmp_path):
+    """Only the bare model id crosses. A provider knows a base_url and the name
+    of the variable a key comes from, and neither has any business on a board."""
+    daemon = stub_daemon(tmp_path, [stub_runner()])
+    client = TestClient(create_app(daemon))
+
+    body = client.get("/api/flows").text
+    assert "base_url" not in body
+    assert "api_key_env" not in body
+    assert "localhost:11434" not in body
 
 
 def test_flows_asks_every_runner_at_once(tmp_path):
