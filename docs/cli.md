@@ -9,7 +9,7 @@ that only the CLI knows how to do. The web API calls the same functions.
 
 | command | does |
 |---|---|
-| `init` | write a working project into this folder |
+| `init` | write a working project into this folder, bound to what this machine has |
 | `validate <graph\|card>` | preflight everything a run would need |
 | `run <graph\|card>` | execute it once |
 | `daemon [config]` | keep flows resident, and serve the page |
@@ -46,7 +46,20 @@ _resolve_store()  the --store flag    →  the project's runs/
 <poieo.yaml>)` whenever the project filled it in. The refusal for "no project
 here" is written once, in `_project_file()`, because a sentence the user reads is
 a thing with one wording and two copies are two chances for that to stop being
-true.
+true. `nothing_found()` in `project.py` is the same rule for `init`'s refusal.
+
+## `init` asks the machine; the CLI decides
+
+`detect()` returns the engines that answered — see [storage.md](storage.md) —
+and `init` is where the choosing happens, because choosing is a front end's job.
+Unattended it takes the first engine and that engine's first model; every other
+engine still lands in the binding for a role to name. `--mock` skips detection
+entirely and is the only way `mock` ever becomes a project's default.
+
+The library half is deliberately question-free: `binding_document()` renders a
+binding for engines the caller has already settled on, and `init_project()`
+writes files for a binding body it is handed. Nothing under `cli.py` prompts,
+which is what keeps the same functions usable from the web board.
 
 ## Cards and graphs are one argument
 

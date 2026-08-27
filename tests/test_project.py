@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from conftest import card
 from poieo.cli import app
+from poieo.detect import Engine
 from poieo.project import find_project, find_project_file
 
 runner = CliRunner()
@@ -265,30 +266,65 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
 # -- poieo init ---------------------------------------------------------------
 
 
+OLLAMA = Engine(
+    key="ollama",
+    label="Ollama",
+    type="ollama",
+    models=("qwen3:32b", "llama3.2:3b"),
+    base_url="http://localhost:11434",
+)
+LMSTUDIO = Engine(
+    key="lmstudio",
+    label="LM Studio",
+    type="openai_compatible",
+    models=("qwen2.5-coder-7b",),
+    base_url="http://localhost:1234/v1",
+)
+CLAUDE = Engine(
+    key="claude",
+    label="Claude API",
+    type="anthropic",
+    models=("claude-opus-5", "claude-haiku-4-5"),
+)
+
+
+def _machine_with(monkeypatch, *engines):
+    """What detection finds on the machine running this test: exactly this.
+
+    Patched on the CLI, which is what asks: detection returns a pool and the
+    front end decides what to do with it -- project.py only ever sees the
+    answer, as a binding body.
+    """
+    import poieo.cli as cli
+
+    monkeypatch.setattr(cli, "detect", lambda: list(engines))
+
+
 def _no_machine(monkeypatch):
-    """A machine with nothing on it: no key, no ollama."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    import poieo.project as project
-
-    monkeypatch.setattr(project, "_ollama_models", lambda: [])
+    """A machine with nothing on it: no key, no local server."""
+    _machine_with(monkeypatch)
 
 
-def test_init_on_a_bare_machine_defaults_to_mock(tmp_path, monkeypatch):
+def test_init_on_a_bare_machine_refuses_instead_of_inventing_answers(tmp_path, monkeypatch):
+    """mock answers from a script. Falling back to it silently would hand the
+    user a project that runs all night and produces invented text."""
     _no_machine(monkeypatch)
     monkeypatch.chdir(tmp_path)
+
     result = runner.invoke(app, ["init"])
-    assert result.exit_code == 0, result.output
-    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
-    assert "mock" in default
-    # The last lines orient the user: the next two commands to type.
-    assert "poieo run tasks/hello.yaml" in result.stdout
-    assert "poieo daemon" in result.stdout
+
+    assert result.exit_code == 1
+    # Nothing half-written: the folder is exactly as it was found.
+    assert list(tmp_path.iterdir()) == []
+    # Names where it looked, and what to do about it.
+    assert "Ollama" in result.stderr and "ANTHROPIC_API_KEY" in result.stderr
+    assert "--mock" in result.stderr
 
 
-def test_an_initialized_project_loads_and_runs_offline(tmp_path, monkeypatch):
+def test_init_mock_is_the_deliberate_way_to_get_an_offline_project(tmp_path, monkeypatch):
     _no_machine(monkeypatch)
     monkeypatch.chdir(tmp_path)
-    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert runner.invoke(app, ["init", "--mock"]).exit_code == 0
     from poieo.daemon import load_config
 
     config = load_config(tmp_path / "poieo.yaml")  # a project that cannot load is an init bug
@@ -298,31 +334,125 @@ def test_an_initialized_project_loads_and_runs_offline(tmp_path, monkeypatch):
     assert "completed" in result.stdout
 
 
-def test_init_with_an_api_key_writes_a_claude_binding(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+def test_every_engine_found_is_declared_so_a_role_can_name_it(tmp_path, monkeypatch):
+    """The point of detection: a pool to bind roles against. A machine with
+    two engines that could only ever use one of them is the reason roles
+    existed and nobody could reach them."""
+    _machine_with(monkeypatch, CLAUDE, OLLAMA, LMSTUDIO)
+    monkeypatch.chdir(tmp_path)
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+
+    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
+    for key in ("claude:", "ollama:", "lmstudio:"):
+        assert key in default, key
+    assert "base_url: http://localhost:11434" in default
+    assert "base_url: http://localhost:1234/v1" in default
+    # ...and every model each one reported, so naming one is reading, not
+    # remembering.
+    for model in ("qwen3:32b", "llama3.2:3b", "qwen2.5-coder-7b", "claude-opus-5"):
+        assert model in default, model
+
+
+def test_the_written_binding_resolves_every_engine_it_declares(tmp_path, monkeypatch):
+    """Generated YAML that will not load is an init bug, and it should be
+    caught here rather than on the project's first run."""
+    from poieo.binding import load_binding
+
+    _machine_with(monkeypatch, CLAUDE, OLLAMA, LMSTUDIO)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+
+    binding = load_binding(tmp_path / "models" / "default.yaml")
+
+    assert set(binding.providers) == {"claude", "ollama", "lmstudio"}
+    # The default role resolves without the user editing a thing.
+    assert binding.resolve("default").model in CLAUDE.models
+
+
+def test_the_first_engine_found_becomes_the_default_unattended(tmp_path, monkeypatch):
+    _machine_with(monkeypatch, OLLAMA, CLAUDE)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    from poieo.binding import load_binding
+
+    binding = load_binding(tmp_path / "models" / "default.yaml")
+    assert binding.default.provider == "ollama"
+    assert binding.default.model == "qwen3:32b"
+
+
+def test_init_says_which_engine_it_chose_and_why(tmp_path, monkeypatch):
+    """Automatic is fine; invisible is not."""
+    _machine_with(monkeypatch, OLLAMA)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
-    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
-    assert "anthropic" in default
+    assert "Ollama" in result.stdout and "qwen3:32b" in result.stdout
+    # The last lines orient the user: the next two commands to type.
+    assert "poieo run tasks/hello.yaml" in result.stdout
+    assert "poieo daemon" in result.stdout
 
 
-def test_init_with_ollama_writes_a_binding_naming_an_installed_model(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
-    import poieo.project as project
+def test_the_roles_example_shows_something_other_than_the_default():
+    """An example that repeats the default teaches nothing, and the whole
+    point of a role is that it can go somewhere else."""
+    from poieo.project import binding_document
 
-    monkeypatch.setattr(project, "_ollama_models", lambda: ["llama3.2:3b"])
+    # One engine, several models: the example has to move the model.
+    document = binding_document([OLLAMA], ("ollama", "qwen3:32b"))
+    example = document.split("#   roles:")[1]
+    assert 'model: "llama3.2:3b"' in example
+
+    # Two engines: the example moves the engine, which is the harder half.
+    document = binding_document([OLLAMA, CLAUDE], ("ollama", "qwen3:32b"))
+    example = document.split("#   roles:")[1]
+    assert "provider: claude" in example
+
+
+def test_a_long_model_id_survives_the_catalogue_whole():
+    """The catalogue exists to be copied from. A name wrapped across two lines
+    is worse than no name at all -- and real Ollama tags are long and full of
+    the hyphens a text wrapper likes to break on."""
+    from poieo.project import binding_document
+
+    long_ones = (
+        "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q5_K_M",
+        "hf.co/yuxinlu1/gemma-4-12B-coder-fable5-composer2.5-v1-GGUF:latest",
+        "short:1b",
+    )
+    engine = Engine("ollama", "Ollama", "ollama", long_ones, "http://localhost:11434")
+
+    document = binding_document([engine], ("ollama", "short:1b"))
+
+    for model in long_ones:
+        assert model in document, model
+
+
+def test_a_single_model_machine_still_writes_a_loadable_binding(tmp_path, monkeypatch):
+    """Nothing else to point an example at, and that must not crash."""
+    from poieo.binding import load_binding
+
+    only = Engine("ollama", "Ollama", "ollama", ("llama3.2:3b",), "http://localhost:11434")
+    _machine_with(monkeypatch, only)
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["init"])
-    assert result.exit_code == 0, result.output
-    default = (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
-    assert "ollama" in default
-    assert "llama3.2:3b" in default
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert load_binding(tmp_path / "models" / "default.yaml").resolve("default").model == (
+        "llama3.2:3b"
+    )
+
+
+def test_mock_is_still_written_as_a_file_to_reach_for(tmp_path, monkeypatch):
+    """Never the default, always available: `-b models/mock.yaml` is how the
+    wiring gets exercised without spending a token."""
+    _machine_with(monkeypatch, OLLAMA)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert (tmp_path / "models" / "mock.yaml").exists()
+    assert "mock" not in (tmp_path / "models" / "default.yaml").read_text(encoding="utf-8")
 
 
 def test_init_twice_keeps_every_existing_file(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
+    _machine_with(monkeypatch, OLLAMA)
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init"]).exit_code == 0
     before = {
@@ -336,7 +466,7 @@ def test_init_twice_keeps_every_existing_file(tmp_path, monkeypatch):
 
 
 def test_init_writes_the_agents_manual(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
+    _machine_with(monkeypatch, OLLAMA)
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
@@ -353,7 +483,7 @@ def test_init_writes_the_agents_manual(tmp_path, monkeypatch):
 
 
 def test_init_never_touches_an_existing_claude_md(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
+    _machine_with(monkeypatch, OLLAMA)
     ours = "# my rules\nnever push on friday\n"
     (tmp_path / "CLAUDE.md").write_text(ours, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -365,7 +495,7 @@ def test_init_never_touches_an_existing_claude_md(tmp_path, monkeypatch):
 
 
 def test_init_appends_to_gitignore_without_clobbering_it(tmp_path, monkeypatch):
-    _no_machine(monkeypatch)
+    _machine_with(monkeypatch, OLLAMA)
     (tmp_path / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init"]).exit_code == 0

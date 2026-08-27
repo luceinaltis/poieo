@@ -29,12 +29,20 @@ from .binding import load_binding
 from .workspace import Workspace
 from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
+from .detect import detect
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
-from .project import find_project, find_project_file, init_project
+from .project import (
+    MOCK_BINDING,
+    binding_document,
+    find_project,
+    find_project_file,
+    init_project,
+    nothing_found,
+)
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
@@ -135,19 +143,50 @@ def version() -> None:
 
 @app.command()
 @_guarded
-def init() -> None:
+def init(
+    mock: bool = typer.Option(
+        False,
+        "--mock",
+        help="Lay the project out against the scripted mock model, without "
+        "looking for a real one.",
+    ),
+) -> None:
     """Write a working project into this folder: poieo.yaml, bindings, a card.
 
-    Looks at the machine once (an API key, a local Ollama) and writes what it
-    found into ordinary files. Existing files are never touched; run it twice
-    and the second run changes nothing.
+    Looks at the machine once -- every local server that answers, and a Claude
+    credential if there is one -- and writes all of them into the binding, so a
+    role can name any of them later without another round of detection.
+
+    Existing files are never touched; run it twice and the second run changes
+    nothing.
     """
-    report, reason = init_project(Path.cwd())
+    if mock:
+        body = MOCK_BINDING
+        reason = "mock -- asked for; it answers from a script, not a model"
+        found = []
+    else:
+        found = detect()
+        if not found:
+            # Better an empty folder than a project that runs all night on
+            # invented text. --mock is the way to say you meant it.
+            _fail(nothing_found())
+        engine = found[0]
+        body = binding_document(found, (engine.key, engine.models[0]))
+        reason = f"{engine.label} -- {engine.models[0]}"
+
+    report = init_project(Path.cwd(), body)
     for action, relative in report:
         line = f"{action}  {relative}"
         if relative == "models/default.yaml":
             line += f"   ({reason})"
         typer.echo(line)
+
+    # Automatic is fine, invisible is not: the whole pool is in the file, so
+    # say what else is in it rather than leaving it to be discovered.
+    others = [spare.label for spare in found[1:]]
+    if others:
+        typer.echo("")
+        typer.echo(f"also declared, ready for a role to name: {', '.join(others)}")
     typer.echo("")
     typer.echo("next:")
     typer.echo("  poieo run tasks/hello.yaml    run the sample card once")

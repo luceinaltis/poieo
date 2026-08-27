@@ -27,17 +27,27 @@ poieo --help              # also runnable as: python main.py --help
 ## Start a project
 
 A folder becomes a poieo project the way a folder becomes a git repository:
-one marker file, `poieo.yaml`. `poieo init` looks at the machine once — an
-API key means Claude, an answering Ollama means local, neither means mock —
-and writes what it found into ordinary files:
+one marker file, `poieo.yaml`. `poieo init` looks at the machine once — every
+local server that answers (Ollama, LM Studio, vLLM/SGLang, llama.cpp) plus a
+Claude credential if there is one — and writes what it found into ordinary
+files:
 
 ```
 poieo.yaml                       store · default binding · tasks folder
-models/default.yaml              what detection found (plus mock.yaml, always)
+models/default.yaml              every engine found, ready for a role to name
+models/mock.yaml                 always; answers from a script, spends nothing
 tasks/hello.yaml                 a sample card, disabled; run it by hand
 memory/longterm/constitution.md  an empty page, with the rule for filling it
 .gitignore                       gains memory/cache/, runs/, worktrees/
 ```
+
+**Every engine is declared, not just the one serving `default:`** — that is
+what makes `roles:` reachable, and the models each one reported are listed in
+the file so naming one is reading rather than remembering.
+
+If nothing on the machine answers, `init` says where it looked and writes
+nothing. `poieo init --mock` is the deliberate way to lay a project out and
+bind a real model later; nothing else ever picks `mock` for you.
 
 That folder is the project. Everything hangs off it, and each folder answers one
 question — `models/` which model, `tasks/` what to do, `memory/` what it
@@ -592,6 +602,7 @@ src/poieo/
   tools/             the hands: files, shell, notes; the isolation seam
   daemon/            cron, triggers, flow config, the resident service
   layout.py          where a project keeps things; store.py is the run log
+  detect.py          what this machine can answer with, asked once at init
   workspace.py       the only module that knows git exists
   memory/            the long memory; learn.py is the pass that fills it
   web/               observation API, event fan-out, the built page
