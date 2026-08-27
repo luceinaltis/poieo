@@ -61,6 +61,8 @@ export interface NodeShape {
   next: string | null
   default: string | null
   branches: Arrow[]
+  /** The model id this node would call; null for a router, which calls none. */
+  model: string | null
   /** Absent -- not zeroed -- when the editor never placed this node. */
   ui?: { x: number; y: number }
 }
