@@ -511,6 +511,12 @@ def run(
     if supplied_by is not None and not as_json:
         typer.echo(f"binding    {binding}  (from {supplied_by})")
 
+    # The card says where it works; the flag still wins. A card's graph does
+    # not name a folder -- the daemon supplies its private copy of one -- so
+    # by hand it is the card that has to.
+    if workdir is None and task is not None and task.folder:
+        workdir = task.folder_path()
+
     card_input = task_payload(task) if task is not None else {}
     payload = {**card_input, **_parse_input(input_json, set_)}
     if store is None:
