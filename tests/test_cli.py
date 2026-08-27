@@ -22,7 +22,7 @@ def test_validate_reports_the_resolved_bindings():
         ],
     )
     assert result.exit_code == 0
-    assert "classifier -> claude:claude-haiku-4-5" in result.stdout
+    assert "classifier -> claude/claude-haiku-4-5" in result.stdout
     assert "valid" in result.stdout
 
 

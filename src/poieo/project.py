@@ -227,6 +227,7 @@ named from memory fails at 3am, not now:
 
     poieo config                       # what this project is bound to
     poieo config models                # what each endpoint serves right now
+    poieo config use <provider/model>  # change it (--role NAME for one role)
 
 Try a card once, without the daemon:
 

@@ -267,7 +267,10 @@ def test_resolved_model_describes_the_binding():
         provider=ProviderSpec(type="anthropic"),
         model="claude-opus-5",
     )
-    assert resolved.describe() == "writer -> claude:claude-opus-5"
+    assert resolved.describe() == "writer -> claude/claude-opus-5"
+    # One spelling everywhere a model is named, and the one `poieo
+    # config use` takes back.
+    assert resolved.ref == "claude/claude-opus-5"
 
 
 class _FakeStream:

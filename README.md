@@ -54,6 +54,8 @@ bind a real model later; nothing else ever picks `mock` for you.
 ```bash
 poieo config             # what this project is bound to -- reads files, opens no socket
 poieo config models      # what each declared endpoint serves right now
+poieo config use ollama/qwen3:32b                       # move the default
+poieo config use ollama/llama3.2:3b --role classifier   # give one role its own
 ```
 
 ```
@@ -64,7 +66,9 @@ ollama      http://localhost:11434
 ```
 
 Asked live, because a model list written down a month ago is a list that has
-since gone wrong — and a model named from memory fails at 3am.
+since gone wrong — and a model named from memory fails at 3am. `use` refuses a
+model the endpoint says it does not serve, and edits the binding in place,
+keeping every comment in it.
 
 That folder is the project. Everything hangs off it, and each folder answers one
 question — `models/` which model, `tasks/` what to do, `memory/` what it
@@ -620,6 +624,7 @@ src/poieo/
   daemon/            cron, triggers, flow config, the resident service
   layout.py          where a project keeps things; store.py is the run log
   detect.py          what this machine can answer with, asked once at init
+  rebind.py          changing a binding without losing what a person wrote
   workspace.py       the only module that knows git exists
   memory/            the long memory; learn.py is the pass that fills it
   web/               observation API, event fan-out, the built page

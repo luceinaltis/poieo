@@ -102,6 +102,7 @@ binding is read after that — and, once the write half lands, changed.
 |---|---|
 | `poieo config` | the binding, its endpoints, its default and its roles. **Reads files, opens no socket.** |
 | `poieo config models` | what each declared endpoint serves **right now**, marked with what is already spoken for |
+| `poieo config use <provider/model>` | point the default — or `--role NAME` — at a different model |
 
 Bare `poieo config` reports instead of printing help (`invoke_without_command`),
 because "what am I bound to" is the question people arrive with and making them
@@ -122,13 +123,38 @@ asked at all (`mock`, or a backend a caller registered) says so rather than
 reading as unreachable; `detect.askable()` is that distinction.
 
 Models are written `provider/model`, splitting once, so an id full of slashes
-(`hf.co/empero-ai/…`) survives. That is the form `config use` will take back —
-what a reader copies out has to be a thing they can type in.
+(`hf.co/empero-ai/…`) survives. That is the form `config use` takes back — what
+a reader copies out has to be a thing they can type in, and a test asserts the
+round trip.
 
-**Known divergence:** `ResolvedModel.describe()` still renders `provider:model`,
-so `poieo flows` and `poieo validate` spell it with a colon. Two spellings for
-one thing is the tax [DESIGN.md](../DESIGN.md) principle 7 exists to refuse;
-unifying them belongs with the write half.
+`ResolvedModel.ref` is the **one** place that spelling is built. Four sites used
+to assemble it themselves and one of them used a colon, so `poieo flows` and
+`poieo validate` disagreed with `poieo config` about what a model is called.
+`describe()` is now `f"{role} -> {ref}"`.
+
+## `config use` edits, and undoes itself if it was wrong
+
+A binding is a file somebody keeps: the generated one carries its model
+catalogue in comments, a hand-kept one carries whatever its owner put there.
+Loading it with a YAML parser and dumping it back would take all of that, so
+`rebind.py` does **text surgery** — it rewrites the two lines it came for and
+leaves every other byte alone.
+
+Surgery is fragile, and the module is written expecting to be wrong sometimes:
+
+- it **refuses before writing** when it cannot find what it came to change,
+  naming the file and the key so a person can do it by hand. Flow-style YAML
+  (`default: {provider: x, model: y}`) is legal, rare, and exactly where
+  guessing corrupts a config;
+- and it **verifies by reloading** — a result that will not parse, or that does
+  not resolve the way it was asked to, is restored and raised.
+
+`config use` adds two refusals of its own before any of that: a provider the
+binding does not declare, and a model the endpoint says it does not serve. The
+second is the typo the whole `config` pair exists to prevent — a model named
+from memory does not fail here, it fails at 3am in a run. It is **best effort**:
+an endpoint that does not answer is not a verdict, so the edit proceeds and the
+command says it could not check.
 
 ## Cards and graphs are one argument
 

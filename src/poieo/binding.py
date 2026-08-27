@@ -150,8 +150,21 @@ class ResolvedModel(_Spec):
     model: str
     params: dict[str, Any] = Field(default_factory=dict)
 
+    @property
+    def ref(self) -> str:
+        """``provider/model``: how a model is named everywhere a person reads
+        or types one.
+
+        Slash-separated because this is the form ``poieo config use`` takes
+        back, and a reader who types what they just read has to be right. It
+        splits once, so an id full of slashes (``hf.co/empero-ai/...``)
+        survives whole. Four places used to spell this themselves, and one of
+        them with a colon.
+        """
+        return f"{self.provider_name}/{self.model}"
+
     def describe(self) -> str:
-        return f"{self.role} -> {self.provider_name}:{self.model}"
+        return f"{self.role} -> {self.ref}"
 
 
 def load_binding(path: str | Path) -> BindingSpec:

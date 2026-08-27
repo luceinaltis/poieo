@@ -697,7 +697,7 @@ def _boot_payload(
         for role in graph.roles():
             try:
                 resolved = binding.resolve(role)
-                bindings[role] = f"{resolved.provider_name}:{resolved.model}"
+                bindings[role] = resolved.ref
             except Exception:
                 bindings[role] = "unbound"
     return {"graph": data, "bindings": bindings, "save": save}
