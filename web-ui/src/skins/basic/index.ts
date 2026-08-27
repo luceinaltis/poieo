@@ -20,7 +20,7 @@
 import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
-import { BOX, arrivals, backWire, corner, depths, exits, loops, place, wire } from "../wiring"
+import { BOX, arrivals, backWire, corner, depths, exits, fit, loops, place, wire } from "../wiring"
 import type { Frame } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
@@ -309,12 +309,11 @@ export const basic: Skin = {
   label: "Basic",
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
-    // The board sits in a frame that fills the host and centres it. The board
-    // itself cannot do that: it is sized by the layout, and its own padding is
-    // inert because everything inside it is absolutely positioned -- which is
-    // why the left-hand border used to touch the edge of the window.
-    const frame = element("div", "basic-frame", el)
-    const board = element("div", "basic", frame)
+    // The board hangs in a viewport that fills the host. The board is sized by
+    // its own layout and cannot place itself; the viewport is the window it is
+    // seen through, and one transform on the board decides what is on screen.
+    const viewport = element("div", "basic-viewport", el)
+    const board = element("div", "basic", viewport)
     const svg = document.createElementNS(SVG, "svg")
     svg.setAttribute("class", "basic-wires")
     board.append(svg)
@@ -329,6 +328,12 @@ export const basic: Skin = {
     // The last stage drawn, so a border opened by hand can lay the board out
     // again -- it just changed a height, and the arrows are drawn off those.
     let last: StageState | null = null
+    // A fit is only true of the board and the window it was measured from, so
+    // a window that changes size needs a new one. Guarded: the observer is not
+    // in jsdom, and a skin that cannot watch simply keeps the fit it has.
+    const watching =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => show())
+    watching?.observe(viewport)
 
     const isOpen = (flow: string, flowState: FlowState): boolean =>
       byHand.get(flow) ?? flowState.status === "running"
@@ -342,18 +347,37 @@ export const basic: Skin = {
           .filter((to): to is string => to !== null)
       }
       const placed = place(flows, handoffs)
-      const frame = measure(placed, boxes)
+      const rows = measure(placed, boxes)
       for (const one of placed) {
         const box = boxes.get(one.flow)
         if (box === undefined) continue
-        const spot = corner(one, frame)
+        const spot = corner(one, rows)
         box.root.style.left = `${spot.x}px`
         box.root.style.top = `${spot.y}px`
       }
       const columns = Math.max(1, ...placed.map((one) => one.column + 1))
-      board.style.width = `${columns * (BOX.width + BOX.gapX)}px`
-      board.style.height = `${frame.bottom + BOX.gapY}px`
-      drawWires(svg, stage, placed, frame)
+      // The gaps sit between columns, so the last one is trailing air.
+      board.style.width = `${columns * (BOX.width + BOX.gapX) - BOX.gapX}px`
+      // Room below for the return leg of a handoff that goes back, which is
+      // drawn half a gap under the lowest box. Trimmed to `rows.bottom`, the
+      // fit would size the board without it and the viewport would clip it.
+      board.style.height = `${rows.bottom + BOX.gapY}px`
+      drawWires(svg, stage, placed, rows)
+      show()
+    }
+
+    /**
+     * Put the whole board on screen.
+     *
+     * Re-run whenever the board changes shape or the window changes size --
+     * a fit is only true of the pair it was measured from.
+     */
+    function show(): void {
+      const view = fit(
+        { width: board.offsetWidth, height: board.offsetHeight },
+        { width: viewport.clientWidth, height: viewport.clientHeight },
+      )
+      board.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     }
 
     return {
@@ -393,8 +417,9 @@ export const basic: Skin = {
       },
 
       destroy() {
+        watching?.disconnect()
         boxes.clear()
-        frame.remove()
+        viewport.remove()
       },
     }
   },

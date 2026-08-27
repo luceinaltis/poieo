@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { BOX, arrivals, backWire, corner, depths, exits, loops, place, walk, wire } from "./wiring"
+import { BOX, arrivals, backWire, corner, depths, exits, fit, loops, place, walk, wire } from "./wiring"
 import type { GraphShape } from "../types"
 
 const LINE: GraphShape = {
@@ -258,4 +258,39 @@ test("measured rows override the pitch, because a border is as tall as it is", (
   expect(back.under).toBeGreaterThan(460)
   // Up into the target's own underside, not into a guess at where it ends.
   expect(back.y2).toBe(190)
+})
+
+
+test("a board smaller than the window is centred, not blown up", () => {
+  // Magnifying four boxes to fill a wide screen would make the board shout at
+  // a reader who only asked to see it.
+  const view = fit({ width: 600, height: 300 }, { width: 1000, height: 700 })
+
+  expect(view.zoom).toBe(1)
+  expect(view.x).toBe(200)
+  expect(view.y).toBe(200)
+})
+
+test("a board wider than the window is scaled to fit inside the margin", () => {
+  // 1000 wide less 24 each side leaves 952, and 952 / 1904 is a half.
+  const view = fit({ width: 1904, height: 100 }, { width: 1000, height: 700 })
+
+  expect(view.zoom).toBe(0.5)
+  expect(view.x).toBe(24)
+})
+
+test("height constrains the fit when it is the tighter of the two", () => {
+  const view = fit({ width: 100, height: 1304 }, { width: 1000, height: 700 })
+
+  expect(view.zoom).toBe(0.5)
+  expect(view.y).toBe(24)
+})
+
+test("an empty board does not divide by zero", () => {
+  // A board with nothing on it has no size, and a NaN transform blanks the
+  // page rather than drawing nothing, which is much harder to diagnose.
+  const view = fit({ width: 0, height: 0 }, { width: 1000, height: 700 })
+
+  expect(Number.isFinite(view.x) && Number.isFinite(view.y)).toBe(true)
+  expect(view.zoom).toBe(1)
 })

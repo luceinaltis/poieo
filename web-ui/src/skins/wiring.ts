@@ -255,6 +255,53 @@ export interface Frame {
   heights: Record<string, number>
 }
 
+/** A size in board coordinates, before any of this is scaled. */
+export interface Size {
+  width: number
+  height: number
+}
+
+/**
+ * Where the board sits in its viewport, and how far it is scaled.
+ *
+ * Applied as one transform, so everything drawn -- boxes, arrows, the words on
+ * them -- moves together and none of the geometry above has to know that a
+ * view exists.
+ */
+export interface View {
+  x: number
+  y: number
+  zoom: number
+}
+
+/**
+ * The view that puts the whole board on screen at once.
+ *
+ * Scaled down only, never up: four boxes magnified to fill a wide screen would
+ * shout at a reader who asked to see a board, and the type sizes were chosen
+ * to be read at 1. So a board that already fits is simply centred.
+ *
+ * `margin` is kept clear on every side, which is why it is subtracted before
+ * the ratio rather than after -- fitting to the full width and then insetting
+ * would push the edges back out past it.
+ */
+export function fit(board: Size, host: Size, margin = 24): View {
+  const room = {
+    width: Math.max(0, host.width - margin * 2),
+    height: Math.max(0, host.height - margin * 2),
+  }
+  const zoom = Math.min(
+    1,
+    board.width > 0 ? room.width / board.width : 1,
+    board.height > 0 ? room.height / board.height : 1,
+  )
+  return {
+    x: (host.width - board.width * zoom) / 2,
+    y: (host.height - board.height * zoom) / 2,
+    zoom,
+  }
+}
+
 /** The top-left corner of a flow's box. */
 export function corner(at: Placed, frame?: Frame): Anchor {
   return {

@@ -338,21 +338,32 @@ test("opening a border by hand lays the board out again", () => {
 })
 
 
-test("the board hangs in a frame, and takes the frame with it when it goes", () => {
-  // The board is sized by its own layout, so it cannot centre itself, and its
-  // padding is inert because everything in it is absolutely positioned -- the
-  // left-hand border used to sit against the edge of the window. The frame
-  // holds both jobs. It also has to be what `destroy` removes: taking the
-  // board out and leaving the frame would leave an empty div in the host on
-  // every skin change.
+test("the board hangs in a viewport, and takes it with it when it goes", () => {
+  // The board is sized by its own layout and cannot place itself. The viewport
+  // is the window it is seen through, and one transform on the board decides
+  // what is on screen. The viewport also has to be what `destroy` removes:
+  // taking the board out and leaving the viewport would leave an empty div in
+  // the host on every skin change.
   const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage(FLOWS))
 
-  const frame = el.querySelector(".basic-frame")!
-  expect(frame).not.toBeNull()
-  expect(frame.querySelector(".basic")).not.toBeNull()
+  const viewport = el.querySelector(".basic-viewport")!
+  expect(viewport).not.toBeNull()
+  expect(viewport.querySelector(".basic")).not.toBeNull()
 
   handle.destroy()
-  expect(el.querySelector(".basic-frame")).toBeNull()
+  expect(el.querySelector(".basic-viewport")).toBeNull()
   expect(el.children).toHaveLength(0)
+})
+
+test("the board is placed by a transform, so nothing drawn has to know", () => {
+  // jsdom measures nothing, so the numbers are all zero -- what this pins is
+  // that a transform is written at all, and that it is finite. A NaN here
+  // blanks the page, which is far harder to diagnose than a bad number.
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+
+  const style = el.querySelector<HTMLElement>(".basic")!.style.transform
+  expect(style).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) scale\([\d.]+\)$/)
+  handle.destroy()
 })
