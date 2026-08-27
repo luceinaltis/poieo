@@ -73,6 +73,12 @@ Merge only when all of these hold:
 7. `git status` is clean after the suite has run. Twice, a test's own output rode
    into a commit because it wrote to a tracked file and `git add -A` swept it up.
    A session fixture now fails the run if the suite writes into `examples/`.
+8. **A diff that touches `web-ui/src/` rebuilds the bundle in the same PR:**
+   `npm run build --workspace web-ui`, then commit `src/poieo/web/static/`.
+   Neither suite reads that folder, so it drifts in silence. It sat four PRs
+   behind `main` before anyone opened the daemon and looked, and one of those
+   four was a CSS fix -- so a fresh checkout served the bug that `main` had
+   already fixed, with both suites green over it the whole time.
 
 Stop and ask a human instead of merging when the PR changes a public interface,
 deletes a test, adds a dependency nothing asked for, or touches how bindings and
