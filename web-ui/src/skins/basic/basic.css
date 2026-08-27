@@ -1,23 +1,20 @@
-/* Fills the host and centres the board in it. `safe` is what makes that
-   survive a board bigger than the window: instead of centring it and cutting
-   the top-left off where nothing can scroll to it, alignment falls back to the
-   start and the host scrolls as it did before. */
-.basic-frame {
-  box-sizing: border-box;
-  display: flex;
-  justify-content: safe center;
-  align-items: safe center;
-  min-width: 100%;
-  min-height: 100%;
-  padding: 24px;
+/* The window the board is seen through. It fills the host and clips, and
+   where the board sits inside it is the transform's business, not the
+   browser's -- which is what lets the same one number be a fit now and a
+   reader's own pan and zoom next. */
+.basic-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 .basic {
-  position: relative;
-  /* No padding here: the boxes inside are absolutely positioned, so they are
-     laid against this element's padding box and any padding is ignored. The
-     frame holds the margin instead, where it is a real gap. */
-  flex: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Scaled from its own top-left, so the transform's x and y stay the board's
+     position on screen rather than drifting with the zoom. */
+  transform-origin: 0 0;
 }
 
 .basic-wires {
