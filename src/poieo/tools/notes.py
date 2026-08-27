@@ -1,14 +1,10 @@
 """Leaving a line in another task's journal.
 
-A journal is already how a task hears things: it holds what the task did and
-what the user told it, and it is re-read before every run. This adds one more
-writer, not a second channel -- there is no queue, no inbox file, and nothing
-for the user to learn beyond what `poieo note` already does.
+One more writer of a file that already exists -- no queue, no inbox. A note is
+news rather than an instruction, and it wakes nobody: it is read on the
+recipient's next scheduled run, so two tasks writing to each other cannot spin.
 
-A note is news, not an instruction. The recipient is a model reading text and
-may ignore it, exactly as it may ignore what the user wrote. And a note wakes
-nobody: it is read on the recipient's next scheduled run, which is why two
-tasks writing to each other cannot spin.
+Design: docs/tools.md
 """
 
 from __future__ import annotations
@@ -25,9 +21,8 @@ from . import Tool, ToolError
 class Postbox:
     """Who is writing, and whose journals they may write to.
 
-    Built where tasks are known and handed down, so this module never has to
-    ask what a task is. The sender lives here rather than in a tool argument
-    precisely so that a model cannot claim to be someone else.
+    The sender lives here rather than in a tool argument, so a model cannot
+    claim to be someone else.
     """
 
     sender: str
@@ -84,8 +79,8 @@ def _tell_tool(postbox: Postbox) -> Tool:
 def notes_tools(postbox: Postbox | None) -> list[Tool]:
     """Nothing at all without a postbox.
 
-    A half-present tool would be worse than an absent one: the model would call
-    it, be refused every time, and spend its turns finding that out.
+    A half-present tool is worse than an absent one: the model would call it,
+    be refused, and spend its turns finding that out.
     """
     if postbox is None:
         return []

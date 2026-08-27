@@ -23,13 +23,12 @@ from ..layout import layout_for
 
 log = logging.getLogger("poieo.memory")
 
-# Character budget (~3k tokens) for the always-present page. Advisory: the
-# page is the user's to trim, and refusing to run over page length would
-# make the memory a way to break the daemon.
+# Advisory budget (~3k tokens) for the always-present page: the page is the
+# user's to trim, and refusing to run over it would make the memory a way to
+# break the daemon.
 PAGE_BUDGET = 12_000
 
-# Glue words carry no signal, and one shared "the" must not make an entry
-# relevant to everything.
+# One shared "the" must not make an entry relevant to everything.
 _GLUE = frozenset(
     "a an and are as at be but by for from if in is it no not of on or so "
     "that the this to was were will with you".split()
@@ -72,9 +71,8 @@ class _Frontmatter(BaseModel):
     # Set this instead of deleting: the file stays, retrieval moves on.
     superseded_by: str | None = None
     links: _Links = Field(default_factory=_Links)
-    # Anchor path -> the digest of the content the entry was written
-    # against. Written by the pass when it seals; a person may write one
-    # by hand. Bytes live under memory/cache/blobs/, never here.
+    # Anchor path -> digest of the content the entry was written against.
+    # The bytes live under memory/cache/blobs/, never here.
     sealed: dict[str, str] = Field(default_factory=dict)
 
 
@@ -93,13 +91,11 @@ class Fact(BaseModel):
 
 
 def keeps_memory(project_dir: Path) -> bool:
-    """Whether this project keeps a long memory. The folder is the whole
-    opt-in, and one rule in one place is what keeps the five callers that ask
-    from drifting apart.
+    """Whether this project keeps a long memory. The folder is the whole opt-in.
 
-    The folder is ``memory/longterm/`` and not ``memory/`` because journals
-    live under ``memory/`` too and arrive on their own, the first time a task
-    runs. A signal that switches itself on is not consent.
+    ``memory/longterm/`` and not ``memory/``, because journals live under
+    ``memory/`` too and arrive on their own the first time a task runs -- a
+    signal that switches itself on is not consent.
     """
     return layout_for(project_dir).longterm().is_dir()
 
@@ -167,17 +163,16 @@ def check_memory(project_dir: Path) -> None:
     """Fail at launch, not at 3am: a typo in the memory must surface where
     `poieo validate` and the daemon's load can see it.
 
-    Typed claims are checked against the whole folder here, because a single
-    file cannot see its siblings. Prose mentions are deliberately not: a
-    mention of an entry that does not exist marks something worth writing.
+    Typed claims only -- prose ``[[mentions]]`` are deliberately free to
+    dangle, since one naming an entry that does not exist marks something worth
+    writing.
     """
     facts = load_facts(project_dir)
     known = {fact.slug for fact in facts}
     attic = layout_for(project_dir).attic()
     if attic.is_dir():
-        # Resting entries still exist: a restored file whose typed claims
-        # name them must load, or "move it back" would not be true. A
-        # genuine typo names something that exists nowhere and still fails.
+        # Resting entries still exist, or "move the file back" would not be
+        # true. A genuine typo names something that exists nowhere and fails.
         known |= {path.stem for path in attic.glob("*.md")}
     for fact in facts:
         claims = [

@@ -62,16 +62,11 @@ def system_block(task: TaskSpec, roster: list[str] | None = None) -> str:
 def _memory_section(task: TaskSpec) -> str:
     """The project's memory, for a project that keeps one.
 
-    Gated on content at graph-build time, so a project that never made a
-    memory sees no trace of the feature -- not even an empty header. A
-    memory created while the daemon is resident appears on the next load,
-    like a new task file; edits to an existing one are re-read every run.
-    Always-true rules come before recent history, and before anything
-    retrieved, so the stable part of the prompt stays stable.
+    Gated on content, so a project that never made a memory sees no trace of
+    the feature -- not even an empty header.
     """
-    # preview: building a prompt is done by `tasks`, `show`, and the
-    # daemon's load, and none of them is a run -- the gate must not leave
-    # machinery behind the way an actual run may.
+    # preview: `tasks`, `show` and the daemon's load all build a prompt, and
+    # none of them is a run, so the gate must leave no machinery behind.
     if read_memory(task.dir, task, preview=True) is None:
         return ""
     return "{{ input.memory }}\n\n"
@@ -80,9 +75,8 @@ def _memory_section(task: TaskSpec) -> str:
 def _roster_block(task: TaskSpec, roster: list[str] | None) -> str:
     """Who this task may leave a note for.
 
-    A model cannot address a task it does not know exists. One that did not ask
-    for the notes toolset is told nothing at all -- not even that others are
-    there -- and one whose siblings are none gets no awkward empty sentence.
+    A model cannot address a task it does not know exists, so one that did not
+    ask for the notes toolset is told nothing at all.
     """
     if "notes" not in (task.tools or DEFAULT_TOOLSETS):
         return ""
@@ -168,16 +162,9 @@ class TaskSpec(BaseModel):
         return self.resolve(self.folder)
 
     def journal_path(self) -> Path:
-        """Where this task remembers, under its own name.
-
-        Not beside the card any more. A card is a thing a person edits; a
-        journal is a thing that grows every night, and mixing the two meant
-        the folder of definitions went dirty in git on every run, whether or
-        not anyone had changed a definition. It sits with the rest of what
-        the project remembers instead, in the short-term room -- which is
-        what it always was: `memory/__init__` calls the journal the
-        short-term half in the same breath as calling `facts/` the long one.
-        """
+        # Under memory/, not beside the card: a card is edited by hand, a
+        # journal grows every night, and together they made the folder of
+        # definitions go dirty in git on every run.
         return layout_for(self.dir).journal(self.slug)
 
 
@@ -258,9 +245,8 @@ def expand(
     try:
         flow = FlowSpec(
             name=task.slug,
-            # With no graph file of its own, the flow points at the task that
-            # stands in for one. Only load_flows reads this, and it prefers the
-            # generated graph it was handed alongside.
+            # With no graph file, the flow points at the card standing in for
+            # one; load_flows prefers the generated graph handed alongside.
             graph=str(task.resolve(task.graph) if task.graph else task.source_path),
             binding=task.binding,
             trigger=_trigger(task),
@@ -271,8 +257,7 @@ def expand(
             carry_state=True,
         )
     except (ValidationError, SpecError) as exc:
-        # A schedule that cannot parse must read as *this card's* problem --
-        # ten cards in a folder, and the message must say which one.
+        # Ten cards in a folder: the message has to say which one.
         raise SpecError(f"task '{task.slug}': {describe_invalid(exc)}") from exc
     return flow, graph
 
@@ -280,14 +265,10 @@ def expand(
 def load_tasks(folder: str | Path) -> list[TaskSpec]:
     """Every card in a folder, in a stable order.
 
-    Graphs live here too -- a card is a graph's short form, and `poieo eject`
-    writes one beside the card it came from -- so the document says which is
-    which: a card has a folder, a graph has nodes.
-
-    Note what this does *not* do: sort them by trying to parse each as a card
-    and taking silence for a no. That reading turns a typo into a task that
-    quietly stops running, which is the one failure this repo refuses. A file
-    that answers to neither shape says so.
+    Graphs live here too, so the document says which is which: a card has a
+    folder, a graph has nodes. Deliberately *not* sorted by trying to parse
+    each as a card and taking silence for a no -- that turns a typo into a
+    task that quietly stops running.
     """
     folder = Path(folder)
     suffixes = {".yaml", ".yml", ".json"}
@@ -302,9 +283,9 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
         elif "nodes" in data and "folder" not in data:
             continue  # a graph: a card names it, or a flow in poieo.yaml does
         else:
-            # Neither shape, or both at once. Both matters: a card that grew a
-            # `nodes:` key answers to no rule, and skipping it would be the
-            # silent disappearance this whole function is written to prevent.
+            # Neither shape, or both at once -- a card that grew a `nodes:` key
+            # answers to no rule, and skipping it would be that silent
+            # disappearance.
             raise SpecError(
                 f"{path}: this is neither a card (`folder:`, no `nodes:`) "
                 f"nor a graph (`nodes:`, no `folder:`)"
@@ -315,25 +296,22 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
 def record_run(task: TaskSpec, result: Any) -> None:
     """Add one run to the task's journal, so the next one can read it.
 
-    This is the other half of the journal contract: reading splits at the
-    task's own last entry, so a run that never writes one leaves every note
-    marked new forever and its own work forgotten. Every runner of a task --
-    the daemon's, the CLI's one-shot -- must land here.
+    **Every runner of a task must land here** -- the daemon's and the CLI's
+    one-shot alike. Reading splits at the task's own last entry, so a run that
+    writes none leaves every note marked new forever.
 
     ``result`` is duck-typed (status / path / outputs / error) so this module
     does not grow a dependency on the runtime.
     """
-    # The journal keeps the line; the episode keeps the whole result. Both
-    # swallow their own failures, so neither can cost the other.
+    # Both writes swallow their own failures, so neither can cost the other.
     write_result(task, result)
     if result.status == "completed":
         kind, text = "did", closing_line(result)
     else:
         kind = "failed"
         cause = getattr(result, "cause", None)
-        # The journal is read by the model (and the person) next run: a
-        # sentence and an action beat an exception repr. The repr stays in
-        # the episode for whoever wants it.
+        # A sentence and an action beat an exception repr for the next reader;
+        # the repr stays in the run record.
         if cause:
             text = f"{cause['said']} -- {cause['fix']}"
         else:
@@ -346,12 +324,10 @@ def record_run(task: TaskSpec, result: Any) -> None:
 
 
 def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
-    """What the model said last: its own one-line summary of the work.
+    """What the model said last: the last node on the path that produced text.
 
-    The last node on the run's path that produced any text at all -- which is
-    what the journal shows, what the run record keeps, and what the commit
-    message of the change says. One reading, so those three can never tell a
-    reader three different stories about the same run.
+    One reading, shared by the journal, the run record and the change's commit
+    message, so those three can never tell three stories about one run.
     """
     for node_id in reversed(result.path):
         value = result.outputs.get(node_id)
@@ -366,13 +342,8 @@ def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
 # user types by hand works exactly like a line poieo wrote.
 
 
-# What a task writes at the end of its own run. The last such line is the
-# bookmark: everything after it arrived while the task was not looking.
-#
-# "nothing" is DESIGN.md's third outcome for a run -- succeeded,
-# failed, or found nothing to do -- and no writer produces it yet. It is here
-# so that the day one does, old journals and new read alike; it is reserved,
-# not dead.
+# What a task writes at the end of its own run; the last such line is the
+# bookmark. "nothing" is reserved: no writer produces it yet.
 OWN_KINDS = ("did", "nothing")
 # One entry looks like: `- <date> <time> {sep} <kind padded> <text>`.
 PREFIX = "- "
@@ -382,8 +353,7 @@ OLD_HEADER = "What you did before that:"
 
 
 def _entries(path: Path) -> list[str]:
-    """Every journal line, as text. Not parsed -- that is what makes a
-    hand-written line work exactly like one poieo wrote."""
+    """Every journal line, as text -- never parsed."""
     try:
         raw = path.read_text(encoding="utf-8") if path.exists() else ""
     except OSError as exc:
@@ -401,10 +371,8 @@ def _entries(path: Path) -> list[str]:
 def _is_own_entry(line: str) -> bool:
     """Is this line the task writing about its own run?
 
-    Read by structure -- the kind sits in a fixed field after the separator --
-    so a note whose *text* mentions one of those words cannot pass for a
-    bookmark. A forged bookmark would mark real notes as read, silently, which
-    is the one failure this whole design exists to prevent.
+    Read by structure, not by searching the text: a forged bookmark would mark
+    real notes as read, silently.
     """
     head, sep, rest = line.partition(SEPARATOR)
     if not sep or not head.startswith(PREFIX):
@@ -415,9 +383,8 @@ def _is_own_entry(line: str) -> bool:
 def _bookmark(lines: list[str]) -> int:
     """Index just past the task's own last completed run, or 0.
 
-    A failed run is deliberately not a bookmark: it saw what had arrived but
-    cannot be said to have handled it, and repeating a note is recoverable
-    where losing one is not.
+    A failed run is deliberately not a bookmark: repeating a note is
+    recoverable where losing one is not.
     """
     for i in range(len(lines) - 1, -1, -1):
         if _is_own_entry(lines[i]):
@@ -428,12 +395,9 @@ def _bookmark(lines: list[str]) -> int:
 def task_payload(task: TaskSpec) -> dict[str, Any]:
     """What a card's generated graph is given, beyond the user's own input.
 
-    One statement of the rule, because there are two runners: `poieo run` on
-    a card by hand, and the daemon on the same card at 3am. They have to
-    agree, and a rule written twice is a rule that eventually doesn't.
-
-    Both halves are re-read on every call rather than cached: a note left at
-    8am is in effect at 9am.
+    One statement of the rule, shared by the two runners -- `poieo run` and the
+    daemon -- which have to agree. Re-read on every call, never cached: a note
+    left at 8am is in effect at 9am.
     """
     payload: dict[str, Any] = {"journal": read_journal(task.journal_path())}
     memory = read_memory(task.dir, task)
@@ -445,10 +409,9 @@ def task_payload(task: TaskSpec) -> dict[str, Any]:
 def read_journal(path: Path, limit: int = JOURNAL_LIMIT) -> str:
     """The journal as a prompt sees it: what is new, then what came before.
 
-    The file is one stream in time order and is never split. The two parts are
-    cut here, at the task's own last entry, so that what is new is chosen by
-    *position* -- no quantity of notes can push another out before it has been
-    seen once. Only the half that is allowed to age out is bounded.
+    Cut at the task's own last entry, so what is new is chosen by *position*:
+    no quantity of notes can push another out before it has been seen once.
+    Only the half allowed to age out is bounded.
     """
     lines = _entries(path)
     if not lines:
@@ -494,9 +457,8 @@ def append_journal(
     stamp = (when or datetime.now()).strftime("%Y-%m-%d %H:%M")
 
     opening = "" if path.exists() else f"# {title or path.stem}\n\n"
-    # The journal used to sit beside the card, in a folder that had to exist
-    # for the card to have been read at all. `memory/shortterm/` need not,
-    # and the first line a task ever writes is the one that makes it.
+    # `memory/shortterm/` need not exist yet: the first line a task writes is
+    # what makes it.
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{opening}- {stamp} · {kind:<8}{one_line}\n")

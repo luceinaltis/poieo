@@ -104,11 +104,8 @@ def shape_output(spec: NodeSpec, text: str) -> Any:
 
 
 def _rendered(spec: NodeSpec, template: str, scope: dict[str, Any]) -> str:
-    """Render one of a node's templates, failing in the node's own voice.
-
-    Every template a node carries goes through here, so a typo in a prompt,
-    a system block or a workdir all read the same way in a run log.
-    """
+    """Render one of a node's templates, failing in the node's own voice, so a
+    typo in a prompt, a system block or a workdir all read alike in a run log."""
     try:
         return render(template, scope)
     except ExpressionError as exc:
@@ -117,11 +114,8 @@ def _rendered(spec: NodeSpec, template: str, scope: dict[str, Any]) -> str:
 
 @dataclass(slots=True)
 class _Bound:
-    """What a node that talks to a model works out before its first request.
-
-    The logical half of the node (its role, its templates) already met the
-    physical half (a provider and a model) by the time this exists.
-    """
+    """What a node that talks to a model works out before its first request:
+    the logical half (role, templates) having met the physical half."""
 
     role: str
     resolved: ResolvedModel
@@ -144,8 +138,7 @@ class _Bound:
 def _prepare(spec: NodeSpec, ctx: RunContext) -> _Bound:
     """Pick the role, resolve it, take the provider, render the templates.
 
-    Both model-calling node types open identically; only what they do with
-    the answer differs.
+    Both model-calling node types open identically.
     """
     role = spec.role or ctx.graph.default_role
     resolved = ctx.binding.resolve(role, spec.params or None)
@@ -169,8 +162,7 @@ def _finish(
 ) -> NodeResult:
     """Shape what the model said, record it, and describe the step.
 
-    Also identical between the two, but for what each adds to ``meta``: an
-    agent counts its turns and its tool calls, an llm node has neither.
+    Identical between the two but for what each adds to ``meta``.
     """
     output = shape_output(spec, response.text)
     ctx.record_output(spec.id, output, spec.output.as_)

@@ -1,13 +1,12 @@
 """What a run leaves behind when it is over.
 
-One file per run, written once and never rewritten, so anything remembered
-can be traced to the work that taught it. The harness writes these, never the
-model: there is no tool for it, so nothing depends on a model remembering to
-remember.
+One file per run in ``runs/results/``, written once and never rewritten,
+sharing a run id with the events the same run wrote to ``runs/events/``.
 
-It sits in ``runs/results/``, beside the event stream the same run wrote to
-``runs/events/``. They share a run id and are two halves of one account: the
-stream as it happened, and what was left when it stopped.
+The harness writes these, never the model: there is no tool for it, so nothing
+depends on a model remembering to remember.
+
+Design: docs/memory.md
 """
 
 from __future__ import annotations
@@ -25,23 +24,19 @@ log = logging.getLogger("poieo.memory")
 
 
 def results_dir(project_dir: Path) -> Path:
-    """Beside the events of the same runs, never in `memory/`: what a person
-    keeps and what a night produced are different kinds of thing.
-
-    ``layout_for``, not a layout rooted here: the events of these same runs
-    are written by ``RunStore``, which is handed the project's ``runs/`` --
-    and that folder answers to ``store:``. Rooting this at the folder it was
-    asked from instead put the result of a run in one place and its events in
-    another, which is a run history split down the middle by nothing.
-    """
+    # `layout_for`, not a layout rooted here: `runs/` answers to `store:`, and
+    # rooting this at the folder asked from would put a run's result and its
+    # events in two different places.
     return layout_for(project_dir).results()
 
 
 def used_in(fact: Fact, record: dict[str, Any]) -> bool:
-    """The one judgment of use, shared by wear and the accounting so the
-    two can never disagree: the entry's distinctive words surface in what
-    the run itself produced -- a behavioral stand-in until a serving stack
-    can report attention."""
+    """Did this entry do real work in this run?
+
+    The entry's distinctive words surface in what the run produced -- a
+    behavioural stand-in until a serving stack can report attention. Shared by
+    wear and the accounting, so the two can never disagree.
+    """
     said = tokens(
         f"{record.get('summary', '')} "
         f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
@@ -50,19 +45,13 @@ def used_in(fact: Fact, record: dict[str, Any]) -> bool:
 
 
 def write_result(task: Any, result: Any) -> Path | None:
-    """One record per run, written once and never rewritten.
+    """One record per run, anchored to the task's folder: one project, one
+    memory, however many configs drive it.
 
-    Anchored to the task's own folder rather than wherever the run log was
-    pointed: one project, one memory, however many configs drive it. The
-    run id joins the two.
-
-    Returns the path written, or None when nothing was -- already recorded,
-    or unwritable. Memory is not worth killing a night's work over, so an
-    unwritable record is logged and the run's result stands.
+    Returns the path written, or None when nothing was -- already recorded, or
+    unwritable. Memory is not worth killing a night's work over.
     """
-    # Late: task.py imports this package, and the closing line's shape
-    # belongs there, beside the journal it also feeds.
-    from ..task import closing_line
+    from ..task import closing_line  # late: task.py imports this package
 
     path = results_dir(task.dir) / f"{result.run_id}.json"
     record = {
@@ -82,9 +71,8 @@ def write_result(task: Any, result: Any) -> Path | None:
         "outputs": result.outputs,
     }
     try:
-        # What the project had in mind: the same selection that built the
-        # run's block, recomputed at record time. Emphasis-grade, so it may
-        # fail without costing the record, let alone the run.
+        # Recomputed rather than passed in, and emphasis-grade: it may fail
+        # without costing the record, let alone the run.
         if keeps_memory(task.dir):
             record["shown"] = [fact.slug for fact in recall(task.dir, task)]
     except Exception as exc:

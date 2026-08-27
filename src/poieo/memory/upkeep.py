@@ -1,9 +1,9 @@
 """What the memory would like a person to look at.
 
-Everything here is computed from the files at read time -- no queue, no
-stored counter, nothing written. A disagreement whose one side was set aside
-is resolved and disappears; whatever leaned on that side surfaces under
-second look instead. Nothing anywhere acts on any of it.
+Computed from the files at read time -- no queue, no stored counter, nothing
+written. **Nothing anywhere acts on any of it.**
+
+Design: docs/memory.md
 """
 
 from __future__ import annotations
@@ -100,11 +100,12 @@ def accounting(project_dir: Path, facts: list[Fact]) -> dict[str, Any] | None:
 def doubts(
     project_dir: Path, facts: list[Fact] | None = None
 ) -> list[tuple[str, str]]:
-    """Every kept entry worth a second look, with the sentence that says
-    why: a lean on a set-aside entry, an anchor whose target is gone, or a
-    target that changed after the entry was last written (editing the entry
-    is how a person clears that one -- look, then touch). Computed from the
-    files every time; nothing writes a queue."""
+    """Every kept entry worth a second look, with the sentence saying why.
+
+    A lean on a set-aside entry, an anchor whose target is gone, or one that
+    changed after the entry was written -- and editing the entry is how a
+    person clears that last one: look, then touch.
+    """
     facts = readable_facts(project_dir) if facts is None else facts
     aside = {fact.slug for fact in facts if fact.matter.superseded_by is not None}
     out: list[tuple[str, str]] = []
@@ -125,12 +126,9 @@ def doubts(
                     continue
                 seal = fact.matter.sealed.get(part)
                 if seal is not None and kept(project_dir, seal) is not None:
-                    # Sealed: doubt by content, not clocks -- a touched-but-
-                    # identical file raises nothing. But the clearing
-                    # gesture stays the same as everywhere: a person who
-                    # revised the entry after the content changed has
-                    # looked, and must not be nagged until they hand-
-                    # compute a digest.
+                    # Sealed: doubt by content, not clocks, so a touched-but-
+                    # identical file raises nothing. The mtime check stays
+                    # so revising the entry still clears the flag.
                     if (
                         digest(named) != seal
                         and named.stat().st_mtime_ns > fact.path.stat().st_mtime_ns

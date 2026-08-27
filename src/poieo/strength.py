@@ -1,15 +1,12 @@
 """How worn each connection is: runtime emphasis, never meaning.
 
-What connects to what stays a judgment in markdown; this file holds only
-how often a connection actually helped, and it is built so it cannot run
-away: every weight decays by age (a half-life, applied whenever it is
-read), and no entry's total can exceed the fan cap -- an entry connected to
-everything has weak claims on each.
+What connects to what stays a judgment in markdown; this holds only how often
+a connection helped. It cannot run away: weights decay by half-life, and no
+entry's connections may total more than the fan cap.
 
-Deleting `memory/cache/strength.json` loses which paths were worn, and nothing
-else; the project relearns them by working. Accordingly, nothing in here is
-ever worth failing anything over: corrupt reads as empty, failed writes are
-logged and swallowed.
+Deleting `memory/cache/strength.json` loses only which paths were worn, so
+nothing here is ever worth failing over -- corrupt reads as empty, failed
+writes are logged and swallowed.
 
 Design: docs/memory.md
 """

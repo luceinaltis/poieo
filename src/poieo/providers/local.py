@@ -120,14 +120,10 @@ class _HttpProvider(Provider):
     async def _list_health(self, path: str, key: str, field: str) -> tuple[bool, str]:
         """Is the server there, and what has it got?
 
-        Both local backends answer this the same way -- a GET that returns a
-        list of models -- and differ only in the path and in what the list and
-        its entries are called.
-
-        Every outcome is a return value, never an exception: a probe is a
-        question, and `poieo check` asks it about endpoints that are quite
-        possibly down. That includes a 200 that is not JSON at all, which is
-        what a proxy or a captive portal answers with.
+        Both local backends answer with a list of models and differ only in
+        the path and the key names. Every outcome is a return value, never an
+        exception -- including a 200 that is not JSON, which is what a proxy
+        or a captive portal answers with.
         """
         try:
             response = await self.client.get(path)

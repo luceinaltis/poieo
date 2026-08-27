@@ -1,14 +1,14 @@
 """The only module in poieo that knows git exists.
 
-A flow with a workdir does not work in the user's checkout. It works in a
-private copy -- a linked worktree on a branch of its own -- so a night of runs
-never touches what the user left open, and each run lands as one change that
-can be read, taken, or thrown away in the morning.
+A flow with a workdir works in a private copy -- a linked worktree on a branch
+of its own -- so a night of runs never touches what the user left open, and
+each run lands as one change to read, take, or throw away in the morning.
 
-Everything here is synchronous. git calls are short but not instant, and the
-daemon shares one asyncio loop with the web server, so every caller wraps these
-in ``asyncio.to_thread``: a blocking subprocess on the loop would stall the
-event stream for every watcher.
+**Everything here is synchronous, and every caller wraps it in
+``asyncio.to_thread``**: a blocking subprocess on the loop the daemon shares
+with the web server would stall the event stream for every watcher.
+
+Design: docs/checkpoint.md
 """
 
 from __future__ import annotations
@@ -73,10 +73,9 @@ def _git(cwd: Path, *args: str) -> str:
 def _numstat_rows(raw: str) -> Iterator[tuple[str, int, int]]:
     """``git diff --numstat`` as ``(path, insertions, deletions)`` per file.
 
-    Binary files report ``-`` for both counts; they still changed, so they are
-    reported with zeroes rather than skipped. A rename reads
-    ``R100<tab>old<tab>new``, and the last field is where the change lands,
-    which is the path worth naming.
+    Binary files report ``-`` for both counts and are reported with zeroes
+    rather than skipped -- they still changed. A rename reads
+    ``R100<tab>old<tab>new``, so the last field is the path worth naming.
     """
     for line in raw.splitlines():
         parts = line.split("\t")

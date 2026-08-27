@@ -1,16 +1,13 @@
 """A pass that reads the run records and writes down what stays true.
 
-The model proposes; the harness writes. That order is the whole safety
-story: the distiller is the most dangerous writer in the system, so its
-output goes through the same kind of narrow, validated door that stamps a
-note's sender -- source ids come from the records actually shown, a slug
-can never collide or escape the folder, and the only verbs are writing a
-new entry and setting one aside. The page is never touched, nothing is
-deleted, nothing is overwritten.
+**The model proposes; the harness writes.** That order is the whole safety
+story: source ids come from the records actually shown, a slug can never
+collide or escape the folder, and the only verbs are writing a new entry and
+setting one aside. The page is never touched, nothing is deleted, nothing is
+overwritten.
 
-The bookmark -- the last record successfully read -- lives in the pass log
-and moves only on success, so a failed pass rereads rather than skips.
-Repeating is recoverable; losing is not.
+The bookmark -- the last record successfully read -- lives in the pass log and
+moves only on success, so a failed pass rereads rather than skips.
 
 Design: docs/memory.md
 """
@@ -131,13 +128,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
 
 
 def _passes(project_dir: Path) -> Iterator[dict[str, Any]]:
-    """Every pass this project has recorded, oldest first.
-
-    Two readers want this -- the bookmark and the page suggestion -- and each
-    used to open and decode the log itself. They had already drifted: one
-    guarded against a line holding something other than a mapping and the
-    other did not.
-    """
+    """Every pass this project has recorded, oldest first."""
     path = layout_for(project_dir).learning_log()
     if not path.is_file():
         return
@@ -284,10 +275,8 @@ def _apply(
     if not isinstance(asides, list):
         result.dropped.append("'set_aside' was not a list")
         asides = []
-    # by_slug is a snapshot from before the pass, so what this loop has
-    # already done must be tracked here: without it one answer could set
-    # the same entry aside twice, or two entries could retire each other
-    # and both silently vanish.
+    # by_slug is a snapshot from before the pass, so this loop tracks its own
+    # work: otherwise two entries could retire each other and both vanish.
     asided: set[str] = set()
     for raw in asides:
         entry = raw.get("entry") if isinstance(raw, dict) else None
@@ -490,11 +479,10 @@ def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
 
 
 def _let_go(project_dir: Path) -> list[str]:
-    """The one true deletion, legal because a keepsake is a copy: runtime
-    bytes named by nothing in facts/ or the attic, past the grace. The
-    meaning a keepsake backed is either alive and keeps its name, or moved
-    to the attic with its name intact -- so an unnamed keepsake backs
-    nothing."""
+    """The one true deletion, legal because a keepsake is a copy: bytes named
+    by nothing in facts/ or the attic, past the grace. Whatever a keepsake
+    backed is either still named or moved to the attic with its name intact,
+    so an unnamed keepsake backs nothing."""
     layout = layout_for(project_dir)
     store = layout.blobs()
     if not store.is_dir():

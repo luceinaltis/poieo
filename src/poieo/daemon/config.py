@@ -49,13 +49,10 @@ class FlowSpec(BaseModel):
     isolation: Isolation | None = None
     on_error: Literal["continue", "stop"] = "continue"
 
-    # Which flow should work next, and on what condition. The router's own
-    # when/to/label, one level up: first match wins, and `to: null` is the
-    # router's own null -- matched, and deliberately no further.
-    #
-    # There is no `default`, because a finished run does not have to go
-    # anywhere. Falling off the end means nothing happens, which is what
-    # almost every flow does; a catch-all is a last branch reading `"true"`.
+    # Which flow should work next: the router's own when/to/label, one level
+    # up. First match wins, and `to: null` means matched-and-no-further. No
+    # `default`, because a finished run does not have to go anywhere; a
+    # catch-all is a last branch reading `"true"`.
     then: list[Branch] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -68,15 +65,9 @@ class FlowSpec(BaseModel):
 class DaemonConfig(ProjectSpec):
     """A project, plus the flows something intends to actually run.
 
-    The paths -- store, binding, tasks, learn -- and how they resolve are the
-    project's and live in :class:`~poieo.project.ProjectSpec`. One schema, so
-    a key cannot mean one thing to `poieo run` and another to `poieo daemon`;
-    what this adds is reading ``flows`` as flows rather than as whatever the
-    document happened to say.
-
-    (``learn``'s other half stays ``memory/longterm/`` beside the marker: a
-    config key alone must not conjure the feature for a project that never
-    chose it.)
+    The paths live in :class:`~poieo.project.ProjectSpec`; what this adds is
+    reading ``flows`` as flows. One schema, so a key cannot mean one thing to
+    `poieo run` and another to `poieo daemon`.
     """
 
     flows: list[FlowSpec] = Field(default_factory=list)
@@ -183,10 +174,8 @@ def _load_tasks(config: DaemonConfig) -> None:
     # the daemon's load can see it, never when a trigger fires at 3am.
     check_memory(config.base_dir)
     if config.learn is not None and not keeps_memory(config.base_dir):
-        # Half an opt-in is the one way this feature dies quietly: the
-        # key says learn, the folder says nothing is kept, and a person
-        # waits a week for entries that were never going to arrive.
-        # A warning, not a failure -- the folder is still the opt-in.
+        # Half an opt-in is how this feature dies quietly. A warning, not a
+        # failure -- the folder is still the opt-in.
         log.warning(
             "%s says `learn: %s`, but %s does not exist, so nothing will be "
             "learned. Make that folder to keep a long memory.",
@@ -221,16 +210,10 @@ def _load_tasks(config: DaemonConfig) -> None:
 def config_for_tasks_folder(folder: Path) -> DaemonConfig:
     """The config `poieo daemon <folder>` stands for: run the cards in it.
 
-    The argument says *which cards to run*. It was never a claim about where
-    the project begins, so a ``poieo.yaml`` above still answers that -- and
-    when there is one, this is that project with its tasks folder swapped:
-    same store, same binding, same memory. Joining a project halfway, taking
-    its memory but not the model it reads with, is the kind of rule nobody
-    can hold in their head.
-
-    Without a marker there is nothing to join. The folder is the project,
-    the history lands inside it, and each card names its own binding because
-    there is no file to hold a default.
+    The argument says *which cards*, never where the project begins, so a
+    ``poieo.yaml`` above still answers that: this becomes that project with its
+    tasks folder swapped. Without a marker the folder is the project, and each
+    card names its own binding because there is no file to hold a default.
     """
     folder = folder.resolve()
     marker = find_project_file(folder)
@@ -254,8 +237,7 @@ def config_for_tasks_folder(folder: Path) -> DaemonConfig:
 def _first_cycle(edges: dict[str, list[str]]) -> list[str] | None:
     """One cycle in the handoff wiring, as the names on it, or None.
 
-    One is enough: a person shown the first loop fixes it and runs again, and
-    listing every loop in a tangle is a wall of text nobody reads.
+    One is enough: listing every loop in a tangle is a wall of text.
     """
     open_: set[str] = set()
     done: set[str] = set()
@@ -288,9 +270,7 @@ def check_handoffs(config: DaemonConfig) -> None:
     """Every `then:` target exists and is not the sender; the rest is warnings.
 
     Not a validator on the config: a task card becomes a flow only after the
-    tasks folder has been read, and a handoff is entitled to name one. So this
-    runs once every flow is known, which is also the last moment before a
-    trigger could fire.
+    tasks folder has been read, and a handoff is entitled to name one.
     """
     known = {flow.name: flow for flow in config.flows}
 
@@ -344,17 +324,13 @@ def check_handoffs(config: DaemonConfig) -> None:
 def check_isolation(flows: list[FlowSpec]) -> None:
     """Docker present, answering, and every named image already here.
 
-    The slowest preflight in the codebase -- a daemon ping plus one inspect per
-    distinct image -- and the only one that reaches outside the process. What
-    buys the cost is principle 5: a task whose image was pruned last week must
-    not discover it at 3am.
+    The slowest preflight in the codebase, and the only one that reaches
+    outside the process: a task whose image was pruned last week must not
+    discover it at 3am. Flows that never asked are not probed at all, so a
+    machine with no docker pays nothing.
 
-    Flows that never asked are not merely skipped, they are not probed at all,
-    so a machine with no docker pays nothing and fails nowhere.
-
-    Whether *disabled* flows reach here is the caller's business, and
-    load_flows keeps them out: they are not going to run, and refusing to
-    *list* one would be the check getting in the way of the fix.
+    Which flows reach here is the caller's business; load_flows keeps disabled
+    ones out.
     """
     wanted = [f for f in flows if f.isolation]
     if not wanted:
@@ -417,32 +393,18 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         graph, binding = generated, bindings[binding_path]
         try:
             preflight(graph, binding, workdir=workdir)
-            # A key the machine does not have is a misconfiguration, and it
-            # reads the environment rather than a server -- so it belongs
-            # here, beside the other things that must not wait until 3am.
-            # Enabled flows only, for the reason check_isolation gives: a
-            # flow that is not going to run must still be listable, or the
-            # check gets in the way of the fix.
+            # Reads the environment, not a server, so it belongs at load time.
+            # Enabled flows only: a disabled one must still be listable.
             if flow.enabled:
                 check_credentials(binding, graph.roles())
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 
-        # A node that names a role the binding never heard of still runs -- on
-        # whatever `default` is, which in a cloud binding is the biggest model
-        # in the file. `role: classifer` is a one-letter typo away from the
-        # cheapest, and nothing has ever said so. A warning rather than a
-        # refusal: falling back is what a default is for, and a binding that
-        # declares no roles at all is a legitimate way to run a graph.
-        #
-        # The graph's own `default_role` is excluded -- a node that named no
-        # role asking for the binding's default is the arrangement working.
-        #
-        # And only a binding that declares roles at all is asked: one that
-        # declares none is saying "one model for everything", which every mock
-        # binding does, and every role legitimately falls through it. The
-        # suspicious case is a binding that has `classifier` and `writer` and
-        # is handed a third name.
+        # `role: classifer` still runs, on whatever `default` is -- a warning,
+        # not a refusal, because falling back is what a default is for.
+        # `default_role` is excluded (a node that named no role reaching the
+        # default is the arrangement working), and a binding that declares no
+        # roles is not asked at all: it is saying "one model for everything".
         strangers = (
             binding.undeclared(graph.roles() - {graph.default_role})
             if binding.roles

@@ -1,19 +1,17 @@
 """A small sandboxed expression language shared by prompts, routers and flows.
 
-Graphs are authored by hand (and, later, by a web editor), so they must be able
-to reference run data without giving the author arbitrary Python. Three
-surfaces use this module:
-
 * prompt templates -- ``"Classify: {{ input.text }}"``
 * router conditions -- ``"category.lower() == 'bug' and state.retries < 3"``
 * a flow's ``then:`` branches -- ``"run.change and run.steps > 2"``
 
 All three go through :func:`evaluate`, which walks a whitelist of AST nodes.
-Anything outside the whitelist (imports, lambdas, comprehensions, dunder
-access, ...) is rejected at parse time rather than at run time.
+Anything outside it (imports, lambdas, comprehensions, dunder access, ...) is
+rejected at parse time rather than at run time.
 
-Every one of those three was typed into a YAML file, so ``true``, ``false``
-and ``null`` are accepted alongside Python's own spelling.
+All three were typed into a YAML file, so ``true``, ``false`` and ``null`` are
+accepted alongside Python's own spelling.
+
+Design: docs/graph.md
 """
 
 from __future__ import annotations

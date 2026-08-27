@@ -39,9 +39,8 @@ class Tool:
 class Isolation(BaseModel):
     """Where a task's shell commands may run.
 
-    Deliberately backend-neutral and free of Docker words: a task's
-    ``isolation:`` block parses into this, and everything downstream -- the
-    factory, the box, the executor -- sees only this shape.
+    Deliberately backend-neutral and free of Docker words: everything
+    downstream of a task's ``isolation:`` block sees only this shape.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -55,12 +54,8 @@ class Isolation(BaseModel):
 class Hands:
     """Everything an agent node's tools need beyond a workdir and a toolset.
 
-    One object rather than one parameter each. Three separate ones -- where
-    commands may run, which boxes are kept, who may be told -- had reached the
-    point of being threaded through five modules apiece, and the next feature
-    would have added a fourth. What travels between the daemon and the factory
-    is this; what each field holds is nobody else's business, which is why two
-    of them are deliberately opaque.
+    One object rather than one parameter each, threaded from the daemon to the
+    executor factory.
     """
 
     isolation: Isolation | None = None
@@ -114,8 +109,7 @@ class Executor:
 class LocalExecutor(Executor):
     """Runs tool calls directly on this machine, confined to one workdir.
 
-    The default, and the one with nothing to set up or tear down -- its
-    lifecycle is inherited and does nothing.
+    The default, with nothing to set up or tear down.
     """
 
     def __init__(
@@ -128,8 +122,8 @@ class LocalExecutor(Executor):
 def make_box_keeper() -> Any:
     """The thing that keeps boxes between runs, shared across tasks.
 
-    Returned as ``Any`` on purpose: the daemon holds it and hands it back, and
-    nothing between here and the executor may learn what is inside it.
+    ``Any`` on purpose: nothing between here and the executor may learn what
+    is inside it.
     """
     from .docker import BoxKeeper
 
@@ -139,13 +133,9 @@ def make_box_keeper() -> Any:
 async def sweep_boxes(days: int = 7) -> int:
     """Reclaim boxes an earlier poieo left behind. Returns how many went.
 
-    A clean shutdown removes every box it owns, so anything still standing
-    is from a crash, a power cut, or a kill -9. Swept at startup rather than
-    on a timer, because that is the only moment the answer can change.
-
-    Safe to run beside another daemon: a box it owns and is older than the
-    cutoff would be removed, and rebuilt on that task's next run. A box is
-    derived state, so the cost of being wrong here is one rebuild.
+    A clean shutdown removes every box it owns, so anything still standing is
+    from a crash. Safe to run beside another daemon: a box is derived state,
+    so the cost of being wrong here is one rebuild.
     """
     from datetime import timedelta
 
@@ -160,12 +150,12 @@ def make_executor(
     """The one place that decides where an agent node's tools run.
 
     Callers hand over a setting and use what comes back, so nothing upstream
-    of here names a backend. The Docker import sits inside the branch: a
-    machine that never isolates never pays to load it.
+    of here names a backend.
     """
     isolation = hands.isolation if hands else None
     if isolation is None:
         return LocalExecutor(workdir, toolsets, hands)
+    # Inside the branch: a machine that never isolates never pays to load it.
     from .docker import DockerExecutor
 
     # With a keeper the box is the task's and survives the run; without one
@@ -184,14 +174,12 @@ def make_executor(
     )
 
 
-# Import toolset modules after Tool is defined, since they import Tool from this module
-# (same pattern as pydantic's late rebuild)
+# Imported after Tool is defined, since they import Tool from this module.
 from .files import FILES_TOOLS  # noqa: E402
 from .notes import notes_tools  # noqa: E402
 from .shell import SHELL_TOOLS  # noqa: E402
 
-# A value is either a fixed list, or a factory taking the postbox for a
-# toolset that has to know who is running it.
+# A fixed list, or a factory taking the postbox (see Executor._load).
 TOOLSETS: dict[str, Any] = {
     "files": FILES_TOOLS,
     "shell": SHELL_TOOLS,

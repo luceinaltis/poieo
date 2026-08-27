@@ -1,9 +1,10 @@
 """Choosing what a task is shown, and assembling the block it reads.
 
-The page comes first and whole -- its position is fixed so the stable part of
-the prompt stays stable -- and the entries the task earned follow it, best
-first, cut on whole-entry boundaries. The page never competes with them for
-room.
+The page comes first and whole, so the stable part of the prompt stays stable;
+the entries the task earned follow it, best first, cut on whole-entry
+boundaries. The page never competes with them for room.
+
+Design: docs/memory.md
 """
 
 from __future__ import annotations
@@ -32,11 +33,9 @@ def read_memory(
 ) -> str | None:
     """The block a run is shown, or None when there is nothing to show.
 
-    Re-read every run, like the journal.
-
-    ``preview`` answers the same question without leaving a trace: the file
-    scan gives the same entries the index would, so `poieo memory` can show
-    exactly what a run will see while writing nothing at all.
+    Re-read every run, like the journal. ``preview`` answers the same question
+    without leaving a trace, so `poieo memory` can show what a run will see
+    while writing nothing at all.
     """
     parts = []
     text = read_page(project_dir)
@@ -100,13 +99,10 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Fact]:
             scored.append((score, fact))
     scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
 
-    # Association after evidence: a neighbor has no score of its own to
-    # argue with -- its claim to the prompt is its seed's, times how worn
-    # the connection between them is. Neighbors are drawn from the
-    # already-filtered pool, which is what keeps scope and set-aside
-    # holding through connections; a second hop is taken only across a
-    # worn connection, so with no wear anywhere one hop means one hop and
-    # the order is exactly what the connections slice shipped.
+    # Association after evidence: a neighbour's claim is its seed's, divided by
+    # rank and scaled by how worn the connection is. Drawn from the already
+    # filtered pool, so scope and set-aside hold through connections; a second
+    # hop needs a worn connection, so with no wear one hop means one hop.
     from ..strength import WORN_FLOOR, wear_of
 
     worn = wear_of(project_dir)
@@ -148,13 +144,13 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Fact]:
 
 
 def connected(fact: Fact, eligible: list[Fact]) -> list[Fact]:
-    """Who arrives beside this entry: mentions either way (nearness is
-    symmetric), leans-on forward only (what you chose needs what it leans
-    on, not the reverse), disagrees never (its consumer is the report --
-    dragging a disputed entry in by association is how confusion spreads).
-    A disagreement is a veto, not one vote among the connections: "this
-    disputes [[x]]" is an ordinary way to write one, and the mention in it
-    must not smuggle the disputed entry in.
+    """Who arrives beside this entry.
+
+    Mentions count either way (nearness is symmetric); ``depends_on`` forward
+    only (what you chose needs what it leans on, not the reverse); and
+    ``contradicts`` is a **veto**, not one vote -- "this disputes [[x]]" is an
+    ordinary way to write a disagreement, and the mention in it must not
+    smuggle the disputed entry into a prompt.
     """
     named = set(fact.mentions) | set(fact.matter.links.depends_on)
     return sorted(
