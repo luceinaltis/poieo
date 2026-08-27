@@ -63,3 +63,25 @@ def test_local_providers_require_a_base_url():
 def test_check_roles_lists_only_unsatisfiable_ones():
     binding = BindingSpec.model_validate({"providers": {"p": {"type": "mock"}}})
     assert binding.check_roles({"writer", "critic"}) == ["critic", "writer"]
+
+
+def test_a_role_the_binding_never_names_is_reportable(tmp_path):
+    """`resolve` falls back to the default for any role at all, which is the
+    point of having one -- and the reason check_roles can never report a typo.
+    This is the question that can: which of these did the binding declare?"""
+    binding = BindingSpec.model_validate(
+        {
+            "name": "b",
+            "providers": {"p": {"type": "mock"}},
+            "default": {"provider": "p", "model": "big"},
+            "roles": {"classifier": {"model": "small"}},
+        }
+    )
+
+    assert binding.undeclared({"classifier", "classifer", "writer"}) == [
+        "classifer",
+        "writer",
+    ]
+    assert binding.undeclared({"classifier"}) == []
+    # It still resolves -- that is exactly the quiet part.
+    assert binding.resolve("classifer").model == "big"

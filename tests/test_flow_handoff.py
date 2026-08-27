@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from poieo.daemon import Daemon, load_config
+from poieo.daemon import Daemon, load_config, load_flows
 from poieo.daemon.service import MAX_CHAIN
 from poieo.errors import SpecError
 from poieo.store import NullStore
@@ -415,3 +415,70 @@ async def test_a_condition_that_cannot_be_read_skips_its_branch(tmp_path, caplog
 
     assert "nonesuch" in " ".join(caplog.messages)
     await _down(daemon, task)
+
+
+# -- a role nobody declared -------------------------------------------------
+
+
+def test_a_role_the_binding_never_heard_of_says_so_at_load(tmp_path, caplog):
+    """One letter between the cheapest model in the file and the dearest.
+
+    `resolve` falls back to `default` for any role at all, so a typo has always
+    run -- on the big model, every night, unattended, with nothing said.
+    """
+    graph = (
+        "name: quick\nentry: a\nnodes:\n"
+        "  - {id: a, type: llm, role: classifer, prompt: hi}\n"
+    )
+    binding = (
+        "name: mock\nproviders:\n"
+        '  fake: {type: mock, options: {responses: {"*": "done"}}}\n'
+        "default: {provider: fake, model: big}\n"
+        "roles:\n  classifier: {model: small}\n"
+    )
+    (tmp_path / "g.yaml").write_text(graph, encoding="utf-8")
+    (tmp_path / "b.yaml").write_text(binding, encoding="utf-8")
+    path = tmp_path / "poieo.yaml"
+    path.write_text(
+        "binding: b.yaml\nflows:\n  - name: f\n    graph: g.yaml\n", encoding="utf-8"
+    )
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        load_flows(load_config(path))
+
+    said = " ".join(caplog.messages)
+    assert "classifer" in said and "big" in said
+
+
+def test_a_binding_that_declares_no_roles_is_not_asked(tmp_path, caplog):
+    """"One model for everything" is what every mock binding says, and every
+    role legitimately falls through it. Warning there would be noise on the
+    one setup that is meant to answer anything at all."""
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        load_flows(load_config(_config(tmp_path, _PAIR)))
+
+    assert "does not declare" not in " ".join(caplog.messages)
+
+
+
+def test_a_node_that_names_no_role_asks_for_the_default_on_purpose(tmp_path, caplog):
+    """`default_role` reaching the binding's default is the arrangement
+    working, so it must not read as a typo even where roles are declared."""
+    (tmp_path / "g.yaml").write_text(
+        "name: quick\nentry: a\nnodes:\n  - {id: a, type: llm, prompt: hi}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "b.yaml").write_text(
+        'name: mock\nproviders:\n  fake: {type: mock, options: {responses: {"*": "x"}}}\n'
+        "default: {provider: fake, model: big}\nroles:\n  classifier: {model: small}\n",
+        encoding="utf-8",
+    )
+    path = tmp_path / "poieo.yaml"
+    path.write_text(
+        "binding: b.yaml\nflows:\n  - name: f\n    graph: g.yaml\n", encoding="utf-8"
+    )
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        load_flows(load_config(path))
+
+    assert "does not declare" not in " ".join(caplog.messages)
