@@ -120,6 +120,19 @@ class RunResult:
     # Set after the run by the daemon when the task keeps a private copy.
     change: dict[str, Any] | None = None
 
+    def said(self, fallback: str = "") -> str:
+        """What the model said last: the last node on the path that produced text.
+
+        One reading, shared by the journal, the run record, the change's commit
+        message and the board -- so those four can never tell four stories
+        about one run. It lives here because `path` and `outputs` do.
+        """
+        for node_id in reversed(self.path):
+            value = self.outputs.get(node_id)
+            if isinstance(value, str) and value.strip():
+                return value
+        return fallback
+
     def summary(self) -> dict[str, Any]:
         summary: dict[str, Any] = {
             "run_id": self.run_id,
@@ -133,6 +146,11 @@ class RunResult:
             "trigger": self.trigger,
             "usage": self.usage,
             "error": self.error,
+            # The run's own account of itself, whether or not it changed a
+            # file. Without it a list of runs that touched nothing reads as
+            # ten identical rows of "2 steps", which is the graph's shape and
+            # not news about any of them.
+            "said": self.said(),
         }
         # Absent, not null: a run that changed nothing has nothing to review,
         # and the difference matters to the card that reads this.

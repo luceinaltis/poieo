@@ -110,6 +110,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
       cache_write_tokens: 0,
     },
     error: null,
+    said: "did the thing",
   }
   const { store } = harness({
     fetchTasks: vi.fn(async () => [{ ...CHORES, last_run: summary }]),
@@ -210,6 +211,7 @@ test("the store tallies each task's recent work from the run index", async () =>
       trigger: "cron 0 2 * * *",
       usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
       error: null,
+      said: "did the thing",
       change: {
         base: "a",
         head: "b",

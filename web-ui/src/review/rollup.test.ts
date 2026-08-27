@@ -23,6 +23,7 @@ function run(over: Partial<RunSummary> = {}): RunSummary {
     trigger: "cron 0 2 * * *",
     usage: USAGE,
     error: null,
+    said: "did the thing",
     ...over,
   }
 }
