@@ -34,12 +34,26 @@ def _kill_tree(process: asyncio.subprocess.Process) -> None:
             pass
 
 
+def _environment(extra: Any) -> dict[str, str] | None:
+    """The process environment with `extra` laid over it, or None for as-is.
+
+    Added to rather than replacing: a command with no PATH cannot find the
+    program it was asked to run. Values are coerced because JSON has numbers
+    and an environment does not -- a model writing `{"RETRIES": 3}` should get
+    a variable, not a TypeError from inside the tool.
+    """
+    if not isinstance(extra, dict) or not extra:
+        return None
+    return {**os.environ, **{str(k): str(v) for k, v in extra.items()}}
+
+
 async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
     command = str(args["command"])
     timeout = min(float(args.get("timeout", _DEFAULT_TIMEOUT)), _MAX_TIMEOUT)
     process = await asyncio.create_subprocess_shell(
         command,
         cwd=workdir,
+        env=_environment(args.get("env")),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=(os.name != "nt"),
@@ -65,12 +79,22 @@ SHELL_TOOLS: list[Tool] = [
             name="run_command",
             description=(
                 "Run a shell command in the working directory. Returns the exit "
-                "code and combined stdout/stderr."
+                "code and combined stdout/stderr. Use `env` to set variables for "
+                "the command rather than writing them into it: shells disagree "
+                "about how that is spelled, and getting it wrong looks exactly "
+                "like the command running and failing."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
                     "command": {"type": "string"},
+                    "env": {
+                        "type": "object",
+                        "description": (
+                            "Variables to set for this command only, laid over "
+                            "the environment rather than replacing it."
+                        ),
+                    },
                     "timeout": {"type": "number", "description": "seconds, max 600"},
                 },
                 "required": ["command"],
