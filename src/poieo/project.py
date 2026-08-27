@@ -223,6 +223,12 @@ Edit a file, then prove it loads -- a typo must fail now, not at 3am:
     poieo check -b models/<name>.yaml  # after editing a binding (probes it)
     poieo flows                        # after editing poieo.yaml (loads all)
 
+Before naming a model in a binding, read what is actually there -- a model
+named from memory fails at 3am, not now:
+
+    poieo config                       # what this project is bound to
+    poieo config models                # what each endpoint serves right now
+
 Try a card once, without the daemon:
 
     poieo run tasks/<card>.yaml                        # --json for structure

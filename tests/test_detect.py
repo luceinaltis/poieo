@@ -44,11 +44,11 @@ def _serves(monkeypatch, answers: dict[str, object]):
 
 def _no_claude(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(detect_module, "_claude", _none)
+    monkeypatch.setattr(detect_module, "_claude_models", _nothing)
 
 
-async def _none():
-    return None
+async def _nothing():
+    return ()
 
 
 OLLAMA_TAGS = {"models": [{"name": "qwen3:32b"}, {"name": "llama3.2:3b"}]}
@@ -151,14 +151,9 @@ def test_claude_is_found_through_the_sdk_and_named_by_it(monkeypatch):
     _serves(monkeypatch, {})
 
     async def _found():
-        return Engine(
-            key="claude",
-            label="Claude API",
-            type="anthropic",
-            models=("claude-opus-5", "claude-sonnet-5"),
-        )
+        return ("claude-opus-5", "claude-sonnet-5")
 
-    monkeypatch.setattr(detect_module, "_claude", _found)
+    monkeypatch.setattr(detect_module, "_claude_models", _found)
 
     found = detect()
 
@@ -200,3 +195,37 @@ def test_every_candidate_names_a_real_provider_type(candidate):
     from poieo.binding import KNOWN_PROVIDER_TYPES
 
     assert candidate.type in KNOWN_PROVIDER_TYPES
+
+
+@pytest.mark.parametrize("candidate", CANDIDATES)
+def test_every_candidate_can_actually_be_asked(candidate):
+    """A candidate detection cannot read is a candidate that never answers.
+    `anthropic` goes through the SDK; everything else needs a reader."""
+    from poieo.detect import _READERS
+
+    assert candidate.type == "anthropic" or candidate.type in _READERS
+
+
+async def test_a_declared_provider_is_asked_the_same_way_detection_asks(monkeypatch):
+    """`poieo config models` reaches models_for() from a binding rather than a
+    candidate. Same type, same address, same answer -- or the board and the
+    binding eventually disagree about what a provider serves."""
+    from poieo.detect import models_for
+
+    _serves(monkeypatch, {"http://elsewhere:9999/api/tags": OLLAMA_TAGS})
+
+    # An address no CANDIDATE names: the reader is chosen by type.
+    assert await models_for("ollama", "http://elsewhere:9999") == (
+        "qwen3:32b",
+        "llama3.2:3b",
+    )
+
+
+async def test_a_type_with_nothing_to_ask_answers_empty(monkeypatch):
+    """`mock` serves from its own file and a caller-registered backend has no
+    listing convention. Neither is an error -- there is just nothing to say."""
+    from poieo.detect import models_for
+
+    _serves(monkeypatch, {})
+    assert await models_for("mock", None) == ()
+    assert await models_for("something_registered_later", "http://x") == ()

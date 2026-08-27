@@ -49,6 +49,23 @@ If nothing on the machine answers, `init` says where it looked and writes
 nothing. `poieo init --mock` is the deliberate way to lay a project out and
 bind a real model later; nothing else ever picks `mock` for you.
 
+`init` happens once, and models change every month. Afterwards:
+
+```bash
+poieo config             # what this project is bound to -- reads files, opens no socket
+poieo config models      # what each declared endpoint serves right now
+```
+
+```
+ollama      http://localhost:11434
+  qwen3:32b                                   default
+  llama3.2:3b                                 classifier
+  granite4.2:8b
+```
+
+Asked live, because a model list written down a month ago is a list that has
+since gone wrong — and a model named from memory fails at 3am.
+
 That folder is the project. Everything hangs off it, and each folder answers one
 question — `models/` which model, `tasks/` what to do, `memory/` what it
 remembers, `runs/` what happened, `worktrees/` where it works.

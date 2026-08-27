@@ -144,6 +144,15 @@ models each reported, and touching a file is the caller's business. Detection
 never runs again — **run time reads files, nothing else.** A binding names an
 endpoint because somebody wrote it there, not because a port answered tonight.
 
+`models_for(type, base_url)` is the one place that knows how each backend lists
+what it has — `/api/tags` for Ollama, `/models` for anything OpenAI-shaped, the
+SDK for Claude. Keyed by **provider type** rather than by address, because the
+question outlives detection: a binding declares a type and a base_url, and
+`poieo config models` asks from there. Two copies of that knowledge would
+eventually look in two places. `askable(type)` says whether the question can be
+put at all — `mock` answers from the binding file itself, and so does a backend
+somebody registered through `providers.register()`.
+
 **Every engine found is declared**, not only the one that ends up serving
 `default:`. A role exists so a graph can send its cheap step somewhere cheap,
 and that is unreachable if the file names a single endpoint — so the pool is
