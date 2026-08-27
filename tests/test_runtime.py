@@ -548,3 +548,36 @@ async def test_the_executor_is_torn_down_even_when_the_node_fails(tmp_path, monk
 
     assert result.status == "failed"
     assert torn_down, "the executor was never torn down"
+
+
+async def test_a_run_summary_says_what_the_run_said(tmp_path):
+    """Ten runs that changed nothing used to read as ten rows of "2 steps",
+    which is the graph's shape and not news about any of them."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "quiet",
+            "entry": "a",
+            "nodes": [{"id": "a", "type": "agent", "prompt": "go", "next": "b"},
+                      {"id": "b", "type": "agent", "prompt": "go"}],
+        }
+    )
+    binding = mock_binding({"*": "nothing needed doing"})
+
+    result = await run_graph(graph, binding)
+
+    # The last node on the path that produced text, which is the same reading
+    # the journal and the commit subject use.
+    assert result.said() == "nothing needed doing"
+    assert result.summary()["said"] == "nothing needed doing"
+
+
+async def test_a_run_that_said_nothing_says_so_with_an_empty_string(tmp_path):
+    graph = GraphSpec.model_validate(
+        {"name": "mute", "entry": "a", "nodes": [{"id": "a", "type": "agent", "prompt": "go"}]}
+    )
+
+    result = await run_graph(graph, mock_binding({"*": ""}))
+
+    # Empty, not "(said nothing)": that wording is a journal line's default,
+    # and a summary is read by a board that wants to know there was nothing.
+    assert result.summary()["said"] == ""

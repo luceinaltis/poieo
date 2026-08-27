@@ -22,6 +22,7 @@ vi.mock("./api", () => ({
         cache_write_tokens: 0,
       },
       error: null,
+      said: "did the thing",
     },
     {
       run_id: "20260822T072819-98a6708d",
@@ -39,6 +40,7 @@ vi.mock("./api", () => ({
         cache_write_tokens: 0,
       },
       error: null,
+      said: "did the thing",
       change: {
         base: "aaa",
         head: "bbb",

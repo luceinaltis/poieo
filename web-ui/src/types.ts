@@ -36,6 +36,8 @@ export interface RunSummary {
   trigger: string
   usage: Usage
   error: string | null
+  /** The run's own account of itself, whether or not it changed a file. */
+  said: string
   /** Absent when the run altered nothing -- which is not the same as null. */
   change?: Change
 }

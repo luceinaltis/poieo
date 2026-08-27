@@ -1,8 +1,8 @@
-"""A task is a name, a folder, and a prompt -- the smallest thing that runs.
+"""A card is a name, a folder, and a prompt -- the smallest thing that runs.
 
-Everything else has a default. A task is *sugar*: at load time it expands into
+Everything else has a default. A card is *sugar*: at load time it expands into
 a task plus a one-node graph indistinguishable from hand-written ones, so
-nothing downstream of the loader knows tasks exist. The expansion is visible
+nothing downstream of the loader knows cards exist. The expansion is visible
 (``poieo show``) and reversible (``poieo eject``), which is what keeps the
 short form from becoming a second, hidden configuration format.
 
@@ -383,16 +383,13 @@ def record_run(task: CardSpec, result: Any) -> None:
 
 
 def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
-    """What the model said last: the last node on the path that produced text.
+    """What the model said last, with the wording a journal line wants.
 
-    One reading, shared by the journal, the run record and the change's commit
-    message, so those three can never tell three stories about one run.
+    The reading itself is `RunResult.said`, beside the `path` and `outputs` it
+    walks. This is the default a reader of a journal should see when a run
+    produced no text at all; the run summary carries the bare answer instead.
     """
-    for node_id in reversed(result.path):
-        value = result.outputs.get(node_id)
-        if isinstance(value, str) and value.strip():
-            return value
-    return fallback
+    return result.said(fallback)
 
 
 # -- the journal -------------------------------------------------------------

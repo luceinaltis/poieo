@@ -179,6 +179,7 @@ test("a task that found nothing to do says so in one word, not a number", () => 
       trigger: "cron",
       usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
       error: null,
+      said: "did the thing",
     })),
   )
   handle.update(quiet)
