@@ -3,6 +3,18 @@
   gap: 6px;
 }
 
+/* How it has been going, before the list of when. Quiet while it is going
+   well, because a reader scanning for trouble should find none here. */
+.run-summary {
+  color: #9a9086;
+  font-size: 0.85em;
+  margin: 0 0 2px;
+}
+
+.run-summary[data-failing="true"] {
+  color: #d16d5a;
+}
+
 .run-empty {
   color: #9a9086;
   font-size: 0.85em;
