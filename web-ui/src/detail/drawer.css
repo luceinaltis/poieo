@@ -116,3 +116,16 @@
     min-height: 34px;
   }
 }
+
+/* A folded answer: the first line, with the rest a click away. Styled like
+   the thinking disclosure beside it -- two triangles in one timeline should
+   not be two different triangles. The summary is the run's own words, so it
+   is not dimmed until it is open and the full text below repeats it. */
+.drawer-said > summary {
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.drawer-said[open] > summary {
+  color: #6b6257;
+}

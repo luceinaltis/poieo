@@ -36,14 +36,23 @@ function size(run: RunSummary): string {
   return out > 0 ? `${out} tokens` : ""
 }
 
+/** The first line of what the model said, short enough to sit in a row. */
+function firstLine(said: string, limit = 90): string {
+  const line = said.trim().split(/\r?\n/).find((part) => part.trim()) ?? ""
+  return line.length > limit ? `${line.slice(0, limit).trimEnd()}…` : line
+}
+
 function account(run: RunSummary, tracked: boolean): string {
   const outcome = outcomeOf(run, tracked)
   if (outcome === "failed") return run.error || "stopped early"
   if (outcome === "nothing") return "found nothing to do"
   if (run.change?.message) return run.change.message
   // A task that keeps no private copy has no change to describe itself with,
-  // so every row read the same "3 steps" and a list of ten said nothing. How
-  // long it took is the one thing always true of a run and always different.
+  // and a run that touched no file has no change at all -- which used to leave
+  // every row reading the same "3 steps", the graph's shape rather than news
+  // about any of them. The run's own closing sentence is the news.
+  const said = firstLine(run.said ?? "")
+  if (said) return said
   const steps = `${run.steps} step${run.steps === 1 ? "" : "s"}`
   const spent = took(run)
   return spent ? `${steps} · ${spent}` : steps
