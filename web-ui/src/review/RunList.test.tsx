@@ -160,3 +160,45 @@ test("a flow with no private copy is not accused of finding nothing to do", () =
   // it still says what the run amounted to
   expect(row.textContent).toMatch(/step/i)
 })
+
+
+test("a run with no change to describe says how long it took", () => {
+  // A flow that keeps no private copy has no change message, so every row read
+  // "3 steps" and ten of them said nothing at all. How long it took is the one
+  // thing that is always true of a run and always different.
+  render([run({ run_id: "a", steps: 3 })], false)
+
+  expect(rows()[0].textContent).toContain("3 steps")
+  expect(rows()[0].textContent).toContain("9s")
+})
+
+test("a run says what it spent when it changed nothing to count", () => {
+  // The lines-changed column is empty for a flow with no copy, and tokens are
+  // the other thing a run costs.
+  render(
+    [run({ run_id: "a", usage: { ...USAGE, output_tokens: 128 } })],
+    false,
+  )
+
+  expect(rows()[0].textContent).toContain("128")
+})
+
+test("a failed run still leads with why, not with how long", () => {
+  render([BROKE], false)
+  // Failed runs stay collapsed until asked for; the point here is what the row
+  // says once it is, not whether it is shown.
+  act(() => container.querySelector<HTMLElement>("[data-failed-toggle]")!.click())
+
+  expect(rows()[0].textContent).toContain("the tool went missing")
+  expect(rows()[0].textContent).not.toContain("step")
+})
+
+test("the list says how the night went before listing it", () => {
+  // The question a reader opens this with is whether the thing has been
+  // working, and ten rows do not answer it as fast as one line does.
+  render([DID_SOMETHING, FOUND_NOTHING, BROKE])
+
+  const summary = container.querySelector(".run-summary")!
+  expect(summary.textContent).toContain("3 runs")
+  expect(summary.textContent).toContain("1 failed")
+})
