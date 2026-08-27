@@ -30,6 +30,7 @@ function worker(over: Partial<Worker> = {}): Worker {
     recentToolCalls: [],
     lastRun: null,
     recent: NOTHING,
+    runs: [],
     tracked: true,
     then: [],
     shape: { entry: "", nodes: [] },

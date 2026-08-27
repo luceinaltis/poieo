@@ -22,6 +22,7 @@ import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
 import { BOX, corner, exits, place, walk, wire } from "../wiring"
 import type { Placed } from "../wiring"
+import { shortTime } from "../../when"
 import "./basic.css"
 
 const SVG = "http://www.w3.org/2000/svg"
@@ -43,19 +44,38 @@ function element(tag: string, className: string, parent: Element): HTMLElement {
   return node
 }
 
+/**
+ * What a flow has amounted to lately -- results, not attempts.
+ *
+ * The line used to count every run, including the ones that looked and found
+ * nothing to do. For a healthy flow that is nearly all of them, so the number
+ * grew large and said nothing: "864 runs · 864 found nothing to do" is a
+ * sentence a reader learns to skip.
+ *
+ * What is left is what happened. A flow that changed nothing says so in one
+ * word and gives the time it last looked -- which is the whole of what tells
+ * "fine, and there was nothing to do" apart from "stuck", and the only reason
+ * the count was ever wanted.
+ */
 function describeRecent(worker: Worker): string {
   const recent = worker.recent
-  if (recent.runs === 0) return "nothing finished yet"
+  if (recent.runs === 0) return "nothing has run yet"
 
-  const parts = [`${recent.runs} run${recent.runs === 1 ? "" : "s"}`]
+  const parts: string[] = []
+  if (recent.succeeded) {
+    // A flow with no private copy has nothing to change against, so a run
+    // that ran is the whole of what there is to say about it.
+    const what = worker.tracked ? "change" : "run"
+    parts.push(`${recent.succeeded} ${what}${recent.succeeded === 1 ? "" : "s"}`)
+  }
   if (recent.insertions || recent.deletions) {
     parts.push(`+${recent.insertions} / -${recent.deletions}`)
   }
-  if (worker.tracked && recent.nothingToDo) {
-    parts.push(`${recent.nothingToDo} found nothing to do`)
-  }
   if (recent.failed) parts.push(`${recent.failed} failed`)
-  return parts.join(" · ")
+
+  if (parts.length > 0) return parts.join(" · ")
+  const last = worker.lastRun?.finished_at
+  return last ? `quiet · last looked ${shortTime(last)}` : "quiet"
 }
 
 function buildBox(flow: string, callbacks: SkinCallbacks): Box {

@@ -12,8 +12,7 @@ import {
   openFeed as defaultOpenFeed,
 } from "../api"
 import type { FeedStatus } from "../api"
-import { rollup } from "../review/rollup"
-import { initialStage, reduce, replay, setRecent } from "../state/stage"
+import { WINDOW, initialStage, reduce, replay, setRuns } from "../state/stage"
 import type { StageState, Worker } from "../state/stage"
 import type { FlowRow, PoieoEvent } from "../types"
 
@@ -24,8 +23,9 @@ export interface StageApi {
   openFeed: typeof defaultOpenFeed
 }
 
-/** How far back the review window reaches. */
-export const REVIEW_LIMIT = 50
+/** How far back the review window reaches. The stage owns the number: the
+ * card's tally and this list have to be the same runs. */
+export const REVIEW_LIMIT = WINDOW
 
 export interface StageStore {
   getStage(): StageState
@@ -121,7 +121,7 @@ export function createStageStore(api: StageApi = {
     )
     let next = current
     for (const { row, runs } of tallies) {
-      next = setRecent(next, row.name, rollup(runs, row.into !== null))
+      next = setRuns(next, row.name, runs)
     }
     return next
   }

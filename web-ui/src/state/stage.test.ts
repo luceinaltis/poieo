@@ -7,8 +7,7 @@ import {
   FAILED_SUMMARY,
   LLM_RUN,
 } from "./fixtures"
-import { initialStage, reduce, replay, setRecent } from "./stage"
-import { NOTHING } from "../review/rollup"
+import { WINDOW, initialStage, reduce, replay, setRuns } from "./stage"
 import type { StageState } from "./stage"
 import type { FlowRow, PoieoEvent } from "../types"
 
@@ -184,17 +183,64 @@ test("a failed run's summary is tallied as failed", () => {
   expect(stage.workers.chores.recent.succeeded).toBe(0)
 })
 
-test("setRecent seeds a tally the events cannot supply", () => {
-  const seeded = setRecent(start(), "chores", {
-    runs: 3,
-    succeeded: 2,
-    failed: 1,
-    nothingToDo: 0,
-    insertions: 40,
-    deletions: 2,
-  })
+function aRun(run_id: string, over: Record<string, unknown> = {}) {
+  return {
+    run_id,
+    flow: "chores",
+    graph: "agent-task",
+    status: "completed",
+    started_at: "2026-08-27T02:00:00+00:00",
+    finished_at: "2026-08-27T02:00:04+00:00",
+    steps: 1,
+    iteration: 1,
+    trigger: "cron",
+    usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+    error: null,
+    ...over,
+  } as never
+}
+
+test("setRuns seeds the window the events cannot supply", () => {
+  const seeded = setRuns(start(), "chores", [
+    aRun("a", { change: { base: "x", head: "y", files: ["f"], insertions: 40, deletions: 2, message: "did" } }),
+    aRun("b", { change: { base: "x", head: "y", files: ["f"], insertions: 0, deletions: 0, message: "did" } }),
+    aRun("c", { status: "failed", error: "boom" }),
+  ])
 
   expect(seeded.workers.chores.recent.runs).toBe(3)
+  expect(seeded.workers.chores.recent.failed).toBe(1)
+  expect(seeded.workers.chores.recent.insertions).toBe(40)
   expect(seeded.workers.revision.recent.runs).toBe(0)
-  expect(setRecent(seeded, "ghost", NOTHING)).toBe(seeded)
+  expect(setRuns(seeded, "ghost", [])).toBe(seeded)
+})
+
+test("the tally stays inside the window the work list shows", () => {
+  // The card's number and the list below it are the same runs, or the reader
+  // has no way to tell which of them is lying. Live summaries used to fold in
+  // without a bound, so a page left open all night drifted past both.
+  const seeded = setRuns(
+    start(),
+    "chores",
+    Array.from({ length: WINDOW }, (_, i) => aRun(`seed${i}`)),
+  )
+  expect(seeded.workers.chores.recent.runs).toBe(WINDOW)
+
+  const after = reduce(seeded, {
+    run_id: "fresh",
+    type: "run_summary",
+    flow: "chores",
+    status: "completed",
+    steps: 1,
+    finished_at: "2026-08-27T02:00:00+00:00",
+  })
+
+  expect(after.workers.chores.recent.runs).toBe(WINDOW)
+  expect(after.workers.chores.runs[0].run_id).toBe("fresh")
+})
+
+test("a summary for a flow that is not on the board changes nothing", () => {
+  const state = start()
+  expect(
+    reduce(state, { run_id: "r", type: "run_summary", flow: "ghost", status: "completed" }),
+  ).toBe(state)
 })

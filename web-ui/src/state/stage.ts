@@ -7,7 +7,7 @@
  * never an event, which is what lets a new skin be one module and one line.
  */
 
-import { NOTHING, fold } from "../review/rollup"
+import { NOTHING, rollup } from "../review/rollup"
 import type { Rollup } from "../review/rollup"
 import type { Arrow, FlowRow, GraphShape, PoieoEvent, RunSummary } from "../types"
 
@@ -41,6 +41,15 @@ export interface Worker {
    * list always agree, which is the property a reader would notice breaking.
    */
   recent: Rollup
+  /**
+   * The window itself, newest first, which `recent` is only the sum of.
+   *
+   * Kept rather than folded away because a sum cannot forget its oldest term:
+   * folding each live summary into a running total, as this used to, walked
+   * the number past the window every night a page was left open, and nothing
+   * short of a reconnect brought it back.
+   */
+  runs: RunSummary[]
   /** Whether this flow keeps a private copy, and so can have changes at all. */
   tracked: boolean
   /**
@@ -56,6 +65,15 @@ export interface Worker {
   /** How this flow is scheduled, as the daemon describes it. Structure too. */
   trigger: string
 }
+
+/**
+ * How far back the tally reaches, in finished runs.
+ *
+ * The same window the work list below a flow is fetched with, and it has to
+ * stay the same: the card's number and that list are the same runs, or a
+ * reader has no way to tell which of the two is lying.
+ */
+export const WINDOW = 50
 
 export interface StageState {
   workers: Record<string, Worker>
@@ -85,6 +103,7 @@ function blankWorker(): Worker {
     recentToolCalls: [],
     lastRun: null,
     recent: NOTHING,
+    runs: [],
     tracked: false,
     then: [],
     shape: { entry: "", nodes: [] },
@@ -223,10 +242,10 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
           steps: asNumber(event.steps),
           finished_at: asString(event.finished_at),
         },
-        // The frame is the summary, flattened -- so it folds like one.
-        recent: fold(
-          state.workers[flow].recent,
-          event as unknown as RunSummary,
+        // The frame is the summary, flattened -- so it joins the window
+        // like one, at the front, and the oldest falls off the back.
+        ...windowed(
+          [event as unknown as RunSummary, ...state.workers[flow].runs],
           state.workers[flow].tracked,
         ),
       },
@@ -262,12 +281,19 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
   }
 }
 
-/** Seed a flow's tally from the run index, which the reducer cannot see. */
-export function setRecent(state: StageState, flow: string, recent: Rollup): StageState {
+/** The window and its sum, which are never allowed to disagree. */
+function windowed(runs: RunSummary[], tracked: boolean): Pick<Worker, "runs" | "recent"> {
+  const kept = runs.slice(0, WINDOW)
+  return { runs: kept, recent: rollup(kept, tracked) }
+}
+
+/** Seed a flow's window from the run index, which the reducer cannot see. */
+export function setRuns(state: StageState, flow: string, runs: RunSummary[]): StageState {
   if (!(flow in state.workers)) return state
+  const worker = state.workers[flow]
   return {
     ...state,
-    workers: { ...state.workers, [flow]: { ...state.workers[flow], recent } },
+    workers: { ...state.workers, [flow]: { ...worker, ...windowed(runs, worker.tracked) } },
   }
 }
 
