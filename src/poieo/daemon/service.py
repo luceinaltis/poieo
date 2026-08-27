@@ -1,4 +1,4 @@
-"""The resident process: keeps flows firing until it is told to stop."""
+"""The resident process: keeps tasks firing until it is told to stop."""
 
 from __future__ import annotations
 
@@ -22,10 +22,10 @@ from ..providers import ProviderPool
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute
 from ..store import Event, RunStore
-from ..task import append_journal, closing_line, record_run
+from ..card import append_journal, closing_line, record_run
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, create_app
-from .config import DaemonConfig, LoadedFlow, load_flows
+from .config import DaemonConfig, LoadedTask, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
@@ -34,7 +34,7 @@ RunCallback = Callable[[str, RunResult], None]
 
 
 def _ensure_port_free(host: str, port: int) -> None:
-    """Fail at launch, not after flows have started."""
+    """Fail at launch, not after tasks have started."""
     with socket.socket() as sock:
         try:
             sock.bind((host, port))
@@ -61,23 +61,23 @@ async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
         log.warning("the %s stopped badly: %s", what, exc)
 
 
-def _change_message(result: RunResult, flow: str) -> str:
+def _change_message(result: RunResult, task: str) -> str:
     """The model's own summary, shaped for a commit subject.
 
     The same reading the journal and the run record use.
     """
     said = closing_line(result, fallback="")
     if not said:
-        return f"poieo {flow} {result.run_id}"
+        return f"poieo {task} {result.run_id}"
     return said.strip().splitlines()[0][:72]
 
 
-# Consecutive identical failures before a flow holds itself. Staying up while
+# Consecutive identical failures before a task holds itself. Staying up while
 # failing identically is noise, not resilience.
 PAUSE_AFTER = 3
 
 # How many finished runs a runner keeps in memory. A RunResult carries the
-# run's whole outputs and state, and only the tail is ever read; a loop flow
+# run's whole outputs and state, and only the tail is ever read; a loop task
 # would otherwise accumulate every output for the daemon's lifetime.
 RESULTS_KEPT = 20
 
@@ -96,6 +96,8 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
     """
     return {
         "run_id": result.run_id,
+        # `flow` on the wire, still: renaming what a condition reads and a
+        # run record carries is the other half of this, and its own change.
         "flow": result.flow,
         "graph": result.graph,
         "status": result.status,
@@ -114,9 +116,9 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
 
 @dataclass(slots=True)
 class Handoff:
-    """One flow's finished run, offered to the flow it named.
+    """One task's finished run, offered to the task it named.
 
-    Carries the depth so a chain can be bounded without any flow having to know
+    Carries the depth so a chain can be bounded without any task having to know
     how it was reached, and the reason so the next run can record what fired it
     rather than the schedule it did not use.
     """
@@ -126,27 +128,27 @@ class Handoff:
     depth: int
 
 
-class FlowRunner:
-    """Drives one flow: trigger -> run -> carry state -> repeat."""
+class TaskRunner:
+    """Drives one task: trigger -> run -> carry state -> repeat."""
 
     def __init__(
         self,
-        flow: LoadedFlow,
+        task: LoadedTask,
         config: DaemonConfig,
         pool: ProviderPool,
         store: RunStore,
         cancel: asyncio.Event,
         on_run: RunCallback | None = None,
         tool_context: ToolContext | None = None,
-        handoff: Callable[["FlowRunner", RunResult, int], None] | None = None,
+        handoff: Callable[["TaskRunner", RunResult, int], None] | None = None,
     ):
-        self.flow = flow
+        self.task = task
         self.config = config
         self.pool = pool
         self.store = store
         self.cancel = cancel
         self.on_run = on_run
-        self.trigger = flow.spec.trigger.build()
+        self.trigger = task.spec.trigger.build()
         self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
@@ -162,7 +164,7 @@ class FlowRunner:
         self._kick = False
         self._wake = asyncio.Event()
         self._manual_fires = 0
-        # A handoff waiting for this flow to be free, and the depth of the run
+        # A handoff waiting for this task to be free, and the depth of the run
         # currently in flight. At most one waits: see `hand`.
         self._handed: Handoff | None = None
         self._depth = 0
@@ -170,10 +172,10 @@ class FlowRunner:
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
         self._pending: asyncio.Task[Firing] | None = None
-        # A flow that says where it works keeps a private copy of it.
-        workdir = config.workdir_path(flow.spec)
+        # A task that says where it works keeps a private copy of it.
+        workdir = config.workdir_path(task.spec)
         self.workspace = (
-            Workspace(workdir, flow.spec.name, config.layout().worktrees())
+            Workspace(workdir, task.spec.name, config.layout().worktrees())
             if workdir is not None
             else None
         )
@@ -184,7 +186,7 @@ class FlowRunner:
 
     @property
     def name(self) -> str:
-        return self.flow.spec.name
+        return self.task.spec.name
 
     async def _open_change(self) -> Path | None:
         """Give the run a private copy of the project to work in."""
@@ -195,7 +197,7 @@ class FlowRunner:
         try:
             if not await asyncio.to_thread(point.available):
                 log.warning(
-                    "flow '%s': %s cannot be tracked -- the work will happen there "
+                    "task '%s': %s cannot be tracked -- the work will happen there "
                     "directly, and its changes cannot be reviewed or undone",
                     self.name,
                     point.repo,
@@ -204,7 +206,7 @@ class FlowRunner:
             await asyncio.to_thread(point.prepare)
         except WorkspaceError as exc:
             # A repository we cannot use is not a reason to stop working at 3am.
-            log.error("flow '%s': %s", self.name, exc)
+            log.error("task '%s': %s", self.name, exc)
             return point.repo
         self._tracking = True
         return point.worktree
@@ -221,7 +223,7 @@ class FlowRunner:
                 failed=result.status != "completed",
             )
         except WorkspaceError as exc:
-            log.error("flow '%s': the change could not be recorded: %s", self.name, exc)
+            log.error("task '%s': the change could not be recorded: %s", self.name, exc)
             return
         if change is None:
             return  # nothing to do is not nothing done
@@ -248,7 +250,7 @@ class FlowRunner:
     def resume(self) -> str:
         """Rearm the schedule; the next fire is the next scheduled one.
 
-        Works the same on a flow that paused itself: the failure counter
+        Works the same on a task that paused itself: the failure counter
         starts over rather than tripping again on the first bad run.
         """
         self._hold = False
@@ -269,7 +271,7 @@ class FlowRunner:
 
     @property
     def holding(self) -> bool:
-        """Whether a hold is on -- by hand, or by this flow's own failures."""
+        """Whether a hold is on -- by hand, or by this task's own failures."""
         return self._hold
 
     def hand(self, handoff: Handoff) -> Handoff | None:
@@ -364,7 +366,7 @@ class FlowRunner:
             await close()
 
     async def run(self) -> None:
-        log.info("flow '%s' armed (%s)", self.name, self.trigger.describe)
+        log.info("task '%s' armed (%s)", self.name, self.trigger.describe)
         fires = self.trigger.fires(self.cancel)
         try:
             while True:
@@ -373,7 +375,7 @@ class FlowRunner:
                     break
         finally:
             await self._quiet(fires)
-        log.info("flow '%s' stopped", self.name)
+        log.info("task '%s' stopped", self.name)
 
     async def _one_run(self, fire: Firing) -> bool:
         """One firing, end to end. False when the runner should stand down."""
@@ -382,10 +384,10 @@ class FlowRunner:
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
         try:
-            payload = self.flow.read_input(self.config)
+            payload = self.task.read_input(self.config)
         except PoieoError as exc:
-            log.error("flow '%s': %s", self.name, exc)
-            return self.flow.spec.on_error != "stop"
+            log.error("task '%s': %s", self.name, exc)
+            return self.task.spec.on_error != "stop"
         if handed is not None:
             # Merged last: what woke this run is the most specific thing it
             # knows. `sender`, not `from` -- expressions are parsed as Python,
@@ -393,7 +395,7 @@ class FlowRunner:
             payload["sender"] = handed.result
 
         log.info(
-            "flow '%s' firing (iteration %d, %s)",
+            "task '%s' firing (iteration %d, %s)",
             self.name,
             fire.iteration,
             fire.reason,
@@ -403,12 +405,12 @@ class FlowRunner:
         workdir = await self._open_change()
         try:
             result = await execute(
-                self.flow.graph,
-                self.flow.binding,
+                self.task.graph,
+                self.task.binding,
                 self.pool,
                 self.store,
                 input=payload,
-                state=dict(self.state) if self.flow.spec.carry_state else None,
+                state=dict(self.state) if self.task.spec.carry_state else None,
                 flow=self.name,
                 # What actually fired this run, not the schedule it may not
                 # have used.
@@ -424,18 +426,18 @@ class FlowRunner:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
         self._remember(result)
-        if self.flow.spec.carry_state:
+        if self.task.spec.carry_state:
             self.state = result.state
 
         pause = self._note_outcome(result)
-        if self.handoff is not None and self.flow.spec.then:
+        if self.handoff is not None and self.task.spec.then:
             # Ahead of the stand-down below: the run happened, so what it says
             # should work next does not depend on this runner carrying on.
             self.handoff(self, result, self._depth)
 
         if result.status == "completed":
             log.info(
-                "flow '%s' run %s completed in %d step(s) [%s]",
+                "task '%s' run %s completed in %d step(s) [%s]",
                 self.name,
                 result.run_id,
                 result.steps,
@@ -443,14 +445,14 @@ class FlowRunner:
             )
         else:
             log.error(
-                "flow '%s' run %s %s: %s",
+                "task '%s' run %s %s: %s",
                 self.name,
                 result.run_id,
                 result.status,
                 result.error,
             )
-            if self.flow.spec.on_error == "stop" and result.status == "failed":
-                log.error("flow '%s' stopping (on_error: stop)", self.name)
+            if self.task.spec.on_error == "stop" and result.status == "failed":
+                log.error("task '%s' stopping (on_error: stop)", self.name)
                 return False
 
         if self.on_run:
@@ -459,7 +461,7 @@ class FlowRunner:
         if pause:
             said = (result.cause or {}).get("said") or result.error or "the same failure"
             log.error(
-                "flow '%s' paused after %d identical failures: %s",
+                "task '%s' paused after %d identical failures: %s",
                 self.name, PAUSE_AFTER, said,
             )
             self._journal_pause(said)
@@ -488,7 +490,7 @@ class FlowRunner:
 
     def _journal_pause(self, said: str) -> None:
         """The reason must survive to the morning, beside the failures."""
-        task = self.config.tasks_by_flow.get(self.name)
+        task = self.config.cards_by_task.get(self.name)
         if task is None:
             return
         try:
@@ -503,13 +505,13 @@ class FlowRunner:
             log.warning("task '%s': could not journal the pause: %s", self.name, exc)
 
     def _remember(self, result: RunResult) -> None:
-        task = self.config.tasks_by_flow.get(self.name)
+        task = self.config.cards_by_task.get(self.name)
         if task is not None:
             record_run(task, result)
 
 
 class Daemon:
-    """Owns the provider pools, the flow tasks, and the shutdown handshake."""
+    """Owns the provider pools, the running tasks, and the shutdown handshake."""
 
     def __init__(
         self,
@@ -520,7 +522,7 @@ class Daemon:
         web_port: int | None = None,
     ):
         self.config = config
-        self.flows = load_flows(config)
+        self.tasks = load_tasks(config)
         base_store = store or RunStore(config.layout().runs())
         if web_port is not None and not isinstance(base_store, BroadcastStore):
             base_store = BroadcastStore(base_store)
@@ -528,58 +530,58 @@ class Daemon:
         self.web_port = web_port
         self.on_run = on_run
         self.cancel = asyncio.Event()
-        # One pool per distinct binding file: clients are reused across flows.
+        # One pool per distinct binding file: clients are reused across tasks.
         self.pools: dict[str, ProviderPool] = {}
         # One container per distinct folder-and-settings, for the same reason.
         self.containers: Any = (
             make_container_pool()
-            if any(f.spec.isolation for f in self.flows)
+            if any(f.spec.isolation for f in self.tasks)
             else None
         )
-        self.runners: list[FlowRunner] = []
+        self.runners: list[TaskRunner] = []
 
-    def _postbox_for(self, flow: LoadedFlow) -> Any:
+    def _postbox_for(self, task: LoadedTask) -> Any:
         """A task that took the notes toolset gets one; nobody else does."""
-        task = self.config.tasks_by_flow.get(flow.spec.name)
-        if task is None or "notes" not in (task.tools or []):
+        card = self.config.cards_by_task.get(task.spec.name)
+        if card is None or "notes" not in (card.tools or []):
             return None
         from ..tools.notes import Postbox
 
         return Postbox(
-            sender=flow.spec.name,
+            sender=task.spec.name,
             recipients={
                 name: other.journal_path()
-                for name, other in self.config.tasks_by_flow.items()
+                for name, other in self.config.cards_by_task.items()
             },
         )
 
-    def _hands_for(self, flow: LoadedFlow) -> ToolContext:
+    def _hands_for(self, task: LoadedTask) -> ToolContext:
         return ToolContext(
-            isolation=flow.spec.isolation,
+            isolation=task.spec.isolation,
             containers=self.containers,
-            postbox=self._postbox_for(flow),
+            postbox=self._postbox_for(task),
         )
 
-    def _runners(self) -> list[FlowRunner]:
+    def _runners(self) -> list[TaskRunner]:
         return [
-            FlowRunner(
-                flow,
+            TaskRunner(
+                task,
                 self.config,
-                self._pool_for(flow),
+                self._pool_for(task),
                 self.store,
                 self.cancel,
                 self.on_run,
-                self._hands_for(flow),
+                self._hands_for(task),
                 # Bound, so it resolves against self.runners at call time --
                 # which is after this list has been built and assigned.
                 self._hand_off,
             )
-            for flow in self.flows
+            for task in self.tasks
         ]
 
-    # -- handing one flow's finished work to the flow it named ---------------
+    # -- handing one task's finished work to the task it named ---------------
 
-    def _chosen(self, sender: FlowRunner, run: dict[str, Any]) -> Branch | None:
+    def _chosen(self, sender: TaskRunner, run: dict[str, Any]) -> Branch | None:
         """The first branch that matches, router-style, or None.
 
         A branch that will not evaluate is skipped rather than fatal: unlike a
@@ -587,13 +589,13 @@ class Daemon:
         is nothing left to fail.
         """
         scope = {"run": wrap(run)}
-        for index, branch in enumerate(sender.flow.spec.then):
+        for index, branch in enumerate(sender.task.spec.then):
             try:
                 if evaluate(branch.when, scope):
                     return branch
             except ExpressionError as exc:
                 log.warning(
-                    "flow '%s' then[%d] (%r): %s -- treating it as no match.",
+                    "task '%s' then[%d] (%r): %s -- treating it as no match.",
                     sender.name,
                     index,
                     branch.when,
@@ -601,7 +603,7 @@ class Daemon:
                 )
         return None
 
-    def _hand_off(self, sender: FlowRunner, result: RunResult, depth: int) -> None:
+    def _hand_off(self, sender: TaskRunner, result: RunResult, depth: int) -> None:
         run = handoff_scope(result)
         branch = self._chosen(sender, run)
         if branch is None or branch.to is None:
@@ -609,7 +611,7 @@ class Daemon:
 
         if depth >= MAX_CHAIN:
             log.warning(
-                "flow '%s' would hand off to '%s', but this chain has already "
+                "task '%s' would hand off to '%s', but this chain has already "
                 "made %d handoffs and stops here. Check for a loop.",
                 sender.name,
                 branch.to,
@@ -624,7 +626,7 @@ class Daemon:
             return
         if target.holding:
             log.warning(
-                "flow '%s' handed off to '%s', which is paused: dropped. "
+                "task '%s' handed off to '%s', which is paused: dropped. "
                 "Resume it and the next handoff lands.",
                 sender.name,
                 branch.to,
@@ -639,16 +641,16 @@ class Daemon:
             # Always said out loud: a loss nobody hears about is what the
             # one-waits rule would otherwise buy.
             log.warning(
-                "flow '%s' was still busy, so an earlier handoff (%s) was "
+                "task '%s' was still busy, so an earlier handoff (%s) was "
                 "dropped in favour of this one.",
                 branch.to,
                 displaced.reason,
             )
 
-    def _pool_for(self, flow: LoadedFlow) -> ProviderPool:
-        if flow.binding_key not in self.pools:
-            self.pools[flow.binding_key] = ProviderPool(flow.binding)
-        return self.pools[flow.binding_key]
+    def _pool_for(self, task: LoadedTask) -> ProviderPool:
+        if task.binding_key not in self.pools:
+            self.pools[task.binding_key] = ProviderPool(task.binding)
+        return self.pools[task.binding_key]
 
     def stop(self) -> None:
         """Request a graceful shutdown; in-flight runs finish their current node."""
@@ -659,7 +661,7 @@ class Daemon:
     def _ready_to_learn(self) -> bool:
         """Double opt-in (the config key and the folder), and learning
         always yields to work: not one runner may be mid-run."""
-        if self.config.learn is None or not self.config.tasks:
+        if self.config.learn is None or not self.config.cards:
             return False
         if not keeps_memory(self.config.base_dir):
             return False
@@ -667,7 +669,7 @@ class Daemon:
 
     async def _learn_once(self, spec: Any, pool: ProviderPool) -> None:
         """One guarded attempt. Nothing here may take the daemon down."""
-        project = self.config.resolve_path(self.config.tasks)
+        project = self.config.resolve_path(self.config.cards)
         try:
             result = await learn_pass(project, spec, pool)
         except Exception as exc:
@@ -715,8 +717,8 @@ class Daemon:
         self.cancel.set()
 
     async def serve(self, *, install_signals: bool = True) -> list[RunResult]:
-        if not self.flows:
-            log.warning("no enabled flows in %s", self.config.source_path)
+        if not self.tasks:
+            log.warning("no enabled tasks in %s", self.config.source_path)
             return []
         if install_signals:
             self._install_signals()
@@ -756,12 +758,12 @@ class Daemon:
             learn_task = asyncio.create_task(self._learning_loop())
             log.info("learning every %s, while nothing else is running", self.config.learn)
         log.info(
-            "poieo daemon up: %d flow(s), store at %s",
+            "poieo daemon up: %d task(s), store at %s",
             len(self.runners),
             self.store.root,
         )
         try:
-            # return_exceptions: one flow blowing up must not orphan the others
+            # return_exceptions: one task blowing up must not orphan the others
             # or tear down pools they are still using.
             outcomes = await asyncio.gather(
                 *(runner.run() for runner in self.runners), return_exceptions=True
@@ -769,7 +771,7 @@ class Daemon:
             for runner, outcome in zip(self.runners, outcomes):
                 if isinstance(outcome, BaseException):
                     log.exception(
-                        "flow '%s' crashed: %s", runner.name, outcome, exc_info=outcome
+                        "task '%s' crashed: %s", runner.name, outcome, exc_info=outcome
                     )
         finally:
             self.cancel.set()

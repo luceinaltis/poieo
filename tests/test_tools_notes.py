@@ -8,7 +8,7 @@ and corrects, never an exception that ends the run.
 import pytest
 
 from poieo.providers.base import ToolCall
-from poieo.task import append_journal, read_journal
+from poieo.card import append_journal, read_journal
 from poieo.tools import DEFAULT_TOOLSETS, ToolContext, LocalExecutor
 from poieo.tools.notes import Postbox
 

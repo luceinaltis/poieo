@@ -544,14 +544,14 @@ def test_finding_a_project_does_not_read_its_cards(tmp_path, monkeypatch):
     """Discovery answers "where is the store" and "which binding". It used to
     parse every card in the folder, cross-check the memory and build a graph
     per task to do it -- on `poieo run`, `poieo runs list`, everything."""
-    import poieo.task as task_module
+    import poieo.card as task_module
 
     _project_with_cards(tmp_path)
 
     parsed = []
-    real = task_module.load_task
+    real = task_module.load_card
     monkeypatch.setattr(
-        task_module, "load_task", lambda p: parsed.append(Path(p).name) or real(p)
+        task_module, "load_card", lambda p: parsed.append(Path(p).name) or real(p)
     )
 
     project = find_project(tmp_path)
@@ -600,7 +600,7 @@ def test_the_daemon_config_is_a_project_and_reads_the_same_keys(tmp_path):
     shallow, full = load_project(marker), load_config(marker)
     assert shallow.store_path() == full.store_path()
     assert shallow.resolve_path("x") == full.resolve_path("x")
-    assert (shallow.binding, shallow.tasks) == (full.binding, full.tasks)
-    # ...and only the full load expands the cards into flows.
-    assert [f.name for f in full.flows] == ["alpha", "beta", "gamma"]
-    assert shallow.flows == []
+    assert (shallow.binding, shallow.cards) == (full.binding, full.cards)
+    # ...and only the full load reads the cards into tasks.
+    assert [f.name for f in full.tasks] == ["alpha", "beta", "gamma"]
+    assert shallow.cards == full.cards  # the shallow read stops at the folder

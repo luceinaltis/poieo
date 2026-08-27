@@ -68,7 +68,7 @@ def stub_runner(
         last_result=last,
         workspace=workspace,
         trigger=SimpleNamespace(describe=f"interval 30s"),
-        flow=SimpleNamespace(
+        task=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
             binding=BindingSpec.model_validate(binding or STUB_BINDING),
             spec=SimpleNamespace(then=list(then)),

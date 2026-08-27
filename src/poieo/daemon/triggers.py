@@ -1,4 +1,4 @@
-"""Triggers decide *when* a flow fires; the daemon decides what happens then.
+"""Triggers decide *when* a task fires; the daemon decides what happens then.
 
 Each is an async generator that yields a :class:`Firing` and **only resumes once
 the run has finished** -- which is what makes ``loop`` a true "run
@@ -56,7 +56,7 @@ def humanize(seconds: float) -> str:
 
 @dataclass(slots=True)
 class Firing:
-    """One scheduled activation of a flow."""
+    """One scheduled activation of a task."""
 
     iteration: int
     at: datetime
@@ -154,7 +154,7 @@ class Trigger:
 
 
 class ManualTrigger(Trigger):
-    """Never fires on its own; the flow only runs when something asks it to."""
+    """Never fires on its own; the task only runs when something asks it to."""
 
     describe = "manual"
 

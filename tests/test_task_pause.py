@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from conftest import card
 from poieo.daemon import Daemon, load_config
-from poieo.daemon.service import PAUSE_AFTER, FlowRunner
+from poieo.daemon.service import PAUSE_AFTER, TaskRunner
 from poieo.store import NullStore
 
 
@@ -14,7 +14,7 @@ from poieo.store import NullStore
 
 
 def _bare_runner():
-    runner = FlowRunner.__new__(FlowRunner)
+    runner = TaskRunner.__new__(TaskRunner)
     runner._repeat_key, runner._repeat_count = None, 0
     return runner
 
@@ -83,7 +83,7 @@ def _config(tmp_path):
     path = tmp_path / "poieo.yaml"
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
     config = load_config(path)
-    config.flows[0].trigger.max_iterations = 10
+    config.tasks[0].trigger.max_iterations = 10
     return config
 
 
@@ -135,8 +135,8 @@ async def test_a_paused_task_says_why_in_its_journal(tmp_path):
     path = tmp_path / "poieo.yaml"
     path.write_text("binding: b.yaml\ntasks: tasks/\n", encoding="utf-8")
     config = load_config(path)
-    config.flows[0].trigger.max_iterations = 10
-    config.flows[0].trigger.cooldown = 0
+    config.tasks[0].trigger.max_iterations = 10
+    config.tasks[0].trigger.cooldown = 0
 
     daemon = Daemon(config, store=NullStore())
     await _paused(daemon)

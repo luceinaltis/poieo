@@ -11,16 +11,16 @@ from pathlib import Path
 import pytest
 
 from conftest import card, at
-from poieo.daemon.config import FlowSpec, load_config, load_flows
+from poieo.daemon.config import TaskSpec, load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
 from poieo.store import NullStore
-from poieo.task import (
-    TaskSpec,
+from poieo.card import (
+    CardSpec,
     append_journal,
     expand,
-    load_task,
-    load_tasks,
+    load_card,
+    load_cards,
     read_journal,
     system_block,
 )
@@ -28,7 +28,7 @@ from poieo.task import (
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 
-def write_task(root: Path, stem: str, body: str, folder: Path | None = None) -> Path:
+def write_card(root: Path, stem: str, body: str, folder: Path | None = None) -> Path:
     """A task file in <root>/tasks, with its folder created."""
     target = folder or (root / "project")
     target.mkdir(parents=True, exist_ok=True)
@@ -43,14 +43,14 @@ def write_task(root: Path, stem: str, body: str, folder: Path | None = None) -> 
 
 
 def test_expansion_equals_the_hand_written_flow_and_graph(tmp_path):
-    path = write_task(
+    path = write_card(
         tmp_path,
         "keep-improving",
         "name: keep improving poieo\nprompt: |\n  Fix one thing.\n",
     )
-    flow, graph = expand(load_task(path))
+    flow, graph = expand(load_card(path))
 
-    assert flow == FlowSpec(
+    assert flow == TaskSpec(
         name="keep-improving",
         graph=str(path),
         trigger={"type": "interval", "every": "1h"},
@@ -78,19 +78,19 @@ def test_expansion_equals_the_hand_written_flow_and_graph(tmp_path):
 
 
 def test_the_generated_prompt_asks_for_a_one_line_summary(tmp_path):
-    path = write_task(tmp_path, "t", "name: tidy up\nprompt: go\n")
-    _, graph = expand(load_task(path))
+    path = write_card(tmp_path, "t", "name: tidy up\nprompt: go\n")
+    _, graph = expand(load_card(path))
     assert "one line" in graph.nodes[0].system
     assert "tidy up" in graph.nodes[0].system
 
 
 def test_optional_keys_land_on_the_node(tmp_path):
-    path = write_task(
+    path = write_card(
         tmp_path,
         "t",
         "name: t\nprompt: go\nrole: worker\ntools: [files]\nmax_turns: 5\n",
     )
-    _, graph = expand(load_task(path))
+    _, graph = expand(load_card(path))
     node = graph.nodes[0]
     assert (node.role, node.tools, node.max_turns) == ("worker", ["files"], 5)
 
@@ -103,7 +103,7 @@ def test_a_card_that_names_no_tools_gets_the_one_default_toolset(tmp_path):
     """
     from poieo.tools import DEFAULT_TOOLSETS
 
-    _, graph = expand(load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n")))
+    _, graph = expand(load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n")))
     assert graph.nodes[0].tools == DEFAULT_TOOLSETS
 
 
@@ -117,15 +117,15 @@ def test_a_card_that_names_no_tools_gets_the_one_default_toolset(tmp_path):
     ],
 )
 def test_schedule_sugar(tmp_path, body, expected):
-    flow, _ = expand(load_task(write_task(tmp_path, "t", body)))
+    flow, _ = expand(load_card(write_card(tmp_path, "t", body)))
     assert flow.trigger.type == expected["type"]
     if "every" in expected:
         assert flow.trigger.every == expected["every"]
 
 
 def test_identity_comes_from_the_filename_not_the_title(tmp_path):
-    path = write_task(tmp_path, "keep-improving", "name: a title I will rewrite\nprompt: go\n")
-    flow, graph = expand(load_task(path))
+    path = write_card(tmp_path, "keep-improving", "name: a title I will rewrite\nprompt: go\n")
+    flow, graph = expand(load_card(path))
     assert flow.name == "keep-improving"
     assert graph.name == "keep-improving"
 
@@ -136,8 +136,8 @@ def test_an_ejected_task_names_its_graph_instead_of_generating_one(tmp_path):
     (graphs / "t.yaml").write_text(
         "name: t\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8"
     )
-    path = write_task(tmp_path, "t", "name: t\ngraph: ../graphs/t.yaml\n")
-    flow, graph = expand(load_task(path))
+    path = write_card(tmp_path, "t", "name: t\ngraph: ../graphs/t.yaml\n")
+    flow, graph = expand(load_card(path))
     assert graph is None
     assert Path(flow.graph) == (graphs / "t.yaml").resolve()
 
@@ -160,9 +160,9 @@ def write_graph(root: Path, stem: str) -> Path:
 
 
 def test_a_graph_beside_a_card_is_not_read_as_a_card(tmp_path):
-    write_task(tmp_path, "tidy", "name: tidy\nprompt: go\n")
+    write_card(tmp_path, "tidy", "name: tidy\nprompt: go\n")
     write_graph(tmp_path, "tidy")
-    assert [task.slug for task in load_tasks(tmp_path / "tasks")] == ["tidy"]
+    assert [task.slug for task in load_cards(tmp_path / "tasks")] == ["tidy"]
 
 
 def test_a_file_that_says_nothing_useful_is_told_what_a_card_needs(tmp_path):
@@ -170,7 +170,7 @@ def test_a_file_that_says_nothing_useful_is_told_what_a_card_needs(tmp_path):
     tasks.mkdir()
     (tasks / "confused.yaml").write_text("name: neither\nversion: 1\n", encoding="utf-8")
     with pytest.raises(SpecError) as caught:
-        load_tasks(tasks)
+        load_cards(tasks)
     # Read as the card it nearly is, and told which key is the problem --
     # which beats "this is neither shape" for anyone holding the file.
     assert "version" in str(caught.value)
@@ -185,7 +185,7 @@ def test_a_file_answering_to_both_shapes_fails_rather_than_disappearing(tmp_path
         "name: both\nfolder: .\nnodes:\n  - {id: a, type: agent}\n", encoding="utf-8"
     )
     with pytest.raises(SpecError):
-        load_tasks(tasks)
+        load_cards(tasks)
 
 
 def test_a_card_whose_yaml_is_broken_still_fails_the_load(tmp_path):
@@ -196,13 +196,13 @@ def test_a_card_whose_yaml_is_broken_still_fails_the_load(tmp_path):
     tasks.mkdir()
     (tasks / "broken.yaml").write_text("name: broken\n  folder: .\n", encoding="utf-8")
     with pytest.raises(SpecError):
-        load_tasks(tasks)
+        load_cards(tasks)
 
 
 def test_a_card_with_an_unknown_key_still_fails_the_load(tmp_path):
-    write_task(tmp_path, "tidy", "name: tidy\nprompt: go\nbogus: 1\n")
+    write_card(tmp_path, "tidy", "name: tidy\nprompt: go\nbogus: 1\n")
     with pytest.raises(SpecError):
-        load_tasks(tmp_path / "tasks")
+        load_cards(tmp_path / "tasks")
 
 
 def test_paths_resolve_against_the_task_file(tmp_path):
@@ -210,7 +210,7 @@ def test_paths_resolve_against_the_task_file(tmp_path):
     (tmp_path / "tasks" / "here").mkdir()
     path = tmp_path / "tasks" / "t.yaml"
     path.write_text("name: t\nfolder: here\nprompt: go\n", encoding="utf-8")
-    flow, graph = expand(load_task(path))
+    flow, graph = expand(load_card(path))
 
     assert flow.workdir == str(tmp_path / "tasks" / "here")
     # And nowhere on the node: the run is handed a private copy of that folder,
@@ -232,9 +232,9 @@ def test_paths_resolve_against_the_task_file(tmp_path):
     ],
 )
 def test_a_broken_task_fails_at_load(tmp_path, body, message):
-    path = write_task(tmp_path, "t", body)
+    path = write_card(tmp_path, "t", body)
     with pytest.raises(SpecError) as exc:
-        load_task(path)
+        load_card(path)
     assert message in str(exc.value)
 
 
@@ -243,7 +243,7 @@ def test_a_missing_folder_fails_at_load(tmp_path):
     path = tmp_path / "tasks" / "t.yaml"
     path.write_text("name: t\nfolder: nowhere\nprompt: go\n", encoding="utf-8")
     with pytest.raises(SpecError, match="folder does not exist"):
-        load_task(path)
+        load_card(path)
 
 
 # -- the daemon config -------------------------------------------------------
@@ -261,25 +261,25 @@ def _config(tmp_path: Path, extra: str = "") -> Path:
 
 
 def test_a_tasks_folder_becomes_flows(tmp_path):
-    write_task(tmp_path, "one", "name: one\nprompt: go\n")
-    write_task(tmp_path, "two", "name: two\nprompt: go\nenabled: false\n")
+    write_card(tmp_path, "one", "name: one\nprompt: go\n")
+    write_card(tmp_path, "two", "name: two\nprompt: go\nenabled: false\n")
     config = load_config(_config(tmp_path))
 
-    assert [f.name for f in config.flows] == ["one", "two"]
-    loaded = load_flows(config, enabled_only=False)
+    assert [f.name for f in config.tasks] == ["one", "two"]
+    loaded = load_tasks(config, enabled_only=False)
     assert [item.graph.nodes[0].type for item in loaded] == ["agent", "agent"]
     assert [item.spec.enabled for item in loaded] == [True, False]
 
-    assert load_flows(config) and len(load_flows(config)) == 1
+    assert load_tasks(config) and len(load_tasks(config)) == 1
 
 
 def test_every_card_in_the_folder_becomes_a_job(tmp_path):
-    write_task(tmp_path, "one", "name: one\nprompt: go\n")
-    write_task(tmp_path, "two", "name: two\nprompt: go\n")
+    write_card(tmp_path, "one", "name: one\nprompt: go\n")
+    write_card(tmp_path, "two", "name: two\nprompt: go\n")
 
     config = load_config(_config(tmp_path))
 
-    assert sorted(f.name for f in config.flows) == ["one", "two"]
+    assert sorted(f.name for f in config.tasks) == ["one", "two"]
 
 
 def test_a_missing_tasks_folder_fails_at_load(tmp_path):
@@ -302,15 +302,15 @@ def test_a_config_that_names_no_tasks_folder_has_no_jobs(tmp_path):
 
     loaded = load_config(config)
 
-    assert loaded.tasks is None
-    assert loaded.flows == []
+    assert loaded.cards is None   # no folder named
+    assert loaded.tasks == []     # and so nothing to run
 
 
 # -- the journal -------------------------------------------------------------
 
 
 def test_a_new_journal_gets_a_header_then_one_line_per_entry(tmp_path):
-    task = load_task(write_task(tmp_path, "tidy", "name: tidy up\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "tidy", "name: tidy up\nprompt: go\n"))
     when = datetime(2026, 8, 22, 3, 14)
 
     append_journal(task.journal_path(), "did", "fixed the flaky test", title=task.name, when=when)
@@ -323,7 +323,7 @@ def test_a_new_journal_gets_a_header_then_one_line_per_entry(tmp_path):
 
 
 def test_an_entry_is_one_line_however_the_model_answers(tmp_path):
-    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
     append_journal(task.journal_path(), "did", "first line\n\nsecond   line\n")
     written = task.journal_path().read_text(encoding="utf-8")
     assert len([line for line in written.splitlines() if line.startswith("- ")]) == 1
@@ -331,12 +331,12 @@ def test_an_entry_is_one_line_however_the_model_answers(tmp_path):
 
 
 def test_reading_an_absent_journal_says_so(tmp_path):
-    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
     assert read_journal(task.journal_path()) == "nothing yet"
 
 
 def test_only_the_tail_reaches_the_prompt(tmp_path):
-    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
     for i in range(25):
         append_journal(task.journal_path(), "did", f"entry {i}", title=task.name)
 
@@ -348,7 +348,7 @@ def test_only_the_tail_reaches_the_prompt(tmp_path):
 
 
 def test_a_hand_written_line_is_read_like_any_other(tmp_path):
-    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
     # By hand, in an editor, before the task has ever run -- so the folder is
     # made the same way a person would make it.
     task.journal_path().parent.mkdir(parents=True, exist_ok=True)
@@ -360,7 +360,7 @@ def test_a_run_leaves_no_journal_among_the_definitions(tmp_path):
     """Why the journal moved at all. A card is a thing a person edits; a
     journal grows every night. Side by side, the folder of definitions went
     dirty in git on every run, whether or not a definition had changed."""
-    task = load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n"))
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
     definitions = sorted(p.name for p in (tmp_path / "tasks").glob("*.yaml"))
 
     append_journal(task.journal_path(), "did", "tidied one file")
@@ -372,17 +372,17 @@ def test_a_run_leaves_no_journal_among_the_definitions(tmp_path):
 
 
 def test_the_generated_prompt_carries_the_journal(tmp_path):
-    _, graph = expand(load_task(write_task(tmp_path, "t", "name: t\nprompt: go\n")))
+    _, graph = expand(load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n")))
     assert "{{ input.journal }}" in graph.nodes[0].system
 
 
 def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
-    path = write_task(tmp_path, "t", "name: t\nprompt: go\n")
+    path = write_card(tmp_path, "t", "name: t\nprompt: go\n")
     memory = at(tmp_path / "tasks")
     memory.longterm().mkdir(parents=True)
     memory.constitution().write_text("Never push to main.", encoding="utf-8")
 
-    _, graph = expand(load_task(path))
+    _, graph = expand(load_card(path))
     system = graph.nodes[0].system
     # The stable part of the prompt stays stable: always-true rules come
     # before recent history.
@@ -390,28 +390,28 @@ def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
 
 
 def test_a_task_backed_flow_reads_its_journal_before_every_run(tmp_path):
-    path = write_task(tmp_path, "one", "name: one\nprompt: go\n")
+    path = write_card(tmp_path, "one", "name: one\nprompt: go\n")
     config = load_config(_config(tmp_path))
-    flow = load_flows(config)[0]
+    flow = load_tasks(config)[0]
 
     assert flow.read_input(config)["journal"] == "nothing yet"
-    append_journal(load_task(path).journal_path(), "you", "try the tests instead")
+    append_journal(load_card(path).journal_path(), "you", "try the tests instead")
     assert "try the tests instead" in flow.read_input(config)["journal"]
 
 
 async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
     from poieo.daemon import Daemon
 
-    path = write_task(tmp_path, "one", "name: one\nprompt: go\n")
+    path = write_card(tmp_path, "one", "name: one\nprompt: go\n")
     config = load_config(_config(tmp_path))
-    for flow in config.flows:
+    for flow in config.tasks:
         flow.trigger.max_iterations = 1
 
     await asyncio.wait_for(
         Daemon(config, store=NullStore()).serve(install_signals=False), timeout=10
     )
 
-    written = load_task(path).journal_path().read_text(encoding="utf-8")
+    written = load_card(path).journal_path().read_text(encoding="utf-8")
     assert written.startswith("# one\n")
     assert "· did" in written
     assert "(mock response)" in written
@@ -424,7 +424,7 @@ from poieo.tools import Isolation
 
 def _task(tmp_path, **extra):
     body = {"name": "boxed", "folder": str(tmp_path), "prompt": "do it", **extra}
-    return TaskSpec.model_validate(body)
+    return CardSpec.model_validate(body)
 
 
 def test_a_task_card_parses_an_isolation_block(tmp_path):
@@ -455,7 +455,7 @@ def _load(tmp_path, body):
     (tmp_path / "work").mkdir(exist_ok=True)
     card = tmp_path / "card.yaml"
     card.write_text(f"name: boxed\nfolder: work\n{body}\nisolation:\n  image: x\n")
-    return load_task(card)
+    return load_card(card)
 
 
 def test_isolation_reaches_the_flow(tmp_path):
@@ -598,7 +598,7 @@ def _card(tmp_path, name, tools=""):
     (tmp_path / "work").mkdir(exist_ok=True)
     path = tmp_path / f"{name}.yaml"
     path.write_text(f"name: {name}\nfolder: work\nprompt: go\n{tools}")
-    return load_task(path)
+    return load_card(path)
 
 
 def test_a_task_with_notes_is_told_who_it_can_tell(tmp_path):
@@ -655,7 +655,7 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
     and the change's commit subject all come from the last node that said
     anything -- so they can never tell a reader three stories about one run."""
     from poieo.daemon.service import _change_message
-    from poieo.task import closing_line
+    from poieo.card import closing_line
 
     result = _finished()
     assert closing_line(result) == "fixed the parser\nand tidied up\n"
@@ -665,7 +665,7 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
 
 def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
     from poieo.daemon.service import _change_message
-    from poieo.task import closing_line
+    from poieo.card import closing_line
 
     silent = _finished(path=["work"], outputs={"work": "   "})
     assert closing_line(silent) == "(said nothing)"
@@ -675,7 +675,7 @@ def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
 
 def test_a_long_line_is_clipped_for_the_commit_but_not_for_the_record():
     from poieo.daemon.service import _change_message
-    from poieo.task import closing_line
+    from poieo.card import closing_line
 
     said = "went through every file and " + "x" * 200
     result = _finished(path=["work"], outputs={"work": said})
