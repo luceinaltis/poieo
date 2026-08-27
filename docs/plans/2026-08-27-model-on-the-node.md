@@ -41,17 +41,17 @@ npm test --workspace web-ui        # Task 2 only; run mode, never watch
 Tests (`tests/test_web_server.py`; the stub runner's `flow` gains a real
 `BindingSpec`, as `graph` is already a real `GraphSpec`):
 
-- [ ] a node naming a role reports that role's model id
-- [ ] a node naming no role reports the model reached through the graph's
+- [x] a node naming a role reports that role's model id
+- [x] a node naming no role reports the model reached through the graph's
       `default_role`
-- [ ] a router's `model` is `None`
-- [ ] one graph served by two flows on different bindings reports different
+- [x] a router's `model` is `None`
+- [x] one graph served by two flows on different bindings reports different
       models for the same node — the spec's reason the model is drawn inside
       a border and never on the graph
-- [ ] a role the binding never declares reports the default's model: what
+- [x] a role the binding never declares reports the default's model: what
       #112 made the daemon warn about, now visible in the payload
-- [ ] a binding with no default serves `None` and a 200, not a 500
-- [ ] the payload contains no `base_url` and no `api_key_env`
+- [x] a binding with no default serves `None` and a 200, not a 500
+- [x] the payload contains no `base_url` and no `api_key_env`
 
 PR `feat: the board is served the model each node would actually call`.
 
@@ -75,11 +75,11 @@ PR `feat: the board is served the model each node would actually call`.
 
 Tests (`web-ui/src/skins/basic/index.test.ts`):
 
-- [ ] every node resolving alike puts one model id on the header line, and
+- [x] every node resolving alike puts one model id on the header line, and
       the pills carry none
-- [ ] two distinct models put `2 models` on the header and the id on each
+- [x] two distinct models put `2 models` on the header and the id on each
       pill that has one
-- [ ] a router pill carries no model
-- [ ] a shape whose nodes all report `null` adds nothing to the header
+- [x] a router pill carries no model
+- [x] a shape whose nodes all report `null` adds nothing to the header
 
 PR `feat: the board says which model runs each node`.
