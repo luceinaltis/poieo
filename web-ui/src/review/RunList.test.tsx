@@ -158,16 +158,37 @@ test("a task with no private copy is not accused of finding nothing to do", () =
   const row = rows()[0]
   expect(row.getAttribute("data-outcome")).toBe("succeeded")
   expect(row.textContent).not.toMatch(/nothing to do/i)
-  // it still says what the run amounted to
-  expect(row.textContent).toMatch(/step/i)
+  // it still says what the run amounted to -- in the run's own words
+  expect(row.textContent).toContain("did the thing")
 })
 
 
-test("a run with no change to describe says how long it took", () => {
+test("a run with no change to describe says what it said", () => {
   // A task that keeps no private copy has no change message, so every row read
-  // "3 steps" and ten of them said nothing at all. How long it took is the one
-  // thing that is always true of a run and always different.
-  render([run({ run_id: "a", steps: 3 })], false)
+  // "3 steps" -- the graph's shape, identical down the list. The run's own
+  // closing sentence is the part that differs.
+  render([run({ run_id: "a", steps: 3, said: "tidied the docs folder" })], false)
+
+  expect(rows()[0].textContent).toContain("tidied the docs folder")
+  expect(rows()[0].textContent).not.toContain("3 steps")
+})
+
+
+test("a run with a long answer is cut to its first line", () => {
+  // A model that wrote six paragraphs must not push the next nine runs off
+  // the screen; the drawer's timeline is where the whole of it belongs.
+  render(
+    [run({ run_id: "a", said: "wrote the file\nand then explained itself at length" })],
+    false,
+  )
+
+  expect(rows()[0].textContent).toContain("wrote the file")
+  expect(rows()[0].textContent).not.toContain("at length")
+})
+
+
+test("a run that said nothing at all still says what it cost", () => {
+  render([run({ run_id: "a", steps: 3, said: "" })], false)
 
   expect(rows()[0].textContent).toContain("3 steps")
   expect(rows()[0].textContent).toContain("9s")
