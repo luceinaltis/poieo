@@ -241,3 +241,21 @@ test("the return leg clears the bottom row, whichever row that is", () => {
     corner({ flow: "x", column: 0, row: 2 }).y + BOX.height,
   )
 })
+
+
+test("measured rows override the pitch, because a border is as tall as it is", () => {
+  // BOX.height is an assumption, and since a border draws its graph on a grid
+  // it is routinely wrong by more than the gap between rows. Left to the
+  // arithmetic, a return leg is drawn straight through the box above it.
+  const frame = { tops: [0, 300], bottom: 460, heights: { chores: 190, publish: 160 } }
+  const publish = { flow: "publish", column: 1, row: 1 }
+  const chores = { flow: "chores", column: 0, row: 0 }
+
+  expect(corner(chores, frame).y).toBe(0)
+  expect(corner(publish, frame).y).toBe(300)
+
+  const back = backWire(publish, chores, 1, frame)
+  expect(back.under).toBeGreaterThan(460)
+  // Up into the target's own underside, not into a guess at where it ends.
+  expect(back.y2).toBe(190)
+})
