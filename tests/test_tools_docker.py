@@ -86,11 +86,11 @@ async def test_a_host_write_is_visible_in_the_box(tmp_path):
 async def test_a_box_write_is_visible_on_the_host(tmp_path):
     work = _workdir(tmp_path)
     async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE) as ex:
-        await ex.execute(_shell("echo from-box > b.txt"))
+        await ex.execute(_shell("echo from-container > b.txt"))
         result = await ex.execute(ToolCall(id="2", name="read_file", arguments={"path": "b.txt"}))
-    assert "from-box" in result.text
+    assert "from-container" in result.text
     # and the host really has the file, not just the executor's view of it
-    assert "from-box" in (work / "b.txt").read_text()
+    assert "from-container" in (work / "b.txt").read_text()
 
 
 async def test_the_workdir_is_a_mount_not_an_empty_volume(tmp_path):
@@ -201,54 +201,54 @@ async def test_execute_before_entering_is_a_harness_error(tmp_path):
     assert result.error
 
 
-# -- the box: one per task, kept between runs -------------------------------
+# -- the container: one per task, kept between runs -------------------------------
 
 from datetime import timedelta
 
 from poieo.tools import Isolation
-from poieo.tools.docker import Box, BoxKeeper, sweep
+from poieo.tools.docker import Container, ContainerPool, sweep
 
 ISO = Isolation(image=IMAGE)
 
 
 async def test_two_runs_share_one_box(tmp_path):
-    """The lifetime decision, stated as a test: a task's box outlives its runs."""
+    """The lifetime decision, stated as a test: a task's container outlives its runs."""
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
+    container = Container("task-a", work, ISO)
     try:
-        first = await box.ensure()
-        second = await box.ensure()
+        first = await container.ensure()
+        second = await container.ensure()
         assert first == second
     finally:
-        await box.remove()
+        await container.remove()
 
 
 async def test_a_file_written_by_the_first_run_survives(tmp_path):
     """What reuse is actually for: what run 1 installed is there for run 2."""
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
+    container = Container("task-a", work, ISO)
     try:
-        await box.ensure()
-        # Written outside the mount, so only the box itself can be keeping it.
-        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, box=box) as ex:
+        await container.ensure()
+        # Written outside the mount, so only the container itself can be keeping it.
+        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, container=container) as ex:
             await ex.execute(_shell("echo installed > /opt/marker"))
-        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, box=box) as ex:
+        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, container=container) as ex:
             result = await ex.execute(_shell("cat /opt/marker"))
         assert "installed" in result.text
     finally:
-        await box.remove()
+        await container.remove()
 
 
 async def test_an_attached_executor_does_not_remove_the_box(tmp_path):
     """The borrower must not destroy the lender's object."""
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
+    container = Container("task-a", work, ISO)
     try:
-        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, box=box) as ex:
+        async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, container=container) as ex:
             container_id = ex.container_id
         assert _container_exists(container_id)
     finally:
-        await box.remove()
+        await container.remove()
 
 
 async def test_a_one_shot_executor_still_removes_its_own(tmp_path):
@@ -261,21 +261,21 @@ async def test_a_one_shot_executor_still_removes_its_own(tmp_path):
 async def test_ensure_restarts_a_box_that_died(tmp_path):
     """Derived state: a machine that slept, or a stray docker rm, must not wedge it."""
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
+    container = Container("task-a", work, ISO)
     try:
-        first = await box.ensure()
+        first = await container.ensure()
         subprocess.run(["docker", "rm", "-f", first], capture_output=True)
-        second = await box.ensure()
+        second = await container.ensure()
         assert second != first and _container_exists(second)
     finally:
-        await box.remove()
+        await container.remove()
 
 
 async def test_a_changed_image_gets_a_different_box(tmp_path):
     """Not a reconfigure: the keeper keys by settings, so this is the whole
     mechanism and there is nothing else to check."""
     work = _workdir(tmp_path)
-    keeper = BoxKeeper()
+    keeper = ContainerPool()
     try:
         assert keeper.get(work, ISO) is not keeper.get(
             work, Isolation(image="busybox:latest")
@@ -286,42 +286,42 @@ async def test_a_changed_image_gets_a_different_box(tmp_path):
 
 async def test_remove_is_safe_to_call_twice(tmp_path):
     work = _workdir(tmp_path)
-    box = Box("task-a", work, ISO)
-    await box.ensure()
-    await box.remove()
-    await box.remove()
+    container = Container("task-a", work, ISO)
+    await container.ensure()
+    await container.remove()
+    await container.remove()
 
 
 async def test_the_sweep_spares_a_box_in_use(tmp_path):
     work = _workdir(tmp_path)
-    box = Box("task-sweep-keep", work, ISO)
+    container = Container("task-sweep-keep", work, ISO)
     try:
-        container_id = await box.ensure()
+        container_id = await container.ensure()
         removed = await sweep(older_than=timedelta(days=7))
         assert _container_exists(container_id)
     finally:
-        await box.remove()
+        await container.remove()
 
 
 async def test_the_sweep_removes_an_idle_box(tmp_path):
     work = _workdir(tmp_path)
-    box = Box("task-sweep-drop", work, ISO)
-    container_id = await box.ensure()
+    container = Container("task-sweep-drop", work, ISO)
+    container_id = await container.ensure()
     try:
         # Anything created before "now" is older than a zero-length window.
         await sweep(older_than=timedelta(seconds=0))
         assert not _container_exists(container_id)
     finally:
-        await box.remove()
+        await container.remove()
 
 
-# -- one box per (folder, isolation), shared by whatever tasks want it -------
+# -- one container per (folder, isolation), shared by whatever tasks want it -------
 
 
 async def test_two_tasks_on_one_folder_share_a_box(tmp_path):
     """The common case: several standing jobs on the same repo."""
     work = _workdir(tmp_path)
-    keeper = BoxKeeper()
+    keeper = ContainerPool()
     try:
         a = keeper.get(work, ISO)
         b = keeper.get(work, ISO)
@@ -333,7 +333,7 @@ async def test_two_tasks_on_one_folder_share_a_box(tmp_path):
 
 async def test_a_different_image_gets_its_own_box(tmp_path):
     work = _workdir(tmp_path)
-    keeper = BoxKeeper()
+    keeper = ContainerPool()
     try:
         a = keeper.get(work, ISO)
         b = keeper.get(work, Isolation(image=IMAGE, network="bridge"))
@@ -343,7 +343,7 @@ async def test_a_different_image_gets_its_own_box(tmp_path):
 
 
 async def test_a_different_folder_gets_its_own_box(tmp_path):
-    keeper = BoxKeeper()
+    keeper = ContainerPool()
     other = tmp_path / "other"
     other.mkdir()
     try:
@@ -356,19 +356,19 @@ async def test_closing_the_keeper_removes_every_box(tmp_path):
     work = _workdir(tmp_path)
     other = tmp_path / "other"
     other.mkdir()
-    keeper = BoxKeeper()
+    keeper = ContainerPool()
     ids = [await keeper.get(work, ISO).ensure(), await keeper.get(other, ISO).ensure()]
     await keeper.aclose()
     assert not any(_container_exists(i) for i in ids)
 
 
 async def test_the_sweep_is_what_reclaims_a_hard_kill(tmp_path):
-    """A clean shutdown removes every box, so what survives is only what a
+    """A clean shutdown removes every container, so what survives is only what a
     crash left behind -- and that is what the sweep is for."""
     work = _workdir(tmp_path)
-    box = Box("orphan", work, ISO)
-    container_id = await box.ensure()
-    box.container_id = None          # as if the process died holding it
+    container = Container("orphan", work, ISO)
+    container_id = await container.ensure()
+    container.container_id = None          # as if the process died holding it
     try:
         await sweep(older_than=timedelta(seconds=0))
         assert not _container_exists(container_id)

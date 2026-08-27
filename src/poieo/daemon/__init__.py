@@ -3,13 +3,13 @@
 from .config import DaemonConfig, FlowSpec, LoadedFlow, load_config, load_flows
 from .cron import CronSchedule
 from .service import Daemon, FlowRunner
-from .triggers import Fire, Trigger, TriggerSpec, parse_duration
+from .triggers import Firing, Trigger, TriggerSpec, parse_duration
 
 __all__ = [
     "CronSchedule",
     "Daemon",
     "DaemonConfig",
-    "Fire",
+    "Firing",
     "FlowRunner",
     "FlowSpec",
     "LoadedFlow",

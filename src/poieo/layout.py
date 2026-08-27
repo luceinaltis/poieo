@@ -53,6 +53,8 @@ class Layout:
         return self.longterm() / "constitution.md"
 
     def facts(self) -> Path:
+        # Named for the folder on disk, which stays `facts/`; the things in it
+        # are Entries everywhere else.
         return self.longterm() / "facts"
 
     def attic(self) -> Path:

@@ -16,9 +16,9 @@ import {
   shelfCount,
 } from "./scene"
 import { NOTHING } from "../../review/rollup"
-import type { Worker } from "../../state/stage"
+import type { FlowState } from "../../state/stage"
 
-function worker(over: Partial<Worker> = {}): Worker {
+function flowState(over: Partial<FlowState> = {}): FlowState {
   return {
     status: "waiting",
     currentNode: null,
@@ -125,22 +125,22 @@ test("zoom is bounded on both sides", () => {
 
 test("figurePose maps the three states to three poses", () => {
   const poses = new Set([
-    figurePose(worker({ status: "waiting" })),
-    figurePose(worker({ status: "running" })),
-    figurePose(worker({ status: "error" })),
+    figurePose(flowState({ status: "waiting" })),
+    figurePose(flowState({ status: "running" })),
+    figurePose(flowState({ status: "error" })),
   ])
   expect(poses.size).toBe(3)
 })
 
 test("the lamp is lit while the bench is in use", () => {
-  expect(lampLit(worker({ status: "running" }))).toBe(true)
-  expect(lampLit(worker({ status: "waiting" }))).toBe(false)
+  expect(lampLit(flowState({ status: "running" }))).toBe(true)
+  expect(lampLit(flowState({ status: "waiting" }))).toBe(false)
 })
 
 test("a flow with no private copy shelves nothing", () => {
   // It produces no piece to put anywhere. Counting its runs as finished
   // pieces fills a shelf with things that do not exist.
-  const busy = worker({
+  const busy = flowState({
     tracked: false,
     recent: { ...NOTHING, runs: 40, succeeded: 40 },
   })
@@ -148,10 +148,10 @@ test("a flow with no private copy shelves nothing", () => {
 })
 
 test("the shelf fills with finished work, not attempts", () => {
-  expect(shelfCount(worker())).toBe(0)
-  expect(shelfCount(worker({ recent: { ...NOTHING, runs: 4, succeeded: 3 } }))).toBe(3)
+  expect(shelfCount(flowState())).toBe(0)
+  expect(shelfCount(flowState({ recent: { ...NOTHING, runs: 4, succeeded: 3 } }))).toBe(3)
   // a failed night leaves the shelf empty
-  expect(shelfCount(worker({ recent: { ...NOTHING, runs: 2, failed: 2 } }))).toBe(0)
+  expect(shelfCount(flowState({ recent: { ...NOTHING, runs: 2, failed: 2 } }))).toBe(0)
 })
 
 

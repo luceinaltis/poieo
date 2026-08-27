@@ -13,7 +13,7 @@ import {
 } from "../api"
 import type { FeedStatus } from "../api"
 import { WINDOW, initialStage, reduce, replay, setRuns } from "../state/stage"
-import type { StageState, Worker } from "../state/stage"
+import type { StageState, FlowState } from "../state/stage"
 import type { FlowRow, PoieoEvent } from "../types"
 
 export interface StageApi {
@@ -44,17 +44,17 @@ export interface StageStore {
  * the feed was down published a summary nobody heard, and this is where that
  * gap closes. Live-only detail (the current node, the last turn) is kept.
  */
-function seed(state: StageState, flows: FlowRow[]): StageState {
-  const fresh = initialStage(flows).workers
-  const workers: Record<string, Worker> = {}
+function seed(state: StageState, rows: FlowRow[]): StageState {
+  const fresh = initialStage(rows).flows
+  const flows: Record<string, FlowState> = {}
 
   for (const [name, blank] of Object.entries(fresh)) {
-    const existing = state.workers[name]
+    const existing = state.flows[name]
     if (!existing) {
-      workers[name] = blank
+      flows[name] = blank
       continue
     }
-    workers[name] = {
+    flows[name] = {
       ...existing,
       tracked: blank.tracked,
       // Structure is the listing's to state, not the event stream's: a graph
@@ -71,7 +71,7 @@ function seed(state: StageState, flows: FlowRow[]): StageState {
             : "waiting",
     }
   }
-  return { ...state, workers }
+  return { ...state, flows }
 }
 
 export function createStageStore(api: StageApi = {

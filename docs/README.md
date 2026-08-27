@@ -28,7 +28,7 @@ component is written to hold.
 | [tools.md](tools.md) | the hands: toolsets, the executor seam, isolation | `tools/` |
 | [tasks.md](tasks.md) | the short form: one card, its journal, notes between cards | `task.py` |
 | [daemon.md](daemon.md) | residency: config, triggers, the runner, the control seam | `daemon/` |
-| [checkpoint.md](checkpoint.md) | the private copy, and last night's work as a change | `checkpoint.py` |
+| [workspace.md](workspace.md) | the private copy, and last night's work as a change | `workspace.py` |
 | [memory.md](memory.md) | what a project keeps and how a run is shown it | `memory/`, `learn.py`, `strength.py`, `blob.py` |
 | [storage.md](storage.md) | where every file lives, and the run log | `layout.py`, `project.py`, `store.py` |
 | [web.md](web.md) | the HTTP/SSE API and the page it serves | `web/`, `web-ui/` |

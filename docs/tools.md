@@ -49,13 +49,13 @@ as a process tree on timeout (default 120s, max 600s) and output is capped.
 
 ## The seam
 
-`make_executor(workdir, toolsets, hands)` is **the one place that decides where
+`make_executor(workdir, toolsets, tool_context)` is **the one place that decides where
 tools run**. Callers hand over a setting and use what comes back, so nothing
 upstream names a backend:
 
 ```
-hands.isolation is None  →  LocalExecutor      (nothing to set up or tear down)
-otherwise                →  DockerExecutor     (import lives inside the branch)
+tool_context.isolation is None  →  LocalExecutor   (nothing to set up or tear down)
+otherwise                       →  DockerExecutor  (import lives inside the branch)
 ```
 
 The Docker import is inside the branch on purpose: a machine that never isolates
@@ -64,19 +64,19 @@ never pays to load it.
 Subclasses differ only in *where* the tools run, never in what a caller does with
 them — `async with`, then `definitions()` and `execute()`.
 
-## Hands
+## ToolContext
 
-`Hands` is one object carrying everything an agent node's tools need beyond a
+`ToolContext` is one object carrying everything an agent node's tools need beyond a
 workdir and a toolset list:
 
 ```python
-Hands(isolation=…, boxes=…, postbox=…)
+ToolContext(isolation=…, containers=…, postbox=…)
 ```
 
-`boxes` and `postbox` are typed `Any` deliberately: only the `tools` package may
-know what they are. The runtime carries `ctx.hands` and never opens it, which is
+`containers` and `postbox` are typed `Any` deliberately: only the `tools` package may
+know what they are. The runtime carries `ctx.tool_context` and never opens it, which is
 how `runtime/` stays unaware that containers or journals exist. The daemon builds
-one per flow, because the box keeper is shared across tasks and the roster of
+one per flow, because the container pool is shared across tasks and the roster of
 tasks is only known there.
 
 ## Isolation
@@ -96,28 +96,31 @@ The workdir is **bind-mounted, not copied**. Host file tools and the container's
 shell must see the same bytes at the same instant, or the model writes a file it
 then cannot compile.
 
-### Boxes
+### Kept containers
 
-A *box* is a container kept alive between runs (`sleep <forever>`, then
-`docker exec` per command), so what a task installs on Monday is there on
-Tuesday. The daemon holds a `BoxKeeper` — one box per distinct folder-and-
-settings, shared by tasks over the same folder — and destroys them on shutdown.
-`poieo run --isolate` has no next run to keep one for, so its executor makes its
-own and destroys it.
+A task's container is kept alive between runs (`sleep <forever>`, then
+`docker exec` per command), so what it installs on Monday is there on Tuesday.
+The daemon holds a `ContainerPool` — one per distinct folder-and-settings,
+shared by tasks over the same folder — and destroys them on shutdown. `poieo
+run --isolate` has no next run to keep one for, so its executor makes its own
+and destroys it.
 
-`box_key()` says what makes two boxes the same box — folder and settings,
-nothing about who asked — so two cards standing over one repo share a toolchain
-instead of installing it twice. The cost of that sharing is that they can
-disturb each other inside the box; what they cannot disturb is anything outside
+`container_key()` says what makes two of them the same — folder and settings,
+nothing about who asked — so two cards standing over one repo share a
+toolchain instead of installing it twice. The cost of that sharing is that they
+can disturb each other inside it; what they cannot disturb is anything outside
 the folder, which is the boundary the feature is about.
 
-A box is disposable derived state. `poieo reset <task>` throws it away and the
-next run rebuilds it; nothing in the user's folder is touched. At startup the
-daemon sweeps every `poieo.box`-labelled container older than 7 days — an *age*
-cap rather than an idle one, since docker records when a container was created,
-not when it was last used. That reclaims what a crash left behind and what
-deleted tasks abandoned, at a cost of about one rebuild a week for an hourly
-task.
+A container is disposable derived state. `poieo reset <task>` throws it away
+and the next run rebuilds it; nothing in the user's folder is touched. At
+startup the daemon sweeps every container labelled `poieo.box` older than 7
+days — an *age* cap rather than an idle one, since docker records when a
+container was created, not when it was last used. That reclaims what a crash
+left behind and what deleted tasks abandoned, at a cost of about one rebuild a
+week for an hourly task.
+
+(The label value stays `poieo.box`: changing it would orphan every container a
+running daemon already made.)
 
 ### Preflight
 

@@ -101,7 +101,7 @@ def explain_failure(exc: BaseException) -> Cause | None:
             return Cause(
                 "no_isolation",
                 "the isolated environment could not be provided",
-                "is docker running? `poieo reset <task>` rebuilds the box",
+                "is docker running? `poieo reset <task>` rebuilds the environment",
             )
         elif isinstance(err, ExpressionError):
             return Cause(

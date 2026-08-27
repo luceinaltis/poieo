@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..layout import layout_for
-from .facts import Fact, keeps_memory, tokens
+from .entries import Entry, keeps_memory, words
 from .recall import recall
 
 log = logging.getLogger("poieo.memory")
@@ -30,18 +30,18 @@ def results_dir(project_dir: Path) -> Path:
     return layout_for(project_dir).results()
 
 
-def used_in(fact: Fact, record: dict[str, Any]) -> bool:
+def used_in(entry: Entry, record: dict[str, Any]) -> bool:
     """Did this entry do real work in this run?
 
     The entry's distinctive words surface in what the run produced -- a
     behavioural stand-in until a serving stack can report attention. Shared by
-    wear and the accounting, so the two can never disagree.
+    reinforcement and the accounting, so the two can never disagree.
     """
-    said = tokens(
+    said = words(
         f"{record.get('summary', '')} "
         f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
     )
-    return len(tokens(fact.body) & said) >= 2
+    return len(words(entry.body) & said) >= 2
 
 
 def write_result(task: Any, result: Any) -> Path | None:
@@ -74,7 +74,7 @@ def write_result(task: Any, result: Any) -> Path | None:
         # Recomputed rather than passed in, and emphasis-grade: it may fail
         # without costing the record, let alone the run.
         if keeps_memory(task.dir):
-            record["shown"] = [fact.slug for fact in recall(task.dir, task)]
+            record["shown"] = [entry.slug for entry in recall(task.dir, task)]
     except Exception as exc:
         log.warning("task '%s': could not record what was shown: %s", task.slug, exc)
     try:

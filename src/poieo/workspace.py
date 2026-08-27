@@ -8,7 +8,7 @@ each run lands as one change to read, take, or throw away in the morning.
 ``asyncio.to_thread``**: a blocking subprocess on the loop the daemon shares
 with the web server would stall the event stream for every watcher.
 
-Design: docs/checkpoint.md
+Design: docs/workspace.md
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .errors import PoieoError
 _IDENTITY = ["-c", "user.name=poieo", "-c", "user.email=poieo@localhost"]
 
 
-class CheckpointError(PoieoError):
+class WorkspaceError(PoieoError):
     """A git operation failed. Never fatal to a flow -- the work still ran."""
 
 
@@ -64,9 +64,9 @@ def _git(cwd: Path, *args: str) -> str:
             errors="replace",
         )
     except OSError as exc:  # git missing from PATH, cwd gone
-        raise CheckpointError(str(exc)) from exc
+        raise WorkspaceError(str(exc)) from exc
     if result.returncode != 0:
-        raise CheckpointError(result.stderr.strip() or f"git {args[0]} failed")
+        raise WorkspaceError(result.stderr.strip() or f"git {args[0]} failed")
     return result.stdout
 
 
@@ -99,7 +99,7 @@ def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
     return files, insertions, deletions
 
 
-class Checkpoint:
+class Workspace:
     """A flow's private copy of one repository, and the change it is building."""
 
     def __init__(self, repo: Path, flow: str, worktrees: Path):
@@ -127,7 +127,7 @@ class Checkpoint:
             return False
         try:
             return _git(self.repo, "rev-parse", "--is-inside-work-tree").strip() == "true"
-        except CheckpointError:
+        except WorkspaceError:
             return False
 
     def into(self) -> str:
@@ -233,7 +233,7 @@ class Checkpoint:
         else:
             try:
                 _git(self.repo, "merge", "--no-commit", "--no-ff", target)
-            except CheckpointError:
+            except WorkspaceError:
                 # Read the conflicted paths before undoing the merge, then leave
                 # the checkout exactly as it was found.
                 conflicted = _git(
@@ -271,14 +271,14 @@ class Checkpoint:
         try:
             _git(self.repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{self.branch}")
             return True
-        except CheckpointError:
+        except WorkspaceError:
             return False
 
     def _is_ancestor(self, older: str, newer: str) -> bool:
         try:
             _git(self.repo, "merge-base", "--is-ancestor", older, newer)
             return True
-        except CheckpointError:
+        except WorkspaceError:
             return False
 
     def _dirty(self) -> list[str]:

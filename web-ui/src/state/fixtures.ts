@@ -116,8 +116,8 @@ export const AGENT_RUN: PoieoEvent[] = [
       "step": 1,
       "next": null,
       "output": "Wrote TODO.md with three next steps.",
-      "role": "worker",
-      "binding": "worker -> fake:mock-model",
+      "role": "flowState",
+      "binding": "flowState -> fake:mock-model",
       "model": "mock-model",
       "usage": {
         "input_tokens": 0,

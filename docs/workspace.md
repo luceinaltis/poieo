@@ -1,6 +1,6 @@
-# Checkpoint — the private copy, and the morning after
+# Workspace — the private copy, and the morning after
 
-`src/poieo/checkpoint.py`
+`src/poieo/workspace.py`
 
 **The only module in poieo that knows git exists.**
 
@@ -86,7 +86,7 @@ one event loop with the web server — a blocking subprocess on that loop would
 stall the event stream for every watcher. The `/api/flows` route gathers the
 per-flow review states concurrently for the same reason.
 
-**A `CheckpointError` is never fatal to a flow.** The work still ran. A
+**A `WorkspaceError` is never fatal to a flow.** The work still ran. A
 repository that cannot be used is logged and the run happens in the folder
 directly, with a warning that its changes cannot be reviewed or undone.
 

@@ -1,10 +1,10 @@
-"""How worn each connection is: runtime emphasis, never meaning.
+"""How strong each connection is: runtime emphasis, never meaning.
 
 What connects to what stays a judgment in markdown; this holds only how often
 a connection helped. It cannot run away: weights decay by half-life, and no
 entry's connections may total more than the fan cap.
 
-Deleting `memory/cache/strength.json` loses only which paths were worn, so
+Deleting `memory/cache/strength.json` loses only which paths were strong, so
 nothing here is ever worth failing over -- corrupt reads as empty, failed
 writes are logged and swallowed.
 
@@ -26,13 +26,13 @@ log = logging.getLogger("poieo.memory")
 
 # One reinforcement is worth 1.0 and halves every HALF_LIFE days untouched.
 HALF_LIFE_DAYS = 30.0
-# The most total wear one entry's connections may carry (the fan effect).
+# The most weight one entry's connections may total (the fan effect).
 FAN_CAP = 10.0
 # Below this a pair is noise and is dropped on the next write.
 _FLOOR = 0.01
-# A pair counts as worn -- enough to carry a second hop -- at this level:
-# one fresh reinforcement stays worn for one half-life.
-WORN_FLOOR = 0.5
+# A pair counts as strong -- enough to carry a second hop -- at this level:
+# one fresh reinforcement stays strong for one half-life.
+STRONG_FLOOR = 0.5
 
 
 def _now() -> datetime:
@@ -71,10 +71,10 @@ def _read(project_dir: Path, now: datetime) -> dict[str, float]:
     return weights
 
 
-def wear_of(
+def strengths(
     project_dir: Path, now: datetime | None = None
 ) -> dict[frozenset[str], float]:
-    """Current wear, decayed as of now. Pairs naming entries that no longer
+    """Current weights, decayed as of now. Pairs naming entries that no longer
     exist are the caller's to ignore -- this file knows names, not files."""
     now = now or _now()
     return {
@@ -84,7 +84,7 @@ def wear_of(
     }
 
 
-def wear(
+def reinforce(
     project_dir: Path, pairs: Iterable[tuple[str, str]], now: datetime | None = None
 ) -> None:
     """Reinforce each pair by one. Decay lands first, the fan cap after,
@@ -128,4 +128,4 @@ def wear(
         temp.write_text(body, encoding="utf-8")
         os.replace(temp, path)
     except Exception as exc:
-        log.warning("could not record the wear in %s: %s", project_dir, exc)
+        log.warning("could not record the strengths in %s: %s", project_dir, exc)

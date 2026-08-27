@@ -37,7 +37,7 @@ export default function App({ store }: { store?: StageStore }) {
   }, [theStore])
 
   useEffect(() => {
-    const host = createSkinHost(boardRef.current!, { onSelectWorker: setSelected })
+    const host = createSkinHost(boardRef.current!, { onSelectFlow: setSelected })
     hostRef.current = host
     return () => {
       host.destroy()
@@ -62,7 +62,7 @@ export default function App({ store }: { store?: StageStore }) {
   const closeDrawer = useCallback(() => setSelected(null), [])
   const decided = useCallback(() => void theStore.resync(), [theStore])
 
-  const empty = Object.keys(stage.workers).length === 0
+  const empty = Object.keys(stage.flows).length === 0
   const openRow = selected ? flows.find((row) => row.name === selected) : undefined
 
   return (
@@ -100,7 +100,7 @@ export default function App({ store }: { store?: StageStore }) {
 
       {selected ? (
         <Drawer
-          // A fresh drawer per worker: its selected run, its opened files and
+          // A fresh drawer per flowState: its selected run, its opened files and
           // its expanded-failures toggle all belong to the flow being read.
           key={selected}
           flow={selected}

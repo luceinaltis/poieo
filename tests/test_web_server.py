@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 from starlette.testclient import TestClient
 
-from test_checkpoint import git, head, make_repo
+from test_workspace import git, head, make_repo
 
 from poieo.binding import BindingSpec
-from poieo.checkpoint import Checkpoint
+from poieo.workspace import Workspace
 from poieo.graph import GraphSpec
 from poieo.store import Event, RunStore
 from poieo.web.events import BroadcastStore
@@ -56,7 +56,7 @@ def stub_runner(
     status="waiting",
     current=None,
     last=None,
-    checkpoint=None,
+    workspace=None,
     then=(),
     graph=None,
     binding=None,
@@ -66,7 +66,7 @@ def stub_runner(
         status=status,
         current_run_id=current,
         last_result=last,
-        checkpoint=checkpoint,
+        workspace=workspace,
         trigger=SimpleNamespace(describe=f"interval 30s"),
         flow=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
@@ -262,7 +262,7 @@ def test_flows_asks_every_runner_at_once(tmp_path):
             return "main"
 
     runners = [
-        stub_runner(name=f"flow{i}", checkpoint=SlowPoint()) for i in range(4)
+        stub_runner(name=f"flow{i}", workspace=SlowPoint()) for i in range(4)
     ]
     client = TestClient(create_app(stub_daemon(tmp_path, runners)))
 
@@ -334,7 +334,7 @@ def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
 def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
     """A stub daemon whose one flow really has a change to show."""
     repo = make_repo(tmp_path)
-    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    point = Workspace(repo, "chores", tmp_path / "worktrees")
     point.prepare()
     (point.worktree / "new.py").write_text(body, encoding="utf-8")
     change = point.commit(run_id, "did a thing")
@@ -349,7 +349,7 @@ def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
             "change": change.as_dict(),
         }
     )
-    runner = stub_runner(name="chores", checkpoint=point)
+    runner = stub_runner(name="chores", workspace=point)
     return SimpleNamespace(runners=[runner], store=store), change
 
 
@@ -405,7 +405,7 @@ def test_diff_truncates_a_huge_patch_but_keeps_the_file_list(tmp_path):
 def daemon_with_two_changes(tmp_path):
     """Two runs' worth of pending work on one flow's branch."""
     repo = make_repo(tmp_path)
-    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    point = Workspace(repo, "chores", tmp_path / "worktrees")
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
     changes = {}
 
@@ -424,7 +424,7 @@ def daemon_with_two_changes(tmp_path):
             }
         )
 
-    runner = stub_runner(name="chores", checkpoint=point)
+    runner = stub_runner(name="chores", workspace=point)
     return SimpleNamespace(runners=[runner], store=store), repo, changes
 
 
@@ -483,7 +483,7 @@ def test_accept_refuses_a_dirty_checkout(tmp_path):
 
 def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
     repo = make_repo(tmp_path)
-    point = Checkpoint(repo, "chores", tmp_path / "checkpoint")
+    point = Workspace(repo, "chores", tmp_path / "worktrees")
     point.prepare()
     (point.worktree / "README.md").write_text("theirs", encoding="utf-8")
     change = point.commit("r1", "rewrote it")
@@ -497,7 +497,7 @@ def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
     before = head(repo, "main")
 
     daemon = SimpleNamespace(
-        runners=[stub_runner(name="chores", checkpoint=point)], store=store
+        runners=[stub_runner(name="chores", workspace=point)], store=store
     )
     response = TestClient(create_app(daemon)).post("/api/flows/chores/accept", json={})
 

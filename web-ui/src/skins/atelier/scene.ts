@@ -8,7 +8,7 @@
  * in ../layout.
  */
 
-import type { Worker } from "../../state/stage"
+import type { FlowState } from "../../state/stage"
 
 export {
   CELL,
@@ -30,17 +30,17 @@ export type Pose = "sitting" | "working" | "alarmed"
 /**
  * How the smith stands: at the anvil, sat waiting, or looking up from it.
  *
- * Three poses and no more. A worker has more states than this, but a figure
+ * Three poses and no more. A flowState has more states than this, but a figure
  * seen across a room can only say so much, and the drawer is where the rest
  * is read.
  */
-export function figurePose(worker: Worker): Pose {
-  if (worker.status === "error") return "alarmed"
-  return worker.status === "running" ? "working" : "sitting"
+export function figurePose(flowState: FlowState): Pose {
+  if (flowState.status === "error") return "alarmed"
+  return flowState.status === "running" ? "working" : "sitting"
 }
 
-export function lampLit(worker: Worker): boolean {
-  return worker.status === "running"
+export function lampLit(flowState: FlowState): boolean {
+  return flowState.status === "running"
 }
 
 
@@ -51,7 +51,7 @@ export function lampLit(worker: Worker): boolean {
  * it produces nothing to put on a shelf, so filling one would be inventing
  * work it never did.
  */
-export function shelfCount(worker: Worker): number {
-  return worker.tracked ? worker.recent.succeeded : 0
+export function shelfCount(flowState: FlowState): number {
+  return flowState.tracked ? flowState.recent.succeeded : 0
 }
 

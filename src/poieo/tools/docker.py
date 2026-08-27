@@ -1,4 +1,4 @@
-"""The box: an executor whose shell can only reach the working directory.
+"""The container: an executor whose shell can only reach the working directory.
 
 This is the only module in poieo that knows Docker exists. File tools are the
 host implementations, unchanged -- ``resolve_path`` already confines them, and
@@ -31,8 +31,8 @@ from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 # make every later exec fail with an unhelpful "is not running".
 _IDLE = "2147483647"
 _MOUNT = "/work"
-# How an orphaned box is found after a hard kill, and what the sweep matches on.
-LABEL_BOX = "poieo.box"
+# How an orphaned container is found after a hard kill, and what the sweep matches on.
+BOX_LABEL = "poieo.box"
 _PROBE_TIMEOUT = 20.0
 
 log = logging.getLogger("poieo.isolation")
@@ -143,14 +143,14 @@ async def _alive(container_id: str) -> bool:
 
 
 async def _remove(container_id: str) -> None:
-    """Never raises: a box that will not die must not take a run down with it."""
+    """Never raises: a container that will not die must not take a run down with it."""
     try:
         await _docker("rm", "-f", container_id)
     except Exception as failure:
         log.warning("could not remove container %s: %s", container_id, failure)
 
 
-class Box:
+class Container:
     """One task's isolated environment, kept between that task's runs.
 
     *Derived state*: removing it is always allowed and the next run rebuilds
@@ -169,13 +169,13 @@ class Box:
 
         Idempotent and deliberately tolerant: a machine that slept, a docker
         restart or a hand-run `docker rm` all land here as a rebuild. Changed
-        settings do not -- the keeper keys a box by them, so an edited
-        isolation block gets a different box rather than reconfiguring this.
+        settings do not -- the keeper keys a container by them, so an edited
+        isolation block gets a different container rather than reconfiguring this.
         """
         if self.container_id and await _alive(self.container_id):
             return self.container_id
         self.container_id = await _start(
-            self.workdir, self.isolation, {LABEL_BOX: self.key}
+            self.workdir, self.isolation, {BOX_LABEL: self.key}
         )
         return self.container_id
 
@@ -186,7 +186,7 @@ class Box:
 
 
 async def sweep(older_than: timedelta) -> int:
-    """Remove poieo boxes older than ``older_than``. Returns how many went.
+    """Remove poieo containers older than ``older_than``. Returns how many went.
 
     Looks at every labelled container, not only this process's, so it also
     reclaims disk from tasks deleted while the daemon was down.
@@ -195,7 +195,7 @@ async def sweep(older_than: timedelta) -> int:
     not when it was last used. For an hourly task the difference is one rebuild
     a week.
     """
-    code, out = await _docker("ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_BOX}")
+    code, out = await _docker("ps", "-aq", "--no-trunc", "--filter", f"label={BOX_LABEL}")
     if code != 0:
         return 0
     removed = 0
@@ -241,19 +241,19 @@ class DockerExecutor(Executor):
         network: str = "none",
         user: str | None = None,
         labels: dict[str, str] | None = None,
-        box: "Box | None" = None,
-        hands: Any = None,
+        container: "Container | None" = None,
+        tool_context: Any = None,
     ):
         self.workdir = _resolved(workdir)
         self.isolation = Isolation(image=image, network=network, user=user)
         self.labels = dict(labels or {})
-        # Handed a box, this executor borrows it and must not remove it; the
+        # Handed a container, this executor borrows it and must not remove it; the
         # owner outlives the run. Without one it creates and destroys its own,
         # which is the one-shot `poieo run` path.
-        self.box = box
+        self.container = container
         self.container_id: str | None = None
 
-        self._load(toolsets, hands.postbox if hands else None)
+        self._load(toolsets, tool_context.postbox if tool_context else None)
         # The one substitution this class exists to make.
         if "run_command" in self.tools:
             self.tools["run_command"] = Tool(
@@ -262,18 +262,18 @@ class DockerExecutor(Executor):
 
     # -- lifecycle -----------------------------------------------------------
     async def __aenter__(self) -> "DockerExecutor":
-        if self.box is not None:
-            self.container_id = await self.box.ensure()
+        if self.container is not None:
+            self.container_id = await self.container.ensure()
         else:
             self.container_id = await _start(self.workdir, self.isolation, self.labels)
         return self
 
     async def __aexit__(self, *_exc_info: Any) -> None:
         container_id, self.container_id = self.container_id, None
-        # A borrowed box outlives this run; removing it here would be the
+        # A borrowed container outlives this run; removing it here would be the
         # borrower destroying the lender's object, and every single-run test
         # would still pass.
-        if container_id and self.box is None:
+        if container_id and self.container is None:
             await _remove(container_id)
 
     # -- execution -----------------------------------------------------------
@@ -298,52 +298,52 @@ class DockerExecutor(Executor):
 
 
 
-def box_key(workdir: Path, isolation: Isolation) -> str:
-    """What makes two boxes the same box: folder and settings, nothing about
+def container_key(workdir: Path, isolation: Isolation) -> str:
+    """What makes two containers the same container: folder and settings, nothing about
     who asked -- so two tasks over one repo share a toolchain."""
     raw = f"{workdir}|{isolation.image}|{isolation.network}|{isolation.user}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
-class BoxKeeper:
-    """Every box this daemon keeps, one per (folder, settings).
+class ContainerPool:
+    """Every container this daemon keeps, one per (folder, settings).
 
-    Sharing has a cost worth knowing: tasks in one box can disturb each other,
-    because the box is one machine. What they cannot disturb is anything
+    Sharing has a cost worth knowing: tasks in one container can disturb each other,
+    because the container is one machine. What they cannot disturb is anything
     outside the folder, which is the boundary that matters.
 
     Held by the Daemon and handed down as an opaque object.
     """
 
     def __init__(self) -> None:
-        self.boxes: dict[str, Box] = {}
+        self.containers: dict[str, Container] = {}
 
-    def get(self, workdir: Path, isolation: Isolation) -> Box:
+    def get(self, workdir: Path, isolation: Isolation) -> Container:
         workdir = _resolved(workdir)
-        key = box_key(workdir, isolation)
-        box = self.boxes.get(key)
-        if box is None:
-            box = self.boxes[key] = Box(key, workdir, isolation)
-        return box
+        key = container_key(workdir, isolation)
+        container = self.containers.get(key)
+        if container is None:
+            container = self.containers[key] = Container(key, workdir, isolation)
+        return container
 
     async def aclose(self) -> None:
-        for box in list(self.boxes.values()):
-            await box.remove()
-        self.boxes.clear()
+        for container in list(self.containers.values()):
+            await container.remove()
+        self.containers.clear()
 
 
-def remove_boxes_for(workdir: Path) -> int:
-    """Throw away every box built around ``workdir``. Returns how many went.
+def remove_containers_for(workdir: Path) -> int:
+    """Throw away every container built around ``workdir``. Returns how many went.
 
     Synchronous and label-driven, because `poieo reset` runs with no daemon and
-    no event loop, and must reach boxes this process never started. Nothing
+    no event loop, and must reach containers this process never started. Nothing
     inside the folder is touched.
     """
     # Matched on the mount rather than the key: reset knows the folder but not
-    # which image or network the box was built with.
+    # which image or network the container was built with.
     workdir = _resolved(workdir)
     listed = subprocess.run(
-        ["docker", "ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_BOX}"],
+        ["docker", "ps", "-aq", "--no-trunc", "--filter", f"label={BOX_LABEL}"],
         capture_output=True,
         text=True,
         timeout=_PROBE_TIMEOUT,

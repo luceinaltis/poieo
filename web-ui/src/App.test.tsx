@@ -117,7 +117,7 @@ let root: Root
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   localStorage.clear()
-  // The shell is driven here by clicking a worker on the board, so these ask
+  // The shell is driven here by clicking a flowState on the board, so these ask
   // for the DOM skin explicitly. The default is the canvas one.
   localStorage.setItem("poieo.skin", "basic")
   container = document.createElement("div")
@@ -143,7 +143,7 @@ test("no flows renders the invitation, not an error", async () => {
   expect(container.textContent).toContain("Nothing is running yet")
 })
 
-test("the picker lists the registered skins and the board carries the workers", async () => {
+test("the picker lists the registered skins and the board carries the flows", async () => {
   await render(initialStage(FLOWS))
 
   const picker = container.querySelector("select")!
@@ -164,7 +164,7 @@ test("a stale stored skin id still renders a board", async () => {
   expect(container.querySelectorAll("[data-flow]").length).toBeGreaterThan(0)
 })
 
-test("selecting a worker opens the drawer, and reading it leaves the board alone", async () => {
+test("selecting a flowState opens the drawer, and reading it leaves the board alone", async () => {
   const stage = replay(initialStage(FLOWS), AGENT_RUN)
   const store = await render(stage)
 
@@ -194,9 +194,9 @@ test("closing the drawer puts it away", async () => {
 })
 
 
-test("opening a different worker does not show the previous one's runs", async () => {
+test("opening a different flowState does not show the previous one's runs", async () => {
   // The drawer keeps a selected run. Without a fresh instance per
-  // flow, switching workers leaves the last flow's run in the diff pane.
+  // flow, switching flows leaves the last flow's run in the diff pane.
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
@@ -211,7 +211,7 @@ test("opening a different worker does not show the previous one's runs", async (
 
   const drawer = container.querySelector(".drawer")!
   expect(drawer.getAttribute("data-flow")).toBe("revision")
-  // nothing carried over from the worker we just left
+  // nothing carried over from the flowState we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
 })
 

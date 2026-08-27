@@ -23,7 +23,7 @@ export interface LastRun {
   finished_at: string
 }
 
-export interface Worker {
+export interface FlowState {
   status: "waiting" | "running" | "error"
   currentNode: string | null
   nodeType: string | null
@@ -76,7 +76,7 @@ export interface Worker {
 export const WINDOW = 50
 
 export interface StageState {
-  workers: Record<string, Worker>
+  flows: Record<string, FlowState>
   /** Learned from run_started: no other event says which flow it belongs to. */
   runFlow: Record<string, string>
   /** Dedup keys for the history/live overlap. Retired when a run ends. */
@@ -91,7 +91,7 @@ const asString = (value: unknown, fallback = ""): string =>
 const asNumber = (value: unknown, fallback = 0): number =>
   typeof value === "number" ? value : fallback
 
-function blankWorker(): Worker {
+function blankFlow(): FlowState {
   return {
     status: "waiting",
     currentNode: null,
@@ -111,11 +111,11 @@ function blankWorker(): Worker {
   }
 }
 
-export function initialStage(flows: FlowRow[]): StageState {
-  const workers: Record<string, Worker> = {}
-  for (const row of flows) {
-    workers[row.name] = {
-      ...blankWorker(),
+export function initialStage(rows: FlowRow[]): StageState {
+  const flows: Record<string, FlowState> = {}
+  for (const row of rows) {
+    flows[row.name] = {
+      ...blankFlow(),
       tracked: row.into !== null,
       then: row.then,
       shape: row.shape,
@@ -130,7 +130,7 @@ export function initialStage(flows: FlowRow[]): StageState {
         : null,
     }
   }
-  return { workers, runFlow: {}, seen: new Set() }
+  return { flows, runFlow: {}, seen: new Set() }
 }
 
 /**
@@ -155,7 +155,7 @@ function flowFor(state: StageState, event: PoieoEvent): string | null {
 }
 
 /** null = an event this build does not know; {} = known, but nothing to show. */
-function patchFor(event: PoieoEvent, worker: Worker): Partial<Worker> | null {
+function patchFor(event: PoieoEvent, flowState: FlowState): Partial<FlowState> | null {
   const data = event.data ?? {}
 
   switch (event.type) {
@@ -194,7 +194,7 @@ function patchFor(event: PoieoEvent, worker: Worker): Partial<Worker> | null {
             error: typeof data.error === "string" ? data.error : null,
             at: event.at ?? "",
           },
-          ...worker.recentToolCalls,
+          ...flowState.recentToolCalls,
         ].slice(0, TOOL_CALL_CAP),
       }
 
@@ -222,7 +222,7 @@ function patchFor(event: PoieoEvent, worker: Worker): Partial<Worker> | null {
  */
 function applySummary(state: StageState, event: PoieoEvent): StageState {
   const flow = asString(event.flow, "")
-  if (!flow || !(flow in state.workers)) return state
+  if (!flow || !(flow in state.flows)) return state
 
   for (const key of state.seen) {
     if (key.startsWith(`${event.run_id}|`)) state.seen.delete(key)
@@ -233,10 +233,10 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
   return {
     ...state,
     runFlow,
-    workers: {
-      ...state.workers,
+    flows: {
+      ...state.flows,
       [flow]: {
-        ...state.workers[flow],
+        ...state.flows[flow],
         lastRun: {
           status: asString(event.status),
           steps: asNumber(event.steps),
@@ -245,8 +245,8 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
         // The frame is the summary, flattened -- so it joins the window
         // like one, at the front, and the oldest falls off the back.
         ...windowed(
-          [event as unknown as RunSummary, ...state.workers[flow].runs],
-          state.workers[flow].tracked,
+          [event as unknown as RunSummary, ...state.flows[flow].runs],
+          state.flows[flow].tracked,
         ),
       },
     },
@@ -257,12 +257,12 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
   if (event.type === "run_summary") return applySummary(state, event)
 
   const flow = flowFor(state, event)
-  if (flow === null || !(flow in state.workers)) return state
+  if (flow === null || !(flow in state.flows)) return state
 
   const key = keyOf(event)
   if (state.seen.has(key)) return state
 
-  const patch = patchFor(event, state.workers[flow])
+  const patch = patchFor(event, state.flows[flow])
   if (patch === null) return state
 
   // The dedup set is carried, not copied: it is bookkeeping, and copying it on
@@ -277,23 +277,23 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
   return {
     ...state,
     runFlow,
-    workers: { ...state.workers, [flow]: { ...state.workers[flow], ...patch } },
+    flows: { ...state.flows, [flow]: { ...state.flows[flow], ...patch } },
   }
 }
 
 /** The window and its sum, which are never allowed to disagree. */
-function windowed(runs: RunSummary[], tracked: boolean): Pick<Worker, "runs" | "recent"> {
+function windowed(runs: RunSummary[], tracked: boolean): Pick<FlowState, "runs" | "recent"> {
   const kept = runs.slice(0, WINDOW)
   return { runs: kept, recent: rollup(kept, tracked) }
 }
 
 /** Seed a flow's window from the run index, which the reducer cannot see. */
 export function setRuns(state: StageState, flow: string, runs: RunSummary[]): StageState {
-  if (!(flow in state.workers)) return state
-  const worker = state.workers[flow]
+  if (!(flow in state.flows)) return state
+  const flowState = state.flows[flow]
   return {
     ...state,
-    workers: { ...state.workers, [flow]: { ...worker, ...windowed(runs, worker.tracked) } },
+    flows: { ...state.flows, [flow]: { ...flowState, ...windowed(runs, flowState.tracked) } },
   }
 }
 

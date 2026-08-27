@@ -66,7 +66,7 @@ async def test_reads_answer_from_the_wrapped_store(tmp_path, monkeypatch):
 
     store = BroadcastStore(NullStore())
     assert store.list_runs() == []
-    assert store.run("r1") is None
+    assert store.summary("r1") is None
     assert list(store.events("r1")) == []
 
 

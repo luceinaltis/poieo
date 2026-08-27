@@ -52,7 +52,7 @@ def test_null_store_reads_nothing_either(tmp_path, monkeypatch):
 
     store = NullStore()
     assert store.list_runs() == []
-    assert store.run("r1") is None
+    assert store.summary("r1") is None
     assert list(store.events("r1")) == []
 
 
@@ -121,7 +121,7 @@ def test_run_returns_the_newest_and_stops_there(tmp_path, monkeypatch):
     parsed = []
     real = json.loads
     monkeypatch.setattr(store_module.json, "loads", lambda s: parsed.append(1) or real(s))
-    row = store.run("r1")
+    row = store.summary("r1")
     assert row["status"] == "completed"  # the newest record still wins
     assert len(parsed) == 1  # the answer, not everything before or after it
 
@@ -140,8 +140,8 @@ def test_a_damaged_line_never_costs_the_lines_around_it(tmp_path):
         handle.write('{"run_id": "half-writ')  # a torn tail, no newline
 
     assert [row["run_id"] for row in store.list_runs()] == ["r2", "r1"]
-    assert store.run("r1")["flow"] == "chores"
-    assert store.run("nope") is None
+    assert store.summary("r1")["flow"] == "chores"
+    assert store.summary("nope") is None
 
 
 def test_events_survive_the_same_damage(tmp_path):

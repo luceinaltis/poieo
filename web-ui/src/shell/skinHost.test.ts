@@ -39,7 +39,7 @@ beforeEach(() => {
 test("switching skins destroys the old handle exactly once", () => {
   const a = fakeSkin("a")
   const b = fakeSkin("b")
-  const host = createSkinHost(document.createElement("div"), { onSelectWorker: () => {} }, (id) =>
+  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, (id) =>
     id === "b" ? b.skin : a.skin,
   )
 
@@ -54,7 +54,7 @@ test("switching skins destroys the old handle exactly once", () => {
 
 test("showing the same skin again does not remount it", () => {
   const a = fakeSkin("a")
-  const host = createSkinHost(document.createElement("div"), { onSelectWorker: () => {} }, () => a.skin)
+  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, () => a.skin)
 
   host.show("a")
   host.show("a")
@@ -65,7 +65,7 @@ test("showing the same skin again does not remount it", () => {
 test("a skin mounted mid-run is handed the current stage at once", () => {
   const a = fakeSkin("a")
   const b = fakeSkin("b")
-  const host = createSkinHost(document.createElement("div"), { onSelectWorker: () => {} }, (id) =>
+  const host = createSkinHost(document.createElement("div"), { onSelectFlow: () => {} }, (id) =>
     id === "b" ? b.skin : a.skin,
   )
   const stage = initialStage(FLOWS)

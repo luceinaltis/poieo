@@ -1,6 +1,6 @@
 """Triggers decide *when* a flow fires; the daemon decides what happens then.
 
-Each is an async generator that yields a :class:`Fire` and **only resumes once
+Each is an async generator that yields a :class:`Firing` and **only resumes once
 the run has finished** -- which is what makes ``loop`` a true "run
 continuously" mode instead of a queue piling up behind a slow model.
 
@@ -37,7 +37,7 @@ def parse_duration(value: str | int | float) -> float:
 
 
 @dataclass(slots=True)
-class Fire:
+class Firing:
     """One scheduled activation of a flow."""
 
     iteration: int
@@ -130,7 +130,7 @@ class Trigger:
     def _exhausted(self, iteration: int) -> bool:
         return self.max_iterations is not None and iteration > self.max_iterations
 
-    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         raise NotImplementedError
         yield  # pragma: no cover - makes this an async generator for typing
 
@@ -140,7 +140,7 @@ class ManualTrigger(Trigger):
 
     describe = "manual"
 
-    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         await cancel.wait()
         return
         yield  # pragma: no cover
@@ -164,7 +164,7 @@ class IntervalTrigger(Trigger):
         self.run_at_start = run_at_start
         self.describe = f"every {every:g}s"
 
-    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         loop = asyncio.get_running_loop()
         origin = loop.time()
         iteration = 0
@@ -178,7 +178,7 @@ class IntervalTrigger(Trigger):
             iteration += 1
             if self._exhausted(iteration):
                 return
-            yield Fire(iteration=iteration, at=datetime.now(), reason=self.describe)
+            yield Firing(iteration=iteration, at=datetime.now(), reason=self.describe)
             if self._exhausted(iteration + 1):
                 return  # nothing left to fire; do not sit out the period
 
@@ -203,7 +203,7 @@ class CronTrigger(Trigger):
         self.schedule = schedule
         self.describe = f"cron {schedule.expression}"
 
-    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         iteration = 0
         while not cancel.is_set():
             if self._exhausted(iteration + 1):
@@ -213,7 +213,7 @@ class CronTrigger(Trigger):
             if not await _sleep_or_cancel((target - now).total_seconds(), cancel):
                 return
             iteration += 1
-            yield Fire(iteration=iteration, at=target, reason=self.describe)
+            yield Firing(iteration=iteration, at=target, reason=self.describe)
 
 
 class LoopTrigger(Trigger):
@@ -227,13 +227,13 @@ class LoopTrigger(Trigger):
         self.cooldown = max(0.0, cooldown)
         self.describe = f"loop (cooldown {cooldown:g}s)" if cooldown else "loop"
 
-    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Fire]:
+    async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         iteration = 0
         while not cancel.is_set():
             iteration += 1
             if self._exhausted(iteration):
                 return
-            yield Fire(iteration=iteration, at=datetime.now(), reason="loop")
+            yield Firing(iteration=iteration, at=datetime.now(), reason="loop")
             if self._exhausted(iteration + 1):
                 return
             if not await _sleep_or_cancel(self.cooldown, cancel):

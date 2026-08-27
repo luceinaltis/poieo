@@ -17,9 +17,9 @@
  * every frame would make the board unreadable as well as slow.
  */
 
-import { changedWorkers } from "../changed"
+import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
-import type { StageState, Worker } from "../../state/stage"
+import type { StageState, FlowState } from "../../state/stage"
 import { BOX, corner, exits, place, steps, walk, wire } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
@@ -57,15 +57,15 @@ function element(tag: string, className: string, parent: Element): HTMLElement {
  * "fine, and there was nothing to do" apart from "stuck", and the only reason
  * the count was ever wanted.
  */
-function describeRecent(worker: Worker): string {
-  const recent = worker.recent
+function describeRecent(flowState: FlowState): string {
+  const recent = flowState.recent
   if (recent.runs === 0) return "nothing has run yet"
 
   const parts: string[] = []
   if (recent.succeeded) {
     // A flow with no private copy has nothing to change against, so a run
     // that ran is the whole of what there is to say about it.
-    const what = worker.tracked ? "change" : "run"
+    const what = flowState.tracked ? "change" : "run"
     parts.push(`${recent.succeeded} ${what}${recent.succeeded === 1 ? "" : "s"}`)
   }
   if (recent.insertions || recent.deletions) {
@@ -74,14 +74,14 @@ function describeRecent(worker: Worker): string {
   if (recent.failed) parts.push(`${recent.failed} failed`)
 
   if (parts.length > 0) return parts.join(" · ")
-  const last = worker.lastRun?.finished_at
+  const last = flowState.lastRun?.finished_at
   return last ? `quiet · last looked ${shortTime(last)}` : "quiet"
 }
 
 /** The distinct models a flow's nodes would call, in the order they appear. */
-function modelsOf(worker: Worker): string[] {
+function modelsOf(flowState: FlowState): string[] {
   const seen: string[] = []
-  for (const node of worker.shape.nodes) {
+  for (const node of flowState.shape.nodes) {
     if (node.model && !seen.includes(node.model)) seen.push(node.model)
   }
   return seen
@@ -96,10 +96,10 @@ function modelsOf(worker: Worker): string[] {
  * the count says so and the nodes inside carry the detail. Opening buys the
  * answer, exactly as it does for a handoff arrow.
  */
-function describeWhen(worker: Worker): string {
-  const models = modelsOf(worker)
-  if (models.length === 0) return worker.trigger
-  return `${worker.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
+function describeWhen(flowState: FlowState): string {
+  const models = modelsOf(flowState)
+  if (models.length === 0) return flowState.trigger
+  return `${flowState.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
 }
 
 function buildBox(flow: string, callbacks: SkinCallbacks): Box {
@@ -115,7 +115,7 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
   // the flow, exactly as a card did, and the chevron opens the box.
   const pick = element("button", "basic-pick", head)
   ;(pick as HTMLButtonElement).type = "button"
-  pick.addEventListener("click", () => callbacks.onSelectWorker(flow))
+  pick.addEventListener("click", () => callbacks.onSelectFlow(flow))
   element("span", "basic-dot", pick)
   element("span", "basic-name", pick).textContent = flow
 
@@ -135,22 +135,22 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
 }
 
 /** The graph inside a border, drawn once: it moves only when a file does. */
-function fillInside(box: Box, worker: Worker): void {
-  const leaves = new Set(exits(worker.shape))
+function fillInside(box: Box, flowState: FlowState): void {
+  const leaves = new Set(exits(flowState.shape))
   // Which neighbouring pairs are a real edge. Drawn between every pair, the
   // connector claims the router's arms run into one another.
-  const leads = new Set(steps(worker.shape))
+  const leads = new Set(steps(flowState.shape))
   // Only when they differ. A flow on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
-  const differ = modelsOf(worker).length > 1
-  const nodes = walk(worker.shape).map((id) => {
+  const differ = modelsOf(flowState).length > 1
+  const nodes = walk(flowState.shape).map((id) => {
     const pill = document.createElement("span")
     pill.className = "basic-node"
     pill.dataset.node = id
-    const spec = worker.shape.nodes.find((node) => node.id === id)
+    const spec = flowState.shape.nodes.find((node) => node.id === id)
     if (spec) pill.dataset.type = spec.type
     // Where a handoff leaves from, once you can see the nodes at all.
-    if (leaves.has(id) && worker.then.length > 0) pill.dataset.exit = "true"
+    if (leaves.has(id) && flowState.then.length > 0) pill.dataset.exit = "true"
     if (leads.has(id)) pill.dataset.leadsOn = "true"
     pill.textContent = id
     // A router has no model because it calls none, and the gap is itself
@@ -164,23 +164,23 @@ function fillInside(box: Box, worker: Worker): void {
 }
 
 /** What moves: which node is lit, and what the flow has been saying. */
-function paint(box: Box, worker: Worker, open: boolean): void {
-  box.root.dataset.status = worker.status
+function paint(box: Box, flowState: FlowState, open: boolean): void {
+  box.root.dataset.status = flowState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
-  box.when.textContent = describeWhen(worker)
+  box.when.textContent = describeWhen(flowState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
-    pill.dataset.here = String(pill.dataset.node === worker.currentNode)
+    pill.dataset.here = String(pill.dataset.node === flowState.currentNode)
   }
 
-  const thinking = !worker.lastText && Boolean(worker.lastThinking)
+  const thinking = !flowState.lastText && Boolean(flowState.lastThinking)
   box.said.dataset.thinking = String(thinking)
-  box.said.textContent = worker.lastText || worker.lastThinking || ""
+  box.said.textContent = flowState.lastText || flowState.lastThinking || ""
 
   box.tools.replaceChildren(
-    ...worker.recentToolCalls.map((call) => {
+    ...flowState.recentToolCalls.map((call) => {
       const item = document.createElement("li")
       item.className = "basic-tool"
       item.dataset.error = String(Boolean(call.error))
@@ -188,17 +188,17 @@ function paint(box: Box, worker: Worker, open: boolean): void {
       return item
     }),
   )
-  box.tally.textContent = describeRecent(worker)
+  box.tally.textContent = describeRecent(flowState)
 }
 
 function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
   const at = new Map(placed.map((one) => [one.flow, one]))
   const lines: SVGElement[] = []
 
-  for (const [flow, worker] of Object.entries(stage.workers)) {
+  for (const [flow, flowState] of Object.entries(stage.flows)) {
     const from = at.get(flow)
     if (from === undefined) continue
-    for (const arrow of worker.then) {
+    for (const arrow of flowState.then) {
       const to = arrow.to === null ? undefined : at.get(arrow.to)
       // A branch that deliberately stops has nothing to point at, and a target
       // that is disabled has no box on this board.
@@ -240,8 +240,8 @@ function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
 
 /** Whether the layout has to be worked out again, rather than just repainted. */
 function wiringKey(stage: StageState): string {
-  return Object.entries(stage.workers)
-    .map(([flow, worker]) => `${flow}>${worker.then.map((a) => a.to).join(",")}`)
+  return Object.entries(stage.flows)
+    .map(([flow, flowState]) => `${flow}>${flowState.then.map((a) => a.to).join(",")}`)
     .join("|")
 }
 
@@ -256,21 +256,21 @@ export const basic: Skin = {
     board.append(svg)
 
     const boxes = new Map<string, Box>()
-    const painted = new Map<string, Worker>()
+    const painted = new Map<string, FlowState>()
     // Only flows the reader has touched. Everything else follows the rule
     // below, so the board opens where something is happening and stays quiet
     // everywhere else.
     const byHand = new Map<string, boolean>()
     let key = ""
 
-    const isOpen = (flow: string, worker: Worker): boolean =>
-      byHand.get(flow) ?? worker.status === "running"
+    const isOpen = (flow: string, flowState: FlowState): boolean =>
+      byHand.get(flow) ?? flowState.status === "running"
 
     function relayout(stage: StageState): void {
-      const flows = Object.keys(stage.workers)
+      const flows = Object.keys(stage.flows)
       const handoffs: Record<string, string[]> = {}
-      for (const [flow, worker] of Object.entries(stage.workers)) {
-        handoffs[flow] = worker.then
+      for (const [flow, flowState] of Object.entries(stage.flows)) {
+        handoffs[flow] = flowState.then
           .map((arrow) => arrow.to)
           .filter((to): to is string => to !== null)
       }
@@ -292,12 +292,12 @@ export const basic: Skin = {
     return {
       update(stage: StageState) {
         let moved = false
-        for (const [flow, worker] of changedWorkers(stage.workers, painted)) {
+        for (const [flow, flowState] of changedFlows(stage.flows, painted)) {
           let box = boxes.get(flow)
           if (box === undefined) {
             box = buildBox(flow, callbacks)
             box.toggle.addEventListener("click", () => {
-              byHand.set(flow, !isOpen(flow, painted.get(flow) ?? worker))
+              byHand.set(flow, !isOpen(flow, painted.get(flow) ?? flowState))
               const now = painted.get(flow)
               if (now !== undefined) paint(box!, now, isOpen(flow, now))
             })
@@ -305,11 +305,11 @@ export const basic: Skin = {
             board.append(box.root)
             moved = true
           }
-          fillInside(box, worker)
-          paint(box, worker, isOpen(flow, worker))
+          fillInside(box, flowState)
+          paint(box, flowState, isOpen(flow, flowState))
         }
         for (const [flow, box] of boxes) {
-          if (!(flow in stage.workers)) {
+          if (!(flow in stage.flows)) {
             box.root.remove()
             boxes.delete(flow)
             byHand.delete(flow)

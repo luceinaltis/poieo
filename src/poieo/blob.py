@@ -36,7 +36,7 @@ def digest(path: Path) -> str | None:
         return None
 
 
-def keep(project_dir: Path, path: Path) -> str | None:
+def store(project_dir: Path, path: Path) -> str | None:
     """Copy the file into the store and return its name, or None -- over
     the cap, unreadable, unwritable -- with the reason logged."""
     path = Path(path)
@@ -68,7 +68,7 @@ def keep(project_dir: Path, path: Path) -> str | None:
         return None
 
 
-def kept(project_dir: Path, name: str) -> Path | None:
+def path_for(project_dir: Path, name: str) -> Path | None:
     """Where the keepsake lives, or None if it is gone."""
     target = layout_for(project_dir).blobs() / name
     return target if target.is_file() else None

@@ -25,12 +25,12 @@ from typing import Any, Iterator
 from .binding import BindingSpec
 from .layout import layout_for
 from .memory import (
-    Fact,
+    Entry,
     doubts,
     keeps_memory,
-    load_fact,
+    load_entry,
     read_page,
-    readable_facts,
+    readable_entries,
     results_dir,
     used_in,
 )
@@ -49,7 +49,7 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 @dataclass(slots=True)
-class Pass:
+class PassResult:
     """What one pass did -- also exactly what lands in the pass log."""
 
     at: str
@@ -66,7 +66,7 @@ class Pass:
     let_go: list[str] = field(default_factory=list)
 
 
-async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> Pass | None:
+async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> PassResult | None:
     """One learning pass. None when the project keeps no memory (the folder
     stays the one opt-in, and a pass must never create it) or when there is
     nothing unread -- in which case no completion is even attempted."""
@@ -78,9 +78,9 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         log.debug("nothing new to learn from in %s", project_dir)
         return None
 
-    facts = readable_facts(project_dir)
-    doubtful = doubts(project_dir, facts)
-    result = Pass(
+    entries = readable_entries(project_dir)
+    doubtful = doubts(project_dir, entries)
+    result = PassResult(
         at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         read=len(records),
         upto=records[-1].get("run_id"),
@@ -92,7 +92,7 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
         messages=[
             {
                 "role": "user",
-                "content": _prompt(read_page(project_dir), facts, records, doubtful),
+                "content": _prompt(read_page(project_dir), entries, records, doubtful),
             }
         ],
         system=None,
@@ -114,11 +114,11 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     if isinstance(suggestion, str) and suggestion.strip():
         result.page = " ".join(suggestion.split())[:300]
 
-    _apply(project_dir, facts, records, data, result)
+    _apply(project_dir, entries, records, data, result)
     # Strengthening rides the same success that moves the bookmark, so a
     # failed pass earns nothing and the reread earns exactly once.
-    _strengthen(project_dir, facts, records)
-    result.to_attic = _to_attic(project_dir, facts)
+    _strengthen(project_dir, entries, records)
+    result.to_attic = _to_attic(project_dir, entries)
     result.let_go = _let_go(project_dir)
     _record(project_dir, result)
     return result
@@ -170,7 +170,7 @@ def _unread(project_dir: Path, mark: str) -> list[dict[str, Any]]:
 
 def _prompt(
     page: str | None,
-    facts: list[Fact],
+    entries: list[Entry],
     records: list[dict[str, Any]],
     doubtful: list[tuple[str, str]] | None = None,
 ) -> str:
@@ -186,9 +186,9 @@ def _prompt(
     ]
     if page:
         lines += ["What this project always requires:", page, ""]
-    if facts:
+    if entries:
         lines.append("What it already knows:")
-        lines += [f"- {fact.slug}: {' '.join(fact.body.split())}" for fact in facts]
+        lines += [f"- {entry.slug}: {' '.join(entry.body.split())}" for entry in entries]
         lines.append("")
     if doubtful:
         lines.append("Worth a second look (confirm silently, or retire with set_aside):")
@@ -229,12 +229,12 @@ def _parse(text: str) -> dict[str, Any]:
 
 def _apply(
     project_dir: Path,
-    facts: list[Fact],
+    entries: list[Entry],
     records: list[dict[str, Any]],
     data: dict[str, Any],
-    result: Pass,
+    result: PassResult,
 ) -> None:
-    by_slug = {fact.slug: fact for fact in facts}
+    by_slug = {entry.slug: entry for entry in entries}
     shown = [r["run_id"] for r in records if r.get("run_id")]
 
     entries = data.get("entries") or []
@@ -332,7 +332,7 @@ def _dangling(raw: dict[str, Any], ok: set[str]) -> str | None:
 
 
 def _write_entry(
-    project_dir: Path, raw: dict[str, Any], shown: list[str], result: Pass
+    project_dir: Path, raw: dict[str, Any], shown: list[str], result: PassResult
 ) -> None:
     from . import blob
 
@@ -349,7 +349,7 @@ def _write_entry(
         target = Path(project_dir) / part
         if not target.is_file():
             continue
-        name = blob.keep(project_dir, target)
+        name = blob.store(project_dir, target)
         if name is not None:
             sealed[part] = name
         else:
@@ -395,15 +395,15 @@ def _set_aside(path: Path, because: str) -> None:
 
 
 def _strengthen(
-    project_dir: Path, facts: list[Fact], records: list[dict[str, Any]]
+    project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]
 ) -> None:
     """Three factors or nothing: both entries cited in the run's own output,
     the run completed, and a declared connection between them. Co-presence
     alone earns nothing -- reinforcing what retrieval already picks is how
     a memory talks itself into a rut."""
-    from .strength import wear
+    from .strength import reinforce
 
-    by_slug = {fact.slug: fact for fact in facts}
+    by_slug = {entry.slug: entry for entry in entries}
     pairs: list[tuple[str, str]] = []
     for record in records:
         if record.get("status") != "completed":
@@ -417,13 +417,13 @@ def _strengthen(
                 if _followable(by_slug[one], by_slug[other]):
                     pairs.append((one, other))
     if pairs:
-        wear(project_dir, pairs)
+        reinforce(project_dir, pairs)
 
 
-def _followable(one: Fact, other: Fact) -> bool:
+def _followable(one: Entry, other: Entry) -> bool:
     """A connection retrieval would walk: mentions either way, leans-on
     either side. Never disagrees -- and a disagreement is a veto, not one
-    vote among the connections, or "this disputes [[x]]" would wear the
+    vote among the connections, or "this disputes [[x]]" would strengthen the
     disputed pair in through its own mention."""
     if (
         other.slug in one.matter.links.contradicts
@@ -443,38 +443,38 @@ def _followable(one: Fact, other: Fact) -> bool:
 ATTIC_AFTER_DAYS = 90.0
 
 
-def _to_attic(project_dir: Path, facts: list[Fact]) -> list[str]:
+def _to_attic(project_dir: Path, entries: list[Entry]) -> list[str]:
     """The gentlest verb the pass has: a whole-file move to memory/attic/,
     content untouched, reversible by moving it back. Typed references hold
     an entry in place however old -- moving a named entry would break the
     load-time cross-check -- and the attic never overwrites either."""
     referenced: set[str] = set()
-    for fact in facts:
-        referenced |= set(fact.matter.links.depends_on)
-        referenced |= set(fact.matter.links.contradicts)
-        if fact.matter.superseded_by is not None:
-            referenced.add(fact.matter.superseded_by)
+    for entry in entries:
+        referenced |= set(entry.matter.links.depends_on)
+        referenced |= set(entry.matter.links.contradicts)
+        if entry.matter.superseded_by is not None:
+            referenced.add(entry.matter.superseded_by)
 
     now = datetime.now(timezone.utc).timestamp()
     moved: list[str] = []
-    for fact in facts:
-        if fact.matter.superseded_by is None or fact.slug in referenced:
+    for entry in entries:
+        if entry.matter.superseded_by is None or entry.slug in referenced:
             continue
         try:
-            if (now - fact.path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
+            if (now - entry.path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
                 continue
             attic = layout_for(project_dir).attic()
             attic.mkdir(exist_ok=True)
-            target = attic / fact.path.name
+            target = attic / entry.path.name
             if target.exists():
                 log.warning(
-                    "the attic already holds %s; leaving it in place", fact.path.name
+                    "the attic already holds %s; leaving it in place", entry.path.name
                 )
                 continue
-            fact.path.rename(target)
-            moved.append(fact.slug)
+            entry.path.rename(target)
+            moved.append(entry.slug)
         except OSError as exc:
-            log.warning("could not move %s to the attic: %s", fact.path.name, exc)
+            log.warning("could not move %s to the attic: %s", entry.path.name, exc)
     return moved
 
 
@@ -494,7 +494,7 @@ def _let_go(project_dir: Path) -> list[str]:
             continue
         for path in sorted(root.glob("*.md")):
             try:
-                referenced |= set(load_fact(path).matter.sealed.values())
+                referenced |= set(load_entry(path).matter.sealed.values())
             except Exception:
                 # An unreadable entry protects nothing it does not name --
                 # but collection must not fail over it either.
@@ -537,7 +537,7 @@ def last_suggestion(project_dir: Path) -> str | None:
     return suggestion
 
 
-def _record(project_dir: Path, result: Pass) -> None:
+def _record(project_dir: Path, result: PassResult) -> None:
     path = layout_for(project_dir).learning_log()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:

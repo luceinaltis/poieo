@@ -64,7 +64,7 @@ memory entry fails here rather than at 3am.
 
 ## Triggers
 
-Each trigger is an **async generator** that yields a `Fire` and only resumes once
+Each trigger is an **async generator** that yields a `Firing` and only resumes once
 the run has finished. That resume-after-run property is what makes `loop` a true
 "run continuously" mode instead of a queue piling up behind a slow model.
 
@@ -108,7 +108,7 @@ promise. Control touches runtime state only — no file, no schedule on disk,
 nothing that survives a restart.
 
 **The private copy.** `_open_change()` and `_close_change()` bracket the run; see
-[checkpoint.md](checkpoint.md). A repository that cannot be tracked is logged and
+[workspace.md](workspace.md). A repository that cannot be tracked is logged and
 the work happens in place — not a reason to stop working at 3am.
 
 **Failing the same way.** `_note_outcome()` counts consecutive failures sharing
@@ -124,12 +124,12 @@ run's whole outputs and state, and only the tail is ever read.
 
 ## Daemon
 
-Owns the pools, the boxes, the runners, and the shutdown handshake.
+Owns the pools, the containers, the runners, and the shutdown handshake.
 
 - **one `ProviderPool` per distinct binding file**, so clients are reused across
-  flows; **one box keeper**, built only if some flow asks for isolation
-- `_hands_for()` assembles each flow's `Hands` — its isolation setting, the
-  shared box keeper, and a `Postbox` if and only if its card took the `notes`
+  flows; **one container pool**, built only if some flow asks for isolation
+- `_tool_context_for()` assembles each flow's `ToolContext` — its isolation setting, the
+  shared container pool, and a `Postbox` if and only if its card took the `notes`
   toolset
 - the web server, if a port was given, runs as a task on the same loop; the port
   is bound-checked up front so it fails at launch rather than after flows start

@@ -38,11 +38,11 @@ however convenient.
             │            ╲
    providers/            tools/             who answers          what it may touch
             │
-      store.py · checkpoint.py · memory/    what it left behind
+      store.py · workspace.py · memory/    what it left behind
 ```
 
 Nothing points upward. `runtime/` knows nothing about the daemon, `tools/`
-knows nothing about containers (`tools/docker.py` does), `checkpoint.py` is the
+knows nothing about containers (`tools/docker.py` does), `workspace.py` is the
 only module that knows git exists.
 
 ## One run, end to end
@@ -54,7 +54,7 @@ A trigger fires (or `poieo run` is typed). Then:
    a note left at 8am is in effect at 9am. → [tasks.md](tasks.md), [memory.md](memory.md)
 2. **A place to work.** If the flow names a `workdir`, the runner opens a private
    copy of it — a git worktree on a branch of its own. The user's own checkout is
-   never written to. → [checkpoint.md](checkpoint.md)
+   never written to. → [workspace.md](workspace.md)
 3. **Preflight.** Every role the graph needs resolves against the binding; every
    agent node has somewhere to work. Failing here costs nothing; failing later
    costs tokens. → [runtime.md](runtime.md)
@@ -71,7 +71,7 @@ A trigger fires (or `poieo run` is typed). Then:
 7. **The change.** Whatever the run wrote in its private copy is committed as one
    change, with the model's own closing sentence as the subject. In the morning
    the user reads it as a diff and accepts or discards it.
-   → [checkpoint.md](checkpoint.md)
+   → [workspace.md](workspace.md)
 8. **The journal.** A card appends one line to its journal — what it did, or why
    it failed — which is what the next run reads first. → [tasks.md](tasks.md)
 9. **The handoff.** If the flow's `then:` block has a branch that matches what
@@ -104,7 +104,7 @@ an agent node, a timeout for a command, `MAX_CHAIN` for a chain of handoffs,
 the next trigger starts fresh.
 
 **Hide the mechanism, never the result.** The user's vocabulary is three words —
-a *task*, a piece of *work*, a *change*. Worktrees, boxes, refs and indexes are
+a *task*, a piece of *work*, a *change*. Worktrees, containers, refs and indexes are
 machinery and stay out of the interface. The one exception is the moment the
 user's own files are about to change, where poieo says exactly what will happen.
 

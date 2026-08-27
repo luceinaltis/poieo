@@ -26,7 +26,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 from . import __version__
 from .binding import load_binding
-from .checkpoint import Checkpoint
+from .workspace import Workspace
 from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
 from .errors import PoieoError
@@ -38,7 +38,7 @@ from .project import find_project, find_project_file, init_project
 from .providers import ProviderPool
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
-from .tools import Hands, Isolation
+from .tools import ToolContext, Isolation
 from .task import (
     TaskSpec,
     append_journal,
@@ -519,11 +519,11 @@ def run(
         store = layout_for(task.dir if task is not None else Path.cwd()).runs()
     run_store = NullStore() if no_log else RunStore(store)
 
-    hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
-    isolation = hands.isolation if hands else None
+    tool_context = ToolContext(isolation=Isolation(image=isolate)) if isolate else None
+    isolation = tool_context.isolation if tool_context else None
     if isolation is not None:
         # The daemon's preflight, for the same reason: better here than eight
-        # turns in. No box is kept -- a one-shot run has no next run.
+        # turns in. No container is kept -- a one-shot run has no next run.
         check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
 
     async def _go():
@@ -535,7 +535,7 @@ def run(
                 run_store,
                 input=payload,
                 workdir=workdir,
-                hands=hands,
+                tool_context=tool_context,
             )
 
     result = asyncio.run(_go())
@@ -584,7 +584,7 @@ def reset(
     available, reason = docker.docker_available()
     if not available:
         _fail(reason)
-    removed = docker.remove_boxes_for(task.folder_path())
+    removed = docker.remove_containers_for(task.folder_path())
     # The one thing the user needs to hear: their files are fine. Everything
     # this throws away is rebuilt the next time the task runs.
     _ok(
@@ -600,7 +600,7 @@ def daemon(
         None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
     ),
     once: bool = typer.Option(
-        False, "--once", help="Fire each flow a single time, then exit."
+        False, "--once", help="Firing each flow a single time, then exit."
     ),
     flow: Optional[str] = typer.Option(
         None, "--flow", help="Run only this flow from the config."
@@ -720,7 +720,7 @@ def flows(
             typer.echo(f"        {item.binding.resolve(role).describe()}")
 
         workdir = config.workdir_path(item.spec)
-        if workdir and not Checkpoint(
+        if workdir and not Workspace(
             workdir, item.spec.name, config.layout().worktrees()
         ).available():
             # Degraded, not broken: the flow still runs tonight.

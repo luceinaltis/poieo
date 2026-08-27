@@ -128,7 +128,7 @@ What poieo offers the user stacks in layers:
 |---|---|---|
 | **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
 | **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
-| **Hands** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
+| **ToolContext** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | done |
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
@@ -201,7 +201,7 @@ works today.
 3. **The morning review** — the model works in a private copy; each run is one
    reviewable change; the board shows the diff and accepts or discards it.
    This is where the daemon stops being something you have to trust blindly.
-   (`docs/checkpoint.md`)
+   (`docs/workspace.md`)
 4. **The task card** — a task becomes one file (a name, a folder, a prompt),
    and it keeps a journal of what it did and what the user told it, which it
    reads before every run. This is what principle 2 promises and what the

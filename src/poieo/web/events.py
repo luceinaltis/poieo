@@ -61,8 +61,8 @@ class BroadcastStore(RunStore):
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
         return self._inner.list_runs(limit=limit, flow=flow)
 
-    def run(self, run_id: str) -> dict[str, Any] | None:
-        return self._inner.run(run_id)
+    def summary(self, run_id: str) -> dict[str, Any] | None:
+        return self._inner.summary(run_id)
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         return self._inner.events(run_id)

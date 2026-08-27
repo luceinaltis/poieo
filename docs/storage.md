@@ -94,7 +94,7 @@ parse only until enough rows have matched. A month of uptime would otherwise
 cost half a second per call. Splitting happens on bytes and a line is decoded
 only once whole, so multi-byte text spanning a block boundary is safe.
 
-`run(run_id)` pre-filters on the raw line before parsing, and returns the first
+`summary(run_id)` pre-filters on the raw line before parsing, and returns the first
 hit — newest first, because a run may be re-recorded.
 
 `json_records()` is the one reading rule for every JSONL file poieo writes: skip

@@ -51,7 +51,7 @@ class Isolation(BaseModel):
 
 
 @dataclass(slots=True)
-class Hands:
+class ToolContext:
     """Everything an agent node's tools need beyond a workdir and a toolset.
 
     One object rather than one parameter each, threaded from the daemon to the
@@ -59,9 +59,9 @@ class Hands:
     """
 
     isolation: Isolation | None = None
-    # The daemon's box keeper and this task's postbox. Untyped on purpose: only
+    # The daemon's container keeper and this task's postbox. Untyped on purpose: only
     # the tools package may know what they are.
-    boxes: Any = None
+    containers: Any = None
     postbox: Any = None
 
 
@@ -113,28 +113,28 @@ class LocalExecutor(Executor):
     """
 
     def __init__(
-        self, workdir: Path, toolsets: "Sequence[str]", hands: "Hands | None" = None
+        self, workdir: Path, toolsets: "Sequence[str]", tool_context: "ToolContext | None" = None
     ):
         self.workdir = workdir
-        self._load(toolsets, hands.postbox if hands else None)
+        self._load(toolsets, tool_context.postbox if tool_context else None)
 
 
-def make_box_keeper() -> Any:
-    """The thing that keeps boxes between runs, shared across tasks.
+def make_container_pool() -> Any:
+    """The thing that keeps containers between runs, shared across tasks.
 
     ``Any`` on purpose: nothing between here and the executor may learn what
     is inside it.
     """
-    from .docker import BoxKeeper
+    from .docker import ContainerPool
 
-    return BoxKeeper()
+    return ContainerPool()
 
 
-async def sweep_boxes(days: int = 7) -> int:
-    """Reclaim boxes an earlier poieo left behind. Returns how many went.
+async def sweep_containers(days: int = 7) -> int:
+    """Reclaim containers an earlier poieo left behind. Returns how many went.
 
-    A clean shutdown removes every box it owns, so anything still standing is
-    from a crash. Safe to run beside another daemon: a box is derived state,
+    A clean shutdown removes every container it owns, so anything still standing is
+    from a crash. Safe to run beside another daemon: a container is derived state,
     so the cost of being wrong here is one rebuild.
     """
     from datetime import timedelta
@@ -145,23 +145,23 @@ async def sweep_boxes(days: int = 7) -> int:
 
 
 def make_executor(
-    workdir: Path, toolsets: "Sequence[str]", hands: Hands | None = None
+    workdir: Path, toolsets: "Sequence[str]", tool_context: ToolContext | None = None
 ) -> Executor:
     """The one place that decides where an agent node's tools run.
 
     Callers hand over a setting and use what comes back, so nothing upstream
     of here names a backend.
     """
-    isolation = hands.isolation if hands else None
+    isolation = tool_context.isolation if tool_context else None
     if isolation is None:
-        return LocalExecutor(workdir, toolsets, hands)
+        return LocalExecutor(workdir, toolsets, tool_context)
     # Inside the branch: a machine that never isolates never pays to load it.
     from .docker import DockerExecutor
 
-    # With a keeper the box is the task's and survives the run; without one
+    # With a keeper the container is the task's and survives the run; without one
     # the executor makes its own and destroys it, which is `poieo run`.
-    boxes = hands.boxes if hands else None
-    box = boxes.get(workdir, isolation) if boxes is not None else None
+    containers = tool_context.containers if tool_context else None
+    container = containers.get(workdir, isolation) if containers is not None else None
 
     return DockerExecutor(
         workdir,
@@ -169,8 +169,8 @@ def make_executor(
         image=isolation.image,
         network=isolation.network,
         user=isolation.user,
-        box=box,
-        hands=hands,
+        container=container,
+        tool_context=tool_context,
     )
 
 
