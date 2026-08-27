@@ -39,7 +39,10 @@
 
 .basic-flow {
   position: absolute;
-  width: 260px;
+  /* Width is set from BOX.width, and border-box makes that the width the
+     reader sees. Declared here it was 260 plus padding plus border = 286,
+     and every arrow's arithmetic was 26px wrong about where a box ends. */
+  box-sizing: border-box;
   background: #1c1915;
   border: 1px solid #2e2820;
   border-radius: 6px;

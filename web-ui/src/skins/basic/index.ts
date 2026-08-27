@@ -106,6 +106,9 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
   const root = document.createElement("div")
   root.className = "basic-flow"
   root.dataset.flow = flow
+  // The one width, from the constant the arrows are drawn against. Written in
+  // the stylesheet it was free to drift from them, and it had.
+  root.style.width = `${BOX.width}px`
 
   const head = element("div", "basic-head", root)
   // Two things to click, so neither has to mean two things: the name selects
