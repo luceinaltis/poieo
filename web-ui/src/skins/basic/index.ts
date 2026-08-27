@@ -20,7 +20,7 @@
 import { changedWorkers } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, Worker } from "../../state/stage"
-import { BOX, corner, exits, place, walk, wire } from "../wiring"
+import { BOX, corner, exits, place, steps, walk, wire } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
@@ -134,6 +134,9 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
 /** The graph inside a border, drawn once: it moves only when a file does. */
 function fillInside(box: Box, worker: Worker): void {
   const leaves = new Set(exits(worker.shape))
+  // Which neighbouring pairs are a real edge. Drawn between every pair, the
+  // connector claims the router's arms run into one another.
+  const leads = new Set(steps(worker.shape))
   // Only when they differ. A flow on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
   const differ = modelsOf(worker).length > 1
@@ -145,6 +148,7 @@ function fillInside(box: Box, worker: Worker): void {
     if (spec) pill.dataset.type = spec.type
     // Where a handoff leaves from, once you can see the nodes at all.
     if (leaves.has(id) && worker.then.length > 0) pill.dataset.exit = "true"
+    if (leads.has(id)) pill.dataset.leadsOn = "true"
     pill.textContent = id
     // A router has no model because it calls none, and the gap is itself
     // information: it is why branching is free.
