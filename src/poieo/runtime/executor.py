@@ -23,8 +23,13 @@ from .nodes import build_node
 
 
 def needs_a_workdir(graph: GraphSpec) -> list[str]:
-    """Agent nodes that will have to be told where to work."""
-    return [n.id for n in graph.nodes if n.type == "agent" and not n.workdir]
+    """Nodes with tools and nowhere to use them.
+
+    Tools are what need a directory. A node that only renders a prompt and
+    reads the answer has nothing to do with the filesystem, which is what lets
+    a graph that never touches a file run without naming one.
+    """
+    return [n.id for n in graph.nodes if n.type == "agent" and n.tools and not n.workdir]
 
 
 def preflight(

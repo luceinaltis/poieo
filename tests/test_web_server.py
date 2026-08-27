@@ -27,14 +27,14 @@ STUB_GRAPH = {
     "name": "support-triage",
     "entry": "classify",
     "nodes": [
-        {"id": "classify", "type": "llm", "prompt": "x", "role": "classifier", "next": "route"},
+        {"id": "classify", "type": "agent", "prompt": "x", "role": "classifier", "next": "route"},
         {
             "id": "route",
             "type": "router",
             "branches": [{"when": "category == 'bug'", "to": "answer", "label": "bug"}],
             "default": "answer",
         },
-        {"id": "answer", "type": "llm", "prompt": "y", "ui": {"x": 40, "y": 8}},
+        {"id": "answer", "type": "agent", "prompt": "y", "ui": {"x": 40, "y": 8}},
     ],
 }
 
@@ -98,7 +98,7 @@ def test_flows_lists_runner_state(tmp_path):
                 "nodes": [
                     {
                         "id": "classify",
-                        "type": "llm",
+                        "type": "agent",
                         "next": "route",
                         "default": None,
                         "branches": [],
@@ -114,7 +114,7 @@ def test_flows_lists_runner_state(tmp_path):
                     },
                     {
                         "id": "answer",
-                        "type": "llm",
+                        "type": "agent",
                         "next": None,
                         "default": None,
                         "branches": [],
@@ -202,7 +202,7 @@ def test_a_role_the_binding_never_declares_reports_what_will_really_run(tmp_path
     typo = {
         "name": "support-triage",
         "entry": "classify",
-        "nodes": [{"id": "classify", "type": "llm", "prompt": "x", "role": "classifer"}],
+        "nodes": [{"id": "classify", "type": "agent", "prompt": "x", "role": "classifer"}],
     }
     daemon = stub_daemon(tmp_path, [stub_runner(graph=typo)])
     client = TestClient(create_app(daemon))

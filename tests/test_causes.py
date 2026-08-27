@@ -124,7 +124,7 @@ _GRAPH = """\
 name: wants-json
 entry: a
 nodes:
-  - {id: a, type: llm, role: r, prompt: hi, output: {format: json}}
+  - {id: a, type: agent, role: r, prompt: hi, output: {format: json}}
 """
 
 _PROSE_MOCK = """\

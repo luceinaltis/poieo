@@ -143,11 +143,11 @@ def test_startup_validates_every_flow_up_front(tmp_path):
     (tmp_path / "b.yaml").write_text(
         "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
     )
-    (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: llm}]\n")
+    (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent}]\n")
     path = tmp_path / "d.yaml"
     path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
 
-    # The graph is broken (an llm node with no prompt); the daemon must refuse
+    # The graph is broken (a model node with no prompt); the daemon must refuse
     # to arm rather than discover this when the trigger first fires.
     with pytest.raises(SpecError, match="requires a prompt"):
         load_flows(load_config(path))
@@ -160,7 +160,7 @@ def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
         "default: {provider: p, model: m}\n"
     )
     (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n"
+        "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
     path = tmp_path / "d.yaml"
     path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
@@ -205,7 +205,7 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
         "default: {provider: used, model: m}\n"
     )
     (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n"
+        "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
     path = tmp_path / "d.yaml"
     path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
@@ -334,7 +334,7 @@ def test_flow_spec_accepts_a_workdir(tmp_path):
         "providers: {p: {type: mock}}" + chr(10) + "default: {provider: p, model: m}" + chr(10)
     )
     (tmp_path / "g.yaml").write_text(
-        "name: g" + chr(10) + "entry: a" + chr(10) + "nodes: [{id: a, type: llm, prompt: p}]" + chr(10)
+        "name: g" + chr(10) + "entry: a" + chr(10) + "nodes: [{id: a, type: agent, prompt: p}]" + chr(10)
     )
     path = tmp_path / "d.yaml"
     path.write_text(

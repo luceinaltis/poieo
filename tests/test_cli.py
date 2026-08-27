@@ -78,7 +78,7 @@ def test_run_reports_a_failure_with_a_nonzero_exit(tmp_path):
     graph = tmp_path / "g.yaml"
     graph.write_text(
         "name: j\nentry: a\nnodes:\n"
-        "  - {id: a, type: llm, prompt: go, output: {format: json}}\n"
+        "  - {id: a, type: agent, prompt: go, output: {format: json}}\n"
     )
     result = runner.invoke(
         app, ["run", str(graph), "-b", str(EXAMPLES / "models/mock.yaml"), "--no-log"]

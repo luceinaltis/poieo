@@ -82,7 +82,7 @@ async def test_max_steps_aborts_a_runaway_graph():
             "name": "spin",
             "entry": "a",
             "max_steps": 5,
-            "nodes": [{"id": "a", "type": "llm", "prompt": "go", "next": "a"}],
+            "nodes": [{"id": "a", "type": "agent", "prompt": "go", "next": "a"}],
         }
     )
     result = await run_graph(graph, mock_binding({"*": "x"}))
@@ -100,7 +100,7 @@ async def test_json_output_survives_a_markdown_fence():
             "nodes": [
                 {
                     "id": "a",
-                    "type": "llm",
+                    "type": "agent",
                     "prompt": "go",
                     "output": {"format": "json", "path": "result.score"},
                 }
@@ -118,7 +118,7 @@ async def test_bad_json_output_fails_the_run():
             "name": "j",
             "entry": "a",
             "nodes": [
-                {"id": "a", "type": "llm", "prompt": "go", "output": {"format": "json"}}
+                {"id": "a", "type": "agent", "prompt": "go", "output": {"format": "json"}}
             ],
         }
     )
@@ -145,7 +145,7 @@ async def test_prompt_sees_the_run_payload():
         {
             "name": "p",
             "entry": "a",
-            "nodes": [{"id": "a", "type": "llm", "prompt": "Hello {{ input.who }}"}],
+            "nodes": [{"id": "a", "type": "agent", "prompt": "Hello {{ input.who }}"}],
         }
     )
     binding = mock_binding({"*": "hi"})
@@ -211,7 +211,7 @@ def retry_graph(attempts):
             "nodes": [
                 {
                     "id": "a",
-                    "type": "llm",
+                    "type": "agent",
                     "prompt": "go",
                     "retry": {"attempts": attempts, "backoff": 0},
                 }
@@ -247,6 +247,7 @@ def agent_graph(workdir, **node_overrides):
         "role": "worker",
         "workdir": str(workdir),
         "prompt": "do it",
+        "tools": ["files", "shell"],
         "output": {"as": "report"},
     }
     node.update(node_overrides)
@@ -404,6 +405,7 @@ async def test_agent_node_emits_a_turn_event_per_model_turn(tmp_path):
                     "type": "agent",
                     "role": "worker",
                     "workdir": str(tmp_path),
+                    "tools": ["files", "shell"],
                     "prompt": "go",
                 }
             ],
@@ -439,6 +441,9 @@ def agent_graph_without_workdir(**node_overrides):
         "type": "agent",
         "role": "worker",
         "prompt": "do it",
+        # Tools are what need a directory, so a node with nowhere to work has
+        # to have asked for them or there is nothing to refuse.
+        "tools": ["files", "shell"],
         "output": {"as": "report"},
     }
     node.update(node_overrides)

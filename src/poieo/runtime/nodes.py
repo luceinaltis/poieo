@@ -7,6 +7,7 @@ import asyncio
 import json
 import re
 import time
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..tools import DEFAULT_TOOLSETS, make_executor
+from ..tools import make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -162,7 +163,9 @@ def _finish(
 ) -> NodeResult:
     """Shape what the model said, record it, and describe the step.
 
-    Identical between the two but for what each adds to ``meta``.
+    The same for every node that calls a model, but for what it adds to
+    ``meta``: one with tools counts its turns and its tool calls, one
+    without has neither to count.
     """
     output = shape_output(spec, response.text)
     ctx.record_output(spec.id, output, spec.output.as_)
@@ -184,27 +187,19 @@ def _finish(
     )
 
 
-class LLMNode(Node):
-    """Renders a prompt, calls the model bound to this node's role, stores the result."""
-
-    async def run(self, ctx: RunContext) -> NodeResult:
-        spec = self.spec
-        bound = _prepare(spec, ctx)
-
-        request = bound.request([{"role": "user", "content": bound.prompt}])
-        response = await call_with_retry(spec, bound.provider, request, ctx)
-        ctx.usage = ctx.usage.merge(response.usage)
-
-        return _finish(spec, ctx, bound, response)
-
-
 def _clip(value: Any, limit: int = 400) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     return text if len(text) <= limit else text[:limit] + "..."
 
 
 class AgentNode(Node):
-    """Hands the model tools and loops until it answers without one.
+    """Renders a prompt, calls the model, and loops while it asks for tools.
+
+    Tools are the whole of what varies here. A node that names none is shown
+    none, so it cannot ask for one, so the loop below runs once and breaks --
+    which is what `type: agent` used to be, without a second node type to say
+    it. Everything else follows from tools: the directory they work in, the
+    executor that runs them, the turn budget the loop spends.
 
     "Keeps working" belongs to the graph and the daemon; this loop is only
     the mechanics of one step doing its job, bounded by max_turns.
@@ -213,22 +208,34 @@ class AgentNode(Node):
     async def run(self, ctx: RunContext) -> NodeResult:
         spec = self.spec
         bound = _prepare(spec, ctx)
+        toolsets = spec.tools or []
 
         workdir = (
             Path(_rendered(spec, spec.workdir, bound.scope)).expanduser()
             if spec.workdir
             else ctx.workdir
         )
-        if workdir is None:  # preflight should have caught this
-            raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
-        if not workdir.is_dir():
-            raise NodeError(
-                f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id
-            )
+        if toolsets:
+            if workdir is None:  # preflight should have caught this
+                raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
+            if not workdir.is_dir():
+                raise NodeError(
+                    f"node '{spec.id}': workdir does not exist: {workdir}",
+                    node_id=spec.id,
+                )
 
-        async with make_executor(
-            workdir, spec.tools or DEFAULT_TOOLSETS, ctx.tool_context
-        ) as executor:
+        # Nothing is built for a node with no tools: an executor can mean a
+        # container, and standing one up to offer nothing would be a cost with
+        # no purchase.
+        async with AsyncExitStack() as stack:
+            executor = (
+                await stack.enter_async_context(
+                    make_executor(workdir, toolsets, ctx.tool_context)  # type: ignore[arg-type]
+                )
+                if toolsets
+                else None
+            )
+            offered = executor.definitions() if executor is not None else []
             messages: list[dict[str, Any]] = [{"role": "user", "content": bound.prompt}]
             turns = 0
             tool_call_count = 0
@@ -237,7 +244,7 @@ class AgentNode(Node):
                 if ctx.cancel is not None and ctx.cancel.is_set():
                     raise RunAborted(f"cancelled during agent node '{spec.id}'")
                 turns += 1
-                request = bound.request(list(messages), tools=executor.definitions())
+                request = bound.request(list(messages), tools=offered)
                 response = await call_with_retry(spec, bound.provider, request, ctx)
                 ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(
@@ -249,7 +256,10 @@ class AgentNode(Node):
                     tool_call_count=len(response.tool_calls),
                 )
 
-                if not response.tool_calls:
+                # No executor means none were offered, so a tool call here is
+                # a model inventing one. There is nothing to run it with, and
+                # the answer it gave is still an answer.
+                if not response.tool_calls or executor is None:
                     break
                 if turns >= spec.max_turns:
                     raise NodeError(
@@ -331,9 +341,8 @@ class RouterNode(Node):
 
 
 NODE_TYPES: dict[str, type[Node]] = {
-    "llm": LLMNode,
-    "router": RouterNode,
     "agent": AgentNode,
+    "router": RouterNode,
 }
 
 

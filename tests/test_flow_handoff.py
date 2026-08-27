@@ -20,7 +20,7 @@ _GRAPH = """\
 name: quick
 entry: a
 nodes:
-  - {id: a, type: llm, role: r, prompt: hi}
+  - {id: a, type: agent, role: r, prompt: hi}
 """
 
 _MOCK = """\
@@ -188,7 +188,7 @@ def _wired(tmp_path, then_block: str, *, takes: str = "hi", slow: bool = False):
     """
     (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
     (tmp_path / "t.yaml").write_text(
-        f'name: taking\nentry: t\nnodes:\n  - {{id: t, type: llm, role: taker, prompt: "{takes}"}}\n',
+        f'name: taking\nentry: t\nnodes:\n  - {{id: t, type: agent, role: taker, prompt: "{takes}"}}\n',
         encoding="utf-8",
     )
     (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
@@ -428,7 +428,7 @@ def test_a_role_the_binding_never_heard_of_says_so_at_load(tmp_path, caplog):
     """
     graph = (
         "name: quick\nentry: a\nnodes:\n"
-        "  - {id: a, type: llm, role: classifer, prompt: hi}\n"
+        "  - {id: a, type: agent, role: classifer, prompt: hi}\n"
     )
     binding = (
         "name: mock\nproviders:\n"
@@ -465,7 +465,7 @@ def test_a_node_that_names_no_role_asks_for_the_default_on_purpose(tmp_path, cap
     """`default_role` reaching the binding's default is the arrangement
     working, so it must not read as a typo even where roles are declared."""
     (tmp_path / "g.yaml").write_text(
-        "name: quick\nentry: a\nnodes:\n  - {id: a, type: llm, prompt: hi}\n",
+        "name: quick\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n",
         encoding="utf-8",
     )
     (tmp_path / "b.yaml").write_text(
