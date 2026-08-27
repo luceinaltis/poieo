@@ -11,7 +11,7 @@ The store is flat and content-addressed: same content, same name, one
 copy; written via tmp+rename, so a torn write cannot leave a wrong body
 under a right name.
 
-Spec: docs/specs/2026-08-24-keepsakes-design.md
+Design: docs/memory.md
 """
 
 from __future__ import annotations

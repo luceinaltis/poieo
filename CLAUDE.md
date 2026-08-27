@@ -6,9 +6,16 @@ commit in a session.
 ## The shape of the repo
 
 - `src/poieo/` — the package. `tests/` mirrors it.
-- `docs/specs/` — design specs, written before any code.
-- `docs/plans/` — task-by-task implementation plans derived from a spec.
+- `docs/` — **one document per component**, describing how it works today.
+  `docs/README.md` is the index. When you change a component's shape, edit its
+  document in the same PR; the docs are the map the next agent reads.
+- `docs/archive/` — the dated design specs and implementation plans features were
+  built from. History: read it for intent, never for current behaviour, and do not
+  add to it.
 - `.claude/worktrees/` — throwaway session worktrees, gitignored.
+
+Do not start a new dated file. A design worth writing down belongs in the
+component document it describes, and git already records when and why it changed.
 
 The remote is **public** (`github.com/luceinaltis/poieo`). Never commit an API key, a
 token, or a real model transcript. Run logs (`.poieo/`, `examples/.poieo/`) are
@@ -19,8 +26,7 @@ gitignored — keep it that way.
 Work happens on a branch. `main` is the only long-lived one.
 
 - Name a branch after its topic, no prefix: `agent-node`, `observation-backend`,
-  `web-frontend`. When the work executes a plan, reuse the plan's slug —
-  `docs/plans/2026-08-22-web-frontend.md` → `web-frontend`.
+  `web-frontend`.
 - Small standalone fixes take a `fix-` prefix: `fix-windows-codepage`.
 - **Branches named `worktree-*` are harness scratch.** The session worktree tool creates
   them with a random suffix. Never push one and never open a PR from one. If you are
@@ -41,9 +47,9 @@ Work happens on a branch. `main` is the only long-lived one.
 **Anything touching `src/` or `tests/` goes through a PR.** That is the code, and the
 code is what breaks.
 
-Commit straight to `main` only for: typo and wording fixes in Markdown, ticking a
-checkbox in a plan, and adding a spec or plan document that no code depends on yet
-(`e2742d6`, `eae4df5`, `1a65cc3` all landed this way, correctly).
+Commit straight to `main` only for: typo and wording fixes in Markdown, and a
+documentation change that no code depends on yet (`e2742d6`, `eae4df5`, `1a65cc3`
+all landed this way, correctly).
 
 When you cannot tell which side of the line a change falls on, open the PR. An
 unnecessary PR costs a minute; a broken `main` costs the next agent an hour.
@@ -53,10 +59,9 @@ unnecessary PR costs a minute; a broken `main` costs the next agent an hour.
 `main` uses **squash merge**, so a PR lands as exactly one commit. Size it so that one
 commit is something you would want to find in `git log` and could revert on its own.
 
-- Executing a plan: **one PR per Task.** The plans are already cut this way — Task 1 of
-  the web frontend plan is a scaffold, Task 3 is a reducer. Those belong in `main` as
-  separate commits, not as one seven-task blob. Group two tasks only when both are small
-  and neither stands alone.
+- Building a feature in slices: **one PR per slice.** A scaffold, then a reducer, then
+  the screen that uses it belong in `main` as separate commits, not as one seven-part
+  blob. Group two slices only when both are small and neither stands alone.
 - Commit freely *inside* the branch. Those commits exist for review and squash discards
   them; the PR title and body are what survive.
 
@@ -72,8 +77,8 @@ refactor: extract call_with_retry and shape_output for reuse
 chore: ignore .claude/worktrees
 ```
 
-Design and plan documents are the one exception — they read as plain sentences
-(`Add web observation design spec`).
+Documentation-only changes take `docs:`, and may read as a plain sentence after
+it (`docs: the layout gets a name, a scaffold, and a manual that is true`).
 
 The **PR title becomes the squashed commit subject**, so write it as one: Conventional
 Commits, imperative, no PR number, no "WIP".
@@ -122,9 +127,11 @@ Merge only when all of these hold:
 1. Both suites are green, and the run appears in the PR body.
 2. You have read the full diff and recorded that review in the PR.
 3. The branch is current with `main` and conflict-free.
-4. Every behaviour change has a test that fails without it. This repo is TDD — the plans
-   are written test-first and the history follows it.
-5. Nothing in the diff is an artifact you did not mean to check in.
+4. Every behaviour change has a test that fails without it. This repo is TDD — write
+   the test first, and the history follows it.
+5. The component document in `docs/` still describes the code. A change that makes one
+   of them wrong is not finished.
+6. Nothing in the diff is an artifact you did not mean to check in.
    `src/poieo/web/static/` **is** deliberately checked in; `node_modules/` is not.
 
 Then:
@@ -146,7 +153,7 @@ git switch --detach origin/main && git branch -D <branch>
 ```
 
 Stop and ask a human instead of merging when the PR changes a public interface, deletes a
-test, adds a dependency no plan calls for, or touches how bindings and credentials are
+test, adds a dependency nothing asked for, or touches how bindings and credentials are
 loaded.
 
 ## Never
