@@ -428,6 +428,38 @@ def load_flows(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         except Exception as exc:
             raise SpecError(f"flow '{flow.name}': {exc}") from exc
 
+        # A node that names a role the binding never heard of still runs -- on
+        # whatever `default` is, which in a cloud binding is the biggest model
+        # in the file. `role: classifer` is a one-letter typo away from the
+        # cheapest, and nothing has ever said so. A warning rather than a
+        # refusal: falling back is what a default is for, and a binding that
+        # declares no roles at all is a legitimate way to run a graph.
+        #
+        # The graph's own `default_role` is excluded -- a node that named no
+        # role asking for the binding's default is the arrangement working.
+        #
+        # And only a binding that declares roles at all is asked: one that
+        # declares none is saying "one model for everything", which every mock
+        # binding does, and every role legitimately falls through it. The
+        # suspicious case is a binding that has `classifier` and `writer` and
+        # is handed a third name.
+        strangers = (
+            binding.undeclared(graph.roles() - {graph.default_role})
+            if binding.roles
+            else []
+        )
+        if strangers:
+            log.warning(
+                "flow '%s': graph '%s' asks for role(s) %s, which binding '%s' "
+                "does not declare -- they will run on its default (%s). Check "
+                "for a typo.",
+                flow.name,
+                graph.name,
+                ", ".join(strangers),
+                binding.name,
+                binding.default.model or "no model named",
+            )
+
         loaded.append(
             LoadedFlow(
                 spec=flow,
