@@ -292,7 +292,7 @@ test("a border is exactly as wide as the arrows think it is", () => {
 
 
 test("a handoff that goes back does not run through what lies between", () => {
-  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(
     initialStage([
       { ...FLOWS[0], then: [{ to: "revision", label: "changed" }] },
@@ -318,5 +318,21 @@ test("a handoff that goes back does not run through what lies between", () => {
   }
   expect(rise(tips[0])).toBe(4)   // forward: level, pointing right
   expect(rise(tips[1])).toBe(-8)  // back: rising, pointing up
+  handle.destroy()
+})
+
+
+test("opening a border by hand lays the board out again", () => {
+  // Opening changes a border's height, and both the rows and the arrows are
+  // measured off those heights. Left alone, every arrow keeps the geometry of
+  // the board as it was before the click -- which is how a return leg ends up
+  // drawn through the box it was meant to pass under.
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(WIRED))
+  const before = el.querySelector(".basic-wire")
+
+  el.querySelector<HTMLElement>('[data-flow="revision"] .basic-toggle')!.click()
+
+  expect(el.querySelector(".basic-wire")).not.toBe(before)
   handle.destroy()
 })

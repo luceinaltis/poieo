@@ -237,11 +237,29 @@ export interface Anchor {
   y: number
 }
 
+/**
+ * What the rows actually came out as, once the boxes were laid out.
+ *
+ * `BOX.height` is a *pitch* -- an assumption about how tall a border is -- and
+ * a border is as tall as its graph and whatever it last said. The assumption
+ * was close enough while the nodes inside were one line; it is not, now that
+ * they are a grid. Rows measured on the page are passed in here; nothing is
+ * passed in the tests, where the arithmetic is the point.
+ */
+export interface Frame {
+  /** The top of each row. */
+  tops: number[]
+  /** The underside of the lowest box on the board. */
+  bottom: number
+  /** How tall each box actually came out, by flow. */
+  heights: Record<string, number>
+}
+
 /** The top-left corner of a flow's box. */
-export function corner(at: Placed): Anchor {
+export function corner(at: Placed, frame?: Frame): Anchor {
   return {
     x: at.column * (BOX.width + BOX.gapX),
-    y: at.row * (BOX.height + BOX.gapY),
+    y: frame?.tops[at.row] ?? at.row * (BOX.height + BOX.gapY),
   }
 }
 
@@ -278,19 +296,27 @@ export interface BackWire extends Wire {
  * two, because that is exactly the height everything else is drawn at.
  *
  * `lastRow` is the bottom row on the board, so the return leg can be put
- * below all of it rather than in whatever gap happens to be nearest.
+ * below all of it rather than in whatever gap happens to be nearest. Where a
+ * `Frame` was measured it is used instead, because a border is as tall as its
+ * graph and `BOX.height` only ever guessed.
  */
-export function backWire(from: Placed, to: Placed, lastRow: number): BackWire {
-  const start = corner(from)
-  const end = corner(to)
+export function backWire(
+  from: Placed,
+  to: Placed,
+  lastRow: number,
+  frame?: Frame,
+): BackWire {
+  const start = corner(from, frame)
+  const end = corner(to, frame)
+  const floor = frame?.bottom ?? lastRow * (BOX.height + BOX.gapY) + BOX.height
   return {
     x1: start.x + BOX.width,
     y1: start.y + BOX.head,
     turn: Math.max(start.x, end.x) + BOX.width + BOX.around,
-    under: lastRow * (BOX.height + BOX.gapY) + BOX.height + BOX.gapY / 2,
+    under: floor + BOX.gapY / 2,
     // Up into the middle of the target's underside.
     x2: end.x + BOX.width / 2,
-    y2: end.y + BOX.height,
+    y2: end.y + (frame?.heights[to.flow] ?? BOX.height),
   }
 }
 
@@ -308,9 +334,9 @@ export interface Wire {
  * The line an arrow runs along between two boxes: out of one's right edge and
  * into the other's left, both level with the header rather than the middle.
  */
-export function wire(from: Placed, to: Placed): Wire {
-  const start = corner(from)
-  const end = corner(to)
+export function wire(from: Placed, to: Placed, frame?: Frame): Wire {
+  const start = corner(from, frame)
+  const end = corner(to, frame)
   const x1 = start.x + BOX.width
   const x2 = end.x
   return {

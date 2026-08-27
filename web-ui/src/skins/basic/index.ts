@@ -21,6 +21,7 @@ import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
 import { BOX, arrivals, backWire, corner, depths, exits, loops, place, wire } from "../wiring"
+import type { Frame } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
@@ -196,7 +197,38 @@ function paint(box: Box, flowState: FlowState, open: boolean): void {
   box.tally.textContent = describeRecent(flowState)
 }
 
-function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
+/**
+ * Where the rows really are, once the boxes have been built.
+ *
+ * The one measurement in this file, and it is taken here because this is the
+ * one place that already runs only when the wiring changes -- a border's
+ * height is a fact about its graph, not about the frame arriving over SSE.
+ * `BOX.height` remains the fallback the tests are written against.
+ */
+function measure(placed: Placed[], boxes: Map<string, Box>): Frame {
+  const heights: Record<string, number> = {}
+  const tall: number[] = []
+  for (const one of placed) {
+    const height = boxes.get(one.flow)?.root.offsetHeight || BOX.height
+    heights[one.flow] = height
+    tall[one.row] = Math.max(tall[one.row] ?? 0, height)
+  }
+
+  const tops: number[] = []
+  let y = 0
+  for (let row = 0; row < tall.length; row += 1) {
+    tops[row] = y
+    y += (tall[row] ?? BOX.height) + BOX.gapY
+  }
+  return { tops, bottom: y - BOX.gapY, heights }
+}
+
+function drawWires(
+  svg: SVGElement,
+  stage: StageState,
+  placed: Placed[],
+  frame: Frame,
+): void {
   const at = new Map(placed.map((one) => [one.flow, one]))
   const lastRow = placed.reduce((low, one) => Math.max(low, one.row), 0)
   const lines: SVGElement[] = []
@@ -209,8 +241,8 @@ function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
       // A branch that deliberately stops has nothing to point at, and a target
       // that is disabled has no box on this board.
       if (to === undefined) continue
-      const back = loops(from, to) ? backWire(from, to, lastRow) : null
-      const line = back ?? wire(from, to)
+      const back = loops(from, to) ? backWire(from, to, lastRow, frame) : null
+      const line = back ?? wire(from, to, frame)
 
       const path = document.createElementNS(SVG, "path")
       path.setAttribute("class", "basic-wire")
@@ -256,9 +288,19 @@ function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
 }
 
 /** Whether the layout has to be worked out again, rather than just repainted. */
-function wiringKey(stage: StageState): string {
+/**
+ * What the layout depends on: who hands to whom, and which borders are open.
+ *
+ * Open belongs here because it changes a border's height, and the rows and the
+ * arrows are measured off those heights. Left out, a flow that starts running
+ * grows and every arrow keeps the geometry of the board before it did.
+ */
+function wiringKey(stage: StageState, open: (flow: string, at: FlowState) => boolean): string {
   return Object.entries(stage.flows)
-    .map(([flow, flowState]) => `${flow}>${flowState.then.map((a) => a.to).join(",")}`)
+    .map(
+      ([flow, flowState]) =>
+        `${flow}>${flowState.then.map((a) => a.to).join(",")}${open(flow, flowState) ? "+" : "-"}`,
+    )
     .join("|")
 }
 
@@ -279,6 +321,9 @@ export const basic: Skin = {
     // everywhere else.
     const byHand = new Map<string, boolean>()
     let key = ""
+    // The last stage drawn, so a border opened by hand can lay the board out
+    // again -- it just changed a height, and the arrows are drawn off those.
+    let last: StageState | null = null
 
     const isOpen = (flow: string, flowState: FlowState): boolean =>
       byHand.get(flow) ?? flowState.status === "running"
@@ -292,18 +337,18 @@ export const basic: Skin = {
           .filter((to): to is string => to !== null)
       }
       const placed = place(flows, handoffs)
+      const frame = measure(placed, boxes)
       for (const one of placed) {
         const box = boxes.get(one.flow)
         if (box === undefined) continue
-        const spot = corner(one)
+        const spot = corner(one, frame)
         box.root.style.left = `${spot.x}px`
         box.root.style.top = `${spot.y}px`
       }
       const columns = Math.max(1, ...placed.map((one) => one.column + 1))
-      const rows = Math.max(1, ...placed.map((one) => one.row + 1))
       board.style.width = `${columns * (BOX.width + BOX.gapX)}px`
-      board.style.height = `${rows * (BOX.height + BOX.gapY)}px`
-      drawWires(svg, stage, placed)
+      board.style.height = `${frame.bottom + BOX.gapY}px`
+      drawWires(svg, stage, placed, frame)
     }
 
     return {
@@ -317,6 +362,7 @@ export const basic: Skin = {
               byHand.set(flow, !isOpen(flow, painted.get(flow) ?? flowState))
               const now = painted.get(flow)
               if (now !== undefined) paint(box!, now, isOpen(flow, now))
+              if (last !== null) relayout(last)
             })
             boxes.set(flow, box)
             board.append(box.root)
@@ -333,7 +379,8 @@ export const basic: Skin = {
             moved = true
           }
         }
-        const fresh = wiringKey(stage)
+        last = stage
+        const fresh = wiringKey(stage, isOpen)
         if (moved || fresh !== key) {
           key = fresh
           relayout(stage)
