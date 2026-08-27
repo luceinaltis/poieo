@@ -59,15 +59,20 @@ class Candidate:
 
 
 # Everything detection knows how to look for, in the order a picker shows them
-# -- which is also the order an unattended `init` takes its answer from. Claude
-# leads because that is the order this has always resolved in: a key on the
-# machine is a decision somebody already made.
+# -- which is also the order an unattended `init` takes its answer from.
+#
+# Local servers lead, and the reason is DESIGN.md principle 3's own: a resident
+# that runs around the clock has to be able to do it without anybody watching
+# the token spend, so the metered endpoint is not what a project falls into by
+# default. Every engine found is still declared either way; this decides only
+# which one an unbound role reaches, and `poieo config use` moves that in one
+# command.
 CANDIDATES: tuple[Candidate, ...] = (
-    Candidate("claude", "Claude API", "anthropic"),
     Candidate("ollama", "Ollama", "ollama", "http://localhost:11434"),
     Candidate("lmstudio", "LM Studio", "openai_compatible", "http://localhost:1234/v1"),
     Candidate("vllm", "vLLM / SGLang", "openai_compatible", "http://localhost:8000/v1"),
     Candidate("llamacpp", "llama.cpp", "openai_compatible", "http://localhost:8080/v1"),
+    Candidate("claude", "Claude API", "anthropic"),
 )
 
 # How to ask an endpoint of each type what it serves: the path, the key holding

@@ -229,3 +229,26 @@ async def test_a_type_with_nothing_to_ask_answers_empty(monkeypatch):
     _serves(monkeypatch, {})
     assert await models_for("mock", None) == ()
     assert await models_for("something_registered_later", "http://x") == ()
+
+
+def test_a_local_engine_is_preferred_over_the_metered_one(monkeypatch):
+    """DESIGN.md principle 3: local first. The reason it gives is economic --
+    a 24/7 resident has to be able to run without worrying about token spend --
+    so a machine with both a Claude credential and a local server answering
+    must not default to the metered one.
+
+    Both are still declared. Only which one an unattended `init` binds to the
+    default role is at stake, and `poieo config use` moves it in one command.
+    """
+    _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_TAGS})
+
+    async def _found():
+        return ("claude-opus-5",)
+
+    monkeypatch.setattr(detect_module, "_claude_models", _found)
+
+    found = detect()
+
+    assert [e.key for e in found] == ["ollama", "claude"]
+    # ...and the whole pool is still there for a role to name.
+    assert {e.key for e in found} == {"ollama", "claude"}
