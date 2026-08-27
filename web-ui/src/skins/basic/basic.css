@@ -1,6 +1,23 @@
+/* Fills the host and centres the board in it. `safe` is what makes that
+   survive a board bigger than the window: instead of centring it and cutting
+   the top-left off where nothing can scroll to it, alignment falls back to the
+   start and the host scrolls as it did before. */
+.basic-frame {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: safe center;
+  align-items: safe center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 24px;
+}
+
 .basic {
   position: relative;
-  padding: 24px;
+  /* No padding here: the boxes inside are absolutely positioned, so they are
+     laid against this element's padding box and any padding is ignored. The
+     frame holds the margin instead, where it is a real gap. */
+  flex: none;
 }
 
 .basic-wires {

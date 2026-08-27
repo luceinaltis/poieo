@@ -309,7 +309,12 @@ export const basic: Skin = {
   label: "Basic",
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
-    const board = element("div", "basic", el)
+    // The board sits in a frame that fills the host and centres it. The board
+    // itself cannot do that: it is sized by the layout, and its own padding is
+    // inert because everything inside it is absolutely positioned -- which is
+    // why the left-hand border used to touch the edge of the window.
+    const frame = element("div", "basic-frame", el)
+    const board = element("div", "basic", frame)
     const svg = document.createElementNS(SVG, "svg")
     svg.setAttribute("class", "basic-wires")
     board.append(svg)
@@ -389,7 +394,7 @@ export const basic: Skin = {
 
       destroy() {
         boxes.clear()
-        board.remove()
+        frame.remove()
       },
     }
   },
