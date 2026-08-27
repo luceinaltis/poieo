@@ -12,7 +12,7 @@ import type { RunSummary } from "../types"
 export type Outcome = "succeeded" | "failed" | "nothing"
 
 export interface Rollup {
-  works: number
+  runs: number
   succeeded: number
   failed: number
   nothingToDo: number
@@ -21,7 +21,7 @@ export interface Rollup {
 }
 
 export const NOTHING: Rollup = Object.freeze({
-  works: 0,
+  runs: 0,
   succeeded: 0,
   failed: 0,
   nothingToDo: 0,
@@ -44,12 +44,12 @@ export function outcomeOf(run: RunSummary, tracked = true): Outcome {
 
 export function fold(into: Rollup, run: RunSummary, tracked = true): Rollup {
   const outcome = outcomeOf(run, tracked)
-  // A failed run's work is parked rather than waiting, so its lines are not
-  // part of what there is to accept.
+  // A failed run's change is parked rather than waiting, so its lines are
+  // not part of what there is to accept.
   const change = outcome === "succeeded" ? run.change : undefined
 
   return {
-    works: into.works + 1,
+    runs: into.runs + 1,
     succeeded: into.succeeded + (outcome === "succeeded" ? 1 : 0),
     failed: into.failed + (outcome === "failed" ? 1 : 0),
     nothingToDo: into.nothingToDo + (outcome === "nothing" ? 1 : 0),

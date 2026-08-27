@@ -369,7 +369,7 @@ def closing_line(result: Any, fallback: str = "(said nothing)") -> str:
 # What a task writes at the end of its own run. The last such line is the
 # bookmark: everything after it arrived while the task was not looking.
 #
-# "nothing" is DESIGN.md's third outcome for a piece of work -- succeeded,
+# "nothing" is DESIGN.md's third outcome for a run -- succeeded,
 # failed, or found nothing to do -- and no writer produces it yet. It is here
 # so that the day one does, old journals and new read alike; it is reserved,
 # not dead.

@@ -137,20 +137,20 @@ test("the lamp is lit while the bench is in use", () => {
 })
 
 test("a flow with no private copy shelves nothing", () => {
-  // It produces no piece to put anywhere. Counting its runs as finished work
-  // fills a shelf with things that do not exist.
+  // It produces no piece to put anywhere. Counting its runs as finished
+  // pieces fills a shelf with things that do not exist.
   const busy = worker({
     tracked: false,
-    recent: { ...NOTHING, works: 40, succeeded: 40 },
+    recent: { ...NOTHING, runs: 40, succeeded: 40 },
   })
   expect(shelfCount(busy)).toBe(0)
 })
 
 test("the shelf fills with finished work, not attempts", () => {
   expect(shelfCount(worker())).toBe(0)
-  expect(shelfCount(worker({ recent: { ...NOTHING, works: 4, succeeded: 3 } }))).toBe(3)
+  expect(shelfCount(worker({ recent: { ...NOTHING, runs: 4, succeeded: 3 } }))).toBe(3)
   // a failed night leaves the shelf empty
-  expect(shelfCount(worker({ recent: { ...NOTHING, works: 2, failed: 2 } }))).toBe(0)
+  expect(shelfCount(worker({ recent: { ...NOTHING, runs: 2, failed: 2 } }))).toBe(0)
 })
 
 

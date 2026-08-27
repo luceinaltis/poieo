@@ -93,14 +93,14 @@ export default function App({ store }: { store?: StageStore }) {
         <div className="shell-board" ref={boardRef} />
         {empty ? (
           <p className="shell-empty">
-            Nothing is running yet. When the daemon picks up work, it shows up here.
+            Nothing is running yet. When the daemon starts a run, it shows up here.
           </p>
         ) : null}
       </div>
 
       {selected ? (
         <Drawer
-          // A fresh drawer per worker: its selected work, its opened files and
+          // A fresh drawer per worker: its selected run, its opened files and
           // its expanded-failures toggle all belong to the flow being read.
           key={selected}
           flow={selected}

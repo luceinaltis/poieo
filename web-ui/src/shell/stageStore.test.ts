@@ -227,7 +227,7 @@ test("the store tallies each flow's recent work from the run index", async () =>
   // The event stream never carries this: a browser opened at noon has to be
   // told what happened at 3am.
   expect(store.getStage().workers.chores.recent).toMatchObject({
-    works: 1,
+    runs: 1,
     succeeded: 1,
     insertions: 9,
   })

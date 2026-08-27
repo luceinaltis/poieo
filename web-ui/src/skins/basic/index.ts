@@ -45,9 +45,9 @@ function element(tag: string, className: string, parent: Element): HTMLElement {
 
 function describeRecent(worker: Worker): string {
   const recent = worker.recent
-  if (recent.works === 0) return "nothing finished yet"
+  if (recent.runs === 0) return "nothing finished yet"
 
-  const parts = [`${recent.works} piece${recent.works === 1 ? "" : "s"} of work`]
+  const parts = [`${recent.runs} run${recent.runs === 1 ? "" : "s"}`]
   if (recent.insertions || recent.deletions) {
     parts.push(`+${recent.insertions} / -${recent.deletions}`)
   }

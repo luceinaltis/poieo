@@ -1,5 +1,5 @@
 /**
- * Taking the work, or throwing it away.
+ * Taking a run's change, or throwing it away.
  *
  * The only component whose requests can move the reader's own files --
  * Control's verbs stop at the daemon. Both actions here are about the
@@ -27,7 +27,7 @@ function Refusal({ decision }: { decision: Decision }) {
     // own editor, with their own history in front of them.
     return (
       <p className="decide-refusal">
-        You changed {decision.conflict.join(", ")} too, so this work can't be
+        You changed {decision.conflict.join(", ")} too, so this run can't be
         taken as it is. Nothing was moved.
       </p>
     )
@@ -51,7 +51,7 @@ export function Decide({
   const [asking, setAsking] = useState(false)
   const { busy, refused, act: send } = useAct<Decision>(onDone)
 
-  // Per-work controls always apply; the card's only apply to a waiting pile.
+  // Per-run controls always apply; the card's only apply to a waiting pile.
   if (!runId && pending <= 0) return null
 
   // Once a request has actually gone out the confirmation step is over: the
@@ -74,7 +74,7 @@ export function Decide({
         disabled={busy}
         onClick={() => void act(() => accept(flow, runId ?? undefined))}
       >
-        {runId ? "accept up to this work" : "accept this work"}
+        {runId ? "accept up to this run" : "accept this run"}
         {preview}
       </button>
 
@@ -96,7 +96,7 @@ export function Decide({
           disabled={busy}
           onClick={() => setAsking(true)}
         >
-          {runId ? "discard from this work onward" : "discard this work"}
+          {runId ? "discard from this run onward" : "discard this run"}
         </button>
       )}
 

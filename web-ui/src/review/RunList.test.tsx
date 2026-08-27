@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test } from "vitest"
 
-import { WorkList } from "./WorkList"
+import { RunList } from "./RunList"
 import type { RunSummary } from "../types"
 
 const USAGE = {
@@ -62,7 +62,7 @@ afterEach(() => {
 function render(runs: RunSummary[], tracked = true) {
   act(() => {
     root.render(
-      <WorkList runs={runs} selected={null} tracked={tracked} onSelect={() => {}} />,
+      <RunList runs={runs} selected={null} tracked={tracked} onSelect={() => {}} />,
     )
   })
 }
@@ -96,10 +96,10 @@ test("a run that found nothing to do says so, and is not a failure", () => {
   expect(row.textContent).toMatch(/nothing to do/i)
 })
 
-test("failed work is collapsed behind one line until asked for", () => {
+test("failed runs are collapsed behind one line until asked for", () => {
   render([DID_SOMETHING, BROKE, run({ run_id: "d", status: "failed" })])
 
-  // the good work is not buried under the noise
+  // the good runs are not buried under the noise
   expect(rows()).toHaveLength(1)
   const toggle = container.querySelector<HTMLElement>("[data-failed-toggle]")!
   expect(toggle.textContent).toContain("2 failed")
@@ -110,31 +110,33 @@ test("failed work is collapsed behind one line until asked for", () => {
   expect(container.textContent).toContain("the tool went missing")
 })
 
-test("the rendered work list uses none of the forbidden words", () => {
+test("the rendered run list uses none of the forbidden words", () => {
   render([DID_SOMETHING, FOUND_NOTHING, BROKE])
   act(() => container.querySelector<HTMLElement>("[data-failed-toggle]")!.click())
 
-  // The reader is here to see work and changes, not to be taught a tool's
+  // The reader is here to see runs and changes, not to be taught a tool's
   // vocabulary. The one licensed exception lives on the accept button.
-  const forbidden = /\b(commit|commits|sha|branch|worktree|ref|refs|merge|merged|HEAD|run id)\b/i
+  // "work" is forbidden for the opposite reason: it is a second name for a
+  // run, and DESIGN principle 7 allows each thing exactly one.
+  const forbidden = /\b(commit|commits|sha|branch|worktree|ref|refs|merge|merged|HEAD|run id|work|works)\b/i
   expect(container.textContent ?? "").not.toMatch(forbidden)
 })
 
-test("the selected piece of work is marked", () => {
+test("the selected run is marked", () => {
   act(() => {
     root.render(
-      <WorkList runs={[DID_SOMETHING]} selected="a" tracked onSelect={() => {}} />,
+      <RunList runs={[DID_SOMETHING]} selected="a" tracked onSelect={() => {}} />,
     )
   })
 
   expect(rows()[0].getAttribute("data-selected")).toBe("true")
 })
 
-test("clicking a row selects that piece of work", () => {
+test("clicking a row selects that run", () => {
   const picked: string[] = []
   act(() => {
     root.render(
-      <WorkList
+      <RunList
         runs={[DID_SOMETHING]}
         selected={null}
         tracked

@@ -93,7 +93,7 @@ test("a conflict names the files and offers no resolve button", async () => {
   expect(container.textContent).not.toMatch(/resolve/i)
 })
 
-test("discard asks first, and does not promise the work is gone forever", async () => {
+test("discard asks first, and does not promise the change is gone forever", async () => {
   discard.mockResolvedValue({ ok: true, discarded: 3 })
   render()
 
@@ -106,7 +106,7 @@ test("discard asks first, and does not promise the work is gone forever", async 
   expect(discard).toHaveBeenCalledWith("chores", undefined)
 })
 
-test("the per-work controls act from and up to that work", async () => {
+test("the per-run controls act from and up to that run", async () => {
   accept.mockResolvedValue({ ok: true, accepted: 1 })
   render({ runId: "r7", pending: 0, into: null })
 
@@ -115,6 +115,19 @@ test("the per-work controls act from and up to that work", async () => {
 
   await act(async () => button("accept").click())
   expect(accept).toHaveBeenCalledWith("chores", "r7")
+})
+
+test("the buttons call a run a run", () => {
+  // DESIGN principle 7: one word for one thing. These buttons used to say
+  // "this work" for what the files, the CLI and the log all call a run.
+  render()
+  expect(button("accept").textContent).toContain("accept this run")
+  expect(button("discard").textContent).toContain("discard this run")
+
+  render({ runId: "r7", pending: 0, into: null })
+  expect(button("accept").textContent).toContain("up to this run")
+  expect(button("discard").textContent).toContain("from this run onward")
+  expect(container.textContent ?? "").not.toMatch(/\bwork\b/i)
 })
 
 test("nothing waiting means nothing to decide", () => {
