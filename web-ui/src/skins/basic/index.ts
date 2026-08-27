@@ -211,10 +211,23 @@ function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
       )
       lines.push(path)
 
+      // A head, because the rule the whole board rests on is that an arrow
+      // crosses a border. A bare line says two flows are related; it does not
+      // say which one ends and which one begins.
+      const head = document.createElementNS(SVG, "path")
+      head.setAttribute("class", "basic-tip")
+      head.setAttribute(
+        "d",
+        `M ${line.x2 - 8} ${line.y2 - 4} L ${line.x2} ${line.y2} L ${line.x2 - 8} ${line.y2 + 4} Z`,
+      )
+      lines.push(head)
+
       const word = document.createElementNS(SVG, "text")
       word.setAttribute("class", "basic-word")
       word.setAttribute("x", String(mid))
-      word.setAttribute("y", String(Math.min(line.y1, line.y2) - 6))
+      // On the line, not above it: floated, the word sat against the border
+      // below and read as that box's label rather than this arrow's.
+      word.setAttribute("y", String((line.y1 + line.y2) / 2))
       word.textContent = arrow.label
       lines.push(word)
     }

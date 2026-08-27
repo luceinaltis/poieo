@@ -4,6 +4,7 @@ import { basic } from "./index"
 import { AGENT_RUN } from "../../state/fixtures"
 import { initialStage, reduce, replay, setRuns } from "../../state/stage"
 import type { FlowRow } from "../../types"
+import { BOX } from "../wiring"
 
 const FLOWS: FlowRow[] = [
   {
@@ -116,6 +117,31 @@ test("a handoff is drawn as an arrow carrying the word on it", () => {
   // point at, and an arrow to nowhere would be a line the reader must ignore.
   expect(el.querySelectorAll(".basic-wire")).toHaveLength(1)
   expect(el.querySelector(".basic-word")!.textContent).toBe("changed")
+  handle.destroy()
+})
+
+test("a handoff says which way it goes", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage(WIRED))
+
+  // The whole board rests on one rule -- an arrow that crosses a border ends
+  // one run and starts another -- and a bare line is not an arrow. Without a
+  // head, "chores hands to review" reads exactly like the reverse.
+  const heads = el.querySelectorAll(".basic-tip")
+  expect(heads).toHaveLength(1)
+  // Pointing at the flow being handed to, not away from it.
+  expect(heads[0].getAttribute("d")).toContain(String(BOX.width + BOX.gapX))
+  handle.destroy()
+})
+
+test("the word on an arrow sits on the line it names", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage(WIRED))
+
+  // Floated above the line it belonged to the box underneath it instead, and
+  // on the top row it had the board's own edge to collide with.
+  const [, , y] = el.querySelector(".basic-wire")!.getAttribute("d")!.split(/[ ,]/)
+  expect(el.querySelector(".basic-word")!.getAttribute("y")).toBe(y)
   handle.destroy()
 })
 

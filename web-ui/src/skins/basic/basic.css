@@ -12,16 +12,29 @@
   height: 100%;
 }
 
+/* The most important line on the board: it is the one that says where a run
+   ends. Drawn at the weight of a border it read as one, and a reader could
+   not tell a handoff from two boxes that happened to sit side by side. */
 .basic-wire {
   fill: none;
-  stroke: #4a4034;
+  stroke: #7a6e60;
   stroke-width: 1.5;
+}
+
+.basic-tip {
+  fill: #7a6e60;
 }
 
 .basic-word {
   fill: #9a9086;
   font-size: 11px;
   text-anchor: middle;
+  dominant-baseline: middle;
+  /* A halo of the page behind the word, so the line runs up to it rather than
+     through it. Cheaper than a backing rect, and it moves with the text. */
+  paint-order: stroke;
+  stroke: #14120f;
+  stroke-width: 4px;
 }
 
 .basic-flow {
