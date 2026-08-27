@@ -9,10 +9,10 @@
 **An autonomous task board: write down the work you want done, and the LLMs on
 your own machine keep it running around the clock.**
 
-The user designs the shape of the work, poieo keeps it resident, and the model
-does the actual hands-on work at each step. Pin up a task like "keep improving
-this project" and — find something to fix, edit the code, run the tests, branch
-on the result — it keeps turning while you are away.
+The user designs the shape of the work; the model does the hands-on part of each
+step. Pin up a task like "keep improving this project" and — find something to
+fix, edit the code, run the tests, branch on the result — it keeps turning while
+you are away.
 
 ## Core principles
 
@@ -20,8 +20,8 @@ on the result — it keeps turning while you are away.
 
 **What the work is** (graph) and **which model does it** (binding) are two
 separate files. A graph names roles; a binding maps roles onto real models.
-Moving a workflow designed against a 3B laptop model onto Claude Opus is one
-flag.
+Moving a workflow from the smallest model on a laptop to the largest one an API
+sells is a flag, not an edit.
 
 This separation is an invariant every new feature must respect. When the web
 editor arrives, graph editing and binding editing stay distinct.
@@ -77,10 +77,9 @@ result takes a manual. The user learns three words and no more: a **task**
 failed, or found nothing to do), and a **change** (what that run did to the
 files, which you accept or discard).
 
-A run is one pass from the entry node to a node with nowhere left to go, and
-it is called that everywhere — on screen, in `poieo runs`, and in the log. The
-board used to say "a piece of work" for what the files called a run: one thing
-with two names, which is the exact tax this principle exists to refuse.
+A run is one pass from the entry node to a node with nowhere left to go, and it
+is called that everywhere — on screen, in `poieo runs`, and in the log. One
+thing with two names is the exact tax this principle exists to refuse.
 
 Everything underneath — how a run is isolated, how a change is stored, how it
 is undone — is machinery, and machinery does not appear in the interface. The
@@ -92,21 +91,14 @@ result.**
 
 ### Today: the CLI
 
-Grouped by what a person is doing, not by which layer a command touches:
+Everything is reachable from a terminal, and the commands are grouped by what a
+person is doing rather than by which layer they touch: **setting up** a project
+and choosing which models answer, **your tasks** — see the board, try one, tell
+one something, keep them all running — and **what happened**, the runs and what
+the project has learned from them.
 
-```
-Setting up     init                    make this folder a project
-               config                  which models it uses, and what else this machine has
-               validate / check        prove it loads, and that the models answer
-
-Your tasks     tasks                   the board: what is pinned up, and when each next runs
-               run                     try one now
-               note                    tell one something before its next run
-               daemon                  keep them all running, and serve the board
-
-What happened  runs                    what ran, and what each run did
-               memory / learn          what the project has come to believe
-```
+`poieo --help` is the list. Naming each command here would be a second copy of
+it, and the copy is the one that goes wrong.
 
 ### Target: the web roadmap board
 
@@ -144,7 +136,7 @@ What poieo offers the user stacks in layers:
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
 | **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
-| **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | most: observe, review and control are live; creating a card from the board is next |
+| **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | part built |
 
 The key insight: **"keeps working" is a property of the graph, not of a node.**
 An agent node is one step of the graph using its hands; running forever is the
@@ -186,60 +178,27 @@ Autonomous execution needs explicit fences:
   index may exist under `memory/cache/`, gitignored, rebuilt from the files at
   any time; deleting it loses nothing, and nothing is ever true because the
   index says so.
-- **Not a general-purpose agent framework.** The goal is not to compete with
-  LangChain-style abstraction stacks, but to complete one experience: *my
-  work keeps running on my machine*. Node types and tools grow only as far
-  as that experience requires.
+- **Not a general-purpose agent framework.** The goal is not a stack of
+  abstractions to build anything on, but one experience carried through: *my
+  work keeps running on my machine*. Node types and tools grow only as far as
+  that experience requires.
 - **No OS-level sandbox by default.** Path confinement is the default; real
   isolation is opt-in, never a prerequisite for getting started. (See safety
   boundaries.)
 
 ## Roadmap
 
-Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: control
-(pause / resume / run-now) is live end to end; card CRUD is the open
-slice. The link after each shipped item is the document describing how it
-works today.
+What is not built yet. Everything marked done in the table above is, and how
+each of those works *today* is in its component document — a roadmap that also
+described finished work would be a second, staler account of it.
 
-1. **Agent node** — build the hands: file and shell tools confined to a
-   working directory. Tool execution sits behind a swappable seam from day
-   one, so container isolation can arrive later without reshaping anything.
-   (`docs/tools.md`)
-2. **Observation** — an HTTP server inside the daemon streaming run events to
-   a browser: what is running, which node, every tool call, what the model
-   said. Read-only.
-   (`docs/web.md`)
-3. **The morning review** — the model works in a private copy; each run is one
-   reviewable change; the board shows the diff and accepts or discards it.
-   This is where the daemon stops being something you have to trust blindly.
-   (`docs/workspace.md`)
-4. **The task card** — a task becomes one file (a name, a folder, a prompt),
-   and it keeps a journal of what it did and what the user told it, which it
-   reads before every run. This is what principle 2 promises and what the
-   board edits.
-   (`docs/tasks.md`)
-5. **Isolation** — a task can opt into running its commands in a container
-   that sees its folder and nothing else of the machine. The shell was the
-   one tool that could reach past path confinement; this closes it.
-   (`docs/tools.md`)
-6. **Web control plane** — card CRUD and task control (REST API); fold the
-   existing canvas editor in for detail editing. The daemon gains runtime
-   add/remove/pause. Control — pause, resume, run now, from runner to board —
-   has shipped; CRUD and the editor fold-in remain.
-   (`docs/web.md`)
-7. **Tasks that work together** — a task can leave a line in another task's
-   journal, read on that task's next run. News, not orders, and no way to
-   spin: a note wakes nobody.
-   (`docs/tasks.md`)
-8. **A long memory** — the project keeps one page that is always in front of
-   every task, and a folder of things it has learned; every run leaves a
-   full record behind, so anything remembered can be traced to the run that
-   taught it.
-   (`docs/memory.md`)
-9. **Beyond (candidates)** — delegating steps to external agent CLIs
-   (Claude Code, etc.); fan-out steps; run-log retention; stronger isolation
-   backends (microVM, or the OS-level primitives Landlock and Seatbelt)
-   behind the same seam.
+- **The board writes, not only reads.** Creating and editing a card from the
+  browser, and folding the existing canvas editor into the detail view. The
+  daemon gains add and remove at runtime. Observing, reviewing and controlling
+  already work end to end; making a task is still a file you write by hand.
+- **Beyond, as candidates.** Delegating a step to an external agent CLI;
+  fan-out steps; deciding what happens to run logs as they age; stronger
+  isolation backends behind the seam the current one already sits on.
 
-The design specs and implementation plans these were built from are kept
-under `docs/archive/`.
+The design specs these were built from are kept under `docs/archive/`. They
+record what was intended at the time, which is not always what is true now.
