@@ -45,7 +45,7 @@ from .project import (
     nothing_found,
 )
 from .providers import ProviderPool
-from .rebind import point_at
+from .rebind import declare, point_at
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
 from .tools import ToolContext, Isolation
@@ -927,6 +927,45 @@ def config_models(
             # before its role, and real Ollama tags run past 44 easily.
             typer.echo(f"  {model:<44}  {role}" if role else f"  {model}")
         typer.echo("")
+
+
+@config_app.command("add")
+@_guarded
+def config_add() -> None:
+    """Look at the machine again, and declare any engine not already here.
+
+    Detection otherwise runs once, at `init`. Install Ollama next week and the
+    binding has never heard of it -- this is how it does, and it is the same
+    look `init` took.
+
+    Only adds. An endpoint already declared is left exactly as it is, since
+    somebody may have pointed it at another port; and the default never moves,
+    because declaring a model and choosing one are different decisions.
+    """
+    path, _ = _configured()
+    found = engines.detect()
+
+    added = declare(path, found)
+    if not added:
+        # Say where it looked, so "nothing new" is an answer rather than a
+        # shrug. An engine already declared is not news.
+        seen = ", ".join(engine.label for engine in found) or "nothing"
+        typer.echo(f"nothing new -- this machine answers with: {seen}")
+        return
+
+    by_key = {engine.key: engine for engine in found}
+    _ok(f"declared {', '.join(added)} in {path}")
+    for key in added:
+        engine = by_key[key]
+        typer.echo("")
+        typer.echo(f"{key:<12}{engine.base_url or ''}".rstrip())
+        for model in engine.models:
+            typer.echo(f"  {model}")
+    first = by_key[added[0]]
+    typer.echo("")
+    typer.echo(
+        f"to use one:  poieo config use {first.key}/{first.models[0]} --role <name>"
+    )
 
 
 @config_app.command("use")

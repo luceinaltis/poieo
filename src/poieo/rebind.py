@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, Sequence
 
 from .errors import BindingError, SpecError
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .detect import Engine
 
 # Two spaces, as everything poieo writes uses and as good as every hand-kept
 # YAML file does. Only used for blocks this module creates.
@@ -148,6 +152,64 @@ def _repoint(text: str, role: str, provider: str, model: str) -> str:
         f"{pad}{INDENT}model: {_quoted(model)}",
     ]
     return "\n".join(lines) + "\n"
+
+
+def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
+    """Add each engine to ``providers:`` that is not already there.
+
+    Returns the keys actually added, so a caller with nothing to report can
+    say so. **Never touches one that is already declared**: somebody may have
+    pointed it at another port or another machine, and adding is adding -- it
+    is not a second round of `init`. Nothing about `default:` moves either;
+    choosing is what `config use` is for.
+    """
+    from .binding import load_binding
+
+    path = Path(path)
+    original = path.read_text(encoding="utf-8")
+    known = set(load_binding(path).providers)
+
+    fresh = [engine for engine in engines if engine.key not in known]
+    if not fresh:
+        return []
+
+    lines = original.splitlines()
+    span = _top_level(lines, "providers")
+    if span is None:
+        raise SpecError(
+            f"could not find `providers:` to add to in {path}. Open it and "
+            f"declare {', '.join(e.key for e in fresh)} by hand -- this only "
+            f"edits the ordinary block form poieo writes."
+        )
+
+    block: list[str] = []
+    for engine in fresh:
+        block.append(f"{INDENT}{engine.key}:")
+        block.append(f"{INDENT * 2}type: {engine.type}")
+        if engine.base_url is not None:
+            # Absent, not empty, when the backend's own SDK knows where it
+            # lives: a guessed address is worse than no address.
+            block.append(f"{INDENT * 2}base_url: {engine.base_url}")
+
+    body = [i for i in range(span[0] + 1, span[1]) if lines[i].strip()]
+    at = (body[-1] + 1) if body else span[1]
+    lines[at:at] = block
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        declared = set(load_binding(path).providers)
+    except SpecError as exc:
+        path.write_text(original, encoding="utf-8")
+        raise SpecError(
+            f"adding to {path} would have broken it ({exc}); it has been left "
+            f"exactly as it was"
+        ) from exc
+
+    added = [engine.key for engine in fresh]
+    if not set(added) <= declared:
+        path.write_text(original, encoding="utf-8")
+        raise SpecError(f"{path} did not take {added} as expected; it is unchanged")
+    return added
 
 
 def point_at(path: Path, role: str, provider: str, model: str) -> None:
