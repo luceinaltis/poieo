@@ -2,6 +2,7 @@
 
 import asyncio
 
+from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 
@@ -30,15 +31,9 @@ default: {provider: fake, model: m}
 def _config(tmp_path, trigger, binding=_MOCK, graph=_GRAPH):
     (tmp_path / "g.yaml").write_text(graph, encoding="utf-8")
     (tmp_path / "b.yaml").write_text(binding, encoding="utf-8")
+    card(tmp_path / "cards", "f", f"graph: ../g.yaml\ntrigger: {trigger}\n")
     path = tmp_path / "poieo.yaml"
-    path.write_text(
-        "binding: b.yaml\n"
-        "flows:\n"
-        "  - name: f\n"
-        "    graph: g.yaml\n"
-        f"    trigger: {trigger}\n",
-        encoding="utf-8",
-    )
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
     return load_config(path)
 
 

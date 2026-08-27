@@ -590,12 +590,15 @@ def reset(
     available, reason = docker.docker_available()
     if not available:
         _fail(reason)
-    removed = docker.remove_containers_for(task.folder_path())
+    folder = task.folder_path()
+    if folder is None:
+        return _say(f"task '{task.slug}' works on no folder; nothing to clean.")
+    removed = docker.remove_containers_for(folder)
     # The one thing the user needs to hear: their files are fine. Everything
     # this throws away is rebuilt the next time the task runs.
     _ok(
         f"reset '{task.name}': {removed} environment(s) thrown away. "
-        f"Nothing in {task.folder_path()} was touched."
+        f"Nothing in {folder} was touched."
     )
 
 

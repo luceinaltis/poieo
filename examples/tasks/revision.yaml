@@ -1,0 +1,9 @@
+# Runs back to back forever. A card carries its state forward by default, so
+# what the last run left is in scope for the next.
+name: revision
+graph: draft-review.graph.yaml
+trigger:
+  type: loop
+  cooldown: 10s
+input:
+  brief: "Why a workflow engine should not know which model it runs on."

@@ -17,12 +17,12 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
-from .graph import GraphSpec, NodeSpec, OutputSpec, load_document
+from .graph import Branch, GraphSpec, NodeSpec, OutputSpec, load_document
 from .layout import layout_for
 from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
@@ -101,14 +101,32 @@ class TaskSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    folder: str
+    # Where the work happens, and so whether there is a private copy of it to
+    # review in the morning. Required of a prompt-shaped task -- its model has
+    # hands and they need somewhere to be -- and optional of one that names a
+    # graph, because a graph that only moves text has no folder to name.
+    folder: str | None = None
     # Exactly one of these. `graph` is what `poieo eject` writes.
     prompt: str | None = None
     graph: str | None = None
 
-    # Schedule sugar: a duration, the word "loop", or a cron expression.
+    # Schedule sugar: a duration, the word "loop", or a cron expression. For
+    # the settings they do not reach -- jitter, run_at_start, max_iterations --
+    # `trigger:` takes the full block instead. Simple things one line, complex
+    # things still possible.
     every: str | float | None = None
     at: str | None = None
+    # Left as a mapping rather than a TriggerSpec: importing one here would
+    # close the loop with daemon.config, and FlowSpec validates it a moment
+    # later anyway -- where the error can name the card it came from.
+    trigger: dict[str, Any] | None = None
+
+    # What the work is handed, and what should work next. These were a flow's
+    # to say when a flow was a thing you wrote; a task is that thing now.
+    input: dict[str, Any] = Field(default_factory=dict)
+    input_file: str | None = None
+    then: list[Branch] = Field(default_factory=list)
+    on_error: Literal["continue", "stop"] = "continue"
 
     role: str | None = None
     tools: list[str] | None = None
@@ -130,14 +148,20 @@ class TaskSpec(BaseModel):
             raise ValueError("a task takes a prompt or a graph, not both")
         if not self.prompt and not self.graph:
             raise ValueError("a task needs a prompt (or a graph, once ejected)")
+        if self.prompt and not self.folder:
+            raise ValueError("a task with a prompt needs a folder to work in")
         if self.graph:
             named = [k for k in _NODE_KEYS if getattr(self, k) not in (None, DEFAULT_MAX_TURNS)]
             if named:
                 raise ValueError(
                     f"{', '.join(named)} belong in the graph once a task names one"
                 )
-        if self.every is not None and self.at is not None:
-            raise ValueError("a task is scheduled by 'every' or 'at', not both")
+        named = [k for k in ("every", "at", "trigger") if getattr(self, k) is not None]
+        if len(named) > 1:
+            raise ValueError(
+                f"a task is scheduled by one of every / at / trigger, not "
+                f"{' and '.join(named)}"
+            )
         return self
 
     @property
@@ -158,8 +182,8 @@ class TaskSpec(BaseModel):
         path = Path(relative).expanduser()
         return (path if path.is_absolute() else self.dir / path).resolve()
 
-    def folder_path(self) -> Path:
-        return self.resolve(self.folder)
+    def folder_path(self) -> Path | None:
+        return self.resolve(self.folder) if self.folder else None
 
     def journal_path(self) -> Path:
         # Under memory/, not beside the card: a card is edited by hand, a
@@ -181,14 +205,30 @@ def load_task(path: str | Path) -> TaskSpec:
         ) from exc
     task.source_path = path
     folder = task.folder_path()
-    if not folder.is_dir():
+    if folder is not None and not folder.is_dir():
         raise SpecError(f"{path}: folder does not exist: {folder}")
     return task
 
 
+# What only a card says. A file with `nodes:` and one of these is ambiguous,
+# and ambiguity here is a job that quietly stops running.
+_CARD_KEYS = {"prompt", "folder", "every", "at", "then", "input", "input_file"}
+
+
 def is_task_document(data: dict[str, Any]) -> bool:
-    """A task has a folder and no nodes; a graph is the other way round."""
-    return "folder" in data and "nodes" not in data
+    """A card says what to do; a graph says what the steps are.
+
+    `nodes:` is the graph's word and no card has one; everything else in the
+    folder is a card. It used to be `folder:` that told them apart, which
+    stopped working the moment a card that moves only text was allowed to name
+    no folder at all.
+
+    Positive evidence, because this is asked of files that might be anything --
+    a `poieo.yaml` has no `nodes:` either, and is not a card. Inside the tasks
+    folder `load_tasks` is laxer on purpose: there, a file with `promt:` is a
+    card with a typo, and saying so beats deciding it was never a card.
+    """
+    return "nodes" not in data and bool(_CARD_KEYS & set(data))
 
 
 def is_task_file(path: str | Path) -> bool:
@@ -198,7 +238,9 @@ def is_task_file(path: str | Path) -> bool:
         return False
 
 
-def _trigger(task: TaskSpec) -> dict[str, Any]:
+def _trigger(task: TaskSpec) -> Any:
+    if task.trigger is not None:
+        return task.trigger
     if task.at is not None:
         return {"type": "cron", "expression": task.at}
     every = DEFAULT_EVERY if task.every is None else task.every
@@ -252,16 +294,22 @@ def expand(
             # With no graph file, the flow points at the card standing in for
             # one; load_flows prefers the generated graph handed alongside.
             graph=str(task.resolve(task.graph) if task.graph else task.source_path),
-            binding=task.binding,
+            # Resolved here, against the card. `poieo run` already reads it
+            # that way, and a path that meant one file to the CLI and another
+            # to the daemon is the same card pointing at two places.
+            binding=str(task.resolve(task.binding)) if task.binding else None,
             trigger=_trigger(task),
             enabled=task.enabled,
             isolation=task.isolation,
-            # The folder is what turns the private copy on, and a card had no
-            # way to say it: `folder` reached the generated node and stopped
-            # there, so a card's work went straight into the user's own files.
-            workdir=str(task.folder_path()),
+            # The folder is what turns the private copy on. A task that names
+            # none works on no folder, and has none to keep a copy of.
+            workdir=str(task.folder_path()) if task.folder else None,
+            input=dict(task.input),
+            input_file=task.input_file,
+            then=list(task.then),
+            on_error=task.on_error,
             # A task is a standing job, so what it learned last night is in
-            # scope tonight. Hand-written flows still opt in.
+            # scope tonight.
             carry_state=True,
         )
     except (ValidationError, SpecError) as exc:
@@ -286,17 +334,20 @@ def load_tasks(folder: str | Path) -> list[TaskSpec]:
     tasks = []
     for path in files:
         data = load_document(path)
-        if is_task_document(data):
+        if "nodes" not in data:
+            # In this folder, everything that is not a graph is a card -- so a
+            # typo'd key is a card that says which key, not a file that quietly
+            # stopped being a job.
             tasks.append(load_task(path))
-        elif "nodes" in data and "folder" not in data:
-            continue  # a graph: a card names it, or a flow in poieo.yaml does
+        elif not _CARD_KEYS & set(data):
+            continue  # a graph: a card names it, and that is how it is reached
         else:
-            # Neither shape, or both at once -- a card that grew a `nodes:` key
-            # answers to no rule, and skipping it would be that silent
-            # disappearance.
+            # Both shapes at once. Reading it as a graph would make it vanish
+            # from the board without a word, which is the one outcome a typo
+            # must never have.
             raise SpecError(
-                f"{path}: this is neither a card (`folder:`, no `nodes:`) "
-                f"nor a graph (`nodes:`, no `folder:`)"
+                f"{path}: this answers to both shapes -- it has `nodes:` like a "
+                f"graph and {', '.join(sorted(_CARD_KEYS & set(data)))} like a card"
             )
     return tasks
 

@@ -18,10 +18,15 @@ they contain:
 ```yaml
 store: runs              # where a run's events and result go
 binding: models/local.yaml
-tasks: tasks/
+tasks: tasks/            # where the jobs are; one file each
 learn: 1d
-flows: [...]             # left as written by ProjectSpec; DaemonConfig parses them
 ```
+
+There is no list of jobs here. `flows:` was one, and a marker that still carries
+it is refused by name rather than by "not a setting here" -- a list in a shared
+file is the worse of the two for a board that creates jobs, for a diff that
+should be about the job that changed, and for a reader who had to learn two
+spellings of every key.
 
 `ProjectSpec` is what commands read to fill flags the user left silent; the
 **flag always wins, and discovery only fills silence**. `DaemonConfig` extends it

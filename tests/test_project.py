@@ -8,6 +8,7 @@ import pytest
 
 from typer.testing import CliRunner
 
+from conftest import card
 from poieo.cli import app
 from poieo.project import find_project, find_project_file
 
@@ -115,7 +116,7 @@ def _project(tmp_path, answer="done"):
         _MOCK.format(answer=answer), encoding="utf-8"
     )
     (tmp_path / "poieo.yaml").write_text(
-        "version: 1\nbinding: bindings/mock.yaml\n", encoding="utf-8"
+        "version: 1\nbinding: bindings/mock.yaml\ntasks: tasks\n", encoding="utf-8"
     )
     card = tmp_path / "tasks" / "hello.yaml"
     card.parent.mkdir(exist_ok=True)
@@ -254,11 +255,7 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     marker = tmp_path / "poieo.yaml"
-    marker.write_text(
-        marker.read_text(encoding="utf-8")
-        + "flows:\n  - {name: f, graph: g.yaml}\n",
-        encoding="utf-8",
-    )
+    card(tmp_path / "tasks", "f", "graph: ../g.yaml\n")
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["flows"])
     assert result.exit_code == 0, result.output

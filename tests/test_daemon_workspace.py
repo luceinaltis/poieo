@@ -9,6 +9,7 @@ import asyncio
 
 from test_workspace import git, head, make_repo
 
+from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.store import RunStore
 
@@ -64,11 +65,12 @@ CONFIG = """
 version: 1
 store: store
 binding: b.yaml
-flows:
-  - name: chores
-    graph: g.yaml
+tasks: cards
+"""
+
+JOB = """graph: ../g.yaml
 {workdir}
-    trigger: {{type: loop, max_iterations: 1}}
+trigger: {{type: loop, max_iterations: 1}}
 """
 
 
@@ -78,9 +80,12 @@ def build(tmp_path, *, responses=WRITES_A_FILE, graph=None, workdir=True, max_tu
     (tmp_path / "g.yaml").write_text(
         graph if graph else GRAPH.format(max_turns=max_turns), encoding="utf-8"
     )
-    (tmp_path / "d.yaml").write_text(
-        CONFIG.format(workdir="    workdir: project" if workdir else ""), encoding="utf-8"
+    card(
+        tmp_path / "cards",
+        "chores",
+        JOB.format(workdir="folder: ../project" if workdir else ""),
     )
+    (tmp_path / "d.yaml").write_text(CONFIG, encoding="utf-8")
     return repo, load_config(tmp_path / "d.yaml")
 
 

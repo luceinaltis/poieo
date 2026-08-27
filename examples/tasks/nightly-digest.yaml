@@ -1,0 +1,7 @@
+# Disabled here; flip `enabled` to arm it. Re-reads its payload every night.
+name: nightly digest
+graph: support-triage.graph.yaml
+binding: ../models/mock.yaml
+at: "0 3 * * *"
+input_file: ../inputs/nightly.json
+enabled: false

@@ -1,0 +1,10 @@
+# Fires on a fixed period. A run that overruns its period skips the missed
+# ticks rather than queuing them up.
+name: triage
+graph: support-triage.graph.yaml
+trigger:
+  type: interval
+  every: 30s
+  run_at_start: true
+input:
+  message: "The export button crashes on 2.1 whenever the filter is empty."

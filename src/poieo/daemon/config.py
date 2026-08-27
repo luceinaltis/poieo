@@ -70,12 +70,32 @@ class DaemonConfig(ProjectSpec):
     `poieo run` and another to `poieo daemon`.
     """
 
-    flows: list[FlowSpec] = Field(default_factory=list)
+    # Not a document key. A job is one file in the tasks folder; this is where
+    # `_load_tasks` puts them once it has read it.
+    flows: list[FlowSpec] = Field(default_factory=list, exclude=True)
 
     # What each task-backed flow came from, by flow name. Filled by
     # load_config; anything a document puts here is discarded.
     task_graphs: dict[str, GraphSpec] = Field(default_factory=dict, exclude=True)
     tasks_by_flow: dict[str, TaskSpec] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flows_are_files_now(cls, data: Any) -> Any:
+        """`flows:` was a second way to say what a card says.
+
+        One list in one shared file, against one file per job in a folder: the
+        list is the worse of the two for a board that creates jobs, for a diff
+        that should show only the job that changed, and for a reader who had to
+        learn two spellings of every key. Refused by name rather than by
+        "not a setting here", which would not say where the work went.
+        """
+        if isinstance(data, dict) and "flows" in data:
+            raise ValueError(
+                "`flows:` is gone -- a job is one file in the tasks folder. "
+                "Give each entry its own card there, and point `tasks:` at it"
+            )
+        return data
 
     @model_validator(mode="after")
     def _check_flows(self) -> DaemonConfig:
