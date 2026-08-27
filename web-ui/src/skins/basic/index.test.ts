@@ -367,3 +367,68 @@ test("the board is placed by a transform, so nothing drawn has to know", () => {
   expect(style).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) scale\([\d.]+\)$/)
   handle.destroy()
 })
+
+
+/** jsdom has pointer events but not capture, which the drag asks for. */
+function letItGrab(el: Element) {
+  const any = el as unknown as Record<string, unknown>
+  any.setPointerCapture = () => {}
+  any.releasePointerCapture = () => {}
+}
+
+const transform = () => el.querySelector<HTMLElement>(".basic")!.style.transform
+
+test("a wheel over the board zooms it rather than scrolling the page", () => {
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+  const before = transform()
+
+  const wheel = new WheelEvent("wheel", { deltaY: -400, cancelable: true, bubbles: true })
+  el.querySelector(".basic-viewport")!.dispatchEvent(wheel)
+
+  expect(transform()).not.toBe(before)
+  // Said before the browser acts on it, or the page scrolls out from under the
+  // board the reader is trying to look at.
+  expect(wheel.defaultPrevented).toBe(true)
+  handle.destroy()
+})
+
+test("dragging the board moves it; pressing a control does not", () => {
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+  const viewport = el.querySelector(".basic-viewport")!
+  letItGrab(viewport)
+  const before = transform()
+
+  const drag = (from: Element, dx: number) => {
+    from.dispatchEvent(
+      new PointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, bubbles: true }),
+    )
+    viewport.dispatchEvent(new PointerEvent("pointermove", { clientX: dx, clientY: 0 }))
+    viewport.dispatchEvent(new PointerEvent("pointerup", {}))
+  }
+
+  // A press that starts on a border's own button is that button's, not a grab
+  // of the board behind it -- otherwise selecting a flow would drag the board.
+  drag(el.querySelector('[data-flow="chores"] .basic-pick')!, 40)
+  expect(transform()).toBe(before)
+
+  drag(viewport, 40)
+  expect(transform()).not.toBe(before)
+  handle.destroy()
+})
+
+test("a double click puts the board back where it started", () => {
+  // A reader who has zoomed into a corner otherwise has only a page reload.
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+  const viewport = el.querySelector(".basic-viewport")!
+  const fitted = transform()
+
+  viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -400, cancelable: true, bubbles: true }))
+  expect(transform()).not.toBe(fitted)
+
+  viewport.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))
+  expect(transform()).toBe(fitted)
+  handle.destroy()
+})
