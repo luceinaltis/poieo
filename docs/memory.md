@@ -53,14 +53,14 @@ reaching past `read_memory()`, which is the answer everything else wants.
 ```markdown
 ---
 scope: ["global"]                  # global, a card slug, or a path prefix
-anchors: ["src/poieo/task.py::read_journal"]   # path, or path::symbol — never line numbers
+anchors: ["src/poieo/card.py::read_journal"]   # path, or path::symbol — never line numbers
 source: ["20260824T031400-a1b2c3d4"]           # the runs that taught it
 valid_from: 2026-08-24
 superseded_by: null                # set this instead of deleting
 links:
   depends_on: [batch-cap]          # what this needs to stay true
   contradicts: [old-batch-cap]     # a standing question for a person
-sealed: {"src/poieo/task.py": "<sha256>"}
+sealed: {"src/poieo/card.py": "<sha256>"}
 ---
 One durable statement, mentioning [[another-entry]] freely.
 ```

@@ -84,8 +84,8 @@ ToolContext(isolation=…, containers=…, postbox=…)
 `containers` and `postbox` are typed `Any` deliberately: only the `tools` package may
 know what they are. The runtime carries `ctx.tool_context` and never opens it, which is
 how `runtime/` stays unaware that containers or journals exist. The daemon builds
-one per task, because the container pool is shared across tasks and the roster of
-tasks is only known there.
+one per task, because the container keeper is shared between them all and the
+roster is only known there.
 
 ## Isolation
 

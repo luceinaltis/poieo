@@ -20,7 +20,7 @@ store" has no business loading triggers and graphs, so `ProjectSpec` leaves
 intends to run them. A key therefore cannot mean one thing to `poieo run` and
 another to `poieo daemon`.
 
-A `FlowSpec` is one workflow wired to a trigger:
+A `TaskSpec` is one workflow wired to a trigger:
 
 | key | is |
 |---|---|
@@ -43,7 +43,7 @@ the kind of rule nobody can hold in their head.
 
 ## Loading is the preflight
 
-`load_flows()` is where *fail at launch, not at 3am* is enforced. For every
+`load_tasks()` is where *fail at launch, not at 3am* is enforced. For every
 enabled task it parses the graph and binding (caching both by path, so ten cards
 sharing a binding load it once), checks the workdir exists, runs
 `preflight()` (roles resolve, agent nodes have somewhere to work) and
@@ -57,7 +57,7 @@ an error, because falling back to `default` is what a default is for; it is just
 the one silent way a graph gets an expensive model it never asked for. See
 [binding.md](binding.md).
 
-`_load_tasks()` expands the tasks folder first, in two passes — a card's
+`_load_cards()` expands the tasks folder first, in two passes — a card's
 generated prompt names the cards it may tell, and that roster is not known until
 the whole folder has been read. It also calls `check_memory()`, so a typo in a
 memory entry fails here rather than at 3am.
@@ -128,7 +128,7 @@ Owns the pools, the containers, the runners, and the shutdown handshake.
 
 - **one `ProviderPool` per distinct binding file**, so clients are reused across
   tasks; **one container pool**, built only if some task asks for isolation
-- `_tool_context_for()` assembles each task's `ToolContext` — its isolation setting, the
+- `_hands_for()` assembles each task's `ToolContext` — its isolation setting, the
   shared container pool, and a `Postbox` if and only if its card took the `notes`
   toolset
 - the web server, if a port was given, runs as a task on the same loop; the port

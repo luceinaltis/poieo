@@ -26,7 +26,7 @@ component is written to hold.
 | [binding.md](binding.md) | the physical layer: which model actually answers | `binding.py`, `providers/` |
 | [runtime.md](runtime.md) | executing one run: the walker, the scope, the nodes | `runtime/` |
 | [tools.md](tools.md) | the hands: toolsets, the executor seam, isolation | `tools/` |
-| [tasks.md](tasks.md) | the short form: one card, its journal, notes between cards | `task.py` |
+| [tasks.md](tasks.md) | the short form: one card, its journal, notes between cards | `card.py` |
 | [daemon.md](daemon.md) | residency: config, triggers, the runner, the control seam | `daemon/` |
 | [workspace.md](workspace.md) | the private copy, and last night's work as a change | `workspace.py` |
 | [memory.md](memory.md) | what a project keeps and how a run is shown it | `memory/`, `learn.py`, `strength.py`, `blob.py` |
