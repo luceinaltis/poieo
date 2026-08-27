@@ -54,6 +54,9 @@ def test_expansion_equals_the_hand_written_flow_and_graph(tmp_path):
         name="keep-improving",
         graph=str(path),
         trigger={"type": "interval", "every": "1h"},
+        # The folder lands on the flow, which is what opens a private copy of
+        # it. On the node it would only have said where to write.
+        workdir=str(tmp_path / "project"),
         carry_state=True,
     )
     assert graph == GraphSpec(
@@ -64,7 +67,6 @@ def test_expansion_equals_the_hand_written_flow_and_graph(tmp_path):
             {
                 "id": "work",
                 "type": "agent",
-                "workdir": str(tmp_path / "project"),
                 "tools": ["files", "shell"],
                 "max_turns": 40,
                 "system": graph.nodes[0].system,
@@ -208,8 +210,12 @@ def test_paths_resolve_against_the_task_file(tmp_path):
     (tmp_path / "tasks" / "here").mkdir()
     path = tmp_path / "tasks" / "t.yaml"
     path.write_text("name: t\nfolder: here\nprompt: go\n", encoding="utf-8")
-    _, graph = expand(load_task(path))
-    assert graph.nodes[0].workdir == str(tmp_path / "tasks" / "here")
+    flow, graph = expand(load_task(path))
+
+    assert flow.workdir == str(tmp_path / "tasks" / "here")
+    # And nowhere on the node: the run is handed a private copy of that folder,
+    # and a node that named the real one would write straight past it.
+    assert graph.nodes[0].workdir is None
 
 
 # -- refusals ----------------------------------------------------------------

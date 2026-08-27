@@ -218,7 +218,11 @@ def build_graph(task: TaskSpec, roster: list[str] | None = None) -> GraphSpec:
                 id="work",
                 type="agent",
                 role=task.role,
-                workdir=str(task.folder_path()),
+                # No workdir on the node, for the reason
+                # examples/tasks/agent-task.graph.yaml gives for not naming
+                # one: a path is physical and a graph is not. Pinning the real
+                # folder here sent the model there even on a night when the
+                # task had a private copy of it open -- which is every night.
                 tools=task.tools or list(DEFAULT_TOOLSETS),
                 max_turns=task.max_turns,
                 system=system_block(task, roster),
@@ -252,6 +256,10 @@ def expand(
             trigger=_trigger(task),
             enabled=task.enabled,
             isolation=task.isolation,
+            # The folder is what turns the private copy on, and a card had no
+            # way to say it: `folder` reached the generated node and stopped
+            # there, so a card's work went straight into the user's own files.
+            workdir=str(task.folder_path()),
             # A task is a standing job, so what it learned last night is in
             # scope tonight. Hand-written flows still opt in.
             carry_state=True,

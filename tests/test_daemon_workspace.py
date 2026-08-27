@@ -202,3 +202,59 @@ async def test_a_broken_repository_does_not_stop_the_flow(tmp_path):
     # No review is possible, but 3am is no time to stop working.
     assert result.status == "completed"
     assert result.change is None
+
+
+CARD = """
+name: chores
+graph: ../g.yaml
+folder: ../project
+every: loop
+"""
+
+CARD_CONFIG = """
+version: 1
+store: store
+binding: b.yaml
+tasks: cards
+"""
+
+
+async def test_a_card_works_in_a_private_copy_like_any_other_job(tmp_path):
+    """The card is the surface the product tells people to use, and it was the
+    one the private copy did not reach.
+
+    A card's `folder:` reached the generated node and stopped there, so the
+    model wrote into the user's own checkout and there was nothing to accept
+    or discard in the morning. The whole safety story, missing from the only
+    file most people will ever write.
+    """
+    repo = make_repo(tmp_path)
+    before = head(repo)
+    (tmp_path / "b.yaml").write_text(
+        BINDING.format(responses=WRITES_A_FILE), encoding="utf-8"
+    )
+    (tmp_path / "g.yaml").write_text(GRAPH.format(max_turns=10), encoding="utf-8")
+    (tmp_path / "cards").mkdir()
+    (tmp_path / "cards" / "chores.yaml").write_text(CARD, encoding="utf-8")
+    (tmp_path / "d.yaml").write_text(CARD_CONFIG, encoding="utf-8")
+
+    config = load_config(tmp_path / "d.yaml")
+    daemon = Daemon(config, store=RunStore(config.store_path()))
+    serving = asyncio.create_task(daemon.serve(install_signals=False))
+    while not daemon.runners:
+        await asyncio.sleep(0.01)
+    deadline = asyncio.get_running_loop().time() + 30
+    while not daemon.runners[0].results:
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("timed out waiting for the card's first run")
+        await asyncio.sleep(0.02)
+    result = daemon.runners[0].results[0]
+    daemon.stop()
+    await asyncio.wait_for(serving, timeout=30)
+
+    assert daemon.runners[0].workspace is not None
+    # The user's own checkout is exactly as they left it, and the work is a
+    # change waiting to be read.
+    assert head(repo) == before
+    assert not (repo / "made.txt").exists()
+    assert result.change is not None and "made.txt" in result.change["files"]
