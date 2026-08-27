@@ -11,15 +11,12 @@ from ..store import Event, RunStore
 class BroadcastStore(RunStore):
     """Wraps a RunStore: writes go through, and live subscribers see them too.
 
-    Subscribers are asyncio queues on the daemon's loop. The store never
-    waits on a subscriber: a full queue means the browser stopped reading,
-    and that subscriber is evicted (EventSource reconnects on its own).
+    Never waits on a subscriber -- a full queue means the browser stopped
+    reading, so it is evicted and EventSource reconnects on its own.
 
-    It subclasses RunStore to *be* one where a RunStore is expected, but every
-    method routes to ``_inner`` -- reads included. Inheriting the reads made
-    them read ``self.root`` instead, which is only the same file by accident:
-    over a NullStore the wrapper answered the web API from whatever ``runs/``
-    the daemon happened to be standing in.
+    Subclasses RunStore to *be* one where one is expected, but **every method
+    routes to ``_inner``, reads included**: inheriting the reads would answer
+    from ``self.root``, which is only the same file by accident.
     """
 
     def __init__(self, inner: RunStore, queue_limit: int = 1000):

@@ -1,15 +1,10 @@
 """Kept copies of the bytes an entry was written against.
 
-Point, don't remember: the entry's words stay the memory, and the exact
-content they were written about is kept here, under its own digest, where
-it can be opened when detail matters. A keepsake is a copy, never a
-meaning -- losing one costs a precise comparison and an openable original,
-not a word of what was learned -- so nothing in this module is ever worth
-raising over.
+A copy, never a meaning: losing one costs a precise comparison, not a word of
+what was learned, so nothing here is ever worth raising over.
 
-The store is flat and content-addressed: same content, same name, one
-copy; written via tmp+rename, so a torn write cannot leave a wrong body
-under a right name.
+Flat and content-addressed -- same content, same name, one copy -- written via
+tmp+rename so a torn write cannot leave a wrong body under a right name.
 
 Design: docs/memory.md
 """

@@ -1,8 +1,9 @@
 """The logical layer: what work happens, in what order.
 
 A graph never names a model. Nodes name a *role* ("classifier", "writer"), and
-:mod:`poieo.binding` maps roles onto physical endpoints. The same graph can run
-against a local 8B model and against Claude Opus 5 with no edit.
+:mod:`poieo.binding` maps roles onto physical endpoints.
+
+Design: docs/graph.md
 """
 
 from __future__ import annotations

@@ -116,25 +116,21 @@ class BindingSpec(_Spec):
     def undeclared(self, roles: set[str]) -> list[str]:
         """Which of these roles this binding never names.
 
-        Not the same question as :meth:`check_roles`, and the one that catches
-        a typo. ``resolve`` falls back to ``default`` for *any* role, which is
-        the point of having a default -- a mock binding that declares no roles
-        at all is a legitimate way to run a graph. It is also why nothing has
-        ever reported `role: classifer`, which quietly gets the default model
+        The question that catches a typo: ``resolve`` falls back to ``default``
+        for *any* role, so `role: classifer` quietly gets the default model
         instead of the cheap one the node asked for.
 
-        So this is a question, not a verdict. The caller decides whether an
-        answer is worth saying out loud.
+        A question, not a verdict -- the caller decides whether an answer is
+        worth saying out loud. See :meth:`check_roles` for the other one.
         """
         return sorted(role for role in roles if role not in self.roles)
 
     def check_roles(self, roles: set[str]) -> list[str]:
         """Which of these roles this binding cannot resolve at all.
 
-        Which is fewer than a reader expects: an unknown role resolves through
+        Fewer than a reader expects: an unknown role resolves through
         ``default``, so this only answers for a binding that declares neither
-        a provider nor a model to fall back on. :meth:`undeclared` is the
-        question about a role the binding never heard of.
+        a provider nor a model to fall back on.
         """
         missing = []
         for role in sorted(roles):

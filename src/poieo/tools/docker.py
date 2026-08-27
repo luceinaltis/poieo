@@ -153,13 +153,9 @@ async def _remove(container_id: str) -> None:
 class Box:
     """One task's isolated environment, kept between that task's runs.
 
-    A task accumulates on purpose -- its journal is re-read before every run,
-    its private working copy persists -- so its box does too. What makes that
-    safe is that the box is *derived state*: removing it is always allowed, and
-    the next run rebuilds it.
-
-    Owned by whatever outlives a run (the daemon's FlowRunner). Executors
-    borrow it and must never remove it.
+    *Derived state*: removing it is always allowed and the next run rebuilds
+    it. Owned by whatever outlives a run; executors borrow it and must never
+    remove it.
     """
 
     def __init__(self, key: str, workdir: Path, isolation: Isolation):
@@ -171,13 +167,10 @@ class Box:
     async def ensure(self) -> str:
         """The container id, starting one if it is missing or has died.
 
-        Idempotent, and deliberately tolerant: a machine that slept, a docker
-        restart, or someone running `docker rm` by hand all land here as a
-        rebuild rather than a failure.
-
-        Settings changing is not one of the cases: the keeper keys a box by
-        them, so a task that edits its isolation block gets a different box
-        rather than this one being reconfigured.
+        Idempotent and deliberately tolerant: a machine that slept, a docker
+        restart or a hand-run `docker rm` all land here as a rebuild. Changed
+        settings do not -- the keeper keys a box by them, so an edited
+        isolation block gets a different box rather than reconfiguring this.
         """
         if self.container_id and await _alive(self.container_id):
             return self.container_id
@@ -195,15 +188,12 @@ class Box:
 async def sweep(older_than: timedelta) -> int:
     """Remove poieo boxes older than ``older_than``. Returns how many went.
 
-    Bounds how far a kept box can drift, and reclaims disk from tasks that were
-    deleted while the daemon was down -- so it looks at every labelled
-    container, not only the ones this process started.
+    Looks at every labelled container, not only this process's, so it also
+    reclaims disk from tasks deleted while the daemon was down.
 
-    This is an *age* cap, not an idle one: docker records when a container was
-    created, not when it was last used, and inventing a last-used file inside
-    each box would be more machinery than the problem deserves. For a task on
-    an hourly trigger the difference is one rebuild a week, which is the drift
-    ceiling working rather than a cost.
+    An *age* cap, not an idle one: docker records when a container was created,
+    not when it was last used. For an hourly task the difference is one rebuild
+    a week.
     """
     code, out = await _docker("ps", "-aq", "--no-trunc", "--filter", f"label={LABEL_BOX}")
     if code != 0:
@@ -309,28 +299,20 @@ class DockerExecutor(Executor):
 
 
 def box_key(workdir: Path, isolation: Isolation) -> str:
-    """What makes two boxes the same box.
-
-    Folder and settings, nothing about who asked. Two tasks standing over one
-    repo -- keep the tests green, keep the docs current -- are the common case,
-    and giving them a box each would mean installing the same toolchain twice.
-    """
+    """What makes two boxes the same box: folder and settings, nothing about
+    who asked -- so two tasks over one repo share a toolchain."""
     raw = f"{workdir}|{isolation.image}|{isolation.network}|{isolation.user}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
 class BoxKeeper:
-    """Every box this daemon keeps, shared by whatever tasks want the same one.
+    """Every box this daemon keeps, one per (folder, settings).
 
-    One box per (folder, settings), the way the daemon already keeps one
-    provider pool per binding file. Sharing is implicit and has a cost worth
-    knowing: tasks in one box can disturb each other, because the box is one
-    machine. What they cannot disturb is anything outside the folder, which is
-    the boundary this whole slice is about.
+    Sharing has a cost worth knowing: tasks in one box can disturb each other,
+    because the box is one machine. What they cannot disturb is anything
+    outside the folder, which is the boundary that matters.
 
-    Held by the Daemon, which outlives every run of every task. Handed down as
-    an opaque object -- nothing between here and the executor learns what it
-    is.
+    Held by the Daemon and handed down as an opaque object.
     """
 
     def __init__(self) -> None:
@@ -354,11 +336,8 @@ def remove_boxes_for(workdir: Path) -> int:
     """Throw away every box built around ``workdir``. Returns how many went.
 
     Synchronous and label-driven, because `poieo reset` runs with no daemon and
-    no event loop: it must reach boxes this process never started.
-
-    Nothing inside the folder is touched. That is the whole promise of the
-    command, and the reason it is safe to suggest whenever a task starts
-    behaving oddly.
+    no event loop, and must reach boxes this process never started. Nothing
+    inside the folder is touched.
     """
     # Matched on the mount rather than the key: reset knows the folder but not
     # which image or network the box was built with.

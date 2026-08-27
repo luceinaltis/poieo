@@ -1,17 +1,15 @@
 """What a ``poieo.yaml`` says, and how a folder comes to have one.
 
-Discovery -- walking upward for the marker, the way git finds ``.git`` --
-lives in :mod:`poieo.layout`, beside the rest of the answer to "where does
-this project keep things"; it is re-exported here because that is where its
-callers have always found it. Commands use it to fill flags the user left
-silent: the flag always wins, and discovery only fills silence, so a folder
-with no marker behaves exactly as it always has.
+**A project is the paths its marker names, and nothing more.** Commands use
+discovery (re-exported from :mod:`poieo.layout`) to fill flags the user left
+silent -- the flag always wins, and discovery only fills silence.
 
-**A project is the paths its marker names, and nothing more.** What a command
-wants from discovery is where the store is and which binding to default to;
-it does not want the flows read, the task folder expanded, or the memory
-cross-checked. The daemon wants all of that, and :class:`DaemonConfig`
-extends this with it -- one schema, read to the depth the caller needs.
+A command asking "where is the store" does not want the flows read, the task
+folder expanded or the memory cross-checked. The daemon wants all of that, and
+:class:`DaemonConfig` extends this with it: one schema, read to the depth the
+caller needs.
+
+Design: docs/storage.md
 """
 
 from __future__ import annotations
@@ -43,26 +41,22 @@ __all__ = [
 class ProjectSpec(BaseModel):
     """The shared defaults a ``poieo.yaml`` declares: where things live.
 
-    Deliberately shallow. ``flows`` is accepted but left as written -- parsing
-    one needs a trigger, a binding and a graph, and a command asking "where is
-    the store" has no business loading any of them. ``DaemonConfig`` narrows
-    the field when something actually intends to run them.
+    Deliberately shallow: ``flows`` is accepted but left as written, and
+    ``DaemonConfig`` narrows the field when something intends to run them.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     version: int = 1
-    # Where a run's events and its result are written. Moving this moves
-    # the whole run history and nothing else -- the memory stays with the
-    # project, and so do the working copies.
+    # Where a run's events and its result are written. Moves the run history
+    # and nothing else: the memory and the working copies stay with the project.
     store: str = "runs"
     # Default binding for flows -- and for tasks, and for `poieo run`.
     binding: str | None = None
     # A folder of task files; each one expands into a flow. See poieo.task.
     tasks: str | None = None
-    # How often the project sits down to learn from its run records
-    # (a duration: "1d"). Absent means never. Validated by the daemon, which
-    # is the only thing that acts on it.
+    # How often the project learns from its run records ("1d"); absent means
+    # never. Validated by the daemon, the only thing that acts on it.
     learn: str | None = None
     # Read to the depth the caller needs: see the class docstring.
     flows: list[Any] = Field(default_factory=list)
@@ -85,9 +79,8 @@ class ProjectSpec(BaseModel):
     def layout(self) -> Layout:
         """Where this project keeps things.
 
-        ``store:`` counts only when the document actually named it: a default
-        that happened to match is not a decision, and treating it as one would
-        make every silent project look like it had asked for something.
+        ``store:`` counts only when the document actually named it -- a default
+        that happened to match is not a decision.
         """
         return Layout(
             root=self.base_dir,
@@ -113,10 +106,9 @@ def load_project(path: str | Path) -> ProjectSpec:
 def find_project(start: str | Path | None = None) -> ProjectSpec | None:
     """The nearest project's paths, or None outside one.
 
-    A marker that cannot be parsed still raises -- a broken project file
-    should fail loudly wherever it is consulted. What no longer fails here is
-    a problem *inside* something the marker points at: a card with a typo is
-    the daemon's business, and used to break an unrelated `poieo run`.
+    A marker that cannot be parsed raises; a problem *inside* what the marker
+    points at does not -- a card with a typo is the daemon's business, not an
+    unrelated `poieo run`'s.
     """
     marker = find_project_file(start)
     return load_project(marker) if marker else None
@@ -125,8 +117,7 @@ def find_project(start: str | Path | None = None) -> ProjectSpec | None:
 # -- poieo init ---------------------------------------------------------------
 #
 # Detection happens here, once, and its answer is written into ordinary files.
-# Nothing at run time ever probes the machine again, so no night's run can
-# silently pick a different model than the one written down.
+# Run time never probes the machine again.
 
 _CLAUDE_BINDING = """\
 # Physical layer: the Claude API.
@@ -276,7 +267,6 @@ web board, belong to the person. Add and edit cards; leave the daemon,
 # Claude Code reads CLAUDE.md; the import points it at the same page.
 _CLAUDE_MD = "@AGENTS.md\n"
 
-# What the machine makes and can make again, or history it keeps for you.
 # Three ordinary names rather than one hidden folder, so a project living
 # inside somebody else's repository takes three lines and not a rename.
 _GITIGNORE_LINES = ("memory/cache/", "runs/", "worktrees/")
@@ -323,10 +313,9 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
         ("models/default.yaml", default_body),
         ("models/mock.yaml", _MOCK_BINDING),
         ("tasks/hello.yaml", _HELLO_CARD),
-        # An empty page, so the memory is a folder you can see rather than
-        # a feature you have to be told about. Nothing switches on: the
-        # page is comments, comments are stripped before the prompt, and
-        # learning needs a `learn:` key this file does not write.
+        # An empty page, so the memory is a folder you can see rather than a
+        # feature you have to be told about. Nothing switches on: it is all
+        # comments, and those are stripped before any prompt.
         ("memory/longterm/constitution.md", _CONSTITUTION),
         ("AGENTS.md", _AGENTS_MD),
         ("CLAUDE.md", _CLAUDE_MD),
@@ -353,11 +342,10 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
         )
         report.append(("wrote", ".gitignore"))
 
-    # A generated project that cannot load is an init bug, caught here and
-    # not at 3am. Also re-checks a kept, hand-edited poieo.yaml still parses.
-    # The full load, flows and cards included -- init is the one caller that
-    # wants that depth, and it is the only reason this module knows the
-    # daemon exists. Late, because DaemonConfig extends ProjectSpec above.
+    # A generated project that cannot load is an init bug, caught here and not
+    # at 3am -- and a kept, hand-edited poieo.yaml is re-checked too. The one
+    # caller that wants the full depth, and the only reason this module knows
+    # the daemon exists. Late, because DaemonConfig extends ProjectSpec above.
     from .daemon.config import load_config
 
     load_config(root / "poieo.yaml")

@@ -26,10 +26,8 @@ def utcnow() -> str:
 def _lines_backwards(path: Path, block: int = 65536) -> Iterator[str]:
     """Lines of a file, last line first, reading only as far as consumed.
 
-    The index is append-only and answers are almost always near the end, so
-    readers walk fixed-size blocks from EOF instead of loading a month of
-    history. Splitting on newlines happens on bytes; a line is only decoded
-    once it is whole, so multi-byte text spanning a block boundary is safe.
+    Splitting happens on bytes and a line is decoded only once whole, so
+    multi-byte text spanning a block boundary is safe.
     """
     with path.open("rb") as handle:
         handle.seek(0, os.SEEK_END)
@@ -50,13 +48,10 @@ def _lines_backwards(path: Path, block: int = 65536) -> Iterator[str]:
 def json_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
     """The JSON objects among some lines, skipping anything that is not one.
 
-    The one reading rule for every JSONL file poieo writes -- the run index,
-    a run's events, the learning pass log. They are appended to by a
-    long-lived daemon and are plain files the user may open, so a blank line
-    or a half-written last one is a thing that happens, and neither is worth
-    refusing to answer over. Nor is a line holding a bare list: every reader
-    here asks a record for a key, so a record that cannot be asked is not
-    one.
+    The one reading rule for every JSONL file poieo writes. They are appended
+    to by a long-lived daemon and are plain files the user may open, so a
+    blank line or a half-written last one is a thing that happens, and neither
+    is worth refusing to answer over.
     """
     for line in lines:
         line = line.strip()
@@ -85,11 +80,8 @@ class Event:
 class RunStore:
     """Everything a run leaves behind, under the folder it is handed.
 
-    That folder is the project's ``runs/``, and this writes straight into
-    it -- it used to append a ``runs`` of its own, so a project that said
-    ``store: logs`` got ``logs/runs/``, one hop nobody asked for.
-
-    Safe for concurrent flows in one process.
+    That folder is the project's ``runs/``, written into straight -- no
+    subfolder of its own. Safe for concurrent flows in one process.
     """
 
     def __init__(self, root: str | Path | None = None):
@@ -107,11 +99,11 @@ class RunStore:
     def _append(self, path: Path, record: dict[str, Any], sync: bool = False) -> None:
         """Append one line; fsync only when asked.
 
-        Events arrive one per model turn and per tool call, from coroutines on
-        the loop the daemon shares with the web server, and an fsync is
-        milliseconds of everything standing still. So events settle for the OS
-        cache (close flushes them), and durability is bought once per run: the
-        index line is synced, and it is the index that answers "what ran".
+        An fsync on the loop the daemon shares with the web server is
+        milliseconds of everything standing still, and events arrive one per
+        model turn and per tool call. So events settle for the OS cache and
+        durability is bought once per run, on the index line -- which is what
+        answers "what ran".
         """
         self._ensure()
         line = json.dumps(unwrap(record), ensure_ascii=False, default=str)
@@ -145,10 +137,8 @@ class RunStore:
     def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
         """The newest ``limit`` summaries, newest first.
 
-        Read from the end and parsed only until enough have matched. The index
-        grows for the daemon's lifetime and the web UI asks per request, so
-        parsing all of history to show the last twenty would make a month of
-        uptime cost half a second per call -- measured, not feared.
+        Read from the end and parsed only until enough have matched: the index
+        grows for the daemon's lifetime and the web UI asks per request.
         """
         rows: list[dict[str, Any]] = []
         for row in self._index_backwards():
@@ -160,13 +150,7 @@ class RunStore:
         return rows
 
     def run(self, run_id: str) -> dict[str, Any] | None:
-        """The index row for one run, or None if the store never saw it.
-
-        Walks the index backwards and stops at the first hit: a run may be
-        re-recorded, and reading from the end makes the newest record the
-        first one found -- without scanning a long-lived daemon's whole log
-        for every diff view and accept click.
-        """
+        """The index row for one run, or None if the store never saw it."""
         for row in self._index_backwards(containing=run_id):
             if row.get("run_id") == run_id:
                 return row  # newest first; a run may be re-recorded
@@ -187,9 +171,8 @@ class RunStore:
 class NullStore(RunStore):
     """Drops everything -- used by ``poieo run --no-log`` and by tests.
 
-    Empty on both sides. Dropping the writes but inheriting the reads would
-    leave it answering from whatever ``runs/`` a folder happens to hold,
-    which is somebody else's history rather than none.
+    Empty on both sides: inheriting the reads would leave it answering from
+    whatever ``runs/`` a folder happens to hold.
     """
 
     def __init__(self) -> None:

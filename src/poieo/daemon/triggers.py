@@ -1,9 +1,10 @@
 """Triggers decide *when* a flow fires; the daemon decides what happens then.
 
-Each trigger is an async generator: it yields a :class:`Fire` when the flow
-should run and only resumes once the run has finished. That resume-after-run
-property is what makes the ``loop`` trigger a true "run continuously" mode
-instead of a queue that piles up behind a slow model.
+Each is an async generator that yields a :class:`Fire` and **only resumes once
+the run has finished** -- which is what makes ``loop`` a true "run
+continuously" mode instead of a queue piling up behind a slow model.
+
+Design: docs/daemon.md
 """
 
 from __future__ import annotations
@@ -181,11 +182,10 @@ class IntervalTrigger(Trigger):
             if self._exhausted(iteration + 1):
                 return  # nothing left to fire; do not sit out the period
 
-            # Anchor to the grid so a run that overran does not shift every
-            # later tick; ticks that fully elapsed are skipped, not queued.
-            # Always advance by at least one tick: a timer that woke a hair
-            # early (Windows' clock is coarse) would otherwise land back on the
-            # tick just fired and turn one period into two.
+            # Anchored to the grid, so a run that overran does not shift every
+            # later tick and elapsed ticks are skipped rather than queued.
+            # Always advance by at least one: a timer that woke a hair early
+            # (Windows' clock is coarse) would otherwise refire the same tick.
             elapsed = loop.time() - origin
             tick = max(tick + 1, int(elapsed // self.every) + 1)
             delay = origin + tick * self.every - loop.time()
@@ -219,8 +219,7 @@ class CronTrigger(Trigger):
 class LoopTrigger(Trigger):
     """Runs the graph back to back forever, pausing only for ``cooldown``.
 
-    The generator resumes after the previous run returns, so iterations never
-    overlap and a slow model simply slows the loop down.
+    Iterations never overlap; a slow model simply slows the loop down.
     """
 
     def __init__(self, cooldown: float = 0.0, max_iterations: int | None = None):

@@ -142,10 +142,9 @@ def explain_failure(exc: BaseException) -> Cause | None:
 def describe_invalid(exc: Exception, known_keys: "tuple[str, ...]" = ()) -> str:
     """A validation failure in the user's words, one line per problem.
 
-    Pydantic's own rendering is written for developers -- type slugs, a docs
-    URL -- and it is what a user with a typo in a YAML file used to see. Keys
-    close to a real one get a suggestion, because 'promt' is a slip of the
-    fingers, not a gap in understanding.
+    Pydantic's own rendering is written for developers. Keys close to a real
+    one get a suggestion: 'promt' is a slip of the fingers, not a gap in
+    understanding.
     """
     from difflib import get_close_matches
 

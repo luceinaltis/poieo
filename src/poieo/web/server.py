@@ -1,16 +1,15 @@
 """The observation and control API served from inside the daemon.
 
-Almost everything here answers "what is happening / what happened". The
-routes that change anything come in exactly two kinds, one fence each:
+Almost everything answers "what is happening / what happened". The routes that
+change anything come in exactly two kinds, marked again where they are
+registered:
 
-- **The review** -- accept and discard. The moment the user's own files are
-  allowed to change, and the only routes that may ever touch them. If you
-  are adding a third of these, stop.
-- **Control** -- pause, resume, run-now. These touch the daemon's runtime
-  state and nothing else: no file, no schedule on disk, nothing that
-  survives a restart.
+- **The review** -- accept and discard, the only routes that may ever touch the
+  user's own files. If you are adding a third of these, stop.
+- **Control** -- pause, resume, run-now. The daemon's runtime state and nothing
+  else: no file, no schedule on disk, nothing that survives a restart.
 
-Both kinds are marked again where they are registered.
+Design: docs/web.md
 """
 
 from __future__ import annotations
@@ -87,13 +86,10 @@ def _review_state(runner: Any) -> dict[str, Any]:
 def _branches(branches: Any) -> list[dict[str, Any]]:
     """How an arrow is drawn: where it goes, and the word on it.
 
-    One shape for a router's branches and for a flow's `then:`, because they
-    are the same `Branch` one level apart -- a view that can draw one can draw
-    the other, and the reader learns one arrow rather than two.
-
-    The label falls back to the condition exactly as `RouterNode` does when it
-    records which arm it took, so the board and the run record never disagree
-    about what to call an arrow.
+    One shape for a router's branches and for a flow's `then:` -- they are the
+    same `Branch` one level apart. The label falls back to the condition
+    exactly as `RouterNode` does, so the board and the run record never
+    disagree about what to call an arrow.
     """
     return [{"to": branch.to, "label": branch.label or branch.when} for branch in branches]
 
@@ -102,14 +98,11 @@ def _model(flow: Any, node: Any) -> str | None:
     """The model id this node would actually call, or None if it calls none.
 
     Resolved the way `runtime/nodes.py` resolves it, so the picture cannot
-    claim one model and the run make another. `params` are deliberately not
-    passed: they layer generation settings onto a role, never a different
-    model, and the board is answering "what runs this", not "how".
+    claim one model and the run make another. `params` are not passed: they
+    layer generation settings onto a role, never a different model.
 
-    A role the binding never declares is not an error here -- `resolve` falls
-    back to `default` for any role at all, which is what makes `role: classifer`
-    a silent upgrade rather than a crash. The board reports what will really
-    run, which is how that typo becomes visible; `load_flows` says why.
+    An undeclared role is not an error here -- it falls back to `default`, and
+    reporting what will really run is how `role: classifer` becomes visible.
     """
     if node.type == "router":
         return None
@@ -126,16 +119,12 @@ def _model(flow: Any, node: Any) -> str | None:
 def _shape(flow: Any) -> dict[str, Any]:
     """A graph's wiring: enough to draw it, and nothing else.
 
-    Deliberately not the whole GraphSpec, and not the whole binding either.
-    Prompts and system messages are long, are of no use to a drawing, and this
-    rides on every board paint to every browser watching -- a graph's text is
-    exactly the sort of thing a person hides a secret in. From the binding,
-    only the bare model id crosses: a provider knows a base_url and the name of
-    the variable its key comes from, and a drawing needs neither.
+    Not the whole GraphSpec, and not the whole binding: this rides on every
+    board paint to every browser watching, so a graph's prompts stay home and
+    only the bare model id crosses.
 
-    It takes the flow rather than the graph because a role resolves against a
-    binding, the binding hangs off the flow, and the same graph under two flows
-    is two different answers.
+    Takes the flow rather than the graph because a role resolves against a
+    binding, and the binding hangs off the flow.
     """
     graph = flow.graph
     return {

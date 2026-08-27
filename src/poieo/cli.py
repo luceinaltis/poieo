@@ -67,8 +67,7 @@ app.add_typer(runs_app)
 def _guarded(fn):
     """Every command fails in the product's voice, never with a traceback.
 
-    The daemon command once printed one because a single site forgot its
-    try/except; making the guard part of registration removes the category.
+    Applied at registration, so no command can forget it.
     """
     import functools
 
@@ -166,9 +165,9 @@ def _find_binding(
 ) -> "tuple[Path | None, Path | None]":
     """The binding chain: the flag, then the card, then the project.
 
-    Returns ``(path, supplied_by)`` -- ``supplied_by`` is the poieo.yaml that
-    filled the silence, and None when the user named the binding themselves.
-    Automatic is fine, invisible is not: callers echo the second half.
+    ``supplied_by`` is the poieo.yaml that filled the silence, None when the
+    user named the binding. Automatic is fine, invisible is not, so callers
+    echo it.
     """
     if binding is not None:
         return binding, None
@@ -183,9 +182,7 @@ def _find_binding(
 def _project_file(named: "Path | None") -> Path:
     """The config to work from: the one the user named, or the project's.
 
-    Both callers used to spell this refusal out themselves, in the same eight
-    lines. A sentence the user reads is a thing with one wording, and two
-    copies of it are two chances for that to stop being true.
+    One place, so the refusal below has one wording.
     """
     if named is not None:
         return named
@@ -199,9 +196,8 @@ def _project_file(named: "Path | None") -> Path:
 
 
 def _load_card(path: Path) -> "TaskSpec | None":
-    """The task a path names, or None for a plain graph. Loaded once per
-    command -- run used to read the same file four times through helpers that
-    each opened it again."""
+    """The task a path names, or None for a plain graph. Load it once per
+    command and pass it down; every helper here would otherwise reopen it."""
     return load_task(path) if is_task_file(path) else None
 
 
@@ -340,10 +336,7 @@ def view(
     title = graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows"
     page = render_page(graphs, spec, title=title)
 
-    # A page you asked for, in the folder you asked from. There was a
-    # default hidden under `.poieo/views/`, resolved against the cwd
-    # rather than the project -- so where it landed depended on which
-    # folder you happened to be standing in. Nothing else reads it.
+    # A page you asked for, in the folder you asked from. Nothing reads it back.
     target = output or Path(f"{graphs[0].name}.html")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(page, encoding="utf-8")
@@ -509,9 +502,8 @@ def run(
     _setup_logging(verbose)
     task = _load_card(graph_path)
     graph = _load_spec(graph_path, task)
-    # The flag wins; otherwise a card answers for itself; otherwise the
-    # project does. A new user's first command must not demand a flag their
-    # card -- or their poieo.yaml -- already carries.
+    # The flag wins; otherwise the card answers for itself; otherwise the
+    # project does.
     binding, supplied_by = _find_binding(binding, task)
     if binding is None:
         _fail(_NO_BINDING)
@@ -522,21 +514,16 @@ def run(
     card_input = task_payload(task) if task is not None else {}
     payload = {**card_input, **_parse_input(input_json, set_)}
     if store is None:
-        # A card run by hand and the same card run by the daemon write one
-        # history, not two -- so this asks from the card's own folder, and
-        # `layout_for` answers with the project's `runs/` if the card is in
-        # one, or the folder's own if it is not. That used to be two branches
-        # here, and the first of them looked from the cwd rather than from
-        # the card: standing somewhere else changed where the history went.
+        # Asked from the card's own folder, not the cwd: a card run by hand and
+        # the same card run by the daemon write one history, not two.
         store = layout_for(task.dir if task is not None else Path.cwd()).runs()
     run_store = NullStore() if no_log else RunStore(store)
 
     hands = Hands(isolation=Isolation(image=isolate)) if isolate else None
     isolation = hands.isolation if hands else None
     if isolation is not None:
-        # Same preflight the daemon does, for the same reason: better here
-        # than eight turns in. No box is kept -- a one-shot run has no next
-        # run to keep one for, so the executor makes and destroys its own.
+        # The daemon's preflight, for the same reason: better here than eight
+        # turns in. No box is kept -- a one-shot run has no next run.
         check_isolation([FlowSpec(name="adhoc", graph=str(graph_path), isolation=isolation)])
 
     async def _go():
@@ -791,9 +778,8 @@ def note(
 def _memory_target(path: "Path | None") -> "tuple[TaskSpec | None, Path]":
     """The card being asked about, and the project it belongs to.
 
-    A card, a folder, or nothing at all -- and in every case the answer is
-    the project's root, because that is where its memory is. `poieo memory`
-    from inside `tasks/` and from the folder above must not disagree.
+    Always the project's *root*, because that is where the memory is: `poieo
+    memory` from inside `tasks/` and from above must not disagree.
     """
     if path is None:
         return None, layout_for().root
@@ -906,9 +892,8 @@ def eject(
 
     if task.graph:
         _fail(f"{task_path} already names a graph: {task.graph}")
-    # Beside the card, under its name. A graph is what a card expands to, so
-    # they are one kind of thing -- what a person writes -- and the folder
-    # that holds one holds the other; `load_tasks` tells them apart by shape.
+    # Beside the card, under its name: `load_tasks` tells the two apart by
+    # shape, so one folder holds both.
     target = to or (task.dir / f"{task.slug}.graph.yaml")
     if target.exists():
         _fail(f"{target} already exists")

@@ -50,13 +50,8 @@ SHUTDOWN_GRACE = 5.0
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
     """Wait out one background task on the way down, and say what it did.
 
-    ``wait_for`` cancels the task and awaits that cancellation before it
-    raises, so there is nothing left here to cancel afterwards. What is left
-    is the reason, and shutdown used to swallow it: a learning pass that blew
-    up at 3am went down with the daemon without leaving a word behind.
-
     Nothing here may keep the daemon from finishing -- the pools and the boxes
-    still have to be closed below.
+    still have to be closed below -- so every outcome is logged, not raised.
     """
     try:
         await asyncio.wait_for(task, timeout=SHUTDOWN_GRACE)
@@ -67,10 +62,9 @@ async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
 
 
 def _change_message(result: RunResult, flow: str) -> str:
-    """The model's own summary when it produced one -- that is what a reader sees.
+    """The model's own summary, shaped for a commit subject.
 
-    The same reading the journal and the run record use, shaped for a commit
-    subject: one line, and short enough to sit in a `git log --oneline`.
+    The same reading the journal and the run record use.
     """
     said = closing_line(result, fallback="")
     if not said:
@@ -78,34 +72,27 @@ def _change_message(result: RunResult, flow: str) -> str:
     return said.strip().splitlines()[0][:72]
 
 
-# Staying up is the default; staying up while failing identically is not
-# resilience, it is noise. A constant, not a setting -- a knob nobody asked
-# for would be configuration for its own sake.
+# Consecutive identical failures before a flow holds itself. Staying up while
+# failing identically is noise, not resilience.
 PAUSE_AFTER = 3
 
 # How many finished runs a runner keeps in memory. A RunResult carries the
-# run's whole outputs and state, and only the tail is ever read: last_result
-# by the web API, one pass's worth by --once. A loop flow with no cooldown
-# otherwise accumulates every output of every night for the daemon's lifetime.
+# run's whole outputs and state, and only the tail is ever read; a loop flow
+# would otherwise accumulate every output for the daemon's lifetime.
 RESULTS_KEPT = 20
 
-# How far one chain of handoffs may reach. `max_steps` guards a cycle inside a
-# graph; this is the same guard one level up, and for the same reason: a loop
-# between flows is legitimate, running forever is not. A constant like
-# PAUSE_AFTER, and for the same reason.
+# How far one chain of handoffs may reach -- `max_steps` one level up.
 MAX_CHAIN = 10
 
 
 def handoff_scope(result: RunResult) -> dict[str, Any]:
     """What a `then:` branch may test, and what the next run reads as `sender`.
 
-    One shape, not two, so there is no second list to keep in sync: whatever
-    the condition could ask about, the run it starts can read. ``usage`` is
-    left out because it is machinery and nothing branches on a token count.
-
-    ``change`` is present and None when a run altered nothing -- unlike
-    :meth:`RunResult.summary`, which drops the key. ``when: "run.change"`` is
-    the commonest branch there is, and it has to read false rather than raise.
+    One shape, not two, so there is no second list to keep in sync. ``usage``
+    is left out; nothing branches on a token count. ``change`` is present and
+    None when a run altered nothing -- unlike :meth:`RunResult.summary`, which
+    drops the key -- because ``when: "run.change"`` has to read false rather
+    than raise.
     """
     return {
         "run_id": result.run_id,
@@ -168,9 +155,9 @@ class FlowRunner:
         self._repeat_key: str | None = None
         self._repeat_count: int = 0
         self.current_run_id: str | None = None
-        # The control seam: the board's three verbs poke these, and the run
-        # loop reads them between runs. All on one event loop -- the web
-        # server shares it -- so flags and an Event are the whole mechanism.
+        # The control seam: the board's three verbs poke these and the run loop
+        # reads them between runs. The web server shares this event loop, so
+        # flags and an Event are the whole mechanism.
         self._hold = False
         self._kick = False
         self._wake = asyncio.Event()
@@ -288,15 +275,10 @@ class FlowRunner:
     def hand(self, handoff: Handoff) -> Handoff | None:
         """Take a handoff, and say which one it displaced.
 
-        Unlike run_now this does not refuse mid-run: it parks, and the run
-        loop finds it when the current run ends. But **one** parks. This is
-        the interval trigger's own rule one level up -- a run that overran its
-        period skips the missed ticks rather than queuing them -- because a
-        flow that has fallen behind should work on the latest thing, not grind
-        through a backlog it can never clear.
-
-        The newest wins, and the caller logs what it lost: a handoff that
-        disappears without a word is the one outcome this must not have.
+        Unlike run_now this does not refuse mid-run: it parks, and the run loop
+        finds it when the current run ends. But **one** parks and the newest
+        wins -- the interval trigger's own rule one level up. The caller logs
+        what it lost.
         """
         displaced, self._handed = self._handed, handoff
         self._kick = True
@@ -326,12 +308,10 @@ class FlowRunner:
     async def _next_fire(self, fires: AsyncIterator[Fire]) -> Fire | None:
         """The runner's ear: the trigger raced against the board's verbs.
 
-        Returns the fire to run next, or None when the daemon is shutting
-        down or the schedule is over. A run-now wins over everything, even a
-        hold; a hold stops the trigger from being consumed at all, so a loop
-        trigger sits suspended at its yield instead of spinning through a
-        pause, and at most one already-due fire is dropped in favour of the
-        next scheduled one.
+        Returns the fire to run next, or None when the daemon is shutting down
+        or the schedule is over. A run-now wins over everything, even a hold; a
+        hold leaves the trigger unconsumed, so a loop trigger sits suspended at
+        its yield instead of spinning through a pause.
         """
         while not self.cancel.is_set():
             if self._kick:
@@ -407,13 +387,9 @@ class FlowRunner:
             log.error("flow '%s': %s", self.name, exc)
             return self.flow.spec.on_error != "stop"
         if handed is not None:
-            # Merged last, after the static input and the task payload: what
-            # woke this run is the most specific thing it knows.
-            #
-            # `sender`, not `from`: conditions and templates are parsed as
-            # Python, where `from` is a keyword, so `input.from.change`
-            # would not even parse. `sender` is what notes.py already calls
-            # the other end of a message.
+            # Merged last: what woke this run is the most specific thing it
+            # knows. `sender`, not `from` -- expressions are parsed as Python,
+            # where `input.from.change` would not even parse.
             payload["sender"] = handed.result
 
         log.info(
@@ -435,8 +411,7 @@ class FlowRunner:
                 state=dict(self.state) if self.flow.spec.carry_state else None,
                 flow=self.name,
                 # What actually fired this run, not the schedule it may not
-                # have used: a run-now on a cron flow used to record the cron,
-                # and a handoff would have recorded a schedule that never rang.
+                # have used.
                 trigger=fire.reason,
                 iteration=fire.iteration,
                 run_id=run_id,
@@ -454,10 +429,8 @@ class FlowRunner:
 
         pause = self._note_outcome(result)
         if self.handoff is not None and self.flow.spec.then:
-            # Ahead of the stand-down below: the run happened, and what it says
-            # should work next does not depend on whether this runner carries
-            # on. A flow that pauses itself on a third failure is exactly the
-            # one whose `broke` branch someone wanted.
+            # Ahead of the stand-down below: the run happened, so what it says
+            # should work next does not depend on this runner carrying on.
             self.handoff(self, result, self._depth)
 
         if result.status == "completed":
@@ -499,10 +472,9 @@ class FlowRunner:
     def _note_outcome(self, result: Any) -> bool:
         """Track consecutive identical failures; True when it is time to pause.
 
-        "Identical" means the same cause slug -- or the same raw error text
-        when nothing classified -- so Ollama down at 2am counts as one thing
-        however its message varies, while a genuinely new failure restarts
-        the count.
+        "Identical" means the same cause slug, or the same raw error text when
+        nothing classified -- so one unreachable server counts as one thing
+        however its message varies.
         """
         if result.status == "completed":
             self._repeat_key, self._repeat_count = None, 0
@@ -610,11 +582,9 @@ class Daemon:
     def _chosen(self, sender: FlowRunner, run: dict[str, Any]) -> Branch | None:
         """The first branch that matches, router-style, or None.
 
-        A branch that cannot be evaluated is skipped rather than fatal. A
-        router raises and takes the run with it, which is right while a run is
-        still going; here the sender has already finished and landed its
-        change, so there is nothing left to fail. The next branch gets its
-        turn, and the mistake is logged against the flow that made it.
+        A branch that will not evaluate is skipped rather than fatal: unlike a
+        router, the sender has already finished and landed its change, so there
+        is nothing left to fail.
         """
         scope = {"run": wrap(run)}
         for index, branch in enumerate(sender.flow.spec.then):
@@ -666,9 +636,8 @@ class Daemon:
             Handoff(result=run, reason=f"after {sender.name} ({label})", depth=depth + 1)
         )
         if displaced is not None:
-            # Said out loud, always: the whole reason only one handoff waits is
-            # that a backlog cannot be worked off, and a loss nobody hears
-            # about is the failure mode that buys.
+            # Always said out loud: a loss nobody hears about is what the
+            # one-waits rule would otherwise buy.
             log.warning(
                 "flow '%s' was still busy, so an earlier handoff (%s) was "
                 "dropped in favour of this one.",
@@ -697,8 +666,7 @@ class Daemon:
         return all(runner.status == "waiting" for runner in self.runners)
 
     async def _learn_once(self, spec: Any, pool: ProviderPool) -> None:
-        """One guarded attempt. Nothing that happens here may take the
-        daemon down -- the box-sweep rule, applied continuously."""
+        """One guarded attempt. Nothing here may take the daemon down."""
         project = self.config.resolve_path(self.config.tasks)
         try:
             result = await learn_pass(project, spec, pool)
