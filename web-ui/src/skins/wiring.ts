@@ -111,6 +111,29 @@ export function walk(shape: GraphShape): string[] {
 }
 
 /**
+ * The nodes whose successor in the drawing really is a node they point at.
+ *
+ * `walk` reads a graph depth first, so the node drawn next is *usually* the
+ * node the run goes to next -- but not at a router, whose arms are siblings.
+ * A connector drawn between every neighbouring pair claims an edge the graph
+ * does not have; this is which pairs are real.
+ */
+export function steps(shape: GraphShape): string[] {
+  const byId = new Map(shape.nodes.map((node) => [node.id, node]))
+  const order = walk(shape)
+  return order.filter((id, index) => {
+    const node = byId.get(id)
+    const after = order[index + 1]
+    if (node === undefined || after === undefined) return false
+    return (
+      node.next === after ||
+      node.default === after ||
+      node.branches.some((branch) => branch.to === after)
+    )
+  })
+}
+
+/**
  * The nodes a run can stop on, in walk order.
  *
  * What an outgoing handoff arrow leaves from once a flow is opened. Shut, the

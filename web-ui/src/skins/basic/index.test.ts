@@ -233,3 +233,16 @@ test("a flow that reports no model at all leaves the trigger line alone", () => 
   expect(when()).toBe("loop")
   handle.destroy()
 })
+
+
+test("a connector is drawn only where the run really goes", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage([triage(["mock", null, "mock"])]))
+
+  // classify -> route is a step. route -> draft is the router's default, so
+  // that is a step too. Nothing after that: the arms are siblings.
+  expect(pill("classify").dataset.leadsOn).toBe("true")
+  expect(pill("route").dataset.leadsOn).toBe("true")
+  expect(pill("draft").dataset.leadsOn).toBeUndefined()
+  handle.destroy()
+})

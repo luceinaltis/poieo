@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { BOX, exits, place, walk, wire } from "./wiring"
+import { BOX, exits, place, steps, walk, wire } from "./wiring"
 import type { GraphShape } from "../types"
 
 const LINE: GraphShape = {
@@ -117,4 +117,40 @@ test("an arrow leaves one box's right edge and enters the next one's left", () =
 
   expect(line.x1).toBe(BOX.width)
   expect(line.x2).toBe(BOX.width + BOX.gapX)
+})
+
+
+// A router with two arms: the walk reads them one after the other, but the
+// graph does not run one into the other.
+const FORK: GraphShape = {
+  entry: "classify",
+  nodes: [
+    { id: "classify", type: "llm", next: "route", default: null, branches: [], model: null },
+    {
+      id: "route",
+      type: "router",
+      next: null,
+      default: "answer",
+      branches: [{ to: "bug", label: "bug" }],
+      model: null,
+    },
+    { id: "answer", type: "llm", next: null, default: null, branches: [], model: null },
+    { id: "bug", type: "llm", next: null, default: null, branches: [], model: null },
+  ],
+}
+
+test("every node of a straight line leads on to the one drawn after it", () => {
+  expect(steps(LINE)).toEqual(["draft", "review", "gate"])
+})
+
+test("a router's arms are siblings, so neither leads on to the other", () => {
+  // `answer` is drawn beside `bug` because the walk reads them in turn, not
+  // because the run goes from one to the other. A connector between them
+  // would claim an edge the graph does not have.
+  expect(steps(FORK)).toEqual(["classify", "route"])
+})
+
+test("a node that loops back leads on to nothing drawn after it", () => {
+  // `revise` points at `review`, which the reader has already passed.
+  expect(steps(LINE)).not.toContain("revise")
 })

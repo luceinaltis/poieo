@@ -111,7 +111,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
-  padding: 2px 0;
+  /* Room on the right for the connector of whichever node ends a wrapped row;
+     it hangs 9px past its pill. */
+  padding: 2px 10px 2px 0;
 }
 
 .basic-node {
@@ -125,12 +127,21 @@
 }
 
 /* The step from one node to the next: the same arrow as the one between two
-   borders, at the scale where it costs nothing to draw. */
-.basic-node + .basic-node::before {
+   borders, at the scale where it costs nothing to draw.
+
+   Trailing its leader rather than leading its follower, so that a row which
+   wraps ends with the arrow instead of starting with one. An arrow at the end
+   of a line reads as "continues"; the same arrow at the start of the next line
+   points into a node out of the border, from nothing. */
+.basic-node[data-leads-on="true"]::after {
   color: #4a4034;
   content: "→";
-  left: -9px;
   position: absolute;
+  right: -9px;
+  /* Pinned to the first line, not left to fall where the box ends: a node
+     carrying a model is two lines tall, and its arrow would sit under the
+     row rather than between two ids. */
+  top: 1px;
 }
 
 /* What actually runs this step, when the flow's nodes do not agree. Dimmer
