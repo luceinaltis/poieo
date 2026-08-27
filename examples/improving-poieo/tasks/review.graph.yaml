@@ -1,0 +1,43 @@
+# Read the change as though someone else wrote it.
+#
+# This project has one account and no second reviewer, so self-review is the
+# review -- which is exactly why it is a separate flow with a separate prompt
+# and, if the binding says so, a different model. A reviewer that is the same
+# process that wrote the code is a rubber stamp.
+name: review
+version: 1
+entry: read
+
+nodes:
+  - id: read
+    type: agent
+    role: reviewer
+    tools: [shell]
+    max_turns: 20
+    prompt: |
+      Review the pull request this project just opened. Find it with
+      `gh pr list --author @me --limit 1`, and read the whole change with
+      `gh pr diff <n>`.
+
+      Look for what a green suite cannot tell you, which is what CLAUDE.md
+      asks for: a dropped error path, a public surface that quietly widened, a
+      comment that no longer matches the code below it, a file staged by
+      accident, a silent cap that reads as completeness.
+
+      Then check the things the rules make conditions of merging:
+        - every behaviour change has a test that fails without it
+        - nothing in the diff is an artifact nobody meant to check in
+        - the pull request body pastes real output, not the words "tests pass"
+
+      Post what you found as a comment on the pull request with
+      `gh pr comment <n> --body ...`, including "no findings" if there are none
+      -- an unrecorded review is not a review.
+
+      Then answer on your own last line with exactly one word:
+      HOLD if you found anything that should be fixed before it lands, or if
+      the change touches a public interface, deletes a test, adds a dependency,
+      or changes how bindings and credentials are loaded -- those are the four
+      this project says a human must decide.
+      Otherwise LAND.
+    output:
+      as: verdict

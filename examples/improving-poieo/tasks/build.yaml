@@ -1,0 +1,14 @@
+# Writes it, tests it, and opens the pull request.
+#
+# A red gate goes nowhere on purpose. There is no branch back to itself: a run
+# that failed is recorded and the next trigger starts fresh, which this project
+# prefers to a flow that keeps hammering at the same broken change -- and to a
+# retry loop spending a paid API on it unattended.
+name: build
+graph: build.graph.yaml
+folder: ../../..
+trigger: {type: manual}
+then:
+  - when: "'GREEN' in str(run.outputs.get('gate', '')).upper()"
+    to: review
+    label: opened

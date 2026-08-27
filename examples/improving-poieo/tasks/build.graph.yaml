@@ -1,0 +1,66 @@
+# Write it, test it, and put it up for review -- all in one run.
+#
+# One run and not three, and that is forced rather than chosen: the folder is
+# a repository, so every run works in its own private copy. A separate flow
+# for "open the pull request" would open one against a copy that never saw the
+# work. One run is one unit of work here, and the pull request is its outward
+# result.
+name: build
+version: 1
+entry: work
+
+nodes:
+  - id: work
+    type: agent
+    role: builder
+    tools: [files, shell]
+    max_turns: 40
+    prompt: |
+      Build this, and nothing else:
+
+      {{ input.get('sender', {}).get('outputs', {}).get('look', '(nothing was handed over -- stop and say so)') }}
+
+      This project is test-first and its rules are in CLAUDE.md. Read it before
+      your first commit. In short:
+
+      1. Cut a branch off main. Name it after the topic, no prefix.
+      2. Write the test first, and run it to watch it fail. A behaviour change
+         with no test that fails without it does not land here.
+      3. Make it pass. Change nothing the proposal did not ask for.
+      4. Run the gate, both halves:
+             PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
+             npm test --workspace web-ui
+         and, if you touched web-ui, `npm run build --workspace web-ui` -- it
+         runs tsc, and vitest does not type-check.
+      5. Commit with a Conventional Commits subject, and end the message with
+             Co-Authored-By: poieo <noreply@example.com>
+      6. Push the branch and open a pull request with `gh pr create`. The body
+         says what changed, why, and pastes the actual test output -- not the
+         words "tests pass", the output.
+
+      If the gate is not green, do not open a pull request. Say what failed and
+      stop; the next run starts fresh, which is what this project prefers to a
+      half-landed change.
+
+      Finish by saying in one line what you did, and the pull request number if
+      you opened one.
+    next: gate
+
+  # Asked again, on its own, because a model that has just spent forty turns
+  # on a change is the last thing that should be trusted to say whether it
+  # worked. This node has one job and no memory of wanting it to pass.
+  - id: gate
+    type: agent
+    role: reader
+    tools: [shell]
+    max_turns: 6
+    prompt: |
+      Run both halves of this project's gate and report the result:
+
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
+          npm test --workspace web-ui
+
+      Answer with exactly one word and nothing else: GREEN if both suites
+      passed, RED if either did not.
+    output:
+      as: gate

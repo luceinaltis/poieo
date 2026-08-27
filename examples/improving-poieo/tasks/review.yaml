@@ -1,0 +1,17 @@
+# Reads the change as though someone else wrote it, and says so on the PR.
+#
+# HOLD comes back to build rather than stopping, because a finding with nobody
+# to act on it is a comment nobody reads. That makes review -> build -> review
+# a cycle; the chain depth limit is what bounds it, and poieo warns about it at
+# startup so you know it is there.
+name: review
+graph: review.graph.yaml
+folder: ../../..
+trigger: {type: manual}
+then:
+  - when: "'HOLD' in str(run.outputs.get('read', '')).upper()"
+    to: build
+    label: findings
+  - when: "'LAND' in str(run.outputs.get('read', '')).upper()"
+    to: land
+    label: clean

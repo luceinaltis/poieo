@@ -1,0 +1,32 @@
+# The review before the work, which is the cheap one.
+#
+# A proposal that is too big, already done, or not wanted is far cheaper to
+# turn away here than after something has written code for it.
+name: shape
+version: 1
+entry: judge
+
+nodes:
+  # No tools on purpose. A node with no tools answers with its text and
+  # nothing else, which is what makes a one-word verdict something a router
+  # can be trusted with.
+  - id: judge
+    type: agent
+    role: reader
+    prompt: |
+      Here is a proposal for the next thing to build in this project:
+
+      {{ input.get('sender', {}).get('outputs', {}).get('look', '(nothing was proposed)') }}
+
+      Answer with exactly one word and nothing else.
+
+      NARROW  if it is more than one behaviour, or would take more than one
+              commit, or names no test that could fail
+      DROP    if it is already built, or the project has said it does not want
+              it -- DESIGN.md has a Non-goals section
+      BUILD   otherwise
+
+      When in doubt, answer NARROW. Turning work away here costs a minute;
+      turning it away after it is written costs an afternoon.
+    output:
+      as: verdict
