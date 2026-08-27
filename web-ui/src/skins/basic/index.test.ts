@@ -265,11 +265,12 @@ test("a connector is drawn only where the run really goes", () => {
   const handle = basic.mount(el, { onSelectFlow: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
-  // classify -> route is a step. route -> draft is the router's default, so
-  // that is a step too. Nothing after that: the arms are siblings.
-  expect(pill("classify").dataset.leadsOn).toBe("true")
-  expect(pill("route").dataset.leadsOn).toBe("true")
-  expect(pill("draft").dataset.leadsOn).toBeUndefined()
+  // The entry is arrived at from nowhere. route is arrived at from classify,
+  // and draft from route -- and nothing is drawn between two nodes that only
+  // happen to share a column.
+  expect(pill("classify").dataset.from).toBeUndefined()
+  expect(pill("route").dataset.from).toBe("true")
+  expect(pill("draft").dataset.from).toBe("true")
   handle.destroy()
 })
 

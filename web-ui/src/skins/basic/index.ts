@@ -20,7 +20,7 @@
 import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
-import { BOX, corner, exits, place, steps, walk, wire } from "../wiring"
+import { BOX, arrivals, corner, depths, exits, place, wire } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
@@ -137,21 +137,26 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
 /** The graph inside a border, drawn once: it moves only when a file does. */
 function fillInside(box: Box, flowState: FlowState): void {
   const leaves = new Set(exits(flowState.shape))
-  // Which neighbouring pairs are a real edge. Drawn between every pair, the
-  // connector claims the router's arms run into one another.
-  const leads = new Set(steps(flowState.shape))
+  // Which nodes something to their left points at. Hung on the arriving
+  // node, so a router draws an arrow into every arm rather than one.
+  const reached = new Set(arrivals(flowState.shape))
   // Only when they differ. A flow on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
   const differ = modelsOf(flowState).length > 1
-  const nodes = walk(flowState.shape).map((id) => {
+  const nodes = depths(flowState.shape).map((cell) => {
+    const id = cell.id
     const pill = document.createElement("span")
     pill.className = "basic-node"
     pill.dataset.node = id
+    // A column per step from the entry, a row per arm of a branch. In one
+    // wrapping line a router's arms read as four steps in a row.
+    pill.style.gridColumn = String(cell.column + 1)
+    pill.style.gridRow = String(cell.row + 1)
     const spec = flowState.shape.nodes.find((node) => node.id === id)
     if (spec) pill.dataset.type = spec.type
     // Where a handoff leaves from, once you can see the nodes at all.
     if (leaves.has(id) && flowState.then.length > 0) pill.dataset.exit = "true"
-    if (leads.has(id)) pill.dataset.leadsOn = "true"
+    if (reached.has(id)) pill.dataset.from = "true"
     pill.textContent = id
     // A router has no model because it calls none, and the gap is itself
     // information: it is why branching is free.

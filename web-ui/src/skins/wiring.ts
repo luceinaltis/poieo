@@ -110,27 +110,85 @@ export function walk(shape: GraphShape): string[] {
   return order
 }
 
+/** Where one node sits inside a border: a step across, a sibling down. */
+export interface Cell {
+  id: string
+  column: number
+  row: number
+}
+
+/** Everywhere a node points: `next`, then `default`, then its branches. */
+export function targets(node: GraphShape["nodes"][number]): string[] {
+  return [node.next, node.default, ...node.branches.map((branch) => branch.to)].filter(
+    (to): to is string => to !== null,
+  )
+}
+
 /**
- * The nodes whose successor in the drawing really is a node they point at.
+ * A graph's nodes on a grid: a column per step from the entry, a row per arm.
  *
- * `walk` reads a graph depth first, so the node drawn next is *usually* the
- * node the run goes to next -- but not at a router, whose arms are siblings.
- * A connector drawn between every neighbouring pair claims an edge the graph
- * does not have; this is which pairs are real.
+ * Laid out in one wrapping line, a router's arms read as four steps in a row
+ * -- which is the one thing about a branching graph a reader needs and the
+ * line could never say. A column is how far along the run a node is; nodes
+ * sharing a column are alternatives at that point.
+ *
+ * Depth comes off `walk`'s own descent rather than a longest-path pass,
+ * because a graph here may loop: an edge back to a node already placed is not
+ * another step forward, and counting it as one would march a cycle off the
+ * right-hand edge of the border for as long as the walk cared to go.
  */
-export function steps(shape: GraphShape): string[] {
+export function depths(shape: GraphShape): Cell[] {
   const byId = new Map(shape.nodes.map((node) => [node.id, node]))
-  const order = walk(shape)
-  return order.filter((id, index) => {
+  const column = new Map<string, number>()
+  const seen = new Set<string>()
+
+  const visit = (id: string, at: number): void => {
+    if (seen.has(id)) return
     const node = byId.get(id)
-    const after = order[index + 1]
-    if (node === undefined || after === undefined) return false
-    return (
-      node.next === after ||
-      node.default === after ||
-      node.branches.some((branch) => branch.to === after)
-    )
+    if (node === undefined) return
+    seen.add(id)
+    column.set(id, at)
+    for (const to of targets(node)) visit(to, at + 1)
+  }
+  visit(shape.entry, 0)
+
+  const filled = new Map<number, number>()
+  return walk(shape).map((id) => {
+    // A node the walk reached but this descent did not is unreachable, which
+    // GraphSpec refuses; drawn last, in a column of its own, rather than lost.
+    const at = column.get(id) ?? 0
+    const row = filled.get(at) ?? 0
+    filled.set(at, row + 1)
+    return { id, column: at, row }
   })
+}
+
+/**
+ * The nodes something in the column to their left points at.
+ *
+ * Which is where the connector goes -- on the node being arrived at, not on
+ * the one leading away. A router points at every one of its arms, and an
+ * arrow hung off the router could only be drawn to one of them; hung off each
+ * arm, all three are drawn and they converge on the router by themselves.
+ *
+ * Nodes sharing a column are alternatives, never a chain, so nothing is drawn
+ * between them.
+ */
+export function arrivals(shape: GraphShape): string[] {
+  const byId = new Map(shape.nodes.map((node) => [node.id, node]))
+  const cells = depths(shape)
+  const before = new Map<number, string[]>()
+  for (const cell of cells) {
+    before.set(cell.column, [...(before.get(cell.column) ?? []), cell.id])
+  }
+  return cells
+    .filter((cell) =>
+      (before.get(cell.column - 1) ?? []).some((from) => {
+        const node = byId.get(from)
+        return node !== undefined && targets(node).includes(cell.id)
+      }),
+    )
+    .map((cell) => cell.id)
 }
 
 /**

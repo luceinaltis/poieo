@@ -123,13 +123,34 @@
   display: none;
 }
 
+/* A grid, not a line: the column a node sits in is how far along the run it
+   is, and nodes sharing a column are alternatives at that point. */
 .basic-inside {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-columns: max-content;
+  justify-items: start;
+  align-items: start;
   gap: 4px 10px;
-  /* Room on the right for the connector of whichever node ends a wrapped row;
-     it hangs 9px past its pill. */
-  padding: 2px 10px 2px 0;
+  /* Room on the left for the connector of every node past the first column;
+     it hangs 9px before its pill. */
+  padding: 2px 0 2px 10px;
+  /* A grid does not wrap, and a long enough run is wider than a border. It
+     scrolls rather than spilling across the board -- and rather than being
+     clipped, which would hide steps while looking complete. */
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a332a transparent;
+}
+
+/* Laid out, not overlaid: an overlay bar fades away, and a run that continues
+   past the border would then look like a run that ends there. */
+.basic-inside::-webkit-scrollbar {
+  height: 5px;
+}
+
+.basic-inside::-webkit-scrollbar-thumb {
+  background: #3a332a;
+  border-radius: 3px;
 }
 
 .basic-node {
@@ -142,21 +163,22 @@
   position: relative;
 }
 
-/* The step from one node to the next: the same arrow as the one between two
-   borders, at the scale where it costs nothing to draw.
+/* The step into a node: the same arrow as the one between two borders, at the
+   scale where it costs nothing to draw.
 
-   Trailing its leader rather than leading its follower, so that a row which
-   wraps ends with the arrow instead of starting with one. An arrow at the end
-   of a line reads as "continues"; the same arrow at the start of the next line
-   points into a node out of the border, from nothing. */
-.basic-node[data-leads-on="true"]::after {
+   Hung on the node being arrived at rather than the one leading away, so that
+   a router draws an arrow into each of its arms. On the router it could reach
+   only one of them, and the rest sat there looking unreachable. Safe on the
+   left now that the nodes are a grid: a column never wraps, so nothing but a
+   real predecessor is ever to a node's left. */
+.basic-node[data-from="true"]::before {
   color: #4a4034;
   content: "→";
   position: absolute;
-  right: -9px;
+  left: -9px;
   /* Pinned to the first line, not left to fall where the box ends: a node
      carrying a model is two lines tall, and its arrow would sit under the
-     row rather than between two ids. */
+     row rather than beside an id. */
   top: 1px;
 }
 
