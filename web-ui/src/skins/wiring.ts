@@ -335,6 +335,69 @@ export function zoom(view: View, by: number, at: { x: number; y: number }): View
   }
 }
 
+/** A rectangle in minimap coordinates. */
+export interface Patch {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * How small the whole board has to be drawn to sit in a corner of the screen.
+ *
+ * One scale for both axes, decided by whichever side is tighter, so a long
+ * board is drawn long rather than squashed into the shape of its frame.
+ */
+export function minimap(board: Size, room: Size): Size & { zoom: number } {
+  const zoom = Math.min(
+    board.width > 0 ? room.width / board.width : 1,
+    board.height > 0 ? room.height / board.height : 1,
+  )
+  return { zoom, width: board.width * zoom, height: board.height * zoom }
+}
+
+/**
+ * The part of the board the window is showing, in minimap coordinates.
+ *
+ * The inverse of the view transform: a screen point is `(screen - view) / zoom`
+ * on the board, so the window's own corners say which piece of board is
+ * visible. Clipped to the board, because a reader who has panned past the edge
+ * is looking partly at nothing, and a rectangle drawn outside the minimap
+ * reads as a bug rather than as "you have gone too far".
+ */
+export function looking(
+  view: View,
+  window: Size,
+  map: { zoom: number; board?: Size },
+): Patch {
+  const left = -view.x / view.zoom
+  const top = -view.y / view.zoom
+  const right = left + window.width / view.zoom
+  const bottom = top + window.height / view.zoom
+
+  const edge = map.board
+  const x0 = Math.max(0, left)
+  const y0 = Math.max(0, top)
+  const x1 = edge ? Math.min(edge.width, right) : right
+  const y1 = edge ? Math.min(edge.height, bottom) : bottom
+  return {
+    x: x0 * map.zoom,
+    y: y0 * map.zoom,
+    width: Math.max(0, x1 - x0) * map.zoom,
+    height: Math.max(0, y1 - y0) * map.zoom,
+  }
+}
+
+/** Move the view so a point on the board sits in the middle of the window. */
+export function centreOn(view: View, on: { x: number; y: number }, window: Size): View {
+  return {
+    x: window.width / 2 - on.x * view.zoom,
+    y: window.height / 2 - on.y * view.zoom,
+    zoom: view.zoom,
+  }
+}
+
 /** The top-left corner of a flow's box. */
 export function corner(at: Placed, frame?: Frame): Anchor {
   return {

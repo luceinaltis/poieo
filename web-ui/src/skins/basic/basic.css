@@ -17,6 +17,44 @@
   cursor: grabbing;
 }
 
+/* The whole board, small, in the corner. Only when there is board off the
+   screen: a minimap of something already wholly visible is a second, smaller
+   copy of it taking up the corner for nothing. */
+.basic-minimap {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  background: #14120f;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  cursor: pointer;
+  display: none;
+}
+
+.basic-minimap[data-needed="true"] {
+  display: block;
+}
+
+.basic-speck {
+  position: absolute;
+  background: #4a4034;
+  border-radius: 1px;
+  /* Never thinner than a hairline: a flow scaled to nothing would leave the
+     minimap describing a board with gaps in it. */
+  min-width: 2px;
+  min-height: 2px;
+}
+
+/* Where the window is looking. An outline rather than a wash, so the specks
+   underneath stay readable through it. */
+.basic-seen {
+  position: absolute;
+  border: 1px solid #d8a657;
+  background: #d8a6571a;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 .basic {
   position: absolute;
   top: 0;
