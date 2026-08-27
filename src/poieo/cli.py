@@ -29,8 +29,8 @@ from .binding import load_binding
 from .workspace import Workspace
 from .daemon import Daemon, load_config, load_flows
 from .daemon.config import FlowSpec, check_isolation, config_for_tasks_folder
-from .detect import detect
-from .errors import PoieoError
+from . import detect as engines
+from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
 from .learn import last_suggestion, learn as run_learning_pass
@@ -41,6 +41,7 @@ from .project import (
     find_project,
     find_project_file,
     init_project,
+    load_project,
     nothing_found,
 )
 from .providers import ProviderPool
@@ -70,6 +71,16 @@ app = typer.Typer(
 )
 runs_app = typer.Typer(name="runs", help="Inspect past runs.", no_args_is_help=True)
 app.add_typer(runs_app)
+
+# Bare `poieo config` reports rather than printing help: "what am I bound to"
+# is the question people arrive with, and making them find a subcommand to ask
+# it is a tax. The subcommands are for changing the answer.
+config_app = typer.Typer(
+    name="config",
+    help="What this project is bound to, and what else it could name.",
+    invoke_without_command=True,
+)
+app.add_typer(config_app)
 
 
 def _guarded(fn):
@@ -165,7 +176,7 @@ def init(
         reason = "mock -- asked for; it answers from a script, not a model"
         found = []
     else:
-        found = detect()
+        found = engines.detect()
         if not found:
             # Better an empty folder than a project that runs all night on
             # invented text. --mock is the way to say you meant it.
@@ -744,6 +755,163 @@ def check_providers(
             typer.secho(f"{mark} {name:<16} {detail}", fg=color)
     if any(not healthy for _, healthy, _ in rows):
         raise typer.Exit(code=1)
+
+
+# -- poieo config -------------------------------------------------------------
+#
+# `check` asks whether an endpoint is up. These ask what it *serves*, and what
+# this project decided to do with that -- two questions close enough together
+# to be confused, so: check probes, config reads the file, config models asks
+# the endpoints for their catalogue.
+
+
+def _configured() -> "tuple[Path, Any]":
+    """The project here and the binding it names, or a refusal in the usual words."""
+    marker = _project_file(None)
+    project = load_project(marker)
+    if not project.binding:
+        _fail(f"{marker} names no binding; add `binding: <file>` to it")
+    path = project.resolve_path(project.binding)
+    return path, load_binding(path)
+
+
+def _target(spec: Any, role: str) -> str | None:
+    """``provider/model`` for a role, or None when the binding cannot say.
+
+    Slash-separated, because this is the form `poieo config use` takes back --
+    a reader who types what they just read has to be right. It splits once, so
+    a model id full of slashes (`hf.co/empero-ai/...`) survives it intact.
+
+    Only a binding with no default to fall back on gets None -- the same call
+    the board makes, and for the same reason: reporting what would really run
+    beats refusing to report.
+    """
+    try:
+        resolved = spec.resolve(role)
+    except BindingError:
+        return None
+    return f"{resolved.provider_name}/{resolved.model}"
+
+
+def _spoken_for(spec: Any) -> dict[str, str]:
+    """Which `provider:model` each named role -- and `default` -- points at."""
+    named = {"default": _target(spec, "default")}
+    named.update({role: _target(spec, role) for role in spec.roles})
+    return {role: target for role, target in named.items() if target}
+
+
+@config_app.callback(invoke_without_command=True)
+@_guarded
+def config(
+    ctx: typer.Context,
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+) -> None:
+    """What this project is bound to: its endpoints, its default, its roles.
+
+    Reads files and opens no socket. `poieo config models` is the one that
+    asks the endpoints themselves.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    path, spec = _configured()
+
+    # One report, two renderings, as `validate` does: the facts are gathered
+    # once so the JSON an agent parses cannot drift from the lines a person
+    # reads.
+    report: dict[str, Any] = {
+        "binding": {"name": spec.name, "path": str(path)},
+        "providers": {
+            name: {"type": p.type, "base_url": p.base_url}
+            for name, p in spec.providers.items()
+        },
+        "default": _target(spec, "default"),
+        "roles": {role: _target(spec, role) for role in sorted(spec.roles)},
+    }
+    if as_json:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    typer.echo(f"binding    {path}  ({spec.name})")
+    typer.echo("")
+    typer.echo("providers")
+    for name, provider in spec.providers.items():
+        # An endpoint with no address is one whose SDK knows where it lives.
+        typer.echo(f"  {name:<12}{provider.type:<20}{provider.base_url or ''}".rstrip())
+    typer.echo("")
+    typer.echo(f"default    {report['default'] or '(the binding names none)'}")
+    if report["roles"]:
+        typer.echo("roles")
+        for role, target in report["roles"].items():
+            typer.echo(f"  {role:<12}{target or '(unresolvable)'}")
+    else:
+        # Not a defect -- one model for everything is a legitimate binding --
+        # but it is the thing most worth knowing you *could* do.
+        typer.echo("roles      none; every step runs on the default")
+        typer.echo("           `poieo config models` lists what else is here")
+
+
+@config_app.command("models")
+@_guarded
+def config_models(
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+) -> None:
+    """What each declared endpoint serves right now.
+
+    Asked live rather than remembered, because a list written down a month ago
+    is a list that has since gone wrong -- and a model named from memory fails
+    at 3am, which is the whole thing poieo is built not to do.
+    """
+    _, spec = _configured()
+    names = list(spec.providers)
+
+    async def _go() -> list[tuple[str, ...]]:
+        # All at once: two endpoints asked in single file is two timeouts on a
+        # laptop where neither is running.
+        return list(
+            await asyncio.gather(
+                *(
+                    engines.models_for(p.type, p.base_url)
+                    for p in spec.providers.values()
+                )
+            )
+        )
+
+    served = dict(zip(names, asyncio.run(_go())))
+    in_use = {target: role for role, target in _spoken_for(spec).items()}
+
+    report = {
+        name: {
+            "type": spec.providers[name].type,
+            "base_url": spec.providers[name].base_url,
+            "reachable": bool(served[name]),
+            "models": list(served[name]),
+        }
+        for name in names
+    }
+    if as_json:
+        typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+
+    for name in names:
+        provider = spec.providers[name]
+        models = served[name]
+        if models:
+            detail = provider.base_url or ""
+        elif not engines.askable(provider.type):
+            # `mock` answers from its own file; a backend a caller registered
+            # has no listing convention. Neither is a failure to report.
+            detail = "nothing to ask -- it answers from the binding"
+        else:
+            detail = "no answer"
+        typer.secho(f"{name:<12}{detail}".rstrip(), bold=True)
+        for model in models:
+            role = in_use.get(f"{name}/{model}")
+            # Padded only when there is something to line up against, so an
+            # unspoken-for model is exactly its own name. The trailing gap is
+            # unconditional: an id longer than the column still needs air
+            # before its role, and real Ollama tags run past 44 easily.
+            typer.echo(f"  {model:<44}  {role}" if role else f"  {model}")
+        typer.echo("")
 
 
 @app.command(hidden=True)

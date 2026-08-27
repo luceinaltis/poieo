@@ -9,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from conftest import card
+from poieo import detect as detect_module
 from poieo.cli import app
 from poieo.detect import Engine
 from poieo.project import find_project, find_project_file
@@ -291,13 +292,12 @@ CLAUDE = Engine(
 def _machine_with(monkeypatch, *engines):
     """What detection finds on the machine running this test: exactly this.
 
-    Patched on the CLI, which is what asks: detection returns a pool and the
-    front end decides what to do with it -- project.py only ever sees the
-    answer, as a binding body.
+    Patched on detect itself rather than on the CLI's name for it: the CLI is
+    what asks -- detection returns a pool and the front end decides what to do
+    with it -- but which module holds the reference is not what these tests
+    are about.
     """
-    import poieo.cli as cli
-
-    monkeypatch.setattr(cli, "detect", lambda: list(engines))
+    monkeypatch.setattr(detect_module, "detect", lambda: list(engines))
 
 
 def _no_machine(monkeypatch):

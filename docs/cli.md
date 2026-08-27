@@ -14,6 +14,7 @@ that only the CLI knows how to do. The web API calls the same functions.
 | `run <graph\|card>` | execute it once |
 | `daemon [config]` | keep flows resident, and serve the page |
 | `check` | probe every declared endpoint |
+| `config` / `config models` | what this project is bound to, and what else it could name |
 | `memory [card]` | what the project keeps, and what one card will be shown |
 | `learn <tasks/>` | one learning pass, now |
 | `runs list` / `runs show` | read the run log |
@@ -60,6 +61,43 @@ The library half is deliberately question-free: `binding_document()` renders a
 binding for engines the caller has already settled on, and `init_project()`
 writes files for a binding body it is handed. Nothing under `cli.py` prompts,
 which is what keeps the same functions usable from the web board.
+
+## `poieo config`
+
+`init` happens once; models change every month. `config` is where a project's
+binding is read after that — and, once the write half lands, changed.
+
+| | |
+|---|---|
+| `poieo config` | the binding, its endpoints, its default and its roles. **Reads files, opens no socket.** |
+| `poieo config models` | what each declared endpoint serves **right now**, marked with what is already spoken for |
+
+Bare `poieo config` reports instead of printing help (`invoke_without_command`),
+because "what am I bound to" is the question people arrive with and making them
+find a subcommand to ask it is a tax. The subcommands are for changing the answer.
+
+Three neighbouring questions stay apart, because they are easy to confuse:
+`check` asks whether an endpoint is **up**, `config` reads what the **file**
+decided, and `config models` asks the endpoints for their **catalogue**. Only
+the last two are new; `check` keeps its place at the top level, where README and
+`AGENTS.md` already send people.
+
+`config models` asks every provider at once. Two endpoints asked in single file
+is two timeouts on a laptop where neither is running, and this is a command read
+one screen at a time. It reaches `detect.models_for()` — the same function
+detection uses, keyed by provider type — so a binding and the board can never
+disagree about where to look for a provider's models. A type that cannot be
+asked at all (`mock`, or a backend a caller registered) says so rather than
+reading as unreachable; `detect.askable()` is that distinction.
+
+Models are written `provider/model`, splitting once, so an id full of slashes
+(`hf.co/empero-ai/…`) survives. That is the form `config use` will take back —
+what a reader copies out has to be a thing they can type in.
+
+**Known divergence:** `ResolvedModel.describe()` still renders `provider:model`,
+so `poieo flows` and `poieo validate` spell it with a colon. Two spellings for
+one thing is the tax [DESIGN.md](../DESIGN.md) principle 7 exists to refuse;
+unifying them belongs with the write half.
 
 ## Cards and graphs are one argument
 
