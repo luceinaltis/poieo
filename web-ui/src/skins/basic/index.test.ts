@@ -472,3 +472,40 @@ test("pressing the minimap moves the view without also dragging the board", () =
   expect(grabbed).toBe(false)
   handle.destroy()
 })
+
+test("a shut border says what the task is doing right now", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  // A running task, mid-graph: the answer to why somebody opened the board.
+  const stage = replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4))
+  handle.update(stage)
+
+  const now = el.querySelector('[data-task="chores"] .basic-now')!
+  expect(now.textContent).toContain("work")
+  handle.destroy()
+})
+
+test("a border with nothing happening says nothing, and takes no room for it", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage(FLOWS))
+
+  // Empty rather than absent: `:empty` is what the stylesheet hides on, so an
+  // idle border is its name and its schedule and no blank space beneath.
+  expect(el.querySelector('[data-task="revision"] .basic-now')!.textContent).toBe("")
+  handle.destroy()
+})
+
+test("a task that stopped says so where it would have said what it was doing", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  // The task has to be known to be running before it can be known to have
+  // stopped: `run_failed` carries no task of its own.
+  let stage = reduce(initialStage(FLOWS), {
+    run_id: "r",
+    type: "run_started",
+    data: { task: "chores" },
+  })
+  stage = reduce(stage, { run_id: "r", type: "run_failed", data: { error: "boom" } })
+  handle.update(stage)
+
+  expect(el.querySelector('[data-task="chores"] .basic-now')!.textContent).toBe("stopped")
+  handle.destroy()
+})

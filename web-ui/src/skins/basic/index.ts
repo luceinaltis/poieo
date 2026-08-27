@@ -37,6 +37,7 @@ interface Box {
   root: HTMLElement
   toggle: HTMLElement
   when: HTMLElement
+  now: HTMLElement
   inside: HTMLElement
   said: HTMLElement
   tools: HTMLElement
@@ -133,12 +134,36 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     root,
     toggle,
     when: element("div", "basic-when", root),
+    // Shut, this is the whole of what a task says about right now. It sits
+    // above the graph because it is the answer to the question a person came
+    // to the board with, and the graph is the answer to the next one.
+    now: element("div", "basic-now", root),
     inside: element("div", "basic-inside", root),
     said: element("p", "basic-said", root),
     tools: element("ul", "basic-tools", root),
     tally: element("div", "basic-tally", root),
   }
 }
+
+/**
+ * What a task is doing at this moment, in one line.
+ *
+ * Shut, a border used to say only its name, its schedule and a tally of
+ * nights past -- and the space where its graph would be sat blank, hidden
+ * rather than removed so the border kept one height. That blank was the
+ * largest area on the board and it answered nothing.
+ *
+ * Running, this is where the run is: which step, and how many model calls it
+ * has spent there. Idle, it is empty and the stylesheet takes the space back.
+ */
+function describeNow(flowState: TaskState): string {
+  if (flowState.status === "error") return "stopped"
+  if (flowState.status !== "running") return ""
+  const parts = [flowState.currentNode ?? "starting"]
+  if (flowState.turn > 1) parts.push(`turn ${flowState.turn}`)
+  return parts.join(" · ")
+}
+
 
 /** The graph inside a border, drawn once: it moves only when a file does. */
 function fillInside(box: Box, flowState: TaskState): void {
@@ -181,6 +206,7 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(flowState)
+  box.now.textContent = describeNow(flowState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
     pill.dataset.here = String(pill.dataset.node === flowState.currentNode)
