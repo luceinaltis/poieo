@@ -170,18 +170,28 @@
   color: #d8c8a8;
 }
 
+/* Both one line. A model id long enough to wrap -- and they get long -- would
+   otherwise make the border a line taller than the one beside it. */
 .basic-when,
 .basic-tally {
   color: #9a9086;
   font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Shut, a flow is a border with a name on it and nothing else -- which is all
-   a node says until you open it. */
+   a node says until you open it.
+
+   Hidden, not removed. A flow opens itself when it starts running and shuts
+   again when it stops, so on a board that runs every minute `display: none`
+   made every border grow and shrink all day, and every arrow move with it.
+   The room stays reserved and only what is in it changes. */
 .basic-flow[data-open="false"] .basic-inside,
 .basic-flow[data-open="false"] .basic-tools,
 .basic-flow[data-open="false"] .basic-said {
-  display: none;
+  visibility: hidden;
 }
 
 /* A grid, not a line: the column a node sits in is how far along the run it
@@ -269,12 +279,17 @@
   border-style: dashed;
 }
 
+/* One row, always, for the same reason as the line above: a tool call is a
+   thing that happens mid-run, and the border must not jump when it does. The
+   row does not wrap -- a second row would be a second jump. */
 .basic-tools {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   list-style: none;
   margin: 0;
+  min-height: 1.35em;
+  overflow: hidden;
   padding: 0;
 }
 
@@ -289,9 +304,12 @@
   color: #d16d5a;
 }
 
+/* One line, always -- reserved before the model has said anything, so the
+   border does not grow by a line the moment it does. */
 .basic-said {
   color: inherit;
   margin: 0;
+  min-height: 1.35em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
