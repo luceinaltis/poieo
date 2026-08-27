@@ -302,6 +302,39 @@ export function fit(board: Size, host: Size, margin = 24): View {
   }
 }
 
+/**
+ * How far a view may be scaled by hand.
+ *
+ * The floor is not the fit's: a fit may go below it, because showing the whole
+ * board is worth more than legible type and there is no other way to see the
+ * shape. Reaching that by hand, past the point of reading anything, only loses
+ * the board. The ceiling stops a board becoming one box and a lot of felt.
+ */
+export const ZOOM = { min: 0.1, max: 4 }
+
+/** Slide the board by a pointer's movement, which is in screen pixels. */
+export function pan(view: View, dx: number, dy: number): View {
+  return { x: view.x + dx, y: view.y + dy, zoom: view.zoom }
+}
+
+/**
+ * Scale the view about a point on screen, holding whatever is under it still.
+ *
+ * That is the whole trick of a usable zoom: the board point under the pointer
+ * is `(at - view) / zoom`, and keeping it there through a change of zoom is
+ * what decides the new x and y. Scaling about the corner instead throws the
+ * thing the reader was looking at off the screen.
+ */
+export function zoom(view: View, by: number, at: { x: number; y: number }): View {
+  const next = Math.min(ZOOM.max, Math.max(ZOOM.min, view.zoom * by))
+  const scale = next / view.zoom
+  return {
+    x: at.x - (at.x - view.x) * scale,
+    y: at.y - (at.y - view.y) * scale,
+    zoom: next,
+  }
+}
+
 /** The top-left corner of a flow's box. */
 export function corner(at: Placed, frame?: Frame): Anchor {
   return {

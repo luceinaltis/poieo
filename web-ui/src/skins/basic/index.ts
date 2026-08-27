@@ -20,9 +20,11 @@
 import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
-import { BOX, arrivals, backWire, corner, depths, exits, fit, loops, place, wire } from "../wiring"
+import {
+  BOX, arrivals, backWire, corner, depths, exits, fit, loops, pan, place, wire, zoom,
+} from "../wiring"
 import type { Frame } from "../wiring"
-import type { Placed } from "../wiring"
+import type { Placed, View } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
 
@@ -335,6 +337,62 @@ export const basic: Skin = {
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => show())
     watching?.observe(viewport)
 
+    // Null until the reader moves the board themselves; after that it is their
+    // view, and `show` stops fitting.
+    let chosen: View | null = null
+
+    // A box's own controls are buttons, and a press on one of those is a click
+    // on the box rather than a grab of the board behind it.
+    const grabbable = (event: Event): boolean =>
+      !(event.target as HTMLElement | null)?.closest("button")
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (!grabbable(event) || event.button !== 0) return
+      const from = { x: event.clientX, y: event.clientY }
+      viewport.setPointerCapture(event.pointerId)
+      viewport.dataset.grabbing = "true"
+
+      const move = (to: PointerEvent) => {
+        chosen = pan(chosen ?? where(), to.clientX - from.x, to.clientY - from.y)
+        from.x = to.clientX
+        from.y = to.clientY
+        show()
+      }
+      const done = () => {
+        viewport.dataset.grabbing = "false"
+        viewport.removeEventListener("pointermove", move)
+        viewport.removeEventListener("pointerup", done)
+        viewport.removeEventListener("pointercancel", done)
+      }
+      viewport.addEventListener("pointermove", move)
+      viewport.addEventListener("pointerup", done)
+      viewport.addEventListener("pointercancel", done)
+    })
+
+    // Not passive: a wheel over the board zooms it rather than scrolling the
+    // page, and saying so has to happen before the default does.
+    viewport.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault()
+        const box = viewport.getBoundingClientRect()
+        chosen = zoom(chosen ?? where(), Math.exp(-event.deltaY * 0.0015), {
+          x: event.clientX - box.left,
+          y: event.clientY - box.top,
+        })
+        show()
+      },
+      { passive: false },
+    )
+
+    // The way back. A board a reader has lost themselves in is otherwise only
+    // recoverable by reloading the page.
+    viewport.addEventListener("dblclick", (event) => {
+      if (!grabbable(event)) return
+      chosen = null
+      show()
+    })
+
     const isOpen = (flow: string, flowState: FlowState): boolean =>
       byHand.get(flow) ?? flowState.status === "running"
 
@@ -367,16 +425,26 @@ export const basic: Skin = {
     }
 
     /**
-     * Put the whole board on screen.
+     * Where the board sits: the reader's own view, or the fit if they have not
+     * asked for one.
      *
-     * Re-run whenever the board changes shape or the window changes size --
-     * a fit is only true of the pair it was measured from.
+     * A fit is only true of the board and the window it was measured from, so
+     * it is recomputed rather than stored -- but the moment a reader drags or
+     * zooms, their view is theirs and no later frame may take it back. Same
+     * rule the open borders follow.
      */
-    function show(): void {
-      const view = fit(
-        { width: board.offsetWidth, height: board.offsetHeight },
-        { width: viewport.clientWidth, height: viewport.clientHeight },
+    function where(): View {
+      return (
+        chosen ??
+        fit(
+          { width: board.offsetWidth, height: board.offsetHeight },
+          { width: viewport.clientWidth, height: viewport.clientHeight },
+        )
       )
+    }
+
+    function show(): void {
+      const view = where()
       board.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     }
 

@@ -6,6 +6,15 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  cursor: grab;
+  /* The board is dragged, so a drag must not also select the words on it. */
+  user-select: none;
+  /* Wheel and drag are handled here; the browser must not also pan or bounce. */
+  touch-action: none;
+}
+
+.basic-viewport[data-grabbing="true"] {
+  cursor: grabbing;
 }
 
 .basic {
