@@ -452,8 +452,21 @@ export const basic: Skin = {
       show()
     })
 
-    const isOpen = (task: string, flowState: TaskState): boolean =>
-      byHand.get(task) ?? flowState.status === "running"
+    /**
+     * Shut until somebody opens it, and open until they shut it again.
+     *
+     * A running task used to open itself, which is how the blank space under
+     * a shut border came to be: opening and shutting on every run meant every
+     * border grew and shrank all day and every arrow moved with it, so the
+     * room had to stay reserved whether or not anything was in it.
+     *
+     * The `now` line answers what the auto-open was for -- which step, how
+     * many turns -- without the border changing size. So the size changes
+     * only when a person asks, the room is given back when it is not wanted,
+     * and the board holds still while it is being read.
+     */
+    const isOpen = (task: string, _state: TaskState): boolean =>
+      byHand.get(task) ?? false
 
     function relayout(stage: StageState): void {
       const tasks = Object.keys(stage.tasks)

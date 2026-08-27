@@ -84,13 +84,14 @@ const WIRED: TaskRow[] = [
   FLOWS[1],
 ]
 
-test("a task that is running opens itself; the rest stay shut", () => {
+test("nothing opens itself, however busy it is", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4)))
 
-  // Detail where something is happening, and only there: a board of ten tasks
-  // opened all the way is sixty nodes, which is not a glance.
-  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-open")).toBe("true")
+  // A running task used to open itself, and shut again when it stopped, so a
+  // board that runs every minute rearranged itself all day. The `now` line
+  // says what that was for; the size changes only when a person asks.
+  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-open")).toBe("false")
   expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("false")
   handle.destroy()
 })
