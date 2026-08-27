@@ -8,11 +8,14 @@ import { basic } from "./basic"
 
 // Listing a skin here must not pull its renderer in: atelier's three.js stays
 // behind a dynamic import inside its own module.
-export const SKINS: Skin[] = [atelier, basic]
+export const SKINS: Skin[] = [basic, atelier]
 
-// The workshop is what this page is for. basic remains the fallback that an
-// unknown or unreadable choice lands on.
-export const DEFAULT_SKIN_ID = atelier.id
+// The graph is what answers "what does this project do, and where is it right
+// now" -- which is the question a reader opens the page with. atelier answers a
+// different and better one, "is it working", and is a click away for that.
+// basic is also what an unknown or unreadable choice lands on, so the default
+// and the fallback are now one skin rather than two.
+export const DEFAULT_SKIN_ID = basic.id
 
 /** A stale or unknown id -- from an old localStorage value -- must not blank
  * the page, so it lands on the fallback skin instead. */

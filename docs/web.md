@@ -138,8 +138,10 @@ knows React. Adding a skin is a module and a line in `skins/registry.ts`.
 swaps the renderer in later. Making it a promise would push waiting onto the
 shell and onto every future skin to serve one skin's private problem.
 
-The chosen skin lives in `localStorage`. `atelier` is the default; a stale or
-unknown id lands on `basic`, the plain fallback, rather than blanking the page.
+The chosen skin lives in `localStorage`. `basic` is the default, and is also
+where a stale or unknown id lands rather than blanking the page -- so a reader
+with nothing stored and a reader with something unreadable stored get the same
+page. `atelier` is a click away.
 `basic` draws the work as a graph — the flows, their nodes, the arrows between
 them, and the model each node calls. `skins/wiring.ts` is the part of that with
 an answer capable of being wrong (where containers go, in what order nodes are read),

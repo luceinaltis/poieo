@@ -52,8 +52,13 @@ test("every registered skin satisfies the contract", () => {
   expect(new Set(ids).size).toBe(ids.length)
 })
 
-test("the workshop is what opens by default", () => {
-  expect(DEFAULT_SKIN_ID).toBe("atelier")
+test("the graph is what opens by default", () => {
+  // The reader arrives asking what the project does and where it is, and the
+  // graph is the skin that answers that. It is also the fallback, so a reader
+  // with nothing stored and one with something unreadable stored see the same
+  // page rather than two different ones.
+  expect(DEFAULT_SKIN_ID).toBe("basic")
+  expect(skinById(null).id).toBe(DEFAULT_SKIN_ID)
 })
 
 test("skinById falls back to basic for an unknown id", () => {
