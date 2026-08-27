@@ -289,3 +289,34 @@ test("a border is exactly as wide as the arrows think it is", () => {
   )
   handle.destroy()
 })
+
+
+test("a handoff that goes back does not run through what lies between", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(
+    initialStage([
+      { ...FLOWS[0], then: [{ to: "revision", label: "changed" }] },
+      { ...FLOWS[1], then: [{ to: "chores", label: "and again" }] },
+    ]),
+  )
+
+  // Two arrows: one forward, one back. Drawn alike, the back one runs at the
+  // same height as every box and every word between the two, straight
+  // through them.
+  const wires = Array.from(el.querySelectorAll(".basic-wire")).map((w) => w.getAttribute("d")!)
+  expect(wires).toHaveLength(2)
+  const [, backward] = wires
+  // Round, under, and up: four turns, where a step onward is one curve.
+  expect(backward).toMatch(/H .* V .* H .* V /)
+
+  // And its head points up into an underside, which no arrow going forward
+  // ever does -- so the reader cannot read it as one.
+  const tips = Array.from(el.querySelectorAll(".basic-tip")).map((t) => t.getAttribute("d")!)
+  const rise = (d: string) => {
+    const [, , y1, , , y2] = d.split(/[ ,]/)
+    return Number(y2) - Number(y1)
+  }
+  expect(rise(tips[0])).toBe(4)   // forward: level, pointing right
+  expect(rise(tips[1])).toBe(-8)  // back: rising, pointing up
+  handle.destroy()
+})

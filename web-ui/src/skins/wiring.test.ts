@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { BOX, arrivals, depths, exits, place, walk, wire } from "./wiring"
+import { BOX, arrivals, backWire, corner, depths, exits, loops, place, walk, wire } from "./wiring"
 import type { GraphShape } from "../types"
 
 const LINE: GraphShape = {
@@ -60,12 +60,26 @@ test("a flow waits for its furthest sender, not its nearest", () => {
   expect(placed.find((p) => p.flow === "publish")?.column).toBe(2)
 })
 
-test("a cycle is drawn rather than refused", () => {
+test("a cycle is unrolled into a line, not piled into one column", () => {
   const placed = place(["fix", "review"], { fix: ["review"], review: ["fix"] })
 
-  // Nothing can be peeled, so both land together and the loop is still visible.
-  expect(placed).toHaveLength(2)
-  expect(placed.every((p) => typeof p.column === "number")).toBe(true)
+  // Nothing in a cycle has an unmet sender, so peeling stalls at once. Left
+  // in a heap the flows all share a column, and then *every* arrow between
+  // them runs backwards -- including the ones that go forwards.
+  expect(placed).toEqual([
+    { flow: "fix", column: 0, row: 0 },
+    { flow: "review", column: 1, row: 0 },
+  ])
+})
+
+test("a cycle of three unrolls in the order they were declared", () => {
+  const placed = place(["chores", "review", "publish"], {
+    chores: ["review"],
+    review: ["publish"],
+    publish: ["chores"],
+  })
+
+  expect(placed.map((one) => one.column)).toEqual([0, 1, 2])
 })
 
 test("a handoff naming a flow that is not on the board is ignored", () => {
@@ -188,4 +202,42 @@ test("a loop back does not push its target into a further column", () => {
     ],
   }
   expect(depths(looping).map((cell) => cell.column)).toEqual([0, 1])
+})
+
+
+test("a handoff forward is not a loop; one to an earlier column is", () => {
+  const chores = { flow: "chores", column: 0, row: 0 }
+  const review = { flow: "review", column: 1, row: 0 }
+  const publish = { flow: "publish", column: 1, row: 1 }
+
+  expect(loops(chores, review)).toBe(false)
+  expect(loops(review, chores)).toBe(true)
+  // Same column, which is where place() puts a cycle it could not peel.
+  expect(loops(publish, review)).toBe(true)
+})
+
+test("a loop goes round the outside and comes up underneath its target", () => {
+  const publish = { flow: "publish", column: 2, row: 0 }
+  const chores = { flow: "chores", column: 0, row: 0 }
+  const back = backWire(publish, chores, 0)
+
+  // Out of the sender's right edge, as any arrow leaves.
+  expect(back.x1).toBe(corner(publish).x + BOX.width)
+  // Round past the right-hand-most border, so the upright leg crosses nothing.
+  expect(back.turn).toBeGreaterThan(corner(publish).x + BOX.width)
+  // Along below every box, not straight back at header height -- which is the
+  // height every box and every word is drawn at.
+  expect(back.under).toBeGreaterThan(corner(publish).y + BOX.height)
+  // And up into the underside, which no arrow going forwards ever does.
+  expect(back.x2).toBe(corner(chores).x + BOX.width / 2)
+  expect(back.y2).toBe(corner(chores).y + BOX.height)
+})
+
+test("the return leg clears the bottom row, whichever row that is", () => {
+  const from = { flow: "publish", column: 1, row: 0 }
+  const to = { flow: "chores", column: 0, row: 0 }
+
+  expect(backWire(from, to, 2).under).toBeGreaterThan(
+    corner({ flow: "x", column: 0, row: 2 }).y + BOX.height,
+  )
 })

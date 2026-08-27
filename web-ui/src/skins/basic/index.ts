@@ -20,7 +20,7 @@
 import { changedFlows } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, FlowState } from "../../state/stage"
-import { BOX, arrivals, corner, depths, exits, place, wire } from "../wiring"
+import { BOX, arrivals, backWire, corner, depths, exits, loops, place, wire } from "../wiring"
 import type { Placed } from "../wiring"
 import { shortTime } from "../../when"
 import "./basic.css"
@@ -198,6 +198,7 @@ function paint(box: Box, flowState: FlowState, open: boolean): void {
 
 function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
   const at = new Map(placed.map((one) => [one.flow, one]))
+  const lastRow = placed.reduce((low, one) => Math.max(low, one.row), 0)
   const lines: SVGElement[] = []
 
   for (const [flow, flowState] of Object.entries(stage.flows)) {
@@ -208,34 +209,45 @@ function drawWires(svg: SVGElement, stage: StageState, placed: Placed[]): void {
       // A branch that deliberately stops has nothing to point at, and a target
       // that is disabled has no box on this board.
       if (to === undefined) continue
-      const line = wire(from, to)
-      const mid = (line.x1 + line.x2) / 2
+      const back = loops(from, to) ? backWire(from, to, lastRow) : null
+      const line = back ?? wire(from, to)
 
       const path = document.createElementNS(SVG, "path")
       path.setAttribute("class", "basic-wire")
       path.setAttribute(
         "d",
-        `M ${line.x1} ${line.y1} C ${mid} ${line.y1}, ${mid} ${line.y2}, ${line.x2} ${line.y2}`,
+        back
+          ? `M ${back.x1} ${back.y1} H ${back.turn} V ${back.under} H ${back.x2} V ${back.y2}`
+          : `M ${line.x1} ${line.y1} C ${line.turn} ${line.y1}, ${line.turn} ${line.y2}, ${line.x2} ${line.y2}`,
       )
       lines.push(path)
 
       // A head, because the rule the whole board rests on is that an arrow
       // crosses a border. A bare line says two flows are related; it does not
       // say which one ends and which one begins.
+      //
+      // Going back it points up instead, into an underside. A forward arrow
+      // always arrives at a left edge, so one arriving from below cannot be
+      // mistaken for a step onward.
       const head = document.createElementNS(SVG, "path")
       head.setAttribute("class", "basic-tip")
       head.setAttribute(
         "d",
-        `M ${line.x2 - 8} ${line.y2 - 4} L ${line.x2} ${line.y2} L ${line.x2 - 8} ${line.y2 + 4} Z`,
+        back
+          ? `M ${back.x2 - 4} ${back.y2 + 8} L ${back.x2} ${back.y2} L ${back.x2 + 4} ${back.y2 + 8} Z`
+          : `M ${line.x2 - 8} ${line.y2 - 4} L ${line.x2} ${line.y2} L ${line.x2 - 8} ${line.y2 + 4} Z`,
       )
       lines.push(head)
 
       const word = document.createElementNS(SVG, "text")
       word.setAttribute("class", "basic-word")
-      word.setAttribute("x", String(mid))
+      // Forward, the bend is the middle of the gap the arrow crosses; going
+      // back, the middle of the long leg underneath. Either way it is the one
+      // piece of the route that is nowhere near a border.
+      word.setAttribute("x", String(back ? (back.turn + back.x2) / 2 : line.turn))
       // On the line, not above it: floated, the word sat against the border
       // below and read as that box's label rather than this arrow's.
-      word.setAttribute("y", String((line.y1 + line.y2) / 2))
+      word.setAttribute("y", String(back ? back.under : (line.y1 + line.y2) / 2))
       word.textContent = arrow.label
       lines.push(word)
     }

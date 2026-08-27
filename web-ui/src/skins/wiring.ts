@@ -26,9 +26,11 @@ export interface Placed {
  * handoffs at all ends up: one column of independent work. That is the common
  * case today and it must not read as a failure to lay anything out.
  *
- * A cycle cannot be peeled, so whatever is left over is placed in the column
- * after the last one that could be. Refusing to draw a legitimate feedback
- * loop would be worse than drawing it in a line.
+ * A cycle cannot be peeled at all -- nothing in one has all its senders
+ * placed -- so peeling stalls and the loop is broken at the first flow
+ * declared, which unrolls it into a line with one arrow coming back. Piling
+ * the leftovers into a single column instead would make every arrow among
+ * them run backwards, including the ones that go forwards.
  */
 export function place(flows: string[], handoffs: Record<string, string[]>): Placed[] {
   const rank = new Map(flows.map((flow, index) => [flow, index]))
@@ -45,7 +47,17 @@ export function place(flows: string[], handoffs: Record<string, string[]>): Plac
   let layer = flows.filter((flow) => waiting.get(flow) === 0)
   let depth = 0
 
-  while (layer.length > 0) {
+  while (left.size > 0) {
+    if (layer.length === 0) {
+      // Peeling has stalled, which means a cycle: nothing left has all its
+      // senders placed. Break it at the first flow declared and carry on.
+      // Left in a heap they would share one column, and then *every* arrow
+      // between them would run backwards -- including the ones going
+      // forwards, which is most of them.
+      const seed = flows.find((flow) => left.has(flow))
+      if (seed === undefined) break
+      layer = [seed]
+    }
     for (const flow of layer) {
       column.set(flow, depth)
       left.delete(flow)
@@ -63,7 +75,6 @@ export function place(flows: string[], handoffs: Record<string, string[]>): Plac
     layer = next.sort((a, b) => rank.get(a)! - rank.get(b)!)
     depth += 1
   }
-  for (const flow of flows) if (!column.has(flow)) column.set(flow, depth)
 
   const filled = new Map<number, number>()
   return flows.map((flow) => {
@@ -219,7 +230,7 @@ export function exits(shape: GraphShape): string[] {
  * A box may grow taller than `height` when it is opened; `head` is why that
  * does not drag its arrows down with it.
  */
-export const BOX = { width: 260, height: 132, gapX: 96, gapY: 20, head: 21 }
+export const BOX = { width: 260, height: 132, gapX: 96, gapY: 20, head: 21, around: 34 }
 
 export interface Anchor {
   x: number
@@ -235,16 +246,78 @@ export function corner(at: Placed): Anchor {
 }
 
 /**
- * The line an arrow runs along between two boxes: out of one's right edge and
- * into the other's left, both level with the header rather than the middle.
+ * Whether a handoff runs backwards -- to a flow no further right than its own.
+ *
+ * `place` lays flows out by who hands to whom, so a handoff normally lands in
+ * a later column and the arrow has the gap between them to itself. A cycle has
+ * no such order: `place` cannot peel one, and drops whatever is left into a
+ * single column. Drawn as though it went forwards, such an arrow runs
+ * right-to-left through every box between the two, which paint over it -- it
+ * survives only as stubs in the gaps between rows.
  */
-export function wire(from: Placed, to: Placed): { x1: number; y1: number; x2: number; y2: number } {
+export function loops(from: Placed, to: Placed): boolean {
+  return to.column <= from.column
+}
+
+/** The way round for a handoff that goes back. */
+export interface BackWire extends Wire {
+  /** The height of the long return leg, clear below every box. */
+  under: number
+}
+
+/**
+ * The way round for a handoff that goes back: out of the sender's right edge,
+ * round past the boards's right-hand side, along underneath everything, and up
+ * into the *underside* of the target.
+ *
+ * Arriving underneath is the whole point. A forward arrow always leaves a
+ * right edge and arrives at a left one, so an arrow coming up from below
+ * cannot be read as one, and the reader is told "back to here" without a word
+ * for it. Taken straight across at header height instead -- the obvious
+ * route -- the return leg runs through every box and every label between the
+ * two, because that is exactly the height everything else is drawn at.
+ *
+ * `lastRow` is the bottom row on the board, so the return leg can be put
+ * below all of it rather than in whatever gap happens to be nearest.
+ */
+export function backWire(from: Placed, to: Placed, lastRow: number): BackWire {
   const start = corner(from)
   const end = corner(to)
   return {
     x1: start.x + BOX.width,
     y1: start.y + BOX.head,
-    x2: end.x,
+    turn: Math.max(start.x, end.x) + BOX.width + BOX.around,
+    under: lastRow * (BOX.height + BOX.gapY) + BOX.height + BOX.gapY / 2,
+    // Up into the middle of the target's underside.
+    x2: end.x + BOX.width / 2,
+    y2: end.y + BOX.height,
+  }
+}
+
+/** Where an arrow starts, where it bends, and where it ends. */
+export interface Wire {
+  x1: number
+  y1: number
+  /** The x the line bends around, and where its word sits. */
+  turn: number
+  x2: number
+  y2: number
+}
+
+/**
+ * The line an arrow runs along between two boxes: out of one's right edge and
+ * into the other's left, both level with the header rather than the middle.
+ */
+export function wire(from: Placed, to: Placed): Wire {
+  const start = corner(from)
+  const end = corner(to)
+  const x1 = start.x + BOX.width
+  const x2 = end.x
+  return {
+    x1,
+    y1: start.y + BOX.head,
+    turn: (x1 + x2) / 2,
+    x2,
     y2: end.y + BOX.head,
   }
 }
