@@ -14,12 +14,13 @@ Design: docs/storage.md
 
 from __future__ import annotations
 
-import os
+import textwrap
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .detect import CANDIDATES, Engine
 from .errors import SpecError, describe_invalid
 from .graph import load_document
 
@@ -30,11 +31,12 @@ from .layout import MARKER, Layout, find_project_file
 __all__ = [
     "MARKER",
     "ProjectSpec",
-    "detect_default_binding",
+    "binding_document",
     "find_project",
     "find_project_file",
     "init_project",
     "load_project",
+    "nothing_found",
 ]
 
 
@@ -116,46 +118,22 @@ def find_project(start: str | Path | None = None) -> ProjectSpec | None:
 
 # -- poieo init ---------------------------------------------------------------
 #
-# Detection happens here, once, and its answer is written into ordinary files.
-# Run time never probes the machine again.
+# Detection happens once, in detect.py, and its answer is written into ordinary
+# files. Run time never probes the machine again.
 
-_CLAUDE_BINDING = """\
-# Physical layer: the Claude API.
-# Credentials resolve from the environment (ANTHROPIC_API_KEY or `ant auth login`).
-name: claude
-version: 1
+# The generation settings each backend is worth starting from. A role inherits
+# them through `default:`, and overrides what it does not want.
+_PARAMS_BY_TYPE: dict[str, tuple[str, ...]] = {
+    "anthropic": (
+        "max_tokens: 16000",
+        "effort: high                # low | medium | high | xhigh | max",
+        "thinking: auto              # adaptive where the model supports it",
+    ),
+    "ollama": ("max_tokens: 2048",),
+    "openai_compatible": ("max_tokens: 2048",),
+}
 
-providers:
-  claude:
-    type: anthropic
-
-default:
-  provider: claude
-  model: claude-opus-5
-  params:
-    max_tokens: 16000
-    effort: high                  # low | medium | high | xhigh | max
-    thinking: auto                # adaptive where the model supports it
-"""
-
-_OLLAMA_BINDING = """\
-# Physical layer: the Ollama server on this machine.
-name: local
-version: 1
-
-providers:
-  ollama:
-    type: ollama
-    base_url: http://localhost:11434
-
-default:
-  provider: ollama
-  model: {model}
-  params:
-    max_tokens: 2048
-"""
-
-_MOCK_BINDING = """\
+MOCK_BINDING = """\
 # Physical layer that spends nothing: scripted replies, for trying the wiring.
 name: mock
 version: 1
@@ -272,46 +250,136 @@ _CLAUDE_MD = "@AGENTS.md\n"
 _GITIGNORE_LINES = ("memory/cache/", "runs/", "worktrees/")
 
 
-def _ollama_models() -> list[str]:
-    """What the local Ollama has installed; [] when it is not there.
+def _catalogue(engines: Sequence[Engine]) -> list[str]:
+    """Every model each engine reported, as comment lines.
 
-    One probe, one second: init must feel instant on a machine with nothing.
+    A comment, not data, because it is a **snapshot**: detection never runs
+    again, so a list the file presented as fact would quietly go stale the
+    first time a model was pulled. What a role may name is whatever the engine
+    actually serves; this is here so naming one is reading rather than
+    remembering.
     """
-    import httpx
-
-    try:
-        response = httpx.get("http://localhost:11434/api/tags", timeout=1.0)
-        response.raise_for_status()
-        return [m["name"] for m in response.json().get("models", []) if m.get("name")]
-    except Exception:
-        return []
-
-
-def detect_default_binding() -> tuple[str, str]:
-    """(binding file body, why it was chosen) -- the machine's answer, once."""
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return _CLAUDE_BINDING, "claude -- ANTHROPIC_API_KEY is set"
-    models = _ollama_models()
-    if models:
-        return (
-            _OLLAMA_BINDING.format(model=models[0]),
-            f"ollama -- answering on localhost:11434 with {models[0]}",
-        )
-    return _MOCK_BINDING, "mock -- no key, no local server; runs free, answers from a script"
+    gutter = max(len(engine.key) for engine in engines)
+    lines = []
+    for engine in engines:
+        # Neither flag is optional: a real Ollama tag is long and full of
+        # hyphens (`hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q5_K_M`), and this
+        # list exists to be copied from. A name broken across two lines is
+        # worse than no name -- so ids wrap between, never inside.
+        wrapped = textwrap.wrap(
+            "  ".join(engine.models),
+            width=68 - gutter,
+            break_long_words=False,
+            break_on_hyphens=False,
+        ) or [""]
+        lines.append(f"#   {engine.key:<{gutter}}  {wrapped[0]}")
+        lines += [f"#   {'':<{gutter}}  {more}" for more in wrapped[1:]]
+    return lines
 
 
-def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
+def _worked_example(engines: Sequence[Engine], chosen: tuple[str, str]) -> tuple[str, str]:
+    """A (engine, model) pair to show the `roles:` block with.
+
+    Anything but ``chosen``: an example that repeats the default demonstrates
+    nothing, and the whole point of the block is that a role can go somewhere
+    else. A different engine first, since that is the harder half to guess.
+    """
+    for engine in engines:
+        if engine.key != chosen[0]:
+            return engine.key, engine.models[0]
+    for engine in engines:
+        for model in engine.models:
+            if model != chosen[1]:
+                return engine.key, model
+    return chosen  # one engine, one model: there is nothing else to show
+
+
+def binding_document(engines: Sequence[Engine], chosen: tuple[str, str]) -> str:
+    """The binding file for a machine with these engines on it.
+
+    **Every** engine found is declared, not only the one serving `default:`.
+    A role exists so a graph can send its cheap step somewhere cheap, and that
+    is unreachable if the file names one endpoint -- so the pool is written
+    down once, here, and picking from it later is an edit rather than another
+    round of detection.
+
+    ``chosen`` is ``(engine key, model id)``: what an unnamed role gets.
+    """
+    key, model = chosen
+    engine = next(e for e in engines if e.key == key)
+    example_key, example_model = _worked_example(engines, chosen)
+
+    lines = [
+        "# Physical layer: every engine this machine answered on when",
+        "# `poieo init` looked. A graph names a role; a role names a model here.",
+        "#",
+        "# Detection does not run again -- edit this file freely.",
+        "name: default",
+        "version: 1",
+        "",
+        "providers:",
+    ]
+    for found in engines:
+        lines.append(f"  {found.key}:")
+        lines.append(f"    type: {found.type}")
+        if found.base_url is not None:
+            lines.append(f"    base_url: {found.base_url}")
+    lines += [
+        "",
+        "default:",
+        f"  provider: {key}",
+        f'  model: "{model}"',
+        "  params:",
+    ]
+    lines += [f"    {param}" for param in _PARAMS_BY_TYPE.get(engine.type, ())]
+    lines += [
+        "",
+        "# Give a role its own model, and a graph that names that role uses it:",
+        "#",
+        "#   roles:",
+        "#     classifier:",
+        f"#       provider: {example_key}",
+        f'#       model: "{example_model}"',
+        "#",
+        "# What each engine had when this file was written:",
+        *_catalogue(engines),
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def nothing_found() -> str:
+    """Why init is refusing, and the two ways forward.
+
+    One wording, here, because the sentence a user reads is a thing with one
+    wording and two copies are two chances for that to stop being true.
+    """
+    looked = "\n".join(
+        f"  {c.label:<16} {c.base_url or 'ANTHROPIC_API_KEY, or `ant auth login`'}"
+        for c in CANDIDATES
+    )
+    return (
+        "nothing on this machine can answer yet. poieo looked for:\n\n"
+        f"{looked}\n\n"
+        "Start one of those, or set a Claude credential, then run `poieo init` "
+        "again.\nTo lay the project out now and bind a real model later, run "
+        "`poieo init --mock`\n-- which answers from a script, so nothing it "
+        "writes is a real model's work."
+    )
+
+
+def init_project(root: Path, default_body: str) -> list[tuple[str, str]]:
     """Write a working project into ``root``; never touch an existing file.
 
-    Returns ``(report, reason)``: one ``(action, relative path)`` pair per
-    file, action ``wrote`` or ``kept``, and the sentence saying why the
-    default binding is what it is.
+    ``default_body`` is the binding the caller settled on -- see
+    :func:`binding_document`. Returns one ``(action, relative path)`` pair per
+    file, action ``wrote`` or ``kept``.
     """
-    default_body, reason = detect_default_binding()
     files = [
         ("poieo.yaml", _MARKER_BODY),
         ("models/default.yaml", default_body),
-        ("models/mock.yaml", _MOCK_BINDING),
+        # Always written, never chosen for you: `-b models/mock.yaml` is how
+        # the wiring gets exercised without spending a token.
+        ("models/mock.yaml", MOCK_BINDING),
         ("tasks/hello.yaml", _HELLO_CARD),
         # An empty page, so the memory is a folder you can see rather than a
         # feature you have to be told about. Nothing switches on: it is all
@@ -349,4 +417,4 @@ def init_project(root: Path) -> tuple[list[tuple[str, str]], str]:
     from .daemon.config import load_config
 
     load_config(root / "poieo.yaml")
-    return report, reason
+    return report

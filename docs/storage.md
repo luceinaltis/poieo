@@ -1,6 +1,7 @@
 # Storage — where everything lives, and the run log
 
-`src/poieo/layout.py`, `src/poieo/project.py`, `src/poieo/store.py`
+`src/poieo/layout.py`, `src/poieo/project.py`, `src/poieo/detect.py`,
+`src/poieo/store.py`
 
 Files are the sole source of truth. There is no database of record; at most a
 derived index under `memory/cache/`, rebuilt from the files at any time and safe
@@ -115,19 +116,52 @@ rather than none.
 
 ## `poieo init`
 
-Looks at the machine **once** — an API key means Claude, an answering Ollama
-means local, neither means mock — and writes what it found into ordinary files:
-`poieo.yaml`, `models/default.yaml` and `models/mock.yaml`, a sample card, an
-empty `constitution.md`, `AGENTS.md`/`CLAUDE.md` for whoever works in the
-project, and `.gitignore` entries for `memory/cache/`, `runs/` and `worktrees/`.
+Writes a working project into ordinary files: `poieo.yaml`,
+`models/default.yaml` and `models/mock.yaml`, a sample card, an empty
+`constitution.md`, `AGENTS.md`/`CLAUDE.md` for whoever works in the project,
+and `.gitignore` entries for `memory/cache/`, `runs/` and `worktrees/`.
 
 The empty page is written so the memory is a folder you can see rather than a
 feature you have to be told about — and nothing switches on, since the page is
 comments and comments are stripped before any prompt.
 
-Detection never runs again: **run time reads files, nothing else.** Existing
-files are never touched (they are reported as `kept`), so `init` in a full
-project changes nothing. It finishes by loading the project it just wrote —
+Existing files are never touched (they are reported as `kept`), so `init` in a
+full project changes nothing. It finishes by loading the project it just wrote —
 flows and cards included — because a generated project that cannot load is an
 init bug, and it should be caught there rather than at 3am. That single call is
 the only reason `project.py` knows the daemon exists.
+
+## Detection
+
+`detect.py` looks at the machine **once**, at `init`, and asks every address it
+knows: Ollama, LM Studio, vLLM/SGLang and llama.cpp on their usual ports, and
+the Claude SDK, which resolves an `ANTHROPIC_API_KEY`, an auth token or an
+`ant auth login` profile by itself. All of them at once, 1.5s each, because the
+common case is a machine where most of them are not listening.
+
+It **asks, and never decides**: it returns the engines that answered and the
+models each reported, and touching a file is the caller's business. Detection
+never runs again — **run time reads files, nothing else.** A binding names an
+endpoint because somebody wrote it there, not because a port answered tonight.
+
+**Every engine found is declared**, not only the one that ends up serving
+`default:`. A role exists so a graph can send its cheap step somewhere cheap,
+and that is unreachable if the file names a single endpoint — so the pool is
+written down once and picking from it later is an edit, not another round of
+detection. `binding_document()` renders it, and the models each engine reported
+land as a **comment**: they are a snapshot, and a list presented as fact would
+go stale the first time a model was pulled.
+
+Two things are deliberately not offered:
+
+- **`mock` is never detected.** It answers from a script, so a project that
+  fell back to it would run all night and produce invented text. It is always
+  written as `models/mock.yaml` — `-b models/mock.yaml` exercises the wiring
+  for free — but reaching for it stays deliberate, and `poieo init --mock` is
+  the one way to make it a project's default.
+- **An engine with no models installed.** Naming it would write a binding that
+  fails on the project's first run.
+
+When nothing answers, `init` refuses and writes nothing at all, naming every
+address it tried. A half-written project, or one quietly bound to a script, is
+worse than an empty folder.

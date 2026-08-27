@@ -30,7 +30,7 @@ component is written to hold.
 | [daemon.md](daemon.md) | residency: config, triggers, the runner, the control seam | `daemon/` |
 | [workspace.md](workspace.md) | the private copy, and last night's work as a change | `workspace.py` |
 | [memory.md](memory.md) | what a project keeps and how a run is shown it | `memory/`, `learn.py`, `strength.py`, `blob.py` |
-| [storage.md](storage.md) | where every file lives, and the run log | `layout.py`, `project.py`, `store.py` |
+| [storage.md](storage.md) | where every file lives, the run log, and what `init` finds | `layout.py`, `project.py`, `detect.py`, `store.py` |
 | [web.md](web.md) | the HTTP/SSE API and the page it serves | `web/`, `web-ui/` |
 | [cli.md](cli.md) | the command line, and the rules it uses to fill silence | `cli.py` |
 
