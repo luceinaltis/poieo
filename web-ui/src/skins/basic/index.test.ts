@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 import { basic } from "./index"
 import { AGENT_RUN } from "../../state/fixtures"
-import { initialStage, reduce, replay } from "../../state/stage"
+import { initialStage, reduce, replay, setRuns } from "../../state/stage"
 import type { FlowRow } from "../../types"
 
 const FLOWS: FlowRow[] = [
@@ -128,5 +128,37 @@ test("a flow to the right of its sender is not laid on top of it", () => {
   expect(from.style.left).toBe("0px")
   expect(parseInt(to.style.left, 10)).toBeGreaterThan(0)
   expect(to.style.top).toBe(from.style.top)
+  handle.destroy()
+})
+
+test("a flow that found nothing to do says so in one word, not a number", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  // Tracked: a flow that keeps a private copy is the one that can find
+  // nothing to do. Without one there is nothing to change against, and a run
+  // that ran is all there is to say.
+  const quiet = setRuns(
+    initialStage([{ ...FLOWS[0], into: "main" }, FLOWS[1]]),
+    "chores",
+    // Eight runs that all looked and found nothing: a healthy night, and the
+    // line the board used to print for it was "8 runs · 8 found nothing to do".
+    Array.from({ length: 8 }, (_, i) => ({
+      run_id: `r${i}`,
+      flow: "chores",
+      graph: "agent-task",
+      status: "completed",
+      started_at: "2026-08-27T02:00:00+00:00",
+      finished_at: "2026-08-27T02:00:04+00:00",
+      steps: 1,
+      iteration: 1,
+      trigger: "cron",
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+      error: null,
+    })),
+  )
+  handle.update(quiet)
+
+  const said = el.querySelector('[data-flow="chores"] .basic-tally')!.textContent!
+  expect(said).toContain("quiet")
+  expect(said).not.toContain("8")
   handle.destroy()
 })
