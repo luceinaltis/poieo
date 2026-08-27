@@ -203,8 +203,8 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     assert len(load_tasks(load_config(path))) == 1
 
 
-async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch):
-    config = load_config(EXAMPLES / "poieo.yaml")
+async def test_daemon_runs_every_flow_once_and_shuts_down(sample_project, monkeypatch):
+    config = load_config(sample_project / "poieo.yaml")
     for flow in config.tasks:
         flow.trigger.max_iterations = 1
 
@@ -217,8 +217,8 @@ async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch)
     assert not any(p.instantiated() for p in daemon.pools.values())  # ...and closed
 
 
-async def test_carry_state_feeds_the_next_iteration():
-    config = load_config(EXAMPLES / "poieo.yaml")
+async def test_carry_state_feeds_the_next_iteration(sample_project):
+    config = load_config(sample_project / "poieo.yaml")
     config.tasks = [f for f in config.tasks if f.name == "revision"]
     config.tasks[0].trigger.max_iterations = 2
     config.tasks[0].trigger.cooldown = 0
@@ -230,7 +230,7 @@ async def test_carry_state_feeds_the_next_iteration():
     assert results[1].state.get("latest_draft")
 
 
-async def test_results_are_a_window_not_a_history(monkeypatch):
+async def test_results_are_a_window_not_a_history(sample_project, monkeypatch):
     """A RunResult carries the run's whole outputs and state. A loop flow with
     no cooldown makes one per fire for the daemon's lifetime, and only the tail
     is ever read -- last_result by the API, one pass's worth by --once."""
@@ -238,7 +238,7 @@ async def test_results_are_a_window_not_a_history(monkeypatch):
 
     monkeypatch.setattr(service, "RESULTS_KEPT", 3)
 
-    config = load_config(EXAMPLES / "poieo.yaml")
+    config = load_config(sample_project / "poieo.yaml")
     config.tasks = [f for f in config.tasks if f.name == "triage"]
     config.tasks[0].trigger = TriggerSpec(type="loop", max_iterations=8)
 
@@ -251,8 +251,8 @@ async def test_results_are_a_window_not_a_history(monkeypatch):
     assert runner.last_result.iteration == 8
 
 
-async def test_flow_runner_exposes_live_status():
-    config = load_config(EXAMPLES / "poieo.yaml")
+async def test_flow_runner_exposes_live_status(sample_project):
+    config = load_config(sample_project / "poieo.yaml")
     config.tasks = [f for f in config.tasks if f.name == "triage"]
     config.tasks[0].trigger.max_iterations = 1
 
@@ -285,8 +285,8 @@ def test_ensure_port_free_passes_on_free_port():
     _ensure_port_free("127.0.0.1", port)
 
 
-async def test_daemon_with_web_port_wraps_store_and_serves():
-    config = load_config(EXAMPLES / "poieo.yaml")
+async def test_daemon_with_web_port_wraps_store_and_serves(sample_project):
+    config = load_config(sample_project / "poieo.yaml")
     config.tasks = [f for f in config.tasks if f.name == "triage"]
     # Two iterations 30s apart: the first fires at once, then the runner sits on
     # the second, so the API is still up when the poll below lands.
@@ -339,6 +339,9 @@ def test_flow_spec_accepts_a_workdir(tmp_path):
 
 
 def test_flow_workdir_is_optional(tmp_path):
+    # Reads the shipped project rather than a copy: this asks where a workdir
+    # resolves *to*, and the answer is spelled against EXAMPLES below. Nothing
+    # here runs, so nothing here writes.
     config = load_config(EXAMPLES / "poieo.yaml")
     by_name = {f.name: f for f in config.tasks}
 
