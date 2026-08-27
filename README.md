@@ -56,6 +56,7 @@ poieo config             # what this project is bound to -- reads files, opens n
 poieo config models      # what each declared endpoint serves right now
 poieo config use ollama/qwen3:32b                       # move the default
 poieo config use ollama/llama3.2:3b --role classifier   # give one role its own
+poieo config add         # installed an engine since init? declare it
 ```
 
 ```

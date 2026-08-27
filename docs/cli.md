@@ -103,6 +103,7 @@ binding is read after that — and, once the write half lands, changed.
 | `poieo config` | the binding, its endpoints, its default and its roles. **Reads files, opens no socket.** |
 | `poieo config models` | what each declared endpoint serves **right now**, marked with what is already spoken for |
 | `poieo config use <provider/model>` | point the default — or `--role NAME` — at a different model |
+| `poieo config add` | look at the machine again, and declare any engine not already here |
 
 Bare `poieo config` reports instead of printing help (`invoke_without_command`),
 because "what am I bound to" is the question people arrive with and making them
@@ -155,6 +156,23 @@ second is the typo the whole `config` pair exists to prevent — a model named
 from memory does not fail here, it fails at 3am in a run. It is **best effort**:
 an endpoint that does not answer is not a verdict, so the edit proceeds and the
 command says it could not check.
+
+## `config add`, and the line between declaring and choosing
+
+Detection otherwise runs **once**, at `init`. Install Ollama next week and the
+binding has never heard of it. `config add` takes the same look `init` took and
+declares whatever is not already in `providers:`.
+
+It **only adds**, and the boundary is the point:
+
+- an endpoint already declared is left exactly as it is, because somebody may
+  have pointed it at another port or another machine, and `add` is not a second
+  `init`;
+- and `default:` never moves, because declaring a model and choosing one are
+  different decisions. `add` widens the pool; `use` picks from it.
+
+An engine with no address is declared without one — Claude's SDK knows where it
+lives, and a guessed `base_url` is worse than none.
 
 ## Cards and graphs are one argument
 
