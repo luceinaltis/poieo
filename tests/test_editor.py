@@ -21,7 +21,7 @@ def test_boot_payload_carries_the_whole_graph():
     gate = next(n for n in payload["graph"]["nodes"] if n["id"] == "gate")
     assert gate["branches"][0]["when"] == "review.approved"
     assert gate["branches"][0]["to"] is None      # a terminal branch stays null
-    assert payload["bindings"]["writer"] == "claude:claude-opus-5"
+    assert payload["bindings"]["writer"] == "claude/claude-opus-5"
 
 
 def test_every_node_has_the_fields_the_editor_expects():

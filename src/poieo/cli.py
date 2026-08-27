@@ -45,6 +45,7 @@ from .project import (
     nothing_found,
 )
 from .providers import ProviderPool
+from .rebind import point_at
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
 from .tools import ToolContext, Isolation
@@ -319,7 +320,7 @@ def validate(
             "path": str(binding),
             "from": str(supplied_by) if supplied_by is not None else None,
             "roles": {
-                role: f"{r.provider_name}:{r.model}"
+                role: r.ref
                 for role in sorted(graph.roles())
                 for r in (spec.resolve(role),)
             },
@@ -804,7 +805,7 @@ def _target(spec: Any, role: str) -> str | None:
         resolved = spec.resolve(role)
     except BindingError:
         return None
-    return f"{resolved.provider_name}/{resolved.model}"
+    return resolved.ref
 
 
 def _spoken_for(spec: Any) -> dict[str, str]:
@@ -926,6 +927,66 @@ def config_models(
             # before its role, and real Ollama tags run past 44 easily.
             typer.echo(f"  {model:<44}  {role}" if role else f"  {model}")
         typer.echo("")
+
+
+@config_app.command("use")
+@_guarded
+def config_use(
+    target: str = typer.Argument(
+        ..., help="Which model, as provider/model -- exactly as `poieo config` prints it."
+    ),
+    role: str = typer.Option(
+        "default",
+        "--role",
+        help="Bind this role instead of the default. A graph that names the "
+        "role uses it; every other step is unaffected.",
+    ),
+) -> None:
+    """Point a role at a different model.
+
+    One edit to the binding file, keeping everything else in it -- comments
+    included -- exactly as it was. Refuses a provider the binding does not
+    declare, and a model the endpoint says it does not serve.
+    """
+    path, spec = _configured()
+
+    # Split once: a model id is full of slashes (`hf.co/empero-ai/...`) and a
+    # provider name never is.
+    provider, sep, model = target.partition("/")
+    if not sep or not model:
+        _fail(
+            f"'{target}' is not a provider/model reference. `poieo config` "
+            f"prints them in exactly the form this takes back."
+        )
+
+    # Empty covers both "not declared" -- point_at refuses that below, in one
+    # wording -- and "declared but silent".
+    served: tuple[str, ...] = ()
+    if provider in spec.providers:
+        # Best effort, and only when the endpoint answers: a laptop with its
+        # server switched off still gets to edit its own config. But a model
+        # named from memory is the typo this whole pair exists to prevent, so
+        # when there *is* an answer it is believed.
+        declared = spec.providers[provider]
+        served = asyncio.run(engines.models_for(declared.type, declared.base_url))
+        if served and model not in served:
+            _fail(
+                f"'{provider}' does not serve '{model}'. It has: "
+                f"{', '.join(served)}"
+            )
+
+    point_at(path, role, provider, model)
+
+    named = "default" if role == "default" else f"role '{role}'"
+    _ok(f"{named} now uses {provider}/{model}")
+    typer.echo(f"           {path}")
+    if provider in spec.providers and not served:
+        # Said out loud rather than implied: silence from an endpoint is not
+        # the same as its agreement.
+        typer.echo(
+            f"note       '{provider}' did not answer, so the model name could "
+            f"not be checked"
+        )
 
 
 @app.command(hidden=True)
