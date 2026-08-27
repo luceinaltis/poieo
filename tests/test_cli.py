@@ -118,8 +118,8 @@ def test_show_emits_a_mermaid_diagram():
     assert "revise --> review" in result.stdout
 
 
-def test_flows_lists_disabled_flows_too():
-    result = runner.invoke(app, ["flows", str(EXAMPLES / "poieo.yaml")])
+def test_tasks_lists_the_disabled_ones_too():
+    result = runner.invoke(app, ["tasks", str(EXAMPLES / "poieo.yaml")])
     assert result.exit_code == 0
     assert "[on ] triage" in result.stdout
     assert "[off] nightly-digest" in result.stdout
@@ -736,32 +736,32 @@ def flow_config(tmp_path, workdir):
     return path
 
 
-def test_flows_fails_when_a_workdir_is_missing(tmp_path):
+def test_tasks_fails_when_a_folder_is_missing(tmp_path):
     config = flow_config(tmp_path, "nowhere")
 
-    result = runner.invoke(app, ["flows", str(config)])
+    result = runner.invoke(app, ["tasks", str(config)])
 
     # Refused at load rather than discovered at 3am.
     assert result.exit_code != 0
     assert "folder does not exist" in result.stderr  # errors go to stderr
 
 
-def test_flows_warns_when_the_work_cannot_be_reviewed(tmp_path):
+def test_tasks_warns_when_the_work_cannot_be_reviewed(tmp_path):
     (tmp_path / "project").mkdir()  # a real directory, but nothing tracks it
     config = flow_config(tmp_path, "project")
 
-    result = runner.invoke(app, ["flows", str(config)])
+    result = runner.invoke(app, ["tasks", str(config)])
 
     # A degraded mode, not an error: the task still runs tonight.
     assert result.exit_code == 0
     assert "reviewed or undone" in result.stdout
 
 
-def test_flows_is_quiet_when_the_work_can_be_reviewed(tmp_path):
+def test_tasks_is_quiet_when_the_work_can_be_reviewed(tmp_path):
     make_repo(tmp_path)
     config = flow_config(tmp_path, "project")
 
-    result = runner.invoke(app, ["flows", str(config)])
+    result = runner.invoke(app, ["tasks", str(config)])
 
     assert result.exit_code == 0
     assert "reviewed or undone" not in result.stdout

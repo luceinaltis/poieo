@@ -17,9 +17,9 @@ the panel titles, passed as `rich_help_panel`:
 | **Your tasks** | `run`, `daemon`, `tasks`, `note` |
 | **What happened** | `memory`, `learn`, `runs` |
 
-Seven more are registered `hidden=True` — `show`, `view`, `edit`, `tasks`,
-`eject`, `reset`, `version`. They are real and supported; hidden keeps `--help`
-to the surface a new user needs. If you are adding a command, ask which panel
+Six more are registered `hidden=True` — `show`, `view`, `edit`, `eject`,
+`reset`, `version`. They are real and supported; hidden keeps `--help` to the
+surface a new user needs. If you are adding a command, ask which panel
 it belongs in, or whether it belongs on the page at all.
 
 `tasks` and `note` are on the page because this is a **task board**: someone who
@@ -129,7 +129,7 @@ a reader copies out has to be a thing they can type in, and a test asserts the
 round trip.
 
 `ResolvedModel.ref` is the **one** place that spelling is built. Four sites used
-to assemble it themselves and one of them used a colon, so `poieo flows` and
+to assemble it themselves and one of them used a colon, so the roster and
 `poieo validate` disagreed with `poieo config` about what a model is called.
 `describe()` is now `f"{role} -> {ref}"`.
 
