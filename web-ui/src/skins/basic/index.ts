@@ -78,6 +78,30 @@ function describeRecent(worker: Worker): string {
   return last ? `quiet · last looked ${shortTime(last)}` : "quiet"
 }
 
+/** The distinct models a flow's nodes would call, in the order they appear. */
+function modelsOf(worker: Worker): string[] {
+  const seen: string[] = []
+  for (const node of worker.shape.nodes) {
+    if (node.model && !seen.includes(node.model)) seen.push(node.model)
+  }
+  return seen
+}
+
+/**
+ * The trigger, and what will actually run on it.
+ *
+ * One model is the common case and the whole answer, so it is said once and
+ * said here -- this line is legible with the border shut, and ten flows shut
+ * is the glance the board is for. More than one cannot be said in a word, so
+ * the count says so and the nodes inside carry the detail. Opening buys the
+ * answer, exactly as it does for a handoff arrow.
+ */
+function describeWhen(worker: Worker): string {
+  const models = modelsOf(worker)
+  if (models.length === 0) return worker.trigger
+  return `${worker.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
+}
+
 function buildBox(flow: string, callbacks: SkinCallbacks): Box {
   const root = document.createElement("div")
   root.className = "basic-flow"
@@ -110,6 +134,9 @@ function buildBox(flow: string, callbacks: SkinCallbacks): Box {
 /** The graph inside a border, drawn once: it moves only when a file does. */
 function fillInside(box: Box, worker: Worker): void {
   const leaves = new Set(exits(worker.shape))
+  // Only when they differ. A flow on one model has already said so on the
+  // header, and repeating it four times would be noise for one answer.
+  const differ = modelsOf(worker).length > 1
   const nodes = walk(worker.shape).map((id) => {
     const pill = document.createElement("span")
     pill.className = "basic-node"
@@ -119,6 +146,11 @@ function fillInside(box: Box, worker: Worker): void {
     // Where a handoff leaves from, once you can see the nodes at all.
     if (leaves.has(id) && worker.then.length > 0) pill.dataset.exit = "true"
     pill.textContent = id
+    // A router has no model because it calls none, and the gap is itself
+    // information: it is why branching is free.
+    if (differ && spec?.model) {
+      element("span", "basic-node-model", pill).textContent = spec.model
+    }
     return pill
   })
   box.inside.replaceChildren(...nodes)
@@ -130,7 +162,7 @@ function paint(box: Box, worker: Worker, open: boolean): void {
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
-  box.when.textContent = worker.trigger
+  box.when.textContent = describeWhen(worker)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
     pill.dataset.here = String(pill.dataset.node === worker.currentNode)

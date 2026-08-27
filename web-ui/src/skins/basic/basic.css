@@ -133,10 +133,24 @@
   position: absolute;
 }
 
+/* What actually runs this step, when the flow's nodes do not agree. Dimmer
+   than the id: the reader is looking for the node and then reading the model,
+   not the other way round. */
+.basic-node-model {
+  color: #6f6459;
+  display: block;
+  font-size: 0.9em;
+  line-height: 1.3;
+}
+
 .basic-node[data-here="true"] {
   background: #3a2f1e;
   border-color: #d8a657;
   color: #e8dcc8;
+}
+
+.basic-node[data-here="true"] .basic-node-model {
+  color: #b39a6a;
 }
 
 /* Where the run can stop, and so where a handoff leaves from. */

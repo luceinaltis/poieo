@@ -162,3 +162,74 @@ test("a flow that found nothing to do says so in one word, not a number", () => 
   expect(said).not.toContain("8")
   handle.destroy()
 })
+
+
+/** A flow whose graph is a triage line: classify, route, then draft. */
+function triage(models: (string | null)[]): FlowRow {
+  const [classify, route, draft] = models
+  return {
+    ...FLOWS[0],
+    name: "chores",
+    shape: {
+      entry: "classify",
+      nodes: [
+        { id: "classify", type: "llm", next: "route", default: null, branches: [], model: classify },
+        {
+          id: "route",
+          type: "router",
+          next: null,
+          default: "draft",
+          branches: [],
+          model: route,
+        },
+        { id: "draft", type: "llm", next: null, default: null, branches: [], model: draft },
+      ],
+    },
+  }
+}
+
+const when = () => el.querySelector('[data-flow="chores"] .basic-when')!.textContent
+const pill = (id: string) =>
+  el.querySelector<HTMLElement>(`[data-flow="chores"] [data-node="${id}"]`)!
+
+test("a flow that resolves to one model says so once, beside the trigger", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage([triage(["qwen3:8b", null, "qwen3:8b"])]))
+
+  // Said once, on the line that is legible with the border shut: ten flows
+  // collapsed is the glance, and "what is running my board" is answered there.
+  expect(when()).toBe("loop · qwen3:8b")
+  // ...and not repeated on every node, which would be noise for one answer.
+  expect(pill("classify").querySelector(".basic-node-model")).toBeNull()
+  handle.destroy()
+})
+
+test("a flow on two models counts them, and each node carries its own", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
+
+  // The header cannot answer it, so it stops trying and says how many;
+  // opening the border is what says which is which.
+  expect(when()).toBe("loop · 2 models")
+  expect(pill("classify").querySelector(".basic-node-model")!.textContent).toBe("llama3.2:3b")
+  expect(pill("draft").querySelector(".basic-node-model")!.textContent).toBe("claude-opus-5")
+  handle.destroy()
+})
+
+test("a router carries no model, because it calls none", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
+
+  // The gap is information: it is why branching is free.
+  expect(pill("route").querySelector(".basic-node-model")).toBeNull()
+  handle.destroy()
+})
+
+test("a flow that reports no model at all leaves the trigger line alone", () => {
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage([triage([null, null, null])]))
+
+  // A binding the board could not read is not a reason to write "· null".
+  expect(when()).toBe("loop")
+  handle.destroy()
+})
