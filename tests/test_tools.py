@@ -76,6 +76,46 @@ async def test_run_command_runs_in_workdir(tmp_path):
     assert "here.txt" in out
 
 
+async def test_run_command_takes_env_without_shell_syntax(tmp_path):
+    """Setting a variable for one command is the commonest thing a gate needs,
+    and every shell spells it differently. `VAR=1 cmd` is a syntax error on
+    Windows, where cmd reads `VAR=1` as the program to run and fails with the
+    same exit code a program that ran and failed would -- so a step told to run
+    one exact command cannot tell "this did not start" from "this went red"."""
+    out = await SHELL["run_command"].run(
+        tmp_path,
+        {"command": "python -c \"import os; print(os.environ['POIEO_PROBE'])\"",
+         "env": {"POIEO_PROBE": "set-by-the-tool"}},
+    )
+
+    assert out.startswith("exit code: 0")
+    assert "set-by-the-tool" in out
+
+
+async def test_run_command_env_adds_to_the_environment_rather_than_replacing_it(tmp_path):
+    """The command still needs a PATH to find anything at all."""
+    out = await SHELL["run_command"].run(
+        tmp_path,
+        {"command": "python -c \"import os; print('PATH' in os.environ)\"",
+         "env": {"POIEO_PROBE": "x"}},
+    )
+
+    assert "True" in out
+
+
+async def test_run_command_env_values_are_strings(tmp_path):
+    """A number in JSON is a number, and an environment takes neither None nor
+    ints -- the tool coerces rather than raising at the model."""
+    out = await SHELL["run_command"].run(
+        tmp_path,
+        {"command": "python -c \"import os; print(os.environ['POIEO_N'])\"",
+         "env": {"POIEO_N": 7}},
+    )
+
+    assert out.startswith("exit code: 0")
+    assert "7" in out
+
+
 async def test_run_command_times_out(tmp_path):
     import os
     sleeper = "ping -n 30 127.0.0.1 > NUL" if os.name == "nt" else "sleep 30"

@@ -28,16 +28,15 @@ nodes:
          with no test that fails without it does not land here.
       3. Make it pass. Change nothing the proposal did not ask for.
       4. Run the gate, both halves:
-             python -m pytest -q -p asyncio      (see the note below)
+             python -m pytest -q -p asyncio
              npm test --workspace web-ui
          and, if you touched web-ui, `npm run build --workspace web-ui` -- it
          runs tsc, and vitest does not type-check.
 
-         pytest needs PYTEST_DISABLE_PLUGIN_AUTOLOAD=1, and how you set it
-         depends on the shell you are given. CLAUDE.md writes the POSIX form,
-         `VAR=1 command`, which a Windows shell rejects outright -- there it is
-         `set VAR=1 && command`. Run one, and if the shell complains that the
-         variable is not a command, use the other.
+         pytest needs PYTEST_DISABLE_PLUGIN_AUTOLOAD=1. Pass it as the tool's
+         `env` argument rather than writing it into the command: CLAUDE.md
+         spells it the POSIX way, `VAR=1 command`, and a Windows shell rejects
+         that outright.
       5. Commit with a Conventional Commits subject, and end the message with
              Co-Authored-By: poieo <noreply@example.com>
       6. Push the branch and open a pull request with `gh pr create`. The body
@@ -63,13 +62,11 @@ nodes:
     prompt: |
       Run both halves of this project's gate and report the result:
 
-          python -m pytest -q -p asyncio    with PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+          python -m pytest -q -p asyncio
           npm test --workspace web-ui
 
-      Set that variable the way your shell wants it: `VAR=1 command` on a POSIX
-      shell, `set VAR=1 && command` on Windows. If the shell says the variable
-      is not a command, you used the wrong one -- that is a broken command and
-      not a failing suite, so try the other before concluding anything.
+      pytest needs PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 -- pass it as the tool's
+      `env` argument, never inside the command string.
 
       Answer with exactly one word and nothing else: GREEN if both suites
       passed, RED if either did not. A suite you could not run is not GREEN.

@@ -47,6 +47,14 @@ local executor does not claim to be one. This is the honest limit of the default
 path confinement prevents accidents, not a malicious model. Commands are killed
 as a process tree on timeout (default 120s, max 600s) and output is capped.
 
+It also takes an **`env`** object, laid over the process environment rather than
+replacing it. That exists because shells disagree about how to set a variable
+for one command — `VAR=1 command` is POSIX and a Windows shell reads `VAR=1` as
+the program to run, failing with the *same exit code* a program that ran and
+failed would. A step told to run one exact command then cannot tell "this did
+not start" from "this went red", which is how a gate comes to report a suite it
+never ran. Passing the variable as data takes the shell's dialect out of it.
+
 ## The seam
 
 `make_executor(workdir, toolsets, tool_context)` is **the one place that decides where
