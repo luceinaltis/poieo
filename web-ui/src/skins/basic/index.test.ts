@@ -336,3 +336,23 @@ test("opening a border by hand lays the board out again", () => {
   expect(el.querySelector(".basic-wire")).not.toBe(before)
   handle.destroy()
 })
+
+
+test("the board hangs in a frame, and takes the frame with it when it goes", () => {
+  // The board is sized by its own layout, so it cannot centre itself, and its
+  // padding is inert because everything in it is absolutely positioned -- the
+  // left-hand border used to sit against the edge of the window. The frame
+  // holds both jobs. It also has to be what `destroy` removes: taking the
+  // board out and leaving the frame would leave an empty div in the host on
+  // every skin change.
+  const handle = basic.mount(el, { onSelectFlow: vi.fn() })
+  handle.update(initialStage(FLOWS))
+
+  const frame = el.querySelector(".basic-frame")!
+  expect(frame).not.toBeNull()
+  expect(frame.querySelector(".basic")).not.toBeNull()
+
+  handle.destroy()
+  expect(el.querySelector(".basic-frame")).toBeNull()
+  expect(el.children).toHaveLength(0)
+})
