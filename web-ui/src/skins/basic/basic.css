@@ -39,7 +39,7 @@
   position: absolute;
   background: #4a4034;
   border-radius: 1px;
-  /* Never thinner than a hairline: a flow scaled to nothing would leave the
+  /* Never thinner than a hairline: a task scaled to nothing would leave the
      minimap describing a board with gaps in it. */
   min-width: 2px;
   min-height: 2px;
@@ -98,7 +98,7 @@
   stroke-width: 4px;
 }
 
-.basic-flow {
+.basic-task {
   position: absolute;
   /* Width is set from BOX.width, and border-box makes that the width the
      reader sees. Declared here it was 260 plus padding plus border = 286,
@@ -112,7 +112,7 @@
   padding: 10px 12px;
 }
 
-.basic-flow:hover {
+.basic-task:hover {
   border-color: #4a4034;
 }
 
@@ -148,11 +148,11 @@
   background: #6b6257;
 }
 
-.basic-flow[data-status="running"] .basic-dot {
+.basic-task[data-status="running"] .basic-dot {
   background: #d8a657;
 }
 
-.basic-flow[data-status="error"] .basic-dot {
+.basic-task[data-status="error"] .basic-dot {
   background: #d16d5a;
 }
 
@@ -184,14 +184,49 @@
 /* Shut, a flow is a border with a name on it and nothing else -- which is all
    a node says until you open it.
 
-   Hidden, not removed. A flow opens itself when it starts running and shuts
-   again when it stops, so on a board that runs every minute `display: none`
-   made every border grow and shrink all day, and every arrow move with it.
-   The room stays reserved and only what is in it changes. */
-.basic-flow[data-open="false"] .basic-inside,
-.basic-flow[data-open="false"] .basic-tools,
-.basic-flow[data-open="false"] .basic-said {
-  visibility: hidden;
+   Removed, not hidden. This was reserved room for a while, because a task
+   opened itself when it started running and shut when it stopped, so on a
+   board that runs every minute `display: none` made every border grow and
+   shrink all day. Nothing opens itself any more -- the `now` line says what
+   that was for -- so the size changes only when a person asks, and a shut
+   border is as small as what it has to say. */
+.basic-task[data-open="false"] .basic-inside,
+.basic-task[data-open="false"] .basic-tools,
+.basic-task[data-open="false"] .basic-said {
+  display: none;
+}
+
+/* Nothing is happening, so this line is not there at all. */
+.basic-now:empty {
+  display: none;
+}
+
+.basic-now {
+  color: #e8dcc8;
+  font-size: 0.85em;
+}
+
+.basic-task[data-status="error"] .basic-now {
+  color: #d16d5a;
+}
+
+/* A running task, from across the room. The dot carries the exact state;
+   this carries the one bit somebody scanning the board actually wants. */
+.basic-task[data-status="running"] {
+  border-color: #6b5a34;
+  box-shadow: inset 2px 0 0 #d8a657;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .basic-task[data-status="running"] .basic-dot {
+    animation: basic-alive 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes basic-alive {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* A grid, not a line: the column a node sits in is how far along the run it

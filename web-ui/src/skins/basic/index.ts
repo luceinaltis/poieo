@@ -37,6 +37,7 @@ interface Box {
   root: HTMLElement
   toggle: HTMLElement
   when: HTMLElement
+  now: HTMLElement
   inside: HTMLElement
   said: HTMLElement
   tools: HTMLElement
@@ -133,12 +134,36 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     root,
     toggle,
     when: element("div", "basic-when", root),
+    // Shut, this is the whole of what a task says about right now. It sits
+    // above the graph because it is the answer to the question a person came
+    // to the board with, and the graph is the answer to the next one.
+    now: element("div", "basic-now", root),
     inside: element("div", "basic-inside", root),
     said: element("p", "basic-said", root),
     tools: element("ul", "basic-tools", root),
     tally: element("div", "basic-tally", root),
   }
 }
+
+/**
+ * What a task is doing at this moment, in one line.
+ *
+ * Shut, a border used to say only its name, its schedule and a tally of
+ * nights past -- and the space where its graph would be sat blank, hidden
+ * rather than removed so the border kept one height. That blank was the
+ * largest area on the board and it answered nothing.
+ *
+ * Running, this is where the run is: which step, and how many model calls it
+ * has spent there. Idle, it is empty and the stylesheet takes the space back.
+ */
+function describeNow(flowState: TaskState): string {
+  if (flowState.status === "error") return "stopped"
+  if (flowState.status !== "running") return ""
+  const parts = [flowState.currentNode ?? "starting"]
+  if (flowState.turn > 1) parts.push(`turn ${flowState.turn}`)
+  return parts.join(" · ")
+}
+
 
 /** The graph inside a border, drawn once: it moves only when a file does. */
 function fillInside(box: Box, flowState: TaskState): void {
@@ -181,6 +206,7 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(flowState)
+  box.now.textContent = describeNow(flowState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
     pill.dataset.here = String(pill.dataset.node === flowState.currentNode)
@@ -426,8 +452,21 @@ export const basic: Skin = {
       show()
     })
 
-    const isOpen = (task: string, flowState: TaskState): boolean =>
-      byHand.get(task) ?? flowState.status === "running"
+    /**
+     * Shut until somebody opens it, and open until they shut it again.
+     *
+     * A running task used to open itself, which is how the blank space under
+     * a shut border came to be: opening and shutting on every run meant every
+     * border grew and shrank all day and every arrow moved with it, so the
+     * room had to stay reserved whether or not anything was in it.
+     *
+     * The `now` line answers what the auto-open was for -- which step, how
+     * many turns -- without the border changing size. So the size changes
+     * only when a person asks, the room is given back when it is not wanted,
+     * and the board holds still while it is being read.
+     */
+    const isOpen = (task: string, _state: TaskState): boolean =>
+      byHand.get(task) ?? false
 
     function relayout(stage: StageState): void {
       const tasks = Object.keys(stage.tasks)
