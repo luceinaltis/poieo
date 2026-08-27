@@ -9,10 +9,10 @@
 **An autonomous task board: write down the work you want done, and the LLMs on
 your own machine keep it running around the clock.**
 
-The user designs the task of the work, poieo keeps that task resident, and the
-model does the actual hands-on work at each step. Pin up a task like "keep
-improving this project" and — find something to fix, edit the code, run the
-tests, branch on the result — the task keeps turning while you are away.
+The user designs the shape of the work, poieo keeps it resident, and the model
+does the actual hands-on work at each step. Pin up a task like "keep improving
+this project" and — find something to fix, edit the code, run the tests, branch
+on the result — it keeps turning while you are away.
 
 ## Core principles
 
@@ -49,7 +49,7 @@ into the same binding mechanism as an option, never as a prerequisite.
 
 Graphs, bindings, task configuration, and run history are all human-readable
 files (YAML/JSONL). There is no database of record — at most a derived index
-under `.poieo/`, rebuilt from the files at any time and safe to delete.
+under `memory/cache/`, rebuilt from the files at any time and safe to delete.
 Everything that means something versions with git, and
 the CLI and web UI read the same files — work started in one interface can be
 continued in any other.
@@ -92,11 +92,20 @@ result.**
 
 ### Today: the CLI
 
+Grouped by what a person is doing, not by which layer a command touches:
+
 ```
-poieo run      execute a graph once
-poieo daemon   keep tasks resident
-poieo runs     see what happened
-poieo validate / show / check   preflight everything
+Setting up     init                    make this folder a project
+               config                  which models it uses, and what else this machine has
+               validate / check        prove it loads, and that the models answer
+
+Your tasks     tasks                   the board: what is pinned up, and when each next runs
+               run                     try one now
+               note                    tell one something before its next run
+               daemon                  keep them all running, and serve the board
+
+What happened  runs                    what ran, and what each run did
+               memory / learn          what the project has come to believe
 ```
 
 ### Target: the web roadmap board
@@ -105,12 +114,13 @@ A single page that opens when you point a browser at wherever `poieo daemon`
 is serving. From there the user can:
 
 - **Create a task card** — write a name and a prompt, save, and the card
-  starts running around the clock. A card *is* a task.
+  starts running around the clock. Writing it is the only step; there is
+  nothing else to register it with.
 - **See the roadmap** — every task's state at a glance: running / paused /
   last result.
-- **Open the details** — expanding a card exposes the task (graph) on a
-  canvas editor, the trigger schedule, and the role→model mapping (binding).
-  Unopened, it all stays on defaults.
+- **Open the details** — expanding a card exposes its graph on a canvas
+  editor, the trigger schedule, and the role→model mapping. Unopened, it all
+  stays on defaults.
 - **Control** — pause/resume, run once right now.
 - **Observe** — replay run history, including the model's tool activity.
 - **Review the night** — open a run, read the change it made as a diff, and
@@ -126,17 +136,18 @@ What poieo offers the user stacks in layers:
 
 | layer | what the user gets | status |
 |---|---|---|
-| **Task** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
-| **Residency** — daemon, triggers, carried state | the designed task keeps running, 24/7 | done |
-| **ToolContext** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
+| **Graph** — nodes, routers, cycles, state | a language for designing the order and branching of work | done |
+| **Binding** — every engine on the machine found once, and named in one file | the models are a pool you pick a step's model from, not a name you had to remember | done |
+| **Residency** — daemon, triggers, carried state | the graph you designed keeps running, 24/7 | done |
+| **Hands** — a step that can read, write and run commands | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | done |
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
 | **Word of mouth** — a task can leave a line in another task's journal | tasks that stand alone can still tell each other what changed | done |
 | **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | most: observe, review and control are live; creating a card from the board is next |
 
-The key insight: **"keeps working" is a property of the task, not of a node.**
-An agent node is one step of the task using its hands; running forever is the
+The key insight: **"keeps working" is a property of the graph, not of a node.**
+An agent node is one step of the graph using its hands; running forever is the
 job of the user-designed graph plus the daemon's triggers, with progress
 carried between iterations as state.
 
@@ -172,8 +183,8 @@ Autonomous execution needs explicit fences:
 - **Not a multi-user service.** One person's machine, that person's work.
   No auth, no permissions, no team features.
 - **No database of record.** Files are the sole source of truth. A derived
-  index may exist under `.poieo/`, gitignored, rebuilt from the files at any
-  time; deleting it loses nothing, and nothing is ever true because the
+  index may exist under `memory/cache/`, gitignored, rebuilt from the files at
+  any time; deleting it loses nothing, and nothing is ever true because the
   index says so.
 - **Not a general-purpose agent framework.** The goal is not to compete with
   LangChain-style abstraction stacks, but to complete one experience: *my
@@ -185,8 +196,8 @@ Autonomous execution needs explicit fences:
 
 ## Roadmap
 
-Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: task control
-(pause / resume / run-now) is live end to end; task card CRUD is the open
+Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: control
+(pause / resume / run-now) is live end to end; card CRUD is the open
 slice. The link after each shipped item is the document describing how it
 works today.
 
@@ -211,10 +222,10 @@ works today.
    that sees its folder and nothing else of the machine. The shell was the
    one tool that could reach past path confinement; this closes it.
    (`docs/tools.md`)
-6. **Web control plane** — task card CRUD and task control (REST API); fold
-   the existing canvas editor in for detail editing. The daemon gains runtime
-   task add/remove/pause. Task control — pause, resume, run now, from runner
-   to board — has shipped; CRUD and the editor fold-in remain.
+6. **Web control plane** — card CRUD and task control (REST API); fold the
+   existing canvas editor in for detail editing. The daemon gains runtime
+   add/remove/pause. Control — pause, resume, run now, from runner to board —
+   has shipped; CRUD and the editor fold-in remain.
    (`docs/web.md`)
 7. **Tasks that work together** — a task can leave a line in another task's
    journal, read on that task's next run. News, not orders, and no way to
