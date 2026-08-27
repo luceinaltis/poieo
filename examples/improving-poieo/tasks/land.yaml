@@ -1,0 +1,19 @@
+# Merges it. Off by default, and deliberately.
+#
+# Everything before this card is reversible: a branch you can delete, a pull
+# request you can close, a private copy you can throw away. This one is not,
+# and it is the only card here that changes something other people can see.
+#
+# The project's own rules say a human decides when a change touches a public
+# interface, deletes a test, adds a dependency, or moves how credentials are
+# loaded. The review card is told to answer HOLD on all four, so those never
+# reach this one -- but that guard is a prompt, and a prompt is not a fence.
+#
+# Turn it on when you have watched the four cards above it behave for a while
+# and you believe the review. Until then the chain ends at a pull request with
+# a review on it, waiting for you, which is a good place for it to end.
+name: land
+graph: land.graph.yaml
+folder: ../../..
+trigger: {type: manual}
+enabled: false

@@ -1,0 +1,15 @@
+# Judges the proposal before anything is written. The cheap review.
+#
+# NARROW sends the scout back out, which is the one loop on this board that
+# costs almost nothing -- it is two model calls and no code.
+name: shape
+graph: shape.graph.yaml
+folder: ../../..
+trigger: {type: manual}
+then:
+  - when: "'NARROW' in str(run.outputs.get('judge', '')).upper()"
+    to: scout
+    label: too big
+  - when: "'BUILD' in str(run.outputs.get('judge', '')).upper()"
+    to: build
+    label: worth building

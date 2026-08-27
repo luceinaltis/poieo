@@ -1,0 +1,10 @@
+# poieo, improving poieo. Its own marker, so the examples/ project above does
+# not swallow it -- the nearest marker wins, exactly as the nearest .git does.
+#
+# Point every card's `folder:` at a checkout you are willing to have written
+# in. It is a git repository, so each run works in a private copy and lands as
+# one change you can read and undo; nothing here writes to your working tree.
+version: 1
+store: runs
+binding: models.yaml
+tasks: tasks/

@@ -1,0 +1,79 @@
+# Which model does which job here.
+#
+# Four roles, and they are not the same size of job. Reading a roadmap and
+# answering with one word is work a small local model does all day for
+# nothing. Writing a change that passes a test-first gate is not, and neither
+# is reading a diff for what a green suite cannot tell you.
+#
+# The graphs beside this file name the roles and nothing else, so moving any
+# of them onto a different model is an edit here and nowhere else.
+name: improving-poieo
+version: 1
+
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+    timeout: 300
+
+  # Uncomment to move the two heavy roles onto something bigger. Any
+  # OpenAI-shaped endpoint will do -- OpenRouter, vLLM, LM Studio. The key is
+  # read from the environment and never written in a file; this remote is
+  # public. poieo refuses to start if the variable is unset, so an endpoint
+  # declared here and not exported stops the daemon at launch rather than at
+  # three in the morning.
+  #
+  # cloud:
+  #   type: openai_compatible
+  #   base_url: https://openrouter.ai/api/v1
+  #   api_key_env: OPENROUTER_API_KEY
+  #   timeout: 600
+
+default:
+  provider: ollama
+  model: qwen3.5:latest
+  params:
+    # This family reasons by default and will spend the whole budget doing it,
+    # handing back empty content if the budget is tight. Some endpoints refuse
+    # to have it turned off at all, so the budget has to cover the thinking as
+    # well as the answer.
+    think: false
+    max_tokens: 800
+    temperature: 0.2
+
+roles:
+  # Reads the roadmap, judges a proposal, reports whether a suite went green.
+  # Short answers about text already in front of it.
+  reader:
+    provider: ollama
+    model: qwen3.5:latest
+    params:
+      think: false
+      max_tokens: 600
+      temperature: 0
+
+  # Writes the change. The one job on this board that a small model will not
+  # do well: it has to hold a codebase's conventions, write a failing test
+  # first, and keep a forty-turn session coherent.
+  # Everything here runs locally out of the box, so this example can be read
+  # and started with no account anywhere. Be honest with yourself about the
+  # next two: a 9B will propose and judge all day, and will not write a change
+  # that passes a test-first gate. When you want it to, uncomment `cloud`
+  # above and give these `provider: cloud` with a model to match.
+  builder:
+    provider: ollama
+    model: qwen3.5:latest
+    params:
+      think: false
+      max_tokens: 4000
+      temperature: 0.2
+
+  # Reads the diff. Deliberately not the same model as the builder: a reviewer
+  # that is the thing that wrote the code is a rubber stamp.
+  reviewer:
+    provider: ollama
+    model: qwen3.5:latest
+    params:
+      think: false
+      max_tokens: 3000
+      temperature: 0.1

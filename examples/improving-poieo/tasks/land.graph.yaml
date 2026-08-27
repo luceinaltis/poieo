@@ -1,0 +1,27 @@
+# The last step, and the only one that changes anything outside this machine.
+#
+# Off by default. See the card beside this file for why.
+name: land
+version: 1
+entry: merge
+
+nodes:
+  - id: merge
+    type: agent
+    role: reader
+    tools: [shell]
+    max_turns: 10
+    prompt: |
+      A review of the open pull request came back clean. Land it:
+
+          gh pr merge <n> --squash --delete-branch
+
+      `--delete-branch` fails here after the merge has already gone through --
+      it tries to switch the local checkout to main, and main is checked out
+      elsewhere. Check `gh pr view <n> --json state --jq .state` before
+      concluding anything failed; MERGED means it worked.
+
+      Do not merge if the pull request has any unresolved review comment, or if
+      its checks are not green. Say so and stop instead.
+
+      Finish by saying in one line what you merged.

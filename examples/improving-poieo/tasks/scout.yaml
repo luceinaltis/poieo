@@ -1,0 +1,11 @@
+# Looks for the next thing to build, and hands it to be judged.
+name: scout
+graph: scout.graph.yaml
+folder: ../../..            # the checkout to improve -- change this
+trigger:
+  type: interval
+  every: 2h
+then:
+  - when: "true"
+    to: shape
+    label: proposed
