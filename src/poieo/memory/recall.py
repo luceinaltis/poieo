@@ -50,12 +50,12 @@ def read_memory(
 def _in_scope(entry: Entry, task: Any, project_dir: Path) -> bool:
     """A filter over one store, never a wall: the word that means everyone,
     the task's own name, or a path that covers where it works."""
-    folder = task.folder_path()
+    folder = task.folder_path()  # None for a task that works on no folder
     for entry in entry.matter.scope:
         if entry in ("global", task.slug):
             return True
         base = (layout_for(project_dir).root / entry).resolve()
-        if folder == base or folder.is_relative_to(base):
+        if folder is not None and (folder == base or folder.is_relative_to(base)):
             return True
     return False
 
@@ -66,6 +66,8 @@ def _anchored(entry: Entry, task: Any, project_dir: Path) -> bool:
     folder = task.folder_path()
     for anchor in entry.matter.anchors:
         target = (layout_for(project_dir).root / anchor.split("::", 1)[0]).resolve()
+        if folder is None:
+            continue  # a task that works on no folder is covered by no anchor
         if target == folder or target.is_relative_to(folder) or folder.is_relative_to(target):
             return True
     return False

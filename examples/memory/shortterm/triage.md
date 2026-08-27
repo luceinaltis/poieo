@@ -1,0 +1,46 @@
+# triage
+
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:52 · did     A first draft that is merely adequate.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A first draft that is merely adequate.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:56 · did     A first draft that is merely adequate.
+- 2026-08-27 21:56 · did     A first draft that is merely adequate.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A first draft that is merely adequate.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A revised draft, now with a verb that earns its keep.
+- 2026-08-27 21:57 · did     A first draft that is merely adequate.
+- 2026-08-27 21:57 · did     A first draft that is merely adequate.

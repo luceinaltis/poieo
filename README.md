@@ -446,19 +446,29 @@ triggers and cannot spin each other up.
 
 ## The resident layer
 
+`poieo.yaml` says where things are. It carries no list of jobs — **a job is
+one file in the tasks folder**, and dropping one in is how you add one.
+
 ```yaml
+# poieo.yaml
 store: runs
 binding: models/hybrid.yaml
-flows:
-  - name: triage
-    graph: tasks/support-triage.graph.yaml
-    trigger: {type: interval, every: 30s}
-    input: {message: "…"}
+tasks: tasks/
+```
 
-  - name: revision
-    graph: tasks/draft-review.graph.yaml
-    trigger: {type: loop, cooldown: 10s}
-    carry_state: true                  # each run starts where the last one ended
+```yaml
+# tasks/triage.yaml
+name: triage
+graph: support-triage.graph.yaml
+trigger: {type: interval, every: 30s}
+input: {message: "…"}
+```
+
+```yaml
+# tasks/revision.yaml
+name: revision
+graph: draft-review.graph.yaml
+trigger: {type: loop, cooldown: 10s}
 ```
 
 | trigger | fires |
@@ -500,15 +510,15 @@ on 8484, and `npm test --workspace web-ui` is its suite.
 
 ## Work you look at in the morning
 
-A flow that names a `workdir` does not work in your project. It works in a
+A task that names a `folder` does not work in your project. It works in a
 private copy of it, and each run lands as one **change** carrying its own
 one-line summary of what it did.
 
 ```yaml
-flows:
-  - name: chores
-    graph: tasks/agent-task.graph.yaml
-    workdir: ../my-project      # where the work happens
+# tasks/chores.yaml
+name: chores
+graph: agent-task.graph.yaml
+folder: ../my-project       # where the work happens
 ```
 
 Your project is never written to while you sleep. In the morning it is exactly

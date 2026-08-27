@@ -4,6 +4,7 @@ from poieo.layout import layout_for
 import asyncio
 from types import SimpleNamespace
 
+from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.daemon.service import PAUSE_AFTER, FlowRunner
 from poieo.store import NullStore
@@ -77,15 +78,10 @@ default: {provider: fake, model: m}
 def _config(tmp_path):
     (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
     (tmp_path / "b.yaml").write_text(_PROSE_MOCK, encoding="utf-8")
+    card(tmp_path / "cards", "doomed",
+         "graph: ../g.yaml\ntrigger: {type: loop, cooldown: 0}\n")
     path = tmp_path / "poieo.yaml"
-    path.write_text(
-        "binding: b.yaml\n"
-        "flows:\n"
-        "  - name: doomed\n"
-        "    graph: g.yaml\n"
-        "    trigger: {type: loop, cooldown: 0}\n",
-        encoding="utf-8",
-    )
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
     config = load_config(path)
     config.flows[0].trigger.max_iterations = 10
     return config

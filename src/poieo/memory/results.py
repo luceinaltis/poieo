@@ -58,7 +58,7 @@ def write_result(task: Any, result: Any) -> Path | None:
         "run_id": result.run_id,
         "task": task.slug,
         "name": task.name,
-        "folder": str(task.folder_path()),
+        "folder": str(task.folder_path() or ""),
         "status": result.status,
         "error": result.error,
         "iteration": result.iteration,

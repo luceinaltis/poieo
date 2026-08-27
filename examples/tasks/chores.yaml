@@ -1,0 +1,9 @@
+# Works on a project instead of on text. `folder` is what makes the run happen
+# in a private copy: the work lands as one change to review in the morning, and
+# your own checkout is never written to.
+# Disabled here because it would commit -- flip `enabled` to try it.
+name: chores
+graph: agent-task.graph.yaml
+folder: ../..
+at: "0 2 * * *"
+enabled: false

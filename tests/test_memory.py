@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import pytest
 
-from conftest import EXAMPLES, at
+from conftest import card, EXAMPLES, at
 from poieo.layout import layout_for
 from poieo.binding import BindingSpec
 from poieo.daemon.config import load_config, load_flows
@@ -205,7 +205,7 @@ def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
 def test_the_memory_hangs_off_the_marker_not_the_tasks_folder(tmp_path):
     """One project, one memory. `poieo.yaml` says where the project begins,
     and everything the project keeps hangs off there -- so cards in `tasks/`
-    and a `flows:` entry beside them read the same page."""
+    and everything they name read the same page."""
     task = _task(tmp_path)
     _remember(tmp_path)
 

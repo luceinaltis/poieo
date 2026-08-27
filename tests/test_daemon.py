@@ -5,7 +5,7 @@ from datetime import datetime
 import httpx
 import pytest
 
-from conftest import EXAMPLES, at
+from conftest import card, EXAMPLES, at
 from poieo.daemon import Daemon, load_config, load_flows
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
@@ -122,21 +122,10 @@ def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
     config = load_config(EXAMPLES / "poieo.yaml")
     flows = load_flows(config)
 
-    assert [f.spec.name for f in flows] == ["triage", "revision"]  # disabled one skipped
-    assert flows[0].graph.name == "support-triage"
+    # Cards are read in filename order, and the disabled ones are skipped.
+    assert [f.spec.name for f in flows] == ["keep-tidy", "revision", "triage"]
+    assert flows[-1].graph.name == "support-triage"
     assert config.store_path() == (EXAMPLES / "runs").resolve()
-
-
-def test_config_rejects_duplicate_flow_names(tmp_path):
-    path = tmp_path / "d.yaml"
-    path.write_text(
-        "binding: b.yaml\n"
-        "flows:\n"
-        "  - {name: a, graph: g.yaml}\n"
-        "  - {name: a, graph: g.yaml}\n"
-    )
-    with pytest.raises(SpecError, match="duplicate flow names"):
-        load_config(path)
 
 
 def test_startup_validates_every_flow_up_front(tmp_path):
@@ -144,8 +133,9 @@ def test_startup_validates_every_flow_up_front(tmp_path):
         "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
     )
     (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent}]\n")
+    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
+    path.write_text(f"binding: b.yaml\ntasks: cards\n")
 
     # The graph is broken (a model node with no prompt); the daemon must refuse
     # to arm rather than discover this when the trigger first fires.
@@ -162,8 +152,9 @@ def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
     (tmp_path / "g.yaml").write_text(
         "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
+    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
+    path.write_text(f"binding: b.yaml\ntasks: cards\n")
     return path
 
 
@@ -187,9 +178,7 @@ def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypat
     fix it is asking for."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     path = _keyed_config(tmp_path)
-    path.write_text(
-        "binding: b.yaml\nflows: [{name: f, graph: g.yaml, enabled: false}]\n"
-    )
+    card(tmp_path / "cards", "f", f"graph: ../g.yaml\nenabled: false\n")
     assert len(load_flows(load_config(path), enabled_only=False)) == 1
 
 
@@ -207,8 +196,9 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     (tmp_path / "g.yaml").write_text(
         "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
+    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text("binding: b.yaml\nflows: [{name: f, graph: g.yaml}]\n")
+    path.write_text(f"binding: b.yaml\ntasks: cards\n")
 
     assert len(load_flows(load_config(path))) == 1
 
@@ -221,7 +211,7 @@ async def test_daemon_runs_every_flow_once_and_shuts_down(tmp_path, monkeypatch)
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
 
-    assert {r.flow for r in results} == {"triage", "revision"}
+    assert {r.flow for r in results} == {"keep-tidy", "revision", "triage"}
     assert all(r.status == "completed" for r in results)
     assert daemon.pools  # a pool was created...
     assert not any(p.instantiated() for p in daemon.pools.values())  # ...and closed
@@ -336,15 +326,14 @@ def test_flow_spec_accepts_a_workdir(tmp_path):
     (tmp_path / "g.yaml").write_text(
         "name: g" + chr(10) + "entry: a" + chr(10) + "nodes: [{id: a, type: agent, prompt: p}]" + chr(10)
     )
+    (tmp_path / "project").mkdir()
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\nfolder: ../project\n")
     path = tmp_path / "d.yaml"
-    path.write_text(
-        "binding: b.yaml" + chr(10)
-        + "flows: [{name: f, graph: g.yaml, workdir: project}]" + chr(10)
-    )
+    path.write_text("binding: b.yaml" + chr(10) + "tasks: cards" + chr(10))
 
     config = load_config(path)
 
-    assert config.flows[0].workdir == "project"
+    assert config.flows[0].workdir == str(tmp_path / "project")
     # resolved against the config file, not whatever cwd the daemon started in
     assert config.workdir_path(config.flows[0]) == tmp_path / "project"
 
@@ -367,16 +356,17 @@ def _isolated_config(tmp_path, image="python:3.12-slim", count=1):
     body = [
         f"binding: {EXAMPLES / 'models/mock.yaml'}",
         f"store: {tmp_path / 'logs'}",
-        "flows:",
+        "tasks: cards",
     ]
     for i in range(count):
-        body += [
-            f"  - name: t{i}",
-            f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}",
-            "    trigger: {type: interval, every: 60s}",
-            "    isolation:",
-            f"      image: {image}",
-        ]
+        card(
+            tmp_path / "cards",
+            f"t{i}",
+            f"graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
+            "trigger: {type: interval, every: 60s}\n"
+            "isolation:\n"
+            f"  image: {image}\n",
+        )
     path = tmp_path / "poieo.yaml"
     path.write_text("\n".join(body) + "\n")
     return load_config(path)
@@ -415,13 +405,16 @@ def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
 
     monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
     config = tmp_path / "poieo.yaml"
+    card(
+        tmp_path / "cards",
+        "plain",
+        f"graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
+        f"trigger: {{type: interval, every: 60s}}\n",
+    )
     config.write_text(
         f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
-        "flows:\n"
-        "  - name: plain\n"
-        f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
-        "    trigger: {type: interval, every: 60s}\n"
+        "tasks: cards\n"
     )
     assert len(load_flows(load_config(config))) == 1
 
@@ -463,7 +456,6 @@ def _tasks_config(tmp_path, tools="[files, notes]"):
         f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
         "tasks: tasks\n"
-        "flows: []\n"
     )
     return load_config(path)
 

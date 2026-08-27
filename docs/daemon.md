@@ -159,12 +159,14 @@ to go somewhere, and a finished run does not. Falling off the end is what almost
 every flow does; a catch-all is a last branch reading `"true"`.
 
 ```yaml
-flows:
-  - name: chores
-    then:
-      - when: "run.change"
-        to: review
-        label: something changed
+# tasks/chores.yaml
+name: chores
+folder: ~/code/poieo
+prompt: Find one thing worth fixing, fix it, run the tests.
+then:
+  - when: "run.change"
+    to: review
+    label: something changed
 ```
 
 ### What is checked at load

@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from test_workspace import make_repo
 
-from conftest import EXAMPLES, at
+from conftest import card, EXAMPLES, at
 from poieo.layout import layout_for
 from poieo.cli import app
 
@@ -217,14 +217,17 @@ def test_runs_list_json_is_machine_readable(tmp_path):
 
 def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
     config = tmp_path / "poieo.yaml"
+    card(
+        tmp_path / "cards",
+        "t",
+        f"graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
+        f"trigger: {{type: interval, every: 60s}}\n"
+        f"input: {{message: hi}}\n",
+    )
     config.write_text(
         f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
         f"store: {tmp_path / 'logs'}\n"
-        "flows:\n"
-        f"  - name: t\n"
-        f"    graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
-        "    trigger: {type: interval, every: 60s}\n"
-        "    input: {message: hi}\n"
+        "tasks: cards\n"
     )
     # --no-web: the observation server binds a real port, so without this the
     # test fails on any machine already running a daemon.
@@ -697,12 +700,11 @@ def flow_config(tmp_path, workdir):
         + "nodes: [{id: work, type: agent, role: p, prompt: do it}]" + chr(10),
         encoding="utf-8",
     )
+    card(tmp_path / "cards", "chores",
+         f"graph: ../g.yaml\nfolder: ../{workdir}\n")
     path = tmp_path / "d.yaml"
-    path.write_text(
-        "binding: b.yaml" + chr(10)
-        + f"flows: [{{name: chores, graph: g.yaml, workdir: {workdir}}}]" + chr(10),
-        encoding="utf-8",
-    )
+    path.write_text("binding: b.yaml" + chr(10) + "tasks: cards" + chr(10),
+                    encoding="utf-8")
     return path
 
 
@@ -713,7 +715,7 @@ def test_flows_fails_when_a_workdir_is_missing(tmp_path):
 
     # Refused at load rather than discovered at 3am.
     assert result.exit_code != 0
-    assert "workdir" in result.stderr  # errors go to stderr
+    assert "folder does not exist" in result.stderr  # errors go to stderr
 
 
 def test_flows_warns_when_the_work_cannot_be_reviewed(tmp_path):

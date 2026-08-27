@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import at
+from conftest import card, at
 from poieo.daemon.config import FlowSpec, load_config, load_flows
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
@@ -165,15 +165,15 @@ def test_a_graph_beside_a_card_is_not_read_as_a_card(tmp_path):
     assert [task.slug for task in load_tasks(tmp_path / "tasks")] == ["tidy"]
 
 
-def test_a_file_that_is_neither_says_so_instead_of_vanishing(tmp_path):
+def test_a_file_that_says_nothing_useful_is_told_what_a_card_needs(tmp_path):
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     (tasks / "confused.yaml").write_text("name: neither\nversion: 1\n", encoding="utf-8")
     with pytest.raises(SpecError) as caught:
         load_tasks(tasks)
-    # Both shapes are named, because "this is wrong" without "here is what
-    # right looks like" is where a person goes to read the source.
-    assert "folder:" in str(caught.value) and "nodes:" in str(caught.value)
+    # Read as the card it nearly is, and told which key is the problem --
+    # which beats "this is neither shape" for anyone holding the file.
+    assert "version" in str(caught.value)
 
 
 def test_a_file_answering_to_both_shapes_fails_rather_than_disappearing(tmp_path):
@@ -227,7 +227,7 @@ def test_paths_resolve_against_the_task_file(tmp_path):
         ("name: t\n", "needs a prompt"),
         ("name: t\nprompt: go\ngraph: g.yaml\n", "not both"),
         ("name: t\ngraph: g.yaml\ntools: [files]\n", "belong in the graph"),
-        ("name: t\nprompt: go\nevery: 1h\nat: '0 3 * * *'\n", "not both"),
+        ("name: t\nprompt: go\nevery: 1h\nat: '0 3 * * *'\n", "not every and at"),
         ("name: t\nprompt: go\nnonsense: 1\n", "nonsense"),
     ],
 )
@@ -273,29 +273,13 @@ def test_a_tasks_folder_becomes_flows(tmp_path):
     assert load_flows(config) and len(load_flows(config)) == 1
 
 
-def test_tasks_and_explicit_flows_live_side_by_side(tmp_path):
+def test_every_card_in_the_folder_becomes_a_job(tmp_path):
     write_task(tmp_path, "one", "name: one\nprompt: go\n")
-    config = load_config(
-        _config(
-            tmp_path,
-            "flows:\n"
-            "  - name: legacy\n"
-            f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
-        )
-    )
-    assert sorted(f.name for f in config.flows) == ["legacy", "one"]
+    write_task(tmp_path, "two", "name: two\nprompt: go\n")
 
+    config = load_config(_config(tmp_path))
 
-def test_a_task_colliding_with_a_flow_fails_at_load(tmp_path):
-    write_task(tmp_path, "one", "name: one\nprompt: go\n")
-    config_path = _config(
-        tmp_path,
-        "flows:\n"
-        "  - name: one\n"
-        f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
-    )
-    with pytest.raises(SpecError, match="already a flow"):
-        load_config(config_path)
+    assert sorted(f.name for f in config.flows) == ["one", "two"]
 
 
 def test_a_missing_tasks_folder_fails_at_load(tmp_path):
@@ -308,18 +292,18 @@ def test_a_missing_tasks_folder_fails_at_load(tmp_path):
         load_config(config)
 
 
-def test_a_config_without_tasks_is_untouched(tmp_path):
+def test_a_config_that_names_no_tasks_folder_has_no_jobs(tmp_path):
+    """There is no other place a job could have been written down."""
     config = tmp_path / "poieo.yaml"
     config.write_text(
-        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
-        "flows:\n"
-        "  - name: legacy\n"
-        f"    graph: {(EXAMPLES / 'tasks/support-triage.graph.yaml').as_posix()}\n",
+        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n",
         encoding="utf-8",
     )
+
     loaded = load_config(config)
+
     assert loaded.tasks is None
-    assert [f.name for f in loaded.flows] == ["legacy"]
+    assert loaded.flows == []
 
 
 # -- the journal -------------------------------------------------------------
