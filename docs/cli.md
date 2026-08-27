@@ -17,7 +17,7 @@ the panel titles, passed as `rich_help_panel`:
 | **Your tasks** | `run`, `daemon`, `tasks`, `note` |
 | **What happened** | `memory`, `learn`, `runs` |
 
-Seven more are registered `hidden=True` — `show`, `view`, `edit`, `flows`,
+Seven more are registered `hidden=True` — `show`, `view`, `edit`, `tasks`,
 `eject`, `reset`, `version`. They are real and supported; hidden keeps `--help`
 to the surface a new user needs. If you are adding a command, ask which panel
 it belongs in, or whether it belongs on the page at all.
@@ -30,24 +30,24 @@ hidden while `memory` and `learn` — both opt-in, both off unless a folder exis
 ## The front page speaks the user's three words
 
 [DESIGN.md](../DESIGN.md) principle 7: the vocabulary is a **task**, a **run**,
-a **change**. Worktrees, flows, bindings, providers and schedulers are
+a **change**. Worktrees, tasks, bindings, providers and schedulers are
 machinery, and machinery does not appear in the interface — least of all on the
 first screen somebody ever sees. The help used to read:
 
 ```
-daemon    Start the resident scheduler and keep flows running.
+daemon    Start the resident scheduler and keep tasks running.
 check     Probe every provider declared in a binding.
 validate  Parse a graph or task (and optionally a binding) and report problems.
 ```
 
 Three lines, six machinery words, and a newcomer none the wiser. A test asserts
-that `scheduler`, `provider`, `binding` and `flow` appear nowhere in
+that `scheduler`, `provider`, `binding` and `task` appear nowhere in
 `poieo --help`; the panel titles and short help are written against it.
 
 The same rule reaches past the help. `humanize()` in `daemon/triggers.py` renders
 an interval in the units somebody would have written it in — `every 30m`, not
-`every 1800s`. That string is what `tasks`, `flows` and `validate` print, what
-the board labels a flow with, and the reason every interval run records for
+`every 1800s`. That string is what `tasks`, `tasks` and `validate` print, what
+the board labels a task with, and the reason every interval run records for
 having fired, so one readable spelling covers all of them.
 
 ## Every command fails in the product's voice
@@ -76,7 +76,7 @@ a thing with one wording and two copies are two chances for that to stop being
 true. `nothing_found()` in `project.py` is the same rule for `init`'s refusal.
 
 Anything on the front page has to work when typed **bare**, since that is how it
-will be typed first: `tasks`, `flows`, `daemon`, `memory` and `config` all fall
+will be typed first: `tasks`, `tasks`, `daemon`, `memory` and `config` all fall
 through to the project's own answer. `poieo tasks` used to require a folder,
 which is a poor greeting from a command whose whole job is "show me my board".
 

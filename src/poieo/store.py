@@ -81,7 +81,7 @@ class RunStore:
     """Everything a run leaves behind, under the folder it is handed.
 
     That folder is the project's ``runs/``, written into straight -- no
-    subfolder of its own. Safe for concurrent flows in one process.
+    subfolder of its own. Safe for concurrent tasks in one process.
     """
 
     def __init__(self, root: str | Path | None = None):
@@ -134,7 +134,7 @@ class RunStore:
             lines = (line for line in lines if containing in line)
         yield from json_records(lines)
 
-    def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:
+    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:
         """The newest ``limit`` summaries, newest first.
 
         Read from the end and parsed only until enough have matched: the index
@@ -144,7 +144,7 @@ class RunStore:
         for row in self._index_backwards():
             if len(rows) >= limit:
                 break
-            if flow and row.get("flow") != flow:
+            if task and row.get("task") != task:
                 continue
             rows.append(row)
         return rows
@@ -184,7 +184,7 @@ class NullStore(RunStore):
     def record_summary(self, summary: dict[str, Any]) -> None:  # noqa: D102
         return
 
-    def list_runs(self, limit: int = 20, flow: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
+    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
         return []
 
     def summary(self, run_id: str) -> dict[str, Any] | None:  # noqa: D102

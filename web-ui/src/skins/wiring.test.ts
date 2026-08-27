@@ -30,29 +30,29 @@ test("a board with no handoffs is one column, not a failure to lay out", () => {
   expect(placed.map((p) => p.row)).toEqual([0, 1, 2])
 })
 
-test("a flow sits to the right of whatever hands to it", () => {
+test("a task sits to the right of whatever hands to it", () => {
   const placed = place(["chores", "review", "publish"], {
     chores: ["review"],
     review: ["publish"],
   })
 
   expect(placed).toEqual([
-    { flow: "chores", column: 0, row: 0 },
-    { flow: "review", column: 1, row: 0 },
-    { flow: "publish", column: 2, row: 0 },
+    { task: "chores", column: 0, row: 0 },
+    { task: "review", column: 1, row: 0 },
+    { task: "publish", column: 2, row: 0 },
   ])
 })
 
-test("two flows fed by one stack up in the same column", () => {
+test("two tasks fed by one stack up in the same column", () => {
   const placed = place(["chores", "review", "alert"], { chores: ["review", "alert"] })
 
   expect(placed.slice(1)).toEqual([
-    { flow: "review", column: 1, row: 0 },
-    { flow: "alert", column: 1, row: 1 },
+    { task: "review", column: 1, row: 0 },
+    { task: "alert", column: 1, row: 1 },
   ])
 })
 
-test("a flow waits for its furthest sender, not its nearest", () => {
+test("a task waits for its furthest sender, not its nearest", () => {
   // chores -> review -> publish, and chores -> publish as well. publish must
   // land past review, or the long arrow would point backwards on screen.
   const placed = place(["chores", "review", "publish"], {
@@ -60,18 +60,18 @@ test("a flow waits for its furthest sender, not its nearest", () => {
     review: ["publish"],
   })
 
-  expect(placed.find((p) => p.flow === "publish")?.column).toBe(2)
+  expect(placed.find((p) => p.task === "publish")?.column).toBe(2)
 })
 
 test("a cycle is unrolled into a line, not piled into one column", () => {
   const placed = place(["fix", "review"], { fix: ["review"], review: ["fix"] })
 
   // Nothing in a cycle has an unmet sender, so peeling stalls at once. Left
-  // in a heap the flows all share a column, and then *every* arrow between
+  // in a heap the tasks all share a column, and then *every* arrow between
   // them runs backwards -- including the ones that go forwards.
   expect(placed).toEqual([
-    { flow: "fix", column: 0, row: 0 },
-    { flow: "review", column: 1, row: 0 },
+    { task: "fix", column: 0, row: 0 },
+    { task: "review", column: 1, row: 0 },
   ])
 })
 
@@ -85,10 +85,10 @@ test("a cycle of three unrolls in the order they were declared", () => {
   expect(placed.map((one) => one.column)).toEqual([0, 1, 2])
 })
 
-test("a handoff naming a flow that is not on the board is ignored", () => {
+test("a handoff naming a task that is not on the board is ignored", () => {
   const placed = place(["chores"], { chores: ["gone"] })
 
-  expect(placed).toEqual([{ flow: "chores", column: 0, row: 0 }])
+  expect(placed).toEqual([{ task: "chores", column: 0, row: 0 }])
 })
 
 test("a walk reads entry first and every node once, loop or not", () => {
@@ -209,9 +209,9 @@ test("a loop back does not push its target into a further column", () => {
 
 
 test("a handoff forward is not a loop; one to an earlier column is", () => {
-  const chores = { flow: "chores", column: 0, row: 0 }
-  const review = { flow: "review", column: 1, row: 0 }
-  const publish = { flow: "publish", column: 1, row: 1 }
+  const chores = { task: "chores", column: 0, row: 0 }
+  const review = { task: "review", column: 1, row: 0 }
+  const publish = { task: "publish", column: 1, row: 1 }
 
   expect(loops(chores, review)).toBe(false)
   expect(loops(review, chores)).toBe(true)
@@ -220,8 +220,8 @@ test("a handoff forward is not a loop; one to an earlier column is", () => {
 })
 
 test("a loop goes round the outside and comes up underneath its target", () => {
-  const publish = { flow: "publish", column: 2, row: 0 }
-  const chores = { flow: "chores", column: 0, row: 0 }
+  const publish = { task: "publish", column: 2, row: 0 }
+  const chores = { task: "chores", column: 0, row: 0 }
   const back = backWire(publish, chores, 0)
 
   // Out of the sender's right edge, as any arrow leaves.
@@ -237,11 +237,11 @@ test("a loop goes round the outside and comes up underneath its target", () => {
 })
 
 test("the return leg clears the bottom row, whichever row that is", () => {
-  const from = { flow: "publish", column: 1, row: 0 }
-  const to = { flow: "chores", column: 0, row: 0 }
+  const from = { task: "publish", column: 1, row: 0 }
+  const to = { task: "chores", column: 0, row: 0 }
 
   expect(backWire(from, to, 2).under).toBeGreaterThan(
-    corner({ flow: "x", column: 0, row: 2 }).y + BOX.height,
+    corner({ task: "x", column: 0, row: 2 }).y + BOX.height,
   )
 })
 
@@ -251,8 +251,8 @@ test("measured rows override the pitch, because a border is as tall as it is", (
   // it is routinely wrong by more than the gap between rows. Left to the
   // arithmetic, a return leg is drawn straight through the box above it.
   const frame = { tops: [0, 300], bottom: 460, heights: { chores: 190, publish: 160 } }
-  const publish = { flow: "publish", column: 1, row: 1 }
-  const chores = { flow: "chores", column: 0, row: 0 }
+  const publish = { task: "publish", column: 1, row: 1 }
+  const chores = { task: "chores", column: 0, row: 0 }
 
   expect(corner(chores, frame).y).toBe(0)
   expect(corner(publish, frame).y).toBe(300)

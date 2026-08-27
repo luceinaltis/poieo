@@ -96,9 +96,7 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
     """
     return {
         "run_id": result.run_id,
-        # `flow` on the wire, still: renaming what a condition reads and a
-        # run record carries is the other half of this, and its own change.
-        "flow": result.flow,
+        "task": result.task,
         "graph": result.graph,
         "status": result.status,
         "started_at": result.started_at,
@@ -411,7 +409,7 @@ class TaskRunner:
                 self.store,
                 input=payload,
                 state=dict(self.state) if self.task.spec.carry_state else None,
-                flow=self.name,
+                task=self.name,
                 # What actually fired this run, not the schedule it may not
                 # have used.
                 trigger=fire.reason,

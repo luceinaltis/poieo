@@ -93,7 +93,7 @@ def test_yaml_spells_its_literals_in_lower_case(source, expected, scope):
     Python's `True` still works and is what the source is parsed as; these are
     aliases, so an author who writes what the file format taught them gets what
     they meant rather than `unknown name 'true'` at 3am. That mistake is
-    especially quiet in a flow's `then:` block, where an unreadable condition
+    especially quiet in a task's `then:` block, where an unreadable condition
     is logged and skipped rather than raised.
     """
     assert evaluate(source, scope) is expected

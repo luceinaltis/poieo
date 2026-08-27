@@ -40,7 +40,7 @@ def _task(tmp_path):
 def _result(**over):
     result = RunResult(
         run_id="20260824T120000-abcd1234",
-        flow="tidy",
+        task="tidy",
         graph="tidy",
         status="completed",
         started_at="2026-08-24T12:00:00+00:00",
@@ -197,9 +197,9 @@ def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
     )
     assert "memory" not in card_payload(task)
 
-    flow, config = _daemon_flow(tmp_path)
-    assert "memory" not in flow.read_input(config)
-    assert "{{ input.memory }}" not in flow.graph.nodes[0].system
+    task, config = _daemon_flow(tmp_path)
+    assert "memory" not in task.read_input(config)
+    assert "{{ input.memory }}" not in task.graph.nodes[0].system
 
 
 def test_the_memory_hangs_off_the_marker_not_the_tasks_folder(tmp_path):
@@ -228,10 +228,10 @@ def test_without_a_marker_the_tasks_folder_still_stands_in(tmp_path):
 def test_the_constitution_reaches_the_prompt_on_the_daemon_path(tmp_path):
     _task(tmp_path)
     _remember(tmp_path)
-    flow, config = _daemon_flow(tmp_path)
+    task, config = _daemon_flow(tmp_path)
 
-    assert "{{ input.memory }}" in flow.graph.nodes[0].system
-    block = flow.read_input(config)["memory"]
+    assert "{{ input.memory }}" in task.graph.nodes[0].system
+    block = task.read_input(config)["memory"]
     assert block.startswith("What this project always requires:")
     assert "Never push to main." in block
 
@@ -252,21 +252,21 @@ def test_both_runners_hand_a_card_the_same_input(tmp_path):
     daemon/config.py, so a third input key could reach one runner and not the
     other -- and the daemon's half only shows up at 3am.
     """
-    task = _task(tmp_path)
+    card = _task(tmp_path)
     _remember(tmp_path)
-    flow, config = _daemon_flow(tmp_path)
+    loaded, config = _daemon_flow(tmp_path)
 
-    assert flow.read_input(config) == card_payload(task)
+    assert loaded.read_input(config) == card_payload(card)
 
 
 def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
     _task(tmp_path)
     memory = _remember(tmp_path)
-    flow, config = _daemon_flow(tmp_path)
-    assert "Never push to main." in flow.read_input(config)["memory"]
+    task, config = _daemon_flow(tmp_path)
+    assert "Never push to main." in task.read_input(config)["memory"]
 
     memory.constitution().write_text("Ship one change at a time.", encoding="utf-8")
-    assert "Ship one change at a time." in flow.read_input(config)["memory"]
+    assert "Ship one change at a time." in task.read_input(config)["memory"]
 
 
 def test_a_malformed_fact_fails_at_load_naming_the_file(tmp_path):

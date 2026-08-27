@@ -67,7 +67,7 @@ from .viewer import mermaid_source, render_page
 # The front page is grouped by what a person is trying to do, in the order
 # they will do it. A panel title is one of the user's three words -- a task, a
 # run, a change -- and never a layer of the design: DESIGN.md principle 7 is
-# that worktrees, flows, bindings and providers are machinery, and machinery
+# that worktrees, bindings and providers are machinery, and machinery
 # does not appear in the interface. Least of all on the first screen.
 SETUP = "Setting up"
 BOARD = "Your tasks"
@@ -1037,8 +1037,9 @@ def flows(
 ) -> None:
     """List the tasks a daemon config would run, with their triggers and bindings.
 
-    Still `poieo flows` on the command line: what a person types is the other
-    half of this rename, and its own change.
+    Still `poieo flows` on the command line. It overlaps `poieo tasks`
+    heavily now, and folding the two together is a question about what a
+    person should see -- not a rename.
     """
     config = load_config(_project_file(config_path))
     loaded = load_tasks(config, enabled_only=False)
@@ -1291,7 +1292,7 @@ def runs_list(
 ) -> None:
     """List recent runs, newest first."""
     store = _resolve_store(store)
-    rows = RunStore(store).list_runs(limit=limit, flow=task)
+    rows = RunStore(store).list_runs(limit=limit, task=task)
     if as_json:
         # JSON stays JSON even when empty -- an agent parses, never greps.
         typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))

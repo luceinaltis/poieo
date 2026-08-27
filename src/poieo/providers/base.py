@@ -17,7 +17,7 @@ def credential_for(name: str, spec: ProviderSpec) -> str | None:
 
     One place, so that reading the rule costs nothing: no client is opened and
     no request is made, which is what lets the daemon check every credential
-    before it arms a single flow rather than discovering a missing key when a
+    before it arms a single task rather than discovering a missing key when a
     trigger fires at 3am.
     """
     if not spec.api_key_env:

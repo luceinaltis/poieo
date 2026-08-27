@@ -4,7 +4,7 @@
 
 **The only module in poieo that knows git exists.**
 
-A flow that names a `workdir` does not work in the user's checkout. It works in a
+A task that names a `workdir` does not work in the user's checkout. It works in a
 private copy — a linked git worktree on a branch of its own — so a night of runs
 never touches what the user left open, and each run lands as one change that can
 be read, taken, or thrown away in the morning.
@@ -12,12 +12,12 @@ be read, taken, or thrown away in the morning.
 Autonomy without undo is a different, scarier product. This is what makes hands
 safe to hand out.
 
-## What exists per flow
+## What exists per task
 
 | thing | where |
 |---|---|
-| the branch | `poieo/<flow>` in the user's own repository |
-| the working copy | `<project>/worktrees/<flow>` |
+| the branch | `poieo/<task>` in the user's own repository |
+| the working copy | `<project>/worktrees/<task>` |
 | every run's tip | `refs/poieo/runs/<run_id>` |
 | a failed run's work | `refs/poieo/failed/<run_id>` |
 | a discarded tip | `refs/poieo/discarded/<run_id>` |
@@ -35,7 +35,7 @@ deletes work.
 `prepare()` — before the run:
 
 1. read the user's `HEAD`
-2. create `poieo/<flow>` at it if it does not exist, and materialise the worktree
+2. create `poieo/<task>` at it if it does not exist, and materialise the worktree
 3. **if nothing is pending review**, hard-reset the copy to the user's `HEAD` —
    follow the user forward only while there is nothing to lose. Rebasing unread
    work out from under them would lose it.
@@ -83,10 +83,10 @@ still changed, so they are listed with zeroes rather than skipped.
 **Everything is synchronous, and every caller wraps it in
 `asyncio.to_thread`.** git calls are short but not instant, and the daemon shares
 one event loop with the web server — a blocking subprocess on that loop would
-stall the event stream for every watcher. The `/api/flows` route gathers the
-per-flow review states concurrently for the same reason.
+stall the event stream for every watcher. The `/api/tasks` route gathers the
+per-task review states concurrently for the same reason.
 
-**A `WorkspaceError` is never fatal to a flow.** The work still ran. A
+**A `WorkspaceError` is never fatal to a task.** The work still ran. A
 repository that cannot be used is logged and the run happens in the folder
 directly, with a warning that its changes cannot be reviewed or undone.
 

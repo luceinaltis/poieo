@@ -173,9 +173,10 @@ def test_the_front_page_speaks_the_users_three_words_not_the_designs():
     """
     result = runner.invoke(app, ["--help"])
     lowered = result.stdout.lower()
-    for machinery in ("scheduler", "provider", "binding", "flow"):
+    for machinery in ("scheduler", "provider", "binding", "worktree"):
         assert machinery not in lowered, machinery
-    # ...and the words that replaced them are there.
+    # ...and the word that replaced them is there. It is the backend's word
+    # now as well, which is the point: there is only the one.
     assert "task" in lowered
 
 
@@ -711,7 +712,7 @@ def test_daemon_folder_stores_beside_the_cards(tmp_path):
 
 # -- where the work happens ---------------------------------------------------
 #
-# A graph is the logical layer and may leave its workdir open. A flow in a
+# A graph is the logical layer and may leave its workdir open. A task in a
 # daemon config may not: a directory that is not there has to be refused at
 # load, rather than discovered when the cron fires at 3am.
 
@@ -751,7 +752,7 @@ def test_flows_warns_when_the_work_cannot_be_reviewed(tmp_path):
 
     result = runner.invoke(app, ["flows", str(config)])
 
-    # A degraded mode, not an error: the flow still runs tonight.
+    # A degraded mode, not an error: the task still runs tonight.
     assert result.exit_code == 0
     assert "reviewed or undone" in result.stdout
 
@@ -802,13 +803,13 @@ def test_validate_accepts_a_graph_that_leaves_the_workdir_open():
 
 
 def test_both_commands_that_look_for_a_project_say_the_same_thing(tmp_path, monkeypatch):
-    """`daemon` and `flows` each fall back to the project's poieo.yaml, and
+    """`daemon` and `tasks` each fall back to the project's poieo.yaml, and
     each has to refuse when there is none. The refusal is a sentence the user
     reads, so there is one wording of it, not one per command."""
     monkeypatch.chdir(tmp_path)  # no poieo.yaml here or above
 
     refusals = []
-    for command in (["daemon"], ["flows"]):
+    for command in (["daemon"], ["tasks"]):
         result = runner.invoke(app, command)
         assert result.exit_code == 1, command
         refusals.append(result.stderr.strip())

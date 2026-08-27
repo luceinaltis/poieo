@@ -3,12 +3,12 @@
 A harness for running LLM workflows where **what the work is** and **which model does it**
 are two separate files.
 
-A *graph* describes the logical flow: classify this, then branch, then draft a reply. It
+A *graph* describes the logical task: classify this, then branch, then draft a reply. It
 names **roles** (`classifier`, `writer`, `critic`) and never names a model. A *binding*
 maps those roles onto physical endpoints — Claude, a local vLLM server, Ollama. Moving a
 workflow from a laptop model to Claude Opus 5 is a `--binding` flag, not an edit.
 
-A *daemon* keeps flows alive on triggers, so the logical flow just keeps running.
+A *daemon* keeps tasks alive on triggers, so the logical task just keeps running.
 
 ```
 graph (logical)          binding (physical)          daemon (resident)
@@ -202,7 +202,7 @@ Names in scope:
 | `state` | mapping that survives across loop iterations |
 | `nodes.<id>` | any earlier node's output |
 | `<alias>` | an output's `as:` name, at the top level |
-| `run` | `id`, `flow`, `trigger`, `iteration`, `path` |
+| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
 
 `output` shapes what a node stores: `as` names it, `format: json` parses the completion
 (tolerating a markdown fence), `path: a.b` digs into it, and `into_state: k` also writes it
@@ -271,7 +271,7 @@ prompt: |
   Find one thing worth fixing, fix it, run the tests.
 ```
 
-Point a daemon config at the folder, and every file in it becomes a flow:
+Point a daemon config at the folder, and every file in it becomes a task:
 
 ```yaml
 store: runs
@@ -288,12 +288,12 @@ and `binding` are there when a task outgrows the defaults.
 | command | does |
 |---|---|
 | `poieo tasks tasks/` | list the cards, with their schedules (a daemon config works too) |
-| `poieo show tasks/keep-improving.yaml` | render the flow the task expands to |
+| `poieo show tasks/keep-improving.yaml` | render the task the task expands to |
 | `poieo run tasks/keep-improving.yaml -b models/mock.yaml` | run it once |
-| `poieo eject tasks/keep-improving.yaml` | write that flow out as a real graph; the task names it from then on |
+| `poieo eject tasks/keep-improving.yaml` | write that task out as a real graph; the task names it from then on |
 
 The sugar is not a second configuration format: a task expands into exactly the
-flow and graph you would have written by hand, `show` proves it, and `eject`
+task and graph you would have written by hand, `show` proves it, and `eject`
 hands it over the moment one line stops being enough. An ejected graph still
 reads `{{ input.journal }}`, which the task supplies -- run it through the task,
 or pass `--set journal=...` when running that graph on its own.
@@ -511,28 +511,28 @@ trigger: {type: loop, cooldown: 10s}
 | `manual` | only when something asks |
 
 All four accept `max_iterations`. `input_file` re-reads the payload before each run, so an
-external process can feed a flow. `on_error: stop` halts a flow after a failed run;
+external process can feed a task. `on_error: stop` halts a task after a failed run;
 the default keeps it up.
 
-Every graph, binding, and role is validated at startup — a typo in a flow that fires at 3am
+Every graph, binding, and role is validated at startup — a typo in a task that fires at 3am
 fails at launch, not at 3am. `SIGINT`/`SIGTERM` drains in-flight runs and closes clients; a
 second signal exits immediately.
 
 ```bash
 poieo flows  examples/poieo.yaml     # what would run, on what trigger, against what model
 poieo daemon examples/poieo.yaml     # stay up
-poieo daemon examples/poieo.yaml --once --flow triage
+poieo daemon examples/poieo.yaml --once --task triage
 ```
 
 While the daemon runs it serves a page on `http://127.0.0.1:8484` (`--port` to
 change it, `--no-web` to turn it off). It ships built, so there is nothing to
-install: open it to watch flows move, click one to read what it did turn by
+install: open it to watch tasks move, click one to read what it did turn by
 turn, and take or throw away what it left you. The picker in the corner switches
 skins; `atelier`, the workshop, is the default, and `basic` draws the work as a
-graph — the flows, their nodes, and the model each one calls.
+graph — the tasks, their nodes, and the model each one calls.
 
 Everything the page reads is plain HTTP too. `GET /api/events` streams every run
-event live (SSE), `/api/flows` and `/api/runs` answer what is running and what
+event live (SSE), `/api/tasks` and `/api/runs` answer what is running and what
 already ran, and `/api/runs/<id>/diff` shows what one run changed. Only two
 routes in the whole surface change anything, and they are the two below.
 
@@ -557,10 +557,10 @@ Your project is never written to while you sleep. In the morning it is exactly
 as you left it, and the night's work is waiting:
 
 ```bash
-curl     127.0.0.1:8484/api/flows                     # how much is waiting
+curl     127.0.0.1:8484/api/tasks                     # how much is waiting
 curl     127.0.0.1:8484/api/runs/<id>/diff            # what one run did
-curl -X POST 127.0.0.1:8484/api/flows/chores/accept   # take it
-curl -X POST 127.0.0.1:8484/api/flows/chores/discard  # throw it away
+curl -X POST 127.0.0.1:8484/api/tasks/chores/accept   # take it
+curl -X POST 127.0.0.1:8484/api/tasks/chores/discard  # throw it away
 ```
 
 Accepting puts the work into your project. Discarding is recoverable -- nothing
@@ -568,7 +568,7 @@ is ever thrown away for good. A run that found nothing to do is not a failure
 and leaves nothing to review, and a run that failed keeps its half-finished work
 aside instead of mixing it in.
 
-None of this is required. A flow with no `workdir` behaves exactly as it always
+None of this is required. A task with no `workdir` behaves exactly as it always
 has, and a `workdir` that nothing tracks still runs -- `poieo flows` says up
 front that its changes can't be reviewed or undone.
 
@@ -608,8 +608,8 @@ asyncio.run(main())
 ```
 
 `execute` never raises for an in-run failure — the error lands on `result.error` so a daemon
-flow can log it and stay up. Spec and binding problems still raise, since those mean the
-flow is misconfigured rather than flaky.
+task can log it and stay up. Spec and binding problems still raise, since those mean the
+task is misconfigured rather than flaky.
 
 ## Layout
 
@@ -617,12 +617,12 @@ flow is misconfigured rather than flaky.
 src/poieo/
   expr.py            sandboxed expressions + {{ }} templating
   graph.py           logical layer: nodes, wiring, validation
-  task.py            the short form: one file expands into a flow + a graph
+  task.py            the short form: one file expands into a task + a graph
   binding.py         physical layer: providers, roles, param merging
   providers/         anthropic · openai_compatible · ollama · mock
   runtime/           context, node implementations, the graph walker
   tools/             the hands: files, shell, notes; the isolation seam
-  daemon/            cron, triggers, flow config, the resident service
+  daemon/            cron, triggers, task config, the resident service
   layout.py          where a project keeps things; store.py is the run log
   detect.py          what this machine can answer with, asked once at init
   rebind.py          changing a binding without losing what a person wrote
@@ -642,7 +642,7 @@ shaped that way. Start at `docs/architecture.md`.
 
 ## Not built yet
 
-* Task cards from the page. Observing, reviewing and controlling a flow all work
+* Task cards from the page. Observing, reviewing and controlling a task all work
   in the browser; creating or editing a card still means editing the file.
 * The editor folded into the board. `poieo edit` is a canvas over the graph schema
   today, and `poieo show --mermaid` draws one; the board draws the work but does

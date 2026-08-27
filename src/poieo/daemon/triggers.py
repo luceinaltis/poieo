@@ -45,7 +45,7 @@ def humanize(seconds: float) -> str:
     divides evenly wins; nothing does, and seconds is the honest answer.
 
     This reaches further than it looks -- it is what `poieo tasks`, `flows`
-    and `validate` print, what the board labels a flow with, and the reason
+    and `validate` print, what the board labels a task with, and the reason
     every interval run records for having fired.
     """
     for size, unit in ((86400, "d"), (3600, "h"), (60, "m")):

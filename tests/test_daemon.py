@@ -120,11 +120,11 @@ async def test_manual_trigger_never_fires_on_its_own():
 def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # cwd is deliberately somewhere else
     config = load_config(EXAMPLES / "poieo.yaml")
-    flows = load_tasks(config)
+    tasks = load_tasks(config)
 
     # Cards are read in filename order, and the disabled ones are skipped.
-    assert [f.spec.name for f in flows] == ["keep-tidy", "revision", "triage"]
-    assert flows[-1].graph.name == "support-triage"
+    assert [f.spec.name for f in tasks] == ["keep-tidy", "revision", "triage"]
+    assert tasks[-1].graph.name == "support-triage"
     assert config.store_path() == (EXAMPLES / "runs").resolve()
 
 
@@ -173,8 +173,8 @@ def test_startup_accepts_the_same_flow_once_the_key_is_there(tmp_path, monkeypat
 
 
 def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypatch):
-    """The same rule check_isolation follows: a flow that is not going to run
-    must still show up in `poieo flows`, or the check gets in the way of the
+    """The same rule check_isolation follows: a task that is not going to run
+    must still show up in `poieo tasks`, or the check gets in the way of the
     fix it is asking for."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     path = _keyed_config(tmp_path)
@@ -203,15 +203,15 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     assert len(load_tasks(load_config(path))) == 1
 
 
-async def test_daemon_runs_every_flow_once_and_shuts_down(sample_project, monkeypatch):
+async def test_daemon_runs_every_task_once_and_shuts_down(sample_project, monkeypatch):
     config = load_config(sample_project / "poieo.yaml")
-    for flow in config.tasks:
-        flow.trigger.max_iterations = 1
+    for task in config.tasks:
+        task.trigger.max_iterations = 1
 
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
 
-    assert {r.flow for r in results} == {"keep-tidy", "revision", "triage"}
+    assert {r.task for r in results} == {"keep-tidy", "revision", "triage"}
     assert all(r.status == "completed" for r in results)
     assert daemon.pools  # a pool was created...
     assert not any(p.instantiated() for p in daemon.pools.values())  # ...and closed
@@ -231,7 +231,7 @@ async def test_carry_state_feeds_the_next_iteration(sample_project):
 
 
 async def test_results_are_a_window_not_a_history(sample_project, monkeypatch):
-    """A RunResult carries the run's whole outputs and state. A loop flow with
+    """A RunResult carries the run's whole outputs and state. A loop task with
     no cooldown makes one per fire for the daemon's lifetime, and only the tail
     is ever read -- last_result by the API, one pass's worth by --once."""
     from poieo.daemon import service
@@ -302,7 +302,7 @@ async def test_daemon_with_web_port_wraps_store_and_serves(sample_project):
             response = None
             while asyncio.get_running_loop().time() < deadline:
                 try:
-                    response = await client.get(f"http://127.0.0.1:{port}/api/flows")
+                    response = await client.get(f"http://127.0.0.1:{port}/api/tasks")
                     if response.status_code == 200:
                         break
                 except httpx.TransportError:
@@ -345,7 +345,7 @@ def test_flow_workdir_is_optional(tmp_path):
     config = load_config(EXAMPLES / "poieo.yaml")
     by_name = {f.name: f for f in config.tasks}
 
-    # A flow that only moves text says nothing about the filesystem...
+    # A task that only moves text says nothing about the filesystem...
     assert by_name["triage"].workdir is None
     assert config.workdir_path(by_name["triage"]) is None
     # ...while one that touches a project says where.
@@ -404,7 +404,7 @@ def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
 def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
     """No ping at all: a machine without docker must not slow down or fail."""
     def boom():
-        raise AssertionError("docker was probed for a flow that never asked")
+        raise AssertionError("docker was probed for a task that never asked")
 
     monkeypatch.setattr("poieo.tools.docker.docker_available", boom)
     config = tmp_path / "poieo.yaml"
@@ -433,8 +433,8 @@ def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
 
 
 def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypatch):
-    """`poieo flows` loads disabled flows too. It must still list one whose
-    image is gone -- that flow is not going to run."""
+    """`poieo tasks` loads disabled tasks too. It must still list one whose
+    image is gone -- that task is not going to run."""
     monkeypatch.setattr(
         "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
     )
@@ -476,8 +476,8 @@ async def test_a_task_can_actually_reach_its_sibling(tmp_path):
 
 def test_the_roster_reaches_the_generated_prompt(tmp_path):
     config = _tasks_config(tmp_path)
-    flow = next(f for f in load_tasks(config) if f.spec.name == "build-docs")
-    system = flow.graph.nodes[0].system or ""
+    task = next(f for f in load_tasks(config) if f.spec.name == "build-docs")
+    system = task.graph.nodes[0].system or ""
     assert "check-links" in system
     assert "build-docs" not in system.split("Other tasks")[-1]
 
@@ -552,7 +552,7 @@ def test_a_bare_tasks_folder_inside_a_project_joins_it(tmp_path):
     # ...and the model it reads with, not just where things live: joining
     # a project halfway is a rule nobody can hold in their head.
     assert bare.binding == config.binding
-    assert [flow.name for flow in bare.tasks] == ["one"]
+    assert [task.name for task in bare.tasks] == ["one"]
 
 
 def test_a_bare_tasks_folder_outside_a_project_is_its_own(tmp_path):
@@ -680,8 +680,8 @@ def test_a_schedule_reads_back_the_way_it_was_written():
     check their own config. The number is the same fact either way; only one
     of them can be checked at a glance.
 
-    This string is what `poieo tasks`, `poieo flows` and `poieo validate`
-    print, what the board labels a flow with, and what every run records as
+    This string is what `poieo tasks`, `poieo tasks` and `poieo validate`
+    print, what the board labels a task with, and what every run records as
     the reason it fired -- so it is worth being readable in one place.
     """
     said = lambda every: TriggerSpec(type="interval", every=every).build().describe

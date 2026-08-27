@@ -4,9 +4,9 @@ import { basic } from "./basic"
 import { DEFAULT_SKIN_ID, SKINS, skinById } from "./registry"
 import { AGENT_RUN } from "../state/fixtures"
 import { initialStage, replay } from "../state/stage"
-import type { FlowRow } from "../types"
+import type { TaskRow } from "../types"
 
-const FLOWS: FlowRow[] = [
+const FLOWS: TaskRow[] = [
   {
     name: "chores",
     graph: "agent-task",
@@ -70,7 +70,7 @@ test("skinById falls back to basic for an unknown id", () => {
 
 test("mount/update/destroy leaves the element empty", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectFlow: () => {} })
+  const handle = basic.mount(el, { onSelectTask: () => {} })
   handle.update(midRun())
   expect(el.childElementCount).toBeGreaterThan(0)
 
@@ -78,38 +78,38 @@ test("mount/update/destroy leaves the element empty", () => {
   expect(el.childElementCount).toBe(0)
 })
 
-test("basic renders one box per flow and reflects status", () => {
+test("basic renders one box per task and reflects status", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectFlow: () => {} })
+  const handle = basic.mount(el, { onSelectTask: () => {} })
   handle.update(midRun())
 
-  expect(el.querySelectorAll("[data-flow]")).toHaveLength(2)
-  expect(el.querySelector('[data-flow="chores"]')!.getAttribute("data-status")).toBe("running")
-  expect(el.querySelector('[data-flow="revision"]')!.getAttribute("data-status")).toBe("waiting")
-  // A running flow opens itself, so the node it is on is visible without
+  expect(el.querySelectorAll("[data-task]")).toHaveLength(2)
+  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-status")).toBe("running")
+  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-status")).toBe("waiting")
+  // A running task opens itself, so the node it is on is visible without
   // anyone having asked -- detail where something is happening, and only there.
-  expect(el.querySelector('[data-flow="chores"]')!.textContent).toContain("work")
+  expect(el.querySelector('[data-task="chores"]')!.textContent).toContain("work")
 
   handle.destroy()
 })
 
-test("the latest thinking and tool call surface on an open flow", () => {
+test("the latest thinking and tool call surface on an open task", () => {
   const el = document.createElement("div")
-  const handle = basic.mount(el, { onSelectFlow: () => {} })
+  const handle = basic.mount(el, { onSelectTask: () => {} })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN))
 
-  const card = el.querySelector('[data-flow="chores"]')!
+  const card = el.querySelector('[data-task="chores"]')!
   expect(card.textContent).toContain("list_dir")
   handle.destroy()
 })
 
-test("clicking a flow's name selects it; the chevron is for opening", () => {
+test("clicking a task's name selects it; the chevron is for opening", () => {
   const el = document.createElement("div")
   const picked: string[] = []
-  const handle = basic.mount(el, { onSelectFlow: (flow) => picked.push(flow) })
+  const handle = basic.mount(el, { onSelectTask: (task) => picked.push(task) })
   handle.update(midRun())
 
-  el.querySelector<HTMLElement>('[data-flow="revision"] .basic-pick')!.click()
+  el.querySelector<HTMLElement>('[data-task="revision"] .basic-pick')!.click()
   expect(picked).toEqual(["revision"])
 
   handle.destroy()

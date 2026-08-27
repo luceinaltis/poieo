@@ -65,7 +65,7 @@ validates before returning:
 What is *not* checked here is anything physical: whether the roles resolve, and
 whether an agent node has somewhere to work. A graph is meant to be portable
 across machines, so `workdir` may legitimately be absent and supplied by the
-flow. `runtime.executor.preflight()` is where "nowhere to work" fails.
+task. `runtime.executor.preflight()` is where "nowhere to work" fails.
 
 `graph.roles()` returns every role the graph needs — `binding.check_roles()`
 consumes it, and that pairing is the whole role contract.
@@ -84,7 +84,7 @@ Three surfaces use one small sandboxed language:
 
 - prompt templates — `"Classify: {{ input.text }}"`
 - router conditions — `"category.lower() == 'bug' and state.retries < 3"`
-- a flow's `then:` branches — `"run.change and run.steps > 2"` (see
+- a task's `then:` branches — `"run.change and run.steps > 2"` (see
   [daemon.md](daemon.md))
 
 `expr.py` walks a whitelist of AST node types. Everything outside it — imports,
@@ -101,7 +101,7 @@ Every one of those three expressions was typed into a **YAML** file, so `true`,
 are aliases, not replacements — the source is still parsed as Python, and the
 scope is checked first, so a run carrying data named `true` keeps it. Without
 them `when: "true"` failed with `unknown name 'true'`, which in a router is loud
-and in a flow's `then:` block is the quietest possible bug: an unreadable
+and in a task's `then:` block is the quietest possible bug: an unreadable
 condition there is logged and skipped, so the branch simply never fires.
 
 `DotDict` is why `input.text` works on data that arrived as plain JSON: run data

@@ -136,7 +136,7 @@ class NodeSpec(_Spec):
                     validate_template(self.system)
             except ExpressionError as exc:
                 raise ValueError(f"node '{self.id}': {exc}") from exc
-            # A workdir is physical, and this is the logical layer: the flow may
+            # A workdir is physical, and this is the logical layer: the task may
             # supply it instead. preflight() is where "nowhere to work" fails.
             if self.workdir:
                 try:

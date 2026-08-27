@@ -25,13 +25,13 @@ of the loop: the `cancel` event (shutdown, checked between nodes) and
 **`execute()` never raises for an in-run failure.** A `PoieoError` becomes
 `status="failed"` on the returned `RunResult`; a `RunAborted` becomes
 `"aborted"`. Only `preflight()` — spec and binding problems — raises, because
-those mean the flow is misconfigured rather than flaky. This is what lets a
-daemon flow log a failure and stay up. `asyncio.CancelledError` is the one
+those mean the task is misconfigured rather than flaky. This is what lets a
+daemon task log a failure and stay up. `asyncio.CancelledError` is the one
 exception that is re-raised, after emitting `run_aborted`.
 
 `preflight()` checks the two things that make a run impossible before it costs
 anything: every role the graph names resolves against the binding, and every
-agent node has somewhere to work (its own `workdir`, or the flow's). Checking a
+agent node has somewhere to work (its own `workdir`, or the task's). Checking a
 graph on its own passes `require_workdir=False`, since not naming a directory is
 the point there rather than a defect.
 
@@ -53,7 +53,7 @@ graph, binding, pool and store; `input`, `state`, `iteration`; `workdir` and
 | `state` | the mapping that survives across iterations |
 | `nodes.<id>` | any earlier node's output |
 | `<alias>` | an output's `as:` name, hoisted to the top level |
-| `run` | `id`, `flow`, `trigger`, `iteration`, `path` |
+| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
 
 Aliases use `setdefault`, so a graph cannot shadow `input` or `run` by naming an
 output after them. Everything is `wrap()`ped once here so `input.text` and
@@ -134,7 +134,7 @@ sentence, and the raw error is always kept beside the cause.
 
 ## RunResult
 
-What comes back, and what the store keeps a summary of: `run_id`, `flow`,
+What comes back, and what the store keeps a summary of: `run_id`, `task`,
 `graph`, `status`, `trigger`, timestamps, `steps`, `path`, `usage`, `outputs`,
 `state`, `error`, `cause`, `iteration`, and `change` (set afterwards by the
 daemon). `summary()` omits `change` and `cause` when absent rather than writing

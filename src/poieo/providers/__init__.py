@@ -42,7 +42,7 @@ def check_credentials(binding: BindingSpec, roles: set[str]) -> None:
     Only the roles a graph actually names -- a spare endpoint declared in the
     binding but bound to nothing is not going to be called, and holding the
     daemon down for its key would make the binding file harder to keep than
-    the flows it serves.
+    the tasks it serves.
     """
     checked: set[str] = set()
     for role in sorted(roles):

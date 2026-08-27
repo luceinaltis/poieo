@@ -16,9 +16,9 @@ import {
   shelfCount,
 } from "./scene"
 import { NOTHING } from "../../review/rollup"
-import type { FlowState } from "../../state/stage"
+import type { TaskState } from "../../state/stage"
 
-function flowState(over: Partial<FlowState> = {}): FlowState {
+function flowState(over: Partial<TaskState> = {}): TaskState {
   return {
     status: "waiting",
     currentNode: null,
@@ -77,7 +77,7 @@ test("no two benches can share a square", () => {
   expect(placed.a).not.toEqual(placed.b)
 })
 
-test("a saved square for a flow that is gone is ignored", () => {
+test("a saved square for a task that is gone is ignored", () => {
   const placed = place(["a"], { ghost: { col: 4, row: 4 } }, 3)
   expect(Object.keys(placed)).toEqual(["a"])
 })
@@ -137,7 +137,7 @@ test("the lamp is lit while the bench is in use", () => {
   expect(lampLit(flowState({ status: "waiting" }))).toBe(false)
 })
 
-test("a flow with no private copy shelves nothing", () => {
+test("a task with no private copy shelves nothing", () => {
   // It produces no piece to put anywhere. Counting its runs as finished
   // pieces fills a shelf with things that do not exist.
   const busy = flowState({

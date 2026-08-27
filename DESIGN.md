@@ -9,10 +9,10 @@
 **An autonomous task board: write down the work you want done, and the LLMs on
 your own machine keep it running around the clock.**
 
-The user designs the flow of the work, poieo keeps that flow resident, and the
+The user designs the task of the work, poieo keeps that task resident, and the
 model does the actual hands-on work at each step. Pin up a task like "keep
 improving this project" and — find something to fix, edit the code, run the
-tests, branch on the result — the flow keeps turning while you are away.
+tests, branch on the result — the task keeps turning while you are away.
 
 ## Core principles
 
@@ -57,7 +57,7 @@ continued in any other.
 ### 5. Fail at launch, not at 3am
 
 Every graph, binding, and expression is validated at load time. A typo must
-never kill a flow when its trigger fires in the middle of the night. In the
+never kill a task when its trigger fires in the middle of the night. In the
 other direction, **an in-run failure never kills the daemon** — it is
 recorded, and the next trigger starts a fresh run. Staying up is the default.
 
@@ -94,7 +94,7 @@ result.**
 
 ```
 poieo run      execute a graph once
-poieo daemon   keep flows resident
+poieo daemon   keep tasks resident
 poieo runs     see what happened
 poieo validate / show / check   preflight everything
 ```
@@ -105,10 +105,10 @@ A single page that opens when you point a browser at wherever `poieo daemon`
 is serving. From there the user can:
 
 - **Create a task card** — write a name and a prompt, save, and the card
-  starts running around the clock. A card *is* a flow.
+  starts running around the clock. A card *is* a task.
 - **See the roadmap** — every task's state at a glance: running / paused /
   last result.
-- **Open the details** — expanding a card exposes the flow (graph) on a
+- **Open the details** — expanding a card exposes the task (graph) on a
   canvas editor, the trigger schedule, and the role→model mapping (binding).
   Unopened, it all stays on defaults.
 - **Control** — pause/resume, run once right now.
@@ -126,8 +126,8 @@ What poieo offers the user stacks in layers:
 
 | layer | what the user gets | status |
 |---|---|---|
-| **Flow** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
-| **Residency** — daemon, triggers, carried state | the designed flow keeps running, 24/7 | done |
+| **Task** — graphs, routers, cycles, state | a language for designing the order and branching of work | done |
+| **Residency** — daemon, triggers, carried state | the designed task keeps running, 24/7 | done |
 | **ToolContext** — agent node, files/shell tools | the model doesn't just talk about an edit; it makes it and runs the tests | done |
 | **Undo** — work isolated from the user's files, one change per run | last night's work arrives as a diff to accept or throw away, never as a surprise | done |
 | **Fences** — opt-in container isolation for a task's commands | the hands reach the folder and nothing else of the machine | done |
@@ -135,8 +135,8 @@ What poieo offers the user stacks in layers:
 | **Memory** — a project keeps what it has learned, and every task reads it before working | last month's lesson is in front of tonight's run, and you can open the file it came from | done |
 | **Face** — the web roadmap board | all of the above in a browser, with minimal configuration | most: observe, review and control are live; creating a card from the board is next |
 
-The key insight: **"keeps working" is a property of the flow, not of a node.**
-An agent node is one step of the flow using its hands; running forever is the
+The key insight: **"keeps working" is a property of the task, not of a node.**
+An agent node is one step of the task using its hands; running forever is the
 job of the user-designed graph plus the daemon's triggers, with progress
 carried between iterations as state.
 
@@ -160,7 +160,7 @@ Autonomous execution needs explicit fences:
   accepted into the project or thrown away. This is not a later luxury: it is
   what makes hands safe to hand out, and it ships with them. Autonomy without
   undo is a different, scarier product.
-- **Time**: every unbounded thing has a ceiling — how many steps a flow may
+- **Time**: every unbounded thing has a ceiling — how many steps a task may
   take, how many turns a model may spend on one step, how long a command may
   run. Endless wandering becomes a recorded failure, and the next trigger
   starts fresh.
@@ -185,7 +185,7 @@ Autonomous execution needs explicit fences:
 
 ## Roadmap
 
-Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: flow control
+Items 1–5, 7 and 8 have shipped, and 6 is half-shipped: task control
 (pause / resume / run-now) is live end to end; task card CRUD is the open
 slice. The link after each shipped item is the document describing how it
 works today.
@@ -211,9 +211,9 @@ works today.
    that sees its folder and nothing else of the machine. The shell was the
    one tool that could reach past path confinement; this closes it.
    (`docs/tools.md`)
-6. **Web control plane** — task card CRUD and flow control (REST API); fold
+6. **Web control plane** — task card CRUD and task control (REST API); fold
    the existing canvas editor in for detail editing. The daemon gains runtime
-   flow add/remove/pause. Flow control — pause, resume, run now, from runner
+   task add/remove/pause. Task control — pause, resume, run now, from runner
    to board — has shipped; CRUD and the editor fold-in remain.
    (`docs/web.md`)
 7. **Tasks that work together** — a task can leave a line in another task's

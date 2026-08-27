@@ -9,7 +9,7 @@
  * else.
  */
 
-import type { DiffReport, FlowRow, PoieoEvent, RunSummary } from "./types"
+import type { DiffReport, TaskRow, PoieoEvent, RunSummary } from "./types"
 
 async function getJson<T>(path: string): Promise<T | null> {
   const response = await fetch(path)
@@ -17,16 +17,16 @@ async function getJson<T>(path: string): Promise<T | null> {
   return (await response.json()) as T
 }
 
-export async function fetchFlows(): Promise<FlowRow[]> {
-  const body = await getJson<{ flows: FlowRow[] }>("/api/flows")
-  return body?.flows ?? []
+export async function fetchTasks(): Promise<TaskRow[]> {
+  const body = await getJson<{ tasks: TaskRow[] }>("/api/tasks")
+  return body?.tasks ?? []
 }
 
 export async function fetchRuns(
-  opts: { flow?: string; limit?: number } = {},
+  opts: { task?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {
   const query = new URLSearchParams()
-  if (opts.flow) query.set("flow", opts.flow)
+  if (opts.task) query.set("task", opts.task)
   if (opts.limit !== undefined) query.set("limit", String(opts.limit))
   const suffix = query.toString() ? `?${query}` : ""
 
@@ -91,8 +91,8 @@ async function post<T extends Answer>(path: string, body?: unknown): Promise<T> 
   }
 }
 
-const flowUrl = (flow: string, verb: string) =>
-  `/api/flows/${encodeURIComponent(flow)}/${verb}`
+const taskUrl = (task: string, verb: string) =>
+  `/api/tasks/${encodeURIComponent(task)}/${verb}`
 
 /**
  * The review: the only two calls that can move the reader's own files. A
@@ -106,12 +106,12 @@ export interface Decision extends Answer {
   conflict?: string[]
 }
 
-export function accept(flow: string, throughRunId?: string): Promise<Decision> {
-  return post(flowUrl(flow, "accept"), { through_run_id: throughRunId })
+export function accept(task: string, throughRunId?: string): Promise<Decision> {
+  return post(taskUrl(task, "accept"), { through_run_id: throughRunId })
 }
 
-export function discard(flow: string, fromRunId?: string): Promise<Decision> {
-  return post(flowUrl(flow, "discard"), { from_run_id: fromRunId })
+export function discard(task: string, fromRunId?: string): Promise<Decision> {
+  return post(taskUrl(task, "discard"), { from_run_id: fromRunId })
 }
 
 /**
@@ -123,16 +123,16 @@ export interface ControlAnswer extends Answer {
   run_id?: string
 }
 
-export function pause(flow: string): Promise<ControlAnswer> {
-  return post(flowUrl(flow, "pause"))
+export function pause(task: string): Promise<ControlAnswer> {
+  return post(taskUrl(task, "pause"))
 }
 
-export function resume(flow: string): Promise<ControlAnswer> {
-  return post(flowUrl(flow, "resume"))
+export function resume(task: string): Promise<ControlAnswer> {
+  return post(taskUrl(task, "resume"))
 }
 
-export function runNow(flow: string): Promise<ControlAnswer> {
-  return post(flowUrl(flow, "run"))
+export function runNow(task: string): Promise<ControlAnswer> {
+  return post(taskUrl(task, "run"))
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

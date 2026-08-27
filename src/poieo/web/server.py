@@ -35,14 +35,14 @@ def sse_frame(record: dict[str, Any]) -> str:
     return f"data: {json.dumps(record, ensure_ascii=False)}\n\n"
 
 
-async def _event_stream(store: BroadcastStore, flow: str | None = None) -> AsyncIterator[str]:
+async def _event_stream(store: BroadcastStore, task: str | None = None) -> AsyncIterator[str]:
     queue = store.subscribe()
     try:
         while True:
             record = await queue.get()
-            if flow:
-                run_flow = record.get("flow") or store.run_flows.get(record.get("run_id", ""))
-                if run_flow != flow:
+            if task:
+                run_flow = record.get("task") or store.run_tasks.get(record.get("run_id", ""))
+                if run_flow != task:
                     continue
             yield sse_frame(record)
     finally:
@@ -58,16 +58,16 @@ class ImmutableFiles(StaticFiles):
         return response
 
 
-def _runner_for(daemon: Any, flow: str | None) -> Any:
+def _runner_for(daemon: Any, task: str | None) -> Any:
     for runner in daemon.runners:
-        if runner.name == flow:
+        if runner.name == task:
             return runner
     return None
 
 
-def _workspace_for(daemon: Any, flow: str | None) -> Any:
-    """The private copy behind a flow, if it keeps one."""
-    runner = _runner_for(daemon, flow)
+def _workspace_for(daemon: Any, task: str | None) -> Any:
+    """The private copy behind a task, if it keeps one."""
+    runner = _runner_for(daemon, task)
     return getattr(runner, "workspace", None) if runner else None
 
 
@@ -86,7 +86,7 @@ def _review_state(runner: Any) -> dict[str, Any]:
 def _branches(branches: Any) -> list[dict[str, Any]]:
     """How an arrow is drawn: where it goes, and the word on it.
 
-    One shape for a router's branches and for a flow's `then:` -- they are the
+    One shape for a router's branches and for a task's `then:` -- they are the
     same `Branch` one level apart. The label falls back to the condition
     exactly as `RouterNode` does, so the board and the run record never
     disagree about what to call an arrow.
@@ -94,7 +94,7 @@ def _branches(branches: Any) -> list[dict[str, Any]]:
     return [{"to": branch.to, "label": branch.label or branch.when} for branch in branches]
 
 
-def _model(flow: Any, node: Any) -> str | None:
+def _model(task: Any, node: Any) -> str | None:
     """The model id this node would actually call, or None if it calls none.
 
     Resolved the way `runtime/nodes.py` resolves it, so the picture cannot
@@ -106,9 +106,9 @@ def _model(flow: Any, node: Any) -> str | None:
     """
     if node.type == "router":
         return None
-    role = node.role or flow.graph.default_role
+    role = node.role or task.graph.default_role
     try:
-        return flow.binding.resolve(role).model
+        return task.binding.resolve(role).model
     except BindingError:
         # Only a binding with no default to fall back on gets here. A board
         # that cannot name the model is worth more than one that will not
@@ -116,17 +116,17 @@ def _model(flow: Any, node: Any) -> str | None:
         return None
 
 
-def _shape(flow: Any) -> dict[str, Any]:
+def _shape(task: Any) -> dict[str, Any]:
     """A graph's wiring: enough to draw it, and nothing else.
 
     Not the whole GraphSpec, and not the whole binding: this rides on every
     board paint to every browser watching, so a graph's prompts stay home and
     only the bare model id crosses.
 
-    Takes the flow rather than the graph because a role resolves against a
-    binding, and the binding hangs off the flow.
+    Takes the task rather than the graph because a role resolves against a
+    binding, and the binding hangs off the task.
     """
-    graph = flow.graph
+    graph = task.graph
     return {
         "entry": graph.entry,
         "nodes": [
@@ -136,7 +136,7 @@ def _shape(flow: Any) -> dict[str, Any]:
                 "next": node.next,
                 "default": node.default,
                 "branches": _branches(node.branches),
-                "model": _model(flow, node),
+                "model": _model(task, node),
                 # Absent rather than null when the editor never placed it: a
                 # view that lays out unplaced nodes itself needs to tell the
                 # difference between "at the origin" and "nowhere yet".
@@ -150,7 +150,7 @@ def _shape(flow: Any) -> dict[str, Any]:
 def create_app(daemon: Any) -> Starlette:
     """Build the app over a daemon-shaped object (.runners, .store)."""
 
-    async def flows(request: Request) -> JSONResponse:
+    async def tasks(request: Request) -> JSONResponse:
         # Each review state is two git subprocesses; asked one runner at a
         # time, the board's first paint waits for all of them in single file.
         states = await asyncio.gather(
@@ -168,18 +168,18 @@ def create_app(daemon: Any) -> Starlette:
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
                     **state,
-                    # The two halves of the work graph: which flow this one
+                    # The two halves of the work graph: which task this one
                     # hands to, and what it walks on the way there.
                     "then": _branches(runner.task.spec.then),
                     "shape": _shape(runner.task),
                 }
             )
-        return JSONResponse({"flows": rows})
+        return JSONResponse({"tasks": rows})
 
     def runs(request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", "20"))
-        flow = request.query_params.get("flow")
-        return JSONResponse({"runs": daemon.store.list_runs(limit=limit, flow=flow)})
+        task = request.query_params.get("task")
+        return JSONResponse({"runs": daemon.store.list_runs(limit=limit, task=task)})
 
     def run_detail(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
@@ -196,7 +196,7 @@ def create_app(daemon: Any) -> Starlette:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
         change = summary.get("change")
-        point = _workspace_for(daemon, summary.get("flow"))
+        point = _workspace_for(daemon, summary.get("task"))
         if not change or point is None:
             # A run that altered nothing has nothing to review. That is an
             # answer, not a failure.
@@ -207,15 +207,15 @@ def create_app(daemon: Any) -> Starlette:
 
     async def _decide(request: Request, action: str, key: str) -> JSONResponse:
         """accept and discard differ only in which verb and which run id."""
-        flow = request.path_params["flow"]
-        runner = _runner_for(daemon, flow)
+        task = request.path_params["task"]
+        runner = _runner_for(daemon, task)
         if runner is None:
-            return JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+            return JSONResponse({"error": f"no task '{task}'"}, status_code=404)
 
         point = getattr(runner, "workspace", None)
         if point is None:
             return JSONResponse(
-                {"error": f"flow '{flow}' keeps no reviewable copy"}, status_code=409
+                {"error": f"task '{task}' keeps no reviewable copy"}, status_code=409
             )
 
         try:
@@ -250,10 +250,10 @@ def create_app(daemon: Any) -> Starlette:
 
     def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
         """The runner a control route is about, or the 404 saying there isn't one."""
-        flow = request.path_params["flow"]
-        runner = _runner_for(daemon, flow)
+        task = request.path_params["task"]
+        runner = _runner_for(daemon, task)
         if runner is None:
-            return None, JSONResponse({"error": f"no flow '{flow}'"}, status_code=404)
+            return None, JSONResponse({"error": f"no task '{task}'"}, status_code=404)
         return runner, None
 
     async def _hold(request: Request, verb: str) -> JSONResponse:
@@ -285,9 +285,9 @@ def create_app(daemon: Any) -> Starlette:
         return JSONResponse({"status": "starting"})
 
     async def events(request: Request) -> StreamingResponse:
-        flow = request.query_params.get("flow")
+        task = request.query_params.get("task")
         return StreamingResponse(
-            _event_stream(daemon.store, flow),
+            _event_stream(daemon.store, task),
             media_type="text/event-stream",
             headers={"cache-control": "no-cache"},
         )
@@ -299,23 +299,23 @@ def create_app(daemon: Any) -> Starlette:
             # reader keeps running an old page with no way to find out.
             return FileResponse(page, headers={"cache-control": "no-cache"})
         return PlainTextResponse(
-            "poieo web UI is not built yet. The API is live: /api/flows"
+            "poieo web UI is not built yet. The API is live: /api/tasks"
         )
 
     routes = [
-        Route("/api/flows", flows),
+        Route("/api/tasks", tasks),
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.
-        Route("/api/flows/{flow}/accept", flow_accept, methods=["POST"]),
-        Route("/api/flows/{flow}/discard", flow_discard, methods=["POST"]),
+        Route("/api/tasks/{task}/accept", flow_accept, methods=["POST"]),
+        Route("/api/tasks/{task}/discard", flow_discard, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
-        Route("/api/flows/{flow}/pause", flow_pause, methods=["POST"]),
-        Route("/api/flows/{flow}/resume", flow_resume, methods=["POST"]),
-        Route("/api/flows/{flow}/run", flow_run, methods=["POST"]),
+        Route("/api/tasks/{task}/pause", flow_pause, methods=["POST"]),
+        Route("/api/tasks/{task}/resume", flow_resume, methods=["POST"]),
+        Route("/api/tasks/{task}/run", flow_run, methods=["POST"]),
         Route("/", index),
     ]
     # Vite emits static/assets/<hashed name> and references it as /assets/...,

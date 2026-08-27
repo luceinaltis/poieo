@@ -30,13 +30,13 @@ afterEach(() => {
 
 function render(props: Record<string, unknown> = {}) {
   act(() => {
-    root.render(<Control flow="chores" status="waiting" onActed={() => {}} {...props} />)
+    root.render(<Control task="chores" status="waiting" onActed={() => {}} {...props} />)
   })
 }
 
 const button = (name: string) => container.querySelector<HTMLElement>(`[data-do="${name}"]`)
 
-test("a waiting flow offers pause, and the toggle sends it", async () => {
+test("a waiting task offers pause, and the toggle sends it", async () => {
   pause.mockResolvedValue({ ok: true, status: "paused" })
   const acted = vi.fn()
   render({ onActed: acted })
@@ -49,7 +49,7 @@ test("a waiting flow offers pause, and the toggle sends it", async () => {
   expect(acted).toHaveBeenCalledTimes(1)
 })
 
-test("a paused flow offers resume, and the toggle sends it", async () => {
+test("a paused task offers resume, and the toggle sends it", async () => {
   resume.mockResolvedValue({ ok: true, status: "waiting" })
   render({ status: "paused" })
 
@@ -60,7 +60,7 @@ test("a paused flow offers resume, and the toggle sends it", async () => {
   expect(pause).not.toHaveBeenCalled()
 })
 
-test("run now fires, and is disabled while the flow is running", async () => {
+test("run now fires, and is disabled while the task is running", async () => {
   runNow.mockResolvedValue({ ok: true, status: "starting" })
   render()
 

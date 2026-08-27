@@ -16,7 +16,7 @@ const USAGE = {
 function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
     run_id: "r",
-    flow: "chores",
+    task: "chores",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T02:14:00+00:00",
@@ -151,7 +151,7 @@ test("clicking a row selects that run", () => {
 })
 
 
-test("a flow with no private copy is not accused of finding nothing to do", () => {
+test("a task with no private copy is not accused of finding nothing to do", () => {
   render([FOUND_NOTHING], false)
 
   const row = rows()[0]
@@ -163,7 +163,7 @@ test("a flow with no private copy is not accused of finding nothing to do", () =
 
 
 test("a run with no change to describe says how long it took", () => {
-  // A flow that keeps no private copy has no change message, so every row read
+  // A task that keeps no private copy has no change message, so every row read
   // "3 steps" and ten of them said nothing at all. How long it took is the one
   // thing that is always true of a run and always different.
   render([run({ run_id: "a", steps: 3 })], false)
@@ -173,7 +173,7 @@ test("a run with no change to describe says how long it took", () => {
 })
 
 test("a run says what it spent when it changed nothing to count", () => {
-  // The lines-changed column is empty for a flow with no copy, and tokens are
+  // The lines-changed column is empty for a task with no copy, and tokens are
   // the other thing a run costs.
   render(
     [run({ run_id: "a", usage: { ...USAGE, output_tokens: 128 } })],

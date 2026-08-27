@@ -38,7 +38,7 @@ export function occupied(
   except: string,
 ): boolean {
   return Object.entries(placed).some(
-    ([flow, at]) => flow !== except && at.col === cell.col && at.row === cell.row,
+    ([task, at]) => task !== except && at.col === cell.col && at.row === cell.row,
   )
 }
 
@@ -97,35 +97,35 @@ export function clampZoom(scale: number): number {
 /**
  * Where the workshop puts benches, honouring anything the reader has moved.
  *
- * A saved square for a flow that no longer exists is dropped; two flows can
+ * A saved square for a task that no longer exists is dropped; two tasks can
  * never end up on one square, because a saved square that is already taken
  * falls back to the automatic one.
  */
 export function place(
-  flows: string[],
+  tasks: string[],
   saved: Record<string, Cell> = {},
   columns = 3,
 ): Record<string, Cell> {
   const placed: Record<string, Cell> = {}
   const taken = new Set<string>()
 
-  for (const flow of flows) {
-    const want = saved[flow]
+  for (const task of tasks) {
+    const want = saved[task]
     if (want && !taken.has(key(want))) {
-      placed[flow] = want
+      placed[task] = want
       taken.add(key(want))
     }
   }
 
   let next = 0
-  for (const flow of flows) {
-    if (placed[flow]) continue
+  for (const task of tasks) {
+    if (placed[task]) continue
     let cell = { col: next % columns, row: Math.floor(next / columns) }
     while (taken.has(key(cell))) {
       next += 1
       cell = { col: next % columns, row: Math.floor(next / columns) }
     }
-    placed[flow] = cell
+    placed[task] = cell
     taken.add(key(cell))
     next += 1
   }

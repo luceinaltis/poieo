@@ -81,8 +81,8 @@ def test_flows_lists_runner_state(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(last=last)])
     client = TestClient(create_app(daemon))
 
-    body = client.get("/api/flows").json()
-    assert body["flows"] == [
+    body = client.get("/api/tasks").json()
+    assert body["tasks"] == [
         {
             "name": "triage",
             "graph": "support-triage",
@@ -134,7 +134,7 @@ def test_a_flow_serves_the_handoffs_it_declared(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(then=then)])
     client = TestClient(create_app(daemon))
 
-    row = client.get("/api/flows").json()["flows"][0]
+    row = client.get("/api/tasks").json()["tasks"][0]
     assert row["then"] == [{"to": "review", "label": "changed"}]
 
 
@@ -145,7 +145,7 @@ def test_a_branch_with_no_label_is_drawn_with_its_condition(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(then=then)])
     client = TestClient(create_app(daemon))
 
-    row = client.get("/api/flows").json()["flows"][0]
+    row = client.get("/api/tasks").json()["tasks"][0]
     assert row["then"] == [{"to": "review", "label": "run.steps > 2"}]
 
 
@@ -155,7 +155,7 @@ def test_the_wiring_carries_no_prompts(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner()])
     client = TestClient(create_app(daemon))
 
-    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
     assert not any("prompt" in node or "system" in node for node in shape["nodes"])
 
 
@@ -166,7 +166,7 @@ def test_each_node_reports_the_model_it_would_call(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner()])
     client = TestClient(create_app(daemon))
 
-    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
     models = {node["id"]: node["model"] for node in shape["nodes"]}
     assert models == {
         "classify": "llama3.2:3b",   # its role
@@ -176,7 +176,7 @@ def test_each_node_reports_the_model_it_would_call(tmp_path):
 
 
 def test_one_graph_on_two_bindings_reports_two_models(tmp_path):
-    """Which is why the model is drawn inside a flow's border and never on the
+    """Which is why the model is drawn inside a task's border and never on the
     graph: the same file is a different afternoon under a different binding."""
     local = {
         "providers": {"ollama": {"type": "ollama", "base_url": "http://localhost:11434"}},
@@ -188,7 +188,7 @@ def test_one_graph_on_two_bindings_reports_two_models(tmp_path):
     )
     client = TestClient(create_app(daemon))
 
-    rows = {row["name"]: row["shape"] for row in client.get("/api/flows").json()["flows"]}
+    rows = {row["name"]: row["shape"] for row in client.get("/api/tasks").json()["tasks"]}
     said = lambda shape: [n["model"] for n in shape["nodes"] if n["id"] == "answer"]
     assert said(rows["triage"]) == ["claude-opus-5"]
     assert said(rows["nightly"]) == ["qwen3:8b"]
@@ -207,7 +207,7 @@ def test_a_role_the_binding_never_declares_reports_what_will_really_run(tmp_path
     daemon = stub_daemon(tmp_path, [stub_runner(graph=typo)])
     client = TestClient(create_app(daemon))
 
-    shape = client.get("/api/flows").json()["flows"][0]["shape"]
+    shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
     assert [node["model"] for node in shape["nodes"]] == ["claude-opus-5"]
 
 
@@ -218,9 +218,9 @@ def test_a_binding_with_no_default_leaves_the_model_unknown(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(binding=bare)])
     client = TestClient(create_app(daemon))
 
-    response = client.get("/api/flows")
+    response = client.get("/api/tasks")
     assert response.status_code == 200
-    shape = response.json()["flows"][0]["shape"]
+    shape = response.json()["tasks"][0]["shape"]
     assert all(node["model"] is None for node in shape["nodes"])
 
 
@@ -230,7 +230,7 @@ def test_the_wiring_carries_no_credentials(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner()])
     client = TestClient(create_app(daemon))
 
-    body = client.get("/api/flows").text
+    body = client.get("/api/tasks").text
     assert "base_url" not in body
     assert "api_key_env" not in body
     assert "localhost:11434" not in body
@@ -239,7 +239,7 @@ def test_the_wiring_carries_no_credentials(tmp_path):
 def test_flows_asks_every_runner_at_once(tmp_path):
     """Each runner's review state costs two git subprocesses, ~100ms of spawn
     on Windows. Asked one runner at a time, the first paint of a board of N
-    flows waits ~2N spawns; asked together it waits for the slowest one."""
+    tasks waits ~2N spawns; asked together it waits for the slowest one."""
     import threading
     import time
 
@@ -262,19 +262,19 @@ def test_flows_asks_every_runner_at_once(tmp_path):
             return "main"
 
     runners = [
-        stub_runner(name=f"flow{i}", workspace=SlowPoint()) for i in range(4)
+        stub_runner(name=f"task{i}", workspace=SlowPoint()) for i in range(4)
     ]
     client = TestClient(create_app(stub_daemon(tmp_path, runners)))
 
-    body = client.get("/api/flows").json()
-    assert [row["name"] for row in body["flows"]] == [f"flow{i}" for i in range(4)]
+    body = client.get("/api/tasks").json()
+    assert [row["name"] for row in body["tasks"]] == [f"task{i}" for i in range(4)]
     assert peak > 1  # overlapping, not one after another
 
 
 def test_runs_index_and_detail_and_404(tmp_path):
     daemon = stub_daemon(tmp_path)
-    daemon.store.append(Event(run_id="r1", type="run_started", data={"flow": "t"}))
-    daemon.store.record_summary({"run_id": "r1", "flow": "t", "status": "completed"})
+    daemon.store.append(Event(run_id="r1", type="run_started", data={"task": "t"}))
+    daemon.store.record_summary({"run_id": "r1", "task": "t", "status": "completed"})
     client = TestClient(create_app(daemon))
 
     runs = client.get("/api/runs").json()["runs"]
@@ -293,7 +293,7 @@ def test_root_serves_fallback_without_built_ui(tmp_path, monkeypatch):
     client = TestClient(create_app(stub_daemon(tmp_path)))
     response = client.get("/")
     assert response.status_code == 200
-    assert "/api/flows" in response.text
+    assert "/api/tasks" in response.text
 
 
 def test_sse_frame_format():
@@ -302,16 +302,16 @@ def test_sse_frame_format():
 
 async def test_event_stream_yields_and_filters(tmp_path):
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
-    stream = _event_stream(store, flow="triage")
+    stream = _event_stream(store, task="triage")
 
     async def first_frame():
         return await stream.__anext__()
 
     task = asyncio.create_task(first_frame())
     await asyncio.sleep(0)  # let the generator subscribe
-    # an event for another flow is filtered out, ours comes through
-    store.append(Event(run_id="a", type="run_started", data={"flow": "other"}))
-    store.append(Event(run_id="b", type="run_started", data={"flow": "triage"}))
+    # an event for another task is filtered out, ours comes through
+    store.append(Event(run_id="a", type="run_started", data={"task": "other"}))
+    store.append(Event(run_id="b", type="run_started", data={"task": "triage"}))
     frame = await asyncio.wait_for(task, timeout=2)
     assert '"run_id": "b"' in frame
     await stream.aclose()
@@ -332,7 +332,7 @@ def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
     assert client.get("/assets/app.js").status_code == 200
 
 def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
-    """A stub daemon whose one flow really has a change to show."""
+    """A stub daemon whose one task really has a change to show."""
     repo = make_repo(tmp_path)
     point = Workspace(repo, "chores", tmp_path / "worktrees")
     point.prepare()
@@ -340,11 +340,11 @@ def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
     change = point.commit(run_id, "did a thing")
 
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
-    store.append(Event(run_id=run_id, type="run_started", data={"flow": "chores"}))
+    store.append(Event(run_id=run_id, type="run_started", data={"task": "chores"}))
     store.record_summary(
         {
             "run_id": run_id,
-            "flow": "chores",
+            "task": "chores",
             "status": "completed",
             "change": change.as_dict(),
         }
@@ -370,9 +370,9 @@ def test_diff_reports_the_files_and_the_patch(tmp_path):
 
 def test_diff_of_a_run_that_changed_nothing_is_not_an_error(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(name="chores")])
-    daemon.store.append(Event(run_id="quiet", type="run_started", data={"flow": "chores"}))
+    daemon.store.append(Event(run_id="quiet", type="run_started", data={"task": "chores"}))
     daemon.store.record_summary(
-        {"run_id": "quiet", "flow": "chores", "status": "completed"}
+        {"run_id": "quiet", "task": "chores", "status": "completed"}
     )
     client = TestClient(create_app(daemon))
 
@@ -403,7 +403,7 @@ def test_diff_truncates_a_huge_patch_but_keeps_the_file_list(tmp_path):
 
 
 def daemon_with_two_changes(tmp_path):
-    """Two runs' worth of pending work on one flow's branch."""
+    """Two runs' worth of pending work on one task's branch."""
     repo = make_repo(tmp_path)
     point = Workspace(repo, "chores", tmp_path / "worktrees")
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
@@ -414,11 +414,11 @@ def daemon_with_two_changes(tmp_path):
         (point.worktree / name).write_text("print(1)" + chr(10), encoding="utf-8")
         change = point.commit(run_id, f"wrote {name}")
         changes[run_id] = change
-        store.append(Event(run_id=run_id, type="run_started", data={"flow": "chores"}))
+        store.append(Event(run_id=run_id, type="run_started", data={"task": "chores"}))
         store.record_summary(
             {
                 "run_id": run_id,
-                "flow": "chores",
+                "task": "chores",
                 "status": "completed",
                 "change": change.as_dict(),
             }
@@ -432,7 +432,7 @@ def test_flows_reports_how_much_is_waiting_and_where_it_would_go(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    row = client.get("/api/flows").json()["flows"][0]
+    row = client.get("/api/tasks").json()["tasks"][0]
     assert row["pending"] == 2
     # the accept button has to say what it would add to
     assert row["into"] == "main"
@@ -442,14 +442,14 @@ def test_flows_reports_nothing_pending_without_a_private_copy(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(name="triage")])
     client = TestClient(create_app(daemon))
 
-    assert client.get("/api/flows").json()["flows"][0]["pending"] == 0
+    assert client.get("/api/tasks").json()["tasks"][0]["pending"] == 0
 
 
 def test_accept_puts_the_work_in_the_users_branch(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/flows/chores/accept", json={})
+    response = client.post("/api/tasks/chores/accept", json={})
 
     assert response.status_code == 200
     assert response.json() == {"accepted": 2}
@@ -461,7 +461,7 @@ def test_accept_through_a_run_stops_there(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    body = client.post("/api/flows/chores/accept", json={"through_run_id": "r1"}).json()
+    body = client.post("/api/tasks/chores/accept", json={"through_run_id": "r1"}).json()
 
     assert body == {"accepted": 1}
     assert head(repo, "main") == changes["r1"].head
@@ -474,7 +474,7 @@ def test_accept_refuses_a_dirty_checkout(tmp_path):
     (repo / "README.md").write_text("mine, unsaved", encoding="utf-8")
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/flows/chores/accept", json={})
+    response = client.post("/api/tasks/chores/accept", json={})
 
     assert response.status_code == 409
     assert response.json() == {"dirty": ["README.md"]}
@@ -490,7 +490,7 @@ def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
 
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
     store.record_summary(
-        {"run_id": "r1", "flow": "chores", "status": "completed", "change": change.as_dict()}
+        {"run_id": "r1", "task": "chores", "status": "completed", "change": change.as_dict()}
     )
     (repo / "README.md").write_text("mine", encoding="utf-8")
     git(repo, "commit", "-am", "my own edit")
@@ -499,7 +499,7 @@ def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
     daemon = SimpleNamespace(
         runners=[stub_runner(name="chores", workspace=point)], store=store
     )
-    response = TestClient(create_app(daemon)).post("/api/flows/chores/accept", json={})
+    response = TestClient(create_app(daemon)).post("/api/tasks/chores/accept", json={})
 
     assert response.status_code == 409
     assert response.json() == {"conflict": ["README.md"]}
@@ -512,7 +512,7 @@ def test_discard_puts_the_branch_back_and_keeps_the_work_reachable(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/flows/chores/discard", json={})
+    response = client.post("/api/tasks/chores/discard", json={})
 
     assert response.status_code == 200
     assert response.json() == {"discarded": 2}
@@ -524,7 +524,7 @@ def test_discard_from_a_run_keeps_the_earlier_work(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    body = client.post("/api/flows/chores/discard", json={"from_run_id": "r2"}).json()
+    body = client.post("/api/tasks/chores/discard", json={"from_run_id": "r2"}).json()
 
     assert body == {"discarded": 1}
     assert head(repo, "poieo/chores") == changes["r1"].head
@@ -534,8 +534,8 @@ def test_accept_and_discard_404_on_an_unknown_flow(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.post("/api/flows/nope/accept", json={}).status_code == 404
-    assert client.post("/api/flows/nope/discard", json={}).status_code == 404
+    assert client.post("/api/tasks/nope/accept", json={}).status_code == 404
+    assert client.post("/api/tasks/nope/discard", json={}).status_code == 404
 
 
 def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
@@ -543,15 +543,15 @@ def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.get("/api/flows/chores/accept").status_code == 405
-    assert client.get("/api/flows/chores/discard").status_code == 405
+    assert client.get("/api/tasks/chores/accept").status_code == 405
+    assert client.get("/api/tasks/chores/discard").status_code == 405
 
 
 def test_accept_survives_a_missing_body(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.post("/api/flows/chores/accept").status_code == 200
+    assert client.post("/api/tasks/chores/accept").status_code == 200
 
 
 def test_the_page_is_revalidated_but_its_assets_are_not(tmp_path, monkeypatch):

@@ -13,7 +13,7 @@ const USAGE = {
 function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
     run_id: "r",
-    flow: "chores",
+    task: "chores",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T02:00:00+00:00",
@@ -103,9 +103,9 @@ test("NOTHING is not mutated by folding", () => {
 })
 
 
-test("a flow that keeps no private copy has no 'nothing to do' at all", () => {
+test("a task that keeps no private copy has no 'nothing to do' at all", () => {
   // Its runs never carry a change because there is nothing to change against.
-  // Reporting every one of them as "found nothing to do" makes a flow that
+  // Reporting every one of them as "found nothing to do" makes a task that
   // only moves text look like it wasted the night, every night.
   const summary = rollup([run({ run_id: "a" }), run({ run_id: "b" })], false)
 
@@ -114,7 +114,7 @@ test("a flow that keeps no private copy has no 'nothing to do' at all", () => {
   expect(summary.succeeded).toBe(2)
 })
 
-test("an untracked flow still counts its failures", () => {
+test("an untracked task still counts its failures", () => {
   const summary = rollup([run({ status: "failed" }), run()], false)
 
   expect(summary.failed).toBe(1)

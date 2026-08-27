@@ -25,7 +25,7 @@ class StubRunner:
         self.last_result = None
         self.workspace = None
         self.trigger = SimpleNamespace(describe="interval 30s")
-        self.flow = SimpleNamespace(graph=SimpleNamespace(name="support-triage"))
+        self.task = SimpleNamespace(graph=SimpleNamespace(name="support-triage"))
         self.calls = []
 
     def pause(self):
@@ -54,8 +54,8 @@ def test_pause_and_resume_answer_the_resulting_status():
     runner = StubRunner()
     client = _client(runner)
 
-    assert client.post("/api/flows/triage/pause").json() == {"status": "paused"}
-    assert client.post("/api/flows/triage/resume").json() == {"status": "waiting"}
+    assert client.post("/api/tasks/triage/pause").json() == {"status": "paused"}
+    assert client.post("/api/tasks/triage/resume").json() == {"status": "waiting"}
     assert runner.calls == ["pause", "resume"]
 
 
@@ -63,20 +63,20 @@ def test_pause_twice_and_resume_at_rest_are_idempotent():
     runner = StubRunner()
     client = _client(runner)
 
-    assert client.post("/api/flows/triage/pause").status_code == 200
-    assert client.post("/api/flows/triage/pause").status_code == 200
-    assert client.post("/api/flows/triage/pause").json() == {"status": "paused"}
+    assert client.post("/api/tasks/triage/pause").status_code == 200
+    assert client.post("/api/tasks/triage/pause").status_code == 200
+    assert client.post("/api/tasks/triage/pause").json() == {"status": "paused"}
 
-    assert client.post("/api/flows/triage/resume").status_code == 200
-    assert client.post("/api/flows/triage/resume").status_code == 200
-    assert client.post("/api/flows/triage/resume").json() == {"status": "waiting"}
+    assert client.post("/api/tasks/triage/resume").status_code == 200
+    assert client.post("/api/tasks/triage/resume").status_code == 200
+    assert client.post("/api/tasks/triage/resume").json() == {"status": "waiting"}
 
 
 def test_run_fires_when_the_flow_is_at_rest():
     runner = StubRunner()
     client = _client(runner)
 
-    response = client.post("/api/flows/triage/run")
+    response = client.post("/api/tasks/triage/run")
     assert response.status_code == 200
     assert response.json() == {"status": "starting"}
     assert runner.calls == ["run_now"]
@@ -86,7 +86,7 @@ def test_run_mid_run_is_409_and_names_the_run():
     runner = StubRunner(status="running")
     client = _client(runner)
 
-    response = client.post("/api/flows/triage/run")
+    response = client.post("/api/tasks/triage/run")
     assert response.status_code == 409
     assert response.json() == {"error": "a run is in flight", "run_id": "r7"}
 
@@ -94,7 +94,7 @@ def test_run_mid_run_is_409_and_names_the_run():
 def test_all_three_verbs_404_on_an_unknown_flow():
     client = _client(StubRunner())
     for verb in ("pause", "resume", "run"):
-        assert client.post(f"/api/flows/nope/{verb}").status_code == 404
+        assert client.post(f"/api/tasks/nope/{verb}").status_code == 404
 
 
 def test_getting_a_control_route_is_not_allowed():
@@ -102,7 +102,7 @@ def test_getting_a_control_route_is_not_allowed():
     runner = StubRunner()
     client = _client(runner)
     for verb in ("pause", "resume", "run"):
-        assert client.get(f"/api/flows/triage/{verb}").status_code == 405
+        assert client.get(f"/api/tasks/triage/{verb}").status_code == 405
     assert runner.calls == []
 
 
@@ -156,18 +156,18 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
         transport=transport, base_url="http://poieo"
     ) as client:
         async def board_status():
-            body = (await client.get("/api/flows")).json()
-            return body["flows"][0]["status"]
+            body = (await client.get("/api/tasks")).json()
+            return body["tasks"][0]["status"]
 
-        response = await client.post("/api/flows/f/run")
+        response = await client.post("/api/tasks/f/run")
         assert response.json() == {"status": "starting"}
         await _until(lambda: len(runner.results) == 1, "the manual run")
         assert runner.results[0].status == "completed"
 
-        assert (await client.post("/api/flows/f/pause")).json() == {"status": "paused"}
+        assert (await client.post("/api/tasks/f/pause")).json() == {"status": "paused"}
         assert await board_status() == "paused"
 
-        assert (await client.post("/api/flows/f/resume")).json() == {"status": "waiting"}
+        assert (await client.post("/api/tasks/f/resume")).json() == {"status": "waiting"}
         assert await board_status() == "waiting"
 
     daemon.stop()

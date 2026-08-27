@@ -31,7 +31,7 @@ spellings of every key.
 
 `ProjectSpec` is what commands read to fill flags the user left silent; the
 **flag always wins, and discovery only fills silence**. `DaemonConfig` extends it
-when something actually intends to run the flows. One schema, read to the depth
+when something actually intends to run the tasks. One schema, read to the depth
 the caller needs.
 
 Paths inside `poieo.yaml` resolve against the config file, never the cwd
@@ -50,7 +50,7 @@ drifted. Three answers to one question is two too many.
   memory/cache/                          derived; delete and lose nothing
   runs/                                  what happened — `store:` moves this
     index.jsonl · events/ · results/
-  worktrees/                             each flow's private checkout
+  worktrees/                             each task's private checkout
 ```
 
 Two rules that are easy to get wrong:
@@ -90,7 +90,7 @@ shares with the web server, and an fsync there is milliseconds of everything
 standing still. Durability is bought once per run, on the file that answers "what
 ran".
 
-Writes take a lock, so concurrent flows in one process are safe.
+Writes take a lock, so concurrent tasks in one process are safe.
 
 ### Reading
 
@@ -127,7 +127,7 @@ comments and comments are stripped before any prompt.
 
 Existing files are never touched (they are reported as `kept`), so `init` in a
 full project changes nothing. It finishes by loading the project it just wrote —
-flows and cards included — because a generated project that cannot load is an
+tasks and cards included — because a generated project that cannot load is an
 init bug, and it should be caught there rather than at 3am. That single call is
 the only reason `project.py` knows the daemon exists.
 

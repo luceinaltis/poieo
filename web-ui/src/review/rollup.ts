@@ -30,11 +30,11 @@ export const NOTHING: Rollup = Object.freeze({
 })
 
 /**
- * `tracked` says whether this flow keeps a private copy at all.
+ * `tracked` says whether this task keeps a private copy at all.
  *
  * Without one there is nothing to change against, so a run that carries no
  * change simply ran. Calling that "found nothing to do" would tell someone
- * whose flow only moves text that it wasted every night it ever worked.
+ * whose task only moves text that it wasted every night it ever worked.
  */
 export function outcomeOf(run: RunSummary, tracked = true): Outcome {
   if (run.status !== "completed") return "failed"

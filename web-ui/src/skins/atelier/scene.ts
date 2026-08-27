@@ -8,7 +8,7 @@
  * in ../layout.
  */
 
-import type { FlowState } from "../../state/stage"
+import type { TaskState } from "../../state/stage"
 
 export {
   CELL,
@@ -34,12 +34,12 @@ export type Pose = "sitting" | "working" | "alarmed"
  * seen across a room can only say so much, and the drawer is where the rest
  * is read.
  */
-export function figurePose(flowState: FlowState): Pose {
+export function figurePose(flowState: TaskState): Pose {
   if (flowState.status === "error") return "alarmed"
   return flowState.status === "running" ? "working" : "sitting"
 }
 
-export function lampLit(flowState: FlowState): boolean {
+export function lampLit(flowState: TaskState): boolean {
   return flowState.status === "running"
 }
 
@@ -47,11 +47,11 @@ export function lampLit(flowState: FlowState): boolean {
 /**
  * Finished pieces on the shelf.
  *
- * Attempts do not count, and neither does a flow that keeps no private copy:
+ * Attempts do not count, and neither does a task that keeps no private copy:
  * it produces nothing to put on a shelf, so filling one would be inventing
  * work it never did.
  */
-export function shelfCount(flowState: FlowState): number {
+export function shelfCount(flowState: TaskState): number {
   return flowState.tracked ? flowState.recent.succeeded : 0
 }
 

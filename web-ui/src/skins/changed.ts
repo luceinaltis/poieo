@@ -1,28 +1,28 @@
 /**
- * Which flows actually changed since a skin last painted them.
+ * Which tasks actually changed since a skin last painted them.
  *
  * The reducer keeps object identity for every flowState a frame did not touch,
  * so reference equality is the whole test. Skins repaint on every SSE frame;
- * without this, a board of N flows rebuilds N-1 cards because one of them
+ * without this, a board of N tasks rebuilds N-1 cards because one of them
  * spoke.
  */
 
-import type { FlowState } from "../state/stage"
+import type { TaskState } from "../state/stage"
 
-export function changedFlows(
-  flows: Record<string, FlowState>,
-  painted: Map<string, FlowState>,
-): [string, FlowState][] {
-  const changed: [string, FlowState][] = []
-  for (const [flow, flowState] of Object.entries(flows)) {
-    if (painted.get(flow) !== flowState) {
-      painted.set(flow, flowState)
-      changed.push([flow, flowState])
+export function changedTasks(
+  tasks: Record<string, TaskState>,
+  painted: Map<string, TaskState>,
+): [string, TaskState][] {
+  const changed: [string, TaskState][] = []
+  for (const [task, flowState] of Object.entries(tasks)) {
+    if (painted.get(task) !== flowState) {
+      painted.set(task, flowState)
+      changed.push([task, flowState])
     }
   }
-  // A flow that left the board is forgotten, so its return paints again.
-  for (const flow of painted.keys()) {
-    if (!(flow in flows)) painted.delete(flow)
+  // A task that left the board is forgotten, so its return paints again.
+  for (const task of painted.keys()) {
+    if (!(task in tasks)) painted.delete(task)
   }
   return changed
 }

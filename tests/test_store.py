@@ -7,15 +7,15 @@ def test_events_and_index_round_trip(tmp_path):
     store = RunStore(tmp_path / "logs")
     store.append(Event(run_id="r1", type="run_started", data={"graph": "g"}))
     store.append(Event(run_id="r1", type="node_finished", node_id="a", data={"output": "x"}))
-    store.record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
-    store.record_summary({"run_id": "r2", "flow": "other", "status": "failed"})
+    store.record_summary({"run_id": "r1", "task": "f", "status": "completed"})
+    store.record_summary({"run_id": "r2", "task": "other", "status": "failed"})
 
     events = list(store.events("r1"))
     assert [e["type"] for e in events] == ["run_started", "node_finished"]
     assert events[1]["node_id"] == "a"
 
     assert [r["run_id"] for r in store.list_runs()] == ["r2", "r1"]  # newest first
-    assert [r["run_id"] for r in store.list_runs(flow="f")] == ["r1"]
+    assert [r["run_id"] for r in store.list_runs(task="f")] == ["r1"]
     assert store.events("missing") is not None
     assert list(store.events("missing")) == []
 
@@ -48,7 +48,7 @@ def test_null_store_reads_nothing_either(tmp_path, monkeypatch):
     else's history. `poieo run --no-log` in a folder that already has a
     `runs/` would otherwise report runs it never recorded."""
     monkeypatch.chdir(tmp_path)
-    RunStore("runs").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
+    RunStore("runs").record_summary({"run_id": "r1", "task": "f", "status": "completed"})
 
     store = NullStore()
     assert store.list_runs() == []
@@ -62,7 +62,7 @@ def test_list_runs_parses_only_what_it_returns(tmp_path, monkeypatch):
     of uptime cost half a second per call."""
     store = RunStore(tmp_path / "logs")
     for i in range(500):
-        store.record_summary({"run_id": f"r{i}", "flow": "loop", "status": "completed"})
+        store.record_summary({"run_id": f"r{i}", "task": "loop", "status": "completed"})
 
     import poieo.store as store_module
 
@@ -75,13 +75,13 @@ def test_list_runs_parses_only_what_it_returns(tmp_path, monkeypatch):
 
 
 def test_a_filter_still_finds_older_matches(tmp_path):
-    """A rare flow's runs sit deep in the file; the early stop must not
+    """A rare task's runs sit deep in the file; the early stop must not
     give up before finding them."""
     store = RunStore(tmp_path / "logs")
-    store.record_summary({"run_id": "old", "flow": "rare", "status": "completed"})
+    store.record_summary({"run_id": "old", "task": "rare", "status": "completed"})
     for i in range(100):
-        store.record_summary({"run_id": f"r{i}", "flow": "busy", "status": "completed"})
-    assert [r["run_id"] for r in store.list_runs(flow="rare")] == ["old"]
+        store.record_summary({"run_id": f"r{i}", "task": "busy", "status": "completed"})
+    assert [r["run_id"] for r in store.list_runs(task="rare")] == ["old"]
 
 
 def test_a_limit_beyond_history_returns_everything(tmp_path):
@@ -132,15 +132,15 @@ def test_a_damaged_line_never_costs_the_lines_around_it(tmp_path):
     at all are all things that happen. None is worth refusing to answer over
     -- and a bare list used to reach a caller that would ask it for a key."""
     store = RunStore(tmp_path / "logs")
-    store.record_summary({"run_id": "r1", "flow": "chores"})
-    store.record_summary({"run_id": "r2", "flow": "chores"})
+    store.record_summary({"run_id": "r1", "task": "chores"})
+    store.record_summary({"run_id": "r2", "task": "chores"})
     with store.index_path.open("a", encoding="utf-8") as handle:
         handle.write("\n")
         handle.write("[1, 2, 3]\n")
         handle.write('{"run_id": "half-writ')  # a torn tail, no newline
 
     assert [row["run_id"] for row in store.list_runs()] == ["r2", "r1"]
-    assert store.summary("r1")["flow"] == "chores"
+    assert store.summary("r1")["task"] == "chores"
     assert store.summary("nope") is None
 
 

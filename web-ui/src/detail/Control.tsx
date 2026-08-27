@@ -12,11 +12,11 @@ import type { ControlAnswer } from "../api"
 import { useAct } from "../useAct"
 
 export function Control({
-  flow,
+  task,
   status,
   onActed,
 }: {
-  flow: string
+  task: string
   status: string
   onActed(): void
 }) {
@@ -32,7 +32,7 @@ export function Control({
         type="button"
         data-do={paused ? "resume" : "pause"}
         disabled={busy}
-        onClick={() => void act(() => (paused ? resume(flow) : pause(flow)))}
+        onClick={() => void act(() => (paused ? resume(task) : pause(task)))}
       >
         {paused ? "resume" : "pause"}
       </button>
@@ -41,7 +41,7 @@ export function Control({
         type="button"
         data-do="run-now"
         disabled={busy || running}
-        onClick={() => void act(() => runNow(flow))}
+        onClick={() => void act(() => runNow(task))}
       >
         {running ? "running…" : "run now"}
       </button>

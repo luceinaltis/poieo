@@ -14,7 +14,7 @@ async def test_events_write_through_and_broadcast(tmp_path):
     store = make_store(tmp_path)
     queue = store.subscribe()
 
-    event = Event(run_id="r1", type="run_started", data={"flow": "triage"})
+    event = Event(run_id="r1", type="run_started", data={"task": "triage"})
     store.append(event)
 
     record = queue.get_nowait()
@@ -22,21 +22,21 @@ async def test_events_write_through_and_broadcast(tmp_path):
     assert record["run_id"] == "r1"
     # written through to the JSONL store too
     assert [e["type"] for e in store.events("r1")] == ["run_started"]
-    # flow learned for SSE filtering
-    assert store.run_flows["r1"] == "triage"
+    # task learned for SSE filtering
+    assert store.run_tasks["r1"] == "triage"
 
 
 async def test_summary_broadcast_and_run_flow_cleanup(tmp_path):
     store = make_store(tmp_path)
     queue = store.subscribe()
-    store.append(Event(run_id="r1", type="run_started", data={"flow": "triage"}))
+    store.append(Event(run_id="r1", type="run_started", data={"task": "triage"}))
     queue.get_nowait()
 
-    store.record_summary({"run_id": "r1", "flow": "triage", "status": "completed"})
+    store.record_summary({"run_id": "r1", "task": "triage", "status": "completed"})
     record = queue.get_nowait()
     assert record["type"] == "run_summary"
     assert record["status"] == "completed"
-    assert "r1" not in store.run_flows
+    assert "r1" not in store.run_tasks
     assert store.list_runs()[0]["run_id"] == "r1"
 
 
@@ -62,7 +62,7 @@ async def test_reads_answer_from_the_wrapped_store(tmp_path, monkeypatch):
     over it used to answer from whatever `./.poieo` happened to hold."""
     monkeypatch.chdir(tmp_path)
     RunStore(".poieo").append(Event(run_id="r1", type="run_started"))
-    RunStore(".poieo").record_summary({"run_id": "r1", "flow": "f", "status": "completed"})
+    RunStore(".poieo").record_summary({"run_id": "r1", "task": "f", "status": "completed"})
 
     store = BroadcastStore(NullStore())
     assert store.list_runs() == []

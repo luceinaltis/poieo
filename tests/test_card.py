@@ -1,4 +1,4 @@
-"""A task is one file that expands into a flow plus a one-node graph.
+"""A task is one file that expands into a task plus a one-node graph.
 
 The expansion tests compare against the hand-written equivalent on purpose:
 that equality is the whole safety argument for the sugar.
@@ -48,13 +48,13 @@ def test_expansion_equals_the_hand_written_flow_and_graph(tmp_path):
         "keep-improving",
         "name: keep improving poieo\nprompt: |\n  Fix one thing.\n",
     )
-    flow, graph = expand(load_card(path))
+    task, graph = expand(load_card(path))
 
-    assert flow == TaskSpec(
+    assert task == TaskSpec(
         name="keep-improving",
         graph=str(path),
         trigger={"type": "interval", "every": "1h"},
-        # The folder lands on the flow, which is what opens a private copy of
+        # The folder lands on the task, which is what opens a private copy of
         # it. On the node it would only have said where to write.
         workdir=str(tmp_path / "project"),
         carry_state=True,
@@ -117,16 +117,16 @@ def test_a_card_that_names_no_tools_gets_the_one_default_toolset(tmp_path):
     ],
 )
 def test_schedule_sugar(tmp_path, body, expected):
-    flow, _ = expand(load_card(write_card(tmp_path, "t", body)))
-    assert flow.trigger.type == expected["type"]
+    task, _ = expand(load_card(write_card(tmp_path, "t", body)))
+    assert task.trigger.type == expected["type"]
     if "every" in expected:
-        assert flow.trigger.every == expected["every"]
+        assert task.trigger.every == expected["every"]
 
 
 def test_identity_comes_from_the_filename_not_the_title(tmp_path):
     path = write_card(tmp_path, "keep-improving", "name: a title I will rewrite\nprompt: go\n")
-    flow, graph = expand(load_card(path))
-    assert flow.name == "keep-improving"
+    task, graph = expand(load_card(path))
+    assert task.name == "keep-improving"
     assert graph.name == "keep-improving"
 
 
@@ -137,9 +137,9 @@ def test_an_ejected_task_names_its_graph_instead_of_generating_one(tmp_path):
         "name: t\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8"
     )
     path = write_card(tmp_path, "t", "name: t\ngraph: ../graphs/t.yaml\n")
-    flow, graph = expand(load_card(path))
+    task, graph = expand(load_card(path))
     assert graph is None
-    assert Path(flow.graph) == (graphs / "t.yaml").resolve()
+    assert Path(task.graph) == (graphs / "t.yaml").resolve()
 
 
 # -- cards and graphs share a folder -----------------------------------------
@@ -210,9 +210,9 @@ def test_paths_resolve_against_the_task_file(tmp_path):
     (tmp_path / "tasks" / "here").mkdir()
     path = tmp_path / "tasks" / "t.yaml"
     path.write_text("name: t\nfolder: here\nprompt: go\n", encoding="utf-8")
-    flow, graph = expand(load_card(path))
+    task, graph = expand(load_card(path))
 
-    assert flow.workdir == str(tmp_path / "tasks" / "here")
+    assert task.workdir == str(tmp_path / "tasks" / "here")
     # And nowhere on the node: the run is handed a private copy of that folder,
     # and a node that named the real one would write straight past it.
     assert graph.nodes[0].workdir is None
@@ -392,11 +392,11 @@ def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
 def test_a_task_backed_flow_reads_its_journal_before_every_run(tmp_path):
     path = write_card(tmp_path, "one", "name: one\nprompt: go\n")
     config = load_config(_config(tmp_path))
-    flow = load_tasks(config)[0]
+    task = load_tasks(config)[0]
 
-    assert flow.read_input(config)["journal"] == "nothing yet"
+    assert task.read_input(config)["journal"] == "nothing yet"
     append_journal(load_card(path).journal_path(), "you", "try the tests instead")
-    assert "try the tests instead" in flow.read_input(config)["journal"]
+    assert "try the tests instead" in task.read_input(config)["journal"]
 
 
 async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
@@ -404,8 +404,8 @@ async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
 
     path = write_card(tmp_path, "one", "name: one\nprompt: go\n")
     config = load_config(_config(tmp_path))
-    for flow in config.tasks:
-        flow.trigger.max_iterations = 1
+    for task in config.tasks:
+        task.trigger.max_iterations = 1
 
     await asyncio.wait_for(
         Daemon(config, store=NullStore()).serve(install_signals=False), timeout=10
@@ -460,8 +460,8 @@ def _load(tmp_path, body):
 
 def test_isolation_reaches_the_flow(tmp_path):
     """It describes the task, not the generated node, so it rides the expansion."""
-    flow, _graph = expand(_load(tmp_path, "prompt: do it"))
-    assert flow.isolation == Isolation(image="x")
+    task, _graph = expand(_load(tmp_path, "prompt: do it"))
+    assert task.isolation == Isolation(image="x")
 
 
 def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
@@ -469,8 +469,8 @@ def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
     (tmp_path / "g.yaml").write_text(
         "name: g\nentry: n\nnodes: [{id: n, type: agent, role: r, prompt: hi}]\n"
     )
-    flow, graph = expand(_load(tmp_path, "graph: g.yaml"))
-    assert graph is None and flow.isolation == Isolation(image="x")
+    task, graph = expand(_load(tmp_path, "graph: g.yaml"))
+    assert graph is None and task.isolation == Isolation(image="x")
 
 # -- the journal delivers, it does not just record ---------------------------
 #
@@ -636,7 +636,7 @@ def _finished(**over):
 
     result = RunResult(
         run_id="20260824T120000-abcd1234",
-        flow="tidy",
+        task="tidy",
         graph="tidy",
         status="completed",
         started_at="2026-08-24T12:00:00+00:00",

@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
-import { fetchFlows, fetchRunEvents, fetchRuns, openFeed, pause, resume, runNow } from "./api"
+import { fetchTasks, fetchRunEvents, fetchRuns, openFeed, pause, resume, runNow } from "./api"
 import type { PoieoEvent } from "./types"
 
 class FakeEventSource {
@@ -70,15 +70,15 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource)
 })
 
-test("fetchFlows unwraps the envelope", async () => {
-  stubFetch({ "/api/flows": { body: { flows: [{ name: "triage" }] } } })
-  expect(await fetchFlows()).toEqual([{ name: "triage" }])
+test("fetchTasks unwraps the envelope", async () => {
+  stubFetch({ "/api/tasks": { body: { tasks: [{ name: "triage" }] } } })
+  expect(await fetchTasks()).toEqual([{ name: "triage" }])
 })
 
-test("fetchRuns passes flow and limit through as query params", async () => {
-  const fetchStub = stubFetch({ "/api/runs?flow=triage&limit=5": { body: { runs: [] } } })
-  await fetchRuns({ flow: "triage", limit: 5 })
-  expect(fetchStub).toHaveBeenCalledWith("/api/runs?flow=triage&limit=5")
+test("fetchRuns passes task and limit through as query params", async () => {
+  const fetchStub = stubFetch({ "/api/runs?task=triage&limit=5": { body: { runs: [] } } })
+  await fetchRuns({ task: "triage", limit: 5 })
+  expect(fetchStub).toHaveBeenCalledWith("/api/runs?task=triage&limit=5")
 })
 
 test("fetchRunEvents returns [] for a 404 run", async () => {
@@ -89,9 +89,9 @@ test("fetchRunEvents returns [] for a 404 run", async () => {
 
 test("the control verbs post to their routes and unwrap the answer", async () => {
   const fetchStub = stubFetch({
-    "/api/flows/chores/pause": { body: { status: "paused" } },
-    "/api/flows/chores/resume": { body: { status: "waiting" } },
-    "/api/flows/chores/run": { body: { status: "starting" } },
+    "/api/tasks/chores/pause": { body: { status: "paused" } },
+    "/api/tasks/chores/resume": { body: { status: "waiting" } },
+    "/api/tasks/chores/run": { body: { status: "starting" } },
   })
 
   expect(await pause("chores")).toEqual({ ok: true, status: "paused" })
@@ -104,7 +104,7 @@ test("the control verbs post to their routes and unwrap the answer", async () =>
 
 test("a refused run comes back as an answer, not a throw", async () => {
   stubFetch({
-    "/api/flows/chores/run": {
+    "/api/tasks/chores/run": {
       status: 409,
       body: { error: "a run is in flight", run_id: "r7" },
     },

@@ -41,7 +41,7 @@ function account(run: RunSummary, tracked: boolean): string {
   if (outcome === "failed") return run.error || "stopped early"
   if (outcome === "nothing") return "found nothing to do"
   if (run.change?.message) return run.change.message
-  // A flow that keeps no private copy has no change to describe itself with,
+  // A task that keeps no private copy has no change to describe itself with,
   // so every row read the same "3 steps" and a list of ten said nothing. How
   // long it took is the one thing always true of a run and always different.
   const steps = `${run.steps} step${run.steps === 1 ? "" : "s"}`

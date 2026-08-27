@@ -1,6 +1,6 @@
 """The only module in poieo that knows git exists.
 
-A flow with a workdir works in a private copy -- a linked worktree on a branch
+A task with a workdir works in a private copy -- a linked worktree on a branch
 of its own -- so a night of runs never touches what the user left open, and
 each run lands as one change to read, take, or throw away in the morning.
 
@@ -26,7 +26,7 @@ _IDENTITY = ["-c", "user.name=poieo", "-c", "user.email=poieo@localhost"]
 
 
 class WorkspaceError(PoieoError):
-    """A git operation failed. Never fatal to a flow -- the work still ran."""
+    """A git operation failed. Never fatal to a task -- the work still ran."""
 
 
 @dataclass(slots=True)
@@ -100,12 +100,12 @@ def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
 
 
 class Workspace:
-    """A flow's private copy of one repository, and the change it is building."""
+    """A task's private copy of one repository, and the change it is building."""
 
-    def __init__(self, repo: Path, flow: str, worktrees: Path):
+    def __init__(self, repo: Path, task: str, worktrees: Path):
         self.repo = Path(repo)
-        self.flow = flow
-        # The folder that holds every flow's copy, not the project root: this
+        self.task = task
+        # The folder that holds every task's copy, not the project root: this
         # used to be handed the run-log store and append `worktrees` itself,
         # which meant pointing the logs at another disk quietly took the
         # working copies along. A copy of a repository is not a log.
@@ -113,11 +113,11 @@ class Workspace:
 
     @property
     def branch(self) -> str:
-        return f"poieo/{self.flow}"
+        return f"poieo/{self.task}"
 
     @property
     def worktree(self) -> Path:
-        return self.worktrees / self.flow
+        return self.worktrees / self.task
 
     # -- inspection ---------------------------------------------------------
 
@@ -135,7 +135,7 @@ class Workspace:
         return _git(self.repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
 
     def pending(self) -> list[str]:
-        """Commits on the flow's branch that the user's HEAD does not contain."""
+        """Commits on the task's branch that the user's HEAD does not contain."""
         if not self._branch_exists():
             return []
         return _git(self.repo, "rev-list", f"HEAD..{self.branch}").split()
@@ -241,7 +241,7 @@ class Workspace:
                 ).split()
                 _git(self.repo, "merge", "--abort")
                 return {"conflict": conflicted}
-            _git(self.repo, "commit", "-m", f"poieo: accept {self.flow}")
+            _git(self.repo, "commit", "-m", f"poieo: accept {self.task}")
 
         return {"accepted": count}
 
