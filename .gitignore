@@ -25,3 +25,6 @@ web-ui/dist/
 
 # personal helper scripts
 claude-rc-loop.ps1
+
+# browser automation scratch (console logs, screenshots)
+.playwright-mcp/
