@@ -66,10 +66,10 @@ class Branch(_Spec):
 
 class NodeSpec(_Spec):
     id: str
-    type: Literal["llm", "router", "agent"]
+    type: Literal["agent", "router"]
     description: str | None = None
 
-    # --- llm nodes ---
+    # --- model nodes ---
     role: str | None = None
     system: str | None = None
     prompt: str | None = None
@@ -85,7 +85,10 @@ class NodeSpec(_Spec):
     # --- agent nodes ---
     # Every tool call is confined to this directory. Templates allowed.
     workdir: str | None = None
-    # Toolset names from poieo.tools.TOOLSETS; None means all of them.
+    # Toolset names from poieo.tools.TOOLSETS. Absent means **no tools**: a
+    # node that can touch the project says so, and a graph's diff shows at a
+    # glance which of its steps can. Principle 2 keeps the folder explicit for
+    # the same reason, and hands are that rule one level up.
     tools: list[str] | None = None
     # Upper bound on model calls in one node execution.
     max_turns: int = Field(default=20, ge=1, le=200)
@@ -95,6 +98,21 @@ class NodeSpec(_Spec):
 
     # Editor-only: where this node sits on the canvas.
     ui: UiSpec | None = None
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def _was_renamed(cls, value: Any) -> Any:
+        """`llm` was a node until there was one model node. Say so.
+
+        `Literal` would answer "Input should be 'agent' or 'router'", which is
+        true and no help to someone holding a graph that worked last week.
+        """
+        if value == "llm":
+            raise ValueError(
+                "node type 'llm' is now 'agent' with no tools. Rename it, and "
+                "add `tools: [files, shell]` only if the node should have hands"
+            )
+        return value
 
     @field_validator("id")
     @classmethod
@@ -107,7 +125,7 @@ class NodeSpec(_Spec):
 
     @model_validator(mode="after")
     def _check_shape(self) -> NodeSpec:
-        if self.type in ("llm", "agent"):
+        if self.type == "agent":
             if not self.prompt:
                 raise ValueError(f"{self.type} node '{self.id}' requires a prompt")
             if self.branches:
@@ -118,7 +136,6 @@ class NodeSpec(_Spec):
                     validate_template(self.system)
             except ExpressionError as exc:
                 raise ValueError(f"node '{self.id}': {exc}") from exc
-        if self.type == "agent":
             # A workdir is physical, and this is the logical layer: the flow may
             # supply it instead. preflight() is where "nowhere to work" fails.
             if self.workdir:
@@ -134,12 +151,11 @@ class NodeSpec(_Spec):
                         f"agent node '{self.id}' names unknown toolset '{name}'; "
                         f"known: {sorted(TOOLSETS)}"
                     )
-        else:
+        if self.type == "router":
             if self.workdir or self.tools:
                 raise ValueError(
-                    f"{self.type} node '{self.id}' does not take workdir/tools"
+                    f"router node '{self.id}' does not take workdir/tools"
                 )
-        if self.type == "router":
             if not self.branches:
                 raise ValueError(f"router node '{self.id}' requires at least one branch")
             if self.prompt or self.role:
@@ -165,7 +181,7 @@ class GraphSpec(_Spec):
     state: dict[str, Any] = Field(default_factory=dict)
     # Guards cycles. A graph may legitimately loop; this bounds how long.
     max_steps: int = Field(default=100, ge=1, le=10_000)
-    # Default role for llm nodes that do not name one.
+    # Default role for model nodes that do not name one.
     default_role: str = "default"
 
     # Populated after validation; not part of the authored document.
@@ -221,7 +237,7 @@ class GraphSpec(_Spec):
         return {
             n.role or self.default_role
             for n in self.nodes
-            if n.type in ("llm", "agent")
+            if n.type == "agent"
         }
 
 

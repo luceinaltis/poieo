@@ -250,7 +250,7 @@ def test_daemon_without_an_argument_outside_a_project_says_so(tmp_path, monkeypa
 def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
     _project(tmp_path)
     (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: llm, role: r, prompt: hi}]\n",
+        "name: g\nentry: a\nnodes: [{id: a, type: agent, role: r, prompt: hi}]\n",
         encoding="utf-8",
     )
     marker = tmp_path / "poieo.yaml"

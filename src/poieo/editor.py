@@ -56,7 +56,7 @@ button.primary:disabled { opacity: .45; cursor: default; }
 button.danger { color: var(--router); }
 .status { font-size: .78rem; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
 .status.bad { color: var(--router); }
-.status.good { color: var(--llm); }
+.status.good { color: var(--agent); }
 
 .main { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
 .canvas-wrap { position: relative; overflow: auto; background: var(--bg);
@@ -75,7 +75,7 @@ button.danger { color: var(--router); }
   border-radius: 10px; padding: .55rem .65rem .6rem; cursor: grab;
   box-shadow: 0 1px 2px rgba(0,0,0,.06); user-select: none; touch-action: none;
 }
-.node.llm { border-left-color: var(--llm); }
+.node.agent { border-left-color: var(--agent); }
 .node.router { border-left-color: var(--router); }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
 .node.entry::after {
@@ -93,7 +93,7 @@ button.danger { color: var(--router); }
   background: var(--panel); border: 2px solid var(--muted); cursor: crosshair;
 }
 .port.in { top: -7px; left: 50%; margin-left: -6.5px; }
-.port.out { bottom: -7px; border-color: var(--llm); }
+.port.out { bottom: -7px; border-color: var(--agent); }
 .port.out.branch { border-color: var(--router); }
 .port:hover { background: var(--accent); border-color: var(--accent); }
 .port-tip { position: absolute; bottom: -22px; font-size: .6rem; color: var(--muted);
@@ -200,7 +200,7 @@ function renderNodes() {
     el.style.top = node.ui.y + "px";
     el.dataset.id = node.id;
 
-    const meta = node.type === "llm"
+    const meta = node.type === "agent"
       ? (node.role || state.graph.default_role || "default")
       : `${node.branches.length} branch${node.branches.length === 1 ? "" : "es"}`;
     el.innerHTML =
@@ -298,7 +298,7 @@ function renderInspector() {
     `<h2>${node.type} node</h2>`,
     `<div class="field"><label>id</label><input id="n-id" value="${esc(node.id)}"></div>`,
   ];
-  if (node.type === "llm") {
+  if (node.type === "agent") {
     rows.push(
       `<div class="field"><label>role</label><input id="n-role" value="${esc(node.role || "")}" placeholder="${esc(state.graph.default_role || "default")}"></div>`,
       `<div class="field"><label>system</label><textarea id="n-system" placeholder="(none)">${esc(node.system || "")}</textarea></div>`,
@@ -382,7 +382,7 @@ function wireInspector(node) {
 function renderRoles() {
   const box = $("#roles");
   if (!box) return;
-  const roles = new Set(state.graph.nodes.filter((n) => n.type === "llm")
+  const roles = new Set(state.graph.nodes.filter((n) => n.type === "agent")
     .map((n) => n.role || state.graph.default_role || "default"));
   box.innerHTML = [...roles].sort().map((role) =>
     `<div><span class="r">${esc(role)}</span><span class="m">${esc(state.bindings[role] || "unbound")}</span></div>`
@@ -424,7 +424,7 @@ function addNode(type) {
   while (state.graph.nodes.some((x) => x.id === `${type}_${n}`)) n++;
   const node = {
     id: `${type}_${n}`, type, role: null, system: null,
-    prompt: type === "llm" ? "" : null,
+    prompt: type === "agent" ? "" : null,
     output: { as: null, format: "text", into_state: null },
     retry: { attempts: 1 }, branches: [], default: null, next: null,
     ui: { x: canvas.parentElement.scrollLeft + 60, y: canvas.parentElement.scrollTop + 60 },
@@ -452,7 +452,7 @@ function validate() {
   else if (!ids.includes(state.graph.entry)) problems.push(`entry "${state.graph.entry}" does not exist`);
 
   for (const node of state.graph.nodes) {
-    if (node.type === "llm" && !(node.prompt || "").trim()) problems.push(`${node.id}: prompt is empty`);
+    if (node.type === "agent" && !(node.prompt || "").trim()) problems.push(`${node.id}: prompt is empty`);
     if (node.type === "router" && !node.branches.length) problems.push(`${node.id}: needs a branch`);
     for (const branch of node.branches || []) {
       if (!(branch.when || "").trim()) problems.push(`${node.id}: a branch has no condition`);
@@ -472,7 +472,7 @@ function validate() {
 
   const box = $("#problems");
   if (box) box.innerHTML = problems.map((p) => `<li>${esc(p)}</li>`).join("") ||
-    `<li style="color:var(--llm)">none</li>`;
+    `<li style="color:var(--agent)">none</li>`;
   const status = $("#status");
   status.textContent = problems.length ? `${problems.length} problem(s)` : "valid";
   status.className = "status " + (problems.length ? "bad" : "good");
@@ -583,7 +583,7 @@ function emitYaml(graph) {
     push(`  - id: ${yamlString(node.id, 4)}`);
     push(`    type: ${node.type}`);
     if (node.description) push(`    description: ${yamlString(node.description, 4)}`);
-    if (node.type === "llm") {
+    if (node.type === "agent") {
       if (node.role) push(`    role: ${yamlString(node.role, 4)}`);
       if (node.system) push(`    system: ${yamlString(node.system, 4)}`);
       push(`    prompt: ${yamlString(node.prompt || "", 4)}`);
@@ -651,7 +651,7 @@ function flash(message, bad) {
 }
 
 // ---------------------------------------------------------------- wiring up
-$("#add-llm").onclick = () => addNode("llm");
+$("#add-agent").onclick = () => addNode("agent");
 $("#add-router").onclick = () => addNode("router");
 $("#save").onclick = save;
 $("#yaml").onclick = () => showYaml(emitYaml(state.graph));
@@ -723,7 +723,7 @@ def render_editor(
     body = f"""<div class="app">
   <div class="bar">
     <h1>{graph.name}</h1>
-    <button id="add-llm">+ llm</button>
+    <button id="add-agent">+ agent</button>
     <button id="add-router">+ router</button>
     <button id="yaml">yaml</button>
     <span id="status" class="status"></span>

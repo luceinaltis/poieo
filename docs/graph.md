@@ -16,20 +16,25 @@ GraphSpec
   nodes[]          NodeSpec
   state            seed for the persistent `state` mapping
   max_steps        cycle guard (default 100)
-  default_role     role for llm/agent nodes that do not name one
+  default_role     role for model nodes that do not name one
 ```
 
-`NodeSpec` is one class for all three node types rather than a union, with a
+`NodeSpec` is one class for both node types rather than a union, with a
 `_check_shape` validator that rejects the combinations that make no sense: an
-`llm` node with `branches`, a `router` with a `prompt`, a non-agent node with
-`workdir`/`tools`. One class keeps the YAML flat and the error messages
-specific ("router node 'route' does not call a model; drop prompt/role").
+`agent` with `branches`, a `router` with a `prompt` or a `workdir`. One class
+keeps the YAML flat and the error messages specific ("router node 'route' does
+not call a model; drop prompt/role").
 
 | type | reads | produces |
 |---|---|---|
-| `llm` | `role`, `system`, `prompt`, `output`, `retry`, `params` | the completion, shaped by `output` |
+| `agent` | `role`, `system`, `prompt`, `output`, `retry`, `params`, and — only with hands — `tools`, `workdir`, `max_turns` | the completion of the turn that used no tool |
 | `router` | `branches[].when` / `.to` / `.label`, `default` | the matched branch's label |
-| `agent` | the `llm` keys plus `workdir`, `tools`, `max_turns` | the completion of the turn that used no tool |
+
+Two types, because a step either does work or picks a path. **No `tools:` line
+means no tools**: the node calls the model once, reads the answer, and cannot
+touch a file. Tools are what bring the loop, the `workdir` and the turn budget
+with them, which is why there is no separate type for a call without them —
+and why hands are asked for rather than defaulted.
 
 `next: null`, or an omitted `next`, ends the run. A branch with `to: null` ends
 it too — matched, and deliberately no further.

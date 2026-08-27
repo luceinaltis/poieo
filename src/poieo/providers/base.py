@@ -74,7 +74,7 @@ class ToolCall:
 
 @dataclass(slots=True)
 class LLMRequest:
-    """A provider-neutral completion request built by an llm node."""
+    """A provider-neutral completion request built by a model node."""
 
     model: str
     messages: list[dict[str, Any]]

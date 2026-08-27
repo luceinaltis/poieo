@@ -34,7 +34,7 @@ however convenient.
             │
       runtime/executor.py                   the walker: one node, then the next
             │
-      runtime/nodes.py                      llm · router · agent
+      runtime/nodes.py                      agent · router
             │            ╲
    providers/            tools/             who answers          what it may touch
             │
@@ -61,9 +61,10 @@ A trigger fires (or `poieo run` is typed). Then:
 4. **The walk.** `execute()` starts at `graph.entry` and loops: run the node, take
    the `next` it returns, repeat until `None`. Cycles are allowed and `max_steps`
    bounds them. → [runtime.md](runtime.md)
-5. **Each node.** An `llm` node renders its prompt and calls the model bound to
-   its role. A `router` evaluates conditions and picks a successor. An `agent`
-   node hands the model tools and loops until it answers without calling one.
+5. **Each node.** An `agent` node renders its prompt and calls the model bound
+   to its role; if it was given `tools:`, it loops until the model answers
+   without calling one. A `router` evaluates conditions and picks a successor,
+   calling no model at all.
    → [runtime.md](runtime.md), [tools.md](tools.md)
 6. **The record.** Every step appends a JSON line to `runs/events/<run_id>.jsonl`;
    the run's summary lands in `runs/index.jsonl` and its full outputs in
@@ -129,7 +130,7 @@ Three places are deliberately swappable, and each has exactly one chokepoint:
 |---|---|---|
 | which backend answers | `providers.register()` / `ProviderPool.get()` | anthropic, openai_compatible, ollama, mock |
 | where tools run | `tools.make_executor()` | local (path-confined), docker |
-| what a node type does | `runtime.nodes.NODE_TYPES` | llm, router, agent |
+| what a node type does | `runtime.nodes.NODE_TYPES` | agent, router |
 
 Adding to any of these should be one module and one registry line. If it is
 not, the seam has leaked.

@@ -108,7 +108,7 @@ async def test_a_graph_without_a_task_leaves_no_episode(tmp_path):
     graph = GraphSpec(
         name="adhoc",
         entry="step",
-        nodes=[NodeSpec(id="step", type="llm", prompt="say hi")],
+        nodes=[NodeSpec(id="step", type="agent", prompt="say hi")],
     )
     binding = BindingSpec.model_validate(
         {

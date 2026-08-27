@@ -199,7 +199,7 @@ function triage(models: (string | null)[]): FlowRow {
     shape: {
       entry: "classify",
       nodes: [
-        { id: "classify", type: "llm", next: "route", default: null, branches: [], model: classify },
+        { id: "classify", type: "agent", next: "route", default: null, branches: [], model: classify },
         {
           id: "route",
           type: "router",
@@ -208,7 +208,7 @@ function triage(models: (string | null)[]): FlowRow {
           branches: [],
           model: route,
         },
-        { id: "draft", type: "llm", next: null, default: null, branches: [], model: draft },
+        { id: "draft", type: "agent", next: null, default: null, branches: [], model: draft },
       ],
     },
   }

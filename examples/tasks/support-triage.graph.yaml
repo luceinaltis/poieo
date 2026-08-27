@@ -8,7 +8,7 @@ max_steps: 20
 
 nodes:
   - id: classify
-    type: llm
+    type: agent
     role: classifier          # cheap, fast model in every binding
     system: You are a precise triage classifier. Reply with one word and nothing else.
     prompt: |
@@ -33,7 +33,7 @@ nodes:
     default: draft_answer
 
   - id: draft_bug
-    type: llm
+    type: agent
     role: writer              # the expensive model: this text reaches a human
     prompt: |
       A user reported a bug. Write a short acknowledgement that restates the
@@ -46,7 +46,7 @@ nodes:
       into_state: last_reply
 
   - id: draft_feature
-    type: llm
+    type: agent
     role: writer
     prompt: |
       A user requested a feature. Write a short, warm acknowledgement that
@@ -59,7 +59,7 @@ nodes:
       into_state: last_reply
 
   - id: draft_answer
-    type: llm
+    type: agent
     role: writer
     prompt: |
       Answer this support question directly and briefly.

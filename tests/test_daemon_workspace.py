@@ -44,6 +44,7 @@ nodes:
     type: agent
     role: worker
     prompt: do it
+    tools: [files, shell]
     max_turns: {max_turns}
     output: {{as: report}}
 """
@@ -53,7 +54,7 @@ name: chat
 entry: say
 nodes:
   - id: say
-    type: llm
+    type: agent
     role: worker
     prompt: hello
     output: {as: reply}

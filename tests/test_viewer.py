@@ -28,7 +28,7 @@ def test_router_without_a_default_still_gets_a_fallback_edge():
             "entry": "a",
             "nodes": [
                 {"id": "a", "type": "router", "branches": [{"when": "True", "to": "b"}]},
-                {"id": "b", "type": "llm", "prompt": "hi"},
+                {"id": "b", "type": "agent", "prompt": "hi"},
             ],
         }
     )
@@ -53,7 +53,7 @@ def test_prompt_text_is_escaped():
         {
             "name": "x",
             "entry": "a",
-            "nodes": [{"id": "a", "type": "llm", "prompt": "<script>alert(1)</script>"}],
+            "nodes": [{"id": "a", "type": "agent", "prompt": "<script>alert(1)</script>"}],
         }
     )
     page = render_page([graph])

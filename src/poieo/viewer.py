@@ -84,7 +84,7 @@ def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) ->
     if node.description:
         parts.append(f'<p class="desc">{html.escape(node.description)}</p>')
 
-    if node.type == "llm":
+    if node.type == "agent":
         role = node.role or graph.default_role
         meta = [_chip("role", role)]
         if binding:
@@ -177,22 +177,22 @@ _TOKENS = """
 :root {
   --bg: #f7f8f6; --panel: #ffffff; --sunk: #eef1ee;
   --ink: #16191c; --muted: #5f6a70; --line: #dde2e0; --line-soft: #e9ecea;
-  --llm: #1c6e5a; --router: #a86a12; --accent: #1f5fa8;
-  --llm-wash: #e8f2ee; --router-wash: #f7eede; --accent-wash: #e6eefa;
+  --agent: #1c6e5a; --router: #a86a12; --accent: #1f5fa8;
+  --agent-wash: #e8f2ee; --router-wash: #f7eede; --accent-wash: #e6eefa;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #14171a; --panel: #1c2024; --sunk: #23282c;
     --ink: #e6eae8; --muted: #8b9599; --line: #2f353a; --line-soft: #262c31;
-    --llm: #4fb99c; --router: #d99a3c; --accent: #6ba6e8;
-    --llm-wash: #17302a; --router-wash: #322715; --accent-wash: #182636;
+    --agent: #4fb99c; --router: #d99a3c; --accent: #6ba6e8;
+    --agent-wash: #17302a; --router-wash: #322715; --accent-wash: #182636;
   }
 }
 :root[data-theme="dark"] {
   --bg: #14171a; --panel: #1c2024; --sunk: #23282c;
   --ink: #e6eae8; --muted: #8b9599; --line: #2f353a; --line-soft: #262c31;
-  --llm: #4fb99c; --router: #d99a3c; --accent: #6ba6e8;
-  --llm-wash: #17302a; --router-wash: #322715; --accent-wash: #182636;
+  --agent: #4fb99c; --router: #d99a3c; --accent: #6ba6e8;
+  --agent-wash: #17302a; --router-wash: #322715; --accent-wash: #182636;
 }
 
 """
@@ -247,12 +247,12 @@ h3 { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
         padding: 1.05rem 1.15rem 1.2rem; display: flex; flex-direction: column; gap: .75rem;
         border-left: 3px solid var(--line); }
-.card.llm { border-left-color: var(--llm); }
+.card.agent { border-left-color: var(--agent); }
 .card.router { border-left-color: var(--router); }
 .card-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .tag { font-size: .64rem; text-transform: uppercase; letter-spacing: .09em; font-weight: 600;
        padding: .18rem .45rem; border-radius: 4px; }
-.tag-llm { color: var(--llm); background: var(--llm-wash); }
+.tag-agent { color: var(--agent); background: var(--agent-wash); }
 .tag-router { color: var(--router); background: var(--router-wash); }
 .tag-entry { color: var(--accent); background: var(--accent-wash); }
 .desc { color: var(--muted); font-size: .87rem; margin: 0; }

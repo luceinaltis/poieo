@@ -6,8 +6,8 @@ import type { GraphShape } from "../types"
 const LINE: GraphShape = {
   entry: "draft",
   nodes: [
-    { id: "draft", type: "llm", next: "review", default: null, branches: [], model: null },
-    { id: "review", type: "llm", next: "gate", default: null, branches: [], model: null },
+    { id: "draft", type: "agent", next: "review", default: null, branches: [], model: null },
+    { id: "review", type: "agent", next: "gate", default: null, branches: [], model: null },
     {
       id: "gate",
       type: "router",
@@ -16,7 +16,7 @@ const LINE: GraphShape = {
       branches: [{ to: null, label: "approved" }],
       model: null,
     },
-    { id: "revise", type: "llm", next: "review", default: null, branches: [], model: null },
+    { id: "revise", type: "agent", next: "review", default: null, branches: [], model: null },
   ],
 }
 
@@ -95,7 +95,7 @@ test("a walk reads entry first and every node once, loop or not", () => {
 test("a node the walk cannot reach is drawn last rather than dropped", () => {
   const stray: GraphShape = {
     ...LINE,
-    nodes: [...LINE.nodes, { id: "orphan", type: "llm", next: null, default: null, branches: [], model: null }],
+    nodes: [...LINE.nodes, { id: "orphan", type: "agent", next: null, default: null, branches: [], model: null }],
   }
 
   expect(walk(stray)).toContain("orphan")
@@ -110,7 +110,7 @@ test("an exit is a node the run can stop on", () => {
 test("a node with nowhere to go next is an exit", () => {
   const stops: GraphShape = {
     entry: "only",
-    nodes: [{ id: "only", type: "llm", next: null, default: null, branches: [], model: null }],
+    nodes: [{ id: "only", type: "agent", next: null, default: null, branches: [], model: null }],
   }
 
   expect(exits(stops)).toEqual(["only"])

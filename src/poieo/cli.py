@@ -301,7 +301,7 @@ def show(
         marker = "*" if node.id == graph.entry else " "
         detail = (
             f"role={node.role or graph.default_role}"
-            if node.type in ("llm", "agent")
+            if node.type == "agent"
             else f"{len(node.branches)} branch(es)"
         )
         typer.echo(f" {marker} {node.id:<16} {node.type:<7} {detail}")

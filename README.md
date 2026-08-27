@@ -74,7 +74,7 @@ name: support-triage
 entry: classify
 nodes:
   - id: classify
-    type: llm
+    type: agent
     role: classifier                 # a role, not a model
     prompt: |
       Classify as bug, feature, or question.
@@ -94,16 +94,20 @@ nodes:
 
 | type | does | keys |
 |---|---|---|
-| `llm` | renders a prompt, calls the model bound to its role | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next` |
+| `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
 | `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
-| `agent` | hands the model tools and loops until it finishes one step | `role`, `workdir`, `tools`, `max_turns`, plus the `llm` keys |
+
+Two types, because there are two things a step can be: work, or a decision.
+**No `tools:` line means no tools** — the node calls the model once and reads
+the answer, and cannot touch a file. Hands are asked for, never defaulted.
 
 `next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
 
-### Agent nodes
+### Hands
 
-An `agent` node gives its model hands: `files` (read/write/list/glob) and
-`shell` (run a command) toolsets, every call confined to the node's `workdir`.
+A node that names `tools:` gives its model hands: `files` (read/write/list/glob)
+and `shell` (run a command) toolsets, every call confined to the node's
+`workdir`.
 The node loops — model asks, poieo executes, result goes back — until the
 model answers without a tool call; `max_turns` bounds the loop. Tool failures
 are fed back to the model as text so it can correct itself. Every call is
@@ -599,7 +603,7 @@ shaped that way. Start at `docs/architecture.md`.
 * The editor folded into the board. `poieo edit` is a canvas over the graph schema
   today, and `poieo show --mermaid` draws one; the board draws the work but does
   not let you edit it.
-* Node types beyond `llm`, `router`, and `agent` (map/fan-out).
+* Node types beyond `agent` and `router` (deterministic work, map/fan-out).
   `runtime/nodes.py` has a `NODE_TYPES` registry to add them to.
 
 ## Tests

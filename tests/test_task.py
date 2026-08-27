@@ -132,7 +132,7 @@ def test_an_ejected_task_names_its_graph_instead_of_generating_one(tmp_path):
     graphs = tmp_path / "graphs"
     graphs.mkdir()
     (graphs / "t.yaml").write_text(
-        "name: t\nentry: a\nnodes:\n  - {id: a, type: llm, prompt: hi}\n", encoding="utf-8"
+        "name: t\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8"
     )
     path = write_task(tmp_path, "t", "name: t\ngraph: ../graphs/t.yaml\n")
     flow, graph = expand(load_task(path))
@@ -152,7 +152,7 @@ def write_graph(root: Path, stem: str) -> Path:
     tasks.mkdir(parents=True, exist_ok=True)
     path = tasks / f"{stem}.graph.yaml"
     path.write_text(
-        "name: g\nentry: a\nnodes:\n  - {id: a, type: llm, prompt: hi}\n", encoding="utf-8"
+        "name: g\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8"
     )
     return path
 
@@ -180,7 +180,7 @@ def test_a_file_answering_to_both_shapes_fails_rather_than_disappearing(tmp_path
     tasks = tmp_path / "tasks"
     tasks.mkdir()
     (tasks / "both.yaml").write_text(
-        "name: both\nfolder: .\nnodes:\n  - {id: a, type: llm}\n", encoding="utf-8"
+        "name: both\nfolder: .\nnodes:\n  - {id: a, type: agent}\n", encoding="utf-8"
     )
     with pytest.raises(SpecError):
         load_tasks(tasks)
@@ -477,7 +477,7 @@ def test_isolation_reaches_the_flow(tmp_path):
 def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
     """Unlike prompt/role/tools, isolation is not a node key -- eject keeps it."""
     (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: n\nnodes: [{id: n, type: llm, role: r, prompt: hi}]\n"
+        "name: g\nentry: n\nnodes: [{id: n, type: agent, role: r, prompt: hi}]\n"
     )
     flow, graph = expand(_load(tmp_path, "graph: g.yaml"))
     assert graph is None and flow.isolation == Isolation(image="x")

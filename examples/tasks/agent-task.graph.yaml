@@ -11,5 +11,7 @@ nodes:
     prompt: |
       Look at the project in your working directory and write a TODO.md
       listing the three most useful next steps.
+    # Named, not defaulted: hands are the one thing a node must ask for.
+    tools: [files, shell]
     max_turns: 10
     output: {as: report}

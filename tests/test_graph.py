@@ -22,7 +22,7 @@ def _spec(**overrides):
     base = {
         "name": "t",
         "entry": "a",
-        "nodes": [{"id": "a", "type": "llm", "prompt": "hi"}],
+        "nodes": [{"id": "a", "type": "agent", "prompt": "hi"}],
     }
     base.update(overrides)
     return base
@@ -31,7 +31,7 @@ def _spec(**overrides):
 def test_rejects_dangling_edge():
     with pytest.raises(Exception, match="unknown node 'ghost'"):
         GraphSpec.model_validate(
-            _spec(nodes=[{"id": "a", "type": "llm", "prompt": "hi", "next": "ghost"}])
+            _spec(nodes=[{"id": "a", "type": "agent", "prompt": "hi", "next": "ghost"}])
         )
 
 
@@ -45,8 +45,8 @@ def test_rejects_unreachable_node():
         GraphSpec.model_validate(
             _spec(
                 nodes=[
-                    {"id": "a", "type": "llm", "prompt": "hi"},
-                    {"id": "orphan", "type": "llm", "prompt": "hi"},
+                    {"id": "a", "type": "agent", "prompt": "hi"},
+                    {"id": "orphan", "type": "agent", "prompt": "hi"},
                 ]
             )
         )
@@ -57,8 +57,8 @@ def test_rejects_duplicate_ids():
         GraphSpec.model_validate(
             _spec(
                 nodes=[
-                    {"id": "a", "type": "llm", "prompt": "hi"},
-                    {"id": "a", "type": "llm", "prompt": "hi"},
+                    {"id": "a", "type": "agent", "prompt": "hi"},
+                    {"id": "a", "type": "agent", "prompt": "hi"},
                 ]
             )
         )
@@ -67,7 +67,7 @@ def test_rejects_duplicate_ids():
 def test_rejects_bad_template_at_load_time():
     with pytest.raises(Exception, match="syntax error"):
         GraphSpec.model_validate(
-            _spec(nodes=[{"id": "a", "type": "llm", "prompt": "{{ 1 + }}"}])
+            _spec(nodes=[{"id": "a", "type": "agent", "prompt": "{{ 1 + }}"}])
         )
 
 
@@ -90,7 +90,7 @@ def test_a_typo_in_a_node_is_explained_and_a_near_miss_suggested(tmp_path):
     """
     path = tmp_path / "g.yaml"
     path.write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: llm, promt: hi}]\n", encoding="utf-8"
+        "name: g\nentry: a\nnodes: [{id: a, type: agent, promt: hi}]\n", encoding="utf-8"
     )
 
     with pytest.raises(SpecError) as caught:
@@ -106,7 +106,7 @@ def test_a_typo_in_a_node_is_explained_and_a_near_miss_suggested(tmp_path):
 
 def test_a_missing_graph_key_is_named_plainly(tmp_path):
     path = tmp_path / "g.yaml"
-    path.write_text("entry: a\nnodes: [{id: a, type: llm, prompt: hi}]\n", encoding="utf-8")
+    path.write_text("entry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n", encoding="utf-8")
 
     with pytest.raises(SpecError, match="'name' is required"):
         load_graph(path)
@@ -148,16 +148,47 @@ def test_agent_node_rejects_branches():
         GraphSpec.model_validate(_agent_graph(branches=[{"when": "True", "to": None}]))
 
 
-def test_llm_node_rejects_agent_only_fields():
+def test_a_router_takes_no_workdir_or_tools():
+    """It calls no model and runs no tool, so it has nowhere to put either.
+
+    This is what is left of the rule that used to refuse a workdir on an `llm`
+    node: with one model node there is no such thing to refuse, and a router
+    is the only node that still cannot want one.
+    """
     spec = {
         "name": "g",
         "entry": "a",
-        "nodes": [{"id": "a", "type": "llm", "prompt": "p", "workdir": "/x"}],
+        "nodes": [
+            {
+                "id": "a",
+                "type": "router",
+                "branches": [{"when": "true", "to": None}],
+                "workdir": "/x",
+            }
+        ],
     }
     with pytest.raises(ValidationError, match="workdir"):
         GraphSpec.model_validate(spec)
 
 
+def test_a_model_node_may_have_no_tools_and_no_workdir():
+    """What `type: llm` used to be, said with the tools line instead."""
+    graph = GraphSpec.model_validate(
+        {"name": "g", "entry": "a", "nodes": [{"id": "a", "type": "agent", "prompt": "p"}]}
+    )
+
+    assert graph.node("a").tools is None
+
+
 def test_roles_includes_agent_nodes():
     graph = GraphSpec.model_validate(_agent_graph())
     assert graph.roles() == {"worker"}
+
+
+def test_a_graph_that_still_says_llm_is_told_what_to_do():
+    """`Literal` would answer "Input should be 'agent' or 'router'" -- true, and
+    no help at all to someone holding a graph that worked last week."""
+    spec = {"name": "g", "entry": "a", "nodes": [{"id": "a", "type": "llm", "prompt": "p"}]}
+
+    with pytest.raises(ValidationError, match="now 'agent' with no tools"):
+        GraphSpec.model_validate(spec)

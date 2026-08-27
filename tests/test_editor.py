@@ -46,7 +46,7 @@ def test_ui_coordinates_round_trip_through_the_schema():
         {
             "name": "u",
             "entry": "a",
-            "nodes": [{"id": "a", "type": "llm", "prompt": "hi", "ui": {"x": 40, "y": 90}}],
+            "nodes": [{"id": "a", "type": "agent", "prompt": "hi", "ui": {"x": 40, "y": 90}}],
         }
     )
     payload = _boot_payload(graph, None, {"mode": "none"})
@@ -68,7 +68,7 @@ def test_a_prompt_cannot_close_the_script_tag():
         {
             "name": "x",
             "entry": "a",
-            "nodes": [{"id": "a", "type": "llm", "prompt": 'say "</script><img>" now'}],
+            "nodes": [{"id": "a", "type": "agent", "prompt": 'say "</script><img>" now'}],
         }
     )
     page = render_editor(graph)

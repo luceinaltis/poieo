@@ -13,7 +13,7 @@ state:
 
 nodes:
   - id: draft
-    type: llm
+    type: agent
     role: writer
     prompt: |
       Write a single tight paragraph on this brief. No preamble.
@@ -25,7 +25,7 @@ nodes:
     next: review
 
   - id: review
-    type: llm
+    type: agent
     role: critic              # a different logical role -> can be a different model
     system: You are a terse editor. Reply with JSON only.
     prompt: |
@@ -51,7 +51,7 @@ nodes:
     default: revise
 
   - id: revise
-    type: llm
+    type: agent
     role: writer
     prompt: |
       Revise the paragraph to address the editor's note. Return only the
