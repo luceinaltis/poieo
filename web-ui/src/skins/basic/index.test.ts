@@ -272,3 +272,19 @@ test("a connector is drawn only where the run really goes", () => {
   expect(pill("draft").dataset.leadsOn).toBeUndefined()
   handle.destroy()
 })
+
+
+test("a border is exactly as wide as the arrows think it is", () => {
+  // The arrows' geometry is arithmetic rather than measurement, which is what
+  // makes it testable at all -- so the constant they are drawn against has to
+  // be the width that renders. Declared in the stylesheet it was free to
+  // drift from BOX.width, and content-box padding had made it 26px wider:
+  // every wire began that far inside the box it was leaving.
+  const handle = basic.mount(el, { onSelectWorker: vi.fn() })
+  handle.update(initialStage(FLOWS))
+
+  expect(el.querySelector<HTMLElement>('[data-flow="chores"]')!.style.width).toBe(
+    `${BOX.width}px`,
+  )
+  handle.destroy()
+})
