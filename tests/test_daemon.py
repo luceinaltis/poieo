@@ -670,3 +670,24 @@ async def test_a_background_task_that_stopped_cleanly_says_nothing(caplog):
         await _stopped(asyncio.ensure_future(tidy()), "learning pass")
 
     assert caplog.text == ""
+
+
+def test_a_schedule_reads_back_the_way_it_was_written():
+    """`every: 30m` shown as `every 1800s` makes a reader do arithmetic to
+    check their own config. The number is the same fact either way; only one
+    of them can be checked at a glance.
+
+    This string is what `poieo tasks`, `poieo flows` and `poieo validate`
+    print, what the board labels a flow with, and what every run records as
+    the reason it fired -- so it is worth being readable in one place.
+    """
+    said = lambda every: TriggerSpec(type="interval", every=every).build().describe
+
+    assert said("30m") == "every 30m"
+    assert said("1h") == "every 1h"
+    assert said("2h") == "every 2h"
+    assert said("1d") == "every 1d"
+    assert said("45s") == "every 45s"
+    # Not a whole number of the larger unit: seconds is the honest answer.
+    assert said(90) == "every 90s"
+    assert said("1.5h") == "every 90m"

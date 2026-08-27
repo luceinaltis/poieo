@@ -6,7 +6,7 @@ from test_workspace import make_repo
 
 from conftest import card, EXAMPLES, at
 from poieo.layout import layout_for
-from poieo.cli import app
+from poieo.cli import AFTER, BOARD, SETUP, app
 
 runner = CliRunner()
 
@@ -136,20 +136,47 @@ def test_help_tells_two_stories_not_seventeen():
     working, hidden: plumbing, files the user edits directly, or views the
     web board owns.
 
-    `memory` and `learn` are on it. A feature nobody can find is a feature
-    nobody has, and these two are how a person sees what the project has
-    come to believe and decides whether it should.
+    `tasks` and `note` are on it because this is a task board: a person who
+    cannot find how to list their tasks has not been shown the product.
+    `memory` and `learn` are on it because a feature nobody can find is a
+    feature nobody has.
     """
     visible = {
         info.name or info.callback.__name__
         for info in app.registered_commands
         if not info.hidden
     }
-    assert visible == {"init", "daemon", "run", "validate", "check", "memory", "learn"}
-    # `runs` rides along as a sub-app.
+    assert visible == {
+        "init", "daemon", "run", "validate", "check",
+        "tasks", "note", "memory", "learn",
+    }
+    # `runs` and `config` ride along as sub-apps.
     result = runner.invoke(app, ["--help"])
-    assert "runs" in result.stdout
+    assert "runs" in result.stdout and "config" in result.stdout
     assert "eject" not in result.stdout
+
+
+def test_the_front_page_is_grouped_by_what_a_person_is_doing():
+    """Nine commands in a flat list is a list nobody reads in order. The
+    panels say which to type first without anybody having to explain it."""
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    for panel in (SETUP, BOARD, AFTER):
+        assert panel in result.stdout, panel
+
+
+def test_the_front_page_speaks_the_users_three_words_not_the_designs():
+    """DESIGN.md principle 7: the vocabulary is a task, a run, a change.
+    Worktrees, flows, bindings and providers are machinery, and machinery does
+    not appear in the interface -- least of all on the first screen somebody
+    ever sees.
+    """
+    result = runner.invoke(app, ["--help"])
+    lowered = result.stdout.lower()
+    for machinery in ("scheduler", "provider", "binding", "flow"):
+        assert machinery not in lowered, machinery
+    # ...and the words that replaced them are there.
+    assert "task" in lowered
 
 
 def test_hidden_commands_still_work():

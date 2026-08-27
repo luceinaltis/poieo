@@ -36,6 +36,24 @@ def parse_duration(value: str | int | float) -> float:
     return float(amount) * _UNITS[(unit or "s").lower()]
 
 
+def humanize(seconds: float) -> str:
+    """Seconds back in the units somebody would have written them in.
+
+    The inverse of :func:`parse_duration`, near enough: `30m` read back as
+    `every 1800s` makes a person do arithmetic to check their own config, and
+    only one of those two can be checked at a glance. The largest unit that
+    divides evenly wins; nothing does, and seconds is the honest answer.
+
+    This reaches further than it looks -- it is what `poieo tasks`, `flows`
+    and `validate` print, what the board labels a flow with, and the reason
+    every interval run records for having fired.
+    """
+    for size, unit in ((86400, "d"), (3600, "h"), (60, "m")):
+        if seconds >= size and seconds % size == 0:
+            return f"{seconds / size:g}{unit}"
+    return f"{seconds:g}s"
+
+
 @dataclass(slots=True)
 class Firing:
     """One scheduled activation of a flow."""
@@ -162,7 +180,7 @@ class IntervalTrigger(Trigger):
         self.every = every
         self.jitter = max(0.0, jitter)
         self.run_at_start = run_at_start
-        self.describe = f"every {every:g}s"
+        self.describe = f"every {humanize(every)}"
 
     async def fires(self, cancel: asyncio.Event) -> AsyncIterator[Firing]:
         loop = asyncio.get_running_loop()

@@ -63,24 +63,38 @@ from .task import (
 from .editor import render_editor
 from .viewer import mermaid_source, render_page
 
+# The front page is grouped by what a person is trying to do, in the order
+# they will do it. A panel title is one of the user's three words -- a task, a
+# run, a change -- and never a layer of the design: DESIGN.md principle 7 is
+# that worktrees, flows, bindings and providers are machinery, and machinery
+# does not appear in the interface. Least of all on the first screen.
+SETUP = "Setting up"
+BOARD = "Your tasks"
+AFTER = "What happened"
+
 app = typer.Typer(
     name="poieo",
-    help="Run logical LLM workflows against physical models you bind separately.",
+    help="Write down the work you want done. The models on your own machine "
+    "keep it running, and you read what they did in the morning.",
+    epilog="New here? `poieo init` sets this folder up, then "
+    "`poieo run tasks/hello.yaml` tries it once.",
     no_args_is_help=True,
     add_completion=False,
 )
-runs_app = typer.Typer(name="runs", help="Inspect past runs.", no_args_is_help=True)
-app.add_typer(runs_app)
+runs_app = typer.Typer(
+    name="runs", help="What has run, and what each run did.", no_args_is_help=True
+)
+app.add_typer(runs_app, rich_help_panel=AFTER)
 
 # Bare `poieo config` reports rather than printing help: "what am I bound to"
 # is the question people arrive with, and making them find a subcommand to ask
 # it is a tax. The subcommands are for changing the answer.
 config_app = typer.Typer(
     name="config",
-    help="What this project is bound to, and what else it could name.",
+    help="Which models this project uses, and what else this machine has.",
     invoke_without_command=True,
 )
-app.add_typer(config_app)
+app.add_typer(config_app, rich_help_panel=SETUP)
 
 
 def _guarded(fn):
@@ -152,7 +166,7 @@ def version() -> None:
     typer.echo(f"poieo {__version__}")
 
 
-@app.command()
+@app.command(rich_help_panel=SETUP)
 @_guarded
 def init(
     mock: bool = typer.Option(
@@ -162,7 +176,7 @@ def init(
         "looking for a real one.",
     ),
 ) -> None:
-    """Write a working project into this folder: poieo.yaml, bindings, a card.
+    """Set this folder up as a poieo project.
 
     Looks at the machine once -- every local server that answers, and a Claude
     credential if there is one -- and writes all of them into the binding, so a
@@ -200,8 +214,8 @@ def init(
         typer.echo(f"also declared, ready for a role to name: {', '.join(others)}")
     typer.echo("")
     typer.echo("next:")
-    typer.echo("  poieo run tasks/hello.yaml    run the sample card once")
-    typer.echo("  poieo daemon                  keep the project's flows running")
+    typer.echo("  poieo run tasks/hello.yaml    run the sample task once")
+    typer.echo("  poieo daemon                  keep this project's tasks running")
 
 
 _NO_BINDING = (
@@ -261,7 +275,7 @@ def _load_spec(path: Path, task: "TaskSpec | None" = None) -> GraphSpec:
     return build_graph(task)
 
 
-@app.command()
+@app.command(rich_help_panel=SETUP)
 @_guarded
 def validate(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
@@ -270,7 +284,7 @@ def validate(
     ),
     as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
 ) -> None:
-    """Parse a graph or task (and optionally a binding) and report problems."""
+    """Prove a task loads now, rather than at 3am when it fires."""
     task = _load_card(graph_path)
     graph = _load_spec(graph_path, task)
     # One report, two renderings: the facts are gathered once so the JSON an
@@ -520,7 +534,7 @@ def edit(
         typer.echo(f"open file://{target.resolve()}")
 
 
-@app.command()
+@app.command(rich_help_panel=BOARD)
 @_guarded
 def run(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
@@ -548,7 +562,7 @@ def run(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Execute a graph, or a task, once."""
+    """Run one task now, and say what it did."""
     _setup_logging(verbose)
     task = _load_card(graph_path)
     graph = _load_spec(graph_path, task)
@@ -652,7 +666,7 @@ def reset(
     )
 
 
-@app.command()
+@app.command(rich_help_panel=BOARD)
 @_guarded
 def daemon(
     config_path: Optional[Path] = typer.Argument(
@@ -668,7 +682,7 @@ def daemon(
     no_web: bool = typer.Option(False, "--no-web", help="Disable the web UI."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
-    """Start the resident scheduler and keep flows running."""
+    """Keep the tasks running, and serve the board in a browser."""
     _setup_logging(verbose)
     config_path = _project_file(config_path)
     if config_path.is_dir():
@@ -714,7 +728,7 @@ def daemon(
         raise typer.Exit(code=1)
 
 
-@app.command("check")
+@app.command("check", rich_help_panel=SETUP)
 @_guarded
 def check_providers(
     binding: Optional[Path] = typer.Option(
@@ -725,7 +739,7 @@ def check_providers(
         False, "--json", help="Print the probe results as JSON."
     ),
 ) -> None:
-    """Probe every provider declared in a binding."""
+    """Ask each model endpoint whether it is answering."""
     binding, _ = _find_binding(binding, None)
     if binding is None:
         _fail(_NO_BINDING)
@@ -946,18 +960,22 @@ def flows(
             )
 
 
-@app.command(hidden=True)
+@app.command(rich_help_panel=BOARD)
 @_guarded
 def tasks(
-    target: Path = typer.Argument(..., help="Daemon config file, or a tasks folder."),
+    target: Optional[Path] = typer.Argument(
+        None, help="A tasks folder, or a config file [default: the project's]."
+    ),
 ) -> None:
-    """List the task cards in a folder, or the ones a daemon config would run."""
-    if target.is_dir():
+    """The tasks on the board, and when each one next runs."""
+    if target is not None and target.is_dir():
         folder = target
     else:
-        config = load_config(target)
+        # Discovery only fills silence: named config, else the project's.
+        source = target if target is not None else _project_file(None)
+        config = load_config(source)
         if not config.tasks:
-            _fail(f"{target} names no tasks folder")
+            _fail(f"{source} names no tasks folder")
         folder = config.resolve_path(config.tasks)
     items = load_tasks(folder)
 
@@ -979,7 +997,7 @@ def tasks(
         typer.echo(f"        {last}")
 
 
-@app.command(hidden=True)
+@app.command(rich_help_panel=BOARD)
 @_guarded
 def note(
     task_path: Path = typer.Argument(..., help="Task YAML/JSON file."),
@@ -1005,7 +1023,7 @@ def _memory_target(path: "Path | None") -> "tuple[TaskSpec | None, Path]":
     return task, layout_for(task.dir if task is not None else path).root
 
 
-@app.command()
+@app.command(rich_help_panel=AFTER)
 @_guarded
 def memory(
     path: Optional[Path] = typer.Argument(
@@ -1050,7 +1068,7 @@ def memory(
         typer.echo(read_memory(project, task, preview=True) or "(nothing)")
 
 
-@app.command()
+@app.command(rich_help_panel=AFTER)
 @_guarded
 def learn(
     path: Optional[Path] = typer.Argument(
@@ -1060,7 +1078,7 @@ def learn(
         None, "--binding", "-b", help="Binding whose `learner` role reads the night."
     ),
 ) -> None:
-    """Run one learning pass: read the run records, keep what stays true."""
+    """Read what has run, and write down what stays true."""
     task, project = _memory_target(path)
 
     binding, _ = _find_binding(binding, task)
