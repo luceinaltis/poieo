@@ -45,7 +45,7 @@ to run a graph. Which means two different questions have to be asked separately:
 | method | asks | answer used for |
 |---|---|---|
 | `check_roles(roles)` | which of these cannot be resolved **at all** | `preflight()` — a hard failure |
-| `undeclared(roles)` | which of these the binding **never names** | `load_flows()` — a warning |
+| `undeclared(roles)` | which of these the binding **never names** | `load_tasks()` — a warning |
 
 `check_roles` is narrower than a reader expects: it only reports for a binding
 that declares neither a provider nor a model to fall back on. It is

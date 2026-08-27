@@ -1,6 +1,6 @@
 # Tasks — the short form
 
-`src/poieo/task.py`
+`src/poieo/card.py`
 
 A graph plus a binding plus a daemon entry is three files. When the work is *one
 model, one folder, one instruction, on repeat*, a **task card** is one:
@@ -14,7 +14,12 @@ prompt: |
 
 ## Sugar, not a second format
 
-A card is sugar. At load time `expand()` turns it into a `FlowSpec` plus a
+**A card and a task are two things.** A card is the file a person writes; a task
+is what runs. `CardSpec` is the first, `TaskSpec` the second, and `expand()` is
+the only crossing between them — which is why the loader is the last place that
+knows cards exist at all.
+
+A card is sugar. At load time `expand()` turns it into a `TaskSpec` plus a
 one-node `GraphSpec` indistinguishable from hand-written ones, so **nothing
 downstream of the loader knows cards exist**. The expansion is visible
 (`poieo show`) and reversible (`poieo eject`), and that is the whole discipline:
@@ -22,7 +27,7 @@ the moment a card's expansion is something you could not have written by hand,
 the short form has become a hidden second configuration format.
 
 ```
-TaskSpec ──expand()──►  FlowSpec        name, graph, binding, trigger,
+CardSpec ──expand()──►  TaskSpec        name, graph, binding, trigger,
                                         enabled, isolation, carry_state: true
                     └►  GraphSpec       one `agent` node, id "work"
 ```
@@ -131,7 +136,7 @@ next run, and a sentence with an action beats an exception repr. The repr stays
 in the run record for whoever wants it. Both writes swallow their own failures:
 memory is not worth killing a night's work over.
 
-## `task_payload()`
+## `card_payload()`
 
 The one statement of what a card's generated graph gets beyond the user's input:
 `journal`, and `memory` when the project keeps one. There are two runners —

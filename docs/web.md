@@ -55,7 +55,7 @@ call an arrow.
 graph.default_role).model`), so the picture cannot claim one model and the run
 make another. It is `null` for a router, which calls none. Per-node `params` are
 deliberately not applied: they layer generation settings onto a role, never a
-different model. This is why `_shape` takes the `LoadedFlow` and not the
+different model. This is why `_shape` takes the `LoadedTask` and not the
 `GraphSpec` — a role resolves against a binding, and the same graph under two
 bindings is two different afternoons.
 
@@ -103,7 +103,7 @@ them read `self.root` instead, which is only the same file by accident — over 
 `NullStore` the wrapper answered the web API from whatever `runs/` the daemon
 happened to be standing in.
 
-`run_flows` maps run id → task, learned from `run_started`, so the SSE endpoint
+`run_tasks` maps run id → task, learned from `run_started`, so the SSE endpoint
 can filter by task without parsing every payload.
 
 Static assets are served immutable (Vite emits content-hashed names), while

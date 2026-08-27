@@ -85,7 +85,7 @@ These are load-bearing. A change that breaks one is a design change, not a fix.
 
 **Fail at launch, not at 3am.** Every graph, binding, expression, cron
 expression, memory entry, credential and container image is checked when the
-config loads. `load_flows()` is where this is enforced for the daemon; the
+config loads. `load_tasks()` is where this is enforced for the daemon; the
 `Spec`/`Binding`/`Expression` errors it raises all mean *misconfigured*, not
 *flaky*.
 
