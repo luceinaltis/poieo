@@ -519,7 +519,7 @@ fails at launch, not at 3am. `SIGINT`/`SIGTERM` drains in-flight runs and closes
 second signal exits immediately.
 
 ```bash
-poieo flows  examples/poieo.yaml     # what would run, on what trigger, against what model
+poieo tasks  examples/poieo.yaml     # what would run, and when each next does
 poieo daemon examples/poieo.yaml     # stay up
 poieo daemon examples/poieo.yaml --once --task triage
 ```
@@ -569,7 +569,7 @@ and leaves nothing to review, and a run that failed keeps its half-finished work
 aside instead of mixing it in.
 
 None of this is required. A task with no `workdir` behaves exactly as it always
-has, and a `workdir` that nothing tracks still runs -- `poieo flows` says up
+has, and a folder that nothing tracks still runs -- `poieo tasks` says up
 front that its changes can't be reviewed or undone.
 
 ## Run logs

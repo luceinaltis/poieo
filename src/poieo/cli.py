@@ -1028,41 +1028,38 @@ def config_use(
         )
 
 
-@app.command(hidden=True)
-@_guarded
-def flows(
-    config_path: Optional[Path] = typer.Argument(
-        None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
-    ),
-) -> None:
-    """List the tasks a daemon config would run, with their triggers and bindings.
+def _unreviewable(cards: "list[CardSpec]") -> set[str]:
+    """Which of these work somewhere git cannot track.
 
-    Still `poieo flows` on the command line. It overlaps `poieo tasks`
-    heavily now, and folding the two together is a question about what a
-    person should see -- not a rename.
+    One `git rev-parse` per card, asked all at once rather than one after
+    another: on Windows a subprocess is most of a tenth of a second, and a
+    listing of ten tasks is what a person types to see the board quickly.
     """
-    config = load_config(_project_file(config_path))
-    loaded = load_tasks(config, enabled_only=False)
 
-    for item in loaded:
-        state = "on " if item.spec.enabled else "off"
-        trigger = item.spec.trigger.build().describe
-        typer.echo(
-            f"[{state}] {item.spec.name:<20} {item.graph.name:<20} "
-            f"{trigger:<24} binding={item.binding.name}"
-        )
-        for role in sorted(item.graph.roles()):
-            typer.echo(f"        {item.binding.resolve(role).describe()}")
-
-        workdir = config.workdir_path(item.spec)
-        if workdir and not Workspace(
-            workdir, item.spec.name, config.layout().worktrees()
-        ).available():
-            # Degraded, not broken: the task still runs tonight.
-            typer.secho(
-                f"        note: changes in {workdir} can't be reviewed or undone",
-                fg=typer.colors.YELLOW,
+    async def _ask() -> list[bool]:
+        return list(
+            await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        Workspace(
+                            card.folder_path(),
+                            card.slug,
+                            layout_for(card.dir).worktrees(),
+                        ).available
+                    )
+                    for card in cards
+                    if card.folder
+                )
             )
+        )
+
+    with_folders = [card for card in cards if card.folder]
+    if not with_folders:
+        return set()
+    answers = asyncio.run(_ask())
+    return {
+        card.folder for card, ok in zip(with_folders, answers) if not ok
+    }
 
 
 @app.command(rich_help_panel=BOARD)
@@ -1072,7 +1069,14 @@ def tasks(
         None, help="A tasks folder, or a config file [default: the project's]."
     ),
 ) -> None:
-    """The tasks on the board, and when each one next runs."""
+    """The tasks on the board, when each next runs, and what it last said.
+
+    This used to have a second half, `poieo flows`, which loaded every graph
+    and binding to print the same roster with the models resolved. `validate`
+    already answers that for one task and `config` for the project, and the
+    one thing only it said -- that a task's work cannot be reviewed or undone
+    -- belongs here, where a person actually looks.
+    """
     if target is not None and target.is_dir():
         folder = target
     else:
@@ -1087,6 +1091,7 @@ def tasks(
     if not items:
         typer.echo("(no tasks)")
         return
+    unreviewable = _unreviewable(items)
     for card in items:
         task, _ = expand(card)
         state = "on " if task.enabled else "off"
@@ -1100,6 +1105,15 @@ def tasks(
         typer.echo(f"        {card.name}{boxed}")
         last = read_journal(card.journal_path(), limit=1).splitlines()[-1]
         typer.echo(f"        {last}")
+        if card.folder in unreviewable:
+            # Degraded, not broken: it still runs tonight. But principle 7's
+            # moment -- the user's own files are about to change -- is exactly
+            # this one, and it must not be found out afterwards.
+            typer.secho(
+                f"        note: changes in {card.folder_path()} can't be "
+                f"reviewed or undone",
+                fg=typer.colors.YELLOW,
+            )
 
 
 @app.command(rich_help_panel=BOARD)
