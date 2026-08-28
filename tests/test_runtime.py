@@ -356,6 +356,122 @@ async def test_agent_node_accepts_a_turn_that_simply_ended(tmp_path):
     assert result.status == "completed"
 
 
+def reads_the_same_file(times, path="big.txt"):
+    """A model that reads one file over and over, then answers.
+
+    The shape a step takes when it is looking around a repository, which is
+    what fills a conversation up in the first place.
+    """
+    turn = {"tool_calls": [{"name": "read_file", "arguments": {"path": path}}]}
+    return mock_binding({"worker": [dict(turn) for _ in range(times)] + ["done"]})
+
+
+def tool_contents(call):
+    return [m["content"] for m in call.messages if m["role"] == "tool"]
+
+
+async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(4)) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    # Four reads of a hundred characters is nowhere near the cap, so every
+    # result is still there in full on the last request.
+    assert tool_contents(provider.calls[-1]) == ["x" * 100] * 4
+
+
+async def test_an_overgrown_conversation_loses_its_oldest_tool_results(tmp_path, monkeypatch):
+    """The fix for a run that spent 160,360 input tokens to produce 6,578.
+
+    Tool results are what fill a conversation -- one file read can be tens of
+    thousands of characters -- and the loop resends all of them every turn.
+    Past a cap the older ones are replaced by a note saying so; the file is
+    still on disk, so the model can read it again if it turns out to need it.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(5)) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    sent = tool_contents(provider.calls[-1])
+    assert len(sent) == 5
+    # The two oldest are gone; the three most recent are whole.
+    assert sent[0] == nodes._CLEARED
+    assert sent[1] == nodes._CLEARED
+    assert sent[2:] == ["x" * 100] * 3
+
+
+async def test_clearing_keeps_the_record_that_the_tool_was_called(tmp_path, monkeypatch):
+    """What the model must not lose is that it already looked.
+
+    Only the result goes. The assistant turn that asked for it stays, so a
+    model reading its own history still knows it has read this file -- and the
+    tool definitions are re-offered every turn either way, so the ability to
+    read it again never goes anywhere.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(5)) as pool:
+        await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    last = provider.calls[-1]
+    asked = [m for m in last.messages if m["role"] == "assistant" and m.get("tool_calls")]
+    assert len(asked) == 5
+    assert all(c[0]["name"] == "read_file" for c in (m["tool_calls"] for m in asked))
+    # And the task itself is never touched.
+    assert last.messages[0] == {"role": "user", "content": "do it"}
+
+
+async def test_clearing_says_so_in_the_run_log(tmp_path, monkeypatch):
+    """A run that quietly shrinks its own history is a run nobody can debug."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+    await run_graph(graph, reads_the_same_file(5), store=store)
+
+    cleared = [e for e in store.events if e.type == "node_context_cleared"]
+    assert cleared, "clearing the conversation must leave a trace"
+    assert cleared[0].data["kept"] == nodes._KEEP_RESULTS
+    # Net, not gross: the note takes the result's place, so what a hundred
+    # characters actually bought back is a hundred less the note.
+    assert cleared[0].data["freed"] == 100 - len(nodes._CLEARED)
+
+
+async def test_a_result_is_only_cleared_once(tmp_path, monkeypatch):
+    """Freed characters are a measurement, not a running total of intent.
+
+    Once a result is a placeholder there is nothing left in it to free, and
+    counting it again would report work that did not happen.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+    await run_graph(graph, reads_the_same_file(6), store=store)
+
+    cleared = [e for e in store.events if e.type == "node_context_cleared"]
+    # Every firing freed something; a firing that found only placeholders
+    # older than the keep window emits nothing at all.
+    assert all(e.data["freed"] > 0 for e in cleared)
+
+
 async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
     graph = agent_graph(tmp_path / "not-there")
     binding = mock_binding({"worker": "hi"})
