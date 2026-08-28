@@ -127,9 +127,10 @@ nodes:
 | type | does | keys |
 |---|---|---|
 | `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
+| `command` | runs one command through the executor seam and reports it; calls no model | `command`, `output`, `next`, and optionally `workdir`, `timeout`, `env` |
 | `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
 
-Two types, because there are two things a step can be: work, or a decision.
+Three types, by who does the step: the model, the machine, or nobody.
 **No `tools:` line means no tools** — the node calls the model once and reads
 the answer, and cannot touch a file. Hands are asked for, never defaulted.
 

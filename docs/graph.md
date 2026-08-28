@@ -28,9 +28,33 @@ not call a model; drop prompt/role").
 | type | reads | produces |
 |---|---|---|
 | `agent` | `role`, `system`, `prompt`, `output`, `retry`, `params`, and — only with hands — `tools`, `workdir`, `max_turns` | the completion of the turn that used no tool |
+| `command` | `command`, `output`, and optionally `workdir`, `timeout`, `env` | `{exit_code, output}` -- the code as the number the process returned |
 | `router` | `branches[].when` / `.to` / `.label`, `default` | the matched branch's label |
 
-Two types, because a step either does work or picks a path. **No `tools:` line
+Three types, split by **who does the step**: the model (`agent`), the machine
+exactly as written (`command`), or nobody (`router`). That line is not a
+detail — it decides whether a step costs a turn, whether it gives the same
+answer twice, and whether the log records a fact or a paraphrase of one.
+
+A `command` node exists because the alternative is asking a model to read
+`exit code: 0` and say so. That is a turn spent on no judgement, and a place
+for a small model to be wrong about something the machine already knew — a
+router branching on the model's account of a test run rather than on the test
+run. The node puts `exit_code` in scope as the **number the process returned**,
+and the router decides what counts as passing, because that varies and the
+node should not hold an opinion about it.
+
+**A non-zero exit is not a failed run.** A red suite is what the graph is there
+to react to. The run fails only when the command could not run at all — a
+timeout, a missing program — because *this did not start* and *this went red*
+are different facts, and a graph that cannot tell them apart will eventually
+report a suite it never ran.
+
+`command` nodes refuse `role`, `system`, `prompt`, `params`, `retry`,
+`max_turns` and `tools`: a key that does nothing reads as configured, which is
+worse than one that is missing. The command runs through
+`tools.make_executor()`, the same seam the model's own commands go through, so
+a task that asked to be fenced is fenced here too. **No `tools:` line
 means no tools**: the node calls the model once, reads the answer, and cannot
 touch a file. Tools are what bring the loop, the `workdir` and the turn budget
 with them, which is why there is no separate type for a call without them —

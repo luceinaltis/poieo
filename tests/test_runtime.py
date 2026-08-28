@@ -616,3 +616,113 @@ async def test_a_run_that_said_nothing_says_so_with_an_empty_string(tmp_path):
     # Empty, not "(said nothing)": that wording is a journal line's default,
     # and a summary is read by a board that wants to know there was nothing.
     assert result.summary()["said"] == ""
+
+
+# -- the command node --------------------------------------------------------
+
+
+def _command_graph(**node) -> GraphSpec:
+    return GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "check",
+            "nodes": [
+                {"id": "check", "type": "command", "next": "gate", **node},
+                {
+                    "id": "gate",
+                    "type": "router",
+                    "branches": [{"when": "check.exit_code == 0", "to": None,
+                                  "label": "green"}],
+                    "default": None,
+                },
+            ],
+        }
+    )
+
+
+async def test_a_command_node_puts_the_exit_code_in_scope_as_a_number(tmp_path):
+    """The whole point: a router branches on the number the process returned,
+    not on a model's account of it."""
+    graph = _command_graph(command="exit 0", output={"as": "check"}, workdir=str(tmp_path))
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert result.outputs["check"]["exit_code"] == 0
+    assert result.outputs["gate"] == "green"
+
+
+async def test_a_red_command_is_a_fact_to_branch_on_not_a_failed_run(tmp_path):
+    """A failing test suite is what the graph is there to react to. The run
+    only fails when the command could not run at all."""
+    graph = _command_graph(command="exit 1", output={"as": "check"}, workdir=str(tmp_path))
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert result.outputs["check"]["exit_code"] == 1
+    assert result.outputs["gate"] == "default"
+
+
+async def test_a_command_node_spends_no_model_turn(tmp_path):
+    """A binding that can answer nothing at all still runs this graph. If the
+    node reached a provider, this would raise instead."""
+    graph = _command_graph(command="exit 0", output={"as": "check"}, workdir=str(tmp_path))
+    binding = BindingSpec.model_validate(
+        {"name": "empty", "providers": {"none": {"type": "mock"}},
+         "default": {"provider": "none", "model": "m"}}
+    )
+
+    result = await run_graph(graph, binding, workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert result.usage["input_tokens"] == 0
+    assert result.usage["output_tokens"] == 0
+
+
+async def test_a_commands_output_is_readable_by_a_later_prompt(tmp_path):
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "check",
+            "nodes": [
+                {"id": "check", "type": "command", "command": "echo boom",
+                 "output": {"as": "check"}, "workdir": str(tmp_path), "next": "fix"},
+                {"id": "fix", "type": "agent", "prompt": "Fix: {{ check.output }}"},
+            ],
+        }
+    )
+
+    result = await run_graph(graph, mock_binding({}, fallback="fixed"), workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert "boom" in result.outputs["check"]["output"]
+
+
+async def test_a_command_that_never_finished_fails_the_run(tmp_path):
+    """"This did not start" and "this went red" are different facts, and the
+    graph must not be able to confuse them."""
+    graph = _command_graph(
+        command="python -c \"import time; time.sleep(5)\"",
+        timeout=0.3,
+        workdir=str(tmp_path),
+    )
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    assert result.status == "failed"
+    assert "timed out" in (result.error or "")
+
+
+async def test_a_command_node_runs_where_the_task_works(tmp_path):
+    (tmp_path / "marker.txt").write_text("x", encoding="utf-8")
+    import os
+
+    graph = _command_graph(
+        command="dir /b" if os.name == "nt" else "ls",
+        output={"as": "check"},
+    )
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    assert "marker.txt" in result.outputs["check"]["output"]

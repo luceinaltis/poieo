@@ -66,7 +66,7 @@ class Branch(_Spec):
 
 class NodeSpec(_Spec):
     id: str
-    type: Literal["agent", "router"]
+    type: Literal["agent", "command", "router"]
     description: str | None = None
 
     # --- model nodes ---
@@ -77,6 +77,16 @@ class NodeSpec(_Spec):
     retry: RetrySpec = Field(default_factory=RetrySpec)
     # Per-node overrides layered on top of whatever the binding resolves to.
     params: dict[str, Any] = Field(default_factory=dict)
+
+    # --- command nodes ---
+    # The command runs where the model's would: through the executor seam, so
+    # a task that asked to be fenced is fenced here too.
+    command: str | None = None
+    timeout: float | None = Field(default=None, gt=0, le=600)
+    # Laid over the process environment, never replacing it. Shells disagree
+    # about `VAR=1 cmd`, and getting it wrong looks exactly like the command
+    # running and failing.
+    env: dict[str, str] = Field(default_factory=dict)
 
     # --- router nodes ---
     branches: list[Branch] = Field(default_factory=list)
@@ -123,8 +133,43 @@ class NodeSpec(_Spec):
             raise ValueError(f"node id {value!r} must not start with a digit")
         return value
 
+    # Keys that only mean something when a model is being called. A node that
+    # calls none must refuse them: a key that does nothing is worse than one
+    # that is missing, because it reads as configured.
+    _MODEL_KEYS = ("role", "system", "prompt", "params", "tools")
+
+    def _refuse_model_keys(self) -> None:
+        named = [key for key in self._MODEL_KEYS if getattr(self, key)]
+        if self.max_turns != type(self).model_fields["max_turns"].default:
+            named.append("max_turns")
+        if self.retry != RetrySpec():
+            named.append("retry")
+        if named:
+            raise ValueError(
+                f"{self.type} node '{self.id}' does not take "
+                f"{'/'.join(named)}: it calls no model"
+            )
+
     @model_validator(mode="after")
     def _check_shape(self) -> NodeSpec:
+        if self.type != "command" and self.command is not None:
+            raise ValueError(
+                f"{self.type} node '{self.id}' does not take a command. Change "
+                f"`type` to `command` for a step that runs one without a model"
+            )
+        if self.type == "command":
+            if not self.command:
+                raise ValueError(f"command node '{self.id}' requires a command")
+            if self.branches:
+                raise ValueError(f"command node '{self.id}' cannot declare branches")
+            self._refuse_model_keys()
+            # Same rule as an agent's: physical, so the task may supply it, and
+            # a template so one graph can serve more than one folder.
+            if self.workdir:
+                try:
+                    validate_template(self.workdir)
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}': {exc}") from exc
         if self.type == "agent":
             if not self.prompt:
                 raise ValueError(f"{self.type} node '{self.id}' requires a prompt")
