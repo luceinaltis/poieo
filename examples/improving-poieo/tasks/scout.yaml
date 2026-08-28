@@ -6,6 +6,13 @@ trigger:
   type: interval
   every: 2h
 then:
-  - when: "true"
+  # `run.status` and not a bare `true`. A handoff is evaluated whether the run
+  # succeeded or not -- deliberately, so that a task can branch on its own
+  # failure -- and the catch-all the docs suggest does not know the difference.
+  # A scout that ran out of room handed its empty proposal on anyway, shape
+  # sent it back as too small to build, and the two bounced off each other
+  # until the chain depth limit stopped them ten handoffs later. Ten handoffs
+  # of a paid endpoint.
+  - when: "run.status == 'completed'"
     to: shape
     label: proposed
