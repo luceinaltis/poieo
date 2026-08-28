@@ -57,6 +57,15 @@ nodes:
 
       {{ survey }}
 
+      {% if input.get('sender', {}).get('outputs', {}).get('carry') %}
+      This came back as too big to build in one commit:
+
+      {{ input.get('sender', {}).get('outputs', {}).get('carry') }}
+
+      Do not propose it again. Either propose the smallest piece of it that
+      stands on its own, or choose a different gap.
+      {% endif %}
+
       Choose exactly one to build. It must be small enough that one person
       would land it as a single commit: one behaviour, one test.
 
