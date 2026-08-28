@@ -96,6 +96,24 @@
   margin: 2px 0 0;
 }
 
+/* What a tool answered: three lines at most, because the timeline is a
+   sequence and one `cat` of a long file must not bury what came next. Dimmed,
+   because the row above it -- the tool and its subject -- is the headline. */
+.drawer-result {
+  color: #9a9086;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  margin: 2px 0 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.drawer-entry[data-error="true"] .drawer-result {
+  color: #d16d5a;
+}
+
 .drawer-thinking {
   color: #9a9086;
   font-style: italic;

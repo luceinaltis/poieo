@@ -13,7 +13,7 @@ import { Control } from "./Control"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { RunList } from "../review/RunList"
-import { initialStage, replay } from "../state/stage"
+import { initialStage, replay, subjectOf } from "../state/stage"
 import type { TaskState } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
 import { shortTime } from "../when"
@@ -56,6 +56,10 @@ function Entry({ event }: { event: PoieoEvent }) {
   if (event.type === "node_turn") {
     const text = String(data.text ?? "")
     const thinking = String(data.thinking ?? "")
+    // A model that reached straight for a tool leaves a turn with nothing in
+    // it. The tool calls below already say the turn happened, so an empty row
+    // here is only a gap in the timeline.
+    if (!text && !thinking) return null
     // The turn number is the loop's bookkeeping. What a reader wants from a
     // second turn is that the model spoke again, which the entry already is.
     return (
@@ -75,20 +79,25 @@ function Entry({ event }: { event: PoieoEvent }) {
   }
 
   if (event.type === "node_tool_call") {
-    const failed = typeof data.error === "string" && data.error.length > 0
+    // The daemon writes a boolean here, and the message a reader wants is in
+    // `result` either way -- a failing tool explains itself there.
+    const failed = data.error === true
     // Milliseconds only when they are worth a reader's attention. A tool that
     // answered instantly said "0ms" on every line and meant nothing by it.
     const ms = Number(data.duration_ms ?? 0)
     const slow = ms >= 1000 ? ` · ${(ms / 1000).toFixed(1)}s` : ""
+    const subject = subjectOf(data.arguments)
+    const result = String(data.result ?? "")
     return (
       <li className="drawer-entry" data-kind="tool" data-error={String(failed)}>
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
         <div>
           <div className="drawer-label">
             {String(data.name ?? "")}
+            {subject ? ` ${subject}` : ""}
             {slow}
           </div>
-          {failed ? <p className="drawer-text">{String(data.error)}</p> : null}
+          {result ? <p className="drawer-result">{result}</p> : null}
         </div>
       </li>
     )

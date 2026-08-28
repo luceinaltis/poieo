@@ -87,6 +87,52 @@ test("tool calls accumulate newest-first and cap at 8", () => {
   expect(calls.at(-1)!.name).toBe("tool_3")
 })
 
+test("a tool call carries what it acted on and what came back", () => {
+  // A column of bare "read_file" says nothing. The path is the whole point.
+  const stage = replay(start(), [
+    AGENT_RUN[0],
+    {
+      run_id: AGENT_RUN[0].run_id,
+      type: "node_tool_call",
+      at: "2026-08-22T07:28:19.838+00:00",
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        // the daemon clips arguments to a JSON string before writing them
+        arguments: '{"path": "DESIGN.md"}',
+        result: "# poieo Design",
+        error: false,
+      },
+    },
+  ])
+  const call = stage.tasks.chores.recentToolCalls[0]
+  expect(call.subject).toBe("DESIGN.md")
+  expect(call.result).toBe("# poieo Design")
+  expect(call.failed).toBe(false)
+})
+
+test("a failed tool call is marked failed, and error is a boolean", () => {
+  // The daemon writes `error: bool`; reading it as a string marked nothing.
+  const stage = replay(start(), [
+    AGENT_RUN[0],
+    {
+      run_id: AGENT_RUN[0].run_id,
+      type: "node_tool_call",
+      at: "2026-08-22T07:28:19.838+00:00",
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        arguments: '{"path": "nope.md"}',
+        result: "no such file: nope.md",
+        error: true,
+      },
+    },
+  ])
+  expect(stage.tasks.chores.recentToolCalls[0].failed).toBe(true)
+})
+
 test("node_finished does not clear the current node", () => {
   // Between two nodes the board should hold the last one, not blink to empty.
   const upToFirstFinish = LLM_RUN.slice(0, 3)

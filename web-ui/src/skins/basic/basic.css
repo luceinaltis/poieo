@@ -328,11 +328,18 @@
   padding: 0;
 }
 
+/* A pill now carries what it acted on, so it has to be stopped from growing
+   the row: one long `grep` line would push every other pill off the card. */
 .basic-tool {
   background: #262019;
   border-radius: 3px;
+  flex: 0 0 auto;
   font-size: 0.8em;
+  max-width: 22ch;
+  overflow: hidden;
   padding: 1px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .basic-tool[data-error="true"] {

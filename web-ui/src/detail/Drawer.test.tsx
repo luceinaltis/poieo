@@ -97,6 +97,58 @@ test("a tool that answered instantly does not report its milliseconds", async ()
   expect(entry.textContent).not.toContain("0ms")
 })
 
+test("a tool says what it acted on and what came back", async () => {
+  // Twenty rows reading "read_file" are twenty rows a reader learns nothing
+  // from. The path is the row.
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "read_file",
+        arguments: '{"path": "DESIGN.md"}',
+        result: "# poieo Design",
+        error: false,
+        duration_ms: 0,
+      },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="tool"]')!
+  expect(entry.textContent).toContain("DESIGN.md")
+  expect(entry.textContent).toContain("# poieo Design")
+})
+
+test("a tool that failed is marked failed, and error is a boolean", async () => {
+  // The daemon writes `error: bool`; the drawer used to test it for a string,
+  // so a failing tool rendered exactly like one that worked.
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "read_file",
+        arguments: '{"path": "nope.md"}',
+        result: "no such file: nope.md",
+        error: true,
+        duration_ms: 0,
+      },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="tool"]')!
+  expect(entry.getAttribute("data-error")).toBe("true")
+  expect(entry.textContent).toContain("no such file: nope.md")
+})
+
+test("a turn with nothing in it does not take a row", async () => {
+  // A model that goes straight to a tool leaves an empty turn behind. The
+  // tool call under it already says the turn happened.
+  await show([
+    event("node_turn", { data: { text: "", thinking: "", turn: 1 } }),
+    event("node_tool_call", { data: { name: "read_file", duration_ms: 0 } }),
+  ])
+
+  expect(container.querySelectorAll('[data-kind="turn"]')).toHaveLength(0)
+  expect(container.querySelectorAll('[data-kind="tool"]')).toHaveLength(1)
+})
+
 test("a tool worth waiting for reports how long it took", async () => {
   await show([event("node_tool_call", { data: { name: "run_tests", duration_ms: 4200 } })])
 
