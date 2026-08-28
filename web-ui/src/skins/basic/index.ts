@@ -220,8 +220,12 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
     ...flowState.recentToolCalls.map((call) => {
       const item = document.createElement("li")
       item.className = "basic-tool"
-      item.dataset.error = String(Boolean(call.error))
-      item.textContent = call.name
+      item.dataset.error = String(call.failed)
+      // The subject and not the result: this row is one line of a card whose
+      // height must not move, and what a tool answered can be long. The
+      // drawer is where a reader goes for that.
+      item.textContent = call.subject ? `${call.name} ${call.subject}` : call.name
+      item.title = call.result || call.name
       return item
     }),
   )

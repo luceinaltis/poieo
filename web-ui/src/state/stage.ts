@@ -13,7 +13,10 @@ import type { Arrow, TaskRow, GraphShape, PoieoEvent, RunSummary } from "../type
 
 export interface ToolCall {
   name: string
-  error: string | null
+  /** What the call acted on -- the path, the pattern, the command line. */
+  subject: string
+  result: string
+  failed: boolean
   at: string
 }
 
@@ -90,6 +93,34 @@ const asString = (value: unknown, fallback = ""): string =>
 
 const asNumber = (value: unknown, fallback = 0): number =>
   typeof value === "number" ? value : fallback
+
+/**
+ * The one argument worth showing beside a tool's name.
+ *
+ * Arguments reach the board clipped to a JSON string, so they are parsed here
+ * rather than upstream. Tools differ in what they act on -- a path, a glob, a
+ * command line -- and the board has room for one of them, so the keys below
+ * are tried in the order a reader would look for them. Anything unrecognised
+ * falls back to the values themselves, which beats showing nothing.
+ */
+export function subjectOf(raw: unknown): string {
+  let args: unknown = raw
+  if (typeof raw === "string") {
+    try {
+      args = JSON.parse(raw)
+    } catch {
+      return raw
+    }
+  }
+  if (!args || typeof args !== "object") return ""
+  const named = args as Record<string, unknown>
+  for (const key of ["path", "pattern", "command", "query", "dir"]) {
+    if (typeof named[key] === "string") return named[key] as string
+  }
+  return Object.values(named)
+    .filter((one): one is string => typeof one === "string")
+    .join(" ")
+}
 
 function blankFlow(): TaskState {
   return {
@@ -191,7 +222,9 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
         recentToolCalls: [
           {
             name: asString(data.name),
-            error: typeof data.error === "string" ? data.error : null,
+            subject: subjectOf(data.arguments),
+            result: asString(data.result),
+            failed: data.error === true,
             at: event.at ?? "",
           },
           ...flowState.recentToolCalls,
