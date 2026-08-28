@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ..errors import IsolationError
-from . import Executor, Isolation, Tool, ToolError
+from . import CommandResult, Executor, Isolation, Tool, ToolError
 from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
@@ -280,21 +280,40 @@ class DockerExecutor(Executor):
     # execute() and definitions() are inherited: the contract is identical, and
     # only the tool bound to run_command differs.
 
-    async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
+    async def run_command(
+        self, command: str, timeout: float | None = None, env: Any = None
+    ) -> CommandResult:
+        """The seam, entered directly -- and it lands *inside the box*.
+
+        A caller that shelled out itself would run on the host here, which is
+        the one thing a task asking to be fenced must never get.
+        """
         if not self.container_id:
             raise ToolError("the isolated environment is not running")
-        command = str(args["command"])
-        timeout = min(float(args.get("timeout", _DEFAULT_TIMEOUT)), _MAX_TIMEOUT)
+        seconds = min(
+            float(_DEFAULT_TIMEOUT if timeout is None else timeout), _MAX_TIMEOUT
+        )
+        argv = ["exec", "-w", _MOUNT]
+        for key, value in (env or {}).items():
+            argv += ["-e", f"{key}={value}"]
         try:
             code, text = await _docker(
-                "exec", "-w", _MOUNT, self.container_id, "sh", "-c", command,
-                timeout=timeout,
+                *argv, self.container_id, "sh", "-c", command, timeout=seconds
             )
         except asyncio.TimeoutError:
-            raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
+            raise ToolError(f"command timed out after {seconds:.0f}s: {command}")
         if len(text) > _OUTPUT_CAP:
             text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
-        return f"exit code: {code}\n{text}"
+        return CommandResult(exit_code=code, output=text)
+
+    async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
+        """The same run, shaped for a model to read."""
+        result = await self.run_command(
+            str(args["command"]),
+            timeout=float(args.get("timeout", _DEFAULT_TIMEOUT)),
+            env=args.get("env"),
+        )
+        return result.as_text()
 
 
 

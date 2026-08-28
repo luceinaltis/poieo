@@ -72,6 +72,22 @@ never pays to load it.
 Subclasses differ only in *where* the tools run, never in what a caller does with
 them — `async with`, then `definitions()` and `execute()`.
 
+### Entering the seam directly
+
+`Executor.run_command(command, timeout, env)` is the same seam without a model
+in front of it, and it answers with a `CommandResult` — `exit_code` as the
+**number the process returned**, `output` as the text.
+
+That distinction is the point. `run_command` the *tool* hands a model
+`exit code: 0\n…`, because a model reads text; anything branching on "did this
+pass" wants the number, and a sentence about a number is a thing that can be
+misread. One implementation, two shapes: the tool is `result.as_text()` over
+this.
+
+A caller that shelled out for itself instead would work on a host and quietly
+escape the container on a task that asked to be fenced. Half a fence is worse
+than none — nobody knows which half.
+
 ## ToolContext
 
 `ToolContext` is one object carrying everything an agent node's tools need beyond a
