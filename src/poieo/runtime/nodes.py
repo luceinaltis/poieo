@@ -196,6 +196,65 @@ def _clip(value: Any, limit: int = 400) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
 
+# How large a conversation may get before its older observations are dropped,
+# in characters -- the unit the tools already measure their own output in
+# (`_READ_CAP`, `_OUTPUT_CAP`), and one that needs no tokenizer to read.
+_CONTEXT_CAP = 120_000
+# How many of the most recent tool results survive a clearing, whole.
+_KEEP_RESULTS = 3
+_CLEARED = "[cleared to save room -- call the tool again if you still need this]"
+
+
+def _conversation_size(messages: list[dict[str, Any]]) -> int:
+    """Roughly how much there is to send, in characters.
+
+    Tool call arguments count: a `write_file` carries a whole file body in
+    them, and a measure that skipped it would call the largest thing in the
+    conversation weightless.
+    """
+    total = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            total += len(content)
+        calls = message.get("tool_calls")
+        if calls:
+            total += len(json.dumps(calls, ensure_ascii=False, default=str))
+    return total
+
+
+def _clear_old_results(messages: list[dict[str, Any]]) -> int:
+    """Replace all but the most recent tool results with a note, in place.
+
+    The conversation is the whole of what an agent node resends every turn,
+    and tool results are nearly all of it -- one file read is tens of
+    thousands of characters, and it is sent again on every turn after it for
+    as long as the node runs. Nothing here ever removed anything, so the cost
+    of a step grew with the square of its length and a model that had read
+    twenty files was reasoning inside a haystack of its own making.
+
+    **What goes is the result, never the request.** The assistant turn that
+    asked for the file stays exactly as it was, so the model still knows it
+    has read this file; and the tools are offered again on every turn, so it
+    can read it again if the contents turn out to matter. That is what makes
+    this lossless in a way summarizing the same history would not be: the
+    worst case is one repeated call, not a fact gone for good.
+
+    Returns the characters freed, which is zero when there was nothing old
+    enough to clear -- the caller says nothing in that case rather than
+    reporting work it did not do.
+    """
+    results = [i for i, message in enumerate(messages) if message.get("role") == "tool"]
+    freed = 0
+    for index in results[:-_KEEP_RESULTS] if _KEEP_RESULTS else results:
+        content = messages[index].get("content")
+        if not isinstance(content, str) or content == _CLEARED:
+            continue
+        freed += len(content) - len(_CLEARED)
+        messages[index] = {**messages[index], "content": _CLEARED}
+    return freed
+
+
 class AgentNode(Node):
     """Renders a prompt, calls the model, and loops while it asks for tools.
 
@@ -248,6 +307,21 @@ class AgentNode(Node):
                 if ctx.cancel is not None and ctx.cancel.is_set():
                     raise RunAborted(f"cancelled during agent node '{spec.id}'")
                 turns += 1
+                # Only past the cap, and then all at once. Clearing on every
+                # turn would move the boundary forward by one result each
+                # time, and an endpoint that caches prompt prefixes would find
+                # a different prefix every turn -- paying the whole
+                # conversation again to save part of it.
+                if _conversation_size(messages) > _CONTEXT_CAP:
+                    freed = _clear_old_results(messages)
+                    if freed:
+                        ctx.emit(
+                            "node_context_cleared",
+                            node_id=spec.id,
+                            turn=turns,
+                            freed=freed,
+                            kept=_KEEP_RESULTS,
+                        )
                 request = bound.request(list(messages), tools=offered)
                 response = await call_with_retry(spec, bound.provider, request, ctx)
                 ctx.usage = ctx.usage.merge(response.usage)

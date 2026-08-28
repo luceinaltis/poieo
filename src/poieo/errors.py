@@ -128,7 +128,8 @@ def explain_failure(exc: BaseException) -> Cause | None:
                     "out_of_room",
                     "the model was cut off before it finished",
                     "raise max_tokens for this node or its role -- a model that "
-                    "reasons spends that budget on thinking too",
+                    "reasons spends that budget on thinking too, and spends more "
+                    "of it the longer the conversation behind it has grown",
                 )
             if "expected JSON output" in message or "output path" in message:
                 return Cause(

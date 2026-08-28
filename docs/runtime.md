@@ -65,8 +65,8 @@ the runtime stays unaware that containers, or journals, exist at all — see
 
 `ctx.emit()` appends one event to the run's stream. The event types are
 `run_started`, `node_started`, `node_retry`, `node_turn`, `node_tool_call`,
-`node_finished`, `run_finished`, `run_failed`, `run_aborted`, and `run_change`
-(written by the daemon, not here).
+`node_context_cleared`, `node_finished`, `run_finished`, `run_failed`,
+`run_aborted`, and `run_change` (written by the daemon, not here).
 
 ## The three node types
 
@@ -91,7 +91,8 @@ as the decision.
 **`AgentNode`** is the loop:
 
 ```
-render prompt → ask the model, offering tool definitions
+render prompt → over the cap? clear the older tool results
+             → ask the model, offering tool definitions
   ↳ cut off?        not an answer — `out_of_room`
   ↳ no tool calls?  the node is done, that answer is its output
   ↳ tool calls?     execute each, append the results, ask again
@@ -106,6 +107,21 @@ OpenAI-shaped ones `finish_reason: length`, Anthropic `max_tokens`, and
 carrying `out_of_room`, whose fix is the budget rather than the turn count —
 and a model that reasons spends that budget on thinking as well as answering,
 which is how a one-word verdict comes back empty.
+
+**The conversation is bounded, because nothing else bounds it.** Every tool
+result is appended and resent on every turn after it, so a step that reads
+twenty files pays for all twenty on every remaining turn -- one run measured
+here spent 160,360 input tokens to produce 6,578 of output before it was cut
+off mid-turn. Past `_CONTEXT_CAP` characters the older tool results are
+replaced by a short note and `node_context_cleared` says how much that freed.
+**Only the result goes, never the request:** the assistant turn that asked for
+the file stays, so the model still knows it has read it, and the tools are
+offered again every turn, so it can read it again. The worst case is one
+repeated call rather than a fact lost for good, which is why this is preferred
+here to summarizing the same history. `_KEEP_RESULTS` most recent results are
+always kept whole, and clearing fires only past the cap rather than every turn
+-- an endpoint that caches prompt prefixes would otherwise find a different
+prefix every turn and charge for the whole conversation to save part of it.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with
