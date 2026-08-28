@@ -42,6 +42,7 @@ afterEach(() => {
 const run: RunSummary = {
   run_id: "r1",
   task: "chores",
+  project: "chores",
   graph: "chores",
   status: "completed",
   started_at: "2026-08-26T02:00:00Z",

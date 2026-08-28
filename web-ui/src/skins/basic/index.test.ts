@@ -171,6 +171,7 @@ test("a task that found nothing to do says so in one word, not a number", () => 
     Array.from({ length: 8 }, (_, i) => ({
       run_id: `r${i}`,
       task: "chores",
+      project: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-27T02:00:00+00:00",

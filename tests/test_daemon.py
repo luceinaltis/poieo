@@ -846,3 +846,41 @@ def test_a_handed_store_is_refused_when_there_is_more_than_one_project(tmp_path)
 
     with pytest.raises(SpecError, match="one project"):
         Daemon([a, b], store=NullStore())
+
+
+async def test_a_run_records_which_project_it_belongs_to(tmp_path):
+    # With two projects on one board, "which task ran" stops being enough to
+    # say what happened -- the reader wants to know whose night it was, and a
+    # record that cannot say so cannot be filtered or labelled later.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+    for config in (a, b):
+        for task in config.tasks:
+            task.trigger.max_iterations = 1
+
+    daemon = Daemon([a, b])
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=20)
+
+    assert {r.task: r.project for r in results} == {"sweep": "chores", "tidy": "notes"}
+    # and the record on disk says it too, which is what a later read has
+    recorded = {row["task"]: row["project"] for row in daemon.store.list_runs(limit=10)}
+    assert recorded == {"sweep": "chores", "tidy": "notes"}
+
+
+async def test_the_run_started_event_says_the_project(tmp_path):
+    # The board learns what is happening from the event stream, not from the
+    # index, so the project has to be on the frame as well as in the record.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    for task in a.tasks:
+        task.trigger.max_iterations = 1
+
+    daemon = Daemon(a)
+    await asyncio.wait_for(daemon.serve(install_signals=False), timeout=20)
+
+    started = [
+        event
+        for row in daemon.store.list_runs(limit=5)
+        for event in daemon.store.events(row["run_id"])
+        if event["type"] == "run_started"
+    ]
+    assert started and all(e["data"]["project"] == "chores" for e in started)

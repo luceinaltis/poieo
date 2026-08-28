@@ -14,6 +14,7 @@ function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
     run_id: "r",
     task: "chores",
+    project: "chores",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T02:00:00+00:00",

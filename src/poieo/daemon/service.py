@@ -410,6 +410,7 @@ class TaskRunner:
                 input=payload,
                 state=dict(self.state) if self.task.spec.carry_state else None,
                 task=self.name,
+                project=self.config.display_name,
                 # What actually fired this run, not the schedule it may not
                 # have used.
                 trigger=fire.reason,

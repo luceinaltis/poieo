@@ -102,6 +102,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
   const summary = {
     run_id: "r-old",
     task: "chores",
+    project: "chores",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T07:00:00+00:00",
@@ -208,6 +209,7 @@ test("the store tallies each task's recent work from the run index", async () =>
     {
       run_id: "a",
       task: "chores",
+      project: "chores",
       graph: "agent-task",
       status: "completed",
       started_at: "t",

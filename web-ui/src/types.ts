@@ -26,6 +26,8 @@ export interface Change {
 export interface RunSummary {
   run_id: string
   task: string | null
+  /** Which project's task this was; one daemon can run several. */
+  project: string
   graph: string
   status: string
   started_at: string
