@@ -217,3 +217,127 @@ def test_docker_available_treats_an_empty_version_as_unavailable(monkeypatch):
     ok, reason = docker_module.docker_available()
     assert not ok
     assert "not running" in reason
+
+
+# -- the seam answers with a number, not a sentence --------------------------
+
+
+async def test_the_executor_runs_a_command_and_reports_the_code_as_a_number(tmp_path):
+    """`run_command` hands the model `exit code: 0\n...` because a model reads
+    text. A graph does not: a router testing `check.exit_code == 0` needs the
+    number the process actually returned, not a sentence about it.
+
+    Both are the same run. This is the seam answering directly.
+    """
+    from poieo.tools import make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        result = await executor.run_command("exit 3")
+
+    assert result.exit_code == 3
+    assert isinstance(result.exit_code, int)
+
+
+async def test_the_executor_reports_output_without_the_prefix(tmp_path):
+    from poieo.tools import make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        result = await executor.run_command("echo hello")
+
+    assert result.exit_code == 0
+    assert "hello" in result.output
+    # The prefix belongs to the text a model reads, not to the output itself.
+    assert not result.output.startswith("exit code:")
+
+
+async def test_the_tool_and_the_seam_are_the_same_run(tmp_path):
+    """One implementation, two shapes. If they drifted, the model and the graph
+    would disagree about what a command did."""
+    from poieo.tools import make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        direct = await executor.run_command("exit 7")
+        through_tool = await SHELL["run_command"].run(tmp_path, {"command": "exit 7"})
+
+    assert through_tool.startswith(f"exit code: {direct.exit_code}")
+
+
+async def test_the_seam_takes_env_and_timeout_like_the_tool_does(tmp_path):
+    from poieo.tools import make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        result = await executor.run_command(
+            "python -c \"import os; print(os.environ['POIEO_PROBE'])\"",
+            env={"POIEO_PROBE": "through-the-seam"},
+        )
+
+    assert result.exit_code == 0
+    assert "through-the-seam" in result.output
+
+
+async def test_a_command_that_could_not_run_still_raises(tmp_path):
+    """A timeout is not an exit code. "this never finished" and "this finished
+    badly" are different facts and a graph must be able to tell them apart."""
+    from poieo.tools import ToolError, make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        with pytest.raises(ToolError, match="timed out"):
+            await executor.run_command("python -c \"import time; time.sleep(5)\"", timeout=0.3)
+
+
+# -- the boxed seam, without needing a box -----------------------------------
+#
+# tests/test_tools_docker.py needs a real docker and skips without one, so the
+# argv the container path builds would otherwise go unchecked on most machines.
+
+
+def _boxed(monkeypatch, tmp_path):
+    """A DockerExecutor with its docker calls recorded instead of run."""
+    from poieo.tools import Isolation
+    from poieo.tools import docker as dock
+
+    seen: list[tuple[str, ...]] = []
+
+    async def fake(*args: str, timeout: float = 0):
+        seen.append(args)
+        return 3, "boxed output"
+
+    monkeypatch.setattr(dock, "_docker", fake)
+    executor = dock.DockerExecutor(
+        tmp_path, ["shell"], image="x", network="none", user=None
+    )
+    executor.container_id = "cafe1234"
+    return executor, seen
+
+
+async def test_the_boxed_seam_reports_the_code_as_a_number(tmp_path, monkeypatch):
+    executor, _ = _boxed(monkeypatch, tmp_path)
+
+    result = await executor.run_command("exit 3")
+
+    assert result.exit_code == 3
+    assert result.output == "boxed output"
+
+
+async def test_the_boxed_seam_passes_env_to_the_container(tmp_path, monkeypatch):
+    """`env` reached the host path and was dropped on the way into a box, so a
+    task that asked to be fenced silently lost the one thing #154 added to stop
+    a gate reporting a suite it never ran."""
+    executor, seen = _boxed(monkeypatch, tmp_path)
+
+    await executor.run_command("pytest", env={"POIEO_PROBE": "1"})
+
+    argv = seen[0]
+    assert "-e" in argv
+    assert "POIEO_PROBE=1" in argv
+    # ...and it is still an exec into this container, in the mounted workdir.
+    assert argv[0] == "exec" and "cafe1234" in argv
+
+
+async def test_the_boxed_tool_and_the_boxed_seam_agree(tmp_path, monkeypatch):
+    executor, _ = _boxed(monkeypatch, tmp_path)
+
+    text = await executor._run_command_in_box(tmp_path, {"command": "exit 3"})
+
+    assert text.startswith("exit code: 3")
+    assert "boxed output" in text

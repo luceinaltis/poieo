@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..providers.base import ToolDef
-from . import Tool, ToolError
+from . import CommandResult, Tool, ToolError
 
 _DEFAULT_TIMEOUT = 120.0
 _MAX_TIMEOUT = 600.0
@@ -47,13 +47,23 @@ def _environment(extra: Any) -> dict[str, str] | None:
     return {**os.environ, **{str(k): str(v) for k, v in extra.items()}}
 
 
-async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
-    command = str(args["command"])
-    timeout = min(float(args.get("timeout", _DEFAULT_TIMEOUT)), _MAX_TIMEOUT)
+async def run_here(
+    workdir: Path,
+    command: str,
+    timeout: float = _DEFAULT_TIMEOUT,
+    env: Any = None,
+) -> CommandResult:
+    """Run one command on this machine and report what it did.
+
+    The exit code comes back as the **number the process returned**. Formatting
+    it into a sentence is the tool's job, one caller up: a model reads text, a
+    router reads a number, and only one of those two readings can be got wrong.
+    """
+    timeout = min(float(timeout), _MAX_TIMEOUT)
     process = await asyncio.create_subprocess_shell(
         command,
         cwd=workdir,
-        env=_environment(args.get("env")),
+        env=_environment(env),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=(os.name != "nt"),
@@ -63,6 +73,8 @@ async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
     except asyncio.TimeoutError:
         _kill_tree(process)
         await process.communicate()
+        # Not an exit code: "this never finished" and "this finished badly" are
+        # different facts, and a caller has to be able to tell them apart.
         raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
     try:
         text = stdout.decode()
@@ -70,7 +82,18 @@ async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
         text = stdout.decode(locale.getpreferredencoding(False), errors="replace")
     if len(text) > _OUTPUT_CAP:
         text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
-    return f"exit code: {process.returncode}\n{text}"
+    return CommandResult(exit_code=process.returncode or 0, output=text)
+
+
+async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
+    """The same run, shaped for a model to read."""
+    result = await run_here(
+        workdir,
+        str(args["command"]),
+        timeout=float(args.get("timeout", _DEFAULT_TIMEOUT)),
+        env=args.get("env"),
+    )
+    return result.as_text()
 
 
 SHELL_TOOLS: list[Tool] = [

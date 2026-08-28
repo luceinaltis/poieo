@@ -29,6 +29,24 @@ class ToolResult:
 
 
 @dataclass(slots=True)
+class CommandResult:
+    """What a command did, as the two facts the machine actually knows.
+
+    ``exit_code`` is the number the process returned, not a sentence about it.
+    That distinction is the whole reason this type exists: a model reads text
+    and can misread it, and anything branching on "did this pass" should be
+    reading the number the process gave.
+    """
+
+    exit_code: int
+    output: str
+
+    def as_text(self) -> str:
+        """The same result, shaped for a model to read."""
+        return f"exit code: {self.exit_code}\n{self.output}"
+
+
+@dataclass(slots=True)
 class Tool:
     """A declaration plus the coroutine that executes it inside a workdir."""
 
@@ -99,6 +117,18 @@ class Executor:
         except Exception as exc:  # a bad argument shape must not kill the run
             return ToolResult(f"{type(exc).__name__}: {exc}", error=True)
 
+    async def run_command(
+        self, command: str, timeout: float | None = None, env: Any = None
+    ) -> CommandResult:
+        """Run one command **where this executor runs things**, and report it.
+
+        The same seam the model's `run_command` tool goes through, entered
+        directly. A caller that shelled out itself would work on a host and
+        quietly escape the box on a task that asked to be fenced -- half a
+        fence being worse than none, since nobody knows which half.
+        """
+        raise NotImplementedError
+
     async def __aenter__(self) -> "Executor":
         return self
 
@@ -117,6 +147,18 @@ class LocalExecutor(Executor):
     ):
         self.workdir = workdir
         self._load(toolsets, tool_context.postbox if tool_context else None)
+
+    async def run_command(
+        self, command: str, timeout: float | None = None, env: Any = None
+    ) -> CommandResult:
+        from .shell import _DEFAULT_TIMEOUT, run_here
+
+        return await run_here(
+            self.workdir,
+            command,
+            timeout=_DEFAULT_TIMEOUT if timeout is None else timeout,
+            env=env,
+        )
 
 
 def make_container_pool() -> Any:
