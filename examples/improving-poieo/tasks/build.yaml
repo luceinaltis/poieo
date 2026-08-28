@@ -4,11 +4,19 @@
 # that failed is recorded and the next trigger starts fresh, which this project
 # prefers to a flow that keeps hammering at the same broken change -- and to a
 # retry loop spending a paid API on it unattended.
+#
+# `run.change` is the other half, and it is not decoration. An agent node ends
+# the moment a turn comes back with no tool calls, so a model that says "I will
+# start by reading the project rules" and stops looks exactly like one that
+# finished -- there is no signal that separates them. Such a run changes
+# nothing, the gate finds the suite green because nothing was touched, and a
+# GREEN alone would send an empty change on to be reviewed. Asking for evidence
+# of work rather than for the absence of failure is what closes that.
 name: build
 graph: build.graph.yaml
 folder: ../../..
 trigger: {type: manual}
 then:
-  - when: "'GREEN' in str(run.outputs.get('gate', '')).upper()"
+  - when: "run.change and 'GREEN' in str(run.outputs.get('gate', '')).upper()"
     to: review
     label: opened
