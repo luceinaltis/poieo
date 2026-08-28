@@ -87,7 +87,13 @@ which is a poor greeting from a command whose whole job is "show me my board".
 and `init` is where the choosing happens, because choosing is a front end's job.
 Unattended it takes the first engine and that engine's first model; every other
 engine still lands in the binding for a role to name. `--mock` skips detection
-entirely and is the only way `mock` ever becomes a project's default.
+entirely and is the only way `mock` ever becomes a project's default. `--name`
+says what a board should call the project; unattended it is the folder's name,
+written into the marker rather than left to be inferred.
+
+Existing files are never touched, so `--name` against a folder that already has
+a `poieo.yaml` cannot land — and says so, naming the line to add. A flag that
+quietly did nothing is worse than one that refuses.
 
 The library half is deliberately question-free: `binding_document()` renders a
 binding for engines the caller has already settled on, and `init_project()`

@@ -634,3 +634,56 @@ def test_two_worktrees_of_one_repo_can_still_be_told_apart(tmp_path):
 def test_a_blank_name_falls_back_rather_than_showing_nothing(tmp_path):
     marker = _mark(tmp_path / "chores", 'version: 1\nname: "  "\n')
     assert load_project(marker).display_name == "chores"
+
+
+# -- the name init leaves you --------------------------------------------------
+#
+# The folder name is a good guess and a bad default: it is right until two
+# worktrees of one repository are two projects called `poieo`. So init writes
+# the guess into the file, where it is a starting point a reader can see and
+# change, rather than a fallback they have to be told exists.
+
+
+def test_init_writes_the_folder_name_so_it_is_there_to_change(tmp_path, monkeypatch):
+    _machine_with(monkeypatch, OLLAMA)
+    here = tmp_path / "chores"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    assert runner.invoke(app, ["init"]).exit_code == 0
+
+    assert "name: chores" in (here / "poieo.yaml").read_text(encoding="utf-8")
+    assert load_project(here / "poieo.yaml").display_name == "chores"
+
+
+def test_init_takes_the_name_you_give_it(tmp_path, monkeypatch):
+    _machine_with(monkeypatch, OLLAMA)
+    here = tmp_path / "chores"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    assert runner.invoke(app, ["init", "--name", "night shift"]).exit_code == 0
+
+    assert load_project(here / "poieo.yaml").display_name == "night shift"
+
+
+def test_a_name_that_needs_quoting_still_reads_back_as_itself(tmp_path, monkeypatch):
+    # A folder can be called `notes: 2026`, and a generated project that does
+    # not parse is the worst kind of bug to ship -- it fails in the user's
+    # folder, on their first command, before they have written anything.
+    _machine_with(monkeypatch, OLLAMA)
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", "--name", "notes: 2026 #1"]).exit_code == 0
+
+    assert load_project(tmp_path / "poieo.yaml").display_name == "notes: 2026 #1"
+
+
+def test_init_says_when_a_name_it_was_given_could_not_be_used(tmp_path, monkeypatch):
+    # Existing files are never touched, so `--name` against a project that
+    # already has one does nothing. Doing nothing quietly is the part to fix.
+    _machine_with(monkeypatch, OLLAMA)
+    (tmp_path / "poieo.yaml").write_text("version: 1\nname: mine\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "--name", "night shift"])
+
+    assert result.exit_code == 0, result.output
+    assert "night shift" in result.output
+    assert load_project(tmp_path / "poieo.yaml").display_name == "mine"

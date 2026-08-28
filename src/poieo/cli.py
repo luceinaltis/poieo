@@ -176,6 +176,9 @@ def init(
         help="Lay the project out against the scripted mock model, without "
         "looking for a real one.",
     ),
+    name: Optional[str] = typer.Option(
+        None, "--name", help="What a board calls this project [default: the folder]."
+    ),
 ) -> None:
     """Set this folder up as a poieo project.
 
@@ -200,12 +203,22 @@ def init(
         body = binding_document(found, (engine.key, engine.models[0]))
         reason = f"{engine.label} -- {engine.models[0]}"
 
-    report = init_project(Path.cwd(), body)
+    report = init_project(Path.cwd(), body, name=name)
     for action, relative in report:
         line = f"{action}  {relative}"
         if relative == "models/default.yaml":
             line += f"   ({reason})"
         typer.echo(line)
+
+    # A flag that quietly did nothing is worse than one that refuses: existing
+    # files are never touched, so a --name against a project that already has a
+    # poieo.yaml has to say where the name it was given went.
+    if name and ("kept", "poieo.yaml") in report:
+        typer.echo("")
+        typer.echo(
+            f'poieo.yaml was already here, so the name stayed as it is -- '
+            f'set `name: {name}` in it to use "{name}"'
+        )
 
     # Automatic is fine, invisible is not: the whole pool is in the file, so
     # say what else is in it rather than leaving it to be discovered.

@@ -18,6 +18,7 @@ import textwrap
 from pathlib import Path
 from typing import Any, Sequence
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from .detect import CANDIDATES, Engine
@@ -35,6 +36,7 @@ __all__ = [
     "find_project",
     "find_project_file",
     "init_project",
+    "marker_body",
     "load_project",
     "nothing_found",
 ]
@@ -168,10 +170,39 @@ _MARKER_BODY = """\
 # The project: where runs land, which models answer, and where the tasks are.
 # This file's folder is the project -- everything below resolves from here.
 version: 1
+{name} # what a board calls this; yours to change
 store: runs                       # where a run's events and result go
 binding: models/default.yaml      # which model serves each role, by default
 tasks: tasks/                     # the cards, and the graphs they name
 """
+
+
+def _name_line(name: str) -> str:
+    """``name: ...``, quoted exactly as much as the value needs.
+
+    A folder can be called ``notes: 2026`` or ``#1``, and hand-writing the
+    quoting rules for that is how a generated project comes out unparseable --
+    in the user's own folder, on their first command, before they have written
+    anything. The emitter knows the rules, so it writes the line.
+
+    ``allow_unicode`` because a project named in Korean should read as Korean
+    in the file rather than as a row of escapes. Padded to the column the
+    other comments start at; a name long enough to pass it still gets its
+    single space.
+    """
+    line = yaml.safe_dump({"name": name}, allow_unicode=True, default_flow_style=False)
+    return f"{line.strip():<33}"
+
+
+def marker_body(name: str) -> str:
+    """The ``poieo.yaml`` a new project starts with, named.
+
+    Substituted rather than ``format``ed: these templates are YAML, and YAML
+    has a flow mapping spelled with braces. The day one appears in here,
+    ``format`` raises and this is the last place anyone would look.
+    """
+    return _MARKER_BODY.replace("{name}", _name_line(name))
+
 
 _CONSTITUTION = """\
 <!--
@@ -389,15 +420,22 @@ def nothing_found() -> str:
     )
 
 
-def init_project(root: Path, default_body: str) -> list[tuple[str, str]]:
+def init_project(
+    root: Path, default_body: str, name: str | None = None
+) -> list[tuple[str, str]]:
     """Write a working project into ``root``; never touch an existing file.
 
     ``default_body`` is the binding the caller settled on -- see
-    :func:`binding_document`. Returns one ``(action, relative path)`` pair per
-    file, action ``wrote`` or ``kept``.
+    :func:`binding_document`. ``name`` is what a board will call this project,
+    defaulting to the folder's own name -- a good guess and a bad default, so
+    it is written into the file where it can be seen and changed rather than
+    left as a fallback a reader has to be told about.
+
+    Returns one ``(action, relative path)`` pair per file, action ``wrote`` or
+    ``kept``.
     """
     files = [
-        ("poieo.yaml", _MARKER_BODY),
+        ("poieo.yaml", marker_body(name or root.name)),
         ("models/default.yaml", default_body),
         # Always written, never chosen for you: `-b models/mock.yaml` is how
         # the wiring gets exercised without spending a token.
