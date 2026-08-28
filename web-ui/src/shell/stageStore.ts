@@ -14,7 +14,7 @@ import {
 import type { FeedStatus } from "../api"
 import { WINDOW, initialStage, reduce, replay, setRuns } from "../state/stage"
 import type { StageState, TaskState } from "../state/stage"
-import type { TaskRow, PoieoEvent } from "../types"
+import type { ProjectRow, TaskRow, PoieoEvent } from "../types"
 
 export interface StageApi {
   fetchTasks: typeof defaultFetchFlows
@@ -30,6 +30,8 @@ export const REVIEW_LIMIT = WINDOW
 export interface StageStore {
   getStage(): StageState
   getFlows(): TaskRow[]
+  /** Whose board this is; null until the first listing answers. */
+  getProject(): ProjectRow | null
   getStatus(): FeedStatus
   subscribe(listener: () => void): () => void
   start(): Promise<void>
@@ -82,6 +84,7 @@ export function createStageStore(api: StageApi = {
 }): StageStore {
   let stage = initialStage([])
   let tasks: TaskRow[] = []
+  let project: ProjectRow | null = null
   let status: FeedStatus = "connecting"
   let closeFeed: (() => void) | null = null
 
@@ -130,7 +133,9 @@ export function createStageStore(api: StageApi = {
     holding = true
     held = []
     try {
-      tasks = await api.fetchTasks()
+      const listing = await api.fetchTasks()
+      tasks = listing.tasks
+      project = listing.project
       stage = seed(stage, tasks)
 
       // Both reads are independent of each other; fetch everything at once
@@ -154,6 +159,7 @@ export function createStageStore(api: StageApi = {
   return {
     getStage: () => stage,
     getFlows: () => tasks,
+    getProject: () => project,
     getStatus: () => status,
 
     subscribe(listener) {
@@ -164,7 +170,9 @@ export function createStageStore(api: StageApi = {
     async start() {
       // Paint something before the socket opens: if the feed never connects,
       // the board should still say what the daemon is running.
-      tasks = await api.fetchTasks()
+      const listing = await api.fetchTasks()
+      tasks = listing.tasks
+      project = listing.project
       stage = seed(stage, tasks)
       stage = await tally(stage, tasks)
       announce()

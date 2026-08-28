@@ -63,6 +63,7 @@ import { AGENT_RUN } from "./state/fixtures"
 import { initialStage, reduce, replay } from "./state/stage"
 import type { StageState } from "./state/stage"
 import type { StageStore } from "./shell/stageStore"
+import type { ProjectRow } from "./types"
 import type { TaskRow } from "./types"
 
 const FLOWS: TaskRow[] = [
@@ -92,12 +93,16 @@ const FLOWS: TaskRow[] = [
   },
 ]
 
-function fakeStore(stage: StageState): StageStore & { push(next: StageState): void } {
+function fakeStore(
+  stage: StageState,
+  project: ProjectRow | null = { name: "chores", root: "/home/k/chores" },
+): StageStore & { push(next: StageState): void } {
   let current = stage
   const listeners = new Set<() => void>()
   return {
     getStage: () => current,
     getFlows: () => FLOWS,
+    getProject: () => project,
     getStatus: () => "live",
     subscribe: (listener) => {
       listeners.add(listener)
@@ -132,8 +137,8 @@ afterEach(() => {
   container.remove()
 })
 
-async function render(stage: StageState) {
-  const store = fakeStore(stage)
+async function render(stage: StageState, project?: ProjectRow | null) {
+  const store = fakeStore(stage, project === undefined ? undefined : project)
   await act(async () => {
     root.render(<App store={store} />)
   })
@@ -251,4 +256,30 @@ test("the drawer opens on the run that changed something", async () => {
 
   const selected = container.querySelector("[data-run][data-selected='true']")!
   expect(selected.getAttribute("data-run")).toBe("20260822T072819-98a6708d")
+})
+
+
+// -- whose board this is ------------------------------------------------------
+
+
+test("the bar names the project, so two boards are not the same board", async () => {
+  await render(initialStage([]), { name: "night shift", root: "/home/k/chores" })
+
+  const named = container.querySelector(".shell-project")!
+  expect(named.textContent).toBe("night shift")
+  // Two worktrees of one repository are two projects with the same folder
+  // name; the path is what tells them apart once the names collide.
+  expect(named.getAttribute("title")).toBe("/home/k/chores")
+})
+
+
+test("the tab says it too, because that is what two open boards show", async () => {
+  await render(initialStage([]), { name: "night shift", root: "/home/k/chores" })
+  expect(document.title).toContain("night shift")
+})
+
+
+test("a board that has not heard yet says nothing rather than guessing", async () => {
+  await render(initialStage([]), null)
+  expect(container.querySelector(".shell-project")).toBeNull()
 })

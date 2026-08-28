@@ -25,6 +25,7 @@ export default function App({ store }: { store?: StageStore }) {
   const stage = useSyncExternalStore(theStore.subscribe, theStore.getStage)
   const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
   const tasks = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
+  const project = useSyncExternalStore(theStore.subscribe, theStore.getProject)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
@@ -49,6 +50,12 @@ export default function App({ store }: { store?: StageStore }) {
     hostRef.current?.show(skinId)
   }, [skinId])
 
+  // The tab, not just the bar. Two boards open side by side are two tabs
+  // reading `poieo`, and the tab is what a person clicks between.
+  useEffect(() => {
+    document.title = project ? `${project.name} · poieo` : "poieo"
+  }, [project])
+
   useEffect(() => {
     hostRef.current?.update(stage)
   }, [stage])
@@ -69,6 +76,13 @@ export default function App({ store }: { store?: StageStore }) {
     <>
       <header className="shell-bar">
         <span className="shell-title">poieo</span>
+        {project ? (
+          // The folder as the tooltip: two worktrees of one repository are two
+          // projects whose names can collide, and the path is what does not.
+          <span className="shell-project" title={project.root}>
+            {project.name}
+          </span>
+        ) : null}
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
         </span>

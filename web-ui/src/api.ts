@@ -9,7 +9,7 @@
  * else.
  */
 
-import type { DiffReport, TaskRow, PoieoEvent, RunSummary } from "./types"
+import type { DiffReport, Listing, PoieoEvent, RunSummary } from "./types"
 
 async function getJson<T>(path: string): Promise<T | null> {
   const response = await fetch(path)
@@ -17,9 +17,12 @@ async function getJson<T>(path: string): Promise<T | null> {
   return (await response.json()) as T
 }
 
-export async function fetchTasks(): Promise<TaskRow[]> {
-  const body = await getJson<{ tasks: TaskRow[] }>("/api/tasks")
-  return body?.tasks ?? []
+export async function fetchTasks(): Promise<Listing> {
+  // The whole envelope, not just the tasks out of it: the project rides on
+  // the listing rather than on each row, because the listing a reader can
+  // recognise least -- the one with no tasks in it -- needs naming most.
+  const body = await getJson<Listing>("/api/tasks")
+  return { project: body?.project ?? null, tasks: body?.tasks ?? [] }
 }
 
 export async function fetchRuns(

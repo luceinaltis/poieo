@@ -70,9 +70,22 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource)
 })
 
-test("fetchTasks unwraps the envelope", async () => {
+test("fetchTasks keeps the whole listing, project and all", async () => {
+  // Not unwrapped to the tasks any more: the project rides on the listing,
+  // and the listing with no tasks in it is the one that most needs a name.
+  const project = { name: "night shift", root: "/home/k/chores" }
+  stubFetch({ "/api/tasks": { body: { project, tasks: [{ name: "triage" }] } } })
+  expect(await fetchTasks()).toEqual({ project, tasks: [{ name: "triage" }] })
+})
+
+test("a listing the daemon did not answer is an empty board, not a crash", async () => {
+  stubFetch({})
+  expect(await fetchTasks()).toEqual({ project: null, tasks: [] })
+})
+
+test("an older daemon that names no project still lists its tasks", async () => {
   stubFetch({ "/api/tasks": { body: { tasks: [{ name: "triage" }] } } })
-  expect(await fetchTasks()).toEqual([{ name: "triage" }])
+  expect(await fetchTasks()).toEqual({ project: null, tasks: [{ name: "triage" }] })
 })
 
 test("fetchRuns passes task and limit through as query params", async () => {

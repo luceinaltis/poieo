@@ -174,7 +174,20 @@ def create_app(daemon: Any) -> Starlette:
                     "shape": _shape(runner.task),
                 }
             )
-        return JSONResponse({"tasks": rows})
+        # Whose board this is. Two daemons on two ports serve pages that are
+        # otherwise identical, and the listing with no tasks on it -- the one
+        # a reader can recognise least -- needs it most, so it rides on the
+        # response rather than on each row.
+        project = daemon.config
+        return JSONResponse(
+            {
+                "project": {
+                    "name": project.display_name,
+                    "root": str(project.base_dir),
+                },
+                "tasks": rows,
+            }
+        )
 
     def runs(request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", "20"))

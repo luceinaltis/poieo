@@ -17,11 +17,19 @@ git finds `.git`.
 they contain:
 
 ```yaml
+name: night shift        # what a board calls this; optional
 store: runs              # where a run's events and result go
 binding: models/local.yaml
 tasks: tasks/            # where the jobs are; one file each
 learn: 1d
 ```
+
+`name:` is the one key that says nothing about where anything is, and it is
+optional because the folder name answers for it nearly always -- `display_name`
+falls back to the folder, and to the folder again if the key is blank. It earns
+its place in the one case the folder cannot cover: a worktree is a second folder
+with the *same* name as the first, so two daemons on two ports serve two boards
+that are otherwise indistinguishable. `poieo init` does not write the key.
 
 There is no list of jobs here. `flows:` was one, and a marker that still carries
 it is refused by name rather than by "not a setting here" -- a list in a shared

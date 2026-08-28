@@ -75,6 +75,25 @@ export interface GraphShape {
   nodes: NodeShape[]
 }
 
+/**
+ * Whose board this is.
+ *
+ * Two daemons on two ports serve pages that are otherwise identical -- same
+ * title, same skin, same empty state -- so the listing carries the name of
+ * the project it came from.
+ */
+export interface ProjectRow {
+  name: string
+  /** The folder the project is, which is what tells two same-named ones apart. */
+  root: string
+}
+
+/** What `GET /api/tasks` answers: the board, and whose board it is. */
+export interface Listing {
+  project: ProjectRow | null
+  tasks: TaskRow[]
+}
+
 export interface TaskRow {
   name: string
   graph: string

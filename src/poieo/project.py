@@ -50,6 +50,11 @@ class ProjectSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     version: int = 1
+    # What this project is called on a board. Optional because the folder name
+    # is right nearly always -- it is only needed when it is not, and the case
+    # that needs it is two worktrees of one repository: two folders with the
+    # same name, two daemons, two boards that otherwise look identical.
+    name: str | None = None
     # Where a run's events and its result are written. Moves the run history
     # and nothing else: the memory and the working copies stay with the project.
     store: str = "runs"
@@ -63,6 +68,16 @@ class ProjectSpec(BaseModel):
     learn: str | None = None
 
     source_path: Path | None = Field(default=None, exclude=True)
+
+    @property
+    def display_name(self) -> str:
+        """What to call this project, which is never nothing.
+
+        A board with a blank title is worse than one with a dull title, so a
+        `name:` that is empty or only spaces falls back the same as an absent
+        one rather than being taken at its word.
+        """
+        return (self.name or "").strip() or self.base_dir.name
 
     # -- path helpers --------------------------------------------------------
     @property

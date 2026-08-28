@@ -13,6 +13,15 @@
   letter-spacing: 0.04em;
 }
 
+/* The subject of the page, beside the name of the tool. Reads brighter than
+   the status because it is the one thing on the bar that differs between two
+   boards -- and dimmer than the title, which is not what a reader is here
+   for. */
+.shell-project {
+  color: #d6ccbe;
+  font-size: 0.9em;
+}
+
 .shell-status {
   color: #9a9086;
   font-size: 0.85em;

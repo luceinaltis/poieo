@@ -4,7 +4,7 @@ import { createStageStore } from "./stageStore"
 import type { StageApi } from "./stageStore"
 import { AGENT_RUN } from "../state/fixtures"
 import type { FeedHandlers } from "../api"
-import type { TaskRow, PoieoEvent } from "../types"
+import type { Listing, TaskRow, PoieoEvent } from "../types"
 
 const CHORES: TaskRow = {
   name: "chores",
@@ -19,10 +19,16 @@ const CHORES: TaskRow = {
   shape: { entry: "", nodes: [] },
 }
 
+/** The envelope `/api/tasks` answers. Only the tasks matter to most of these,
+ *  so the project is a constant rather than an argument. */
+function listing(tasks: TaskRow[]): Listing {
+  return { project: { name: "chores", root: "/home/k/chores" }, tasks }
+}
+
 function harness(overrides: Partial<StageApi> = {}) {
   let handlers: FeedHandlers | null = null
   const api: StageApi = {
-    fetchTasks: vi.fn(async () => [CHORES]),
+    fetchTasks: vi.fn(async () => listing([CHORES])),
     fetchRunEvents: vi.fn(async () => [] as PoieoEvent[]),
     fetchRuns: vi.fn(async () => []),
     openFeed: vi.fn((h: FeedHandlers) => {
@@ -47,7 +53,7 @@ test("seeds from the task list, then subscribes", async () => {
 })
 
 test("no tasks leaves an empty board, not an error", async () => {
-  const { store } = harness({ fetchTasks: vi.fn(async () => []) })
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing([])) })
   await store.start()
 
   expect(store.getStage().tasks).toEqual({})
@@ -77,7 +83,7 @@ test("a resync applies the run's history before the live frames that overlapped 
   })
 
   const { store, feed } = harness({
-    fetchTasks: vi.fn(async () => [{ ...CHORES, current_run_id: AGENT_RUN[0].run_id }]),
+    fetchTasks: vi.fn(async () => listing([{ ...CHORES, current_run_id: AGENT_RUN[0].run_id }])),
     fetchRunEvents: vi.fn(() => pending),
   })
   await store.start()
@@ -113,7 +119,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
     said: "did the thing",
   }
   const { store } = harness({
-    fetchTasks: vi.fn(async () => [{ ...CHORES, last_run: summary }]),
+    fetchTasks: vi.fn(async () => listing([{ ...CHORES, last_run: summary }])),
   })
   await store.start()
   await store.resync()
@@ -184,7 +190,7 @@ test("a resync asks the tasks together, not one after another", async () => {
   }
 
   const { store } = harness({
-    fetchTasks: vi.fn(async () => tasks),
+    fetchTasks: vi.fn(async () => listing(tasks)),
     fetchRuns: vi.fn(() => slow([])),
     fetchRunEvents: vi.fn(() => slow([] as PoieoEvent[])),
   })
