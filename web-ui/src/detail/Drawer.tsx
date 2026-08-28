@@ -103,6 +103,24 @@ function Entry({ event }: { event: PoieoEvent }) {
     )
   }
 
+  if (event.type === "node_context_cleared") {
+    // A step whose history quietly shrinks is a step nobody can reason about
+    // afterwards -- least of all when the question is why it stopped. The
+    // results are gone from the conversation, not from the disk, and the line
+    // says which by naming what was kept.
+    const freed = Number(data.freed ?? 0)
+    const kept = Number(data.kept ?? 0)
+    return (
+      <li className="drawer-entry" data-kind="cleared">
+        <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+        <div className="drawer-label">
+          {`cleared ${freed.toLocaleString("en-US")} characters of older results, `}
+          {`keeping the last ${kept}`}
+        </div>
+      </li>
+    )
+  }
+
   if (event.type === "node_started") {
     // The step's name, and nothing about what kind of node it is: `agent` and
     // `router` are how the graph is built, not what is happening.

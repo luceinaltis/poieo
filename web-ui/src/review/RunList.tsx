@@ -32,9 +32,31 @@ function size(run: RunSummary): string {
   // Nothing changed to count, so the other thing a run spends. Local models
   // make this free, which is exactly when a reader stops watching it -- but a
   // bound cloud model makes it the number they came for.
+  //
+  // What it sends is the larger half and used to be missing entirely. An agent
+  // step resends its whole conversation every turn, so a run that answered in
+  // 6,578 tokens can have sent 160,360 getting there -- and when such a run
+  // dies, that is the number that says why. The cached share is the other half
+  // of it: resending looks ruinous until you see how much of it the endpoint
+  // already had.
   const out = run.usage?.output_tokens ?? 0
-  return out > 0 ? `${out} tokens` : ""
+  const sent = run.usage?.input_tokens ?? 0
+  const cached = run.usage?.cache_read_tokens ?? 0
+  // One number, because the row is 440px wide and the run's own sentence is
+  // what the other column is for. When both are known, sent is the one worth
+  // the space: it is the half that grows without bound and the half that says
+  // why a run stopped. Output alone still shows for a backend that reports
+  // nothing else.
+  if (sent > 0) {
+    const share = cached > 0 ? ` · ${Math.round((cached / sent) * 100)}% cached` : ""
+    return `${counted(sent)} sent${share}`
+  }
+  return out > 0 ? `${counted(out)} tokens` : ""
 }
+
+/** Six figures is unreadable without separators, and the locale is pinned so
+ *  that a number quoted from one machine's board matches another's. */
+const counted = (n: number): string => n.toLocaleString("en-US")
 
 /** The first line of what the model said, short enough to sit in a row. */
 function firstLine(said: string, limit = 90): string {
