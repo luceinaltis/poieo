@@ -11,7 +11,7 @@ from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
 from poieo.daemon.triggers import TriggerSpec, parse_duration
 from poieo.errors import SpecError
-from poieo.store import NullStore
+from poieo.store import Event, NullStore
 from poieo.web.events import BroadcastStore
 
 
@@ -694,3 +694,155 @@ def test_a_schedule_reads_back_the_way_it_was_written():
     # Not a whole number of the larger unit: seconds is the honest answer.
     assert said(90) == "every 90s"
     assert said("1.5h") == "every 90m"
+
+
+# -- more than one project ----------------------------------------------------
+
+
+def _project(root, name, tasks, extra=""):
+    """A whole project on disk: a marker, a mock binding, and its cards."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "b.yaml").write_text(
+        "providers:\n  fake:\n    type: mock\n    options:\n      responses:\n"
+        '        "*": "done"\n'
+        "default:\n  provider: fake\n  model: mock-model\n",
+        encoding="utf-8",
+    )
+    for task_name in tasks:
+        card(root / "cards", task_name, "prompt: do the thing\nfolder: .\n")
+    marker = root / "poieo.yaml"
+    marker.write_text(
+        f"name: {name}\nstore: runs\nbinding: b.yaml\ntasks: cards\n{extra}",
+        encoding="utf-8",
+    )
+    return marker
+
+
+def test_a_daemon_can_hold_two_projects(tmp_path):
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+
+    daemon = Daemon([a, b])
+
+    assert [p.config.display_name for p in daemon.projects] == ["chores", "notes"]
+    assert {t.spec.name for t in daemon.tasks} == {"sweep", "tidy"}
+
+
+def test_each_project_writes_its_runs_under_its_own_root(tmp_path):
+    # A store is where a project keeps its history. Two projects sharing one
+    # would put a task's runs in a folder its own `poieo run` cannot find.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+
+    daemon = Daemon([a, b])
+
+    roots = [p.store.root for p in daemon.projects]
+    assert roots == [tmp_path / "a" / "runs", tmp_path / "b" / "runs"]
+
+
+def test_two_projects_may_not_share_a_task_name(tmp_path):
+    # The task name is still the only namespace there is -- the board's routes
+    # and the run index both key on it -- so a collision has to be refused at
+    # launch rather than found at 3am by whichever runner asked second.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["sweep"]))
+
+    with pytest.raises(SpecError) as caught:
+        Daemon([a, b])
+
+    said = str(caught.value)
+    assert "sweep" in said
+    # and it names both, so the reader knows which two to go and look at
+    assert "chores" in said and "notes" in said
+
+
+async def test_two_projects_run_their_own_tasks(tmp_path):
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+    for config in (a, b):
+        for task in config.tasks:
+            task.trigger.max_iterations = 1
+
+    daemon = Daemon([a, b])
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=20)
+
+    assert {r.task for r in results} == {"sweep", "tidy"}
+    assert all(r.status == "completed" for r in results)
+
+
+async def test_the_board_reads_runs_from_every_project(tmp_path):
+    # One store per project on the way in; one list on the way out, or the
+    # board shows half a night.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+    for config in (a, b):
+        for task in config.tasks:
+            task.trigger.max_iterations = 1
+
+    daemon = Daemon([a, b])
+    await asyncio.wait_for(daemon.serve(install_signals=False), timeout=20)
+
+    listed = {row["task"] for row in daemon.store.list_runs(limit=10)}
+    assert listed == {"sweep", "tidy"}
+    # and one run is findable by id whichever project recorded it
+    for row in daemon.store.list_runs(limit=10):
+        assert daemon.store.summary(row["run_id"]) is not None
+
+
+def test_one_project_is_still_one_project(tmp_path):
+    # The shape every existing caller passes: a bare config, not a list.
+    config = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    daemon = Daemon(config)
+
+    assert len(daemon.projects) == 1
+    assert daemon.config is config
+
+
+async def test_one_reader_hears_every_project(tmp_path):
+    # The board opens one event stream. A daemon running two projects has two
+    # broadcast stores, and a reader who heard only the first would watch half
+    # a night go by with nothing on the page.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+    daemon = Daemon([a, b], web_port=1)
+
+    feed = daemon.store.subscribe()
+    try:
+        daemon.projects[0].store.append(
+            Event(run_id="r1", type="run_started", data={"task": "sweep"})
+        )
+        daemon.projects[1].store.append(
+            Event(run_id="r2", type="run_started", data={"task": "tidy"})
+        )
+
+        heard = [feed.get_nowait()["run_id"], feed.get_nowait()["run_id"]]
+        assert heard == ["r1", "r2"]
+        # and the run-to-task map the SSE filter reads spans them both
+        assert daemon.store.run_tasks == {"r1": "sweep", "r2": "tidy"}
+    finally:
+        daemon.store.unsubscribe(feed)
+
+
+async def test_a_reader_who_left_stops_hearing_every_project(tmp_path):
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+    daemon = Daemon([a, b], web_port=1)
+
+    feed = daemon.store.subscribe()
+    daemon.store.unsubscribe(feed)
+    daemon.projects[1].store.append(
+        Event(run_id="r2", type="run_started", data={"task": "tidy"})
+    )
+
+    assert feed.empty()
+
+
+def test_a_handed_store_is_refused_when_there_is_more_than_one_project(tmp_path):
+    # An injected store is one store, and a project keeps its own history.
+    # Sharing it would file every project's runs under whichever root it
+    # happened to point at -- silently, and only findable months later.
+    a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "notes", ["tidy"]))
+
+    with pytest.raises(SpecError, match="one project"):
+        Daemon([a, b], store=NullStore())

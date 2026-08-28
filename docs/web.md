@@ -31,8 +31,14 @@ you are adding a third of them, stop. **Control** routes touch the daemon's
 runtime state and nothing else: no file, no schedule on disk, nothing that
 survives a restart.
 
-`create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`, `.config`), which
-is what makes the API testable without a running daemon.
+`create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
+`.config`), which
+is what makes the API testable without a running daemon. `.store` answers for
+every project the daemon runs — one store when there is one project, a
+`MergedStore` over their stores when there are several — so no route here knows
+how many there are. `.config` is still the first project's; the routes are not
+project-aware yet, which is also why the daemon refuses to start two projects
+that share a task name.
 
 ### Whose board this is
 
