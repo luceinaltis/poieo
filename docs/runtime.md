@@ -65,8 +65,9 @@ the runtime stays unaware that containers, or journals, exist at all — see
 
 `ctx.emit()` appends one event to the run's stream. The event types are
 `run_started`, `node_started`, `node_retry`, `node_turn`, `node_tool_call`,
-`node_context_cleared`, `node_finished`, `run_finished`, `run_failed`,
-`run_aborted`, and `run_change` (written by the daemon, not here).
+`node_context_cleared`, `node_compacted`, `node_compact_failed`,
+`node_finished`, `run_finished`, `run_failed`, `run_aborted`, and
+`run_change` (written by the daemon, not here).
 
 ## The three node types
 
@@ -92,6 +93,7 @@ as the decision.
 
 ```
 render prompt → over the cap? clear the older tool results
+             → still over the second cap? fold the older turns into a summary
              → ask the model, offering tool definitions
   ↳ cut off?        not an answer — `out_of_room`
   ↳ no tool calls?  the node is done, that answer is its output
@@ -122,6 +124,27 @@ here to summarizing the same history. `_KEEP_RESULTS` most recent results are
 always kept whole, and clearing fires only past the cap rather than every turn
 -- an endpoint that caches prompt prefixes would otherwise find a different
 prefix every turn and charge for the whole conversation to save part of it.
+
+**And a second cap above it, for what clearing cannot reach.** Clearing empties
+tool results, but the turns themselves keep accumulating -- the model's own
+reasoning, and tool call arguments, which for a `write_file` are a whole file.
+Past `_COMPACT_CAP` the turns older than the last `_KEEP_TURNS` are folded into
+a summary the model writes, which is appended to the first message rather than
+added beside it: that message is the task, the task is never folded away, and
+keeping the two together avoids asking either API to accept two user turns in a
+row. **The cut always lands on a turn boundary** -- where the model speaks --
+because a tool result whose call is gone is rejected outright by both APIs.
+
+Two things keep this from running away. It only fires when the fold would
+reclaim at least `_FOLD_AT_LEAST`, without which it would fire on every turn
+after the first: a fold leaves exactly `_KEEP_TURNS` behind it, so the next turn
+is over the line again. And a summary that cannot be written is not worth losing
+the step over -- the history is left whole, `node_compact_failed` records it,
+and the run carries on to fail honestly on room if it is going to.
+
+Clearing before folding, and not the other way around, because clearing costs
+nothing and is one repeated tool call away from being undone, while a fold
+costs a model call and loses whatever the summary left out.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with

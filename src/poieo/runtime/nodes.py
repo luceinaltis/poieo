@@ -255,6 +255,121 @@ def _clear_old_results(messages: list[dict[str, Any]]) -> int:
     return freed
 
 
+# The second cap, and the last resort. Clearing empties tool results but the
+# turns themselves keep piling up -- a model's own reasoning, and tool call
+# arguments, which for a `write_file` are a whole file. Past this the older
+# turns are folded into one summary. Well above `_CONTEXT_CAP` on purpose:
+# clearing is free and reversible, and this is neither.
+_COMPACT_CAP = 220_000
+# How many of the most recent turns are left as they were.
+_KEEP_TURNS = 4
+# The least a fold may reclaim to be worth the model call that writes it.
+#
+# Without a floor this fires every turn once it has fired once: a fold leaves
+# exactly `_KEEP_TURNS` turns behind it, so the next turn is one over again and
+# folding a single turn away costs a whole model call. Anthropic's clearing has
+# a `clear_at_least` for the same reason.
+_FOLD_AT_LEAST = 20_000
+_SUMMARY_HEADER = "What has happened so far, in your own earlier words:"
+_SUMMARY_PROMPT = """\
+Below is the earlier part of your own working session, which is about to be
+replaced by what you write here. Write down what the rest of the session
+cannot do without: the task as you now understand it, what you have tried and
+what came of it, what you have decided and why, which files matter, and what
+is still broken or unfinished. Be specific -- name files, functions and error
+messages. Write nothing else: no preamble, no offer to help.
+
+"""
+
+
+def _transcript(messages: list[dict[str, Any]]) -> str:
+    """The part being folded away, as something a model can read back."""
+    lines: list[str] = []
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content") or ""
+        if role == "assistant":
+            calls = ", ".join(
+                f"{c['name']}({json.dumps(c.get('arguments'), ensure_ascii=False, default=str)})"
+                for c in (message.get("tool_calls") or [])
+            )
+            lines.append(f"you: {content}" if content else "you:")
+            if calls:
+                lines.append(f"you called: {calls}")
+        elif role == "tool":
+            lines.append(f"the tool answered: {content}")
+        else:
+            lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
+def _fold_point(messages: list[dict[str, Any]]) -> int | None:
+    """Where the history may be cut without orphaning a tool result.
+
+    A result answers a call, and a provider rejects one whose call is gone --
+    so the cut has to land on a turn boundary, which is where the model
+    speaks. Returns None when there is not enough behind the kept turns to be
+    worth folding.
+    """
+    spoke = [i for i, message in enumerate(messages) if message.get("role") == "assistant"]
+    if len(spoke) <= _KEEP_TURNS:
+        return None
+    cut = spoke[-_KEEP_TURNS]
+    # Everything before the cut but after the task itself; less than that and
+    # a model call would buy nothing.
+    return cut if cut > 1 else None
+
+
+async def _compact(
+    spec: NodeSpec,
+    ctx: RunContext,
+    bound: _Bound,
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fold the older turns into a summary, and carry on from it.
+
+    The summary is written into the first message rather than added beside it.
+    That message is the task, the task is never folded away, and keeping the
+    two together avoids asking either API to accept two user turns in a row.
+
+    A summary that cannot be written is not worth losing the step over: the
+    history is left whole, `node_compact_failed` says so, and the run carries
+    on to fail honestly on room if it is going to.
+    """
+    cut = _fold_point(messages)
+    if cut is None:
+        return messages
+    older, tail = messages[1:cut], messages[cut:]
+    if _conversation_size(older) < _FOLD_AT_LEAST:
+        return messages
+    before = _conversation_size(messages)
+
+    request = bound.request([{"role": "user", "content": _SUMMARY_PROMPT + _transcript(older)}])
+    try:
+        response = await call_with_retry(spec, bound.provider, request, ctx)
+    except NodeError as exc:
+        # `call_with_retry` has already spent this node's retry budget and
+        # wrapped whatever went wrong, so this is the end of the attempt rather
+        # than the start of one. It ends here and not up the stack: the step
+        # itself is still fine.
+        ctx.emit("node_compact_failed", node_id=spec.id, error=str(exc))
+        return messages
+    ctx.usage = ctx.usage.merge(response.usage)
+
+    task = messages[0]
+    folded = [
+        {**task, "content": f"{task.get('content') or ''}\n\n{_SUMMARY_HEADER}\n{response.text}"},
+        *tail,
+    ]
+    ctx.emit(
+        "node_compacted",
+        node_id=spec.id,
+        folded=before - _conversation_size(folded),
+        kept=_KEEP_TURNS,
+    )
+    return folded
+
+
 class AgentNode(Node):
     """Renders a prompt, calls the model, and loops while it asks for tools.
 
@@ -322,6 +437,13 @@ class AgentNode(Node):
                             freed=freed,
                             kept=_KEEP_RESULTS,
                         )
+                # And if emptying the results was not enough -- the turns
+                # themselves accumulate, and a `write_file` carries a whole
+                # file in its arguments -- the older ones are folded into a
+                # summary. Second because it costs a model call and cannot be
+                # undone, where clearing is free and one repeated call away.
+                if _conversation_size(messages) > _COMPACT_CAP:
+                    messages = await _compact(spec, ctx, bound, messages)
                 request = bound.request(list(messages), tools=offered)
                 response = await call_with_retry(spec, bound.provider, request, ctx)
                 ctx.usage = ctx.usage.merge(response.usage)
