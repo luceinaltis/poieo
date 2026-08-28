@@ -186,12 +186,20 @@ class OpenAICompatibleProvider(_HttpProvider):
                 )
             )
         usage = data.get("usage") or {}
+        # How much of the prompt the endpoint already had. An agent loop resends
+        # its whole conversation every turn, so this is the difference between a
+        # cheap long run and an expensive one -- and it was being reported as
+        # zero on every run through here, which read as a measurement and was
+        # not one. Endpoints that cache nothing omit the key; absent is zero.
+        details = usage.get("prompt_tokens_details") or {}
         return LLMResponse(
             text=message.get("content") or "",
             model=data.get("model", request.model),
             usage=Usage(
                 input_tokens=usage.get("prompt_tokens", 0) or 0,
                 output_tokens=usage.get("completion_tokens", 0) or 0,
+                cache_read_tokens=details.get("cached_tokens", 0) or 0,
+                cache_write_tokens=details.get("cache_write_tokens", 0) or 0,
             ),
             stop_reason=choices[0].get("finish_reason"),
             tool_calls=tool_calls,

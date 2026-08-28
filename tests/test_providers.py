@@ -116,6 +116,70 @@ async def test_openai_compatible_provider_maps_the_response():
     assert response.usage.output_tokens == 2
 
 
+async def test_openai_compatible_provider_counts_the_cache_it_read():
+    """A cached prefix is the difference between a cheap turn and an expensive
+    one, and an agent loop resends its whole conversation every turn -- so this
+    is the number that says what a long run actually cost. It was reported as
+    zero on every OpenRouter run because nothing read it."""
+    provider = build_provider(
+        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "glm",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {
+                    "prompt_tokens": 8000,
+                    "completion_tokens": 12,
+                    "prompt_tokens_details": {
+                        "cached_tokens": 7600,
+                        "cache_write_tokens": 400,
+                    },
+                },
+            },
+        )
+
+    _mock_client(provider, handler)
+    response = await provider.complete(
+        LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}])
+    )
+    await provider.aclose()
+
+    assert response.usage.input_tokens == 8000
+    assert response.usage.cache_read_tokens == 7600
+    assert response.usage.cache_write_tokens == 400
+
+
+async def test_openai_compatible_provider_reports_no_cache_when_none_is_offered():
+    """Ollama and a plain llama.cpp server send no `prompt_tokens_details` at
+    all. Absent must read as zero rather than raising."""
+    provider = build_provider(
+        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "qwen",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+            },
+        )
+
+    _mock_client(provider, handler)
+    response = await provider.complete(
+        LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}])
+    )
+    await provider.aclose()
+
+    assert response.usage.cache_read_tokens == 0
+    assert response.usage.cache_write_tokens == 0
+
+
 async def test_ollama_provider_moves_params_into_options():
     provider = build_provider(
         "ollama", ProviderSpec(type="ollama", base_url="http://x")
