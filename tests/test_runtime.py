@@ -321,6 +321,41 @@ async def test_agent_node_stops_at_max_turns(tmp_path):
     assert "max_turns" in result.error
 
 
+async def test_agent_node_refuses_a_turn_the_model_was_cut_off_mid(tmp_path):
+    """A turn that ran out of output budget is not an answer.
+
+    The loop ends on a turn with no tool calls, and a truncated turn has none
+    -- so half a sentence became the node's output and the run reported
+    success. Watched in the wild: a step that had read twenty files ended on
+    "Let me search with different quoting", and everything downstream treated
+    that as the finished work.
+
+    The provider says so plainly, and poieo already carries it: OpenAI-shaped
+    endpoints return `finish_reason: length`, Anthropic `max_tokens`. Nothing
+    was reading it.
+    """
+    graph = agent_graph(tmp_path, max_turns=3)
+    binding = mock_binding(
+        {"worker": [{"text": "Let me search with different quoting.",
+                     "stop_reason": "length"}]}
+    )
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "failed"
+    assert "cut off" in result.error
+
+
+async def test_agent_node_accepts_a_turn_that_simply_ended(tmp_path):
+    """The other side of it: a model that finished still finishes."""
+    graph = agent_graph(tmp_path, max_turns=3)
+    binding = mock_binding({"worker": "all done"})
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "completed"
+
+
 async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
     graph = agent_graph(tmp_path / "not-there")
     binding = mock_binding({"worker": "hi"})

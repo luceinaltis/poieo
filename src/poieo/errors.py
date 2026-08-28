@@ -123,6 +123,13 @@ def explain_failure(exc: BaseException) -> Cause | None:
                     "ran out of turns before finishing",
                     "raise max_turns, or make the step smaller",
                 )
+            if "was cut off before it finished" in message:
+                return Cause(
+                    "out_of_room",
+                    "the model was cut off before it finished",
+                    "raise max_tokens for this node or its role -- a model that "
+                    "reasons spends that budget on thinking too",
+                )
             if "expected JSON output" in message or "output path" in message:
                 return Cause(
                     "bad_output",

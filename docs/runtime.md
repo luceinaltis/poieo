@@ -92,11 +92,22 @@ as the decision.
 
 ```
 render prompt → ask the model, offering tool definitions
+  ↳ cut off?        not an answer — `out_of_room`
   ↳ no tool calls?  the node is done, that answer is its output
   ↳ tool calls?     execute each, append the results, ask again
 ```
 
-`max_turns` bounds it; hitting the bound with calls still pending is a
+**A truncated turn is checked before anything else, because it is the one that
+lies.** A model that ran out of output budget mid-sentence comes back with no
+tool calls — the same shape as one that finished — so half a sentence became
+the node's output and the run reported success. Endpoints say which it was:
+OpenAI-shaped ones `finish_reason: length`, Anthropic `max_tokens`, and
+`LLMResponse.stop_reason` has carried it all along. Hitting it is a `NodeError`
+carrying `out_of_room`, whose fix is the budget rather than the turn count —
+and a model that reasons spends that budget on thinking as well as answering,
+which is how a one-word verdict comes back empty.
+
+`max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with
 `async with`, so an isolated environment is set up and torn down around the whole
 loop, not per call. Each turn emits `node_turn` (with the model's text and

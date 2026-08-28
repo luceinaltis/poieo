@@ -187,6 +187,10 @@ def _finish(
     )
 
 
+# What an endpoint calls "I stopped because I ran out of room", by dialect.
+_CUT_OFF = {"length", "max_tokens"}
+
+
 def _clip(value: Any, limit: int = 400) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     return text if len(text) <= limit else text[:limit] + "..."
@@ -255,6 +259,20 @@ class AgentNode(Node):
                     thinking=_clip(response.meta.get("thinking") or ""),
                     tool_call_count=len(response.tool_calls),
                 )
+
+                # A turn the model was cut off in the middle of is not an
+                # answer, and it arrives looking exactly like one: the loop
+                # ends on a turn with no tool calls, and a truncated turn has
+                # none. Half a sentence then becomes the node's output and the
+                # run reports success. The endpoint says so plainly --
+                # OpenAI-shaped ones `length`, Anthropic `max_tokens` -- and it
+                # was already being carried this far unread.
+                if response.stop_reason in _CUT_OFF:
+                    raise NodeError(
+                        f"node '{spec.id}' was cut off before it finished: the "
+                        f"model reached its output limit mid-turn",
+                        node_id=spec.id,
+                    )
 
                 # No executor means none were offered, so a tool call here is
                 # a model inventing one. There is nothing to run it with, and

@@ -70,6 +70,17 @@ def test_max_turns_reads_as_out_of_turns():
     assert cause.slug == "out_of_turns"
 
 
+def test_being_cut_off_reads_as_out_of_room_and_names_the_budget():
+    """Out of turns and out of room are different mistakes with different
+    fixes, and the message a reader gets has to send them to the right one."""
+    cause = explain_failure(
+        NodeError("node 'work' was cut off before it finished: the model "
+                  "reached its output limit mid-turn", node_id="work")
+    )
+    assert cause.slug == "out_of_room"
+    assert "max_tokens" in cause.fix
+
+
 def test_unparseable_output_reads_as_bad_output():
     cause = explain_failure(
         NodeError("node 'a' expected JSON output but got: 'sure! here you go'")
