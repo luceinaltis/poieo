@@ -87,6 +87,14 @@
   color: #9a9086;
 }
 
+/* Housekeeping, not work: it belongs in the timeline because a history that
+   shrinks silently cannot be reasoned about afterwards, but it must not read
+   as a step the model took. */
+.drawer-entry[data-kind="cleared"] .drawer-label {
+  color: #6b6257;
+  font-style: italic;
+}
+
 .drawer-entry[data-error="true"] .drawer-label,
 .drawer-entry[data-error="true"] .drawer-text {
   color: #d16d5a;

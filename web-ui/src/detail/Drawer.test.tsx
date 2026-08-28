@@ -150,6 +150,18 @@ test("a turn with nothing in it does not take a row", async () => {
   expect(container.querySelectorAll('[data-kind="tool"]')).toHaveLength(1)
 })
 
+test("a run that cleared its own history says so in the timeline", async () => {
+  // A step whose conversation quietly shrinks is a step nobody can reason
+  // about afterwards. The reader has to be able to see it happen.
+  await show([
+    event("node_context_cleared", { data: { turn: 8, freed: 30997, kept: 3 } }),
+  ])
+
+  const entry = container.querySelector('[data-kind="cleared"]')!
+  expect(entry.textContent).toContain("30,997")
+  expect(entry.textContent).toContain("3")
+})
+
 test("a tool worth waiting for reports how long it took", async () => {
   await show([event("node_tool_call", { data: { name: "run_tests", duration_ms: 4200 } })])
 

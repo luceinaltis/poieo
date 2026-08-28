@@ -206,6 +206,44 @@ test("a run says what it spent when it changed nothing to count", () => {
   expect(rows()[0].textContent).toContain("128")
 })
 
+test("a run says how much it sent, which is the number that explains a failure", () => {
+  // A run that died reading twenty files spent 160,360 tokens to produce
+  // 6,578, and the row said "6578 tokens" -- the small half of the story, and
+  // not the half that says why it stopped.
+  render(
+    [
+      run({
+        run_id: "a",
+        usage: { ...USAGE, input_tokens: 160360, output_tokens: 6578 },
+      }),
+    ],
+    false,
+  )
+
+  expect(rows()[0].textContent).toContain("160,360")
+})
+
+test("a run that was mostly answered from cache says so", () => {
+  // Resending a whole conversation every turn looks ruinous until you see how
+  // much of it the endpoint already had.
+  render(
+    [
+      run({
+        run_id: "a",
+        usage: {
+          ...USAGE,
+          input_tokens: 660598,
+          output_tokens: 58072,
+          cache_read_tokens: 633344,
+        },
+      }),
+    ],
+    false,
+  )
+
+  expect(rows()[0].textContent).toContain("96% cached")
+})
+
 test("a failed run still leads with why, not with how long", () => {
   render([BROKE], false)
   // Failed runs stay collapsed until asked for; the point here is what the row
