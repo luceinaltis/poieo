@@ -126,11 +126,24 @@ run's whole outputs and state, and only the tail is ever read.
 
 Owns the pools, the containers, the runners, and the shutdown handshake.
 
+Its roster is a list of **`LoadedProject`** — a config, a run store, and that
+project's tasks. There is exactly one today, and the list is what the board's
+project switcher will hold more of. Anything whose answer differs per project
+asks the project: where a run is written, which cards a note may reach, whether
+this project learns. Anything shared by the machine stays on the daemon: the
+pools, the container pool, `cancel`. `daemon.config` / `.store` / `.tasks` still
+answer, and answer for the only project there is — the CLI and the web API have
+not been widened yet.
+
 - **one `ProviderPool` per distinct binding file**, so clients are reused across
-  tasks; **one container pool**, built only if some task asks for isolation
+  tasks — and across projects, which is the point of keying on the file rather
+  than on the project; **one container pool**, built only if some task asks for
+  isolation
 - `_hands_for()` assembles each task's `ToolContext` — its isolation setting, the
   shared container pool, and a `Postbox` if and only if its card took the `notes`
-  toolset
+  toolset. A postbox reaches **that project's** cards and no others: a note is a
+  line in another card's journal, and a journal is a file in one project's
+  memory
 - the web server, if a port was given, runs as a task on the same loop; the port
   is bound-checked up front so it fails at launch rather than after tasks start
 - `SIGINT`/`SIGTERM` sets `cancel`, which drains in-flight runs; a second signal
@@ -143,9 +156,11 @@ Owns the pools, the containers, the runners, and the shutdown handshake.
 
 ## The learning loop
 
-`learn: 1d` in the config starts a background loop that runs a pass while
-**nothing else is running** — `_ready_to_learn()` requires every runner to be
-`waiting`. It is a double opt-in: the config key *and* the `memory/longterm/`
+`learn: 1d` in the config starts a background loop, one per project that asked
+for it, running a pass while **nothing else is running** — `_ready_to_learn()`
+requires every runner to be `waiting`. Every runner anywhere, not just that
+project's: learning would rather be late than contend, and another project's run
+contends just as well as this one's. It is a double opt-in: the config key *and* the `memory/longterm/`
 folder. Half an opt-in is how a feature dies quietly, so a config that says
 `learn:` over a project with no memory folder logs a warning naming both. See
 [memory.md](memory.md).

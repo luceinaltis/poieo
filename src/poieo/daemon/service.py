@@ -508,6 +508,22 @@ class TaskRunner:
             record_run(task, result)
 
 
+@dataclass(slots=True)
+class LoadedProject:
+    """One project the daemon runs: its paths, its run history, its tasks.
+
+    Everything a task needs that is not the task itself hangs off here rather
+    than off the daemon -- where its runs are written, which other cards it may
+    leave a note for, whether the project learns. The daemon is about to hold
+    more than one of these, and each of those questions has a different answer
+    per project.
+    """
+
+    config: DaemonConfig
+    store: RunStore
+    tasks: list[LoadedTask]
+
+
 class Daemon:
     """Owns the provider pools, the running tasks, and the shutdown handshake."""
 
@@ -519,16 +535,18 @@ class Daemon:
         on_run: RunCallback | None = None,
         web_port: int | None = None,
     ):
-        self.config = config
-        self.tasks = load_tasks(config)
         base_store = store or RunStore(config.layout().runs())
         if web_port is not None and not isinstance(base_store, BroadcastStore):
             base_store = BroadcastStore(base_store)
-        self.store = base_store
+        self.projects = [
+            LoadedProject(config=config, store=base_store, tasks=load_tasks(config))
+        ]
         self.web_port = web_port
         self.on_run = on_run
         self.cancel = asyncio.Event()
-        # One pool per distinct binding file: clients are reused across tasks.
+        # One pool per distinct binding file: clients are reused across tasks,
+        # and across projects -- two projects naming one binding file mean one
+        # set of clients, which is the point of keying on the file.
         self.pools: dict[str, ProviderPool] = {}
         # One container per distinct folder-and-settings, for the same reason.
         self.containers: Any = (
@@ -538,9 +556,34 @@ class Daemon:
         )
         self.runners: list[TaskRunner] = []
 
-    def _postbox_for(self, task: LoadedTask) -> Any:
-        """A task that took the notes toolset gets one; nobody else does."""
-        card = self.config.cards_by_task.get(task.spec.name)
+    # -- while there is exactly one project ----------------------------------
+    #
+    # The daemon's insides ask a project for these; the seams that have not
+    # been widened yet -- the CLI, and the web API's one store -- still ask
+    # the daemon, and get the only project there is.
+
+    @property
+    def config(self) -> DaemonConfig:
+        return self.projects[0].config
+
+    @property
+    def store(self) -> RunStore:
+        return self.projects[0].store
+
+    @property
+    def tasks(self) -> list[LoadedTask]:
+        """Every task the daemon runs, whichever project it came from."""
+        return [task for project in self.projects for task in project.tasks]
+
+    def _postbox_for(self, project: LoadedProject, task: LoadedTask) -> Any:
+        """A task that took the notes toolset gets one; nobody else does.
+
+        The recipients are that project's cards and no others. A note is a
+        line written into another card's journal, and a journal is a file in
+        one project's memory -- reaching across would be one project writing
+        into another's folder.
+        """
+        card = project.config.cards_by_task.get(task.spec.name)
         if card is None or "notes" not in (card.tools or []):
             return None
         from ..tools.notes import Postbox
@@ -549,32 +592,33 @@ class Daemon:
             sender=task.spec.name,
             recipients={
                 name: other.journal_path()
-                for name, other in self.config.cards_by_task.items()
+                for name, other in project.config.cards_by_task.items()
             },
         )
 
-    def _hands_for(self, task: LoadedTask) -> ToolContext:
+    def _hands_for(self, project: LoadedProject, task: LoadedTask) -> ToolContext:
         return ToolContext(
             isolation=task.spec.isolation,
             containers=self.containers,
-            postbox=self._postbox_for(task),
+            postbox=self._postbox_for(project, task),
         )
 
     def _runners(self) -> list[TaskRunner]:
         return [
             TaskRunner(
                 task,
-                self.config,
+                project.config,
                 self._pool_for(task),
-                self.store,
+                project.store,
                 self.cancel,
                 self.on_run,
-                self._hands_for(task),
+                self._hands_for(project, task),
                 # Bound, so it resolves against self.runners at call time --
                 # which is after this list has been built and assigned.
                 self._hand_off,
             )
-            for task in self.tasks
+            for project in self.projects
+            for task in project.tasks
         ]
 
     # -- handing one task's finished work to the task it named ---------------
@@ -656,20 +700,30 @@ class Daemon:
 
     # -- learning while nothing else is running ------------------------------
 
-    def _ready_to_learn(self) -> bool:
+    def _ready_to_learn(self, project: LoadedProject) -> bool:
         """Double opt-in (the config key and the folder), and learning
-        always yields to work: not one runner may be mid-run."""
-        if self.config.learn is None or not self.config.cards:
+        always yields to work: not one runner may be mid-run.
+
+        Not one runner *anywhere*, not just this project's. Learning reads a
+        project's run records and rewrites its memory, and it yields to work
+        because it would rather be late than contend -- which is as true of
+        another project's run as of this one's.
+        """
+        config = project.config
+        if config.learn is None or not config.cards:
             return False
-        if not keeps_memory(self.config.base_dir):
+        if not keeps_memory(config.base_dir):
             return False
         return all(runner.status == "waiting" for runner in self.runners)
 
-    async def _learn_once(self, spec: Any, pool: ProviderPool) -> None:
+    async def _learn_once(
+        self, project: LoadedProject, spec: Any, pool: ProviderPool
+    ) -> None:
         """One guarded attempt. Nothing here may take the daemon down."""
-        project = self.config.resolve_path(self.config.cards)
+        config = project.config
+        folder = config.resolve_path(config.cards)
         try:
-            result = await learn_pass(project, spec, pool)
+            result = await learn_pass(folder, spec, pool)
         except Exception as exc:
             log.warning("the learning pass failed: %s", exc)
             return
@@ -685,19 +739,20 @@ class Daemon:
                 len(result.set_aside),
             )
 
-    async def _learning_loop(self) -> None:
+    async def _learning_loop(self, project: LoadedProject) -> None:
         from ..binding import load_binding
 
+        config = project.config
         try:
-            interval = parse_duration(self.config.learn)
-            spec = load_binding(self.config.resolve_path(self.config.binding))
+            interval = parse_duration(config.learn)
+            spec = load_binding(config.resolve_path(config.binding))
         except Exception as exc:
             log.warning("learning is off: %s", exc)
             return
         async with ProviderPool(spec) as pool:
             while await _sleep_or_cancel(interval, self.cancel):
-                if self._ready_to_learn():
-                    await self._learn_once(spec, pool)
+                if self._ready_to_learn(project):
+                    await self._learn_once(project, spec, pool)
 
     def _install_signals(self) -> None:
         loop = asyncio.get_running_loop()
@@ -716,7 +771,10 @@ class Daemon:
 
     async def serve(self, *, install_signals: bool = True) -> list[RunResult]:
         if not self.tasks:
-            log.warning("no enabled tasks in %s", self.config.source_path)
+            log.warning(
+                "no enabled tasks in %s",
+                ", ".join(str(project.config.source_path) for project in self.projects),
+            )
             return []
         if install_signals:
             self._install_signals()
@@ -751,14 +809,24 @@ class Daemon:
                 log.warning("could not reclaim old environments: %s", exc)
 
         self.runners = self._runners()
-        learn_task = None
-        if self.config.learn is not None:
-            learn_task = asyncio.create_task(self._learning_loop())
-            log.info("learning every %s, while nothing else is running", self.config.learn)
+        # One loop per project that asked for it: `learn:` is a project's key,
+        # and two projects learn on their own schedules from their own records.
+        learn_tasks = [
+            asyncio.create_task(self._learning_loop(project))
+            for project in self.projects
+            if project.config.learn is not None
+        ]
+        for project in self.projects:
+            if project.config.learn is not None:
+                log.info(
+                    "'%s' learns every %s, while nothing else is running",
+                    project.config.display_name,
+                    project.config.learn,
+                )
         log.info(
             "poieo daemon up: %d task(s), store at %s",
             len(self.runners),
-            self.store.root,
+            ", ".join(str(project.store.root) for project in self.projects),
         )
         try:
             # return_exceptions: one task blowing up must not orphan the others
@@ -773,7 +841,7 @@ class Daemon:
                     )
         finally:
             self.cancel.set()
-            if learn_task is not None:
+            for learn_task in learn_tasks:
                 await _stopped(learn_task, "learning pass")
             if web_task is not None:
                 server.should_exit = True
