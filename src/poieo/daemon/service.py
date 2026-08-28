@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..workspace import Workspace, WorkspaceError
 from ..errors import ExpressionError, PoieoError, SpecError
@@ -24,7 +24,7 @@ from ..runtime.executor import execute
 from ..store import Event, RunStore
 from ..card import append_journal, closing_line, record_run
 from ..tools import ToolContext, make_container_pool, sweep_containers
-from ..web import BroadcastStore, create_app
+from ..web import BroadcastStore, MergedStore, create_app
 from .config import DaemonConfig, LoadedTask, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
@@ -524,23 +524,68 @@ class LoadedProject:
     tasks: list[LoadedTask]
 
 
+def _no_two_tasks_alike(projects: list[LoadedProject]) -> None:
+    """Refuse at launch when two projects call a task by the same name.
+
+    The task name is the only namespace there is: the board's control routes
+    take one, the run index files runs under one, and a handoff names one. Two
+    `chores` would make each of those mean whichever project answered first.
+
+    The right fix is for the wire to carry the project as well, and until it
+    does this is the honest half -- said at launch, naming both projects, not
+    found at 3am by whichever runner asked second.
+    """
+    seen: dict[str, str] = {}
+    for project in projects:
+        where = project.config.display_name
+        for task in project.tasks:
+            first = seen.setdefault(task.spec.name, where)
+            if first != where:
+                raise SpecError(
+                    f"two projects both have a task called '{task.spec.name}' "
+                    f"('{first}' and '{where}'). A daemon runs them in one "
+                    f"namespace, so rename one of the card files -- a task is "
+                    f"called after its file -- or give each project its own "
+                    f"daemon"
+                )
+
+
 class Daemon:
     """Owns the provider pools, the running tasks, and the shutdown handshake."""
 
     def __init__(
         self,
-        config: DaemonConfig,
+        config: DaemonConfig | Sequence[DaemonConfig],
         *,
         store: RunStore | None = None,
         on_run: RunCallback | None = None,
         web_port: int | None = None,
     ):
-        base_store = store or RunStore(config.layout().runs())
-        if web_port is not None and not isinstance(base_store, BroadcastStore):
-            base_store = BroadcastStore(base_store)
+        # One project or several. A caller with one passes it bare, which is
+        # every caller there was before the board learned to switch between
+        # them, and an injected `store` belongs to that one.
+        configs = [config] if isinstance(config, DaemonConfig) else list(config)
+        if not configs:
+            raise SpecError("a daemon needs at least one project to run")
+        if store is not None and len(configs) > 1:
+            # An injected store is one store, and a project keeps its own
+            # history. Handing the same one to several would file every
+            # project's runs in whichever folder it happened to point at.
+            raise SpecError(
+                "a store can only be handed to a daemon running one project; "
+                "with several, each keeps its own"
+            )
+
         self.projects = [
-            LoadedProject(config=config, store=base_store, tasks=load_tasks(config))
+            LoadedProject(
+                config=each,
+                store=self._history_for(each, store, web_port),
+                tasks=load_tasks(each),
+            )
+            for each in configs
         ]
+        _no_two_tasks_alike(self.projects)
+        self._merged: MergedStore | None = None
         self.web_port = web_port
         self.on_run = on_run
         self.cancel = asyncio.Event()
@@ -556,19 +601,42 @@ class Daemon:
         )
         self.runners: list[TaskRunner] = []
 
-    # -- while there is exactly one project ----------------------------------
+    @staticmethod
+    def _history_for(
+        config: DaemonConfig, store: RunStore | None, web_port: int | None
+    ) -> RunStore:
+        """Where this project's runs are written, wrapped to publish if served.
+
+        A store per project, because a store is where a project keeps its own
+        history -- sharing one would file a task's runs in a folder its own
+        `poieo runs` cannot see.
+        """
+        history = store or RunStore(config.layout().runs())
+        if web_port is not None and not isinstance(history, BroadcastStore):
+            history = BroadcastStore(history)
+        return history
+
+    # -- asked of the daemon, answered by the projects ------------------------
     #
-    # The daemon's insides ask a project for these; the seams that have not
-    # been widened yet -- the CLI, and the web API's one store -- still ask
-    # the daemon, and get the only project there is.
+    # The daemon's insides ask a project directly. These are for the seam that
+    # is not project-aware yet: the web API, whose routes still take a task
+    # name and no project. That is also why two projects may not share one.
 
     @property
     def config(self) -> DaemonConfig:
+        """The first project's. Only the API asks, and only for its paths."""
         return self.projects[0].config
 
     @property
     def store(self) -> RunStore:
-        return self.projects[0].store
+        """Every project's history, read as one -- and the one store itself
+        when there is only one, because then there is nothing to merge and a
+        wrapper would only stand between the board and the answer."""
+        if len(self.projects) == 1:
+            return self.projects[0].store
+        if self._merged is None:
+            self._merged = MergedStore([project.store for project in self.projects])
+        return self._merged
 
     @property
     def tasks(self) -> list[LoadedTask]:
@@ -661,7 +729,19 @@ class Daemon:
             )
             return
 
-        target = next((r for r in self.runners if r.name == branch.to), None)
+        # Within the sender's own project. `check_handoffs()` already refuses a
+        # `to:` that names nothing in the project, so a cross-project hop cannot
+        # be reached from a valid config -- but the search should say which
+        # namespace it means rather than rely on names being unique daemon-wide,
+        # which is a rule this daemon enforces today and will not forever.
+        target = next(
+            (
+                r
+                for r in self.runners
+                if r.name == branch.to and r.config is sender.config
+            ),
+            None,
+        )
         if target is None:
             # Disabled, so it has no runner. check_handoffs already said so at
             # load; saying it again per run would be noise.

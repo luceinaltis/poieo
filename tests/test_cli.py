@@ -872,3 +872,80 @@ def test_both_commands_that_look_for_a_project_say_the_same_thing(tmp_path, monk
     assert "no poieo.yaml found here or above" in refusals[0]
     assert "poieo init" in refusals[0]
     assert refusals[0] == refusals[1]
+
+
+# -- one board, several projects ----------------------------------------------
+
+
+def _tiny_project(root, name, task_name):
+    """A project whose one task runs against the mock model and touches nothing."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "b.yaml").write_text(
+        "providers:\n  fake:\n    type: mock\n    options:\n      responses:\n"
+        '        "*": "done"\n'
+        "default:\n  provider: fake\n  model: mock-model\n",
+        encoding="utf-8",
+    )
+    card(root / "cards", task_name, "prompt: do the thing\nfolder: .\n")
+    (root / "poieo.yaml").write_text(
+        f"name: {name}\nstore: runs\nbinding: b.yaml\ntasks: cards\n", encoding="utf-8"
+    )
+    return root
+
+
+def test_the_daemon_runs_the_projects_it_was_given(tmp_path):
+    a = _tiny_project(tmp_path / "a", "chores", "sweep")
+    b = _tiny_project(tmp_path / "b", "notes", "tidy")
+
+    result = runner.invoke(app, ["daemon", str(a), str(b), "--once", "--no-web"])
+
+    assert result.exit_code == 0, result.output
+    assert "2 run(s), 0 not completed" in result.output
+
+
+def test_naming_a_task_finds_it_in_whichever_project_has_it(tmp_path):
+    a = _tiny_project(tmp_path / "a", "chores", "sweep")
+    b = _tiny_project(tmp_path / "b", "notes", "tidy")
+
+    result = runner.invoke(
+        app, ["daemon", str(a), str(b), "--task", "tidy", "--once", "--no-web"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "1 run(s), 0 not completed" in result.output
+
+
+def test_a_task_in_none_of_the_projects_is_refused_naming_them_all(tmp_path):
+    a = _tiny_project(tmp_path / "a", "chores", "sweep")
+    b = _tiny_project(tmp_path / "b", "notes", "tidy")
+
+    result = runner.invoke(
+        app, ["daemon", str(a), str(b), "--task", "nope", "--once", "--no-web"]
+    )
+
+    assert result.exit_code != 0
+    assert "nope" in result.output
+    assert "a" in result.output and "b" in result.output
+
+
+def test_a_folder_with_a_marker_in_it_is_that_project(tmp_path):
+    # `poieo daemon ../notes` is how a second project gets named. Reading a
+    # project root as a folder of cards would try to load its own poieo.yaml
+    # and its binding as tasks.
+    a = _tiny_project(tmp_path / "a", "chores", "sweep")
+
+    result = runner.invoke(app, ["daemon", str(a), "--once", "--no-web"])
+
+    assert result.exit_code == 0, result.output
+    assert "1 run(s), 0 not completed" in result.output
+
+
+def test_a_folder_of_cards_is_still_a_folder_of_cards(tmp_path):
+    # The other spelling has to keep working: a folder with no marker means
+    # "run these cards", and the project above still says where things live.
+    a = _tiny_project(tmp_path / "a", "chores", "sweep")
+
+    result = runner.invoke(app, ["daemon", str(a / "cards"), "--once", "--no-web"])
+
+    assert result.exit_code == 0, result.output
+    assert "1 run(s), 0 not completed" in result.output

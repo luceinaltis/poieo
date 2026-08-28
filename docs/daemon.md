@@ -34,8 +34,10 @@ A `TaskSpec` is one workflow wired to a trigger:
 | `on_error` | `continue` (default) or `stop` |
 | `then` | which task should work next — see *Handoff* below |
 
-`config_for_tasks_folder()` is what `poieo daemon <folder>` stands for: run the
-cards in that folder. The argument says *which cards*, never *where the project
+A folder **with a `poieo.yaml` in it** is that project — `poieo daemon ../notes`
+is how a second project gets named, and reading a project root as a folder of
+cards would try to load its own marker as a task. A folder **without** one is
+what `config_for_tasks_folder()` stands for: run the cards in that folder. The argument says *which cards*, never *where the project
 begins* — so a `poieo.yaml` above still answers that, and the config becomes that
 project with its tasks folder swapped (same store, same binding, same memory).
 Joining a project halfway, taking its memory but not the model it reads with, is
@@ -127,13 +129,30 @@ run's whole outputs and state, and only the tail is ever read.
 Owns the pools, the containers, the runners, and the shutdown handshake.
 
 Its roster is a list of **`LoadedProject`** — a config, a run store, and that
-project's tasks. There is exactly one today, and the list is what the board's
-project switcher will hold more of. Anything whose answer differs per project
-asks the project: where a run is written, which cards a note may reach, whether
-this project learns. Anything shared by the machine stays on the daemon: the
-pools, the container pool, `cancel`. `daemon.config` / `.store` / `.tasks` still
-answer, and answer for the only project there is — the CLI and the web API have
-not been widened yet.
+project's tasks. `poieo daemon a/ b/` is how it gets more than one. Anything
+whose answer differs per project asks the project: where a run is written, which
+cards a note may reach, whether this project learns. Anything shared by the
+machine stays on the daemon: the pools, the container pool, `cancel`.
+
+**A store per project, one read across them.** A project keeps its history under
+its own root, because that is where its own `poieo runs` will look; the board
+asks one question of all of them, and `MergedStore` is the seam. It merges on
+the clock — inside one index the order is already the order runs finished, and
+across two indexes nothing but the timestamp relates them. It is reads only:
+a write would have to guess which project a run belongs to, and the runner
+already knows. With one project there is nothing to merge and `daemon.store` is
+that project's store.
+
+**Two projects may not share a task name**, and the daemon refuses to start when
+they do, naming both. The task name is the only namespace there is — the board's
+control routes take one, the run index files runs under one, a handoff names one
+— so two `chores` would make each of those mean whichever project answered
+first. A task is called after its **file**, so the fix is renaming one of the
+cards on disk, and the refusal says so. The real fix is for the wire to carry the project too; this is the honest
+half of it, said at launch rather than found at 3am.
+
+`daemon.config` and `.tasks` still answer: `.config` for the first project, and
+`.tasks` for every task whichever project it came from.
 
 - **one `ProviderPool` per distinct binding file**, so clients are reused across
   tasks — and across projects, which is the point of keying on the file rather

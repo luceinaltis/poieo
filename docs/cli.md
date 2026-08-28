@@ -45,6 +45,18 @@ that `scheduler`, `provider`, `binding` and `worktree` appear nowhere in
 `poieo --help`, and that `task` — the word that replaced them — is there. The
 panel titles and short help are written against it.
 
+## `poieo daemon` takes as many projects as you name
+
+`poieo daemon` with no argument is the project you are standing in, which is
+what it has always been. With arguments it is those projects, one board over all
+of them: `poieo daemon . ../notes`. Each argument is read on its own — a marker
+file, a folder holding one, or a folder of cards — so the spellings that worked
+for one still work for each.
+
+`--task` is narrowed across everything named, and refuses while listing every
+project it looked in. Which project a task lives in is not something the user
+should have to say in order to name it.
+
 The same rule reaches past the help. `humanize()` in `daemon/triggers.py` renders
 an interval in the units somebody would have written it in — `every 30m`, not
 `every 1800s`. That string is what `tasks` and `validate` print, what the board

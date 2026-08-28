@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, NoReturn, Optional
+from typing import Any, List, NoReturn, Optional
 
 import typer
 import yaml
@@ -28,7 +28,12 @@ from . import __version__
 from .binding import load_binding
 from .workspace import Workspace
 from .daemon import Daemon, load_config, load_tasks
-from .daemon.config import TaskSpec, check_isolation, config_for_tasks_folder
+from .daemon.config import (
+    DaemonConfig,
+    TaskSpec,
+    check_isolation,
+    config_for_tasks_folder,
+)
 from . import detect as engines
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
@@ -36,6 +41,7 @@ from .layout import layout_for
 from .learn import last_suggestion, learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
 from .project import (
+    MARKER,
     MOCK_BINDING,
     binding_document,
     find_project,
@@ -691,11 +697,36 @@ def reset(
     )
 
 
+def _daemon_config(config_path: "Path | None") -> "DaemonConfig":
+    """One argument to `poieo daemon`, read as a project."""
+    config_path = _project_file(config_path)
+    if config_path.is_dir():
+        # A folder with a marker in it is that project -- `poieo daemon ../notes`
+        # is how a second project gets named, and pointing at a project root
+        # meaning "read every file in here as a card" helps nobody.
+        marker = config_path / MARKER
+        if marker.exists():
+            return load_config(marker)
+        # Otherwise `poieo daemon tasks/`, the natural guess once cards exist:
+        # a spelling of the same thing, not an error.
+        return config_for_tasks_folder(config_path)
+    if is_card_file(config_path):
+        _fail(
+            f"'{config_path}' is a single task. "
+            f"`poieo run {config_path}` runs it once; to keep it "
+            f"running, point the daemon at its folder: "
+            f"`poieo daemon {config_path.parent}`"
+        )
+    return load_config(config_path)
+
+
 @app.command(rich_help_panel=BOARD)
 @_guarded
 def daemon(
-    config_path: Optional[Path] = typer.Argument(
-        None, help="Daemon config YAML/JSON file [default: the project's poieo.yaml]."
+    config_paths: Optional[List[Path]] = typer.Argument(
+        None,
+        help="One or more project files or task folders "
+        "[default: the project's poieo.yaml].",
     ),
     once: bool = typer.Option(
         False, "--once", help="Firing each task a single time, then exit."
@@ -709,39 +740,37 @@ def daemon(
 ) -> None:
     """Keep the tasks running, and serve the board in a browser."""
     _setup_logging(verbose)
-    config_path = _project_file(config_path)
-    if config_path.is_dir():
-        # `poieo daemon tasks/` is the natural guess once cards exist,
-        # so it is a spelling of the same thing, not an error.
-        config = config_for_tasks_folder(config_path)
-    elif is_card_file(config_path):
-        _fail(
-            f"'{config_path}' is a single task. "
-            f"`poieo run {config_path}` runs it once; to keep it "
-            f"running, point the daemon at its folder: "
-            f"`poieo daemon {config_path.parent}`"
-        )
-    else:
-        config = load_config(config_path)
+    # One board, as many projects as were named. No argument still means the
+    # project you are standing in, which is what it has always meant.
+    given = list(config_paths or [None])
+    configs = [_daemon_config(each) for each in given]
 
     if task:
-        matching = [f for f in config.tasks if f.name == task]
-        if not matching:
-            _fail(f"no task named '{task}' in {config_path}")
-        config.tasks = matching
+        # Narrowed across everything given: the flag names a task, and which
+        # project it lives in is not something the user should have to say.
+        found = False
+        for config in configs:
+            matching = [f for f in config.tasks if f.name == task]
+            config.tasks = matching
+            found = found or bool(matching)
+        if not found:
+            where = ", ".join(str(c.source_path) for c in configs)
+            _fail(f"no task named '{task}' in {where}")
+        configs = [c for c in configs if c.tasks]
 
     if once:
         # A single pass per task: cap iterations and make interval tasks fire
         # immediately instead of waiting out their first period.
-        for spec in config.tasks:
-            spec.trigger.max_iterations = 1
-            spec.trigger.run_at_start = True
-            if spec.trigger.type == "manual":
-                spec.trigger = spec.trigger.model_copy(update={"type": "loop"})
+        for config in configs:
+            for spec in config.tasks:
+                spec.trigger.max_iterations = 1
+                spec.trigger.run_at_start = True
+                if spec.trigger.type == "manual":
+                    spec.trigger = spec.trigger.model_copy(update={"type": "loop"})
 
     try:
         results = asyncio.run(
-            Daemon(config, web_port=None if no_web else port).serve()
+            Daemon(configs, web_port=None if no_web else port).serve()
         )
     except KeyboardInterrupt:  # pragma: no cover - interactive
         raise typer.Exit(code=130)
