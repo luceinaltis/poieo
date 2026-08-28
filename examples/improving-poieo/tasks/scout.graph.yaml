@@ -17,12 +17,16 @@ nodes:
     role: reader
     tools: [files]
     max_turns: 10
-    # More room than the role's default. This family reasons, some endpoints
-    # refuse to have it turned off, and the thinking is spent out of the same
-    # budget as the answer -- at a tighter budget the survey came back cut off
-    # mid-sentence and the node after it had nothing to work from.
+    # Far more room than the role's default, and measured rather than guessed:
+    # reading four files and writing five lines about them cost 7,677 output
+    # tokens on the model this was tried against, nearly all of it reasoning.
+    # At 3,000 the node produced no text at all and failed `out_of_room`.
+    #
+    # A ceiling is not a reservation -- you are billed for what is generated,
+    # not for what you allowed -- so the generous number is the cheap one. Set
+    # it tight and you pay for a run that fails instead of one that finishes.
     params:
-      max_tokens: 3000
+      max_tokens: 8000
     prompt: |
       Read exactly these, and nothing else:
 
