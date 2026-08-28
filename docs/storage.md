@@ -89,11 +89,18 @@ run's events and its result to two different folders.
 `store.py` is append-only. Every run writes:
 
 - `runs/events/<run_id>.jsonl` — one JSON line per event
-- one summary line in `runs/index.jsonl` — what ran, its status, path, usage and
-  `change`
+- one summary line in `runs/index.jsonl` — what ran, **whose project it was**,
+  its status, path, usage and `change`
 
 That is enough to answer *what ran, what did it decide, what did it cost* without
-a database. `runs/results/<run_id>.json` is the third file, written by
+a database.
+
+`project` is on the record because one daemon can run several, and then "which
+task ran" no longer says whose night it was. It is written where the daemon
+knows it and read where the board needs it: the runtime carries it as a label
+and never looks at it, the same way it carries `task`. It is on the
+`run_started` frame too — the board learns what is happening from the stream,
+not from the index. `runs/results/<run_id>.json` is the third file, written by
 [memory](memory.md) — the same run's full outcome, unclipped.
 
 ### Durability

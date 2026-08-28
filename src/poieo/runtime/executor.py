@@ -68,6 +68,9 @@ async def execute(
     input: dict[str, Any] | None = None,
     state: dict[str, Any] | None = None,
     task: str = "adhoc",
+    # A label the runtime carries and never reads, like `task` beside it: the
+    # daemon knows which project a task came from, and the record has to.
+    project: str = "",
     trigger: str = "manual",
     iteration: int = 0,
     run_id: str | None = None,
@@ -105,6 +108,7 @@ async def execute(
         "run_started",
         graph=graph.name,
         task=task,
+        project=project,
         trigger=trigger,
         iteration=iteration,
         binding=binding.name,
@@ -163,6 +167,7 @@ async def execute(
     run_result = RunResult(
         run_id=ctx.run_id,
         task=task,
+        project=project,
         graph=graph.name,
         status=status,
         started_at=started_at,

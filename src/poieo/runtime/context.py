@@ -117,6 +117,10 @@ class RunResult:
     # chores (changed)". Not the task's configured schedule, which may well not
     # be what rang: a run-now and a handoff both happen outside it.
     trigger: str = ""
+    # Which project's task this was. One daemon can run several, and then
+    # "which task ran" stops being enough to say whose night it was -- a
+    # record that cannot say cannot be filtered or labelled later either.
+    project: str = ""
     # Set after the run by the daemon when the task keeps a private copy.
     change: dict[str, Any] | None = None
 
@@ -137,6 +141,7 @@ class RunResult:
         summary: dict[str, Any] = {
             "run_id": self.run_id,
             "task": self.task,
+            "project": self.project,
             "graph": self.graph,
             "status": self.status,
             "started_at": self.started_at,
