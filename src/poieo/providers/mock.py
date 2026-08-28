@@ -48,6 +48,7 @@ class MockProvider(Provider):
             value = value[min(index - 1, len(value) - 1)]
         tool_calls: list[ToolCall] = []
         text = ""
+        stop: str | None = None
         meta: dict[str, Any] = {}
         if isinstance(value, dict):
             # A dict entry scripts an assistant turn that may request tools.
@@ -67,13 +68,17 @@ class MockProvider(Provider):
                 meta["raw_content"] = value["raw_content"]
             if value.get("thinking"):
                 meta["thinking"] = value["thinking"]
+            # Lets a test script a turn the model was cut off in the middle of,
+            # which is a thing real endpoints do and nothing else here can fake.
+            if value.get("stop_reason"):
+                stop = str(value["stop_reason"])
         else:
             text = value if isinstance(value, str) else str(value)
         return LLMResponse(
             text=text,
             model=request.model,
             usage=Usage(input_tokens=0, output_tokens=len(text.split())),
-            stop_reason="tool_use" if tool_calls else "end_turn",
+            stop_reason=stop or ("tool_use" if tool_calls else "end_turn"),
             meta=meta,
             tool_calls=tool_calls,
         )
