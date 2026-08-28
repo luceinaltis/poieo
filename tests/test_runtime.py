@@ -472,6 +472,156 @@ async def test_a_result_is_only_cleared_once(tmp_path, monkeypatch):
     assert all(e.data["freed"] > 0 for e in cleared)
 
 
+def summarizing(call):
+    """The compaction call is the one made without tools.
+
+    An agent turn is always offered the node's toolset, so nothing else in the
+    loop asks the model anything with an empty `tools`.
+    """
+    return not call.tools
+
+
+async def test_a_conversation_under_the_second_cap_is_never_summarized(tmp_path, monkeypatch):
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(6)) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    # Clearing is cheap and fires often; summarizing costs a model call and
+    # loses what it does not keep, so it must not fire until it has to.
+    assert not any(summarizing(c) for c in provider.calls)
+
+
+async def test_an_overgrown_conversation_folds_its_older_turns_into_a_summary(
+    tmp_path, monkeypatch
+):
+    """Clearing empties tool results; the turns themselves still pile up.
+
+    A model's own reasoning and its tool call arguments survive a clearing --
+    a `write_file` carries a whole file body in them -- so past a second, much
+    higher cap the older turns are folded into one summary and the task keeps
+    going from there.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)  # clearing out of the way
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(8)) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    folded = [c for c in provider.calls if summarizing(c)]
+    assert folded, "past the second cap the older turns must be folded"
+    # The task itself is never folded away: it is the whole of what the step
+    # is for, and a summary of it is not it.
+    after = next(c for c in provider.calls if c.tools and c.messages[0]["content"] != "do it")
+    assert after.messages[0]["content"].startswith("do it")
+
+
+async def test_a_summary_never_leaves_a_tool_result_without_its_call(tmp_path, monkeypatch):
+    """The one way this breaks that a provider will not forgive.
+
+    A tool result answers a call, and the two are a pair. Cutting the history
+    anywhere but a turn boundary leaves a result whose call is gone, and both
+    APIs reject that outright -- so the tail after a fold always starts with
+    the model speaking, never with an answer to nobody.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(8)) as pool:
+        await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    for call in provider.calls:
+        seen: set[str] = set()
+        for message in call.messages:
+            for made in message.get("tool_calls") or []:
+                seen.add(made["id"])
+            if message["role"] == "tool":
+                assert message["tool_call_id"] in seen, "a result outlived its call"
+
+
+async def test_a_summary_that_cannot_be_written_does_not_end_the_run(tmp_path, monkeypatch):
+    """A step is not worth losing over the machinery meant to save it."""
+    from poieo.errors import ProviderError
+    from poieo.providers.mock import MockProvider
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    real = MockProvider.complete
+
+    async def refuse_to_summarize(self, request):
+        if not request.tools:
+            raise ProviderError("the summarizer is down", provider="fake", retryable=False)
+        return await real(self, request)
+
+    monkeypatch.setattr(MockProvider, "complete", refuse_to_summarize)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+    result = await run_graph(graph, reads_the_same_file(8), store=store)
+
+    assert result.status == "completed", result.error
+    # Loudly, though: the run log has to say the history was left whole.
+    assert [e for e in store.events if e.type == "node_compact_failed"]
+
+
+async def test_a_fold_that_would_reclaim_little_is_not_worth_the_call(tmp_path, monkeypatch):
+    """Otherwise it fires on every turn once it has fired once.
+
+    A fold leaves exactly `_KEEP_TURNS` turns behind it, so the very next turn
+    is one over the line again -- and folding that single turn away would cost
+    another whole model call. The floor is what stops the loop paying for a
+    summary of nothing, over and over.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 10_000_000)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    async with ProviderPool(binding := reads_the_same_file(8)) as pool:
+        result = await execute(graph, binding, pool, NullStore())
+        provider = pool.get("fake")
+
+    assert result.status == "completed"
+    assert not any(summarizing(c) for c in provider.calls)
+
+
+async def test_folding_says_so_in_the_run_log(tmp_path, monkeypatch):
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+    await run_graph(graph, reads_the_same_file(8), store=store)
+
+    folded = [e for e in store.events if e.type == "node_compacted"]
+    assert folded
+    assert folded[0].data["kept"] == nodes._KEEP_TURNS
+    assert folded[0].data["folded"] > 0
+
+
 async def test_agent_node_fails_cleanly_on_missing_workdir(tmp_path):
     graph = agent_graph(tmp_path / "not-there")
     binding = mock_binding({"worker": "hi"})
