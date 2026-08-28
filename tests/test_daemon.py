@@ -534,7 +534,7 @@ def test_learning_needs_the_daemon_default_binding(tmp_path):
 
 def test_an_unconfigured_daemon_never_learns(tmp_path):
     daemon = Daemon(_learning_config(tmp_path, learn=""))
-    assert daemon._ready_to_learn() is False
+    assert daemon._ready_to_learn(daemon.projects[0]) is False
 
 
 def test_a_bare_tasks_folder_inside_a_project_joins_it(tmp_path):
@@ -572,7 +572,7 @@ def test_a_bare_tasks_folder_outside_a_project_is_its_own(tmp_path):
 
 def test_a_daemon_without_a_memory_folder_never_learns(tmp_path):
     daemon = Daemon(_learning_config(tmp_path, memory=False))
-    assert daemon._ready_to_learn() is False
+    assert daemon._ready_to_learn(daemon.projects[0]) is False
 
 
 def test_half_an_opt_in_says_so_at_load(tmp_path, caplog):
@@ -598,10 +598,10 @@ def test_a_busy_daemon_waits_its_turn(tmp_path):
     from types import SimpleNamespace
 
     daemon = Daemon(_learning_config(tmp_path))
-    assert daemon._ready_to_learn() is True
+    assert daemon._ready_to_learn(daemon.projects[0]) is True
 
     daemon.runners = [SimpleNamespace(status="running")]
-    assert daemon._ready_to_learn() is False
+    assert daemon._ready_to_learn(daemon.projects[0]) is False
 
 
 async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch):
@@ -617,7 +617,7 @@ async def test_a_failing_pass_never_takes_the_daemon_down(tmp_path, monkeypatch)
     monkeypatch.setattr(service, "learn_pass", blow_up)
     spec = load_binding(EXAMPLES / "models/mock.yaml")
     async with ProviderPool(spec) as pool:
-        await daemon._learn_once(spec, pool)  # must not raise
+        await daemon._learn_once(daemon.projects[0], spec, pool)  # must not raise
 
 
 def test_a_zero_learn_interval_fails_at_load(tmp_path):
