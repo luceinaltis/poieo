@@ -226,19 +226,30 @@ _NO_BINDING = (
 
 
 def _find_binding(
-    binding: "Path | None", task: "CardSpec | None"
+    binding: "Path | None", task: "CardSpec | None", where: "Path | None" = None
 ) -> "tuple[Path | None, Path | None]":
-    """The binding chain: the flag, then the card, then the project.
+    """The binding chain: the flag, then the card, then the card's project.
 
     ``supplied_by`` is the poieo.yaml that filled the silence, None when the
     user named the binding. Automatic is fine, invisible is not, so callers
     echo it.
+
+    The project is the card's, found from ``where`` the card sits -- not from
+    where the terminal happens to be. Searched from the working directory, the
+    same card run from two places got two different bindings, and a card under
+    no project at all quietly borrowed one from whatever the shell was standing
+    in. The store already resolves this way (``layout_for(task.dir)``); this is
+    the same rule for the binding.
+
+    ``where`` is passed rather than read off the card because callers expand a
+    card before they get here, and an expanded card is a different object with
+    no directory of its own. The path the user named always has one.
     """
     if binding is not None:
         return binding, None
     if task is not None and task.binding:
         return task.resolve(task.binding), None
-    project = find_project()
+    project = find_project(where)
     if project is not None and project.binding:
         return project.resolve_path(project.binding), project.source_path
     return None, None
@@ -308,7 +319,7 @@ def validate(
     if homeless:
         report["workdir_open"] = homeless
 
-    binding, supplied_by = _find_binding(binding, task)
+    binding, supplied_by = _find_binding(binding, task, graph_path.parent)
     if binding:
         try:
             spec = load_binding(binding)
@@ -569,7 +580,7 @@ def run(
     graph = _load_spec(graph_path, task)
     # The flag wins; otherwise the card answers for itself; otherwise the
     # project does.
-    binding, supplied_by = _find_binding(binding, task)
+    binding, supplied_by = _find_binding(binding, task, graph_path.parent)
     if binding is None:
         _fail(_NO_BINDING)
     spec = load_binding(binding)
@@ -1200,7 +1211,7 @@ def learn(
     """Read what has run, and write down what stays true."""
     task, project = _memory_target(path)
 
-    binding, _ = _find_binding(binding, task)
+    binding, _ = _find_binding(binding, task, path.parent if path is not None else None)
     if binding is None:
         _fail(_NO_BINDING)
     spec = load_binding(binding)

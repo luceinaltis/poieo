@@ -582,6 +582,61 @@ def test_run_without_any_binding_names_both_ways_out(tmp_path):
     assert "-b" in result.stderr and "binding:" in result.stderr
 
 
+def test_a_card_takes_the_project_it_sits_in_not_the_one_you_stand_in(tmp_path, monkeypatch):
+    """Which project answers for a card is a fact about the card's location.
+
+    It used to be a fact about the shell's: `_find_binding` searched upward
+    from the working directory, so the same card run from two places got two
+    different bindings -- and a card sitting under no project at all quietly
+    borrowed one from wherever the terminal happened to be. That also made
+    this file's own "no binding" test pass or fail depending on where the
+    checkout lived, which is how it was found.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "work").mkdir(parents=True)
+    card = elsewhere / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: say hello\n")
+
+    standing_in = tmp_path / "a-project"
+    standing_in.mkdir()
+    (standing_in / "poieo.yaml").write_text("version: 1\nbinding: models.yaml\n")
+    (standing_in / "models.yaml").write_text(
+        "name: b\nversion: 1\nproviders:\n  fake: {type: mock}\n"
+        "default: {provider: fake, model: m}\n"
+    )
+    monkeypatch.chdir(standing_in)
+
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+
+    # The card is under no project, so there is no binding -- whatever project
+    # the terminal happens to be standing in.
+    assert result.exit_code == 1
+    assert "-b" in result.stderr and "binding:" in result.stderr
+
+
+def test_a_card_under_a_project_takes_it_from_anywhere(tmp_path, monkeypatch):
+    """The other half of the same rule: standing somewhere else must not take
+    a card's own project away from it."""
+    project = tmp_path / "project"
+    (project / "work").mkdir(parents=True)
+    (project / "poieo.yaml").write_text("version: 1\nbinding: models.yaml\n")
+    (project / "models.yaml").write_text(
+        "name: b\nversion: 1\nproviders:\n"
+        "  fake: {type: mock, options: {responses: {\"*\": ok}}}\n"
+        "default: {provider: fake, model: m}\n"
+    )
+    card = project / "card.yaml"
+    card.write_text("name: hello\nfolder: work\nprompt: say hello\n")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+
+    result = runner.invoke(app, ["run", str(card), "--no-log"])
+
+    assert result.exit_code == 0, result.output
+
+
 def test_run_flag_still_wins_over_the_card(tmp_path):
     result = runner.invoke(
         app,
