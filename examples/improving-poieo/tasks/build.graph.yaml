@@ -16,9 +16,12 @@ nodes:
     tools: [files, shell]
     max_turns: 40
     prompt: |
-      Build this, and nothing else:
+      Build this, and nothing else. Two cards can wake you: shape hands you a
+      proposal to build, review hands you findings on a change you already
+      made. Read which it is from what follows, and in the second case fix
+      what it names rather than starting again.
 
-      {{ input.get('sender', {}).get('outputs', {}).get('look', '(nothing was handed over -- stop and say so)') }}
+      {{ input.get('sender', {}).get('outputs', {}).get('carry', '(nothing was handed over -- stop and say so)') }}
 
       This project is test-first and its rules are in CLAUDE.md. Read it before
       your first commit. In short:

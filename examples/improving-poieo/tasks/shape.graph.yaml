@@ -16,7 +16,7 @@ nodes:
     prompt: |
       Here is a proposal for the next thing to build in this project:
 
-      {{ input.get('sender', {}).get('outputs', {}).get('look', '(nothing was proposed)') }}
+      {{ input.get('sender', {}).get('outputs', {}).get('pick', '(nothing was proposed)') }}
 
       Answer with exactly one word and nothing else.
 
@@ -30,3 +30,18 @@ nodes:
       turning it away after it is written costs an afternoon.
     output:
       as: verdict
+    next: carry
+
+  # Carries the proposal one hop further.
+  #
+  # A handoff brings only the *immediate* sender's outputs, and by the time
+  # build is woken the proposal is two hops back in scout. Without this, build
+  # is handed a verdict and no proposal, and says so.
+  - id: carry
+    type: agent
+    role: reader
+    prompt: |
+      Reply with exactly the following text and nothing else. Do not summarise
+      it, do not comment on it, do not add a preamble.
+
+      {{ input.get('sender', {}).get('outputs', {}).get('pick', '(nothing was proposed)') }}

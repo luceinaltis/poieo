@@ -41,3 +41,17 @@ nodes:
       Otherwise LAND.
     output:
       as: verdict
+    next: carry
+
+  # Carries the findings back to whoever has to act on them.
+  #
+  # Named `carry` to match shape's, because build has two possible senders and
+  # cannot know which one woke it: one hands it a proposal to build, the other
+  # findings to fix. One key, read the same way, described in build's own
+  # prompt as either.
+  - id: carry
+    type: agent
+    role: reader
+    prompt: |
+      Repeat, exactly and with nothing added, everything you just wrote down
+      as findings -- or the words "no findings" if that is what you found.
