@@ -15,7 +15,7 @@ server and the client keep them together so they stay easy to count.
 
 | route | does |
 |---|---|
-| `GET /api/tasks` | every task: status, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/tasks` | the project whose board this is, then every task: status, trigger, last run, how much is waiting for review, and its wiring |
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
@@ -31,8 +31,17 @@ you are adding a third of them, stop. **Control** routes touch the daemon's
 runtime state and nothing else: no file, no schedule on disk, nothing that
 survives a restart.
 
-`create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`), which
+`create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`, `.config`), which
 is what makes the API testable without a running daemon.
+
+### Whose board this is
+
+`/api/tasks` answers `{project, tasks}`, and `project` is `{name, root}`. It
+rides on the listing rather than on each row because the listing that most needs
+naming is the empty one — with no tasks to recognise, one daemon's page is
+another's. The page puts the name in the bar and in `document.title`, since two
+boards open side by side are two tabs, and hangs the folder off the label as a
+tooltip: two worktrees of one repository can share a name, but not a path.
 
 ### The wiring on `/api/tasks`
 

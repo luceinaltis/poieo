@@ -10,15 +10,20 @@ from test_workspace import git, head, make_repo
 from poieo.binding import BindingSpec
 from poieo.workspace import Workspace
 from poieo.graph import GraphSpec
+from poieo.project import MARKER, ProjectSpec
 from poieo.store import Event, RunStore
 from poieo.web.events import BroadcastStore
 from poieo.web import server
 from poieo.web.server import create_app, sse_frame, _event_stream
 
 
-def stub_daemon(tmp_path, runners=()):
+def stub_daemon(tmp_path, runners=(), project_name=None):
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
-    return SimpleNamespace(runners=list(runners), store=store)
+    # A real ProjectSpec: the board's title comes off `display_name`, and a
+    # stub would let the fallback drift from what a nameless project shows.
+    project = ProjectSpec(name=project_name)
+    project.source_path = tmp_path / MARKER
+    return SimpleNamespace(runners=list(runners), store=store, config=project)
 
 
 # A real GraphSpec, not a stub: the wiring the board is served comes straight
@@ -425,7 +430,13 @@ def daemon_with_two_changes(tmp_path):
         )
 
     runner = stub_runner(name="chores", workspace=point)
-    return SimpleNamespace(runners=[runner], store=store), repo, changes
+    project = ProjectSpec()
+    project.source_path = tmp_path / MARKER
+    return (
+        SimpleNamespace(runners=[runner], store=store, config=project),
+        repo,
+        changes,
+    )
 
 
 def test_flows_reports_how_much_is_waiting_and_where_it_would_go(tmp_path):
@@ -572,3 +583,25 @@ def test_the_page_is_revalidated_but_its_assets_are_not(tmp_path, monkeypatch):
     asset = client.get("/assets/app-abc123.js")
     assert "max-age=31536000" in asset.headers["cache-control"]
     assert "immutable" in asset.headers["cache-control"]
+
+
+# -- whose board this is ------------------------------------------------------
+
+
+def test_the_board_says_which_project_it_is_showing(tmp_path):
+    daemon = stub_daemon(tmp_path, [stub_runner()], project_name="night shift")
+    client = TestClient(create_app(daemon))
+
+    body = client.get("/api/tasks").json()
+    assert body["project"] == {"name": "night shift", "root": str(tmp_path)}
+
+
+def test_a_board_with_nothing_on_it_still_says_whose_it_is(tmp_path):
+    # The listing a reader most needs named is the empty one: with no tasks to
+    # recognise, the page is otherwise indistinguishable from another daemon's.
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    body = client.get("/api/tasks").json()
+    assert body["tasks"] == []
+    assert body["project"]["name"] == tmp_path.name

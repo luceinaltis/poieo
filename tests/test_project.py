@@ -12,7 +12,7 @@ from conftest import card
 from poieo import detect as detect_module
 from poieo.cli import app
 from poieo.detect import Engine
-from poieo.project import find_project, find_project_file
+from poieo.project import find_project, find_project_file, load_project
 
 runner = CliRunner()
 
@@ -604,3 +604,33 @@ def test_the_daemon_config_is_a_project_and_reads_the_same_keys(tmp_path):
     # ...and only the full load reads the cards into tasks.
     assert [f.name for f in full.tasks] == ["alpha", "beta", "gamma"]
     assert shallow.cards == full.cards  # the shallow read stops at the folder
+
+
+# -- what a project is called -------------------------------------------------
+#
+# Two daemons on two ports serve two boards that look identical. The name is
+# how a reader tells them apart, so it has to exist for every project, not
+# only the ones whose author thought to write one down.
+
+
+def test_a_project_is_named_for_its_folder_when_it_does_not_say(tmp_path):
+    marker = _mark(tmp_path / "chores")
+    assert load_project(marker).display_name == "chores"
+
+
+def test_a_project_that_names_itself_wins_over_its_folder(tmp_path):
+    marker = _mark(tmp_path / "chores", "version: 1\nname: night shift\n")
+    assert load_project(marker).display_name == "night shift"
+
+
+def test_two_worktrees_of_one_repo_can_still_be_told_apart(tmp_path):
+    # The case the key exists for: a worktree is a second folder with the same
+    # name as the first, and the folder name alone says "poieo" for both.
+    main = _mark(tmp_path / "a" / "poieo", "version: 1\nname: poieo (main)\n")
+    tree = _mark(tmp_path / "b" / "poieo", "version: 1\nname: poieo (web-frontend)\n")
+    assert load_project(main).display_name != load_project(tree).display_name
+
+
+def test_a_blank_name_falls_back_rather_than_showing_nothing(tmp_path):
+    marker = _mark(tmp_path / "chores", 'version: 1\nname: "  "\n')
+    assert load_project(marker).display_name == "chores"
