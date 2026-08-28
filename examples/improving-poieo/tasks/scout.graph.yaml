@@ -1,42 +1,66 @@
 # Find one thing worth building next.
 #
-# Reading only. The proposal leaves as a node output rather than a file,
-# because the flow that builds it works in its own private copy and would not
-# see a file this one wrote.
+# Two nodes, and the split is the point. Told to "read the roadmap and the
+# component docs" and propose something, a capable model read twenty-one files
+# across twelve turns and never reached a conclusion -- the step was
+# open-ended, not the model slow. Naming the files is what makes it finish.
+#
+# Then deciding happens in a node with no hands, which cannot wander off to
+# read one more file instead of answering.
 name: scout
 version: 1
-entry: look
+entry: survey
 
 nodes:
-  - id: look
+  - id: survey
     type: agent
     role: reader
     tools: [files]
-    max_turns: 12
+    max_turns: 10
+    # More room than the role's default. This family reasons, some endpoints
+    # refuse to have it turned off, and the thinking is spent out of the same
+    # budget as the answer -- at a tighter budget the survey came back cut off
+    # mid-sentence and the node after it had nothing to work from.
+    params:
+      max_tokens: 3000
     prompt: |
-      You are looking for the next small thing to build in this project.
+      Read exactly these, and nothing else:
 
-      Read DESIGN.md first -- its Roadmap says what has shipped and what has
-      not, and its Non-goals say what this project has decided against.
+        DESIGN.md         its Roadmap says what has shipped and what has not,
+                          and its Non-goals say what is not wanted
+        docs/README.md    the index of one document per component
 
-      Then read docs/README.md, which indexes one document per component, and
-      the component document nearest whatever DESIGN.md says is unfinished.
-      Those describe how the code is shaped today; where one promises
-      something the code does not do, that gap is a candidate.
+      Then read at most TWO component documents from docs/ -- whichever the
+      roadmap suggests is least finished.
+
+      Report what you found as a short list of gaps: places where DESIGN.md or
+      a component document promises something the code is not described as
+      doing. Five lines at most. Do not propose anything yet, and do not read
+      anything else.
 
       Do not go looking in docs/archive/. It is history -- accurate about the
-      intent on the day it was written, and not guaranteed to describe the
-      code now. Nothing new is written there.
+      intent on the day it was written, and not guaranteed to describe the code
+      now. Nothing new is written there.
+    output:
+      as: survey
+    next: pick
 
-      Propose exactly one thing to build. It must be small enough that one
-      person would land it as a single commit: one behaviour, one test.
+  - id: pick
+    type: agent
+    role: reader
+    prompt: |
+      These are the gaps someone found in this project:
 
-      Reply with:
+      {{ survey }}
+
+      Choose exactly one to build. It must be small enough that one person
+      would land it as a single commit: one behaviour, one test.
+
+      Reply in exactly this shape and nothing else:
+
         WHAT   one line, what to build
         WHY    one line, what makes it the next thing
         WHERE  the files you expect to touch
         TEST   the test that should fail before it and pass after
-
-      Nothing else. Do not start building it.
     output:
       as: proposal
