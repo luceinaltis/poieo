@@ -29,7 +29,13 @@ optional because the folder name answers for it nearly always -- `display_name`
 falls back to the folder, and to the folder again if the key is blank. It earns
 its place in the one case the folder cannot cover: a worktree is a second folder
 with the *same* name as the first, so two daemons on two ports serve two boards
-that are otherwise indistinguishable. `poieo init` does not write the key.
+that are otherwise indistinguishable.
+
+`poieo init` writes the key, filled in with the folder's name, and `--name`
+sets it instead. The folder is a good guess and a bad default: written into the
+file it is a starting point a reader can see and change, where left as a
+fallback it is a rule they have to be told about. The fallback stays for the
+markers people write by hand, which are most of them.
 
 There is no list of jobs here. `flows:` was one, and a marker that still carries
 it is refused by name rather than by "not a setting here" -- a list in a shared
