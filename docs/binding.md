@@ -146,7 +146,15 @@ Forty of OpenRouter's models disagree with themselves like this. Ollama's gap is
 sixty-four fold, because `/api/show` describes the file on disk and the server
 loads it with whatever `num_ctx` it was told. **Nothing announces the
 difference** — an endpoint asked to hold more than it loaded simply drops the
-rest — so the smaller number is the only safe one to believe. It is the second place the runtime looks: the binding's
+rest — so the smaller number is the only safe one to believe.
+
+**The two answers keep for different lengths of time, and are cached
+accordingly.** OpenRouter's is a property of a deployment and holds for the
+process. Ollama's is "what is loaded right now", and a single request from any
+client — poieo, or the editor somebody has open beside it — reloads the model at
+a different size: measured, `num_ctx=16384` took 5.43s to load and the next
+plain request took 3.91s to put 4,096 back. So that one is asked every time, and
+being wrong about it is caught at runtime rather than prevented here. It is the second place the runtime looks: the binding's
 `context:` is the first, because somebody who wrote the number down meant it.
 Implementations cache; a window does not change while a process runs, and this
 must not become a round trip per turn. An endpoint that will not answer is not

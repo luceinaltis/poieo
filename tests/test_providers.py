@@ -265,6 +265,29 @@ async def test_ollama_is_asked_what_it_loaded_not_what_the_model_could_do():
     await provider.aclose()
 
 
+async def test_ollama_is_asked_every_time_because_the_answer_can_change():
+    """The OpenAI-shaped answer is a property of a deployment and holds for the
+    process. This one is "what is loaded right now", and a single request from
+    any client reloads the model at a different size -- measured, `num_ctx`
+    16384 took 5.43s to load and the next plain request took 3.91s to put 4096
+    back. A localhost GET is cheaper than being wrong about that.
+    """
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+    tries = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        tries.append(1)
+        return httpx.Response(
+            200, json={"models": [{"name": "qwen3.5:latest", "context_length": 4_096}]}
+        )
+
+    _mock_client(provider, handler)
+    assert await provider.context_for("qwen3.5:latest") == 4_096
+    assert await provider.context_for("qwen3.5:latest") == 4_096
+    assert len(tries) == 2
+    await provider.aclose()
+
+
 async def test_ollama_says_nothing_about_a_model_it_has_not_loaded():
     """And does not remember the silence -- the model is loaded by the first
     call to it, so the next node can get a real answer."""

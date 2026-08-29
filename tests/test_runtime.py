@@ -631,6 +631,153 @@ async def test_nothing_to_clear_means_nothing_to_retry(tmp_path, monkeypatch):
     assert not [e for e in store.events if e.type == "node_retried_smaller"]
 
 
+class _QuietlyTruncates:
+    """Reports having read less than it was sent, and says nothing about it.
+
+    Measured against a real Ollama at num_ctx 4096: sending 45,000 characters
+    after 18,000 made `prompt_eval_count` *fall* from 4,010 to 2,050. No error,
+    no flag -- the model just answers from a conversation with its beginning
+    missing.
+    """
+
+    instances: dict[str, "_QuietlyTruncates"] = {}
+
+    def __init__(self, name, spec):
+        from poieo.providers.mock import MockProvider
+
+        self.inner = MockProvider(name, spec)
+        self.ceiling = spec.options.get("ceiling", 0)
+        _QuietlyTruncates.instances[name] = self
+
+    async def complete(self, request):
+        from poieo.providers.base import Usage
+
+        response = await self.inner.complete(request)
+        if self.ceiling and response.usage.input_tokens > self.ceiling:
+            response.usage = Usage(
+                input_tokens=self.ceiling // 2,   # what Ollama actually does
+                output_tokens=response.usage.output_tokens,
+            )
+        return response
+
+    async def context_for(self, model):
+        return None
+
+    async def health(self):
+        return True, "truncates"
+
+    async def aclose(self):
+        return
+
+
+def truncating_binding(responses, ceiling):
+    from poieo.providers import register
+
+    register("truncates", _QuietlyTruncates)
+    return BindingSpec.model_validate(
+        {
+            "providers": {
+                "t": {
+                    "type": "truncates",
+                    "options": {"responses": responses, "ceiling": ceiling},
+                }
+            },
+            "default": {"provider": "t", "model": "m"},
+        }
+    )
+
+
+def reading_script(times, path="big.txt"):
+    turn = {"tool_calls": [{"name": "read_file", "arguments": {"path": path}}]}
+    return {"worker": [dict(turn) for _ in range(times)] + ["done"]}
+
+
+async def test_an_endpoint_that_drops_our_conversation_is_noticed(tmp_path, monkeypatch):
+    """The conversation only ever grows, so the count the endpoint reports for
+    it must grow too. When it does not, the endpoint kept less than we sent --
+    and no estimate was needed to work that out."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    await run_graph(graph, truncating_binding(reading_script(6), ceiling=1_500), store=store)
+
+    dropped = [e for e in store.events if e.type == "node_input_dropped"]
+    assert dropped
+    assert dropped[0].data["kept"] < dropped[0].data["before"]
+
+
+async def test_a_turn_that_cleared_is_expected_to_shrink(tmp_path, monkeypatch):
+    """Clearing makes the count fall on purpose. Reading that as the endpoint
+    dropping something would cry wolf on the loop's own housekeeping."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    await run_graph(graph, mock_binding(reading_script(6)), store=store)
+
+    assert [e for e in store.events if e.type == "node_context_cleared"]
+    assert not [e for e in store.events if e.type == "node_input_dropped"]
+
+
+async def test_a_provider_that_counts_nothing_is_not_accused(tmp_path, monkeypatch):
+    """No measurement and a bad measurement are different facts. A backend
+    that reports zero has not told us anything, and zero is not a fall."""
+    from poieo.runtime import nodes
+    from poieo.providers.base import Usage
+    from poieo.providers.mock import MockProvider
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    real = MockProvider.complete
+
+    async def silent(self, request):
+        response = await real(self, request)
+        response.usage = Usage(input_tokens=0, output_tokens=1)
+        return response
+
+    monkeypatch.setattr(MockProvider, "complete", silent)
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    await run_graph(graph, mock_binding(reading_script(6)), store=store)
+
+    assert not [e for e in store.events if e.type == "node_input_dropped"]
+
+
+async def test_a_result_too_large_to_fit_is_replaced_with_what_to_do(tmp_path, monkeypatch):
+    """The case clearing cannot reach.
+
+    `_clear_old_results` always keeps the most recent few, so a single file
+    bigger than the whole window survives every clearing and every retry. Once
+    we know it did not fit, saying so beats failing -- and `read_file` has
+    taken `offset` and `limit` since #178, which the model has never once used.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    (tmp_path / "huge.txt").write_text("x" * 40_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    await run_graph(
+        graph,
+        truncating_binding(reading_script(6, path="huge.txt"), ceiling=1_500),
+        store=store,
+    )
+
+    said = [e for e in store.events if e.type == "node_input_dropped"]
+    assert said
+    # And the model is told, in the result's own place, what to do instead.
+    assert any("offset" in str(e.data.get("note", "")) for e in said)
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)

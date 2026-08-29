@@ -91,7 +91,8 @@ the runtime stays unaware that containers, or journals, exist at all — see
 
 `ctx.emit()` appends one event to the run's stream. The event types are
 `run_started`, `node_started`, `node_retry`, `node_turn`, `node_tool_call`,
-`node_context_cleared`, `node_retried_smaller`, `node_compacted`, `node_compact_failed`,
+`node_context_cleared`, `node_retried_smaller`, `node_input_dropped`,
+`node_compacted`, `node_compact_failed`,
 `node_finished`, `run_finished`, `run_failed`, `run_aborted`, and
 `run_change` and `run_change_failed` (both written by the daemon, not here).
 
@@ -214,6 +215,32 @@ and only when clearing found something to clear.** A refusal with nothing older
 to drop was not about size, or was about a size nothing here can help, and
 sending it again would buy the same answer twice. `node_retried_smaller` says
 when it happened and what it freed.
+
+**Not every endpoint refuses. Some just keep less.** Ollama past `num_ctx`
+truncates the prompt and answers anyway, so the model replies from a
+conversation with its beginning missing and nothing says a word. Measured
+against a real one at 4,096: sending 45,000 characters after 18,000 made the
+reported count **fall from 4,010 to 2,050**.
+
+The invariant that catches it needs no estimate. **A conversation only grows,
+so the count the endpoint reports for it must grow too.** When it does not, and
+the loop did not itself shrink anything that turn, the endpoint kept less than
+it was sent. Both counts have to be real numbers: a backend that reports zero
+has not told us anything, and no measurement is a different fact from a bad
+one.
+
+What follows is the same ladder as everywhere else -- clear the oldest results,
+then, only if nothing old enough is left, replace the newest one. That last
+step is the case clearing cannot reach: a single file larger than the window
+survives every clearing and every retry. It is only safe *after* the endpoint
+has shown it did not fit; doing it beforehand would make the tool call
+pointless and have the model read the same file forever. And it is replaced
+with what to do rather than only that something is gone -- `read_file` has
+taken `offset` and `limit` since the windows arrived, and a step measured here
+used them zero times out of thirty-six.
+
+With nothing left to drop the node fails, carrying `window_too_small`. Without
+that, a truncating endpoint would be answered forever with garbage.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with

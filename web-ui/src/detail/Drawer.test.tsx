@@ -178,6 +178,21 @@ test("machinery that could not do its job says so in the timeline", async () => 
   expect(rows[1].textContent).toContain("summarizer")
 })
 
+test("an endpoint that dropped our conversation says so in the timeline", async () => {
+  // The quiet failure. Ollama past num_ctx does not refuse -- it truncates and
+  // answers, so the model replies from a conversation with its beginning
+  // missing and nothing anywhere says a word.
+  await show([
+    event("node_input_dropped", {
+      data: { turn: 6, before: 4010, kept: 2050, freed: 8000, note: "" },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="stuck"]')!
+  expect(entry.textContent).toContain("4,010")
+  expect(entry.textContent).toContain("2,050")
+})
+
 test("a tool worth waiting for reports how long it took", async () => {
   await show([event("node_tool_call", { data: { name: "run_tests", duration_ms: 4200 } })])
 
