@@ -168,6 +168,11 @@ async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeyp
     noticed at noon would run with none -- rebuilding a throwaway container
     every run while believing it was fenced."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    # The refusal is the thing under test, not whether this machine has docker
+    # and that image. Left real, the load fails first on a runner without them
+    # and the card is refused for the wrong reason -- which is how this passed
+    # here and failed on all three CI legs.
+    monkeypatch.setattr("poieo.daemon.config.check_isolation", lambda tasks: None)
     daemon = Daemon(_project(tmp_path), store=NullStore())
     task = await _up(daemon)
 
