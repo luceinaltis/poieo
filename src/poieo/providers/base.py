@@ -36,6 +36,18 @@ class Usage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    # How much of the writing was thinking. Endpoints that reason report it
+    # separately, and it is the only direct answer to a question this project
+    # has otherwise had to infer from how long a turn took.
+    reasoning_tokens: int = 0
+    # What the endpoint says it charged, in whatever currency it bills in.
+    #
+    # **`None` is not zero.** Zero is a local model that really costs nothing;
+    # None is an endpoint that was not asked or does not say, and a spend limit
+    # cannot be enforced against it. Keeping a price table here instead would
+    # go stale silently and be wrong in the direction nobody checks, which is
+    # the reasoning that kept a table of context windows out too.
+    cost: float | None = None
 
     def merge(self, other: Usage) -> Usage:
         return Usage(
@@ -43,14 +55,22 @@ class Usage:
             self.output_tokens + other.output_tokens,
             self.cache_read_tokens + other.cache_read_tokens,
             self.cache_write_tokens + other.cache_write_tokens,
+            self.reasoning_tokens + other.reasoning_tokens,
+            # Two unknowns add to an unknown; a known and an unknown add to
+            # what is known, because a total that silently dropped a charge
+            # would be worse than one that is merely incomplete.
+            None if self.cost is None and other.cost is None
+            else (self.cost or 0.0) + (other.cost or 0.0),
         )
 
-    def as_dict(self) -> dict[str, int]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "cache_read_tokens": self.cache_read_tokens,
             "cache_write_tokens": self.cache_write_tokens,
+            "reasoning_tokens": self.reasoning_tokens,
+            "cost": self.cost,
         }
 
 

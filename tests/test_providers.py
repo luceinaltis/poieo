@@ -153,6 +153,73 @@ async def test_openai_compatible_provider_counts_the_cache_it_read():
     assert response.usage.cache_write_tokens == 400
 
 
+async def test_an_endpoint_that_says_what_it_charged_is_believed():
+    """What a run cost is a number the endpoint has and we do not.
+
+    OpenRouter answers with it when asked -- `cost`, and a breakdown beside
+    it -- so a spend limit can be enforced against what was actually billed
+    rather than against a price table living here, going stale, and being
+    wrong in a direction nobody notices. The same reasoning that kept a table
+    of context windows out of this repository.
+    """
+    provider = build_provider(
+        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "glm",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {
+                    "prompt_tokens": 14,
+                    "completion_tokens": 16,
+                    "cost": 5.05e-06,
+                    "completion_tokens_details": {"reasoning_tokens": 9},
+                },
+            },
+        )
+
+    _mock_client(provider, handler)
+    response = await provider.complete(
+        LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}])
+    )
+    await provider.aclose()
+
+    assert response.usage.cost == 5.05e-06
+    # And how much of the writing was thinking, which until now could only be
+    # guessed at from how long a turn took.
+    assert response.usage.reasoning_tokens == 9
+
+
+async def test_an_endpoint_that_charges_nothing_says_nothing():
+    """A local model costs nothing and reports nothing, and zero is the honest
+    answer for it -- but `None` would be the honest answer for a paid endpoint
+    that simply was not asked. They are told apart by the field being absent."""
+    provider = build_provider(
+        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "qwen",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2},
+            },
+        )
+
+    _mock_client(provider, handler)
+    response = await provider.complete(
+        LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}])
+    )
+    await provider.aclose()
+
+    assert response.usage.cost is None
+
+
 async def test_openai_compatible_provider_reports_no_cache_when_none_is_offered():
     """Ollama and a plain llama.cpp server send no `prompt_tokens_details` at
     all. Absent must read as zero rather than raising."""

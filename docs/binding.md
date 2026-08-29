@@ -89,6 +89,38 @@ Written as an effort level (`reasoning: {effort: "medium"}`) it says the same
 thing more honestly, and does not depend on a ratio to a second number. Use the
 token form when the endpoint really does take a budget.
 
+### What a run cost, from the endpoint rather than a table
+
+`Usage` carries `cost` alongside the token counts, and `reasoning_tokens` beside
+the output ones. Both come from the endpoint. OpenRouter reports them when the
+request asks:
+
+```yaml
+params:
+  usage: {include: true}
+```
+
+which reaches it through the same passthrough as everything else. The response
+then carries what it actually billed:
+
+```json
+"usage": {"prompt_tokens": 14, "completion_tokens": 16, "cost": 5.05e-06,
+          "completion_tokens_details": {"reasoning_tokens": 9}}
+```
+
+**`cost: None` is not zero.** Zero is a local model that really costs nothing;
+`None` is an endpoint that was not asked or does not say. Anything that spends
+against a budget has to tell those apart, or a backend that stays quiet reads as
+free.
+
+It is not sent by default, and that is deliberate: `usage` is an OpenRouter
+extension, and adding an unrecognised key to every request would risk endpoints
+that reject what they do not know.
+
+**No price table lives here.** Prices change, a table would go stale in silence,
+and it would be wrong in the direction nobody checks — the same reasoning that
+kept a table of context windows out.
+
 ### Two questions about roles, and why both exist
 
 `resolve()` falls back to `default` for **any** role at all — that is the point
