@@ -1,0 +1,15 @@
+# Commits that only changed formatting. `git blame` skips them when told to.
+#
+# Worth less than it sounds: git already matches a moved line by itself, and on
+# the reformat below it attributed 1,483 of cli.py's 1,484 lines correctly with
+# this file ignored. It is here for the reformat that git cannot follow.
+#
+# GitHub reads this file by name, with nothing to configure. Locally, once:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only add a commit here that changed nothing but layout. A commit carrying one
+# real edit alongside the reformat would take that edit out of blame with it.
+
+# style: ruff format, and nothing else (#220)
+0faa434413fd4fd8926ed1f1c1b42d49e7b9b72b

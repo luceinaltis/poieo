@@ -152,6 +152,24 @@ of *which* is the whole point:
 Everything past that is deliberately off. Style rules encode somebody's taste,
 and a rule nobody agreed to is a rule that gets argued with in review forever.
 
+`ruff format --check .` runs beside it. `--check`, never a rewrite: CI reports and
+the author commits, because a job that edits the branch it is testing is a job you
+cannot reproduce. The formatter is why `E501` is nearly free — it keeps code under
+the limit on its own, and the eleven lines it cannot reach are the ones worth
+looking at. It never reflows a comment or a docstring, so the prose is yours.
+
+**`.git-blame-ignore-revs` names the reformat**, GitHub reads that file by name,
+and one `git config blame.ignoreRevsFile .git-blame-ignore-revs` does the same
+locally. Only list a commit there that changed nothing but layout — one carrying a
+real edit alongside would take that edit out of blame with it.
+
+It earned less than it was argued for. Measured on `cli.py`, the most reformatted
+file: 1,483 of its 1,484 lines already blamed to whoever wrote them *without* the
+file, because git matches a moved line on its own. The objection that a reformat
+destroys history is largely folklore, and it was the objection this PR series
+first refused the formatter over. The file stays because the next reformat may be
+one git cannot follow, and because it costs nothing until then.
+
 `src/poieo/editor.py` and `src/poieo/viewer.py` are exempt from `E501`. They hold
 JavaScript and CSS inside Python strings, where a `# noqa` would be written into
 the asset rather than the module — the line cannot be excused where it sits.
