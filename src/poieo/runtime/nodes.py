@@ -507,6 +507,12 @@ class AgentNode(Node):
             # attempt per node -- more than that and a genuinely broken
             # request gets paid for over and over.
             went_again = False
+            # When this step must be finished by, if the graph said. Checked at
+            # the top of a turn rather than raced against the model call: a
+            # request already sent is paid for whether or not the answer is
+            # kept, and cancelling it mid-flight would waste the tokens it was
+            # set to save.
+            expires = time.monotonic() + spec.deadline if spec.deadline else None
             # Whether the loop itself made the conversation smaller since the
             # last count. Clearing and folding do that on purpose, and reading
             # their effect as the endpoint dropping something would have the
@@ -525,6 +531,12 @@ class AgentNode(Node):
             while True:
                 if ctx.cancel is not None and ctx.cancel.is_set():
                     raise RunAborted(f"cancelled during agent node '{spec.id}'")
+                if expires is not None and time.monotonic() >= expires:
+                    raise NodeError(
+                        f"node '{spec.id}' passed its deadline ({spec.deadline}s) "
+                        f"after {turns} turn(s)",
+                        node_id=spec.id,
+                    )
                 turns += 1
                 # Only past the cap, and then all at once. Clearing on every
                 # turn would move the boundary forward by one result each

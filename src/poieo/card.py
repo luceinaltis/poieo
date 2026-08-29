@@ -92,7 +92,7 @@ def _roster_block(task: CardSpec, roster: list[str] | None) -> str:
 
 # Keys that describe the single generated node, and therefore have nowhere to
 # go once the task names a graph of its own.
-_NODE_KEYS = ("prompt", "role", "tools", "max_turns")
+_NODE_KEYS = ("prompt", "role", "tools", "max_turns", "deadline")
 
 
 class CardSpec(BaseModel):
@@ -131,6 +131,9 @@ class CardSpec(BaseModel):
     role: str | None = None
     tools: list[str] | None = None
     max_turns: int = Field(default=DEFAULT_MAX_TURNS, ge=1, le=200)
+    # Seconds this task's step may work for. The unit a person can reason
+    # about: "this fires hourly, so it must not take an hour".
+    deadline: float | None = Field(default=None, gt=0)
     enabled: bool = True
     binding: str | None = None
     # Where this task's commands may run. Absent means the host, as before.
@@ -267,6 +270,7 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
                 # task had a private copy of it open -- which is every night.
                 tools=task.tools or list(DEFAULT_TOOLSETS),
                 max_turns=task.max_turns,
+                deadline=task.deadline,
                 system=system_block(task, roster),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
