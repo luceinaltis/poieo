@@ -1,19 +1,20 @@
-"""What the board may say about the models a project runs on.
+"""Every model this project can reach, endpoint by endpoint.
 
-One route, and a fence: it names the variable a credential comes from and never
-the credential. `/api/tasks` still carries neither that nor an address --
-see `test_the_wiring_carries_no_credentials` in test_web_server.py, which is the
-other half of this pair.
+Asked live, for the reason `poieo config models` is asked live. And a fence:
+the report names the variable a credential comes from and never the
+credential. `/api/tasks` still carries neither that nor an address -- see
+`test_the_wiring_carries_no_credentials` in test_web_server.py, the other half
+of this pair.
 
 Design: docs/web.md
 """
 
-from pathlib import Path
-
 from starlette.testclient import TestClient
 
 from conftest import card
+from poieo import detect as detect_module
 from poieo.daemon import Daemon, load_config
+from poieo.detect import Served
 from poieo.store import NullStore
 from poieo.web import create_app
 
@@ -33,19 +34,43 @@ roles:
   reader: {provider: fake, model: m2}
 """
 
+# What one endpoint answers with, keyed by the type asked. Nothing here reaches
+# a socket: the route's whole job is to ask, so the asking is what is stubbed.
+CATALOGUE = {
+    "mock": (),
+    "ollama": (
+        Served(
+            id="qwen3.5:latest",
+            context=262144,
+            size="9.0B",
+            quantization="Q4_K_M",
+            capabilities=("completion", "vision"),
+        ),
+    ),
+    "openai_compatible": (
+        Served(id="qwen/flash", context=1000000, price=(0.15, 0.47)),
+    ),
+}
+
+
+def _asks(monkeypatch, catalogue=None):
+    served = CATALOGUE if catalogue is None else catalogue
+
+    async def fake(type_, base_url=None):
+        return served.get(type_, ())
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+
 
 def _client(tmp_path, *, binding=_MOCK, tasks=True, name="board"):
     """A daemon that was built but never served.
 
-    A GET needs `daemon.projects` and nothing else, and `runners` is already
-    an empty list before `serve()` fills it -- so this stays a read test
-    rather than a scheduling one, over the real `LoadedProject` the route
-    will actually be handed.
+    A GET needs `daemon.projects` and nothing else, and `runners` is already an
+    empty list before `serve()` fills it -- so this stays a read test rather
+    than a scheduling one, over the real `LoadedProject` the route is handed.
     """
     (tmp_path / "b.yaml").write_text(binding, encoding="utf-8")
-    marker = f"name: {name}\ntasks: cards\n"
-    if binding is not None:
-        marker += "binding: b.yaml\n"
+    marker = f"name: {name}\ntasks: cards\nbinding: b.yaml\n"
     if tasks:
         (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
         card(tmp_path / "cards", "f", "graph: ../g.yaml\ntrigger: {type: manual}\n")
@@ -61,67 +86,158 @@ def _models(client, project="board"):
     return client.get(f"/api/projects/{project}/models")
 
 
-def test_the_models_report_is_what_the_binding_decided(tmp_path):
-    """The same facts `poieo config` prints, so the two front ends cannot
-    disagree about what this project is bound to."""
+def _endpoints(body):
+    return {e["name"]: e for e in body["endpoints"]}
+
+
+_TWO = """\
+name: two
+providers:
+  local: {type: ollama, base_url: "http://localhost:11434"}
+  routed: {type: openai_compatible, base_url: "http://x/v1"}
+default: {provider: local, model: "qwen3.5:latest"}
+"""
+
+
+def test_every_declared_endpoint_is_listed_with_what_it_serves(tmp_path, monkeypatch):
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    assert [e["name"] for e in body["endpoints"]] == ["local", "routed"]
+    assert [m["id"] for m in _endpoints(body)["local"]["models"]] == ["qwen3.5:latest"]
+
+
+def test_a_local_model_carries_what_it_costs_in_memory_and_no_price(tmp_path, monkeypatch):
+    """Ollama charges nothing per token, so there is no price to report. What a
+    local model costs is the size and quantization it does report."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    model = _endpoints(body)["local"]["models"][0]
+    assert (model["size"], model["quantization"]) == ("9.0B", "Q4_K_M")
+    assert model["context"] == 262144
+    assert model["capabilities"] == ["completion", "vision"]
+    assert model["price"] is None
+
+
+def test_a_published_price_crosses_as_input_and_output(tmp_path, monkeypatch):
+    """From the endpoint's own listing, never from a table in this repository."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    assert _endpoints(body)["routed"]["models"][0]["price"] == {
+        "input": 0.15,
+        "output": 0.47,
+    }
+
+
+def test_the_model_in_use_says_which_roles_are_on_it(tmp_path, monkeypatch):
+    """What a reader is using, among what they could be. A model may serve
+    more than one role, so this is a list and not a flag."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    model = _endpoints(body)["local"]["models"][0]
+    assert model["ref"] == "local/qwen3.5:latest"
+    assert model["used_by"] == ["default"]
+    assert _endpoints(body)["routed"]["models"][0]["used_by"] == []
+
+
+def test_an_endpoint_that_cannot_be_asked_says_so_rather_than_reading_as_down(
+    tmp_path, monkeypatch
+):
+    """`mock` answers from the binding file itself. Silence from it is a
+    different fact from an endpoint that did not answer."""
+    _asks(monkeypatch)
     body = _models(_client(tmp_path)).json()
 
-    assert body["binding"]["name"] == "models-for-a-board"
-    assert body["binding"]["path"].endswith("b.yaml")
-    assert body["default"] == "fake/m1"
-    assert body["roles"] == {"reader": "fake/m2"}
-    assert body["providers"]["fake"]["type"] == "mock"
+    assert _endpoints(body)["fake"]["askable"] is False
+    assert _endpoints(body)["fake"]["models"] == []
 
 
-def test_the_models_report_carries_no_address(tmp_path):
+def test_the_report_carries_no_address(tmp_path, monkeypatch):
     """A `base_url` is not needed to pick a model -- the endpoint's own name
-    tells one from another -- and it is the one field in a binding that can
-    carry a private host. Held back until something concrete needs it."""
-    body = _models(_client(tmp_path)).json()
+    tells one from another -- and it is the one binding field that can carry a
+    private host."""
+    _asks(monkeypatch)
+    response = _models(_client(tmp_path, binding=_TWO))
 
-    assert "base_url" not in body["providers"]["fake"]
-    assert "localhost" not in _models(_client(tmp_path)).text
+    assert "base_url" not in response.text
+    assert "localhost" not in response.text
 
 
-def test_the_models_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch):
+def test_the_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch):
     """The one route where a credential is a legitimate subject, and the line
     it holds instead.
 
-    The panel has to be able to say why a model will not answer, which means
-    naming the variable. So what is forbidden is the *value*, and this goes
-    looking for the value rather than trusting the shape of the code.
+    An endpoint whose key is missing lists nothing, and the panel has to be
+    able to say why -- which means naming the variable. So what is forbidden
+    is the *value*, and this goes looking for the value rather than trusting
+    the shape of the code.
     """
     monkeypatch.setenv("POIEO_TEST_KEY", "sk-planted-by-this-test")
+    _asks(monkeypatch)
     binding = _MOCK.replace(
         "fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,"
     )
     response = _models(_client(tmp_path, binding=binding))
 
-    assert response.json()["providers"]["fake"]["api_key_env"] == "POIEO_TEST_KEY"
-    assert response.json()["providers"]["fake"]["api_key_set"] is True
+    assert _endpoints(response.json())["fake"]["api_key_env"] == "POIEO_TEST_KEY"
+    assert _endpoints(response.json())["fake"]["api_key_set"] is True
     assert "sk-planted-by-this-test" not in response.text
 
 
-def test_a_provider_that_names_no_variable_says_so_rather_than_unset(tmp_path):
-    """`null`, not `false`: "its SDK resolves its own" is a different fact
-    from "the key is missing", and a panel that showed a warning for the
-    first would be crying wolf on every local endpoint."""
+def test_an_endpoint_that_names_no_variable_says_null_rather_than_unset(
+    tmp_path, monkeypatch
+):
+    """`null`, not `false`: "its SDK resolves its own" is a different fact from
+    "the key is missing", and a panel warning about the first would cry wolf on
+    every local endpoint."""
+    _asks(monkeypatch)
     body = _models(_client(tmp_path)).json()
 
-    assert body["providers"]["fake"]["api_key_env"] is None
-    assert body["providers"]["fake"]["api_key_set"] is None
+    assert _endpoints(body)["fake"]["api_key_env"] is None
+    assert _endpoints(body)["fake"]["api_key_set"] is None
 
 
 def test_a_variable_that_is_not_set_reads_false(tmp_path, monkeypatch):
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
+    _asks(monkeypatch)
     binding = _MOCK.replace(
         "fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,"
     )
-    # No tasks, so the unset key is not a startup failure -- the panel is
+    # No tasks, so an unset key is not a startup failure -- and the panel is
     # exactly where somebody would go to find out about it.
     body = _models(_client(tmp_path, binding=binding, tasks=False)).json()
 
-    assert body["providers"]["fake"]["api_key_set"] is False
+    assert _endpoints(body)["fake"]["api_key_set"] is False
+
+
+def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
+    """Each endpoint costs up to `HTTP_TIMEOUT` when it is not listening. Asked
+    one at a time, a panel over two dead endpoints waits for both in turn;
+    asked together it waits for the slower one. Measured the way the board's
+    own review states are: by how many were ever in flight together."""
+    import asyncio as _asyncio
+
+    active = 0
+    peak = 0
+    asked: list[str] = []
+
+    async def fake(type_, base_url=None):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        asked.append(type_)
+        await _asyncio.sleep(0.01)  # a real await point, so the other can start
+        active -= 1
+        return ()
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+    _models(_client(tmp_path, binding=_TWO))
+
+    assert sorted(asked) == ["ollama", "openai_compatible"]
+    assert peak == 2
 
 
 def test_a_project_that_names_no_binding_says_so_rather_than_failing(tmp_path):
@@ -133,32 +249,13 @@ def test_a_project_that_names_no_binding_says_so_rather_than_failing(tmp_path):
 
     response = _models(client)
     assert response.status_code == 200
-    assert response.json() == {
-        "binding": None,
-        "providers": {},
-        "default": None,
-        "roles": {},
-    }
+    assert response.json() == {"binding": None, "endpoints": []}
 
 
-def test_a_role_the_binding_cannot_resolve_says_so_rather_than_guessing(tmp_path):
-    """`resolve` falls through to `default` for any role at all, so the only
-    unresolvable one is in a binding with nothing to fall back on.
-
-    Null, not absent -- `poieo config` prints `(unresolvable)` rather than
-    dropping the line, and the role is in the file either way. Hiding it would
-    hide the one case on this screen worth looking at.
-    """
-    partial = "name: half\nproviders:\n  fake: {type: mock}\nroles:\n  half: {provider: fake}\n"
-    body = _models(_client(tmp_path, binding=partial, tasks=False)).json()
-
-    assert body["default"] is None
-    assert body["roles"] == {"half": None}
-
-
-def test_an_unknown_project_is_404_and_names_the_ones_there_are(tmp_path):
+def test_an_unknown_project_is_404_and_names_the_ones_there_are(tmp_path, monkeypatch):
     """The board remembers a project across restarts, so a picker holding one
     the daemon was started without is a real state, not a typo."""
+    _asks(monkeypatch)
     response = _models(_client(tmp_path), project="gone")
 
     assert response.status_code == 404
@@ -166,30 +263,10 @@ def test_an_unknown_project_is_404_and_names_the_ones_there_are(tmp_path):
     assert response.json()["projects"] == ["board"]
 
 
-def test_the_report_reads_the_spec_the_board_is_already_painting_from(tmp_path):
-    """One truth per screen.
+def test_the_report_names_the_file_these_endpoints_came_from(tmp_path, monkeypatch):
+    """Provenance, not configuration: where to go when one of them is wrong."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path)).json()
 
-    The panel sits beside a graph whose nodes carry a resolved model, and both
-    have to come off the same in-memory spec -- so a binding re-read by a run
-    moves them together rather than leaving one screen arguing with itself.
-    Read from the file instead and they part company the moment anybody types
-    `poieo config use`.
-    """
-    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
-    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
-    card(tmp_path / "cards", "f", "graph: ../g.yaml\ntrigger: {type: manual}\n")
-    path = tmp_path / "poieo.yaml"
-    path.write_text("name: board\ntasks: cards\nbinding: b.yaml\n", encoding="utf-8")
-    daemon = Daemon(load_config(path), store=NullStore())
-    client = TestClient(create_app(daemon))
-
-    # Move the file underneath, without telling the daemon. The report must
-    # still say what the daemon would really run, which is the old spec.
-    (tmp_path / "b.yaml").write_text(
-        _MOCK.replace("model: m2", "model: moved"), encoding="utf-8"
-    )
-    body = _models(client).json()
-
-    loaded = daemon.projects[0].tasks[0].binding
-    assert body["roles"]["reader"] == loaded.resolve("reader").ref == "fake/m2"
-    assert Path(body["binding"]["path"]).name == "b.yaml"
+    assert body["binding"]["name"] == "models-for-a-board"
+    assert body["binding"]["path"].endswith("b.yaml")

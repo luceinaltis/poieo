@@ -26,6 +26,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from ..binding import load_binding
+from .. import detect as engines
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
 from .events import BroadcastStore
@@ -298,17 +299,25 @@ def create_app(daemon: Any) -> Starlette:
         )
 
     async def project_models(request: Request) -> JSONResponse:
-        """Which models this project runs on, and where that was decided.
+        """Every model this project can reach, endpoint by endpoint.
 
-        The same facts `poieo config` prints, so the terminal and the browser
-        cannot disagree about what a project is bound to. Reads what is
-        already in memory and opens no socket; asking the endpoints what they
-        currently serve is a different question and will be a different route.
+        **Asked live**, for the reason `poieo config models` is: a catalogue
+        written down a month ago is a catalogue that has since gone wrong, and
+        a model named from memory fails at 3am. Every endpoint is asked at
+        once -- two asked in single file is two timeouts on a laptop where
+        neither is running.
+
+        What each model carries is whatever its endpoint said about it and
+        nothing else. `docs/runtime.md` refuses a price table in this
+        repository; this does not add one, it reports the rates an endpoint
+        publishes on the same listing it publishes ids on, and leaves a blank
+        where none is published rather than guessing at a number.
 
         Two things deliberately do not cross. A **key** never does -- only the
-        name of the variable it comes from, and whether that is set. Nor does
-        a `base_url`: the endpoint's own name tells one from another, and an
-        address is the one field in a binding that can carry a private host.
+        name of the variable it comes from, and whether that is set, which is
+        usually the whole explanation for an endpoint that listed nothing. Nor
+        does a `base_url`: the endpoint's own name tells one from another, and
+        an address is the one field in a binding that can carry a private host.
         """
         name = request.path_params["project"]
         project = _project_for(daemon, name)
@@ -327,26 +336,61 @@ def create_app(daemon: Any) -> Starlette:
         spec = await asyncio.to_thread(_models_of, project)
         if spec is None:
             # An answer, not a failure: a project may legitimately name none.
-            return JSONResponse(
-                {"binding": None, "providers": {}, "default": None, "roles": {}}
+            return JSONResponse({"binding": None, "endpoints": []})
+
+        declared = list(spec.providers.items())
+        # Awaited, never `asyncio.run`: this handler is already on the
+        # daemon's loop, and starting a second one there raises.
+        catalogues = await asyncio.gather(
+            *(
+                engines.catalogue_for(provider.type, provider.base_url)
+                for _, provider in declared
             )
+        )
+        # Which model each role is on, so a reader can see what they are using
+        # among what they could. A model may serve several roles.
+        in_use: dict[str, list[str]] = {}
+        for role, ref in spec.spoken_for().items():
+            in_use.setdefault(ref, []).append(role)
+
         return JSONResponse(
             {
                 "binding": {"name": spec.name, "path": str(spec.source_path)},
-                "providers": {
-                    key: {
+                "endpoints": [
+                    {
+                        "name": key,
                         "type": provider.type,
+                        # "did not answer" and "there is nothing to ask" are
+                        # different facts, and a listing that conflated them
+                        # would read as a fault.
+                        "askable": engines.askable(provider.type),
                         "api_key_env": provider.api_key_env,
                         "api_key_set": _key_state(key, provider),
+                        "models": [
+                            {
+                                "id": model.id,
+                                # The one spelling of a model, built where it
+                                # is always built.
+                                "ref": f"{key}/{model.id}",
+                                "context": model.context,
+                                "size": model.size,
+                                "quantization": model.quantization,
+                                "capabilities": list(model.capabilities),
+                                "price": (
+                                    None
+                                    if model.price is None
+                                    else {
+                                        "input": model.price[0],
+                                        "output": model.price[1],
+                                    }
+                                ),
+                                "used_by": in_use.get(f"{key}/{model.id}", []),
+                            }
+                            for model in served
+                        ],
                     }
-                    for key, provider in spec.providers.items()
-                },
-                "default": spec.target("default"),
-                # Null for a role this binding cannot resolve, exactly as
-                # `poieo config` prints `(unresolvable)` rather than dropping
-                # the line. It is in the file, so it is on the screen; leaving
-                # it out would hide the only case worth looking at.
-                "roles": {role: spec.target(role) for role in sorted(spec.roles)},
+                    for (key, provider), served in zip(declared, catalogues)
+                ],
             }
         )
 

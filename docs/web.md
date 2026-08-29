@@ -19,7 +19,7 @@ server and the client keep them together so they stay easy to count.
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
-| `GET /api/projects/{p}/models` | which models this project runs on, and where that was decided |
+| `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
@@ -47,40 +47,67 @@ route needs it: without it the answer route is a button with no label on it.
 
 ### `GET /api/projects/{p}/models`
 
-The same facts `poieo config` prints, so the terminal and the browser cannot
-disagree about what a project is bound to: the file, every endpoint it declares,
-what runs by default, and what each **named** role runs on. It reads what is
-already in memory and opens no socket — asking the endpoints what they *serve*
-right now is a different question, and `poieo config models` keeps those apart
-for a reason worth keeping here too.
+**Every model this project can reach**, endpoint by endpoint, with whatever each
+endpoint said about each model. Not what the project is *bound* to — that is one
+line of the answer and the smaller one; the question this opens for is "what
+could I be running, and what would it cost".
+
+**Asked live**, for the reason `poieo config models` is asked live: a catalogue
+written down a month ago has since gone wrong, and a model named from memory
+fails at 3am. Every endpoint is asked at once through `detect.catalogue_for` —
+two asked in single file is two `HTTP_TIMEOUT`s on a laptop where neither is
+running. The handler is already on the daemon's loop, so it **awaits**;
+`asyncio.run` from here raises, and `cli.py` is full of it, which is why the
+catalogue is shared as a coroutine rather than as a copied body.
 
 It is addressed by **project**, not by task, because that is `poieo config`'s own
-scope: a binding belongs to the project, and hanging the answer off a task would
-put the same answer on every card. `_project_for` is the lookup, and a name that
-answers for nothing is a **404 carrying the names that do** — the board remembers
-a project across restarts, so a picker holding one the daemon was started without
-is a real state rather than a typo.
+scope: the endpoints belong to the project, and hanging the answer off a task
+would put the same answer on every card. `_project_for` is the lookup, and a name
+that answers for nothing is a **404 carrying the names that do** — the board
+remembers a project across restarts, so a picker holding one the daemon was
+started without is a real state rather than a typo.
 
-`_models_of` takes the spec **already in memory**, off any task bound to the
-project's own file, rather than reading that file again. The board draws a
-resolved model on every node from that same object, and a panel reading the file
-would disagree with the graph three inches to its left the moment anybody typed
-`poieo config use`. One truth per screen; a run re-reads the file and moves both
-together (see [daemon.md](daemon.md)). It falls back to a read only for a project
-whose every task is disabled or bound elsewhere — it still has a binding, and
-refusing to show it because nothing is armed would be the check getting in the way.
+`_models_of` decides *which endpoints to ask* from the spec **already in
+memory**, off any task bound to the project's own file. Reading the file instead
+would let the panel ask a different set from the one the board is painting the
+moment anybody typed `poieo config use`. One truth per screen; a run re-reads
+the file and moves both together (see [daemon.md](daemon.md)). It falls back to a
+read only for a project whose every task is disabled or bound elsewhere.
+
+Each model carries `id`, `ref`, and whatever the endpoint published: `context`,
+`size`, `quantization`, `capabilities`, `price`. **Every one of those is null
+when the endpoint did not say**, and none is filled in from anywhere else.
+`price` is the one worth stating plainly: [runtime.md](runtime.md) refuses a
+price table in this repository — *"nothing in poieo knows what a model charges,
+and a price table checked in here would be wrong the week after it was
+written"* — and this does not add one. OpenRouter publishes per-token rates on
+the same listing it publishes ids on, so those are reported, converted to USD
+per **million** tokens because `0.00000015` is not a number anybody compares at
+a glance. Every other OpenAI-shaped server publishes none, and Ollama charges
+nothing per token at all; both come back null, and the panel distinguishes them
+by the endpoint's type rather than by inventing a zero.
+
+`used_by` is the one thing the binding contributes: which roles are on this
+model, so a reader can see what they are using among what they could. A list,
+because a model may serve several.
 
 Two things deliberately do not cross. A **key** never does: only the name of the
 variable it comes from, and whether that is set — read through
 `providers.credential_for`, so the rule about where a credential comes from stays
-in one place and the value never reaches this module to be leaked. `api_key_set`
-is **null rather than false** when an endpoint names no variable, because "its
-SDK resolves its own" is a different fact from "the key is missing", and a panel
-warning about the first would cry wolf on every local endpoint. And a
-**`base_url`** does not cross either: an endpoint's own name tells one from
-another, and an address is the one field in a binding that can carry a private
-host. If a real confusion turns up — two `openai_compatible` endpoints a reader
-cannot tell apart — the argument for letting it through will be concrete.
+in one place and the value never reaches this module to be leaked. That name is
+not decoration: an endpoint whose key is unset lists nothing, and it is the whole
+explanation. `api_key_set` is **null rather than false** when an endpoint names
+no variable, because "its SDK resolves its own" is a different fact from "the key
+is missing", and a panel warning about the first would cry wolf on every local
+endpoint. And a **`base_url`** does not cross either: an endpoint's own name
+tells one from another, and an address is the one field in a binding that can
+carry a private host. If a real confusion turns up — two `openai_compatible`
+endpoints a reader cannot tell apart — the argument for letting it through will
+be concrete.
+
+`askable` is the third fact an empty list can mean: `mock` answers from the
+binding file, so there is nothing to ask, and a panel that ran that together with
+"did not answer" would report a working endpoint as a broken one.
 
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
 `.config`), which
@@ -241,12 +268,12 @@ one margin for whichever it is. Its width comes from `--rail-width` on the left
 and the drawer's constant on the right; the rail is `position: fixed`, so the
 stage has to reserve exactly that much or the board slides under it.
 
-**Roles are gated on content**, the way a card's generated prompt gates its
-memory block: a project whose file names none shows no trace of them, because
-most projects run everything on one model and a heading over an empty list is
-furniture. A project whose file *does* name roles gets them, because without them
-the panel would be lying by omission — the default is not what the step pinned to
-`role: reader` will use.
+**A row is what the endpoint said, and a blank is what it did not.** A local
+model shows the two numbers that are its real price -- its size and
+quantization -- and says it *runs here* rather than showing a rate of nothing; a
+routed one shows the rate it published. An endpoint that charges but publishes
+nothing leaves the column empty, because "free" would be a guess and an
+expensive one to be wrong about.
 
 **`Question` is drawn first in the drawer, above the controls.** Everything
 after a `confirm` node is held until it is answered, so a reader who scrolls

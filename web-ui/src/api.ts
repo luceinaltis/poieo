@@ -26,35 +26,55 @@ export async function fetchTasks(): Promise<Listing> {
 }
 
 /**
- * Which models a project runs on, and where that was decided.
+ * One model an endpoint says it has.
  *
- * A key never crosses -- only the name of the variable it comes from, and
- * whether that is set. Nor does an endpoint's address: its own name tells one
- * from another, and a `base_url` is the one field in a binding that can carry
- * a private host.
+ * Everything but `id` and `ref` is **null when the endpoint did not say**, and
+ * nothing is filled in from anywhere else. `price` in particular: poieo keeps
+ * no price table, because one written down would be wrong the week after.
+ * Where an endpoint publishes rates on its own listing they are reported;
+ * where it does not, this is null rather than a guess -- and never a zero,
+ * which would read as free.
+ */
+export interface ServedModel {
+  id: string
+  /** `provider/model` -- the one spelling, and what `config use` takes back. */
+  ref: string
+  context: number | null
+  /** Ollama's own words for a local build: "9.0B", "Q4_K_M". */
+  size: string | null
+  quantization: string | null
+  capabilities: string[]
+  /** USD per million tokens. */
+  price: { input: number; output: number } | null
+  /** Which roles are on this model right now. Empty for most of them. */
+  used_by: string[]
+}
+
+export interface Endpoint {
+  name: string
+  type: string
+  /** False for `mock`, which answers from the binding file rather than a port. */
+  askable: boolean
+  /** The variable a key is read from; null when the endpoint names none. */
+  api_key_env: string | null
+  /** Null -- not false -- when it names none: its SDK resolves its own. */
+  api_key_set: boolean | null
+  models: ServedModel[]
+}
+
+/**
+ * Every model a project can reach, endpoint by endpoint, asked just now.
+ *
+ * A key never crosses -- only the name of the variable it comes from and
+ * whether that is set, which is usually the whole explanation for an endpoint
+ * that listed nothing. Nor does an endpoint's address: its own name tells one
+ * from another, and a `base_url` is the one binding field that can carry a
+ * private host.
  */
 export interface ModelsReport {
-  /** Null when the project names no models file at all. */
+  /** Where these endpoints were declared. Null if the project names no file. */
   binding: { name: string; path: string } | null
-  providers: Record<
-    string,
-    {
-      type: string
-      /** The variable a key is read from; null when the endpoint names none. */
-      api_key_env: string | null
-      /** Null -- not false -- when it names none: its SDK resolves its own. */
-      api_key_set: boolean | null
-    }
-  >
-  /** `provider/model` for everything that does not name a role, or null. */
-  default: string | null
-  /**
-   * The roles this project's models file names, and nothing else -- a role a
-   * graph calls but the file has never named runs on the default and is not
-   * this panel's business. Null for one the binding cannot resolve at all,
-   * which is a broken file rather than a missing entry.
-   */
-  roles: Record<string, string | null>
+  endpoints: Endpoint[]
 }
 
 export async function fetchModels(project: string): Promise<ModelsReport | null> {

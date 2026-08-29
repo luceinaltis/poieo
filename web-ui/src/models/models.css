@@ -1,6 +1,6 @@
-/* The same aside the drawer is, on the same edge and at the same width: two
-   panels of different shapes fighting over one margin is furniture, and only
-   one of them is ever open. */
+/* The same aside the drawer is, on the same edge and at the same width: only
+   one of the two is ever open, and `.shell-stage` reserves one margin for
+   whichever it is. Widening this alone would put the board under it. */
 .models {
   background: #191612;
   border-left: 1px solid #2e2820;
@@ -27,8 +27,8 @@
   margin: 0;
 }
 
-/* The file, not the whole path: enough to recognise which project's models
-   these are, with the rest on the tooltip for whoever has to go and edit it. */
+/* The file, not the whole path: enough to know which project's endpoints
+   these are, with the rest on the tooltip for whoever goes to edit it. */
 .models-file {
   color: #7a6e60;
   font-size: 0.82em;
@@ -49,59 +49,50 @@
 }
 
 /* Everything below the header scrolls together, and starts at the top: the
-   aside's own `1fr` row lands here, so without `align-content: start` the
-   lists inside share the leftover height between them instead of stacking. */
+   aside's `1fr` row lands here, so without `align-content: start` the blocks
+   inside share the leftover height between them instead of stacking. */
 .models-body {
   align-content: start;
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-height: 0;
   overflow-y: auto;
-  /* A model id and the file's path are both things a reader copies out. */
+  /* A model id is the thing a reader copies out of here. */
   -webkit-user-select: text;
   user-select: text;
 }
 
 .models-note {
   color: #7a6e60;
-  font-size: 0.86em;
+  font-size: 0.82em;
   margin: 0;
 }
 
-.models-endpoints,
-.models-bound {
-  align-content: start;
-  display: grid;
-  gap: 4px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.models-endpoints li,
-.models-bound li {
+.models-endpoint h3 {
   align-items: baseline;
+  border-bottom: 1px solid #2e2820;
   display: flex;
-  font-size: 0.86em;
+  font-size: 0.9em;
+  font-weight: 600;
   gap: 8px;
+  margin: 0 0 6px;
+  padding-bottom: 4px;
 }
 
-.models-endpoint-name,
-.models-role {
+.models-endpoint-name {
   color: #e8dcc8;
-  min-width: 88px;
 }
 
-.models-kind,
-.models-ref {
-  color: #9a9086;
+.models-kind {
+  color: #6b6257;
+  font-weight: 400;
 }
 
-/* Named, never valued. The colour is the only thing that shouts: a step whose
-   endpoint has no key will not run, and that is worth finding without
-   reading. */
+/* Named, never valued. The colour is the only thing that shouts: an endpoint
+   with no key lists nothing, and that is worth finding without reading. */
 .models-key {
-  font-size: 0.94em;
+  font-size: 0.9em;
+  font-weight: 400;
   margin-left: auto;
 }
 
@@ -113,8 +104,70 @@
   color: #d16d5a;
 }
 
-/* Same red as a missing key, and for the same reason: a step bound to this
-   role has nothing to call. */
-.models-ref[data-unresolved="true"] {
-  color: #d16d5a;
+.models-list {
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Id, then what the endpoint said about it, then what it costs. The price
+   column is fixed and right-aligned so a column of them can be compared
+   down the page rather than read one at a time. */
+.models-list li {
+  align-items: baseline;
+  display: grid;
+  font-size: 0.82em;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.models-id {
+  color: #d6ccbe;
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.models-price {
+  color: #9a9086;
+  font-variant-numeric: tabular-nums;
+  grid-column: 2;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* A local model costs memory rather than money, and the row says so in words
+   instead of a number that would read as a rate somebody looked up. */
+.models-price[data-price="local"],
+.models-price[data-price="free"] {
+  color: #6b6257;
+}
+
+/* What the endpoint said, under the id: the window, and for a local build the
+   two numbers that are its real price. */
+.models-facts {
+  color: #6b6257;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 0.92em;
+}
+
+.models-facts [data-fact="can"] {
+  color: #8a7a55;
+}
+
+/* Which roles are on this model. One word, and only where there is one. */
+.models-using {
+  color: #d8a657;
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.92em;
+  text-align: right;
+  white-space: nowrap;
 }

@@ -8,14 +8,48 @@ vi.mock("../api", () => ({ fetchModels }))
 
 import { Models } from "./Models"
 
+const LOCAL = {
+  id: "qwen3.5:latest",
+  ref: "ollama/qwen3.5:latest",
+  context: 262144,
+  size: "9.0B",
+  quantization: "Q4_K_M",
+  capabilities: ["completion", "vision"],
+  price: null,
+  used_by: ["default"],
+}
+
+const ROUTED = {
+  id: "qwen/qwen3.8-flash",
+  ref: "routed/qwen/qwen3.8-flash",
+  context: 1000000,
+  size: null,
+  quantization: null,
+  capabilities: [],
+  price: { input: 0.15, output: 0.47 },
+  used_by: [],
+}
+
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/proj/models/default.yaml" },
-  providers: {
-    ollama: { type: "ollama", api_key_env: null, api_key_set: null },
-    claude: { type: "anthropic", api_key_env: "ANTHROPIC_API_KEY", api_key_set: false },
-  },
-  default: "ollama/qwen3:32b",
-  roles: { reader: "ollama/llama3.2:3b" },
+  endpoints: [
+    {
+      name: "ollama",
+      type: "ollama",
+      askable: true,
+      api_key_env: null,
+      api_key_set: null,
+      models: [LOCAL],
+    },
+    {
+      name: "routed",
+      type: "openai_compatible",
+      askable: true,
+      api_key_env: "OPENROUTER_API_KEY",
+      api_key_set: true,
+      models: [ROUTED],
+    },
+  ],
 }
 
 let container: HTMLDivElement
@@ -24,7 +58,6 @@ let root: Root
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   fetchModels.mockReset()
-  fetchModels.mockResolvedValue(REPORT)
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -42,80 +75,125 @@ async function render(report: unknown = REPORT) {
   })
 }
 
-test("the panel names the file the answer came from", async () => {
+const row = (ref: string) => container.querySelector<HTMLElement>(`[data-model="${ref}"]`)
+const fact = (ref: string, kind: string) =>
+  row(ref)!.querySelector(`[data-fact="${kind}"]`)?.textContent
+
+test("it asks the project on screen, and names the file the endpoints came from", async () => {
   await render()
 
   expect(fetchModels).toHaveBeenCalledWith("board")
   expect(container.textContent).toContain("models/default.yaml")
 })
 
-test("every endpoint is listed with what kind it is", async () => {
+test("every endpoint is a block, with its models under it", async () => {
   await render()
 
-  const names = [...container.querySelectorAll(".models-endpoint-name")].map(
-    (el) => el.textContent,
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
   )
-  expect(names).toEqual(["ollama", "claude"])
-  expect(container.textContent).toContain("anthropic")
+  expect(blocks).toEqual(["ollama", "routed"])
+  expect(row("ollama/qwen3.5:latest")).not.toBeNull()
+  expect(row("routed/qwen/qwen3.8-flash")).not.toBeNull()
 })
 
-test("an endpoint whose key is missing says which variable, and never a value", async () => {
+test("a published price is shown per million tokens, input then output", async () => {
   await render()
 
-  // The panel's whole job here is to explain why a model will not answer, so
-  // the variable is named -- and nothing else about it ever is.
-  const claude = container.querySelector('[data-endpoint="claude"]')!
-  expect(claude.textContent).toContain("ANTHROPIC_API_KEY")
-  expect(claude.querySelector('[data-key="missing"]')).not.toBeNull()
+  const price = row("routed/qwen/qwen3.8-flash")!.querySelector(".models-price")!
+  expect(price.textContent).toBe("$0.15 / $0.47")
+  expect(price.getAttribute("data-price")).toBe("paid")
 })
 
-test("an endpoint that names no variable says nothing about keys at all", async () => {
+test("a local model says it runs here rather than showing a price of nothing", async () => {
+  // Ollama does not charge per token, so there is no rate to report -- and a
+  // zero would read as a rate somebody looked up.
   await render()
 
-  // Null is not false: a local server resolving its own is not a warning, and
-  // a panel that flagged it would cry wolf on every one of them.
-  const ollama = container.querySelector('[data-endpoint="ollama"]')!
-  expect(ollama.textContent).not.toContain("KEY")
-  expect(ollama.querySelector("[data-key]")).toBeNull()
+  const price = row("ollama/qwen3.5:latest")!.querySelector(".models-price")!
+  expect(price.textContent).toBe("runs here")
+  expect(price.getAttribute("data-price")).toBe("local")
 })
 
-test("what runs by default is shown, and named roles beside it", async () => {
+test("an endpoint that charges but did not say leaves the price blank", async () => {
+  // vLLM and LM Studio answer the same listing with no rates on it. A blank is
+  // the honest answer; "free" would be a guess, and an expensive one.
+  await render({
+    ...REPORT,
+    endpoints: [{ ...REPORT.endpoints[1], models: [{ ...ROUTED, price: null }] }],
+  })
+
+  const price = row("routed/qwen/qwen3.8-flash")!.querySelector(".models-price")!
+  expect(price.textContent).toBe("")
+  expect(price.getAttribute("data-price")).toBe("unknown")
+})
+
+test("what a local model costs is its size, and the window is readable", async () => {
   await render()
 
-  expect(container.querySelector('[data-role="default"]')!.textContent).toContain(
-    "ollama/qwen3:32b",
+  expect(fact("ollama/qwen3.5:latest", "context")).toBe("262k")
+  expect(fact("ollama/qwen3.5:latest", "size")).toBe("9.0B")
+  expect(fact("ollama/qwen3.5:latest", "quant")).toBe("Q4_K_M")
+  expect(fact("routed/qwen/qwen3.8-flash", "context")).toBe("1M")
+})
+
+test("capabilities are shown, except the one every model has", async () => {
+  // Every entry says "completion". A column that is the same on every row is
+  // not information.
+  await render()
+
+  const shown = [...row("ollama/qwen3.5:latest")!.querySelectorAll('[data-fact="can"]')]
+  expect(shown.map((s) => s.textContent)).toEqual(["vision"])
+})
+
+test("only the models a role is on say so", async () => {
+  await render()
+
+  expect(row("ollama/qwen3.5:latest")!.querySelector(".models-using")!.textContent).toBe(
+    "default",
   )
-  expect(container.querySelector('[data-role="reader"]')!.textContent).toContain(
-    "ollama/llama3.2:3b",
-  )
+  expect(row("routed/qwen/qwen3.8-flash")!.querySelector(".models-using")).toBeNull()
 })
 
-test("a project whose models file names no roles shows no trace of them", async () => {
-  // Gated on content, like the memory block in a card's prompt: most projects
-  // run everything on one model, and a row per role it does not have is noise.
-  await render({ ...REPORT, roles: {} })
+test("an endpoint with nothing to ask says that, not that it is down", async () => {
+  await render({
+    ...REPORT,
+    endpoints: [
+      { name: "fake", type: "mock", askable: false, api_key_env: null, api_key_set: null, models: [] },
+    ],
+  })
 
-  expect(container.querySelectorAll("[data-role]")).toHaveLength(1)
-  expect(container.querySelector('[data-role="default"]')).not.toBeNull()
+  expect(container.textContent).toContain("nothing to ask")
 })
 
-test("a role the binding cannot resolve is called out rather than hidden", async () => {
-  await render({ ...REPORT, roles: { reader: null } })
+test("an endpoint whose key is missing says so where the models would be", async () => {
+  // The likeliest reason a list is empty, and the only one the reader can fix.
+  await render({
+    ...REPORT,
+    endpoints: [
+      {
+        name: "claude",
+        type: "anthropic",
+        askable: true,
+        api_key_env: "ANTHROPIC_API_KEY",
+        api_key_set: false,
+        models: [],
+      },
+    ],
+  })
 
-  const row = container.querySelector('[data-role="reader"] .models-ref')!
-  expect(row.textContent).toContain("unresolved")
-  expect(row.getAttribute("data-unresolved")).toBe("true")
+  expect(container.textContent).toContain("ANTHROPIC_API_KEY is not set")
 })
 
-test("a project with no models file says so instead of drawing an empty table", async () => {
-  await render({ binding: null, providers: {}, default: null, roles: {} })
+test("a project with no models file says so instead of an empty list", async () => {
+  await render({ binding: null, endpoints: [] })
 
   expect(container.textContent).toContain("no models file")
-  expect(container.querySelector(".models-endpoint-name")).toBeNull()
+  expect(container.querySelector("[data-endpoint]")).toBeNull()
 })
 
 test("a daemon that did not answer is said out loud", async () => {
   await render(null)
 
-  expect(container.textContent).toContain("could not be read")
+  expect(container.textContent).toContain("could not be asked")
 })

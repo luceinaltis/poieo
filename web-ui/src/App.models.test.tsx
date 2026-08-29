@@ -58,9 +58,27 @@ const PROJECTS = [
 
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/a/models/default.yaml" },
-  providers: { ollama: { type: "ollama", api_key_env: null, api_key_set: null } },
-  default: "ollama/qwen3:32b",
-  roles: {},
+  endpoints: [
+    {
+      name: "ollama",
+      type: "ollama",
+      askable: true,
+      api_key_env: null,
+      api_key_set: null,
+      models: [
+        {
+          id: "qwen3:32b",
+          ref: "ollama/qwen3:32b",
+          context: 262144,
+          size: "32B",
+          quantization: "Q4_K_M",
+          capabilities: ["completion"],
+          price: null,
+          used_by: ["default"],
+        },
+      ],
+    },
+  ],
 }
 
 function api(): StageApi {

@@ -252,3 +252,107 @@ def test_a_local_engine_is_preferred_over_the_metered_one(monkeypatch):
     assert [e.key for e in found] == ["ollama", "claude"]
     # ...and the whole pool is still there for a role to name.
     assert {e.key for e in found} == {"ollama", "claude"}
+
+
+# -- what an endpoint says about each model, beyond its name -----------------
+
+OLLAMA_DETAILED = {
+    "models": [
+        {
+            "name": "qwen3.5:latest",
+            "details": {
+                "parameter_size": "9.0B",
+                "quantization_level": "Q4_K_M",
+                "context_length": 262144,
+            },
+            "capabilities": ["completion", "vision"],
+        }
+    ]
+}
+
+# OpenRouter's shape, and the only listing in the wild that carries a price.
+# Per token on the wire, which is what makes it unreadable without converting.
+ROUTED = {
+    "data": [
+        {
+            "id": "qwen/qwen3.8-flash",
+            "context_length": 1000000,
+            "pricing": {"prompt": "0.00000015", "completion": "0.00000047"},
+        }
+    ]
+}
+
+
+async def test_a_local_model_reports_what_it_costs_in_memory_not_money(monkeypatch):
+    """Ollama charges nothing per token, so there is no price to report -- and
+    what a local model actually costs is the size and quantization it says."""
+    _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_DETAILED})
+
+    served = await detect_module.catalogue_for("ollama", "http://localhost:11434")
+
+    assert served[0].id == "qwen3.5:latest"
+    assert (served[0].size, served[0].quantization) == ("9.0B", "Q4_K_M")
+    assert served[0].context == 262144
+    assert served[0].capabilities == ("completion", "vision")
+    assert served[0].price is None
+
+
+async def test_a_published_price_is_reported_per_million_tokens(monkeypatch):
+    """`0.00000015` is not a number anybody compares at a glance. The endpoint
+    is still the only source -- this converts what it said, and invents none."""
+    _serves(monkeypatch, {"http://x/v1/models": ROUTED})
+
+    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+
+    assert served[0].price == (0.15, 0.47)
+    assert served[0].context == 1000000
+
+
+async def test_an_endpoint_that_publishes_no_price_says_nothing_rather_than_zero(
+    monkeypatch,
+):
+    """vLLM, LM Studio and llama.cpp all answer the same listing with no rates
+    on it. Zero would read as free, which is the one wrong answer available."""
+    _serves(monkeypatch, {"http://x/v1/models": LMSTUDIO_MODELS})
+
+    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+
+    assert served[0].price is None
+    assert served[0].context is None
+
+
+async def test_a_half_priced_entry_is_not_half_reported(monkeypatch):
+    """A listing with a prompt rate and no completion rate cannot be shown as
+    a price, and showing the half that is there would read as the whole."""
+    half = {"data": [{"id": "m", "pricing": {"prompt": "0.000001"}}]}
+    _serves(monkeypatch, {"http://x/v1/models": half})
+
+    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+
+    assert served[0].price is None
+
+
+async def test_one_malformed_entry_does_not_empty_the_listing(monkeypatch):
+    """The rest of what the server said is still true."""
+    mixed = {"data": [{"id": "good"}, {"nope": 1}, {"id": "also-good"}]}
+    _serves(monkeypatch, {"http://x/v1/models": mixed})
+
+    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+
+    assert [m.id for m in served] == ["good", "also-good"]
+
+
+async def test_models_for_is_the_same_listing_read_for_its_names(monkeypatch):
+    """One request, one place that knows where to send it. `init` and
+    `config use` only ever wanted names, and still get exactly those."""
+    _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_DETAILED})
+
+    assert await detect_module.models_for("ollama", "http://localhost:11434") == (
+        "qwen3.5:latest",
+    )
+
+
+async def test_a_type_that_cannot_be_asked_has_an_empty_catalogue():
+    """`mock` answers from the binding file, so there is nothing to ask."""
+    assert await detect_module.catalogue_for("mock", None) == ()
+    assert not detect_module.askable("mock")
