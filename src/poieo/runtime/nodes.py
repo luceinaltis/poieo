@@ -455,6 +455,15 @@ class AgentNode(Node):
             # has been answered, which is why nothing is cleared on turn one --
             # there is nothing there yet to clear.
             sent = 0
+            # The binding first, the endpoint second. Someone who wrote the
+            # number down meant it -- a smaller real window, a deliberately
+            # tighter budget -- so the endpoint is only asked when nobody has
+            # said. Providers remember the answer; this is not a round trip
+            # per turn, and a provider that cannot answer says None and the
+            # character caps take over.
+            window = bound.resolved.context
+            if window is None:
+                window = await bound.provider.context_for(bound.resolved.model)
 
             while True:
                 if ctx.cancel is not None and ctx.cancel.is_set():
@@ -465,7 +474,6 @@ class AgentNode(Node):
                 # time, and an endpoint that caches prompt prefixes would find
                 # a different prefix every turn -- paying the whole
                 # conversation again to save part of it.
-                window = bound.resolved.context
                 if _too_big(window, sent, messages, _CLEAR_AT, _CONTEXT_CAP):
                     freed = _clear_old_results(messages)
                     if freed:

@@ -116,5 +116,20 @@ class Provider(abc.ABC):
         """Cheap reachability probe used by ``poieo providers check``."""
         return True, "no health check implemented"
 
+    async def context_for(self, model: str) -> int | None:
+        """How many tokens this model can hold, if the endpoint will say.
+
+        The binding is the first answer and this is the second, for anyone who
+        has not written the number down. Getting it wrong is not cheap: a
+        hardcoded cap was 2.3% of what `z-ai/glm-5.3-flash` holds, and a step
+        was watched re-reading one file eight times because of it.
+
+        `None` for an endpoint that does not publish it, and **`None` for one
+        that would not answer** -- asking is an optimisation and a run must
+        never die because it failed. Implementations cache: this cannot become
+        a round trip per turn.
+        """
+        return None
+
     async def aclose(self) -> None:
         """Release sockets/clients. Always called on daemon shutdown."""

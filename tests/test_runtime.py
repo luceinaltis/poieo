@@ -184,6 +184,11 @@ class _FlakyProvider:
             raise ProviderError("temporarily overloaded", provider=self.name, retryable=True)
         return LLMResponse(text="recovered", model=request.model)
 
+    async def context_for(self, model):
+        # A stub stands in for a real provider, and a real one inherits this
+        # from `Provider` rather than writing it.
+        return None
+
     async def health(self):
         return True, "flaky"
 
@@ -426,6 +431,80 @@ async def test_without_a_declared_window_the_old_cap_still_holds(tmp_path, monke
     store = _CapturingStore()
     await run_graph(graph, reads_the_same_file(5), store=store)
 
+    assert [e for e in store.events if e.type == "node_context_cleared"]
+
+
+class _KnowsItsSize:
+    """A provider that publishes a window, and counts how often it is asked."""
+
+    instances: dict[str, "_KnowsItsSize"] = {}
+
+    def __init__(self, name, spec):
+        from poieo.providers.mock import MockProvider
+
+        self.inner = MockProvider(name, spec)
+        self.window = spec.options.get("window")
+        self.asked = 0
+        _KnowsItsSize.instances[name] = self
+
+    async def complete(self, request):
+        return await self.inner.complete(request)
+
+    async def context_for(self, model):
+        self.asked += 1
+        return self.window
+
+    async def health(self):
+        return True, "sized"
+
+    async def aclose(self):
+        return
+
+
+def sized_provider_binding(responses, window, context=None):
+    from poieo.providers import register
+
+    register("sized", _KnowsItsSize)
+    default = {"provider": "s", "model": "m"}
+    if context:
+        default["context"] = context
+    return BindingSpec.model_validate(
+        {
+            "providers": {
+                "s": {"type": "sized", "options": {"responses": responses, "window": window}}
+            },
+            "default": default,
+        }
+    )
+
+
+async def test_a_provider_is_asked_when_the_binding_has_not_said(tmp_path):
+    """Nobody should have to look a number up that the endpoint publishes."""
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    script = {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 6 + ["done"]}
+
+    binding = sized_provider_binding(script, window=10_000_000)
+    store = _CapturingStore()
+    await run_graph(graph, binding, store=store)
+
+    assert _KnowsItsSize.instances["s"].asked >= 1
+    # A window that large leaves nothing to clear, which is the point.
+    assert not [e for e in store.events if e.type == "node_context_cleared"]
+
+
+async def test_the_binding_is_not_second_guessed(tmp_path):
+    """Someone who wrote the number down meant it -- a smaller real window, a
+    deliberately tighter budget. The endpoint is the fallback, not the truth."""
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    script = {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 6 + ["done"]}
+
+    binding = sized_provider_binding(script, window=10_000_000, context=4_000)
+    store = _CapturingStore()
+    await run_graph(graph, binding, store=store)
+
+    assert _KnowsItsSize.instances["s"].asked == 0
     assert [e for e in store.events if e.type == "node_context_cleared"]
 
 
