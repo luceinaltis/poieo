@@ -22,6 +22,29 @@
   font-size: 0.9em;
 }
 
+/* Reads as the subject of the page, not as a control: it happens to be a
+   select because there is more than one, and the bar should not shout about
+   that. Same weight and colour as the plain name it replaces. */
+.shell-project-pick {
+  background: transparent;
+  border: 0;
+  color: #d6ccbe;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9em;
+  padding: 0;
+}
+
+.shell-project-pick:focus-visible {
+  outline: 1px solid #6b6257;
+  outline-offset: 2px;
+}
+
+.shell-project-pick option {
+  background: #1c1915;
+  color: #d6ccbe;
+}
+
 .shell-status {
   color: #9a9086;
   font-size: 0.85em;

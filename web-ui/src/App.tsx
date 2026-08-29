@@ -4,16 +4,26 @@
  * plain DOM behind a contract, so a new one never touches this file.
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react"
 
 import { Drawer } from "./detail/Drawer"
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell/skinHost"
 import type { SkinHost } from "./shell/skinHost"
+import { recall, remember } from "./shell/remember"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { SKINS, skinById } from "./skins/registry"
-import { keyOfTask } from "./state/stage"
+import { keyOfTask, onlyProject } from "./state/stage"
 import "./app.css"
+
+const PROJECT_KEY = "poieo.project"
 
 const STATUS_LABEL: Record<string, string> = {
   connecting: "connecting",
@@ -27,10 +37,12 @@ export default function App({ store }: { store?: StageStore }) {
   const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
   const tasks = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
   const projects = useSyncExternalStore(theStore.subscribe, theStore.getProjects)
-  // One project is the ordinary case, and the bar names it. Several is what
-  // the switcher is for; until then the bar says how many rather than lying
-  // about which.
-  const project = projects.length === 1 ? projects[0] : null
+  const [asked, setAsked] = useState(() => recall(PROJECT_KEY, ""))
+  // What the reader asked for, if the daemon is still running it. A remembered
+  // project the daemon was restarted without would otherwise leave the board
+  // filtering on nothing, which looks exactly like broken.
+  const project =
+    projects.find((one) => one.name === asked) ?? projects[0] ?? null
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
@@ -61,9 +73,20 @@ export default function App({ store }: { store?: StageStore }) {
     document.title = project ? `${project.name} · poieo` : "poieo"
   }, [project])
 
+  // One project's board at a time. Every arrow on it stays inside a project,
+  // so two of them side by side share nothing but a machine.
+  const shown = useMemo(() => onlyProject(stage, project?.name ?? null), [stage, project])
+
   useEffect(() => {
-    hostRef.current?.update(stage)
-  }, [stage])
+    hostRef.current?.update(shown)
+  }, [shown])
+
+  const chooseProject = useCallback((name: string) => {
+    setAsked(name)
+    remember(PROJECT_KEY, name)
+    // The drawer belongs to a task on the board that was there a moment ago.
+    setSelected(null)
+  }, [])
 
   const chooseSkin = (id: string) => {
     setSkinId(id)
@@ -74,7 +97,7 @@ export default function App({ store }: { store?: StageStore }) {
   const closeDrawer = useCallback(() => setSelected(null), [])
   const decided = useCallback(() => void theStore.resync(), [theStore])
 
-  const empty = Object.keys(stage.tasks).length === 0
+  const empty = Object.keys(shown.tasks).length === 0
   // `selected` is the board's key -- the project and the task -- because a
   // name alone stopped picking out one task.
   const openRow = selected
@@ -85,9 +108,25 @@ export default function App({ store }: { store?: StageStore }) {
     <>
       <header className="shell-bar">
         <span className="shell-title">poieo</span>
-        {project ? (
-          // The folder as the tooltip: two worktrees of one repository are two
-          // projects whose names can collide, and the path is what does not.
+        {/* One project is a name, not a thing to choose between: a picker with
+            one option in it is furniture. The folder is the tooltip either
+            way -- two worktrees of one repository are two projects whose names
+            can collide, and the path is what does not. */}
+        {projects.length > 1 ? (
+          <select
+            className="shell-project-pick"
+            aria-label="Project"
+            title={project?.root}
+            value={project?.name ?? ""}
+            onChange={(event) => chooseProject(event.target.value)}
+          >
+            {projects.map((one) => (
+              <option key={one.name} value={one.name}>
+                {one.name}
+              </option>
+            ))}
+          </select>
+        ) : project ? (
           <span className="shell-project" title={project.root}>
             {project.name}
           </span>

@@ -6,23 +6,16 @@
 import { DEFAULT_SKIN_ID, skinById } from "../skins/registry"
 import type { Skin, SkinCallbacks, SkinHandle } from "../skins/contract"
 import type { StageState } from "../state/stage"
+import { recall, remember } from "./remember"
 
 const STORAGE_KEY = "poieo.skin"
 
 export function readSkinPreference(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY) ?? DEFAULT_SKIN_ID
-  } catch {
-    return DEFAULT_SKIN_ID // private mode, blocked storage: not worth a crash
-  }
+  return recall(STORAGE_KEY, DEFAULT_SKIN_ID)
 }
 
 export function writeSkinPreference(id: string): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, id)
-  } catch {
-    // a preference that cannot be saved is not an error worth showing
-  }
+  remember(STORAGE_KEY, id)
 }
 
 export interface SkinHost {
