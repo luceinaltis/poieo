@@ -162,6 +162,22 @@ test("a run that cleared its own history says so in the timeline", async () => {
   expect(entry.textContent).toContain("3")
 })
 
+test("machinery that could not do its job says so in the timeline", async () => {
+  // The two ways a run's own housekeeping can fail. Neither stops the work,
+  // and that is exactly why both have to be seen: a run whose change was
+  // never recorded looks identical to one that had nothing to do, and every
+  // `then:` written against `run.change` silently stops firing.
+  await show([
+    event("run_change_failed", { data: { error: "Could not read fd0489dc" } }),
+    event("node_compact_failed", { data: { error: "the summarizer is down" } }),
+  ])
+
+  const rows = container.querySelectorAll('[data-kind="stuck"]')
+  expect(rows).toHaveLength(2)
+  expect(rows[0].textContent).toContain("fd0489dc")
+  expect(rows[1].textContent).toContain("summarizer")
+})
+
 test("a tool worth waiting for reports how long it took", async () => {
   await show([event("node_tool_call", { data: { name: "run_tests", duration_ms: 4200 } })])
 

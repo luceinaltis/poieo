@@ -95,6 +95,13 @@
   font-style: italic;
 }
 
+/* Housekeeping that failed. The same colour as a failed tool call, because
+   to a reader looking for why nothing happened it is the same news. */
+.drawer-entry[data-kind="stuck"] .drawer-label,
+.drawer-entry[data-kind="stuck"] .drawer-text {
+  color: #d16d5a;
+}
+
 .drawer-entry[data-error="true"] .drawer-label,
 .drawer-entry[data-error="true"] .drawer-text {
   color: #d16d5a;

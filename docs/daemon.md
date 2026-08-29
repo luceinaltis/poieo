@@ -187,6 +187,23 @@ folder. Half an opt-in is how a feature dies quietly, so a config that says
 `learn:` over a project with no memory folder logs a warning naming both. See
 [memory.md](memory.md).
 
+## A change that could not be recorded
+
+`_close_change` commits the run's work as one change. When the repository will
+not have it -- a missing object, a broken index, git gone from PATH -- the work
+still ran and the daemon carries on, because 3am is no time to stop. But the
+run keeps `change = None`, and that is not a quiet fact:
+
+**`then:` conditions are written against `run.change`.** The improving-poieo
+example hands off on `run.change and 'GREEN' in ...`, so a task whose commits
+keep failing passes its own gate and **never hands over, forever**, while the
+board shows a healthy green run that "changed nothing" -- which is exactly what
+a run with nothing to do looks like.
+
+So the failure is appended to the run's own stream as `run_change_failed`, not
+only logged. A line in the daemon's log is where nobody is looking; the run is
+where somebody would.
+
 ## Handoff
 
 `then:` on a task is the router's `branches`, one level up: `graph.Branch`
