@@ -30,6 +30,10 @@ HTTP_TIMEOUT = 1.5
 
 # Enough to fill a picker. A server offering hundreds is a catalogue, not a
 # choice, and the binding file is where the full name gets typed anyway.
+#
+# The default and not the rule: a caller whose whole job **is** the catalogue
+# passes `limit=None`, because forty of three hundred and ninety-six shown
+# without a word reads as all of them.
 MODEL_CAP = 40
 
 
@@ -107,11 +111,6 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate("claude", "Claude API", "anthropic"),
 )
 
-# How to ask an endpoint of each type what it serves: the path, the key holding
-# the list, and the key on each entry holding its id. Keyed by **provider
-# type**, not by address, because the question outlives detection -- a binding
-# declares a type and a base_url, and `poieo config models` asks the same way
-# from there. Two copies of this would eventually look in two places.
 def _number(value: Any) -> float | None:
     """A price as the wire gave it -- a string, on every endpoint that has one."""
     try:
@@ -163,7 +162,10 @@ def _openai_served(entry: dict[str, Any]) -> Served:
 
 
 # How to ask an endpoint of each type what it serves: the path, the key holding
-# the list, and how to read one entry off it.
+# the list, and how to read one entry off it. Keyed by **provider type**, not by
+# address, because the question outlives detection -- a binding declares a type
+# and a base_url, and `poieo config models` and the board ask the same way from
+# there. Two copies of this would eventually look in two places.
 _READERS: dict[str, tuple[str, str, Callable[[dict[str, Any]], Served]]] = {
     "ollama": ("/api/tags", "models", _ollama_served),
     "openai_compatible": ("/models", "data", _openai_served),
@@ -173,7 +175,7 @@ _READERS: dict[str, tuple[str, str, Callable[[dict[str, Any]], Served]]] = {
 _IDENTIFIES = {"ollama": "name", "openai_compatible": "id"}
 
 
-async def _listed(type_: str, base_url: str) -> tuple[Served, ...]:
+async def _listed(type_: str, base_url: str, limit: int | None) -> tuple[Served, ...]:
     """Ask one HTTP address what it has.
 
     Every outcome is a return value, never an exception -- including a 200
@@ -208,7 +210,7 @@ async def _listed(type_: str, base_url: str) -> tuple[Served, ...]:
             # One malformed entry is not a reason to report an endpoint as
             # serving nothing; the rest of the listing is still true.
             continue
-        if len(out) >= MODEL_CAP:
+        if limit is not None and len(out) >= limit:
             break
     return tuple(out)
 
@@ -248,7 +250,9 @@ def askable(type_: str) -> bool:
     return type_ == "anthropic" or type_ in _READERS
 
 
-async def catalogue_for(type_: str, base_url: str | None = None) -> tuple[Served, ...]:
+async def catalogue_for(
+    type_: str, base_url: str | None = None, limit: int | None = MODEL_CAP
+) -> tuple[Served, ...]:
     """What an endpoint of this type, at this address, serves **right now**,
     with whatever else it said about each model.
 
@@ -260,19 +264,35 @@ async def catalogue_for(type_: str, base_url: str | None = None) -> tuple[Served
     request with its own idea of where to send it.
     """
     if type_ == "anthropic":
-        # The SDK's listing promises an id and nothing this cares about.
-        return tuple(Served(id=name) for name in await _claude_models())
+        # The SDK's listing promises an id and nothing this cares about, and
+        # asks for `MODEL_CAP` of them -- Anthropic serves far fewer than that,
+        # so a caller wanting everything already has it.
+        named = await _claude_models()
+        return tuple(Served(id=name) for name in named[:limit])
     if type_ not in _READERS or base_url is None:
         # A type with nothing to ask -- `mock` answers from its own file, and
         # an unknown backend registered by a caller has no listing convention.
         return ()
-    return await _listed(type_, base_url)
+    return await _listed(type_, base_url, limit)
 
 
 async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]:
     """Just the ids, for the callers that only ever wanted a list of names --
     `init`, `config add`, and `config use`'s check that a model is really there."""
     return tuple(model.id for model in await catalogue_for(type_, base_url))
+
+
+def lists_installed(type_: str) -> bool:
+    """Whether this backend lists what is **on this machine** rather than what
+    it offers.
+
+    Two listings that look identical and mean different things. Ollama's
+    `/api/tags` is `ollama list`: models pulled onto this disk, ready now, and
+    all of them. OpenRouter's is a catalogue of what it would route to for
+    money, with nothing here yet. A panel that drew both the same way would
+    have a reader believe they had four hundred models sitting on a laptop.
+    """
+    return type_ == "ollama"
 
 
 async def probe() -> list[Engine]:

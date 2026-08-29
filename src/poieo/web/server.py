@@ -343,7 +343,9 @@ def create_app(daemon: Any) -> Starlette:
         # daemon's loop, and starting a second one there raises.
         catalogues = await asyncio.gather(
             *(
-                engines.catalogue_for(provider.type, provider.base_url)
+                # No cap: this panel *is* the catalogue, and forty of three
+                # hundred shown without a word reads as all of them.
+                engines.catalogue_for(provider.type, provider.base_url, limit=None)
                 for _, provider in declared
             )
         )
@@ -364,6 +366,10 @@ def create_app(daemon: Any) -> Starlette:
                         # different facts, and a listing that conflated them
                         # would read as a fault.
                         "askable": engines.askable(provider.type),
+                        # Whether this listing is what is on this machine or
+                        # what the endpoint offers. Two listings that look
+                        # identical and mean different things.
+                        "installed": engines.lists_installed(provider.type),
                         "api_key_env": provider.api_key_env,
                         "api_key_set": _key_state(key, provider),
                         "models": [

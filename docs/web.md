@@ -109,6 +109,20 @@ be concrete.
 binding file, so there is nothing to ask, and a panel that ran that together with
 "did not answer" would report a working endpoint as a broken one.
 
+`installed` is the difference between two listings that look identical.
+Ollama's `/api/tags` is `ollama list` — models pulled onto *this disk*, ready
+now, and all of them. OpenRouter's is a catalogue of what it would route to for
+money, with nothing here yet. `detect.lists_installed()` is the one place that
+knows which is which, so the panel does not decide it from a type string of its
+own.
+
+**The route asks with `limit=None`.** `MODEL_CAP` is a sensible default for
+`init`, whose job is to fill a picker — *"a server offering hundreds is a
+catalogue, not a choice"*. This panel **is** that catalogue: OpenRouter answers
+with 396 models, and forty of them shown without a word reads as all of them.
+The cap stays the default on `catalogue_for` and this is the caller that lifts
+it.
+
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
 `.config`), which
 is what makes the API testable without a running daemon. `.store` answers for
@@ -267,6 +281,13 @@ the same width — so only one of the two is ever open, and `.shell-stage` reser
 one margin for whichever it is. Its width comes from `--rail-width` on the left
 and the drawer's constant on the right; the rail is `position: fixed`, so the
 stage has to reserve exactly that much or the board slides under it.
+
+**The panel filters rather than truncates.** A four-hundred-model catalogue is
+read by narrowing it, and the count keeps saying what it narrowed *from* — "12
+of 396 offered" — so the filter does not become the same silent truncation it
+replaced. An endpoint with nothing matching leaves the list entirely: left in
+place it would show "no answer" under its own heading, which is a different and
+more alarming thing than a search that missed.
 
 **A row is what the endpoint said, and a blank is what it did not.** A local
 model shows the two numbers that are its real price -- its size and

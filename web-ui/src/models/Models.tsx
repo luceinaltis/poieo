@@ -29,6 +29,7 @@ export function Models({
   onClose(): void
 }) {
   const [report, setReport] = useState<ModelsReport | null | undefined>(undefined)
+  const [filter, setFilter] = useState("")
 
   useEffect(() => {
     let live = true
@@ -54,17 +55,36 @@ export function Models({
           ✕
         </button>
       </header>
+      {/* One endpoint can offer hundreds. Filtering is how a catalogue is read,
+          and the alternative -- showing the first forty -- reads as all of
+          them. */}
+      {report?.binding ? (
+        <input
+          className="models-filter"
+          type="search"
+          aria-label="Filter models"
+          placeholder="filter"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
+      ) : null}
       {/* One box under the header, because the aside is a two-row grid: left
           loose, its `1fr` lands on whichever child happens to be second and
           stretches that one alone. */}
       <div className="models-body">
-        <Body report={report} />
+        <Body report={report} filter={filter.trim().toLowerCase()} />
       </div>
     </aside>
   )
 }
 
-function Body({ report }: { report: ModelsReport | null | undefined }) {
+function Body({
+  report,
+  filter,
+}: {
+  report: ModelsReport | null | undefined
+  filter: string
+}) {
   if (report === undefined) return <p className="models-note">asking…</p>
   // Null is the daemon not answering, which is a different thing from a
   // project with no models file -- and only one of them is yours to fix.
@@ -78,21 +98,57 @@ function Body({ report }: { report: ModelsReport | null | undefined }) {
       </p>
     )
   }
+  const blocks = report.endpoints.map((endpoint) => ({
+    endpoint,
+    shown: filter
+      ? endpoint.models.filter((m) => m.id.toLowerCase().includes(filter))
+      : endpoint.models,
+  }))
+  // An endpoint with nothing matching is dropped rather than shown empty: with
+  // a filter on, "no answer" under a heading would read as a broken endpoint
+  // rather than as a search that missed.
+  const matched = filter ? blocks.filter((b) => b.shown.length > 0) : blocks
+  if (filter && matched.length === 0) {
+    return <p className="models-note">nothing matches “{filter}”.</p>
+  }
   return (
     <>
-      {report.endpoints.map((endpoint) => (
-        <EndpointBlock key={endpoint.name} endpoint={endpoint} />
+      {matched.map(({ endpoint, shown }) => (
+        <EndpointBlock
+          key={endpoint.name}
+          endpoint={endpoint}
+          shown={shown}
+          filtered={Boolean(filter)}
+        />
       ))}
     </>
   )
 }
 
-function EndpointBlock({ endpoint }: { endpoint: Endpoint }) {
+function EndpointBlock({
+  endpoint,
+  shown,
+  filtered,
+}: {
+  endpoint: Endpoint
+  shown: ServedModel[]
+  filtered: boolean
+}) {
   return (
     <section className="models-endpoint" data-endpoint={endpoint.name}>
       <h3>
         <span className="models-endpoint-name">{endpoint.name}</span>
         <span className="models-kind">{endpoint.type}</span>
+        {/* What the listing *means*, not just how long it is. Ollama's is
+            `ollama list` -- pulled onto this disk, ready now. A routed
+            endpoint's is a catalogue of what it would run for money, with
+            nothing here yet. Identical-looking lists, different things. */}
+        <span
+          className="models-count"
+          data-listing={endpoint.installed ? "here" : "offered"}
+        >
+          {countText(endpoint, shown, filtered)}
+        </span>
         {/* Only when the endpoint names a variable. One that does not is
             resolving its own credential, which is not news. */}
         {endpoint.api_key_env ? (
@@ -105,10 +161,10 @@ function EndpointBlock({ endpoint }: { endpoint: Endpoint }) {
           </span>
         ) : null}
       </h3>
-      {endpoint.models.length > 0 ? (
+      {shown.length > 0 ? (
         <ul className="models-list">
-          {endpoint.models.map((model) => (
-            <Row key={model.id} model={model} local={endpoint.type === "ollama"} />
+          {shown.map((model) => (
+            <Row key={model.id} model={model} local={endpoint.installed} />
           ))}
         </ul>
       ) : (
@@ -130,6 +186,16 @@ function emptyBecause(endpoint: Endpoint): string {
   if (endpoint.api_key_set === false) return `no answer — ${endpoint.api_key_env} is not set`
   return "no answer"
 }
+
+/** How many, and of what -- the endpoint's own count when a filter narrows it. */
+function countText(endpoint: Endpoint, shown: ServedModel[], filtered: boolean): string {
+  const whole = endpoint.models.length
+  if (!whole) return ""
+  const what = endpoint.installed ? "on this machine" : "offered"
+  if (filtered && shown.length !== whole) return `${shown.length} of ${whole} ${what}`
+  return `${whole} ${what}`
+}
+
 
 function Row({ model, local }: { model: ServedModel; local: boolean }) {
   return (

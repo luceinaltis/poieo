@@ -37,6 +37,7 @@ const REPORT = {
       name: "ollama",
       type: "ollama",
       askable: true,
+      installed: true,
       api_key_env: null,
       api_key_set: null,
       models: [LOCAL],
@@ -45,6 +46,7 @@ const REPORT = {
       name: "routed",
       type: "openai_compatible",
       askable: true,
+      installed: false,
       api_key_env: "OPENROUTER_API_KEY",
       api_key_set: true,
       models: [ROUTED],
@@ -159,7 +161,15 @@ test("an endpoint with nothing to ask says that, not that it is down", async () 
   await render({
     ...REPORT,
     endpoints: [
-      { name: "fake", type: "mock", askable: false, api_key_env: null, api_key_set: null, models: [] },
+      {
+        name: "fake",
+        type: "mock",
+        askable: false,
+        installed: false,
+        api_key_env: null,
+        api_key_set: null,
+        models: [],
+      },
     ],
   })
 
@@ -175,6 +185,7 @@ test("an endpoint whose key is missing says so where the models would be", async
         name: "claude",
         type: "anthropic",
         askable: true,
+        installed: false,
         api_key_env: "ANTHROPIC_API_KEY",
         api_key_set: false,
         models: [],
@@ -196,4 +207,74 @@ test("a daemon that did not answer is said out loud", async () => {
   await render(null)
 
   expect(container.textContent).toContain("could not be asked")
+})
+
+test("a listing says how many, and whether they are here or merely offered", async () => {
+  // The one thing the screenshot could not tell you: eight models on this disk
+  // and four hundred on somebody's menu are the same-looking list.
+  await render()
+
+  const here = container.querySelector('[data-endpoint="ollama"] .models-count')!
+  expect(here.textContent).toBe("1 on this machine")
+  expect(here.getAttribute("data-listing")).toBe("here")
+
+  const offered = container.querySelector('[data-endpoint="routed"] .models-count')!
+  expect(offered.textContent).toBe("1 offered")
+  expect(offered.getAttribute("data-listing")).toBe("offered")
+})
+
+/**
+ * Type into the filter the way a person does.
+ *
+ * Through the prototype's own setter, because React installs a value tracker
+ * on every controlled input and a plain assignment slips past it -- the event
+ * fires and the component never sees a change. A `<select>` has no tracker,
+ * which is why the project picker's test can set `.value` directly.
+ */
+async function type(text: string) {
+  const box = container.querySelector<HTMLInputElement>(".models-filter")!
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+  await act(async () => {
+    set.call(box, text)
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+}
+
+test("filtering narrows the rows and says what it narrowed from", async () => {
+  // A four-hundred-model catalogue is read by filtering it. The count has to
+  // keep saying how many there really are, or the filter becomes the same
+  // silent truncation it replaced.
+  await render({
+    ...REPORT,
+    endpoints: [
+      { ...REPORT.endpoints[0], models: [LOCAL, { ...LOCAL, id: "llama3.2:3b", ref: "ollama/llama3.2:3b" }] },
+    ],
+  })
+
+  await type("llama")
+
+  expect(row("ollama/llama3.2:3b")).not.toBeNull()
+  expect(row("ollama/qwen3.5:latest")).toBeNull()
+  expect(container.querySelector(".models-count")!.textContent).toBe(
+    "1 of 2 on this machine",
+  )
+})
+
+test("an endpoint with nothing matching leaves rather than reading as broken", async () => {
+  await render()
+
+  await type("qwen3.5")
+
+  // `routed` has no match. Left in place it would show "no answer" under its
+  // heading, which is a different and alarming thing.
+  expect(container.querySelector('[data-endpoint="routed"]')).toBeNull()
+  expect(container.querySelector('[data-endpoint="ollama"]')).not.toBeNull()
+})
+
+test("a filter that matches nothing at all says so", async () => {
+  await render()
+
+  await type("nothing-is-called-this")
+
+  expect(container.textContent).toContain("nothing matches")
 })

@@ -56,7 +56,10 @@ CATALOGUE = {
 def _asks(monkeypatch, catalogue=None):
     served = CATALOGUE if catalogue is None else catalogue
 
-    async def fake(type_, base_url=None):
+    async def fake(type_, base_url=None, limit=None):
+        # The route lifts the cap; a stub that refused the argument would let
+        # that go untested.
+        assert limit is None, "the catalogue panel must not be capped"
         return served.get(type_, ())
 
     monkeypatch.setattr(detect_module, "catalogue_for", fake)
@@ -155,6 +158,21 @@ def test_an_endpoint_that_cannot_be_asked_says_so_rather_than_reading_as_down(
     assert _endpoints(body)["fake"]["models"] == []
 
 
+def test_a_listing_says_whether_it_is_what_is_here_or_what_is_offered(
+    tmp_path, monkeypatch
+):
+    """Two listings that look identical and mean different things. Ollama's is
+    `ollama list` -- pulled onto this disk, ready now. A routed endpoint's is a
+    catalogue of what it would run for money, with nothing here yet. A panel
+    that drew both the same way would have a reader believe four hundred models
+    were sitting on their laptop."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    assert _endpoints(body)["local"]["installed"] is True
+    assert _endpoints(body)["routed"]["installed"] is False
+
+
 def test_the_report_carries_no_address(tmp_path, monkeypatch):
     """A `base_url` is not needed to pick a model -- the endpoint's own name
     tells one from another -- and it is the one binding field that can carry a
@@ -224,7 +242,7 @@ def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
     peak = 0
     asked: list[str] = []
 
-    async def fake(type_, base_url=None):
+    async def fake(type_, base_url=None, limit=None):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)

@@ -55,6 +55,13 @@ export interface Endpoint {
   type: string
   /** False for `mock`, which answers from the binding file rather than a port. */
   askable: boolean
+  /**
+   * Whether this listing is what is **on this machine** or what the endpoint
+   * offers. Ollama's is `ollama list` -- pulled, here, ready. A routed
+   * endpoint's is a catalogue of what it would run for money, with nothing
+   * here yet. They look identical and are not.
+   */
+  installed: boolean
   /** The variable a key is read from; null when the endpoint names none. */
   api_key_env: string | null
   /** Null -- not false -- when it names none: its SDK resolves its own. */

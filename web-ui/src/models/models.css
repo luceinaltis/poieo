@@ -19,7 +19,27 @@
   align-items: baseline;
   display: flex;
   gap: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
+}
+
+/* Reading a four-hundred-model catalogue is filtering it. Full width because
+   the thing it filters is full width, and above the scroll so it does not
+   leave with the list. */
+.models-filter {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82em;
+  margin-bottom: 10px;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.models-filter:focus-visible {
+  border-color: #4a4034;
+  outline: none;
 }
 
 .models-head h2 {
@@ -86,6 +106,24 @@
 .models-kind {
   color: #6b6257;
   font-weight: 400;
+}
+
+/* How long the listing is, and -- the part that matters -- what it is a
+   listing *of*. Dimmer for a catalogue than for what is on the machine: one is
+   ready to run and the other is a menu. */
+.models-count {
+  color: #6b6257;
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.models-count[data-listing="here"] {
+  color: #a9b665;
+}
+
+/* A key sits after the count rather than pushing it around. */
+.models-endpoint h3 .models-key {
+  margin-left: 0;
 }
 
 /* Named, never valued. The colour is the only thing that shouts: an endpoint

@@ -356,3 +356,28 @@ async def test_a_type_that_cannot_be_asked_has_an_empty_catalogue():
     """`mock` answers from the binding file, so there is nothing to ask."""
     assert await detect_module.catalogue_for("mock", None) == ()
     assert not detect_module.askable("mock")
+
+
+async def test_the_cap_is_a_default_a_catalogue_can_lift(monkeypatch):
+    """`init` wants enough to fill a picker; a panel whose whole job is the
+    catalogue wants all of it. Forty of three hundred shown without a word
+    reads as all of them, which is the one thing a listing must not do."""
+    many = {"data": [{"id": f"m{n}"} for n in range(120)]}
+    _serves(monkeypatch, {"http://x/v1/models": many})
+
+    capped = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+    whole = await detect_module.catalogue_for(
+        "openai_compatible", "http://x/v1", limit=None
+    )
+
+    assert len(capped) == detect_module.MODEL_CAP
+    assert len(whole) == 120
+
+
+def test_only_a_local_backend_lists_what_is_on_this_machine():
+    """Two listings that look identical and mean different things: Ollama's is
+    `ollama list` -- pulled, here, ready -- and OpenRouter's is a catalogue of
+    what it would route to for money, with nothing here yet."""
+    assert detect_module.lists_installed("ollama")
+    assert not detect_module.lists_installed("openai_compatible")
+    assert not detect_module.lists_installed("anthropic")
