@@ -4,9 +4,13 @@ Detection **asks, and never decides.** It returns every engine that answered
 and the models each one reported; choosing among them, and writing anything
 down, belongs to the caller. Nothing here touches a file.
 
-It also runs **once**, at ``poieo init``. Run time reads files, never ports --
-a binding names an endpoint because somebody wrote it there, not because a
-port happened to answer tonight.
+**Run time reads files, never ports** -- a binding names an endpoint because
+somebody wrote it there, not because a port happened to answer tonight. It runs
+at ``poieo init``, at ``config add``, and on every paint of the board's models
+panel, which is looking for an engine installed since. That last one still only
+asks -- nothing is written until somebody presses the offer -- and it is a
+request of its own, because an address with nothing on it costs a whole
+``HTTP_TIMEOUT`` and no catalogue should wait on that.
 
 ``mock`` is deliberately not a candidate. It answers from a script, so a
 project that fell back to it would run all night and produce invented text.
@@ -20,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import httpx
 
@@ -90,6 +94,22 @@ class Engine:
     models: tuple[str, ...]
     # None when the backend's own SDK knows where it lives -- see _claude.
     base_url: str | None = None
+    # What the server called itself on its own listing, if it said. The only
+    # thing that tells vLLM from SGLang: they share a default port, so
+    # `label` -- which comes from the address -- can only ever be the pair.
+    said: str | None = None
+
+    @property
+    def known_as(self) -> str:
+        """What to call this endpoint on a screen or in a terminal.
+
+        What the server said when it said anything, and the address's own
+        label otherwise -- which for a port two products share is the pair,
+        `vLLM / SGLang`, and picking one of them from an address would be a
+        guess. One rule, so the board and `poieo config add` cannot name the
+        same server two different things.
+        """
+        return label_for(self.type, self.base_url, self.said) or self.label
 
 
 @dataclass(frozen=True)
@@ -374,26 +394,36 @@ def lists_installed(type_: str) -> bool:
     return type_ == "ollama"
 
 
-async def probe() -> list[Engine]:
-    """Every engine that answers, asked all at once, in CANDIDATES order.
+async def probe(candidates: Sequence[Candidate] = CANDIDATES) -> list[Engine]:
+    """Every engine that answers, asked all at once, in the given order.
 
     An engine serving nothing is left out: naming it would write a binding
     that fails on the project's first run.
+
+    `init` and `config add` want all of :data:`CANDIDATES`, which is the
+    default. The board asks about a subset -- the ones a project cannot
+    already reach -- because an address it has declared is one it is asking
+    about anyway, and offering it twice would write the same server into one
+    file under two names.
     """
 
     async def one(candidate: Candidate) -> Engine | None:
-        models = await models_for(candidate.type, candidate.base_url)
-        if not models:
+        # The whole answer, not `models_for`'s view of it: what a server called
+        # itself is the only evidence that separates two products sharing a
+        # port, and dropping it here would leave nobody able to recover it.
+        answered = await catalogue_for(candidate.type, candidate.base_url)
+        if not answered.models:
             return None
         return Engine(
             key=candidate.key,
             label=candidate.label,
             type=candidate.type,
-            models=models,
+            models=tuple(model.id for model in answered.models),
             base_url=candidate.base_url,
+            said=answered.server,
         )
 
-    found = await asyncio.gather(*(one(c) for c in CANDIDATES))
+    found = await asyncio.gather(*(one(c) for c in candidates))
     return [engine for engine in found if engine is not None]
 
 

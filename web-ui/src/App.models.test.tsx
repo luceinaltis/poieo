@@ -19,11 +19,15 @@ const fetchModels = vi.hoisted(() => vi.fn())
 // jsdom's fetch with a relative URL and land as an unhandled rejection.
 const fetchRuns = vi.hoisted(() => vi.fn(async () => []))
 const fetchRunEvents = vi.hoisted(() => vi.fn(async () => []))
+// The panel's second read, for engines this project cannot reach. Same reason
+// as the drawer's above: unmocked it reaches jsdom's fetch with a relative URL.
+const fetchUndeclared = vi.hoisted(() => vi.fn(async () => []))
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   fetchModels,
   fetchRuns,
   fetchRunEvents,
+  fetchUndeclared,
 }))
 
 import App from "./App"

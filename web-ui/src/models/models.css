@@ -64,7 +64,8 @@
   margin-right: auto;
 }
 
-.models-close {
+.models-close,
+.models-again {
   background: none;
   border: 0;
   color: #7a6e60;
@@ -73,8 +74,16 @@
   padding: 0 2px;
 }
 
-.models-close:hover {
+.models-close:hover:not(:disabled),
+.models-again:hover:not(:disabled) {
   color: #e8dcc8;
+}
+
+/* Dimmed rather than hidden while the answers are on their way: the button
+   staying where it is, unpressable, is the whole feedback this needs. */
+.models-again:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 /* Everything below the header scrolls together, and starts at the top: the
@@ -311,6 +320,50 @@
   flex: none;
   font-size: 0.82em;
   margin: 0 0 10px;
+}
+
+/* A footnote to the catalogue above it, so it reads quieter than an endpoint
+   heading -- but boxed, because it is the one thing here that is news. */
+.models-offer {
+  align-items: baseline;
+  background: #201d17;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: #9a9086;
+  display: flex;
+  font-size: 0.82em;
+  gap: 10px;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.models-offer strong {
+  color: #d6ccbe;
+  font-weight: 600;
+}
+
+.models-offer button {
+  background: #2a251d;
+  border: 1px solid #3a3227;
+  border-radius: 4px;
+  color: #d6ccbe;
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  font-size: 1em;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.models-offer button:hover:not(:disabled) {
+  border-color: #6b6257;
+  color: #e8dcc8;
+}
+
+.models-offer button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* The row is the button: a catalogue is read by scanning names, and a verb

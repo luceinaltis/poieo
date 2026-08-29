@@ -17,8 +17,14 @@
 
 import { useEffect, useState } from "react"
 
-import { fetchModels, pickModel } from "../api"
-import type { Endpoint, ModelsAnswer, ModelsReport, ServedModel } from "../api"
+import { addEngine, fetchModels, fetchUndeclared, pickModel } from "../api"
+import type {
+  Endpoint,
+  ModelsAnswer,
+  ModelsReport,
+  ServedModel,
+  UndeclaredEngine,
+} from "../api"
 import { useAct } from "../useAct"
 import "./models.css"
 
@@ -35,13 +41,36 @@ export function Models({
   // reader picks one -- the common project has no others and never sees this.
   const [role, setRole] = useState("default")
   const [reload, setReload] = useState(0)
+  const [asking, setAsking] = useState(true)
+  // Two requests, not one. Looking for an engine this project has never used
+  // means asking ports nothing may be listening on, and a closed one costs a
+  // whole timeout -- so the catalogue would have waited a second and a half
+  // for its own footnote. This lands under it whenever it arrives.
+  const [offers, setOffers] = useState<UndeclaredEngine[]>([])
   const { busy, refused, act } = useAct<ModelsAnswer>(() => setReload((n) => n + 1))
+
+  // Blanking belongs to a change of subject, not to a re-ask. Every refresh
+  // and every write asks again, and a panel that flashed to "asking…" each
+  // time would take away the list the reader is comparing against.
+  useEffect(() => setReport(undefined), [project])
 
   useEffect(() => {
     let live = true
-    setReport(undefined)
+    setAsking(true)
     void fetchModels(project).then((answer) => {
-      if (live) setReport(answer)
+      if (!live) return
+      setReport(answer)
+      setAsking(false)
+    })
+    return () => {
+      live = false
+    }
+  }, [project, reload])
+
+  useEffect(() => {
+    let live = true
+    void fetchUndeclared(project).then((found) => {
+      if (live) setOffers(found)
     })
     return () => {
       live = false
@@ -56,6 +85,9 @@ export function Models({
   const use = (model: ServedModel) =>
     void act(() => pickModel(project, model.ref, role))
 
+  const add = (engine: UndeclaredEngine) =>
+    void act(() => addEngine(project, engine.name))
+
   return (
     <aside className="models" aria-label="Models">
       <header className="models-head">
@@ -65,6 +97,21 @@ export function Models({
             {shortPath(report.binding.path)}
           </span>
         ) : null}
+        {/* The panel reads when it opens and not again. Pull a model in a
+            terminal with it open and the list is stale, and closing and
+            reopening was the only way to find out. Everything goes out again
+            -- the declared endpoints and the machine both. */}
+        <button
+          type="button"
+          className="models-again"
+          data-do="refresh"
+          aria-label="Ask the endpoints again"
+          title="Ask again"
+          disabled={asking}
+          onClick={() => setReload((n) => n + 1)}
+        >
+          ↻
+        </button>
         <button type="button" className="models-close" onClick={onClose}>
           ✕
         </button>
@@ -123,6 +170,27 @@ export function Models({
           onUse={use}
           busy={busy}
         />
+        {/* Under the catalogue, because it is a footnote to it: something is
+            running here that none of the blocks above could have shown. Drawn
+            only when there is one, which is the point -- a standing button
+            whose usual answer is "nothing new" is one people learn to ignore,
+            and this is silent until there is something to say. */}
+        {offers.map((one) => (
+          <p className="models-offer" data-offer={one.name} key={one.name}>
+            <span>
+              <strong>{one.label}</strong> is answering on this machine, with{" "}
+              {one.models.length} model{one.models.length === 1 ? "" : "s"} this
+              project cannot use yet.
+            </span>
+            {/* Not "add", which the reader would have to guess the object of.
+                Pressing this declares the endpoint; it moves nothing that is
+                already in use, and choosing among these models is still a
+                separate click on one of them. */}
+            <button type="button" data-do="add" disabled={busy} onClick={() => add(one)}>
+              let it use them
+            </button>
+          </p>
+        ))}
       </div>
     </aside>
   )

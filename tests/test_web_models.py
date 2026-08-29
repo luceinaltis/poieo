@@ -266,10 +266,16 @@ def test_a_variable_that_is_not_set_reads_false(tmp_path, monkeypatch):
 
 
 def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
-    """Each endpoint costs up to `HTTP_TIMEOUT` when it is not listening. Asked
+    """Each address costs up to `HTTP_TIMEOUT` when nothing is listening. Asked
     one at a time, a panel over two dead endpoints waits for both in turn;
     asked together it waits for the slower one. Measured the way the board's
-    own review states are: by how many were ever in flight together."""
+    own review states are: by how many were ever in flight together.
+
+    Only the declared ones. Looking for engines this project has *not* got is
+    the route below, and the reason it is a separate route: a candidate port
+    nothing is listening on costs a whole timeout, so folding the search in
+    here would have made every catalogue wait on its own footnote.
+    """
     import asyncio as _asyncio
 
     active = 0
@@ -531,3 +537,349 @@ def test_the_panel_offers_the_roles_the_file_names(tmp_path, monkeypatch):
     body = _models(_client(tmp_path, binding=_BLOCK, tasks=False)).json()
 
     assert body["roles"] == ["default", "reader"]
+
+
+# -- engines running here that this project has never used -------------------
+#
+# Detection runs once, at `init`. Install Ollama the week after and the binding
+# has never heard of it, so the panel shows nothing from it -- and shows no
+# reason why either, which reads as "there is nothing there". So the addresses
+# `CANDIDATES` knows are asked too, and whatever answers that this project
+# cannot reach is offered.
+#
+# On **its own route**, measured rather than assumed: a candidate port nothing
+# is listening on costs a full `HTTP_TIMEOUT` rather than refusing fast, so
+# folding this into the catalogue would have added a second and a half to every
+# paint of it. Asked apart, nothing waits on it.
+#
+# It is an offer, never an edit: writing the file is `models/add` below, which
+# a person presses.
+
+
+def _machine(monkeypatch, at):
+    """What answers at each address, so a test can put an engine on a port.
+
+    Keyed by address rather than by type, because the address is what the
+    offer turns on: a declared endpoint and a candidate are routinely the same
+    type, and telling them apart by type would make every test here pass for
+    the wrong reason.
+    """
+
+    async def fake(type_, base_url=None, limit=None):
+        return at.get(base_url, Catalogue())
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+
+
+_OLLAMA = "http://localhost:11434"
+_LMSTUDIO = "http://localhost:1234/v1"
+_VLLM = "http://localhost:8000/v1"
+
+# A binding that reaches nothing on this machine, so every candidate that
+# answers is one this project cannot use.
+_NOWHERE = """name: nowhere
+providers:
+  routed:
+    type: openai_compatible
+    base_url: https://openrouter.ai/api/v1
+default:
+  provider: routed
+  model: qwen/flash
+"""
+
+
+def _look(client, project="board"):
+    return client.get(f"/api/projects/{project}/models/undeclared")
+
+
+def _offered(body):
+    return {one["name"]: one for one in body["undeclared"]}
+
+
+def test_the_catalogue_does_not_go_looking_for_engines(tmp_path, monkeypatch):
+    """The measurement this split exists for. A candidate nothing is listening
+    on does not refuse -- it costs the whole `HTTP_TIMEOUT` -- so a catalogue
+    that searched for new engines while it was at it would have taken a second
+    and a half to draw a list it already had every answer for."""
+    asked = []
+
+    async def fake(type_, base_url=None, limit=None):
+        asked.append(base_url)
+        return Catalogue()
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+    _models(_client(tmp_path, binding=_NOWHERE, tasks=False))
+
+    assert asked == ["https://openrouter.ai/api/v1"]
+
+
+def test_an_engine_answering_here_that_this_project_cannot_reach_is_offered(tmp_path, monkeypatch):
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    body = _look(_client(tmp_path, binding=_NOWHERE, tasks=False)).json()
+
+    offer = _offered(body)["lmstudio"]
+    assert offer["label"] == "LM Studio"
+    assert offer["models"] == ["qwen3-4b"]
+
+
+def test_an_engine_this_project_already_declares_is_not_offered(tmp_path, monkeypatch):
+    _machine(monkeypatch, {_OLLAMA: Catalogue((Served(id="qwen3.5:latest"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    assert _look(client).json()["undeclared"] == []
+    assert [e["name"] for e in _models(client).json()["endpoints"]] == ["local"]
+
+
+def test_an_engine_declared_under_another_name_is_not_offered_again(tmp_path, monkeypatch):
+    """The offer is about an address, not a key. Somebody who declared the
+    vLLM on this machine as `fast` has it already; asking them to add it a
+    second time under the name detection would have picked writes the same
+    server into the file twice."""
+    binding = """name: renamed
+providers:
+  fast:
+    type: openai_compatible
+    base_url: http://localhost:8000/v1
+default:
+  provider: fast
+  model: qwen3-32b
+"""
+    _machine(monkeypatch, {_VLLM: Catalogue((Served(id="qwen3-32b"),))})
+    body = _look(_client(tmp_path, binding=binding, tasks=False)).json()
+
+    assert body["undeclared"] == []
+
+
+def test_the_same_address_spelled_two_ways_is_still_one_endpoint(tmp_path, monkeypatch):
+    """`127.0.0.1` and `localhost` are the same machine and a config may say
+    either; a trailing slash is nobody's second endpoint."""
+    binding = _BLOCK.replace("http://localhost:11434", "http://127.0.0.1:11434/")
+    _machine(monkeypatch, {_OLLAMA: Catalogue((Served(id="qwen3.5:latest"),))})
+    body = _look(_client(tmp_path, binding=binding, tasks=False)).json()
+
+    assert body["undeclared"] == []
+
+
+def test_an_engine_that_answers_with_nothing_is_not_offered(tmp_path, monkeypatch):
+    """The rule `probe` already holds: naming an engine that serves nothing
+    writes a binding that fails on the project's first run."""
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue()})
+    body = _look(_client(tmp_path, binding=_NOWHERE, tasks=False)).json()
+
+    assert body["undeclared"] == []
+
+
+def test_the_offer_carries_no_address(tmp_path, monkeypatch):
+    """Same fence as the endpoints beside it. The board never needs to know
+    where an engine lives -- it names one back by key, and the daemon looks the
+    address up in the table it detects from."""
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    response = _look(_client(tmp_path, binding=_NOWHERE, tasks=False))
+
+    assert _offered(response.json())["lmstudio"]["models"] == ["qwen3-4b"]
+    assert "localhost" not in response.text
+    assert "1234" not in response.text
+
+
+def test_a_project_that_names_no_binding_is_not_asked_about_engines(tmp_path, monkeypatch):
+    """There is nowhere to write an answer to, so the four addresses are not
+    worth a round trip."""
+    asked: list[str | None] = []
+
+    async def fake(type_, base_url=None, limit=None):
+        asked.append(base_url)
+        return Catalogue()
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+    (tmp_path / "cards").mkdir()
+    path = tmp_path / "poieo.yaml"
+    path.write_text("name: board\ntasks: cards\n", encoding="utf-8")
+    client = TestClient(create_app(Daemon(load_config(path), store=NullStore())))
+
+    assert _look(client).json()["undeclared"] == []
+    assert asked == []
+
+
+# -- letting this project use an engine that is already running --------------
+#
+# The second write on this route, and the same fence: it may write the
+# project's binding file and nothing else, and never accepts or returns a
+# credential. It goes through `rebind.declare`, so it is the same edit
+# `poieo config add` makes -- and, like that command, it only ever *adds*.
+# Nothing about what a role uses moves; choosing is what `models/use` is for.
+
+
+def _add(client, engine, project="board"):
+    return client.post(f"/api/projects/{project}/models/add", json={"engine": engine})
+
+
+def test_adding_an_engine_writes_it_into_the_binding(tmp_path, monkeypatch):
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add(client, "lmstudio")
+
+    assert reply.status_code == 200
+    assert reply.json() == {"status": "added", "engine": "lmstudio", "models": ["qwen3-4b"]}
+    written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert "lmstudio:" in written
+    assert "type: openai_compatible" in written
+    assert "base_url: http://localhost:1234/v1" in written
+
+
+def test_adding_an_engine_moves_nothing_that_is_already_in_use(tmp_path, monkeypatch):
+    """Declaring a model and choosing one are different decisions, and this is
+    the first. A panel that quietly repointed the default would change what
+    every unattended run does."""
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    assert _add(client, "lmstudio").status_code == 200
+
+    body = _models(client).json()
+    assert body["endpoints"][0]["name"] == "local"
+    written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert 'default:\n  provider: local\n  model: "qwen3.5:latest"' in written
+
+
+def test_an_engine_already_in_the_file_is_refused_and_the_file_is_untouched(tmp_path, monkeypatch):
+    """The offer is drawn from a report taken a moment ago; between the paint
+    and the press somebody may have added it in a terminal."""
+    _machine(monkeypatch, {_OLLAMA: Catalogue((Served(id="qwen3.5:latest"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add(client, "ollama")
+
+    assert reply.status_code == 409
+    assert "already" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_an_engine_nobody_detects_is_refused_by_name(tmp_path, monkeypatch):
+    """400 and not 409: the argument names nothing this knows how to look for,
+    which is malformed rather than a state that could change."""
+    _machine(monkeypatch, {})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add(client, "not-an-engine")
+
+    assert reply.status_code == 400
+    assert "lmstudio" in reply.json()["engines"]
+
+
+def test_an_engine_that_has_stopped_answering_is_not_written(tmp_path, monkeypatch):
+    """It answered when the panel was painted and does not now. Writing it
+    would put an address in the file that fails on the project's next run --
+    the rule `probe` holds, held here too because the press is a second trip."""
+    _machine(monkeypatch, {})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add(client, "lmstudio")
+
+    assert reply.status_code == 409
+    assert "not answering" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_a_file_that_cannot_be_added_to_is_refused_in_rebinds_own_words(tmp_path, monkeypatch):
+    """A whole `providers:` written on one line, which is legal YAML and not a
+    shape anything can be appended to. `rebind` writes, sees the result will
+    not load, and puts the file back exactly as it was -- so the refusal is
+    what the reader gets, not a corrupted config.
+
+    Note `_TWO` is *not* this case, though it looks close: block-form
+    `providers:` with flow-style children takes an addition fine, because
+    adding only ever appends a sibling and never edits inside one.
+    """
+    flow = 'name: flow\nproviders: {local: {type: ollama, base_url: "http://localhost:11434"}}\n'
+    flow += 'default: {provider: local, model: "qwen3.5:latest"}\n'
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    client = _client(tmp_path, binding=flow, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add(client, "lmstudio")
+
+    assert reply.status_code == 409
+    assert "b.yaml" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_adding_an_engine_to_an_unknown_project_is_404(tmp_path, monkeypatch):
+    _machine(monkeypatch, {})
+    reply = _add(_client(tmp_path, tasks=False), "lmstudio", project="ghost")
+
+    assert reply.status_code == 404
+    assert reply.json()["projects"] == ["board"]
+
+
+def test_a_get_on_the_add_route_is_not_allowed(tmp_path, monkeypatch):
+    _machine(monkeypatch, {})
+    client = _client(tmp_path, tasks=False)
+
+    assert client.get("/api/projects/board/models/add").status_code == 405
+
+
+def test_adding_an_engine_never_carries_a_credential(tmp_path, monkeypatch):
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-planted-by-this-test")
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    binding = _BLOCK.replace("    type: ollama\n", "    type: ollama\n    api_key_env: POIEO_TEST_KEY\n")
+    client = _client(tmp_path, binding=binding, tasks=False)
+
+    reply = _add(client, "lmstudio")
+
+    assert reply.status_code == 200
+    assert "sk-planted-by-this-test" not in reply.text
+
+
+def test_the_new_endpoint_is_listed_without_a_restart(tmp_path, monkeypatch):
+    """The whole point of pressing it. The daemon re-reads the file it just
+    wrote, so the endpoint the next paint asks is the one now on disk.
+
+    Over a project **with a task on this binding**, which is the case the
+    reread exists for: the panel then answers from the spec in memory, and
+    without the reread it would go on describing the file as it was at start-up
+    however many times the reader pressed.
+    """
+    _machine(
+        monkeypatch,
+        {
+            _OLLAMA: Catalogue((Served(id="qwen3.5:latest"),)),
+            _LMSTUDIO: Catalogue((Served(id="qwen3-4b"),)),
+        },
+    )
+    client = _client(tmp_path, binding=_BLOCK, tasks=True)
+    assert [e["name"] for e in _models(client).json()["endpoints"]] == ["local"]
+
+    _add(client, "lmstudio")
+
+    body = _models(client).json()
+    assert [e["name"] for e in body["endpoints"]] == ["local", "lmstudio"]
+    assert [m["id"] for m in _endpoints(body)["lmstudio"]["models"]] == ["qwen3-4b"]
+    # And it is no longer something to offer, because it is now declared.
+    assert _look(client).json()["undeclared"] == []
+
+
+def test_an_offer_says_which_product_answered_not_the_pair_that_share_a_port(tmp_path, monkeypatch):
+    """vLLM and SGLang default to the same port, so the address can never tell
+    them apart and the candidate's own label is the pair. What can tell them
+    apart is the server, which names itself on its listing -- and reading it
+    back off the binding would be believing what its author typed."""
+    monkeypatch.setattr(
+        detect_module,
+        "catalogue_for",
+        lambda type_, base_url=None, limit=None: _answers(
+            Catalogue((Served(id="qwen3-32b"),), "SGLang") if base_url == _VLLM else Catalogue()
+        ),
+    )
+    body = _look(_client(tmp_path, binding=_NOWHERE, tasks=False)).json()
+
+    assert _offered(body)["vllm"]["label"] == "SGLang"
+
+
+def _answers(catalogue):
+    async def ready():
+        return catalogue
+
+    return ready()
