@@ -1,12 +1,11 @@
 import json
 
+from conftest import EXAMPLES, at, card
+from test_workspace import make_repo
 from typer.testing import CliRunner
 
-from test_workspace import make_repo
-
-from conftest import card, EXAMPLES, at
-from poieo.layout import layout_for
 from poieo.cli import AFTER, BOARD, SETUP, app
+from poieo.layout import layout_for
 
 runner = CliRunner()
 

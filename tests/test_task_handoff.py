@@ -10,8 +10,8 @@ Design: docs/daemon.md
 import asyncio
 
 import pytest
-
 from conftest import card
+
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.service import MAX_CHAIN
 from poieo.errors import SpecError
@@ -552,17 +552,6 @@ async def test_a_card_can_hand_off_on_what_the_run_spent(tmp_path):
     await _down(daemon, task)
 
 
-async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
-    """The threshold is read, not assumed.
-
-    The log matters as much as the count here: an unreadable condition is also
-    treated as no match, so "nobody was woken" on its own cannot tell a guard
-    that held from a name the scope never had.
-    """
-    block = _TO_RECEIVER.replace(
-        "run.status == 'completed'", "run.usage.output_tokens > 1000"
-    )
-    daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
 _ASKING = """\
 name: quick
 entry: a

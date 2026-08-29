@@ -1,6 +1,5 @@
 """BroadcastStore: events go to the file store and to live subscribers."""
 
-import asyncio
 
 from poieo.store import Event, NullStore, RunStore
 from poieo.web.events import BroadcastStore

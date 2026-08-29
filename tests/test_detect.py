@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from poieo import detect as detect_module
-from poieo.detect import CANDIDATES, Engine, detect
+from poieo.detect import CANDIDATES, detect
 
 
 def _serves(monkeypatch, answers: dict[str, object]):

@@ -144,8 +144,8 @@ these is wrong, the document is wrong — fix it in the PR where you found out.*
 ## The gate, exactly
 
 ```bash
-# Python — the global pytest plugin on this machine is broken, hence the flags
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
+# Python — tests then lint; the flags dodge a broken global pytest plugin here
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio && ruff check src tests
 
 # Frontend — run mode, never watch (watch mode hangs an agent)
 npm test --workspace web-ui

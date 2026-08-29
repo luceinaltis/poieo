@@ -3,6 +3,7 @@
 import asyncio
 
 from conftest import card
+
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 

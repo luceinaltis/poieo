@@ -1,14 +1,14 @@
 """A task that fails the same way three times pauses itself and says so."""
 
-from poieo.layout import layout_for
 import asyncio
 from types import SimpleNamespace
 
 from conftest import card
+
 from poieo.daemon import Daemon, load_config
 from poieo.daemon.service import PAUSE_AFTER, TaskRunner
+from poieo.layout import layout_for
 from poieo.store import NullStore
-
 
 # -- the counter, in isolation ------------------------------------------------
 

@@ -8,9 +8,9 @@ that only holds if git is actually involved.
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+from conftest import card
 from test_workspace import git, head, make_repo
 
-from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.project import SpendSpec
 from poieo.store import RunStore

@@ -6,11 +6,12 @@ test here is the address, the payload, and what the user is told.
 """
 
 import json
+
 import httpx
 import pytest
+from conftest import card
 from typer.testing import CliRunner
 
-from conftest import card
 from poieo.cli import app
 
 runner = CliRunner()

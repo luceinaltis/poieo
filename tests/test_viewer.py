@@ -1,4 +1,5 @@
 from conftest import EXAMPLES
+
 from poieo.binding import load_binding
 from poieo.graph import GraphSpec, load_graph
 from poieo.viewer import mermaid_source, render_page

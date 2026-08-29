@@ -4,17 +4,16 @@ import asyncio
 from types import SimpleNamespace
 
 from starlette.testclient import TestClient
-
 from test_workspace import git, head, make_repo
 
 from poieo.binding import BindingSpec
-from poieo.workspace import Workspace
 from poieo.graph import GraphSpec
 from poieo.project import MARKER, ProjectSpec
 from poieo.store import Event, RunStore
-from poieo.web.events import BroadcastStore
 from poieo.web import server
-from poieo.web.server import create_app, sse_frame, _event_stream
+from poieo.web.events import BroadcastStore
+from poieo.web.server import _event_stream, create_app, sse_frame
+from poieo.workspace import Workspace
 
 
 def stub_project(tmp_path, project_name=None):
@@ -88,7 +87,7 @@ def stub_runner(
         current_run_id=current,
         last_result=last,
         workspace=workspace,
-        trigger=SimpleNamespace(describe=f"interval 30s"),
+        trigger=SimpleNamespace(describe="interval 30s"),
         task=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
             binding=BindingSpec.model_validate(binding or STUB_BINDING),

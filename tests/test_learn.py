@@ -10,11 +10,11 @@ import json
 import os
 
 from conftest import at
+
+import poieo.learn as learning
 from poieo.binding import BindingSpec
 from poieo.learn import learn
 from poieo.providers import ProviderPool
-
-import poieo.learn as learning
 
 
 def _project(tmp_path, page="Never push to main."):

@@ -5,8 +5,9 @@ a failure to write is logged and swallowed, and the fan cap plus decay make
 runaway impossible by construction.
 """
 
-from conftest import at
 from datetime import datetime, timedelta, timezone
+
+from conftest import at
 
 from poieo.strength import FAN_CAP, reinforce, strengths
 

@@ -5,10 +5,9 @@ import json
 from pathlib import Path
 
 import pytest
-
+from conftest import card
 from typer.testing import CliRunner
 
-from conftest import card
 from poieo import detect as detect_module
 from poieo.cli import app
 from poieo.detect import Engine
@@ -256,7 +255,6 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
         "name: g\nentry: a\nnodes: [{id: a, type: agent, role: r, prompt: hi}]\n",
         encoding="utf-8",
     )
-    marker = tmp_path / "poieo.yaml"
     card(tmp_path / "tasks", "f", "graph: ../g.yaml\n")
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["tasks"])

@@ -132,3 +132,26 @@ leaves the check green; it is asking about the bundle, not about your diff.
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and
 whether the change fits the design at all (9).
+
+## What lint enforces, and what it refuses to
+
+*Merge condition 1.* `ruff check src tests`, configured in `pyproject.toml` and
+run by the same CI job as the Python suite. Three rule families, and the choice
+of *which* is the whole point:
+
+- **`F` — pyflakes.** A name that does not exist, an import or a local nobody
+  reads, an f-string with nothing to fill in. These say *this is wrong*, not
+  *I would have written it differently*, so they almost never cry wolf. A linter
+  that is usually wrong gets skimmed past, and then it is worth nothing.
+- **`E501` at 120, not the default 88.** The comments here carry as much as the
+  code and are wrapped by hand at about 86; the formatter never reflows those,
+  so an 88 limit would have meant rewrapping prose across the repository to
+  satisfy a rule about code. At 120 there are eleven long lines instead of 374.
+- **`I` — import order.** Mechanical, and `--fix` does all of it.
+
+Everything past that is deliberately off. Style rules encode somebody's taste,
+and a rule nobody agreed to is a rule that gets argued with in review forever.
+
+`src/poieo/editor.py` and `src/poieo/viewer.py` are exempt from `E501`. They hold
+JavaScript and CSS inside Python strings, where a `# noqa` would be written into
+the asset rather than the module — the line cannot be excused where it sits.

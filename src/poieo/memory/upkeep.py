@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from ..blob import digest, path_for
-from .results import results_dir, used_in
 from .entries import PAGE_BUDGET, Entry, keeps_memory, read_page, readable_entries
 from .index import fts_available
+from .results import results_dir, used_in
 
 # How far back the accounting reads, and how often an entry must have been
 # shown, unused, before it is worth naming.

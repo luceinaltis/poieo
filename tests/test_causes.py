@@ -1,8 +1,8 @@
 """A failed run says why in words -- classified once, shown everywhere."""
 
-from conftest import at
 import json
 
+from conftest import at
 from typer.testing import CliRunner
 
 from poieo.cli import app

@@ -5,15 +5,14 @@ speed -- and the plain scan behind the same interface must return the same
 entries, or the fallback is a different feature wearing the same name.
 """
 
-from conftest import at
 import pytest
+from conftest import at
+from test_card import write_card
 
 import poieo.memory.index as memory_index
 import poieo.memory.recall as memory_recall
-from poieo.memory import read_memory
 from poieo.card import load_card
-
-from test_card import write_card
+from poieo.memory import read_memory
 
 
 def _project(tmp_path, prompt="review the api batch sizes in the importer"):
