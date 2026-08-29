@@ -50,6 +50,15 @@ name in the bar and in `document.title`, since two boards open side by side are
 two tabs, and hangs the folder off the label as a tooltip: two worktrees of one
 repository can share a name, but not a path.
 
+**The board shows one project at a time.** With several, the bar's name becomes
+a picker; with one it stays a name, because a picker with one option in it is
+furniture. There is no "all": two projects side by side share nothing but a
+machine — no arrow crosses between them — so all of them at once is a wall
+rather than a board. The choice is remembered like the skin is (`poieo.project`
+in `localStorage`), and a remembered project the daemon was restarted without
+falls back to the first rather than leaving the board filtering on nothing,
+which looks exactly like broken.
+
 **A task's identity is its project and its name**, and every route that names
 one takes both. A name alone stopped picking out one task the moment a daemon
 could run two projects, and every project has a `chores`. The page keys its

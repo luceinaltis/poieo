@@ -159,6 +159,23 @@ export function keyOfTask(project: string, task: string): string {
   return `${project}/${task}`
 }
 
+/**
+ * The board, narrowed to one project.
+ *
+ * A daemon runs as many projects as it was given, and looking at all of them
+ * at once is looking at a wall: the boxes are unrelated, no arrow crosses
+ * between them, and the only thing they share is a machine. One at a time is
+ * the whole board, not a filtered one.
+ */
+export function onlyProject(stage: StageState, project: string | null): StageState {
+  if (project === null) return stage
+  const tasks: Record<string, TaskState> = {}
+  for (const [key, task] of Object.entries(stage.tasks)) {
+    if (task.project === project) tasks[key] = task
+  }
+  return { ...stage, tasks }
+}
+
 export function initialStage(rows: TaskRow[]): StageState {
   const tasks: Record<string, TaskState> = {}
   for (const row of rows) {

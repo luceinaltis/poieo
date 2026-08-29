@@ -97,12 +97,14 @@ const FLOWS: TaskRow[] = [
 
 function fakeStore(
   stage: StageState,
-  project: ProjectRow | null = { name: "chores", root: "/home/k/chores" },
+  // Named for the project FLOWS' rows belong to: the board shows one
+  // project's tasks, so a fake naming another would filter them all away.
+  project: ProjectRow | ProjectRow[] | null = { name: "board", root: "/home/k/chores" },
 ): StageStore & { push(next: StageState): void } {
   let current = stage
   // One array, not a fresh one per call: useSyncExternalStore compares
   // snapshots by identity and re-renders forever if they never match.
-  const projectList = project ? [project] : []
+  const projectList = project === null ? [] : [project].flat()
   const listeners = new Set<() => void>()
   return {
     getStage: () => current,
@@ -142,7 +144,10 @@ afterEach(() => {
   container.remove()
 })
 
-async function render(stage: StageState, project?: ProjectRow | null) {
+async function render(
+  stage: StageState,
+  project?: ProjectRow | ProjectRow[] | null,
+) {
   const store = fakeStore(stage, project === undefined ? undefined : project)
   await act(async () => {
     root.render(<App store={store} />)
@@ -287,4 +292,93 @@ test("the tab says it too, because that is what two open boards show", async () 
 test("a board that has not heard yet says nothing rather than guessing", async () => {
   await render(initialStage([]), null)
   expect(container.querySelector(".shell-project")).toBeNull()
+})
+
+// -- picking a project --------------------------------------------------------
+
+const TWO: ProjectRow[] = [
+  { name: "night shift", root: "/home/k/a" },
+  { name: "day job", root: "/home/k/b" },
+]
+
+const MIXED: TaskRow[] = [
+  { ...FLOWS[0], project: "night shift" },
+  { ...FLOWS[1], project: "day job" },
+]
+
+const picker = () => container.querySelector<HTMLSelectElement>(".shell-project-pick")
+
+
+test("one project is a name, not a thing to choose between", async () => {
+  await render(initialStage(FLOWS), { name: "night shift", root: "/home/k/a" })
+
+  expect(picker()).toBeNull()
+  expect(container.querySelector(".shell-project")!.textContent).toBe("night shift")
+})
+
+
+test("several projects become a picker, and the board shows one of them", async () => {
+  await render(initialStage(MIXED), TWO)
+
+  expect(Array.from(picker()!.options).map((o) => o.value)).toEqual([
+    "night shift",
+    "day job",
+  ])
+  // The first, until asked otherwise -- and only its task.
+  expect(picker()!.value).toBe("night shift")
+  expect(container.querySelectorAll("[data-task]")).toHaveLength(1)
+  expect(container.querySelector("[data-task]")!.getAttribute("data-task")).toBe(
+    "night shift/chores",
+  )
+})
+
+
+test("choosing another project changes what the board is showing", async () => {
+  await render(initialStage(MIXED), TWO)
+
+  await act(async () => {
+    const select = picker()!
+    select.value = "day job"
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+
+  expect(container.querySelector("[data-task]")!.getAttribute("data-task")).toBe(
+    "day job/revision",
+  )
+})
+
+
+test("the choice outlives the page, the way the view does", async () => {
+  localStorage.setItem("poieo.project", "day job")
+  await render(initialStage(MIXED), TWO)
+
+  expect(picker()!.value).toBe("day job")
+})
+
+
+test("a remembered project the daemon no longer runs falls back to the first", async () => {
+  // The daemon was restarted without it. A board that showed nothing, because
+  // it was filtering on a project that is not there, would look broken.
+  localStorage.setItem("poieo.project", "somewhere else")
+  await render(initialStage(MIXED), TWO)
+
+  expect(picker()!.value).toBe("night shift")
+  expect(container.querySelectorAll("[data-task]")).toHaveLength(1)
+})
+
+
+test("switching projects puts away a drawer opened in the last one", async () => {
+  await render(initialStage(MIXED), TWO)
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="night shift/chores"] .basic-pick')!.click()
+  })
+  expect(container.querySelector(".drawer")).not.toBeNull()
+
+  await act(async () => {
+    const select = picker()!
+    select.value = "day job"
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+
+  expect(container.querySelector(".drawer")).toBeNull()
 })
