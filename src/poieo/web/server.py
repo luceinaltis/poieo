@@ -25,8 +25,8 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, S
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from ..binding import load_binding
 from .. import detect as engines
+from ..binding import load_binding
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
 from .events import BroadcastStore
@@ -367,9 +367,7 @@ def create_app(daemon: Any) -> Starlette:
                         # reader nothing about who they were talking to. Null
                         # when the address is one nobody wrote down, and the
                         # panel falls back to the type.
-                        "label": engines.label_for(
-                            provider.type, provider.base_url, answered.server
-                        ),
+                        "label": engines.label_for(provider.type, provider.base_url, answered.server),
                         # "did not answer" and "there is nothing to ask" are
                         # different facts, and a listing that conflated them
                         # would read as a fault.

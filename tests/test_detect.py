@@ -347,9 +347,7 @@ async def test_models_for_is_the_same_listing_read_for_its_names(monkeypatch):
     `config use` only ever wanted names, and still get exactly those."""
     _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_DETAILED})
 
-    assert await detect_module.models_for("ollama", "http://localhost:11434") == (
-        "qwen3.5:latest",
-    )
+    assert await detect_module.models_for("ollama", "http://localhost:11434") == ("qwen3.5:latest",)
 
 
 async def test_a_type_that_cannot_be_asked_has_an_empty_catalogue():
@@ -366,9 +364,7 @@ async def test_the_cap_is_a_default_a_catalogue_can_lift(monkeypatch):
     _serves(monkeypatch, {"http://x/v1/models": many})
 
     capped = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
-    whole = (
-        await detect_module.catalogue_for("openai_compatible", "http://x/v1", limit=None)
-    ).models
+    whole = (await detect_module.catalogue_for("openai_compatible", "http://x/v1", limit=None)).models
 
     assert len(capped) == detect_module.MODEL_CAP
     assert len(whole) == 120
@@ -388,14 +384,8 @@ def test_an_endpoint_is_named_by_something_a_person_recognises():
     what tells them apart, and `CANDIDATES` already wrote the names down."""
     assert detect_module.label_for("ollama") == "Ollama"
     assert detect_module.label_for("anthropic") == "Claude API"
-    assert (
-        detect_module.label_for("openai_compatible", "https://openrouter.ai/api/v1")
-        == "OpenRouter"
-    )
-    assert (
-        detect_module.label_for("openai_compatible", "http://localhost:1234/v1")
-        == "LM Studio"
-    )
+    assert detect_module.label_for("openai_compatible", "https://openrouter.ai/api/v1") == "OpenRouter"
+    assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1") == "LM Studio"
 
 
 def test_an_address_nobody_wrote_down_is_not_guessed_at():
@@ -410,10 +400,7 @@ def test_an_address_nobody_wrote_down_is_not_guessed_at():
 def test_vllm_and_sglang_share_one_label_because_they_share_a_port():
     """Their listings are the same shape. Saying `vLLM` of an SGLang server
     would be worse than saying both."""
-    assert (
-        detect_module.label_for("openai_compatible", "http://localhost:8000/v1")
-        == "vLLM / SGLang"
-    )
+    assert detect_module.label_for("openai_compatible", "http://localhost:8000/v1") == "vLLM / SGLang"
 
 
 # The two that share a default port, answering listings of the same shape. The
@@ -431,14 +418,10 @@ async def test_a_server_that_names_itself_is_taken_at_its_own_word(monkeypatch):
     its own listing does."""
     _serves(monkeypatch, {"http://localhost:8000/v1/models": VLLM})
 
-    answered = await detect_module.catalogue_for(
-        "openai_compatible", "http://localhost:8000/v1"
-    )
+    answered = await detect_module.catalogue_for("openai_compatible", "http://localhost:8000/v1")
 
     assert answered.server == "vLLM"
-    assert detect_module.label_for(
-        "openai_compatible", "http://localhost:8000/v1", answered.server
-    ) == "vLLM"
+    assert detect_module.label_for("openai_compatible", "http://localhost:8000/v1", answered.server) == "vLLM"
 
 
 async def test_the_same_address_says_sglang_when_sglang_is_the_one_there(monkeypatch):
@@ -446,9 +429,7 @@ async def test_the_same_address_says_sglang_when_sglang_is_the_one_there(monkeyp
     label read off the address gets wrong every time."""
     _serves(monkeypatch, {"http://localhost:8000/v1/models": SGLANG})
 
-    answered = await detect_module.catalogue_for(
-        "openai_compatible", "http://localhost:8000/v1"
-    )
+    answered = await detect_module.catalogue_for("openai_compatible", "http://localhost:8000/v1")
 
     assert answered.server == "SGLang"
 
@@ -458,14 +439,10 @@ async def test_a_server_moved_off_its_usual_port_is_still_itself(monkeypatch):
     nobody wrote down would have had no label at all."""
     _serves(monkeypatch, {"http://box.local:9999/v1/models": SGLANG})
 
-    answered = await detect_module.catalogue_for(
-        "openai_compatible", "http://box.local:9999/v1"
-    )
+    answered = await detect_module.catalogue_for("openai_compatible", "http://box.local:9999/v1")
 
     assert answered.server == "SGLang"
-    assert detect_module.label_for(
-        "openai_compatible", "http://box.local:9999/v1", answered.server
-    ) == "SGLang"
+    assert detect_module.label_for("openai_compatible", "http://box.local:9999/v1", answered.server) == "SGLang"
 
 
 async def test_owned_by_is_only_read_as_a_server_when_a_server_is_known_to_say_it(
@@ -487,12 +464,8 @@ async def test_what_the_server_said_beats_what_the_address_suggests(monkeypatch)
     address is a guess about what is listening; the listing is an answer."""
     _serves(monkeypatch, {"http://localhost:1234/v1/models": VLLM})
 
-    answered = await detect_module.catalogue_for(
-        "openai_compatible", "http://localhost:1234/v1"
-    )
+    answered = await detect_module.catalogue_for("openai_compatible", "http://localhost:1234/v1")
 
     # Without the listing this address reads as LM Studio.
     assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1") == "LM Studio"
-    assert detect_module.label_for(
-        "openai_compatible", "http://localhost:1234/v1", answered.server
-    ) == "vLLM"
+    assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1", answered.server) == "vLLM"

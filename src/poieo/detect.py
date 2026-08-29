@@ -284,9 +284,7 @@ def askable(type_: str) -> bool:
     return type_ == "anthropic" or type_ in _READERS
 
 
-async def catalogue_for(
-    type_: str, base_url: str | None = None, limit: int | None = MODEL_CAP
-) -> Catalogue:
+async def catalogue_for(type_: str, base_url: str | None = None, limit: int | None = MODEL_CAP) -> Catalogue:
     """What an endpoint of this type, at this address, serves **right now**,
     with whatever else it said about each model.
 
@@ -324,9 +322,7 @@ async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]
 _BY_HOST: tuple[tuple[str, str], ...] = (("openrouter.ai", "OpenRouter"),)
 
 
-def label_for(
-    type_: str, base_url: str | None = None, said: str | None = None
-) -> str | None:
+def label_for(type_: str, base_url: str | None = None, said: str | None = None) -> str | None:
     """A name a person would recognise this endpoint by, or None.
 
     `openai_compatible` is four products in a trench coat -- vLLM, SGLang, LM

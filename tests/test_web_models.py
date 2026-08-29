@@ -9,9 +9,9 @@ of this pair.
 Design: docs/web.md
 """
 
+from conftest import card
 from starlette.testclient import TestClient
 
-from conftest import card
 from poieo import detect as detect_module
 from poieo.daemon import Daemon, load_config
 from poieo.detect import Catalogue, Served
@@ -49,9 +49,7 @@ CATALOGUE = {
             ),
         )
     ),
-    "openai_compatible": Catalogue(
-        (Served(id="qwen/flash", context=1000000, price=(0.15, 0.47)),)
-    ),
+    "openai_compatible": Catalogue((Served(id="qwen/flash", context=1000000, price=(0.15, 0.47)),)),
 }
 
 
@@ -151,9 +149,7 @@ def test_the_model_in_use_says_which_roles_are_on_it(tmp_path, monkeypatch):
     assert _endpoints(body)["routed"]["models"][0]["used_by"] == []
 
 
-def test_an_endpoint_that_cannot_be_asked_says_so_rather_than_reading_as_down(
-    tmp_path, monkeypatch
-):
+def test_an_endpoint_that_cannot_be_asked_says_so_rather_than_reading_as_down(tmp_path, monkeypatch):
     """`mock` answers from the binding file itself. Silence from it is a
     different fact from an endpoint that did not answer."""
     _asks(monkeypatch)
@@ -163,9 +159,7 @@ def test_an_endpoint_that_cannot_be_asked_says_so_rather_than_reading_as_down(
     assert _endpoints(body)["fake"]["models"] == []
 
 
-def test_a_listing_says_whether_it_is_what_is_here_or_what_is_offered(
-    tmp_path, monkeypatch
-):
+def test_a_listing_says_whether_it_is_what_is_here_or_what_is_offered(tmp_path, monkeypatch):
     """Two listings that look identical and mean different things. Ollama's is
     `ollama list` -- pulled onto this disk, ready now. A routed endpoint's is a
     catalogue of what it would run for money, with nothing here yet. A panel
@@ -220,9 +214,7 @@ def test_the_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch
     """
     monkeypatch.setenv("POIEO_TEST_KEY", "sk-planted-by-this-test")
     _asks(monkeypatch)
-    binding = _MOCK.replace(
-        "fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,"
-    )
+    binding = _MOCK.replace("fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,")
     response = _models(_client(tmp_path, binding=binding))
 
     assert _endpoints(response.json())["fake"]["api_key_env"] == "POIEO_TEST_KEY"
@@ -230,9 +222,7 @@ def test_the_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch
     assert "sk-planted-by-this-test" not in response.text
 
 
-def test_an_endpoint_that_names_no_variable_says_null_rather_than_unset(
-    tmp_path, monkeypatch
-):
+def test_an_endpoint_that_names_no_variable_says_null_rather_than_unset(tmp_path, monkeypatch):
     """`null`, not `false`: "its SDK resolves its own" is a different fact from
     "the key is missing", and a panel warning about the first would cry wolf on
     every local endpoint."""
@@ -246,9 +236,7 @@ def test_an_endpoint_that_names_no_variable_says_null_rather_than_unset(
 def test_a_variable_that_is_not_set_reads_false(tmp_path, monkeypatch):
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     _asks(monkeypatch)
-    binding = _MOCK.replace(
-        "fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,"
-    )
+    binding = _MOCK.replace("fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,")
     # No tasks, so an unset key is not a startup failure -- and the panel is
     # exactly where somebody would go to find out about it.
     body = _models(_client(tmp_path, binding=binding, tasks=False)).json()

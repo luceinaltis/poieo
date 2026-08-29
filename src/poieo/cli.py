@@ -49,7 +49,6 @@ from .daemon.config import (
     check_isolation,
     config_for_tasks_folder,
 )
-from . import detect as engines
 from .editor import render_editor
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
