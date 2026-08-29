@@ -13,11 +13,33 @@ Declare it in a binding to exercise a graph's wiring without spending tokens:
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
 from .base import LLMRequest, LLMResponse, Provider, ToolCall, Usage
+
+
+def _roughly(request: LLMRequest) -> int:
+    """About how many tokens this request carries.
+
+    Four characters to a token, over everything that goes on the wire: the
+    system block, every message, and the tool definitions, which are not free
+    and are sent again on every turn.
+    """
+    total = len(request.system or "")
+    for message in request.messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            total += len(content)
+        calls = message.get("tool_calls")
+        if calls:
+            total += len(json.dumps(calls, ensure_ascii=False, default=str))
+    for tool in request.tools or []:
+        total += len(tool.name) + len(tool.description)
+        total += len(json.dumps(tool.input_schema, ensure_ascii=False, default=str))
+    return total // 4
 
 
 class MockProvider(Provider):
@@ -77,7 +99,16 @@ class MockProvider(Provider):
         return LLMResponse(
             text=text,
             model=request.model,
-            usage=Usage(input_tokens=0, output_tokens=len(text.split())),
+            usage=Usage(
+                # Roughly what was sent, rather than a flat zero. A real
+                # endpoint counts its input, and code that decides anything
+                # from that count -- how full the window is, what a run cost --
+                # could not be exercised against a provider that always
+                # answered nothing. Four characters to a token is the usual
+                # rule of thumb and near enough for a mock.
+                input_tokens=_roughly(request),
+                output_tokens=len(text.split()),
+            ),
             stop_reason=stop or ("tool_use" if tool_calls else "end_turn"),
             meta=meta,
             tool_calls=tool_calls,

@@ -375,6 +375,60 @@ def tool_contents(call):
     return [m["content"] for m in call.messages if m["role"] == "tool"]
 
 
+def sized_binding(responses, context):
+    """A binding whose model says how much it can hold."""
+    return BindingSpec.model_validate(
+        {
+            "name": "test",
+            "providers": {"fake": {"type": "mock", "options": {"responses": responses}}},
+            "default": {"provider": "fake", "model": "mock-model", "context": context},
+        }
+    )
+
+
+async def test_a_model_that_can_hold_more_is_not_emptied_as_early(tmp_path):
+    """The cap the binding knows about beats the one the module guessed.
+
+    Measured, a hardcoded 120,000 characters is 2.3% of what
+    `z-ai/glm-5.3-flash` holds. A step was watched re-reading the same file
+    eight times because its history was being emptied at a fortieth of what
+    the model could carry -- so the trigger has to know the model.
+    """
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    script = {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 6 + ["done"]}
+
+    # Small window: the same conversation is over the line and gets cleared.
+    async with ProviderPool(small := sized_binding(script, context=4_000)) as pool:
+        cramped = _CapturingStore()
+        await execute(graph, small, pool, cramped)
+
+    # Large window: nothing is thrown away, because nothing needed to be.
+    async with ProviderPool(roomy := sized_binding(script, context=10_000_000)) as pool:
+        spacious = _CapturingStore()
+        await execute(graph, roomy, pool, spacious)
+
+    assert [e for e in cramped.events if e.type == "node_context_cleared"]
+    assert not [e for e in spacious.events if e.type == "node_context_cleared"]
+
+
+async def test_without_a_declared_window_the_old_cap_still_holds(tmp_path, monkeypatch):
+    """A binding that says nothing must behave exactly as it did.
+
+    `None` is not zero and not infinity -- it means nobody has said, and the
+    character cap is what this loop did before anyone could.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 400)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+    await run_graph(graph, reads_the_same_file(5), store=store)
+
+    assert [e for e in store.events if e.type == "node_context_cleared"]
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)
