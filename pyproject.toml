@@ -27,6 +27,20 @@ poieo = "poieo.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The board. `src/poieo/web/static/` is not a package -- it has no __init__ and
+# never will, being a vite build -- so `packages.find` walks straight past it
+# and the wheel ships a daemon that serves nothing.
+#
+# It went unnoticed because every install in this repository is `pip install -e
+# .`, which points at the source tree where the files are. An editable install
+# is exactly the one that cannot see this.
+#
+# `**`, not `static/*` plus `static/assets/*`: the pattern must not encode the
+# shape of a build it does not control. A vite config that emits one folder
+# deeper would drop those files back out, silently, in the same way.
+[tool.setuptools.package-data]
+"poieo.web" = ["static/**/*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
