@@ -15,6 +15,7 @@ const row = (name: string): TaskRow => ({
   last_run: null,
   pending: 0,
   into: null,
+  asking: null,
   then: [],
   shape: { entry: "", nodes: [] },
 })

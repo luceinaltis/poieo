@@ -150,6 +150,28 @@ export function runNow(project: string, task: string): Promise<ControlAnswer> {
   return post(taskUrl(project, task, "run"))
 }
 
+/**
+ * Answering: neither review nor control. It touches none of the reader's own
+ * files, so it is not the first; it outlives the daemon and can set a chain of
+ * tasks going, so it is not the second either.
+ *
+ * A refusal carries the choices that *were* offered -- this page is holding a
+ * list that may have moved on since it was drawn.
+ */
+export interface AnswerReply extends Answer {
+  status?: string
+  answer?: string
+  choices?: string[]
+}
+
+export function answer(
+  project: string,
+  task: string,
+  choice: string,
+): Promise<AnswerReply> {
+  return post(taskUrl(project, task, "answer"), { choice })
+}
+
 export type FeedStatus = "connecting" | "live" | "lost"
 
 export interface FeedHandlers {

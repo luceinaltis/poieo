@@ -171,8 +171,20 @@ web-ui/src/
   skins/            how that model is drawn — atelier, basic
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
   detail/           the drawer: one task, turn by turn, plus control
+  detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
 ```
+
+**`Question` is drawn first in the drawer, above the controls.** Everything
+after a `confirm` node is held until it is answered, so a reader who scrolls
+past it is looking at a flow that has quietly stopped. It has no confirmation
+step, unlike `Decide`: the graph's author already wrote the question, and
+asking "are you sure?" over the top of somebody else's sentence only makes it
+easier to stop reading it.
+
+Like accept and discard, it lives in the drawer rather than on the card. The
+board is a list of what is happening; deciding is what you open a task to do.
+`poieo asking` is the way to see every open question at once.
 
 **One reducer.** Live SSE frames and replayed history are the same bytes, so
 they fold through the same function — replay is the live path at a different

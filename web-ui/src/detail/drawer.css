@@ -39,6 +39,33 @@
   margin: 0;
 }
 
+/* A question waiting on the reader. Given a border and a colour the rest of
+   the drawer does not use: everything after it is held until it is answered,
+   so it is the one thing here that must not read as another row of buttons. */
+.question {
+  border: 1px solid #c8a04a;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.question-asked {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+
+.question-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.question-refusal {
+  color: #d16d5a;
+  font-size: 0.8em;
+  margin: 8px 0 0;
+}
+
 .control {
   display: flex;
   flex-wrap: wrap;
@@ -144,6 +171,7 @@
   /* Thumbs, not pointers. */
   .drawer-head button,
   .control button,
+  .question-choices button,
   .decide-take,
   .decide-drop {
     min-height: 34px;
