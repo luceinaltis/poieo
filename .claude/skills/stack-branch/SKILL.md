@@ -35,5 +35,5 @@ git log origin/main..HEAD
 This should list only commits you wrote. If the parent's commits appear, the tip was
 wrong: `git rebase --abort` and pick it again.
 
-Then re-run the full gate from CLAUDE.md Part 2. A rebase that applied cleanly past a
+Then re-run the full gate from AGENTS.md Part 2. A rebase that applied cleanly past a
 rename refactor proves the syntax still fits, not that the meaning does.

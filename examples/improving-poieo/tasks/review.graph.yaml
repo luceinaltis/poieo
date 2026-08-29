@@ -19,7 +19,7 @@ nodes:
       `gh pr list --author @me --limit 1`, and read the whole change with
       `gh pr diff <n>`.
 
-      Look for what a green suite cannot tell you, which is what CLAUDE.md
+      Look for what a green suite cannot tell you, which is what AGENTS.md
       asks for: a dropped error path, a public surface that quietly widened, a
       comment that no longer matches the code below it, a file staged by
       accident, a silent cap that reads as completeness.
