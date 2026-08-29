@@ -113,11 +113,23 @@ nothing that survives a restart.
 [workspace.md](workspace.md). A repository that cannot be tracked is logged and
 the work happens in place — not a reason to stop working at 3am.
 
-**A run re-reads its binding first.** `Daemon.reread()` is called before every
-firing, beside `read_input` and for the same reason: what the run needs is read
-now rather than remembered from startup. An edit — `poieo config use`, a hand
-edit, a pull — is in effect on the next run rather than after a restart, which
-is what [DESIGN.md](../DESIGN.md) promises.
+**A run re-reads both files it answers to first.** `Daemon.reread()` is called
+before every firing, beside `read_input` and for the same reason: what the run
+needs is read now rather than remembered from startup. An edit — `poieo config
+use`, a hand edit, a pull, and now a changed prompt — is in effect on the next
+run rather than after a restart, which is what [DESIGN.md](../DESIGN.md)
+promises.
+
+The binding half has been here since the board began painting which model would
+answer. The graph half is newer, and it closes the more visible gap: the file a
+person actually edits is the one that says what the run *does*, and until now
+that one alone needed the daemon restarted. A card carrying its own prompt is
+re-expanded from the card file; a task naming a graph file re-reads that.
+
+**Only the graph is adopted, never the rest of the spec.** A schedule, a folder
+or an `enabled:` read here would have to reach a trigger built when the daemon
+started, and half-adopting a spec is worse than not adopting one. Those still
+want a restart, and adding a card at runtime is its own piece of work.
 
 It is the **daemon's** reread and not the runner's, because one file is one spec
 across every task that names it: a runner reading only for itself would leave its

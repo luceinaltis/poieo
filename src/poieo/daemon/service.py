@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..binding import BindingSpec, load_binding
-from ..card import append_journal, closing_line, record_run
+from ..card import append_journal, closing_line, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
-from ..graph import Branch
+from ..graph import Branch, load_graph
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
 from ..providers import ProviderPool, check_credentials
@@ -156,7 +156,7 @@ class TaskRunner:
         on_run: RunCallback | None = None,
         tool_context: ToolContext | None = None,
         handoff: Callable[["TaskRunner", RunResult, int], None] | None = None,
-        reread: Callable[[str], None] | None = None,
+        reread: Callable[["LoadedTask"], None] | None = None,
     ):
         self.task = task
         self.config = config
@@ -484,12 +484,11 @@ class TaskRunner:
         # no time to stop working over a config saved half-written.
         if self.reread is not None:
             try:
-                self.reread(self.task.binding_key)
+                self.reread(self.task)
             except PoieoError as exc:
                 log.warning(
-                    "task '%s': %s could not be re-read, so this run uses the last good one: %s",
+                    "task '%s': a file it answers to could not be re-read, so this run uses the last good one: %s",
                     self.name,
-                    self.task.binding_key,
                     exc,
                 )
 
@@ -1022,7 +1021,53 @@ class Daemon:
 
     # -- picking up a binding that changed under us ---------------------------
 
-    def reread(self, key: str) -> None:
+    def reread(self, task: LoadedTask) -> None:
+        """Load both files a run answers to again, and adopt what still starts.
+
+        A run reads its binding *and* its graph now rather than remembering
+        them from startup, which is what DESIGN.md means by "picked up by the
+        daemon from the next run. No restarts." The binding half has been here
+        since the board began painting which model would answer; the graph half
+        is the same promise kept for the file that says what the run does.
+        """
+        self._reread_binding(task.binding_key)
+        self._reread_graph(task)
+
+    def _reread_graph(self, task: LoadedTask) -> None:
+        """The graph this task runs, read again from wherever it came from.
+
+        A card that carries its own prompt is re-expanded from the card file; a
+        task naming a graph file re-reads that. Validated against the binding
+        already in memory before it is adopted, for the reason below: a file
+        saved mid-flight must not put the daemon somewhere it would have
+        refused to start.
+
+        Only the graph is adopted, never the rest of the spec. A schedule, a
+        folder or an `enabled:` read here would have to reach a trigger that
+        was built when the daemon started, and half-adopting a spec is worse
+        than not adopting it.
+        """
+        project = next((p for p in self.projects if task in p.tasks), None)
+        if project is None:
+            return
+        config = project.config
+        card = config.cards_by_task.get(task.spec.name)
+        if card is not None and config.card_graphs.get(task.spec.name) is not None:
+            roster = [c.slug for c in config.cards_by_task.values()]
+            _, graph = expand(load_card(card.source_path), roster=roster)
+            if graph is None:
+                return
+        elif task.spec.graph:
+            graph = load_graph(config.resolve_path(task.spec.graph).resolve())
+        else:
+            return
+        try:
+            preflight(graph, task.binding, workdir=config.workdir_path(task.spec))
+        except Exception as exc:
+            raise SpecError(f"task '{task.spec.name}': {exc}") from exc
+        task.graph = graph
+
+    def _reread_binding(self, key: str) -> None:
         """Load one binding file again and adopt it, if it still starts.
 
         Called before every run, so an edit -- `poieo config use`, a hand
