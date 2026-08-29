@@ -90,3 +90,44 @@ found nothing.
 all of these hold*, so skipping it is skipping a condition, the same as merging on
 an unrun suite. What is missing is not force but anyone to apply it: like every
 other condition here, it is worth exactly what the person recording it is honest.
+
+## What CI checks, and what it cannot
+
+*Merge condition 1.* `.github/workflows/gate.yml` runs on every PR against `main`
+and on every push to it. Two jobs: the Python suite on the lowest Python the
+project claims to support, and the frontend suite, the types, and a rebuild of
+the checked-in bundle.
+
+It **reports and does not block.** `main` has no required checks, so a red run
+stops nothing by itself. That is deliberate for now — a gate turned on before it
+has been watched fails honest work and gets routed around.
+
+Three things are worth knowing when a run disagrees with your machine.
+
+**CI drops two flags you use locally.** Part 2 of `AGENTS.md` runs pytest as
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio`; CI runs plain
+`pytest -q`. Those flags work around a broken global plugin on one machine, and
+CI is the standing check that the workaround stays local. If CI ever needs them,
+the problem was never local and Part 2 is wrong.
+
+**CI runs Ubuntu; you develop on Windows.** A break that only happens on Windows
+— a shell, a codepage, a path separator — is invisible here and still has to be
+caught by hand. The reverse is also true and newer: code that only ever ran on
+Windows is now exercised on Linux for the first time.
+
+**Thirty tests still skip.** `tests/test_tools_docker.py` needs a docker daemon
+*and* `alpine:3.20` already pulled, and CI does neither yet, so container isolation
+is as unverified in CI as it is on this machine. A green run does not cover it.
+Making those thirty run is a separate change, because they have never executed on
+Linux and the first run that includes them is likely to be red.
+
+**The bundle check is a rebuild, not a heuristic.** vite writes straight into
+`src/poieo/web/static/`, so CI rebuilds and fails if anything changed. A failure
+means the committed bundle does not match the source it claims to come from;
+`npm run build --workspace web-ui` and commit the result. A source edit that
+changes nothing in the output — a comment, which minification drops — correctly
+leaves the check green; it is asking about the bundle, not about your diff.
+
+What CI cannot judge stays prose, and stays yours: whether a second reader looked
+(condition 2), whether the component documents still describe the code (5), and
+whether the change fits the design at all (9).

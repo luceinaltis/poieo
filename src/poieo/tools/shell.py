@@ -11,7 +11,7 @@ import shlex
 import shutil
 import signal
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from ..providers.base import ToolDef
@@ -78,7 +78,10 @@ def posix_shell(windows: bool = os.name == "nt") -> str | None:
     found = shutil.which("bash")
     if not found:
         return None
-    parts = [part.lower() for part in Path(found).parts]
+    # PureWindowsPath, not Path: `windows` says the path is a Windows one, and
+    # a backslash is not a separator to a PosixPath. Reading it as native means
+    # the guard quietly stops guarding anywhere the interpreter is not Windows.
+    parts = [part.lower() for part in PureWindowsPath(found).parts]
     if "system32" in parts:
         return None
     return found
