@@ -205,8 +205,10 @@ described finished work would be a second, staler account of it.
 
 - **The board writes, not only reads.** Creating and editing a card from the
   browser, and folding the existing canvas editor into the detail view. The
-  daemon gains add and remove at runtime. Observing, reviewing and controlling
-  already work end to end; making a task is still a file you write by hand.
+  daemon now notices a card that appears while it runs, and a prompt edited at
+  noon is what the next run uses; removing one at runtime, and the browser side
+  of all of it, are what is left. Observing, reviewing and controlling already
+  work end to end; making a task is still a file you write by hand.
 - **Beyond, as candidates.** Delegating a step to an external agent CLI;
   fan-out steps; deciding what happens to run logs as they age; stronger
   isolation backends behind the seam the current one already sits on.
