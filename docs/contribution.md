@@ -94,11 +94,11 @@ other condition here, it is worth exactly what the person recording it is honest
 ## What CI checks, and what it cannot
 
 *Merge condition 1.* `.github/workflows/gate.yml` runs on every PR against `main`
-and on every push to it. Four jobs: the Python suite on the lowest Python the
-project claims to support, on Ubuntu and on Windows; the frontend suite, the
-types, and a rebuild of the checked-in bundle; container isolation against a
-real docker daemon; and the package as a user gets it, installed and exercised
-outside the checkout.
+and on every push to it. Six jobs: the Python suite, three ways; ruff; the
+frontend suite, the types, and a rebuild of the checked-in bundle; container
+isolation against a real docker daemon; the package as a user gets it,
+installed, served, and exercised outside the checkout; and coverage, reported
+and deliberately not gated.
 
 It **reports and does not block.** `main` has no required checks, so a red run
 stops nothing by itself. That is deliberate for now — a gate turned on before it
@@ -115,20 +115,34 @@ the problem was never local and Part 2 is wrong.
 **The Python suite runs on both OSes; nothing else does.** Development happens
 on Windows and CI was Ubuntu only, which put the one platform anybody actually
 runs this on outside every check — and the code branches on it in earnest:
-`run_command` picks a POSIX shell or `cmd.exe`, refuses `System32ash.exe`
+`run_command` picks a POSIX shell or `cmd.exe`, refuses `System32\bash.exe`
 because that is the WSL launcher and would run in a different filesystem
 entirely, rewrites path separators, and kills a process tree through `taskkill`
 rather than a process group. `test_a_heredoc_runs` exists to catch a shell that
 rejects heredocs and passes on Linux without proving anything.
 
-So `python` is a matrix and its result differs per OS. `fail-fast` is off,
-because "one OS or both" is the whole question and cancelling the second run
-deletes the answer. Ruff runs on Ubuntu alone: it reads the same bytes either
-way.
+**And on a Python nobody has run it on.** `requires-python = ">=3.10"` has no
+upper bound, so this package claims to install on every release since — while
+3.10 is what the one development machine has, and until now what CI had too. A
+break in a newer Python arrives with that Python and would first be seen by
+whoever installed it.
 
-What is still uncovered: the frontend suite, the container tests, the installed
-package, and macOS in its entirety. A Windows-only break in the *daemon's*
-packaging or a mac-only break anywhere is still yours to catch by hand.
+So `python` is a matrix of three rows, spelled out rather than crossed: the
+floor on Ubuntu, the floor on Windows, and the newest release on Ubuntu. The
+full cross is six runs to answer three questions. `fail-fast` is off, because
+"one row or all of them" is the whole question and cancelling deletes the
+answer.
+
+Ruff is its own job. Inside the matrix it is either three copies of one verdict
+or a conditional pinning it to one row, and the conditional has to be re-pinned
+every time a row is added; outside it, it runs once by construction — and in
+parallel with the suite rather than after it, which is what the ordering in
+Part 2 was protecting. A long line must never cost the run its test result.
+
+What is still uncovered: the frontend suite, the container tests, and the
+installed package all run on Ubuntu and 3.10 alone, and macOS is nowhere. A
+mac-only break, or a Windows-only break in the *daemon's* packaging, is still
+yours to catch by hand.
 
 **Thirty tests skip here and run in CI.** `tests/test_tools_docker.py` needs a
 docker daemon *and* `alpine:3.20` already local — the module never pulls, so no
