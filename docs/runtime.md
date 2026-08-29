@@ -93,7 +93,7 @@ the runtime stays unaware that containers, or journals, exist at all — see
 `run_started`, `node_started`, `node_retry`, `node_turn`, `node_tool_call`,
 `node_context_cleared`, `node_compacted`, `node_compact_failed`,
 `node_finished`, `run_finished`, `run_failed`, `run_aborted`, and
-`run_change` (written by the daemon, not here).
+`run_change` and `run_change_failed` (both written by the daemon, not here).
 
 ## The three node types
 

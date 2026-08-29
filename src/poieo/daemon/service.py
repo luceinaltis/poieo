@@ -236,7 +236,21 @@ class TaskRunner:
                 failed=result.status != "completed",
             )
         except WorkspaceError as exc:
+            # The work ran; only the record of it failed. That is not a reason
+            # to stop at 3am -- but it has to be visible, and a line in the
+            # daemon's log is not. `then:` conditions are written against
+            # `run.change`, so a task whose commits keep failing passes its own
+            # gate and never hands over, forever, while the board shows a
+            # healthy green run that "changed nothing". The run's own stream is
+            # where somebody would look, so that is where it goes.
             log.error("task '%s': the change could not be recorded: %s", self.name, exc)
+            self.store.append(
+                Event(
+                    run_id=result.run_id,
+                    type="run_change_failed",
+                    data={"error": str(exc)},
+                )
+            )
             return
         if change is None:
             return  # nothing to do is not nothing done

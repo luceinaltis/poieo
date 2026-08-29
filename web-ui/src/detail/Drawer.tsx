@@ -121,6 +121,27 @@ function Entry({ event }: { event: PoieoEvent }) {
     )
   }
 
+  if (event.type === "run_change_failed" || event.type === "node_compact_failed") {
+    // Housekeeping that could not do its job. Neither stops the work, which
+    // is exactly why both have to be seen: a run whose change was never
+    // recorded reads as a run that had nothing to do, and every `then:`
+    // written against `run.change` quietly stops firing while the board goes
+    // on showing green.
+    const what =
+      event.type === "run_change_failed"
+        ? "the change could not be recorded"
+        : "the older turns could not be folded"
+    return (
+      <li className="drawer-entry" data-kind="stuck">
+        <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+        <div>
+          <div className="drawer-label">{what}</div>
+          <p className="drawer-text">{String(data.error ?? "")}</p>
+        </div>
+      </li>
+    )
+  }
+
   if (event.type === "node_started") {
     // The step's name, and nothing about what kind of node it is: `agent` and
     // `router` are how the graph is built, not what is happening.

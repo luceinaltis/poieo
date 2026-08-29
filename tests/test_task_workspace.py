@@ -209,6 +209,34 @@ async def test_a_broken_repository_does_not_stop_the_flow(tmp_path):
     assert result.change is None
 
 
+async def test_a_change_that_could_not_be_recorded_is_visible(tmp_path, monkeypatch):
+    """A run whose work was never recorded looks exactly like one that had
+    nothing to do, and the difference decides whether anything happens next.
+
+    `then:` conditions are written against `run.change` -- the example's build
+    hands off on `run.change and 'GREEN' in ...` -- so a task whose commits
+    keep failing will pass its own gate and never hand over, forever, while
+    the board shows a healthy green run. Watched in the wild against a
+    repository with a missing object: `error: Could not read fd0489dc...`.
+    """
+    from poieo import workspace as workspace_module
+
+    def refuse(*args, **kwargs):
+        raise workspace_module.WorkspaceError("Could not read fd0489dc")
+
+    repo, config = build(tmp_path)
+    monkeypatch.setattr(workspace_module.Workspace, "commit", refuse)
+
+    _, result = await run_once(config)
+
+    # The work still ran, and 3am is no time to stop -- but it has to say so.
+    assert result.status == "completed"
+    assert result.change is None
+    said = [e for e in events_of(config, result.run_id) if e["type"] == "run_change_failed"]
+    assert said, "a change that could not be recorded has to reach the run's own log"
+    assert "fd0489dc" in said[0]["data"]["error"]
+
+
 CARD = """
 name: chores
 graph: ../g.yaml
