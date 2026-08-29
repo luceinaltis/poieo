@@ -20,8 +20,9 @@ memory/cache/
 node_modules/
 web-ui/dist/
 
-# session worktrees
+# session worktrees, and per-machine permissions (.claude/rules and skills ARE shared)
 .claude/worktrees/
+.claude/settings.local.json
 
 # personal helper scripts
 claude-rc-loop.ps1
