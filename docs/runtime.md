@@ -175,12 +175,22 @@ keeping the two together avoids asking either API to accept two user turns in a
 row. **The cut always lands on a turn boundary** -- where the model speaks --
 because a tool result whose call is gone is rejected outright by both APIs.
 
-Two things keep this from running away. It only fires when the fold would
+Three things keep this from running away. It only fires when the fold would
 reclaim at least `_FOLD_AT_LEAST`, without which it would fire on every turn
 after the first: a fold leaves exactly `_KEEP_TURNS` behind it, so the next turn
-is over the line again. And a summary that cannot be written is not worth losing
+is over the line again. A summary that cannot be written is not worth losing
 the step over -- the history is left whole, `node_compact_failed` records it,
 and the run carries on to fail honestly on room if it is going to.
+
+**And a fold that would not shrink the conversation is not taken.** The model
+is asked to be brief rather than made to be, so whether it was is checked
+rather than assumed. Watched in another harness: a compression pass took a
+conversation from 64,186 tokens to 71,173 -- fourteen messages in, fourteen
+out, seven thousand tokens larger -- and reported it as done. Rebuilding is not
+shrinking. The same `node_compact_failed` carries it, because the outcome is
+the same: nothing was folded, the history is whole, and the next turn can fail
+honestly on room. What differs is the sentence, and that is what a reader
+needs.
 
 Clearing before folding, and not the other way around, because clearing costs
 nothing and is one repeated tool call away from being undone, while a fold
