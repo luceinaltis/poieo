@@ -350,16 +350,30 @@ export function pickModel(
 }
 
 /**
- * Declare an engine already answering on this machine, so this project can
- * reach its models.
+ * Declare an engine, so this project can reach its models.
+ *
+ * Either one detection found on this machine (`{engine}`), or an address
+ * nobody guessed (`{url}`) -- a vLLM on 8001, an Ollama on a desktop, an
+ * office box. Which backend an address is comes from asking it, so the reader
+ * types where it is and nothing else; `name` and `key_env` are theirs to give
+ * when the defaults do not fit.
+ *
+ * `key_env` is a variable's **name**. This never takes a key, here or
+ * anywhere: the value belongs in the environment the daemon reads, and the
+ * file this writes is one people commit.
  *
  * Only adds. Nothing about what a role uses moves -- declaring a model and
  * choosing one are different decisions, and `pickModel` is the second.
  */
-export function addEngine(project: string, engine: string): Promise<ModelsAnswer> {
-  return post(`/api/projects/${encodeURIComponent(project)}/models/add`, {
-    engine,
-  })
+export interface EngineToAdd {
+  engine?: string
+  url?: string
+  name?: string
+  key_env?: string
+}
+
+export function addEngine(project: string, what: EngineToAdd): Promise<ModelsAnswer> {
+  return post(`/api/projects/${encodeURIComponent(project)}/models/add`, what)
 }
 
 /**

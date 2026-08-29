@@ -51,6 +51,9 @@ export function Models({
   // which keeps the last good spec -- and the panel reads that same spec, so it
   // would redraw the old model with nothing said. Kept until the next write.
   const [notTaken, setNotTaken] = useState<ModelsAnswer | null>(null)
+  const [at, setAt] = useState("")
+  const [atName, setAtName] = useState("")
+  const [atKeyEnv, setAtKeyEnv] = useState("")
   const { busy, refused, act } = useAct<ModelsAnswer>((answer) => {
     setNotTaken(answer.adopted === false ? answer : null)
     setReload((n) => n + 1)
@@ -93,7 +96,24 @@ export function Models({
     void act(() => pickModel(project, model.ref, role))
 
   const add = (engine: UndeclaredEngine) =>
-    void act(() => addEngine(project, engine.name))
+    void act(() => addEngine(project, { engine: engine.name }))
+
+  // An engine at an address nobody guessed. Detection knows four ports on this
+  // machine; a vLLM on 8001, an Ollama on a desktop and an office box had no
+  // way in at all. The reader types where it is -- which backend it is comes
+  // from asking it, not from a field asking them to classify their own server.
+  const addAt = () => {
+    if (!at.trim()) return
+    void act(() =>
+      addEngine(project, {
+        url: at.trim(),
+        ...(atName.trim() ? { name: atName.trim() } : {}),
+        ...(atKeyEnv.trim() ? { key_env: atKeyEnv.trim() } : {}),
+      }),
+    ).then((sent) => {
+      if (sent) setAt("")
+    })
+  }
 
   return (
     <aside className="models" aria-label="Models">
@@ -212,6 +232,47 @@ export function Models({
           onUse={use}
           busy={busy}
         />
+        {/* Last, because it is what you reach for when nothing above it was
+            what you were looking for. One field that matters: which backend an
+            address is comes from asking it, and the name from what it answers.
+            The other two are for the project that has two vLLMs, or an
+            endpoint that wants a key.
+
+            No key field, here or anywhere on this page. A variable's *name* is
+            not a secret and belongs in the file; the key belongs in the
+            environment the daemon reads. */}
+        {report?.binding ? (
+          <section className="models-at">
+            <h3>somewhere else</h3>
+            <input
+              data-do="url"
+              type="url"
+              aria-label="Address of an engine"
+              placeholder="http://gpu-box:8001"
+              value={at}
+              onChange={(event) => setAt(event.target.value)}
+            />
+            <div className="models-at-more">
+              <input
+                data-do="url-name"
+                aria-label="What to call it"
+                placeholder="name it (optional)"
+                value={atName}
+                onChange={(event) => setAtName(event.target.value)}
+              />
+              <input
+                data-do="url-key-env"
+                aria-label="Variable its key is read from"
+                placeholder="key variable (optional)"
+                value={atKeyEnv}
+                onChange={(event) => setAtKeyEnv(event.target.value)}
+              />
+            </div>
+            <button type="button" data-do="add-at" disabled={busy || !at.trim()} onClick={addAt}>
+              ask it
+            </button>
+          </section>
+        ) : null}
       </div>
     </aside>
   )

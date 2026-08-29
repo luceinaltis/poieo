@@ -223,6 +223,31 @@ Deliberately no further than string comparison. Resolving a hostname would turn
 a question about a config into a DNS lookup, and being wrong costs a label,
 never a request going somewhere it should not.
 
+### An address nobody guessed
+
+`CANDIDATES` is four ports on this machine, which is the right guess for a
+laptop and no guess at all for the vLLM on 8001, the Ollama on a desktop or the
+box in an office. `ask(base_url)` is those: it takes an address and finds out
+what is there.
+
+**It asks rather than being told.** Both listing shapes are tried against the
+address, and whichever answers says which backend it is — so a caller supplies
+an address and nothing else, instead of a form asking somebody to classify their
+own server. `/v1` is tried as well: `http://box:8001` is what a person reads off
+a terminal, the OpenAI shape lives one segment further down, and refusing the
+address they have would be making them debug a URL to answer a question this can
+answer itself.
+
+The name comes from what the server said it was, and from the **host** when it
+said nothing. `gpu-box` is something the person who typed the address will
+recognise; `openai_compatible` would tell them nothing, being five products at
+once. Nothing answering is None, and so is an empty listing — the rule
+:func:`probe` holds, for the same reason.
+
+`Engine.api_key_env` carries the **name** of a variable, filled in by the
+caller, and `rebind.declare` writes it. Never a value: detection has no business
+holding a credential, and the file this ends up in is one people commit.
+
 ### Who is actually answering
 
 `openai_compatible` is four products in a trench coat: vLLM, SGLang, LM Studio,

@@ -23,6 +23,7 @@ Design: docs/storage.md
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
@@ -98,6 +99,10 @@ class Engine:
     # thing that tells vLLM from SGLang: they share a default port, so
     # `label` -- which comes from the address -- can only ever be the pair.
     said: str | None = None
+    # The variable a key is read from, when the caller named one. A **name**,
+    # never a value: detection has no business holding a credential, and the
+    # binding file this ends up in is one people commit.
+    api_key_env: str | None = None
 
     @property
     def known_as(self) -> str:
@@ -442,6 +447,73 @@ def lists_installed(type_: str) -> bool:
     have a reader believe they had four hundred models sitting on a laptop.
     """
     return type_ == "ollama"
+
+
+# A key from what a server called itself, so the name in `providers:` is the
+# product rather than the port it happened to be on. Keyed by the same values
+# `_SAYS_ITS_NAME` reads, since they come from the same field.
+_KEYED_BY_NAME = {"vLLM": "vllm", "SGLang": "sglang", "llama.cpp": "llamacpp"}
+
+
+def _named_for(base_url: str, said: str | None) -> str:
+    """What to call this endpoint in a `providers:` block.
+
+    What the server said it was, when it said -- that is the product, and it is
+    what tells vLLM from SGLang. Otherwise the **host**, because a person who
+    typed `http://gpu-box:8080` will recognise `gpu-box`, where the type would
+    have told them nothing: `openai_compatible` is five products at once.
+    """
+    if said and said in _KEYED_BY_NAME:
+        return _KEYED_BY_NAME[said]
+    host = _authority(base_url)[0]
+    # `providers:` keys are plain names; an address is not one.
+    return re.sub(r"[^\w-]+", "-", host).strip("-").lower() or "endpoint"
+
+
+async def ask(base_url: str) -> Engine | None:
+    """What is at this address, or None if nothing usable answers.
+
+    `CANDIDATES` knows four ports on *this* machine. An inference server is
+    routinely somewhere else -- one on 8001 because 8000 was taken, an Ollama
+    on the desktop under the desk, a shared box in an office -- and this is how
+    those are reached without opening the binding file by hand.
+
+    **It asks rather than making the caller classify.** Both listing shapes are
+    tried and whichever answers says which backend it is, so the whole input is
+    an address. `/v1` is tried as well, because `http://box:8001` is what a
+    person reads off a terminal and the OpenAI shape lives one segment further
+    down; refusing the address they have would be making them debug a URL to
+    answer a question this can answer itself.
+
+    Nothing answering is None, and so is answering with an empty listing --
+    the rule :func:`probe` holds, for the same reason: naming an endpoint that
+    serves nothing writes a binding that fails on the project's first run.
+    """
+    trimmed = base_url.strip().rstrip("/")
+    if not trimmed:
+        return None
+    # Ollama first: its path is its own, so a hit is unambiguous. The OpenAI
+    # shape is tried at the address given and then one `/v1` down.
+    attempts = [
+        ("ollama", trimmed),
+        ("openai_compatible", trimmed),
+        ("openai_compatible", f"{trimmed}/v1"),
+    ]
+    for type_, url in attempts:
+        if url.endswith("/v1/v1"):
+            continue
+        answered = await _listed(type_, url, MODEL_CAP)
+        if not answered.models:
+            continue
+        return Engine(
+            key=_named_for(url, answered.server),
+            label=label_for(type_, url, answered.server) or _authority(url)[0],
+            type=type_,
+            models=tuple(model.id for model in answered.models),
+            base_url=url,
+            said=answered.server,
+        )
+    return None
 
 
 async def probe(candidates: Sequence[Candidate] = CANDIDATES) -> list[Engine]:

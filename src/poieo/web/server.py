@@ -20,6 +20,7 @@ import asyncio
 import json
 import os
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -792,36 +793,72 @@ def create_app(daemon: Any) -> Starlette:
             body = await request.json()
         except Exception:
             body = {}
-        wanted = str((body or {}).get("engine", ""))
-        candidate = next((one for one in _unclaimed(spec) if one.key == wanted), None)
-        if candidate is None:
-            if any(one.key == wanted for one in engines.CANDIDATES):
-                # It exists; this project already has it. The offer was drawn
-                # from a report taken a moment ago, and a terminal may have
-                # added it in between.
+        body = body or {}
+        url = str(body.get("url", "")).strip()
+        wanted = str(body.get("engine", ""))
+
+        if url:
+            # An address nobody detected. `CANDIDATES` knows four ports on this
+            # machine, and an inference server is routinely somewhere else --
+            # so the reader types where it is and this asks what is there,
+            # rather than a form asking them to classify their own server.
+            found = await engines.ask(url)
+            if found is None:
                 return JSONResponse(
-                    {"error": f"this project already reaches '{wanted}'"},
+                    {"error": f"nothing usable answered at {url} -- no listing, or one with no models on it"},
                     status_code=409,
                 )
-            # 400, not 409: the argument names nothing detection knows how to
-            # look for, which is malformed rather than a state that can change.
-            return JSONResponse(
-                {
-                    "error": f"'{wanted}' is not an engine this looks for",
-                    "engines": [one.key for one in engines.CANDIDATES],
-                },
-                status_code=400,
+            # A **name**, never a key. The variable is not a secret and belongs
+            # in the file; the value belongs in the environment, and this route
+            # would not know what to do with one if it were sent.
+            found = replace(
+                found,
+                key=str(body.get("name") or found.key),
+                api_key_env=str(body.get("key_env") or "") or None,
             )
-
-        # Asked again, because the press is a second trip: it answered when the
-        # panel was painted and may not now, and writing an address that serves
-        # nothing is a binding that fails on the project's next run. The rule
-        # `probe` holds, held here for the same reason.
-        answered = await engines.probe([candidate])
-        if not answered:
+            if found.key in spec.providers:
+                return JSONResponse(
+                    {
+                        "error": f"this project already declares '{found.key}' -- "
+                        f"give this one another name, since one already there is never overwritten"
+                    },
+                    status_code=409,
+                )
+            answered = [found]
+        elif wanted:
+            candidate = next((one for one in _unclaimed(spec) if one.key == wanted), None)
+            if candidate is None:
+                if any(one.key == wanted for one in engines.CANDIDATES):
+                    # It exists; this project already has it. The offer was
+                    # drawn from a report taken a moment ago, and a terminal may
+                    # have added it in between.
+                    return JSONResponse(
+                        {"error": f"this project already reaches '{wanted}'"},
+                        status_code=409,
+                    )
+                # 400, not 409: the argument names nothing detection knows how
+                # to look for, which is malformed rather than a changeable state.
+                return JSONResponse(
+                    {
+                        "error": f"'{wanted}' is not an engine this looks for",
+                        "engines": [one.key for one in engines.CANDIDATES],
+                    },
+                    status_code=400,
+                )
+            # Asked again, because the press is a second trip: it answered when
+            # the panel was painted and may not now, and writing an address that
+            # serves nothing is a binding that fails on the project's next run.
+            # The rule `probe` holds, held here for the same reason.
+            answered = await engines.probe([candidate])
+            if not answered:
+                return JSONResponse(
+                    {"error": f"'{candidate.key}' is not answering on this machine"},
+                    status_code=409,
+                )
+        else:
             return JSONResponse(
-                {"error": f"'{candidate.key}' is not answering on this machine"},
-                status_code=409,
+                {"error": "name an engine this machine is running, or the address of one"},
+                status_code=400,
             )
 
         path = project.config.default_binding_path()
@@ -836,7 +873,7 @@ def create_app(daemon: Any) -> Starlette:
             # edit can leave a step behind the file. `declare` read the file,
             # so it is the one that found out.
             return JSONResponse(
-                {"error": f"this project already reaches '{candidate.key}'"},
+                {"error": f"this project already reaches '{answered[0].key}'"},
                 status_code=409,
             )
 
@@ -852,7 +889,7 @@ def create_app(daemon: Any) -> Starlette:
         return JSONResponse(
             {
                 "status": "added",
-                "engine": candidate.key,
+                "engine": answered[0].key,
                 "models": list(answered[0].models),
             }
         )

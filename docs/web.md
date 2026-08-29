@@ -249,10 +249,31 @@ sits beside it, and only when nothing identified the endpoint does the key lead.
 
 ### `POST /api/projects/{p}/models/add`
 
-`{engine}` — one of the keys the read report offered under `undeclared`. It
-answers `{status: "added", engine, models}`, and is the browser form of
+Either `{engine}` — one of the keys the read report offered under `undeclared`
+— or `{url}`, an address nobody detected. It answers
+`{status: "added", engine, models}`, and is the browser form of
 `poieo config add`, through the same `rebind.declare`, so there is not a second
 set of rules about what may be written.
+
+**`{url}` is the whole input.** Detection knows four ports on *this* machine,
+and an inference server is routinely somewhere else: one on 8001 because 8000
+was taken, an Ollama on the desktop under the desk, a shared box in an office.
+Until this there was no route to any of them — the only way in was opening the
+binding file and typing a block by hand.
+
+`detect.ask` decides *what* is there rather than making the reader classify
+their own server: both listing shapes are tried, and the one that answers says
+which backend it is. `/v1` is tried as well, because `http://box:8001` is what a
+person reads off a terminal and the OpenAI shape lives one segment further down.
+The name comes from what the server called itself, and from the **host** when it
+said nothing — `gpu-box` is something the reader will recognise where
+`openai_compatible` tells them nothing. `{name}` overrides it, which the project
+with two vLLMs needs.
+
+**`{key_env}` is a variable's name, and there is no field for a key.** The
+value belongs in the environment the daemon reads; this file is one people
+commit. That is the same fence the rest of this route has held since it was one
+screen, at the one place a hosted endpoint makes it tempting to break.
 
 **Only adds.** Nothing about what a role uses moves — declaring a model and
 choosing one are different decisions, and the second is `models/use`. An endpoint
@@ -263,7 +284,10 @@ another port.
 |---|---|---|
 | **404** | no such project | the names that do answer |
 | **409** | this project names no models file | — |
+| **400** | neither an engine nor an address | — |
 | **400** | not an engine detection looks for | the keys it does |
+| **409** | nothing usable answered at that address | — |
+| **409** | that name is already in the file | — |
 | **409** | this project already reaches it | — |
 | **409** | it is not answering on this machine | — |
 | **409** | `rebind` could not add to that file | its own sentence, naming the file |
@@ -513,6 +537,11 @@ either but it is not this machine's memory being spent; a routed one shows the
 rate it published. An endpoint that charges but publishes
 nothing leaves the column empty, because "free" would be a guess and an
 expensive one to be wrong about.
+
+**The form for an address is last in the panel**, because it is what a reader
+reaches for when nothing above it was what they were looking for. One field
+that matters and two that are usually left alone. No key field anywhere on the
+page.
 
 **An offer sits above the lists, and only when there is one.** The panel makes a
 second request for it, so the catalogue never waits; when it comes back with

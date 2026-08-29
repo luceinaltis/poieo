@@ -532,7 +532,7 @@ test("taking an offer names the engine back, and nothing else", async () => {
 
   await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
 
-  expect(addEngine).toHaveBeenCalledWith("board", "lmstudio")
+  expect(addEngine).toHaveBeenCalledWith("board", { engine: "lmstudio" })
 })
 
 test("a refusal to add is shown in the daemon's words", async () => {
@@ -756,4 +756,69 @@ test("an ordinary change says nothing extra", async () => {
   await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
 
   expect(container.querySelector("[data-do='use-not-taken']")).toBeNull()
+})
+
+// -- an engine at an address the board was not told about --------------------
+
+const value = (el: HTMLInputElement, text: string) => {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+  set.call(el, text)
+  el.dispatchEvent(new Event("input", { bubbles: true }))
+}
+
+test("an address is all a reader has to type", async () => {
+  // Not a form asking them to classify their own server: which backend it is
+  // comes from asking it, and the name from what it says it is.
+  await render()
+
+  await act(async () => value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://gpu-box:8001"))
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(addEngine).toHaveBeenCalledWith("board", { url: "http://gpu-box:8001" })
+})
+
+test("a name and a key variable go along when they are given", async () => {
+  await render()
+
+  await act(async () => {
+    value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://gpu-box:8001")
+    value(container.querySelector<HTMLInputElement>("[data-do='url-name']")!, "office")
+    value(container.querySelector<HTMLInputElement>("[data-do='url-key-env']")!, "OFFICE_TOKEN")
+  })
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(addEngine).toHaveBeenCalledWith("board", {
+    url: "http://gpu-box:8001",
+    name: "office",
+    key_env: "OFFICE_TOKEN",
+  })
+})
+
+test("the form never asks for a key, only for the variable holding one", async () => {
+  // The rule this panel has followed since it was one screen: a variable's
+  // name is not a secret and a key is, and the web takes neither a key nor a
+  // password field it could be typed into.
+  await render()
+
+  const fields = [...container.querySelectorAll(".models-at input")]
+  expect(fields.some((f) => f.getAttribute("type") === "password")).toBe(false)
+  expect(container.textContent).not.toContain("API key")
+})
+
+test("an empty address does not send anything", async () => {
+  await render()
+
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(addEngine).not.toHaveBeenCalled()
+})
+
+test("a refusal from an address is shown where it was typed", async () => {
+  addEngine.mockResolvedValue({ ok: false, error: "nothing usable answered at http://nowhere:9999" })
+  await render()
+
+  await act(async () => value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://nowhere:9999"))
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(container.textContent).toContain("nothing usable answered")
 })

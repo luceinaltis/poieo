@@ -1031,3 +1031,118 @@ def test_a_warning_about_a_key_never_carries_the_key(tmp_path, monkeypatch):
     reply = _use(client, "routed/qwen/flash", role="reader")
 
     assert "sk-planted-by-this-test" not in reply.text
+
+
+# -- an engine at an address the board was not told about --------------------
+#
+# The offer above covers the four ports on this machine. Everything else -- a
+# vLLM on 8001, an Ollama on a desktop, an office box -- had no route at all,
+# and DESIGN.md's "everything is reachable from a terminal" cuts both ways: the
+# terminal grew `poieo config add <url>` in the same change, and this is that
+# command, through the same `detect.ask` and the same `rebind.declare`.
+
+
+def _found(monkeypatch, engine):
+    async def fake(base_url):
+        return engine if engine and base_url == engine.base_url else None
+
+    monkeypatch.setattr(detect_module, "ask", fake)
+
+
+def _add_at(client, url, project="board", **rest):
+    return client.post(f"/api/projects/{project}/models/add", json={"url": url, **rest})
+
+
+_OFFICE = detect_module.Engine("gpu-box", "gpu-box", "openai_compatible", ("qwen3-32b",), "http://gpu-box:8001/v1")
+
+
+def test_an_address_is_asked_and_what_it_is_comes_back(tmp_path, monkeypatch):
+    """The reader types an address and nothing else: which backend it is comes
+    from asking, not from a form asking them to classify their own server."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://gpu-box:8001/v1")
+
+    assert reply.status_code == 200
+    assert reply.json() == {
+        "status": "added",
+        "engine": "gpu-box",
+        "models": ["qwen3-32b"],
+    }
+    written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert "  gpu-box:\n    type: openai_compatible\n" in written
+    assert "base_url: http://gpu-box:8001/v1" in written
+
+
+def test_an_address_with_nothing_on_it_is_refused_and_writes_nothing(tmp_path, monkeypatch):
+    _machine(monkeypatch, {})
+    _found(monkeypatch, None)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://nowhere:9999")
+
+    assert reply.status_code == 409
+    assert "nowhere:9999" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_an_address_may_be_given_the_name_the_reader_wants(tmp_path, monkeypatch):
+    """Two vLLMs is the ordinary case and both would be called `vllm`."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", name="office")
+
+    assert reply.json()["engine"] == "office"
+    assert "  office:\n" in (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+
+def test_an_address_takes_the_name_of_a_variable_and_never_a_key(tmp_path, monkeypatch):
+    """The fence, at the one place a hosted endpoint makes it tempting. A
+    variable's name is not a secret and belongs in the file; the value is one
+    and never crosses."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN", api_key="sk-nope")
+
+    assert reply.status_code == 200
+    written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert "api_key_env: OFFICE_TOKEN" in written
+    assert "sk-nope" not in written
+    assert "sk-nope" not in reply.text
+
+
+def test_a_name_already_in_the_file_is_refused_rather_than_overwritten(tmp_path, monkeypatch):
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", name="local")
+
+    assert reply.status_code == 409
+    assert "local" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_a_body_with_neither_an_engine_nor_an_address_is_refused(tmp_path, monkeypatch):
+    _machine(monkeypatch, {})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    assert client.post("/api/projects/board/models/add", json={}).status_code == 400
+
+
+def test_an_address_the_project_can_reach_is_listed_without_a_restart(tmp_path, monkeypatch):
+    _machine(monkeypatch, {_OLLAMA: Catalogue((Served(id="qwen3.5:latest"),))})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=True)
+
+    assert _add_at(client, "http://gpu-box:8001/v1").status_code == 200
+
+    assert [e["name"] for e in _models(client).json()["endpoints"]] == ["local", "gpu-box"]

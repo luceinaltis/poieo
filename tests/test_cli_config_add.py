@@ -231,3 +231,103 @@ def test_a_server_that_named_itself_is_called_that_when_there_is_nothing_new(tmp
     assert "nothing new" in result.stdout.lower()
     assert "SGLang" in result.stdout
     assert "vLLM / SGLang" not in result.stdout
+
+
+# -- an engine at an address nobody guessed ----------------------------------
+#
+# Detection knows four ports on *this* machine. A vLLM on 8001, an Ollama on
+# the desktop under the desk, a shared box in an office -- none of them were
+# reachable except by opening the binding file and typing a block by hand.
+#
+# `poieo config add <url>` takes the address and asks what is there. The
+# command's no-argument form is untouched: that one still looks at this machine.
+
+
+def _at(monkeypatch, engine):
+    async def fake(base_url):
+        return engine if base_url == engine.base_url else None
+
+    monkeypatch.setattr(detect_module, "ask", fake)
+
+
+OFFICE = Engine(
+    "gpu-box",
+    "gpu-box",
+    "openai_compatible",
+    ("qwen3-32b",),
+    "http://gpu-box:8001/v1",
+)
+
+
+def test_an_address_is_asked_and_declared(tmp_path, monkeypatch):
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _at(monkeypatch, OFFICE)
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1"])
+
+    assert result.exit_code == 0, result.output
+    declared = load_binding(path).providers
+    assert declared["gpu-box"].type == "openai_compatible"
+    assert declared["gpu-box"].base_url == "http://gpu-box:8001/v1"
+
+
+def test_an_address_that_answers_with_nothing_is_refused_and_writes_nothing(tmp_path, monkeypatch):
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    _at(monkeypatch, OFFICE)
+
+    result = runner.invoke(app, ["config", "add", "http://nothing-here:9999"])
+
+    assert result.exit_code != 0
+    assert "nothing-here:9999" in result.output
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_an_address_may_be_given_the_name_the_reader_wants(tmp_path, monkeypatch):
+    """Two vLLMs is the ordinary case, and both would be called `vllm`."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _at(monkeypatch, OFFICE)
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--name", "office"])
+
+    assert result.exit_code == 0, result.output
+    assert "office" in load_binding(path).providers
+
+
+def test_an_address_may_name_the_variable_its_key_comes_from(tmp_path, monkeypatch):
+    """A hosted endpoint wants one. The **name** of the variable is not a
+    secret and belongs in the file; the key itself never goes near it."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _at(monkeypatch, OFFICE)
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--key-env", "OFFICE_TOKEN"])
+
+    assert result.exit_code == 0, result.output
+    assert load_binding(path).providers["gpu-box"].api_key_env == "OFFICE_TOKEN"
+
+
+def test_a_name_already_in_the_file_is_refused_rather_than_overwritten(tmp_path, monkeypatch):
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    _at(monkeypatch, OFFICE)
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--name", "ollama"])
+
+    assert result.exit_code != 0
+    assert "ollama" in result.output
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_looking_at_this_machine_still_takes_no_argument(tmp_path, monkeypatch):
+    """The form that existed before, unchanged."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _machine_with(monkeypatch, OLLAMA, LMSTUDIO)
+
+    assert runner.invoke(app, ["config", "add"]).exit_code == 0
+    assert "lmstudio" in load_binding(path).providers

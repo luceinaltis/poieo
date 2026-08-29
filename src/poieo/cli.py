@@ -30,6 +30,8 @@ for _stream in (sys.stdout, sys.stderr):
     if _stream and _stream.encoding and _stream.encoding.lower() not in ("utf-8", "utf8"):
         _stream.reconfigure(errors="replace")
 
+from dataclasses import replace
+
 from . import __version__
 from . import detect as engines
 from .binding import load_binding, split_ref
@@ -1005,19 +1007,52 @@ def config_models(
 
 @config_app.command("add")
 @_guarded
-def config_add() -> None:
-    """Look at the machine again, and declare any engine not already here.
+def config_add(
+    url: str = typer.Argument(
+        "",
+        help="An engine's address, if it is not on one of this machine's usual ports.",
+    ),
+    name: str = typer.Option("", "--name", help="What to call it in the file. Defaults to what it says it is."),
+    key_env: str = typer.Option(
+        "",
+        "--key-env",
+        help="The variable its key is read from. A name, never the key itself.",
+    ),
+) -> None:
+    """Look for engines again, and declare any that is not already here.
 
     Detection otherwise runs once, at `init`. Install Ollama next week and the
     binding has never heard of it -- this is how it does, and it is the same
     look `init` took.
+
+    **With an address**, it asks that one instead. Detection knows four ports on
+    *this* machine, and an inference server is routinely somewhere else -- one
+    on 8001 because 8000 was taken, an Ollama on the desktop under the desk, a
+    shared box in an office. Which backend it is comes from asking rather than
+    from a flag: both listing shapes are tried, and the one that answers says.
 
     Only adds. An endpoint already declared is left exactly as it is, since
     somebody may have pointed it at another port; and the default never moves,
     because declaring a model and choosing one are different decisions.
     """
     path, _ = _configured()
-    found = engines.detect()
+    if url:
+        engine = asyncio.run(engines.ask(url))
+        if engine is None:
+            _fail(f"nothing usable answered at {url} -- no listing, or one with no models on it")
+        if name:
+            engine = replace(engine, key=name)
+        if key_env:
+            engine = replace(engine, api_key_env=key_env)
+        if engine.key in load_binding(path).providers:
+            _fail(
+                f"'{engine.key}' is already declared in {path}. Pass --name to "
+                f"call this one something else; an endpoint already there is "
+                f"never overwritten."
+            )
+        found = [engine]
+    else:
+        found = engines.detect()
 
     added = declare(path, found)
     if not added:

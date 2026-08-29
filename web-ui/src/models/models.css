@@ -445,3 +445,58 @@
 .models-id:disabled {
   cursor: default;
 }
+
+/* An engine at an address nobody guessed. Last in the body and quiet with it:
+   most projects never need this, and the four ports detection knows cover the
+   ordinary machine. It earns its place for the vLLM on 8001 and the box in an
+   office, which had no way in at all. */
+.models-at {
+  border-top: 1px solid #221e18;
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.models-at h3 {
+  color: #7a6e60;
+  font-size: 0.82em;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The address is the one field that matters, so it gets the width. */
+.models-at input {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82em;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.models-at input:focus-visible {
+  border-color: #4a4034;
+  outline: none;
+}
+
+/* The two that are usually left alone, side by side and out of the way. */
+.models-at-more {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.models-at button {
+  justify-self: start;
+}
+
+/* One column when there is not room for two -- a phone, where these would
+   otherwise be two boxes too narrow to read what is typed in them. */
+@media (max-width: 460px) {
+  .models-at-more {
+    grid-template-columns: 1fr;
+  }
+}
