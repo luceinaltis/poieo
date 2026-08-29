@@ -167,6 +167,11 @@ Bare `poieo config` reports instead of printing help (`invoke_without_command`),
 because "what am I bound to" is the question people arrive with and making them
 find a subcommand to ask it is a tax. The subcommands are for changing the answer.
 
+**The board asks the same question**, at `GET /api/projects/{p}/models` — see
+[web.md](web.md). Both go through `BindingSpec.target()` and `spoken_for()`,
+which is where `provider/model` used to be spelled twice; the browser sees less
+of the answer than the terminal does, and that difference is argued there.
+
 Three neighbouring questions stay apart, because they are easy to confuse:
 `check` asks whether an endpoint is **up**, `config` reads what the **file**
 decided, and `config models` asks the endpoints for their **catalogue**. Only

@@ -76,8 +76,52 @@
   padding: 3px 6px;
 }
 
+/* Down the side, because these are what the page is *for* -- a list that grows
+   as views are added, where the bar's controls are a fixed handful about the
+   board already on screen. Narrow on purpose: it is navigation, not content. */
+.shell-rail {
+  border-right: 1px solid #2e2820;
+  bottom: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  left: 0;
+  padding: 10px 8px;
+  position: fixed;
+  top: var(--bar-height);
+  width: var(--rail-width);
+}
+
+.shell-rail button {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: #7a6e60;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.shell-rail button:hover:not(:disabled) {
+  color: #d6ccbe;
+}
+
+.shell-rail button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Where you are, not what you last pressed. */
+.shell-rail button[aria-current="page"] {
+  background: #221e18;
+  color: #e8dcc8;
+}
+
 .shell-stage {
   height: calc(100vh - var(--bar-height));
+  margin-left: var(--rail-width);
   position: relative;
 }
 

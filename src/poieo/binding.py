@@ -204,6 +204,26 @@ class BindingSpec(_Spec):
                 missing.append(role)
         return missing
 
+    def target(self, role: str) -> str | None:
+        """``provider/model`` for a role, or None when this cannot say.
+
+        The form `poieo config use` takes back, so a reader who types what
+        they just read is right. Only a binding with nothing to fall back on
+        gets None -- reporting what would really run beats refusing to report,
+        which is the same call the board makes and for the same reason.
+        """
+        try:
+            return self.resolve(role).ref
+        except BindingError:
+            return None
+
+    def spoken_for(self) -> dict[str, str]:
+        """Which ``provider/model`` each named role -- and ``default`` -- points
+        at, leaving out any this binding cannot answer for."""
+        named = {"default": self.target("default")}
+        named.update({role: self.target(role) for role in self.roles})
+        return {role: target for role, target in named.items() if target}
+
 
 class ResolvedModel(_Spec):
     """What a node is actually going to call."""

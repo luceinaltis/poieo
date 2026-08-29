@@ -1,0 +1,285 @@
+/* The same aside the drawer is, on the same edge and at the same width: only
+   one of the two is ever open, and `.shell-stage` reserves one margin for
+   whichever it is. Widening this alone would put the board under it. */
+.models {
+  background: #191612;
+  border-left: 1px solid #2e2820;
+  bottom: 0;
+  /* A column, and only the body grows. Not a grid: `grid-template-rows: auto
+     1fr` names rows by *position*, so the `1fr` lands on whichever child
+     happens to be second -- and adding the filter above the body handed the
+     whole leftover height to a one-line text box. A flex column says which
+     child stretches instead of counting to it, so the next thing added here
+     cannot reintroduce that. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px 16px;
+  position: fixed;
+  right: 0;
+  top: var(--bar-height);
+  width: min(440px, 100vw);
+}
+
+.models-head {
+  align-items: baseline;
+  display: flex;
+  /* Neither of the two above the body may take height from it or give any
+     back: the body is the only thing here that scrolls. */
+  flex: none;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+/* Reading a four-hundred-model catalogue is filtering it. Full width because
+   the thing it filters is full width, and above the scroll so it does not
+   leave with the list. */
+.models-filter {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  flex: none;
+  font: inherit;
+  font-size: 0.82em;
+  margin-bottom: 10px;
+  padding: 4px 8px;
+}
+
+.models-filter:focus-visible {
+  border-color: #4a4034;
+  outline: none;
+}
+
+.models-head h2 {
+  font-size: 1em;
+  margin: 0;
+}
+
+/* The file, not the whole path: enough to know which project's endpoints
+   these are, with the rest on the tooltip for whoever goes to edit it. */
+.models-file {
+  color: #7a6e60;
+  font-size: 0.82em;
+  margin-right: auto;
+}
+
+.models-close {
+  background: none;
+  border: 0;
+  color: #7a6e60;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.models-close:hover {
+  color: #e8dcc8;
+}
+
+/* Everything below the header scrolls together, and starts at the top: the
+   aside's `1fr` row lands here, so without `align-content: start` the blocks
+   inside share the leftover height between them instead of stacking. */
+.models-body {
+  align-content: start;
+  display: grid;
+  /* The one child that grows, and `min-height: 0` so it may also shrink --
+     without it a long catalogue pushes the panel past the viewport instead of
+     scrolling inside it. */
+  flex: 1;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  /* A model id is the thing a reader copies out of here. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.models-note {
+  color: #7a6e60;
+  font-size: 0.82em;
+  margin: 0;
+}
+
+.models-endpoint h3 {
+  align-items: baseline;
+  border-bottom: 1px solid #2e2820;
+  display: flex;
+  /* `OPENROUTER_API_KEY -- not set` beside a count beside a name is more than
+     440px holds. Wrapping is fine; a count broken across two lines is not. */
+  flex-wrap: wrap;
+  font-size: 0.9em;
+  font-weight: 600;
+  gap: 4px 8px;
+  margin: 0 0 6px;
+  padding-bottom: 4px;
+}
+
+.models-endpoint-name {
+  color: #e8dcc8;
+}
+
+.models-kind {
+  color: #6b6257;
+  font-weight: 400;
+}
+
+/* How long the listing is, and -- the part that matters -- what it is a
+   listing *of*. Dimmer for a catalogue than for what is on the machine: one is
+   ready to run and the other is a menu. */
+.models-count {
+  color: #6b6257;
+  font-weight: 400;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.models-count[data-listing="here"] {
+  color: #a9b665;
+}
+
+/* A key sits after the count rather than pushing it around. */
+.models-endpoint h3 .models-key {
+  margin-left: 0;
+}
+
+/* Named, never valued. The colour is the only thing that shouts: an endpoint
+   with no key lists nothing, and that is worth finding without reading. */
+.models-key {
+  font-size: 0.9em;
+  font-weight: 400;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.models-key[data-key="set"] {
+  color: #6b6257;
+}
+
+.models-key[data-key="missing"] {
+  color: #d16d5a;
+}
+
+.models-list {
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Id, then what the endpoint said about it, then what it costs. The price
+   column is fixed and right-aligned so a column of them can be compared
+   down the page rather than read one at a time. */
+.models-list li {
+  align-items: baseline;
+  display: grid;
+  font-size: 0.82em;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.models-id {
+  color: #d6ccbe;
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.models-price {
+  color: #9a9086;
+  font-variant-numeric: tabular-nums;
+  grid-column: 2;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* A local model costs memory rather than money, and the row says so in words
+   instead of a number that would read as a rate somebody looked up. */
+.models-price[data-price="local"],
+.models-price[data-price="free"] {
+  color: #6b6257;
+}
+
+/* What the endpoint said, under the id: the window, and for a local build the
+   two numbers that are its real price. */
+.models-facts {
+  color: #6b6257;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 0.92em;
+}
+
+.models-facts [data-fact="can"] {
+  color: #8a7a55;
+}
+
+/* Which roles are on this model. One word, and only where there is one. */
+.models-using {
+  color: #d8a657;
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.92em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* One maker's models, folded. A hosted catalogue is 396 models across 58
+   makers, and the maker is the first thing a reader narrows by -- so it is the
+   fold, and the count on it is what says whether opening is worth it. */
+.models-maker {
+  border-top: 1px solid #221e18;
+}
+
+.models-maker:first-of-type {
+  border-top: 0;
+}
+
+.models-maker > summary {
+  align-items: baseline;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.84em;
+  gap: 8px;
+  list-style: none;
+  padding: 4px 0;
+}
+
+/* The triangle, drawn rather than inherited: the default marker is a different
+   glyph in every browser and sits at a different baseline in each. */
+.models-maker > summary::before {
+  color: #6b6257;
+  content: "▸";
+  font-size: 0.9em;
+}
+
+.models-maker[open] > summary::before {
+  content: "▾";
+}
+
+.models-maker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.models-maker-name {
+  color: #d6ccbe;
+}
+
+.models-maker-count {
+  color: #6b6257;
+  margin-left: auto;
+}
+
+.models-maker > summary:hover .models-maker-name {
+  color: #e8dcc8;
+}
+
+/* Indented under the card that holds them, so an open maker reads as a branch
+   rather than as the list starting again. */
+.models-maker .models-list {
+  padding: 0 0 6px 14px;
+}

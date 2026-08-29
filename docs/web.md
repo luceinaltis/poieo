@@ -19,6 +19,7 @@ server and the client keep them together so they stay easy to count.
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
+| `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
@@ -43,6 +44,97 @@ because whoever asked is holding a list that has moved on.
 
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.
+
+### `GET /api/projects/{p}/models`
+
+**Every model this project can reach**, endpoint by endpoint, with whatever each
+endpoint said about each model. Not what the project is *bound* to — that is one
+line of the answer and the smaller one; the question this opens for is "what
+could I be running, and what would it cost".
+
+**Asked live**, for the reason `poieo config models` is asked live: a catalogue
+written down a month ago has since gone wrong, and a model named from memory
+fails at 3am. Every endpoint is asked at once through `detect.catalogue_for` —
+two asked in single file is two `HTTP_TIMEOUT`s on a laptop where neither is
+running. The handler is already on the daemon's loop, so it **awaits**;
+`asyncio.run` from here raises, and `cli.py` is full of it, which is why the
+catalogue is shared as a coroutine rather than as a copied body.
+
+It is addressed by **project**, not by task, because that is `poieo config`'s own
+scope: the endpoints belong to the project, and hanging the answer off a task
+would put the same answer on every card. `_project_for` is the lookup, and a name
+that answers for nothing is a **404 carrying the names that do** — the board
+remembers a project across restarts, so a picker holding one the daemon was
+started without is a real state rather than a typo.
+
+`_models_of` decides *which endpoints to ask* from the spec **already in
+memory**, off any task bound to the project's own file. Reading the file instead
+would let the panel ask a different set from the one the board is painting the
+moment anybody typed `poieo config use`. One truth per screen; a run re-reads
+the file and moves both together (see [daemon.md](daemon.md)). It falls back to a
+read only for a project whose every task is disabled or bound elsewhere.
+
+Each model carries `id`, `ref`, and whatever the endpoint published: `context`,
+`size`, `quantization`, `capabilities`, `price`. **Every one of those is null
+when the endpoint did not say**, and none is filled in from anywhere else.
+`price` is the one worth stating plainly: [runtime.md](runtime.md) refuses a
+price table in this repository — *"nothing in poieo knows what a model charges,
+and a price table checked in here would be wrong the week after it was
+written"* — and this does not add one. OpenRouter publishes per-token rates on
+the same listing it publishes ids on, so those are reported, converted to USD
+per **million** tokens because `0.00000015` is not a number anybody compares at
+a glance. Every other OpenAI-shaped server publishes none, and Ollama charges
+nothing per token at all; both come back null, and the panel distinguishes them
+by the endpoint's type rather than by inventing a zero.
+
+`used_by` is the one thing the binding contributes: which roles are on this
+model, so a reader can see what they are using among what they could. A list,
+because a model may serve several.
+
+Two things deliberately do not cross. A **key** never does: only the name of the
+variable it comes from, and whether that is set — read through
+`providers.credential_for`, so the rule about where a credential comes from stays
+in one place and the value never reaches this module to be leaked. That name is
+not decoration: an endpoint whose key is unset lists nothing, and it is the whole
+explanation. `api_key_set` is **null rather than false** when an endpoint names
+no variable, because "its SDK resolves its own" is a different fact from "the key
+is missing", and a panel warning about the first would cry wolf on every local
+endpoint. And a **`base_url`** does not cross either: an endpoint's own name
+tells one from another, and an address is the one field in a binding that can
+carry a private host. If a real confusion turns up — two `openai_compatible`
+endpoints a reader cannot tell apart — the argument for letting it through will
+be concrete.
+
+`askable` is the third fact an empty list can mean: `mock` answers from the
+binding file, so there is nothing to ask, and a panel that ran that together with
+"did not answer" would report a working endpoint as a broken one.
+
+`label` is what a person would recognise the endpoint as — "vLLM", "SGLang",
+"OpenRouter". `type` alone said nothing: `openai_compatible` is all of those at
+once. `detect.label_for()` prefers **what the server said about itself** on its
+own listing, falling back to the address; [storage.md](storage.md) has the
+sources and why they are in that order. The **address itself still does not
+cross**, only the name it produces, and `label` is null when nothing answered
+the question — the panel falls back to the type then.
+
+**The panel leads with what answered, not with the key in the file.** A
+provider's key is the handle its author typed; reading a config back to somebody
+is not telling them what is there. So `OpenRouter` is the heading and `routed`
+sits beside it, and only when nothing identified the endpoint does the key lead.
+
+`installed` is the difference between two listings that look identical.
+Ollama's `/api/tags` is `ollama list` — models pulled onto *this disk*, ready
+now, and all of them. OpenRouter's is a catalogue of what it would route to for
+money, with nothing here yet. `detect.lists_installed()` is the one place that
+knows which is which, so the panel does not decide it from a type string of its
+own.
+
+**The route asks with `limit=None`.** `MODEL_CAP` is a sensible default for
+`init`, whose job is to fill a picker — *"a server offering hundreds is a
+catalogue, not a choice"*. This panel **is** that catalogue: OpenRouter answers
+with 396 models, and forty of them shown without a word reads as all of them.
+The cap stays the default on `catalogue_for` and this is the caller that lifts
+it.
 
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
 `.config`), which
@@ -183,7 +275,52 @@ web-ui/src/
   detail/           the drawer: one task, turn by turn, plus control
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
+  models/           which models this project runs on
 ```
+
+**`Models` is reached from the rail, not from a card.** A project's models are
+the project's, and putting them in the drawer would repeat one answer on every
+task.
+
+The **rail** is the nav down the left: what the page is *for*, where the bar's
+controls are a fixed handful about the board already on screen. It holds `board`
+and `models` today and is where the next view lands. `board` is a rail item
+rather than a close box, because "no panel over it" is a place you can be and
+closing is not — the rail always says where you are, in one item marked
+`aria-current="page"`.
+
+The panel itself is the drawer's twin — the same fixed aside on the same edge at
+the same width — so only one of the two is ever open, and `.shell-stage` reserves
+one margin for whichever it is. Its width comes from `--rail-width` on the left
+and the drawer's constant on the right; the rail is `position: fixed`, so the
+stage has to reserve exactly that much or the board slides under it.
+
+**A big catalogue folds by maker.** A hosted listing names every model
+`maker/model` — 396 across 58 makers — and a flat list of that is not read, it
+is scrolled past. So each maker is a `<details>` card, shut until opened, with
+its count on the summary; a filter opens them, because the matches are what was
+asked for. Inside a card the rows drop the prefix the card already says, with
+the whole id still on the tooltip since that is the half of `ref` a reader
+copies out. The test for whether to fold is mechanical — every id carries a
+prefix, and there are at least `WORTH_GROUPING` of them — rather than a list of
+endpoints known to have makers, so an endpoint that grows into that shape gets
+it without anybody deciding. What is *on a machine* is named the way its owner
+pulled it (`qwen3.5:latest`, `hf.co/user/repo`), where a leading segment is a
+host or nothing at all, so those stay flat.
+
+**The panel filters rather than truncates.** A four-hundred-model catalogue is
+read by narrowing it, and the count keeps saying what it narrowed *from* — "12
+of 396 offered" — so the filter does not become the same silent truncation it
+replaced. An endpoint with nothing matching leaves the list entirely: left in
+place it would show "no answer" under its own heading, which is a different and
+more alarming thing than a search that missed.
+
+**A row is what the endpoint said, and a blank is what it did not.** A local
+model shows the two numbers that are its real price -- its size and
+quantization -- and says it *runs here* rather than showing a rate of nothing; a
+routed one shows the rate it published. An endpoint that charges but publishes
+nothing leaves the column empty, because "free" would be a guess and an
+expensive one to be wrong about.
 
 **`Question` is drawn first in the drawer, above the controls.** Everything
 after a `confirm` node is held until it is answered, so a reader who scrolls

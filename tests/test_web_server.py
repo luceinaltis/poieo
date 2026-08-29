@@ -292,8 +292,15 @@ def test_a_binding_with_no_default_leaves_the_model_unknown(tmp_path):
 
 
 def test_the_wiring_carries_no_credentials(tmp_path):
-    """Only the bare model id crosses. A provider knows a base_url and the name
-    of the variable a key comes from, and neither has any business on a board."""
+    """Only the bare model id crosses **here**.
+
+    A provider knows a base_url and the name of the variable a key comes from,
+    and neither belongs on the paint: this body rides out to every browser
+    watching, on every board update. The models panel is the one place either
+    is a legitimate subject, and it is a route a person opened on purpose --
+    see `test_the_models_report_names_the_variable_and_never_its_value` in
+    test_web_models.py, which holds the harder line there.
+    """
     daemon = stub_daemon(tmp_path, [stub_runner()])
     client = TestClient(create_app(daemon))
 

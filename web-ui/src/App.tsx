@@ -17,6 +17,7 @@ import { Drawer } from "./detail/Drawer"
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell/skinHost"
 import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
+import { Models } from "./models/Models"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { SKINS, skinById } from "./skins/registry"
@@ -48,6 +49,9 @@ export default function App({ store }: { store?: StageStore }) {
   const hostRef = useRef<SkinHost | null>(null)
   const [skinId, setSkinId] = useState(readSkinPreference)
   const [selected, setSelected] = useState<string | null>(null)
+  // Not remembered across reloads, unlike the skin and the project: this is a
+  // thing you open to answer a question, not a way you like the board to sit.
+  const [showModels, setShowModels] = useState(false)
 
   useEffect(() => {
     void theStore.start()
@@ -96,6 +100,14 @@ export default function App({ store }: { store?: StageStore }) {
   // Stable, so the memoized drawer sees the same props while frames stream by.
   const closeDrawer = useCallback(() => setSelected(null), [])
   const decided = useCallback(() => void theStore.resync(), [theStore])
+
+  // One panel on that edge at a time. Both are fixed to the right at one
+  // width, and the stage reserves one margin for whichever is open.
+  const openModels = useCallback(() => {
+    setShowModels(true)
+    setSelected(null)
+  }, [])
+  const closeModels = useCallback(() => setShowModels(false), [])
 
   const empty = Object.keys(shown.tasks).length === 0
   // `selected` is the board's key -- the project and the task -- because a
@@ -151,7 +163,33 @@ export default function App({ store }: { store?: StageStore }) {
         </label>
       </header>
 
-      <div className="shell-stage" data-drawer={String(Boolean(selected))}>
+      {/* What the page is for, rather than what one task is doing -- so it is
+          nav down the side and not a control on the bar, and it is where the
+          next view lands beside `models`. `board` is the page with no panel
+          over it: a rail item rather than a close box, because closing is not
+          a place you can be. */}
+      <nav className="shell-rail" aria-label="Views">
+        <button
+          type="button"
+          data-do="open-board"
+          aria-current={showModels ? undefined : "page"}
+          onClick={closeModels}
+        >
+          board
+        </button>
+        <button
+          type="button"
+          data-do="open-models"
+          aria-current={showModels ? "page" : undefined}
+          // Nothing to ask about until the daemon has named a project.
+          disabled={!project}
+          onClick={openModels}
+        >
+          models
+        </button>
+      </nav>
+
+      <div className="shell-stage" data-drawer={String(Boolean(selected || showModels))}>
         <div className="shell-board" ref={boardRef} />
         {empty ? (
           <p className="shell-empty">
@@ -159,6 +197,10 @@ export default function App({ store }: { store?: StageStore }) {
           </p>
         ) : null}
       </div>
+
+      {showModels && project ? (
+        <Models project={project.name} onClose={closeModels} />
+      ) : null}
 
       {selected ? (
         <Drawer

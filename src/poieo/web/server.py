@@ -25,7 +25,10 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, S
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from .. import detect as engines
+from ..binding import load_binding
 from ..errors import BindingError, PoieoError
+from ..providers import credential_for
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -98,6 +101,59 @@ def _workspace_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The private copy behind a task, if it keeps one."""
     runner = _runner_for(daemon, project, task)
     return getattr(runner, "workspace", None) if runner else None
+
+
+def _project_for(daemon: Any, name: str) -> Any:
+    """The one project answering to a name, or None.
+
+    A name is an identity here for the same reason it is on a task: the daemon
+    refuses to start two projects that share one.
+    """
+    for project in daemon.projects:
+        if project.config.display_name == name:
+            return project
+    return None
+
+
+def _models_of(project: Any) -> Any:
+    """The binding this project's models panel is about, or None.
+
+    **The spec already in memory**, taken off any task bound to the project's
+    own file -- not a fresh read of that file. The board draws a resolved model
+    on every node from that same object, and a panel reading the file instead
+    would disagree with the graph three inches to its left the moment anybody
+    typed `poieo config use`. One truth per screen; a run re-reads the file and
+    moves both together (see daemon.md).
+
+    Falling back to a read is for the project whose every task is disabled or
+    bound elsewhere: it still has a binding, and refusing to show it because
+    nothing happens to be armed would be the check getting in the way.
+    """
+    wanted = project.config.default_binding_path()
+    if wanted is None:
+        return None
+    for task in getattr(project, "tasks", ()):
+        if task.binding_key == str(wanted):
+            return task.binding
+    return load_binding(wanted)
+
+
+def _key_state(name: str, provider: Any) -> bool | None:
+    """Whether the variable this endpoint names is set -- never what is in it.
+
+    `None` rather than `False` when it names none: "its SDK resolves its own"
+    is a different fact from "the key is missing", and a panel that warned
+    about the first would cry wolf on every local endpoint. Asked through
+    `credential_for`, so the rule about where a key comes from stays in one
+    place and the value never comes back here to be leaked.
+    """
+    if not provider.api_key_env:
+        return None
+    try:
+        credential_for(name, provider)
+    except PoieoError:
+        return False
+    return True
 
 
 def _review_state(runner: Any) -> dict[str, Any]:
@@ -237,6 +293,116 @@ def create_app(daemon: Any) -> Starlette:
                     for project in daemon.projects
                 ],
                 "tasks": rows,
+            }
+        )
+
+    async def project_models(request: Request) -> JSONResponse:
+        """Every model this project can reach, endpoint by endpoint.
+
+        **Asked live**, for the reason `poieo config models` is: a catalogue
+        written down a month ago is a catalogue that has since gone wrong, and
+        a model named from memory fails at 3am. Every endpoint is asked at
+        once -- two asked in single file is two timeouts on a laptop where
+        neither is running.
+
+        What each model carries is whatever its endpoint said about it and
+        nothing else. `docs/runtime.md` refuses a price table in this
+        repository; this does not add one, it reports the rates an endpoint
+        publishes on the same listing it publishes ids on, and leaves a blank
+        where none is published rather than guessing at a number.
+
+        Two things deliberately do not cross. A **key** never does -- only the
+        name of the variable it comes from, and whether that is set, which is
+        usually the whole explanation for an endpoint that listed nothing. Nor
+        does a `base_url`: the endpoint's own name tells one from another, and
+        an address is the one field in a binding that can carry a private host.
+        """
+        name = request.path_params["project"]
+        project = _project_for(daemon, name)
+        if project is None:
+            # The board remembers a project across restarts, so a picker
+            # holding one the daemon was started without is a real state
+            # rather than a typo -- and the list is what fixes it.
+            return JSONResponse(
+                {
+                    "error": f"no project '{name}'",
+                    "projects": [p.config.display_name for p in daemon.projects],
+                },
+                status_code=404,
+            )
+        # `_models_of` may read a file when nothing armed is bound to it.
+        spec = await asyncio.to_thread(_models_of, project)
+        if spec is None:
+            # An answer, not a failure: a project may legitimately name none.
+            return JSONResponse({"binding": None, "endpoints": []})
+
+        declared = list(spec.providers.items())
+        # Awaited, never `asyncio.run`: this handler is already on the
+        # daemon's loop, and starting a second one there raises.
+        catalogues = await asyncio.gather(
+            *(
+                # No cap: this panel *is* the catalogue, and forty of three
+                # hundred shown without a word reads as all of them.
+                engines.catalogue_for(provider.type, provider.base_url, limit=None)
+                for _, provider in declared
+            )
+        )
+        # Which model each role is on, so a reader can see what they are using
+        # among what they could. A model may serve several roles.
+        in_use: dict[str, list[str]] = {}
+        for role, ref in spec.spoken_for().items():
+            in_use.setdefault(ref, []).append(role)
+
+        return JSONResponse(
+            {
+                "binding": {"name": spec.name, "path": str(spec.source_path)},
+                "endpoints": [
+                    {
+                        "name": key,
+                        "type": provider.type,
+                        # What a person would recognise this as. The type is
+                        # four products in a trench coat -- vLLM, SGLang, LM
+                        # Studio, llama.cpp and every hosted router all speak
+                        # `openai_compatible` -- so the type alone told a
+                        # reader nothing about who they were talking to. Null
+                        # when the address is one nobody wrote down, and the
+                        # panel falls back to the type.
+                        "label": engines.label_for(provider.type, provider.base_url, answered.server),
+                        # "did not answer" and "there is nothing to ask" are
+                        # different facts, and a listing that conflated them
+                        # would read as a fault.
+                        "askable": engines.askable(provider.type),
+                        # Whether this listing is what is on this machine or
+                        # what the endpoint offers. Two listings that look
+                        # identical and mean different things.
+                        "installed": engines.lists_installed(provider.type),
+                        "api_key_env": provider.api_key_env,
+                        "api_key_set": _key_state(key, provider),
+                        "models": [
+                            {
+                                "id": model.id,
+                                # The one spelling of a model, built where it
+                                # is always built.
+                                "ref": f"{key}/{model.id}",
+                                "context": model.context,
+                                "size": model.size,
+                                "quantization": model.quantization,
+                                "capabilities": list(model.capabilities),
+                                "price": (
+                                    None
+                                    if model.price is None
+                                    else {
+                                        "input": model.price[0],
+                                        "output": model.price[1],
+                                    }
+                                ),
+                                "used_by": in_use.get(f"{key}/{model.id}", []),
+                            }
+                            for model in answered.models
+                        ],
+                    }
+                    for (key, provider), answered in zip(declared, catalogues)
+                ],
             }
         )
 
@@ -406,6 +572,7 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
+        Route("/api/projects/{project}/models", project_models),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.

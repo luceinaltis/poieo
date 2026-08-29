@@ -25,6 +25,79 @@ export async function fetchTasks(): Promise<Listing> {
   return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
 }
 
+/**
+ * One model an endpoint says it has.
+ *
+ * Everything but `id` and `ref` is **null when the endpoint did not say**, and
+ * nothing is filled in from anywhere else. `price` in particular: poieo keeps
+ * no price table, because one written down would be wrong the week after.
+ * Where an endpoint publishes rates on its own listing they are reported;
+ * where it does not, this is null rather than a guess -- and never a zero,
+ * which would read as free.
+ */
+export interface ServedModel {
+  id: string
+  /** `provider/model` -- the one spelling, and what `config use` takes back. */
+  ref: string
+  context: number | null
+  /** Ollama's own words for a local build: "9.0B", "Q4_K_M". */
+  size: string | null
+  quantization: string | null
+  capabilities: string[]
+  /** USD per million tokens. */
+  price: { input: number; output: number } | null
+  /** Which roles are on this model right now. Empty for most of them. */
+  used_by: string[]
+}
+
+export interface Endpoint {
+  /** The name the reader gave it in their own models file. */
+  name: string
+  type: string
+  /**
+   * What a person would recognise this as -- "OpenRouter", "LM Studio".
+   * Null when the address is one nobody wrote down, and `type` is the
+   * fallback: `openai_compatible` is vLLM and SGLang and LM Studio and
+   * llama.cpp and every hosted router at once, which tells a reader nothing.
+   */
+  label: string | null
+  /** False for `mock`, which answers from the binding file rather than a port. */
+  askable: boolean
+  /**
+   * Whether this listing is what is **on this machine** or what the endpoint
+   * offers. Ollama's is `ollama list` -- pulled, here, ready. A routed
+   * endpoint's is a catalogue of what it would run for money, with nothing
+   * here yet. They look identical and are not.
+   */
+  installed: boolean
+  /** The variable a key is read from; null when the endpoint names none. */
+  api_key_env: string | null
+  /** Null -- not false -- when it names none: its SDK resolves its own. */
+  api_key_set: boolean | null
+  models: ServedModel[]
+}
+
+/**
+ * Every model a project can reach, endpoint by endpoint, asked just now.
+ *
+ * A key never crosses -- only the name of the variable it comes from and
+ * whether that is set, which is usually the whole explanation for an endpoint
+ * that listed nothing. Nor does an endpoint's address: its own name tells one
+ * from another, and a `base_url` is the one binding field that can carry a
+ * private host.
+ */
+export interface ModelsReport {
+  /** Where these endpoints were declared. Null if the project names no file. */
+  binding: { name: string; path: string } | null
+  endpoints: Endpoint[]
+}
+
+export async function fetchModels(project: string): Promise<ModelsReport | null> {
+  return getJson<ModelsReport>(
+    `/api/projects/${encodeURIComponent(project)}/models`,
+  )
+}
+
 export async function fetchRuns(
   opts: { task?: string; project?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {

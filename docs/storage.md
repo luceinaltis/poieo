@@ -184,14 +184,51 @@ the metered endpoint is not what a project falls into by default. A machine with
 both a Claude credential and an answering Ollama declares both and binds the
 Ollama. Moving that is `poieo config use`, one command.
 
-`models_for(type, base_url)` is the one place that knows how each backend lists
-what it has — `/api/tags` for Ollama, `/models` for anything OpenAI-shaped, the
-SDK for Claude. Keyed by **provider type** rather than by address, because the
-question outlives detection: a binding declares a type and a base_url, and
-`poieo config models` asks from there. Two copies of that knowledge would
-eventually look in two places. `askable(type)` says whether the question can be
-put at all — `mock` answers from the binding file itself, and so does a backend
-somebody registered through `providers.register()`.
+`catalogue_for(type, base_url)` is the one place that knows how each backend
+lists what it has — `/api/tags` for Ollama, `/models` for anything OpenAI-shaped,
+the SDK for Claude. Keyed by **provider type** rather than by address, because
+the question outlives detection: a binding declares a type and a base_url, and
+`poieo config models` and the board ask from there. Two copies of that knowledge
+would eventually look in two places. `models_for()` is that answer read for its
+ids, so there is still one request and one place that knows where to send it.
+`askable(type)` says whether the question can be put at all — `mock` answers from
+the binding file itself, and so does a backend somebody registered through
+`providers.register()`.
+
+### Who is actually answering
+
+`openai_compatible` is four products in a trench coat: vLLM, SGLang, LM Studio,
+llama.cpp and every hosted router speak it. `label_for()` answers *which*, from
+three sources, and the order is the whole point.
+
+**First, what the server said about itself.** `Catalogue.server` carries the name
+found in `owned_by` on the listing's own entries. That field means "who owns the
+model" in the OpenAI schema — OpenAI's own API answers `openai` and `system` with
+it — so only values a server is *known* to write for itself are read as one, and
+`_SAYS_ITS_NAME` is that short list. Each was verified in the server's source
+rather than guessed:
+
+| server | `owned_by` | where it is set |
+|---|---|---|
+| vLLM | `vllm` | `vllm/entrypoints/openai/engine/protocol.py` |
+| SGLang | `sglang` | `python/sglang/srt/entrypoints/openai/protocol.py` |
+| llama.cpp | `llamacpp` | `tools/server/server-context.cpp` |
+
+**This is what tells vLLM from SGLang.** They share a default port and answer
+listings of the same shape, so no amount of looking at the address ever could —
+and it keeps working for a server moved onto a port nobody wrote down.
+
+**Second, the address**, for `CANDIDATES`' own entries plus a very short list of
+hosted endpoints worth naming. Right for a server that names itself nothing, and
+deliberately short: a registry of every hosted endpoint is a table that goes
+stale, and naming one wrongly is worse than not naming it.
+
+**Third, nothing** — the caller falls back to the bare type.
+
+A name **typed into the binding** is not among them, and that is the point. It
+says what its author believed when they wrote it; the whole reason to ask an
+endpoint anything is to find out what is really there. The board shows what
+answered first and the author's key second (see [web.md](web.md)).
 
 **Every engine found is declared**, not only the one that ends up serving
 `default:`. A role exists so a graph can send its cheap step somewhere cheap,
