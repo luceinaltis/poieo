@@ -8,6 +8,13 @@
 # Bytes as the bundler wrote them, no conversion either way.
 src/poieo/web/static/** -text
 
+# ...except the one text file in it. vite copies web-ui/index.html into the
+# bundle byte for byte, and pinning *that* to LF only fixes checkouts made
+# afterwards -- a worktree opened earlier still holds a CRLF copy, builds a CRLF
+# bundle, and reddens the bundle check for everyone. Normalising the output
+# itself makes the working tree's line endings stop mattering.
+src/poieo/web/static/index.html text eol=lf
+
 # vite copies this template into the bundle byte for byte, so its line endings
 # end up in checked-in output. Left to `core.autocrlf` it is CRLF on Windows and
 # LF elsewhere, and the same commit then builds two different bundles -- which is
