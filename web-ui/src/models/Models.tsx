@@ -51,7 +51,12 @@ export function Models({
           ✕
         </button>
       </header>
-      <Body report={report} />
+      {/* One box under the header, because the aside is a two-row grid: left
+          loose, its `1fr` lands on whichever child happens to be second and
+          stretches that one alone. */}
+      <div className="models-body">
+        <Body report={report} />
+      </div>
     </aside>
   )
 }
@@ -95,27 +100,25 @@ function Body({ report }: { report: ModelsReport | null | undefined }) {
         ))}
       </ul>
 
+      {/* One list, because "everything" is the first row of the same answer:
+          what runs what. A project whose file names no roles is simply a list
+          of one, and shows no trace of a feature it does not use. */}
       <ul className="models-bound">
         <li data-role="default">
           <span className="models-role">everything</span>
           <span className="models-ref">{report.default ?? "(nothing named)"}</span>
         </li>
+        {roles.map(([role, ref]) => (
+          <li key={role} data-role={role}>
+            <span className="models-role">{role}</span>
+            {/* A role the file names but the binding cannot resolve is a
+                broken file, and the one line here worth finding. */}
+            <span className="models-ref" data-unresolved={String(ref === null)}>
+              {ref ?? "(unresolved)"}
+            </span>
+          </li>
+        ))}
       </ul>
-
-      {roles.length > 0 ? (
-        <ul className="models-bound models-roles">
-          {roles.map(([role, ref]) => (
-            <li key={role} data-role={role}>
-              <span className="models-role">{role}</span>
-              {/* A role the file names but the binding cannot resolve is a
-                  broken file, and the one line here worth finding. */}
-              <span className="models-ref" data-unresolved={String(ref === null)}>
-                {ref ?? "(unresolved)"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </>
   )
 }

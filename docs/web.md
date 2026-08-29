@@ -224,11 +224,22 @@ web-ui/src/
   models/           which models this project runs on
 ```
 
-**`Models` hangs off the bar, not off a card.** A project's models are the
-project's, and putting them in the drawer would repeat one answer on every task.
-It is the drawer's twin otherwise — the same fixed aside on the same edge at the
-same width — so only one of the two is ever open, and `.shell-stage` reserves one
-margin for whichever it is.
+**`Models` is reached from the rail, not from a card.** A project's models are
+the project's, and putting them in the drawer would repeat one answer on every
+task.
+
+The **rail** is the nav down the left: what the page is *for*, where the bar's
+controls are a fixed handful about the board already on screen. It holds `board`
+and `models` today and is where the next view lands. `board` is a rail item
+rather than a close box, because "no panel over it" is a place you can be and
+closing is not — the rail always says where you are, in one item marked
+`aria-current="page"`.
+
+The panel itself is the drawer's twin — the same fixed aside on the same edge at
+the same width — so only one of the two is ever open, and `.shell-stage` reserves
+one margin for whichever it is. Its width comes from `--rail-width` on the left
+and the drawer's constant on the right; the rail is `position: fixed`, so the
+stage has to reserve exactly that much or the board slides under it.
 
 **Roles are gated on content**, the way a card's generated prompt gates its
 memory block: a project whose file names none shows no trace of them, because

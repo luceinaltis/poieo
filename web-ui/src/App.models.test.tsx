@@ -1,10 +1,11 @@
 /**
- * The bar's models button, over the real store.
+ * The rail down the left, and the panel it opens.
  *
- * The panel is about a project rather than a task, which is the whole reason
- * it hangs off the bar -- so what these defend is that it asks about the
- * project actually on screen, and that it does not fight the drawer for the
- * one margin the stage reserves.
+ * The rail is what the page is *for* rather than what one task is doing, so it
+ * is nav and not a control on the bar -- and it is where the next view lands
+ * beside `models`. The panel is about a project, so what these defend is that
+ * it asks about the project actually on screen, and that it does not fight the
+ * drawer for the one margin the stage reserves.
  */
 
 import { act } from "react"
@@ -104,13 +105,35 @@ async function open() {
 const button = (name: string) =>
   container.querySelector<HTMLElement>(`[data-do="${name}"]`)
 
-test("the bar opens the panel for the project on screen", async () => {
+const railed = () =>
+  [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
+
+test("the rail lists what there is to look at, board first", async () => {
+  await open()
+
+  // Two now, and this is where the next one lands. `board` is the page with
+  // no panel over it, which is why it is a rail item rather than a close box.
+  expect(railed()).toEqual(["board", "models"])
+})
+
+test("the rail opens the panel for the project on screen", async () => {
   await open()
 
   await act(async () => button("open-models")!.click())
 
   expect(fetchModels).toHaveBeenCalledWith("night shift")
   expect(container.querySelector(".models")).not.toBeNull()
+  expect(button("open-models")!.getAttribute("aria-current")).toBe("page")
+})
+
+test("going back to board puts the panel away", async () => {
+  await open()
+  await act(async () => button("open-models")!.click())
+
+  await act(async () => button("open-board")!.click())
+
+  expect(container.querySelector(".models")).toBeNull()
+  expect(button("open-board")!.getAttribute("aria-current")).toBe("page")
 })
 
 test("picking the other project asks about that one instead", async () => {

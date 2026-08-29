@@ -161,20 +161,33 @@ export default function App({ store }: { store?: StageStore }) {
             ))}
           </select>
         </label>
-        {/* On the bar and not on a card: a project's models are the project's,
-            and every task on the board would otherwise carry the same answer. */}
-        {project ? (
-          <button
-            type="button"
-            className="shell-pick shell-models"
-            data-do="open-models"
-            aria-expanded={showModels}
-            onClick={openModels}
-          >
-            models
-          </button>
-        ) : null}
       </header>
+
+      {/* What the page is for, rather than what one task is doing -- so it is
+          nav down the side and not a control on the bar, and it is where the
+          next view lands beside `models`. `board` is the page with no panel
+          over it: a rail item rather than a close box, because closing is not
+          a place you can be. */}
+      <nav className="shell-rail" aria-label="Views">
+        <button
+          type="button"
+          data-do="open-board"
+          aria-current={showModels ? undefined : "page"}
+          onClick={closeModels}
+        >
+          board
+        </button>
+        <button
+          type="button"
+          data-do="open-models"
+          aria-current={showModels ? "page" : undefined}
+          // Nothing to ask about until the daemon has named a project.
+          disabled={!project}
+          onClick={openModels}
+        >
+          models
+        </button>
+      </nav>
 
       <div className="shell-stage" data-drawer={String(Boolean(selected || showModels))}>
         <div className="shell-board" ref={boardRef} />

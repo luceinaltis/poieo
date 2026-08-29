@@ -4,6 +4,9 @@
   /* One source of truth: the drawer starts where the bar ends, so the skin
      picker in the bar's right corner stays reachable with the drawer open. */
   --bar-height: 42px;
+  /* The rail is fixed, so the stage has to reserve exactly its width; spelling
+     it twice is how the board ends up under it by a pixel. */
+  --rail-width: 92px;
 }
 
 /* Every small bordered button on the page -- close, pause, run now, accept,

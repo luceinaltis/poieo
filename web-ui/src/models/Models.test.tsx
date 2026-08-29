@@ -92,11 +92,19 @@ test("what runs by default is shown, and named roles beside it", async () => {
 
 test("a project whose models file names no roles shows no trace of them", async () => {
   // Gated on content, like the memory block in a card's prompt: most projects
-  // run everything on one model, and a heading over an empty list is furniture.
+  // run everything on one model, and a row per role it does not have is noise.
   await render({ ...REPORT, roles: {} })
 
+  expect(container.querySelectorAll("[data-role]")).toHaveLength(1)
   expect(container.querySelector('[data-role="default"]')).not.toBeNull()
-  expect(container.querySelector(".models-roles")).toBeNull()
+})
+
+test("a role the binding cannot resolve is called out rather than hidden", async () => {
+  await render({ ...REPORT, roles: { reader: null } })
+
+  const row = container.querySelector('[data-role="reader"] .models-ref')!
+  expect(row.textContent).toContain("unresolved")
+  expect(row.getAttribute("data-unresolved")).toBe("true")
 })
 
 test("a project with no models file says so instead of drawing an empty table", async () => {

@@ -48,6 +48,20 @@
   color: #e8dcc8;
 }
 
+/* Everything below the header scrolls together, and starts at the top: the
+   aside's own `1fr` row lands here, so without `align-content: start` the
+   lists inside share the leftover height between them instead of stacking. */
+.models-body {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  /* A model id and the file's path are both things a reader copies out. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .models-note {
   color: #7a6e60;
   font-size: 0.86em;
@@ -56,10 +70,11 @@
 
 .models-endpoints,
 .models-bound {
+  align-content: start;
   display: grid;
   gap: 4px;
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 0;
 }
 
