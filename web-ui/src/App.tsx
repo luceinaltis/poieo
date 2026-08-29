@@ -18,6 +18,7 @@ import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell
 import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
+import { MakeTask } from "./make/MakeTask"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { SKINS, skinById } from "./skins/registry"
@@ -52,6 +53,7 @@ export default function App({ store }: { store?: StageStore }) {
   // Not remembered across reloads, unlike the skin and the project: this is a
   // thing you open to answer a question, not a way you like the board to sit.
   const [showModels, setShowModels] = useState(false)
+  const [showMake, setShowMake] = useState(false)
 
   useEffect(() => {
     void theStore.start()
@@ -105,9 +107,19 @@ export default function App({ store }: { store?: StageStore }) {
   // width, and the stage reserves one margin for whichever is open.
   const openModels = useCallback(() => {
     setShowModels(true)
+    setShowMake(false)
     setSelected(null)
   }, [])
   const closeModels = useCallback(() => setShowModels(false), [])
+  const openMake = useCallback(() => {
+    setShowMake(true)
+    setShowModels(false)
+    setSelected(null)
+  }, [])
+  const closeMake = useCallback(() => setShowMake(false), [])
+  // The card is written; the daemon finds it within seconds, and the feed
+  // brings it in. Nothing to insert here, which is the point of one door.
+  const made = useCallback(() => setShowMake(false), [])
 
   const empty = Object.keys(shown.tasks).length === 0
   // `selected` is the board's key -- the project and the task -- because a
@@ -172,8 +184,11 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={showModels ? undefined : "page"}
-          onClick={closeModels}
+          aria-current={showModels || showMake ? undefined : "page"}
+          onClick={() => {
+            closeModels()
+            closeMake()
+          }}
         >
           board
         </button>
@@ -187,9 +202,20 @@ export default function App({ store }: { store?: StageStore }) {
         >
           models
         </button>
+        <button
+          type="button"
+          data-do="open-make"
+          aria-current={showMake ? "page" : undefined}
+          // A card is written into a project's tasks folder, so there has to
+          // be a project before there is anywhere to write it.
+          disabled={!project}
+          onClick={openMake}
+        >
+          new task
+        </button>
       </nav>
 
-      <div className="shell-stage" data-drawer={String(Boolean(selected || showModels))}>
+      <div className="shell-stage" data-drawer={String(Boolean(selected || showModels || showMake))}>
         <div className="shell-board" ref={boardRef} />
         {empty ? (
           <p className="shell-empty">
@@ -200,6 +226,10 @@ export default function App({ store }: { store?: StageStore }) {
 
       {showModels && project ? (
         <Models project={project.name} onClose={closeModels} />
+      ) : null}
+
+      {showMake && project ? (
+        <MakeTask project={project.name} onClose={closeMake} onMade={made} />
       ) : null}
 
       {selected ? (

@@ -281,6 +281,31 @@ export function pickModel(
   })
 }
 
+/**
+ * Making a task: the only call here that creates a file that did not exist.
+ *
+ * Three things and no fourth, which is what DESIGN.md says a task cannot do
+ * without. The folder is not optional and has no default -- it is the one
+ * thing the model's hands will touch.
+ */
+export interface MadeTask extends Answer {
+  task?: string
+  path?: string
+}
+
+export function createTask(
+  project: string,
+  name: string,
+  folder: string,
+  prompt: string,
+): Promise<MadeTask> {
+  return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
+    name,
+    folder,
+    prompt,
+  })
+}
+
 export type FeedStatus = "connecting" | "live" | "lost"
 
 export interface FeedHandlers {
