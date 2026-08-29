@@ -428,26 +428,6 @@ export const AGENT_SUMMARY: PoieoEvent = {
   "error": null
 }
 
-export const LLM_SUMMARY: PoieoEvent = {
-  "type": "run_summary",
-  "run_id": "20260822T072805-f3ba4128",
-  "task": "revision",
-  "project": "board",
-  "graph": "draft-review",
-  "status": "completed",
-  "started_at": "2026-08-22T07:28:05.855+00:00",
-  "finished_at": "2026-08-22T07:28:05.864+00:00",
-  "steps": 6,
-  "iteration": 1,
-  "usage": {
-    "input_tokens": 0,
-    "output_tokens": 30,
-    "cache_read_tokens": 0,
-    "cache_write_tokens": 0
-  },
-  "error": null
-}
-
 export const FAILED_SUMMARY: PoieoEvent = {
   "type": "run_summary",
   "run_id": "20260822T072805-bcbbb588",
