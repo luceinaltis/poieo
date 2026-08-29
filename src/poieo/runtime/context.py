@@ -131,6 +131,12 @@ class RunResult:
     usage: dict[str, int]
     outputs: dict[str, Any]
     state: dict[str, Any]
+    # The same outputs under the names their nodes gave them (`output: {as:}`).
+    # Beside `outputs` rather than merged into it: that mapping is keyed by node
+    # id, an alias may be anything, and one dictionary would let a graph quietly
+    # bury one node's output under another's alias. What reads this is the
+    # card's `then:` -- see `daemon.service.handoff_scope`.
+    aliases: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     # The failure in the user's words ({slug, said, fix}), when one of the
     # known causes matched. The raw error above is always kept beside it.

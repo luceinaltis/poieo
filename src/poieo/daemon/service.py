@@ -108,6 +108,13 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
         "iteration": result.iteration,
         "path": list(result.path),
         "outputs": result.outputs,
+        # The outputs again, under the names their nodes gave them. `outputs`
+        # is keyed by node id, so an output aliased `verdict` on a node called
+        # `a` was `verdict` everywhere inside the graph and reachable by no
+        # spelling at all out here -- and it is the value a handoff is most
+        # often about. `_chosen` hoists these to the top level, which is where
+        # a router reads them one level down.
+        "aliases": result.aliases,
         "state": result.state,
         "error": result.error,
         "cause": result.cause,
@@ -883,7 +890,16 @@ class Daemon:
         router, the sender has already finished and landed its change, so there
         is nothing left to fail.
         """
-        scope = {"run": wrap(run)}
+        scope: dict[str, Any] = {"run": wrap(run)}
+        # Output aliases at the top level, exactly as `RunContext.scope()` puts
+        # them inside a run -- so a condition on what a node said is written
+        # once and means the same thing at both levels. `setdefault` for the
+        # same reason it has one there: a graph may alias an output `run`, and
+        # a `then:` whose `run.status` had quietly become a node's completion
+        # text is the worst kind of bug this block can have, since an
+        # unreadable condition here is logged and skipped rather than raised.
+        for name, value in (run.get("aliases") or {}).items():
+            scope.setdefault(name, wrap(value))
         for index, branch in enumerate(sender.task.spec.then):
             try:
                 if evaluate(branch.when, scope):
