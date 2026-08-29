@@ -547,6 +547,10 @@ turn, and take or throw away what it left you. The picker in the corner switches
 skins; `atelier`, the workshop, is the default, and `basic` draws the work as a
 graph — the tasks, their nodes, and the model each one calls.
 
+`--host` moves where it listens, and the default is this machine on
+purpose: there is no password on the board, and one of its buttons makes a
+task that runs commands here. `docs/daemon.md` has the whole of it.
+
 Everything the page reads is plain HTTP too. `GET /api/events` streams every run
 event live (SSE), `/api/tasks` and `/api/runs` answer what is running and what
 already ran, and `/api/runs/<id>/diff` shows what one run changed. Only two

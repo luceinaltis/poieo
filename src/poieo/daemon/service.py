@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import signal
@@ -35,11 +36,62 @@ log = logging.getLogger("poieo.daemon")
 RunCallback = Callable[[str, RunResult], None]
 
 
+# Spellings of "this machine" that are not addresses to parse.
+_LOOPBACK_NAMES = {"localhost"}
+
+
+def _is_loopback(host: str) -> bool:
+    """Whether this address is only this machine.
+
+    Parsed rather than matched: 127.0.0.0/8 is all loopback, and a set of
+    spellings called 127.0.0.2 the open internet and warned about it.
+    """
+    name = host.strip().lower()
+    if name in _LOOPBACK_NAMES:
+        return True
+    try:
+        return ipaddress.ip_address(name.strip("[]")).is_loopback
+    except ValueError:
+        # A hostname the daemon cannot resolve here. Not loopback as far as
+        # anything known goes, and the warning is the safe way to be wrong.
+        return False
+
+
+def web_exposure(host: str) -> str | None:
+    """What serving the board on this address costs, or None for loopback.
+
+    DESIGN.md says poieo is one person's machine and that there is no auth --
+    and "no auth" is a decision resting on "nothing outside can reach it". A
+    host that is not loopback spends that, so the daemon says so rather than
+    letting the flag be the only record.
+
+    It names what is actually reachable, not merely that the address changed:
+    the board accepts a night's work into the reader's own files, repoints a
+    role at another model, and writes a task that runs shell commands here.
+    """
+    if _is_loopback(host):
+        return None
+    return (
+        f"the board is on {host}, which is not just this machine. Anyone who can "
+        f"reach it can make a task that runs commands here, accept work into your "
+        f"files, and change which model answers -- there is no password on any of it"
+    )
+
+
 def _ensure_port_free(host: str, port: int) -> None:
-    """Fail at launch, not after tasks have started."""
-    with socket.socket() as sock:
+    """Fail at launch, not after tasks have started.
+
+    The family comes from the address rather than from `socket()`'s default,
+    which is AF_INET: `--host ::1` used to fail resolution here and be
+    reported as a port already in use, on a port nothing was holding.
+    """
+    try:
+        family, kind, proto, _, address = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0]
+    except OSError as exc:
+        raise SpecError(f"the board cannot listen on {host}: {exc}") from exc
+    with socket.socket(family, kind, proto) as sock:
         try:
-            sock.bind((host, port))
+            sock.bind(address)
         except OSError as exc:
             raise SpecError(f"web port {port} is already in use on {host}: {exc}") from exc
 
@@ -816,6 +868,7 @@ class Daemon:
         store: RunStore | None = None,
         on_run: RunCallback | None = None,
         web_port: int | None = None,
+        web_host: str = "127.0.0.1",
     ):
         # One project or several. A caller with one passes it bare, which is
         # every caller there was before the board learned to switch between
@@ -842,6 +895,7 @@ class Daemon:
         _no_two_projects_alike(self.projects)
         self._merged: MergedStore | None = None
         self.web_port = web_port
+        self.web_host = web_host
         self.on_run = on_run
         self.cancel = asyncio.Event()
         # One pool per distinct binding file: clients are reused across tasks,
@@ -1382,18 +1436,22 @@ class Daemon:
         if self.web_port is not None:
             import uvicorn
 
-            _ensure_port_free("127.0.0.1", self.web_port)
+            # Said before it is bound, and at warning level: a line that scrolls
+            # past at info is not a record of a fence being opened.
+            if (exposed := web_exposure(self.web_host)) is not None:
+                log.warning("%s", exposed)
+            _ensure_port_free(self.web_host, self.web_port)
             server = uvicorn.Server(
                 uvicorn.Config(
                     create_app(self),
-                    host="127.0.0.1",
+                    host=self.web_host,
                     port=self.web_port,
                     log_level="warning",
                 )
             )
             server.install_signal_handlers = lambda: None
             web_task = asyncio.create_task(server.serve())
-            log.info("web observation UI on http://127.0.0.1:%d", self.web_port)
+            log.info("web observation UI on http://%s:%d", self.web_host, self.web_port)
 
         if self.containers is not None:
             # Whatever an earlier poieo left behind after a crash. Boxes it
