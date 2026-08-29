@@ -69,6 +69,15 @@ class Served:
 
 
 @dataclass(frozen=True)
+class Catalogue:
+    """What one endpoint answered with: its models, and who it said it was."""
+
+    models: tuple[Served, ...] = ()
+    # The product serving this, when it named itself -- see `_SAYS_ITS_NAME`.
+    server: str | None = None
+
+
+@dataclass(frozen=True)
 class Engine:
     """One endpoint that answered, and the models it said it has."""
 
@@ -175,9 +184,31 @@ _READERS: dict[str, tuple[str, str, Callable[[dict[str, Any]], Served]]] = {
 # The key on an entry that has to be there for it to be a model at all.
 _IDENTIFIES = {"ollama": "name", "openai_compatible": "id"}
 
+# Servers that write their own name into `owned_by` on every model they list,
+# and the name a person calls each. Verified in their source rather than
+# guessed -- the field means "who owns the model" in the OpenAI schema, and
+# OpenAI's own API answers `openai` or `system` with it, so only values a
+# server is *known* to use for itself are read as one:
+#
+#   vLLM        vllm/entrypoints/openai/engine/protocol.py  `owned_by: str = "vllm"`
+#   SGLang      sglang/srt/entrypoints/openai/protocol.py   `owned_by: str = "sglang"`
+#   llama.cpp   tools/server/server-context.cpp             `{"owned_by", "llamacpp"}`
+#
+# This is what tells vLLM from SGLang, which share a default port and answer
+# listings of the same shape. It is the **server's** answer about itself, not
+# a name somebody typed into a binding -- a config file says what its author
+# believed, and the point of asking is to find out what is actually there.
+_SAYS_ITS_NAME = {"vllm": "vLLM", "sglang": "SGLang", "llamacpp": "llama.cpp"}
 
-async def _listed(type_: str, base_url: str, limit: int | None) -> tuple[Served, ...]:
-    """Ask one HTTP address what it has.
+
+def _server_named(entry: dict[str, Any]) -> str | None:
+    """Which product this listing came from, if its entry says so."""
+    owner = entry.get("owned_by")
+    return _SAYS_ITS_NAME.get(owner) if isinstance(owner, str) else None
+
+
+async def _listed(type_: str, base_url: str, limit: int | None) -> Catalogue:
+    """Ask one HTTP address what it has, and who it says it is.
 
     Every outcome is a return value, never an exception -- including a 200
     that is not JSON, which is what a proxy or a captive portal answers with,
@@ -189,22 +220,24 @@ async def _listed(type_: str, base_url: str, limit: int | None) -> tuple[Served,
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.get(f"{base_url}{path}")
     except httpx.RequestError:
-        return ()
+        return Catalogue()
     if response.status_code >= 400:
-        return ()
+        return Catalogue()
     try:
         served = response.json().get(listing)
     except ValueError:
-        return ()
+        return Catalogue()
     if not isinstance(served, list):
-        return ()
+        return Catalogue()
 
     # In the server's own order, which is the order the user already knows
     # from `ollama list`.
     out: list[Served] = []
+    server: str | None = None
     for entry in served:
         if not isinstance(entry, dict) or not entry.get(identifier):
             continue
+        server = server or _server_named(entry)
         try:
             out.append(read(entry))
         except Exception:
@@ -213,7 +246,7 @@ async def _listed(type_: str, base_url: str, limit: int | None) -> tuple[Served,
             continue
         if limit is not None and len(out) >= limit:
             break
-    return tuple(out)
+    return Catalogue(tuple(out), server)
 
 
 async def _claude_models() -> tuple[str, ...]:
@@ -253,7 +286,7 @@ def askable(type_: str) -> bool:
 
 async def catalogue_for(
     type_: str, base_url: str | None = None, limit: int | None = MODEL_CAP
-) -> tuple[Served, ...]:
+) -> Catalogue:
     """What an endpoint of this type, at this address, serves **right now**,
     with whatever else it said about each model.
 
@@ -269,18 +302,18 @@ async def catalogue_for(
         # asks for `MODEL_CAP` of them -- Anthropic serves far fewer than that,
         # so a caller wanting everything already has it.
         named = await _claude_models()
-        return tuple(Served(id=name) for name in named[:limit])
+        return Catalogue(tuple(Served(id=name) for name in named[:limit]))
     if type_ not in _READERS or base_url is None:
         # A type with nothing to ask -- `mock` answers from its own file, and
         # an unknown backend registered by a caller has no listing convention.
-        return ()
+        return Catalogue()
     return await _listed(type_, base_url, limit)
 
 
 async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]:
     """Just the ids, for the callers that only ever wanted a list of names --
     `init`, `config add`, and `config use`'s check that a model is really there."""
-    return tuple(model.id for model in await catalogue_for(type_, base_url))
+    return tuple(model.id for model in (await catalogue_for(type_, base_url)).models)
 
 
 # Addresses whose product is worth naming, beyond the four `CANDIDATES`
@@ -291,21 +324,31 @@ async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]
 _BY_HOST: tuple[tuple[str, str], ...] = (("openrouter.ai", "OpenRouter"),)
 
 
-def label_for(type_: str, base_url: str | None = None) -> str | None:
+def label_for(
+    type_: str, base_url: str | None = None, said: str | None = None
+) -> str | None:
     """A name a person would recognise this endpoint by, or None.
 
     `openai_compatible` is four products in a trench coat -- vLLM, SGLang, LM
     Studio, llama.cpp and every hosted router speak it -- so a panel that
     printed the type told a reader nothing about who they were talking to.
-    The address already says, and `CANDIDATES` already writes those names down
-    for detection; this is the same table read the other way.
 
-    **vLLM and SGLang share a port and are not told apart here.** Their model
-    listings are the same shape, so the honest label is the one `CANDIDATES`
-    already uses for that address. Renaming the provider in the binding is how
-    a reader says which it is -- that name is theirs and is what the panel
-    shows first.
+    Three sources, and the order is the whole point:
+
+    1. **What the server said about itself** (`said`, from `owned_by` on its
+       own listing). This is the only one that is evidence rather than
+       inference, and it is what tells vLLM from SGLang -- they share a
+       default port, so no amount of looking at the address ever could.
+    2. **The address**, for the endpoints `CANDIDATES` already writes down for
+       detection. Right for a server that names itself nothing.
+    3. Nothing, and the caller falls back to the bare type.
+
+    A name typed into the binding is deliberately **not** among them. That is
+    what its author believed when they wrote it, and the entire reason to ask
+    an endpoint anything is to find out what is really there.
     """
+    if said:
+        return said
     if type_ == "anthropic":
         return "Claude API"
     if type_ == "ollama":

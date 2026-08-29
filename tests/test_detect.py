@@ -288,7 +288,7 @@ async def test_a_local_model_reports_what_it_costs_in_memory_not_money(monkeypat
     what a local model actually costs is the size and quantization it says."""
     _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_DETAILED})
 
-    served = await detect_module.catalogue_for("ollama", "http://localhost:11434")
+    served = (await detect_module.catalogue_for("ollama", "http://localhost:11434")).models
 
     assert served[0].id == "qwen3.5:latest"
     assert (served[0].size, served[0].quantization) == ("9.0B", "Q4_K_M")
@@ -302,7 +302,7 @@ async def test_a_published_price_is_reported_per_million_tokens(monkeypatch):
     is still the only source -- this converts what it said, and invents none."""
     _serves(monkeypatch, {"http://x/v1/models": ROUTED})
 
-    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+    served = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
 
     assert served[0].price == (0.15, 0.47)
     assert served[0].context == 1000000
@@ -315,7 +315,7 @@ async def test_an_endpoint_that_publishes_no_price_says_nothing_rather_than_zero
     on it. Zero would read as free, which is the one wrong answer available."""
     _serves(monkeypatch, {"http://x/v1/models": LMSTUDIO_MODELS})
 
-    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+    served = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
 
     assert served[0].price is None
     assert served[0].context is None
@@ -327,7 +327,7 @@ async def test_a_half_priced_entry_is_not_half_reported(monkeypatch):
     half = {"data": [{"id": "m", "pricing": {"prompt": "0.000001"}}]}
     _serves(monkeypatch, {"http://x/v1/models": half})
 
-    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+    served = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
 
     assert served[0].price is None
 
@@ -337,7 +337,7 @@ async def test_one_malformed_entry_does_not_empty_the_listing(monkeypatch):
     mixed = {"data": [{"id": "good"}, {"nope": 1}, {"id": "also-good"}]}
     _serves(monkeypatch, {"http://x/v1/models": mixed})
 
-    served = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+    served = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
 
     assert [m.id for m in served] == ["good", "also-good"]
 
@@ -354,7 +354,7 @@ async def test_models_for_is_the_same_listing_read_for_its_names(monkeypatch):
 
 async def test_a_type_that_cannot_be_asked_has_an_empty_catalogue():
     """`mock` answers from the binding file, so there is nothing to ask."""
-    assert await detect_module.catalogue_for("mock", None) == ()
+    assert (await detect_module.catalogue_for("mock", None)).models == ()
     assert not detect_module.askable("mock")
 
 
@@ -365,10 +365,10 @@ async def test_the_cap_is_a_default_a_catalogue_can_lift(monkeypatch):
     many = {"data": [{"id": f"m{n}"} for n in range(120)]}
     _serves(monkeypatch, {"http://x/v1/models": many})
 
-    capped = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
-    whole = await detect_module.catalogue_for(
-        "openai_compatible", "http://x/v1", limit=None
-    )
+    capped = (await detect_module.catalogue_for("openai_compatible", "http://x/v1")).models
+    whole = (
+        await detect_module.catalogue_for("openai_compatible", "http://x/v1", limit=None)
+    ).models
 
     assert len(capped) == detect_module.MODEL_CAP
     assert len(whole) == 120
@@ -414,3 +414,85 @@ def test_vllm_and_sglang_share_one_label_because_they_share_a_port():
         detect_module.label_for("openai_compatible", "http://localhost:8000/v1")
         == "vLLM / SGLang"
     )
+
+
+# The two that share a default port, answering listings of the same shape. The
+# only thing that tells them apart is the name each writes into `owned_by` --
+# verified in their own source, not guessed:
+#   vLLM       vllm/entrypoints/openai/engine/protocol.py  `owned_by: str = "vllm"`
+#   SGLang     sglang/srt/entrypoints/openai/protocol.py   `owned_by: str = "sglang"`
+VLLM = {"data": [{"id": "facebook/opt-125m", "owned_by": "vllm", "max_model_len": 2048}]}
+SGLANG = {"data": [{"id": "facebook/opt-125m", "owned_by": "sglang"}]}
+
+
+async def test_a_server_that_names_itself_is_taken_at_its_own_word(monkeypatch):
+    """The address cannot tell vLLM from SGLang -- they share port 8000 -- so
+    nothing about where it is answers the question. What the server says on
+    its own listing does."""
+    _serves(monkeypatch, {"http://localhost:8000/v1/models": VLLM})
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://localhost:8000/v1"
+    )
+
+    assert answered.server == "vLLM"
+    assert detect_module.label_for(
+        "openai_compatible", "http://localhost:8000/v1", answered.server
+    ) == "vLLM"
+
+
+async def test_the_same_address_says_sglang_when_sglang_is_the_one_there(monkeypatch):
+    """Same port, same listing shape, different server. This is the case a
+    label read off the address gets wrong every time."""
+    _serves(monkeypatch, {"http://localhost:8000/v1/models": SGLANG})
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://localhost:8000/v1"
+    )
+
+    assert answered.server == "SGLang"
+
+
+async def test_a_server_moved_off_its_usual_port_is_still_itself(monkeypatch):
+    """Which is the other half of asking rather than inferring: an address
+    nobody wrote down would have had no label at all."""
+    _serves(monkeypatch, {"http://box.local:9999/v1/models": SGLANG})
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://box.local:9999/v1"
+    )
+
+    assert answered.server == "SGLang"
+    assert detect_module.label_for(
+        "openai_compatible", "http://box.local:9999/v1", answered.server
+    ) == "SGLang"
+
+
+async def test_owned_by_is_only_read_as_a_server_when_a_server_is_known_to_say_it(
+    monkeypatch,
+):
+    """`owned_by` means "who owns the model" in the OpenAI schema -- OpenAI's
+    own API answers `openai` and `system` with it. Reading any value as a
+    product name would label a proxy "openai"."""
+    owned = {"data": [{"id": "gpt-4", "owned_by": "openai"}]}
+    _serves(monkeypatch, {"http://x/v1/models": owned})
+
+    answered = await detect_module.catalogue_for("openai_compatible", "http://x/v1")
+
+    assert answered.server is None
+
+
+async def test_what_the_server_said_beats_what_the_address_suggests(monkeypatch):
+    """A binding may point `http://localhost:1234/v1` at anything at all. The
+    address is a guess about what is listening; the listing is an answer."""
+    _serves(monkeypatch, {"http://localhost:1234/v1/models": VLLM})
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://localhost:1234/v1"
+    )
+
+    # Without the listing this address reads as LM Studio.
+    assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1") == "LM Studio"
+    assert detect_module.label_for(
+        "openai_compatible", "http://localhost:1234/v1", answered.server
+    ) == "vLLM"

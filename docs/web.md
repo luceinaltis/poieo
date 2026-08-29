@@ -109,17 +109,18 @@ be concrete.
 binding file, so there is nothing to ask, and a panel that ran that together with
 "did not answer" would report a working endpoint as a broken one.
 
-`label` is what a person would recognise the endpoint as — "OpenRouter", "LM
-Studio". `type` alone said nothing: `openai_compatible` is vLLM and SGLang and
-LM Studio and llama.cpp and every hosted router at once. `detect.label_for()`
-reads it off the address, which is the same table `CANDIDATES` already keeps for
-detection — so the **address itself still does not cross**, only the name it
-produces. It is null for an address nobody wrote down, and the panel falls back
-to the type; a registry of every hosted endpoint would be a table that goes
-stale, and naming one wrongly is worse than not naming it. **vLLM and SGLang
-share a default port and are not told apart**, because their listings are the
-same shape — the provider's own key in the binding is the reader's way to say
-which, and that name is what the panel shows first.
+`label` is what a person would recognise the endpoint as — "vLLM", "SGLang",
+"OpenRouter". `type` alone said nothing: `openai_compatible` is all of those at
+once. `detect.label_for()` prefers **what the server said about itself** on its
+own listing, falling back to the address; [storage.md](storage.md) has the
+sources and why they are in that order. The **address itself still does not
+cross**, only the name it produces, and `label` is null when nothing answered
+the question — the panel falls back to the type then.
+
+**The panel leads with what answered, not with the key in the file.** A
+provider's key is the handle its author typed; reading a config back to somebody
+is not telling them what is there. So `OpenRouter` is the heading and `routed`
+sits beside it, and only when nothing identified the endpoint does the key lead.
 
 `installed` is the difference between two listings that look identical.
 Ollama's `/api/tags` is `ollama list` — models pulled onto *this disk*, ready

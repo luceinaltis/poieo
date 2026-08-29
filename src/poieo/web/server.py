@@ -369,7 +369,9 @@ def create_app(daemon: Any) -> Starlette:
                         # reader nothing about who they were talking to. Null
                         # when the address is one nobody wrote down, and the
                         # panel falls back to the type.
-                        "label": engines.label_for(provider.type, provider.base_url),
+                        "label": engines.label_for(
+                            provider.type, provider.base_url, answered.server
+                        ),
                         # "did not answer" and "there is nothing to ask" are
                         # different facts, and a listing that conflated them
                         # would read as a fault.
@@ -400,10 +402,10 @@ def create_app(daemon: Any) -> Starlette:
                                 ),
                                 "used_by": in_use.get(f"{key}/{model.id}", []),
                             }
-                            for model in served
+                            for model in answered.models
                         ],
                     }
-                    for (key, provider), served in zip(declared, catalogues)
+                    for (key, provider), answered in zip(declared, catalogues)
                 ],
             }
         )

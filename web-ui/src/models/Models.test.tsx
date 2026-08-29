@@ -283,25 +283,26 @@ test("a filter that matches nothing at all says so", async () => {
   expect(container.textContent).toContain("nothing matches")
 })
 
-test("an endpoint is named by what a person recognises, not by its protocol", async () => {
-  // `openai_compatible` is vLLM and SGLang and LM Studio and llama.cpp and
-  // every hosted router at once.
+test("what an endpoint is leads; the name in the file comes second", async () => {
+  // Reading a config back to somebody is not telling them what is there. The
+  // key is what its author believed when they typed it; the label is what
+  // answered.
   await render()
 
-  expect(
-    container.querySelector('[data-endpoint="routed"] .models-kind')!.textContent,
-  ).toBe("OpenRouter")
+  const block = container.querySelector('[data-endpoint="routed"]')!
+  expect(block.querySelector(".models-endpoint-name")!.textContent).toBe("OpenRouter")
+  expect(block.querySelector(".models-kind")!.textContent).toBe("routed")
 })
 
-test("an address nobody wrote down falls back to the protocol", async () => {
+test("when nothing answered the question, the file's name is all there is", async () => {
   await render({
     ...REPORT,
     endpoints: [{ ...REPORT.endpoints[1], label: null }],
   })
 
-  expect(
-    container.querySelector('[data-endpoint="routed"] .models-kind')!.textContent,
-  ).toBe("openai_compatible")
+  const block = container.querySelector('[data-endpoint="routed"]')!
+  expect(block.querySelector(".models-endpoint-name")!.textContent).toBe("routed")
+  expect(block.querySelector(".models-kind")!.textContent).toBe("openai_compatible")
 })
 
 /** A catalogue big enough to be worth folding, named the way one is. */

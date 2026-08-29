@@ -138,13 +138,15 @@ function EndpointBlock({
   return (
     <section className="models-endpoint" data-endpoint={endpoint.name}>
       <h3>
-        <span className="models-endpoint-name">{endpoint.name}</span>
-        {/* The reader's own name for it first, then what it actually is.
-            `openai_compatible` is vLLM and SGLang and LM Studio and llama.cpp
-            and every hosted router at once, so the type alone said nothing
-            about who they were talking to. It stays as the fallback for an
-            address nobody wrote down. */}
-        <span className="models-kind">{endpoint.label ?? endpoint.type}</span>
+        {/* What it *is* leads; the key beside it is only the handle its owner
+            typed into a file. Reading a config back to somebody is not telling
+            them what is there -- a binding says what its author believed, and
+            the whole reason to ask an endpoint is to find out. When nothing
+            answered the question the key is all there is, so it leads then. */}
+        <span className="models-endpoint-name">{endpoint.label ?? endpoint.name}</span>
+        <span className="models-kind">
+          {endpoint.label ? endpoint.name : endpoint.type}
+        </span>
         {/* What the listing *means*, not just how long it is. Ollama's is
             `ollama list` -- pulled onto this disk, ready now. A routed
             endpoint's is a catalogue of what it would run for money, with

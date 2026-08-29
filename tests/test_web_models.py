@@ -14,7 +14,7 @@ from starlette.testclient import TestClient
 from conftest import card
 from poieo import detect as detect_module
 from poieo.daemon import Daemon, load_config
-from poieo.detect import Served
+from poieo.detect import Catalogue, Served
 from poieo.store import NullStore
 from poieo.web import create_app
 
@@ -37,18 +37,20 @@ roles:
 # What one endpoint answers with, keyed by the type asked. Nothing here reaches
 # a socket: the route's whole job is to ask, so the asking is what is stubbed.
 CATALOGUE = {
-    "mock": (),
-    "ollama": (
-        Served(
-            id="qwen3.5:latest",
-            context=262144,
-            size="9.0B",
-            quantization="Q4_K_M",
-            capabilities=("completion", "vision"),
-        ),
+    "mock": Catalogue(),
+    "ollama": Catalogue(
+        (
+            Served(
+                id="qwen3.5:latest",
+                context=262144,
+                size="9.0B",
+                quantization="Q4_K_M",
+                capabilities=("completion", "vision"),
+            ),
+        )
     ),
-    "openai_compatible": (
-        Served(id="qwen/flash", context=1000000, price=(0.15, 0.47)),
+    "openai_compatible": Catalogue(
+        (Served(id="qwen/flash", context=1000000, price=(0.15, 0.47)),)
     ),
 }
 
@@ -60,7 +62,7 @@ def _asks(monkeypatch, catalogue=None):
         # The route lifts the cap; a stub that refused the argument would let
         # that go untested.
         assert limit is None, "the catalogue panel must not be capped"
-        return served.get(type_, ())
+        return served.get(type_, Catalogue())
 
     monkeypatch.setattr(detect_module, "catalogue_for", fake)
 
@@ -272,7 +274,7 @@ def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
         asked.append(type_)
         await _asyncio.sleep(0.01)  # a real await point, so the other can start
         active -= 1
-        return ()
+        return Catalogue()
 
     monkeypatch.setattr(detect_module, "catalogue_for", fake)
     _models(_client(tmp_path, binding=_TWO))
