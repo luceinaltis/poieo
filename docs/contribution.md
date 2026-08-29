@@ -251,6 +251,20 @@ It is a test rather than a CI step so it runs where you already run the suite.
 The 200-line one earned its place immediately: hand-counting caught two overruns
 in a single day and would eventually not.
 
+**Every job has a ceiling.** Nothing here runs longer than three minutes, and the
+jobs are capped at roughly five times that. Without one they inherit GitHub's
+six-hour default, and this repository has things that hang rather than fail: the
+frontend suite in watch mode, and the daemon check waiting on a port. A hung job
+holds a runner and a required check at once, so the PR waits with it.
+
+**Only the actions are watched for updates** (`.github/dependabot.yml`, monthly,
+grouped into one PR). The runners already warn on every run that `checkout@v4` and
+`setup-python@v5` target a deprecated Node and are being forced onto a newer one;
+when that forcing ends they stop working, and a broken action now stops every merge
+including the one that would fix it. pip and npm are left out: seven runtime
+dependencies and a frontend tree would open more pull requests than one account can
+read, and an update nobody reads is worse than one nobody made.
+
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and
 whether the change fits the design at all (9).

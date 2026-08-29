@@ -1,0 +1,22 @@
+# Only the actions, and on purpose.
+#
+# GitHub's runners already warn on every run that actions/checkout@v4 and
+# actions/setup-python@v5 target a Node it has deprecated, and are being forced
+# onto a newer one. When that forcing ends they stop working -- and since the
+# gate is now required to merge, a broken action stops every merge, including
+# the one that would fix it. Nothing else here has that shape.
+#
+# pip and npm are deliberately absent. Seven runtime dependencies and a large
+# frontend tree would open more pull requests than one account can read, and a
+# dependency update nobody reads is worse than one nobody made.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+    groups:
+      actions:
+        patterns: ["*"]
