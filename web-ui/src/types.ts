@@ -90,14 +90,20 @@ export interface ProjectRow {
   root: string
 }
 
-/** What `GET /api/tasks` answers: the board, and whose board it is. */
+/** What `GET /api/tasks` answers: the board, and whose board it is.
+ *
+ * A list, because one daemon runs as many projects as it was given. Empty
+ * means an older daemon that did not say.
+ */
 export interface Listing {
-  project: ProjectRow | null
+  projects: ProjectRow[]
   tasks: TaskRow[]
 }
 
 export interface TaskRow {
   name: string
+  /** Which project's. With `name`, this is the task's identity. */
+  project: string
   graph: string
   trigger: string
   status: string

@@ -68,8 +68,13 @@ class BroadcastStore(RunStore):
 
     # -- reads: the wrapped store answers, never this one --------------------
 
-    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:
-        return self._inner.list_runs(limit=limit, task=task)
+    def list_runs(
+        self,
+        limit: int = 20,
+        task: str | None = None,
+        project: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._inner.list_runs(limit=limit, task=task, project=project)
 
     def summary(self, run_id: str) -> dict[str, Any] | None:
         return self._inner.summary(run_id)
@@ -106,7 +111,12 @@ class MergedStore(RunStore):
 
     # -- reads ---------------------------------------------------------------
 
-    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:
+    def list_runs(
+        self,
+        limit: int = 20,
+        task: str | None = None,
+        project: str | None = None,
+    ) -> list[dict[str, Any]]:
         """The newest ``limit`` across every project, newest first.
 
         Each store is asked for its own newest ``limit``, which is the most any
@@ -116,7 +126,7 @@ class MergedStore(RunStore):
         """
         rows: list[dict[str, Any]] = []
         for store in self._stores:
-            rows.extend(store.list_runs(limit=limit, task=task))
+            rows.extend(store.list_runs(limit=limit, task=task, project=project))
         rows.sort(key=lambda row: str(row.get("finished_at") or row.get("started_at") or ""),
                   reverse=True)
         return rows[:limit]

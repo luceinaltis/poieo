@@ -525,30 +525,31 @@ class LoadedProject:
     tasks: list[LoadedTask]
 
 
-def _no_two_tasks_alike(projects: list[LoadedProject]) -> None:
-    """Refuse at launch when two projects call a task by the same name.
+def _no_two_projects_alike(projects: list[LoadedProject]) -> None:
+    """Refuse at launch when two projects answer to the same name.
 
-    The task name is the only namespace there is: the board's control routes
-    take one, the run index files runs under one, and a handoff names one. Two
-    `chores` would make each of those mean whichever project answered first.
+    A project's name is what tells it from another one -- on the board, in a
+    run record, in the address of every control route. Two called `poieo` make
+    each of those mean whichever answered first.
 
-    The right fix is for the wire to carry the project as well, and until it
-    does this is the honest half -- said at launch, naming both projects, not
-    found at 3am by whichever runner asked second.
+    This is the constraint that belongs here. Requiring *task* names to be
+    unique across projects, which is what stood here first, made the daemon
+    refuse the ordinary case: every project has a `chores`. Names collide by
+    default, too -- a project falls back to its folder's name, and a worktree
+    is a second folder called the same thing as the first -- which is exactly
+    what `name:` in poieo.yaml is for.
     """
-    seen: dict[str, str] = {}
+    seen: dict[str, Path | None] = {}
     for project in projects:
-        where = project.config.display_name
-        for task in project.tasks:
-            first = seen.setdefault(task.spec.name, where)
-            if first != where:
-                raise SpecError(
-                    f"two projects both have a task called '{task.spec.name}' "
-                    f"('{first}' and '{where}'). A daemon runs them in one "
-                    f"namespace, so rename one of the card files -- a task is "
-                    f"called after its file -- or give each project its own "
-                    f"daemon"
-                )
+        name = project.config.display_name
+        if name in seen:
+            raise SpecError(
+                f"two projects are both called '{name}' ({seen[name]} and "
+                f"{project.config.source_path}). Give one of them a `name:` "
+                f"in its poieo.yaml -- it is what a board, a run record and "
+                f"every control route call it by"
+            )
+        seen[name] = project.config.source_path
 
 
 class Daemon:
@@ -585,7 +586,7 @@ class Daemon:
             )
             for each in configs
         ]
-        _no_two_tasks_alike(self.projects)
+        _no_two_projects_alike(self.projects)
         self._merged: MergedStore | None = None
         self.web_port = web_port
         self.on_run = on_run

@@ -25,6 +25,7 @@ export const AGENT_RUN: PoieoEvent[] = [
     "data": {
       "graph": "agent-task",
       "task": "chores",
+      "project": "board",
       "trigger": "loop",
       "iteration": 1,
       "binding": "mock",
@@ -158,6 +159,7 @@ export const LLM_RUN: PoieoEvent[] = [
     "data": {
       "graph": "draft-review",
       "task": "revision",
+      "project": "board",
       "trigger": "loop",
       "iteration": 1,
       "binding": "mock",
@@ -376,6 +378,7 @@ export const FAILED_RUN: PoieoEvent[] = [
     "data": {
       "graph": "agent-task",
       "task": "chores",
+      "project": "board",
       "trigger": "loop",
       "iteration": 1,
       "binding": "mock",
@@ -409,6 +412,7 @@ export const AGENT_SUMMARY: PoieoEvent = {
   "type": "run_summary",
   "run_id": "20260822T072819-98a6708d",
   "task": "chores",
+  "project": "board",
   "graph": "agent-task",
   "status": "completed",
   "started_at": "2026-08-22T07:28:19.836+00:00",
@@ -428,6 +432,7 @@ export const LLM_SUMMARY: PoieoEvent = {
   "type": "run_summary",
   "run_id": "20260822T072805-f3ba4128",
   "task": "revision",
+  "project": "board",
   "graph": "draft-review",
   "status": "completed",
   "started_at": "2026-08-22T07:28:05.855+00:00",
@@ -447,6 +452,7 @@ export const FAILED_SUMMARY: PoieoEvent = {
   "type": "run_summary",
   "run_id": "20260822T072805-bcbbb588",
   "task": "chores",
+  "project": "board",
   "graph": "agent-task",
   "status": "failed",
   "started_at": "2026-08-22T07:28:05.866+00:00",

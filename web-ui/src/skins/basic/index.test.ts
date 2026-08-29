@@ -9,6 +9,7 @@ import { BOX } from "../wiring"
 const FLOWS: TaskRow[] = [
   {
     name: "chores",
+    project: "board",
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
@@ -24,6 +25,7 @@ const FLOWS: TaskRow[] = [
   },
   {
     name: "revision",
+    project: "board",
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
@@ -53,7 +55,7 @@ test("a frame for one task does not rebuild the other tasks' boxes", () => {
   handle.update(stage)
 
   // chores is drawn with its graph's nodes inside it.
-  const node = el.querySelector('[data-task="chores"] .basic-node')
+  const node = el.querySelector('[data-task="board/chores"] .basic-node')
   expect(node).not.toBeNull()
 
   // An event for the other task arrives; chores was not touched, and the
@@ -61,13 +63,13 @@ test("a frame for one task does not rebuild the other tasks' boxes", () => {
   const next = reduce(stage, {
     run_id: "rr",
     type: "run_started",
-    data: { task: "revision" },
+    data: { task: "revision", project: "board" },
   })
   handle.update(next)
 
-  expect(el.querySelector('[data-task="chores"] .basic-node')).toBe(node)
+  expect(el.querySelector('[data-task="board/chores"] .basic-node')).toBe(node)
   // The task the frame was for did repaint.
-  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-status")).toBe(
+  expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-status")).toBe(
     "running",
   )
   handle.destroy()
@@ -91,8 +93,8 @@ test("nothing opens itself, however busy it is", () => {
   // A running task used to open itself, and shut again when it stopped, so a
   // board that runs every minute rearranged itself all day. The `now` line
   // says what that was for; the size changes only when a person asks.
-  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-open")).toBe("false")
-  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("false")
+  expect(el.querySelector('[data-task="board/chores"]')!.getAttribute("data-open")).toBe("false")
+  expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-open")).toBe("false")
   handle.destroy()
 })
 
@@ -101,12 +103,12 @@ test("opening a task by hand outlasts the frames that follow", () => {
   const stage = initialStage(FLOWS)
   handle.update(stage)
 
-  el.querySelector<HTMLElement>('[data-task="revision"] .basic-toggle')!.click()
-  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("true")
+  el.querySelector<HTMLElement>('[data-task="board/revision"] .basic-toggle')!.click()
+  expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-open")).toBe("true")
 
   // A frame for that task must not undo the reader's own choice.
-  handle.update(reduce(stage, { run_id: "r", type: "run_started", data: { task: "revision" } }))
-  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-open")).toBe("true")
+  handle.update(reduce(stage, { run_id: "r", type: "run_started", data: { task: "revision", project: "board" } }))
+  expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-open")).toBe("true")
   handle.destroy()
 })
 
@@ -150,8 +152,8 @@ test("a task to the right of its sender is not laid on top of it", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
 
-  const from = el.querySelector<HTMLElement>('[data-task="chores"]')!
-  const to = el.querySelector<HTMLElement>('[data-task="revision"]')!
+  const from = el.querySelector<HTMLElement>('[data-task="board/chores"]')!
+  const to = el.querySelector<HTMLElement>('[data-task="board/revision"]')!
   expect(from.style.left).toBe("0px")
   expect(parseInt(to.style.left, 10)).toBeGreaterThan(0)
   expect(to.style.top).toBe(from.style.top)
@@ -165,13 +167,13 @@ test("a task that found nothing to do says so in one word, not a number", () => 
   // that ran is all there is to say.
   const quiet = setRuns(
     initialStage([{ ...FLOWS[0], into: "main" }, FLOWS[1]]),
-    "chores",
+    "board/chores",
     // Eight runs that all looked and found nothing: a healthy night, and the
     // line the board used to print for it was "8 runs · 8 found nothing to do".
     Array.from({ length: 8 }, (_, i) => ({
       run_id: `r${i}`,
       task: "chores",
-      project: "chores",
+      project: "board",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-27T02:00:00+00:00",
@@ -186,7 +188,7 @@ test("a task that found nothing to do says so in one word, not a number", () => 
   )
   handle.update(quiet)
 
-  const said = el.querySelector('[data-task="chores"] .basic-tally')!.textContent!
+  const said = el.querySelector('[data-task="board/chores"] .basic-tally')!.textContent!
   expect(said).toContain("quiet")
   expect(said).not.toContain("8")
   handle.destroy()
@@ -199,6 +201,7 @@ function triage(models: (string | null)[]): TaskRow {
   return {
     ...FLOWS[0],
     name: "chores",
+    project: "board",
     shape: {
       entry: "classify",
       nodes: [
@@ -217,9 +220,9 @@ function triage(models: (string | null)[]): TaskRow {
   }
 }
 
-const when = () => el.querySelector('[data-task="chores"] .basic-when')!.textContent
+const when = () => el.querySelector('[data-task="board/chores"] .basic-when')!.textContent
 const pill = (id: string) =>
-  el.querySelector<HTMLElement>(`[data-task="chores"] [data-node="${id}"]`)!
+  el.querySelector<HTMLElement>(`[data-task="board/chores"] [data-node="${id}"]`)!
 
 test("a task that resolves to one model says so once, beside the trigger", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
@@ -287,7 +290,7 @@ test("a border is exactly as wide as the arrows think it is", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
-  expect(el.querySelector<HTMLElement>('[data-task="chores"]')!.style.width).toBe(
+  expect(el.querySelector<HTMLElement>('[data-task="board/chores"]')!.style.width).toBe(
     `${BOX.width}px`,
   )
   handle.destroy()
@@ -334,7 +337,7 @@ test("opening a border by hand lays the board out again", () => {
   handle.update(initialStage(WIRED))
   const before = el.querySelector(".basic-wire")
 
-  el.querySelector<HTMLElement>('[data-task="revision"] .basic-toggle')!.click()
+  el.querySelector<HTMLElement>('[data-task="board/revision"] .basic-toggle')!.click()
 
   expect(el.querySelector(".basic-wire")).not.toBe(before)
   handle.destroy()
@@ -413,7 +416,7 @@ test("dragging the board moves it; pressing a control does not", () => {
 
   // A press that starts on a border's own button is that button's, not a grab
   // of the board behind it -- otherwise selecting a task would drag the board.
-  drag(el.querySelector('[data-task="chores"] .basic-pick')!, 40)
+  drag(el.querySelector('[data-task="board/chores"] .basic-pick')!, 40)
   expect(transform()).toBe(before)
 
   drag(viewport, 40)
@@ -481,7 +484,7 @@ test("a shut border says what the task is doing right now", () => {
   const stage = replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4))
   handle.update(stage)
 
-  const now = el.querySelector('[data-task="chores"] .basic-now')!
+  const now = el.querySelector('[data-task="board/chores"] .basic-now')!
   expect(now.textContent).toContain("work")
   handle.destroy()
 })
@@ -492,7 +495,7 @@ test("a border with nothing happening says nothing, and takes no room for it", (
 
   // Empty rather than absent: `:empty` is what the stylesheet hides on, so an
   // idle border is its name and its schedule and no blank space beneath.
-  expect(el.querySelector('[data-task="revision"] .basic-now')!.textContent).toBe("")
+  expect(el.querySelector('[data-task="board/revision"] .basic-now')!.textContent).toBe("")
   handle.destroy()
 })
 
@@ -503,11 +506,11 @@ test("a task that stopped says so where it would have said what it was doing", (
   let stage = reduce(initialStage(FLOWS), {
     run_id: "r",
     type: "run_started",
-    data: { task: "chores" },
+    data: { task: "chores", project: "board" },
   })
   stage = reduce(stage, { run_id: "r", type: "run_failed", data: { error: "boom" } })
   handle.update(stage)
 
-  expect(el.querySelector('[data-task="chores"] .basic-now')!.textContent).toBe("stopped")
+  expect(el.querySelector('[data-task="board/chores"] .basic-now')!.textContent).toBe("stopped")
   handle.destroy()
 })

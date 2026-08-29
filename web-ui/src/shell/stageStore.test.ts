@@ -8,6 +8,7 @@ import type { Listing, TaskRow, PoieoEvent } from "../types"
 
 const CHORES: TaskRow = {
   name: "chores",
+  project: "board",
   graph: "agent-task",
   trigger: "loop",
   status: "waiting",
@@ -22,7 +23,7 @@ const CHORES: TaskRow = {
 /** The envelope `/api/tasks` answers. Only the tasks matter to most of these,
  *  so the project is a constant rather than an argument. */
 function listing(tasks: TaskRow[]): Listing {
-  return { project: { name: "chores", root: "/home/k/chores" }, tasks }
+  return { projects: [{ name: "board", root: "/home/k/chores" }], tasks }
 }
 
 function harness(overrides: Partial<StageApi> = {}) {
@@ -48,7 +49,7 @@ test("seeds from the task list, then subscribes", async () => {
 
   expect(api.fetchTasks).toHaveBeenCalled()
   expect(api.openFeed).toHaveBeenCalled()
-  expect(Object.keys(store.getStage().tasks)).toEqual(["chores"])
+  expect(Object.keys(store.getStage().tasks)).toEqual(["board/chores"])
   store.stop()
 })
 
@@ -65,8 +66,8 @@ test("live events fold into the stage", async () => {
   await store.start()
 
   for (const event of AGENT_RUN.slice(0, 4)) feed().onEvent(event)
-  expect(store.getStage().tasks.chores.status).toBe("running")
-  expect(store.getStage().tasks.chores.currentNode).toBe("work")
+  expect(store.getStage().tasks["board/chores"].status).toBe("running")
+  expect(store.getStage().tasks["board/chores"].currentNode).toBe("work")
   store.stop()
 })
 
@@ -93,8 +94,8 @@ test("a resync applies the run's history before the live frames that overlapped 
   releaseHistory(history)
   await resynced
 
-  expect(store.getStage().tasks.chores.status).toBe("waiting")
-  expect(store.getStage().tasks.chores.currentNode).toBeNull()
+  expect(store.getStage().tasks["board/chores"].status).toBe("waiting")
+  expect(store.getStage().tasks["board/chores"].currentNode).toBeNull()
   store.stop()
 })
 
@@ -102,7 +103,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
   const summary = {
     run_id: "r-old",
     task: "chores",
-    project: "chores",
+    project: "board",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-22T07:00:00+00:00",
@@ -126,7 +127,7 @@ test("a resync refreshes what finished while the feed was down", async () => {
   await store.resync()
 
   // The run_summary frame for that run was missed; /api/tasks still knows.
-  expect(store.getStage().tasks.chores.lastRun).toEqual({
+  expect(store.getStage().tasks["board/chores"].lastRun).toEqual({
     status: "completed",
     steps: 4,
     finished_at: "2026-08-22T07:00:01+00:00",
@@ -209,7 +210,7 @@ test("the store tallies each task's recent work from the run index", async () =>
     {
       run_id: "a",
       task: "chores",
-      project: "chores",
+      project: "board",
       graph: "agent-task",
       status: "completed",
       started_at: "t",
@@ -236,7 +237,7 @@ test("the store tallies each task's recent work from the run index", async () =>
 
   // The event stream never carries this: a browser opened at noon has to be
   // told what happened at 3am.
-  expect(store.getStage().tasks.chores.recent).toMatchObject({
+  expect(store.getStage().tasks["board/chores"].recent).toMatchObject({
     runs: 1,
     succeeded: 1,
     insertions: 9,

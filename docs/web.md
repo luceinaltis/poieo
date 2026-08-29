@@ -15,16 +15,16 @@ server and the client keep them together so they stay easy to count.
 
 | route | does |
 |---|---|
-| `GET /api/tasks` | the project whose board this is, then every task: status, trigger, last run, how much is waiting for review, and its wiring |
-| `GET /api/runs` | run summaries, newest first (`?task=`, `?limit=`) |
+| `GET /api/tasks` | every project on this board, then every task: which project's, status, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
-| `POST /api/tasks/{f}/accept` | **review** — put the work in the user's own branch |
-| `POST /api/tasks/{f}/discard` | **review** — throw it away, recoverably |
-| `POST /api/tasks/{f}/pause` | **control** — hold the schedule |
-| `POST /api/tasks/{f}/resume` | **control** — rearm it |
-| `POST /api/tasks/{f}/run` | **control** — one fire, now |
+| `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
+| `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
+| `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
+| `POST /api/tasks/{p}/{f}/resume` | **control** — rearm it |
+| `POST /api/tasks/{p}/{f}/run` | **control** — one fire, now |
 
 **Review** routes are the only ones that may ever touch the user's own files. If
 you are adding a third of them, stop. **Control** routes touch the daemon's
@@ -40,14 +40,28 @@ how many there are. `.config` is still the first project's; the routes are not
 project-aware yet, which is also why the daemon refuses to start two projects
 that share a task name.
 
-### Whose board this is
+### Whose board this is, and whose task
 
-`/api/tasks` answers `{project, tasks}`, and `project` is `{name, root}`. It
-rides on the listing rather than on each row because the listing that most needs
-naming is the empty one — with no tasks to recognise, one daemon's page is
-another's. The page puts the name in the bar and in `document.title`, since two
-boards open side by side are two tabs, and hangs the folder off the label as a
-tooltip: two worktrees of one repository can share a name, but not a path.
+`/api/tasks` answers `{projects, tasks}`. `projects` is a list, because a daemon
+runs as many as it was given, and it rides on the listing rather than on each
+row because the listing that most needs naming is the empty one — with no tasks
+to recognise, one daemon's page is another's. With exactly one the page puts its
+name in the bar and in `document.title`, since two boards open side by side are
+two tabs, and hangs the folder off the label as a tooltip: two worktrees of one
+repository can share a name, but not a path.
+
+**A task's identity is its project and its name**, and every route that names
+one takes both. A name alone stopped picking out one task the moment a daemon
+could run two projects, and every project has a `chores`. The page keys its
+board on `` `${project}/${task}` `` — built by `keyOfTask()` and never split,
+because whoever needs the halves has them already — and shows the plain name on
+the card, since the project is the board's business and not the reader's.
+
+The daemon refuses to start two projects answering to one name, which is what
+makes the pair an identity rather than a guess. A run summary written before
+this carried no project, and `_runner_for` treats that `None` as "whichever task
+has this name" rather than losing the diff over a field the record never had the
+chance to carry.
 
 ### The wiring on `/api/tasks`
 

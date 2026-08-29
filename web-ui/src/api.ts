@@ -22,14 +22,16 @@ export async function fetchTasks(): Promise<Listing> {
   // the listing rather than on each row, because the listing a reader can
   // recognise least -- the one with no tasks in it -- needs naming most.
   const body = await getJson<Listing>("/api/tasks")
-  return { project: body?.project ?? null, tasks: body?.tasks ?? [] }
+  return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
 }
 
 export async function fetchRuns(
-  opts: { task?: string; limit?: number } = {},
+  opts: { task?: string; project?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {
   const query = new URLSearchParams()
   if (opts.task) query.set("task", opts.task)
+  // Both, or `?task=chores` answers with every project's chores at once.
+  if (opts.project) query.set("project", opts.project)
   if (opts.limit !== undefined) query.set("limit", String(opts.limit))
   const suffix = query.toString() ? `?${query}` : ""
 
@@ -94,8 +96,10 @@ async function post<T extends Answer>(path: string, body?: unknown): Promise<T> 
   }
 }
 
-const taskUrl = (task: string, verb: string) =>
-  `/api/tasks/${encodeURIComponent(task)}/${verb}`
+// A project and a task name between them pick out one task; a name alone
+// stopped being enough when one daemon could run several projects.
+const taskUrl = (project: string, task: string, verb: string) =>
+  `/api/tasks/${encodeURIComponent(project)}/${encodeURIComponent(task)}/${verb}`
 
 /**
  * The review: the only two calls that can move the reader's own files. A
@@ -109,12 +113,20 @@ export interface Decision extends Answer {
   conflict?: string[]
 }
 
-export function accept(task: string, throughRunId?: string): Promise<Decision> {
-  return post(taskUrl(task, "accept"), { through_run_id: throughRunId })
+export function accept(
+  project: string,
+  task: string,
+  throughRunId?: string,
+): Promise<Decision> {
+  return post(taskUrl(project, task, "accept"), { through_run_id: throughRunId })
 }
 
-export function discard(task: string, fromRunId?: string): Promise<Decision> {
-  return post(taskUrl(task, "discard"), { from_run_id: fromRunId })
+export function discard(
+  project: string,
+  task: string,
+  fromRunId?: string,
+): Promise<Decision> {
+  return post(taskUrl(project, task, "discard"), { from_run_id: fromRunId })
 }
 
 /**
@@ -126,16 +138,16 @@ export interface ControlAnswer extends Answer {
   run_id?: string
 }
 
-export function pause(task: string): Promise<ControlAnswer> {
-  return post(taskUrl(task, "pause"))
+export function pause(project: string, task: string): Promise<ControlAnswer> {
+  return post(taskUrl(project, task, "pause"))
 }
 
-export function resume(task: string): Promise<ControlAnswer> {
-  return post(taskUrl(task, "resume"))
+export function resume(project: string, task: string): Promise<ControlAnswer> {
+  return post(taskUrl(project, task, "resume"))
 }
 
-export function runNow(task: string): Promise<ControlAnswer> {
-  return post(taskUrl(task, "run"))
+export function runNow(project: string, task: string): Promise<ControlAnswer> {
+  return post(taskUrl(project, task, "run"))
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

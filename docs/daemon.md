@@ -143,13 +143,16 @@ a write would have to guess which project a run belongs to, and the runner
 already knows. With one project there is nothing to merge and `daemon.store` is
 that project's store.
 
-**Two projects may not share a task name**, and the daemon refuses to start when
-they do, naming both. The task name is the only namespace there is — the board's
-control routes take one, the run index files runs under one, a handoff names one
-— so two `chores` would make each of those mean whichever project answered
-first. A task is called after its **file**, so the fix is renaming one of the
-cards on disk, and the refusal says so. The real fix is for the wire to carry the project too; this is the honest
-half of it, said at launch rather than found at 3am.
+**Two projects may not answer to the same name**, and the daemon refuses to
+start when they do, naming both files and the `name:` key that fixes it. That is
+the constraint that belongs here: a project's name is what tells it from another
+one, on the board and in the address of every control route — and names collide
+by default, since a project falls back to its folder's and a worktree is a
+second folder called the same thing as the first.
+
+Task names are free to repeat. Requiring *those* to be unique across projects,
+which is what stood here first, refused the ordinary case: every project has a
+`chores`. A task's identity is the pair, and the wire carries both.
 
 `daemon.config` and `.tasks` still answer: `.config` for the first project, and
 `.tasks` for every task whichever project it came from.

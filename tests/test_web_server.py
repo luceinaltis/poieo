@@ -17,13 +17,28 @@ from poieo.web import server
 from poieo.web.server import create_app, sse_frame, _event_stream
 
 
-def stub_daemon(tmp_path, runners=(), project_name=None):
-    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
-    # A real ProjectSpec: the board's title comes off `display_name`, and a
-    # stub would let the fallback drift from what a nameless project shows.
+def stub_project(tmp_path, project_name=None):
+    """A real ProjectSpec: the board's title comes off `display_name`, and a
+    stub would let the fallback drift from what a nameless project shows."""
     project = ProjectSpec(name=project_name)
     project.source_path = tmp_path / MARKER
-    return SimpleNamespace(runners=list(runners), store=store, config=project)
+    return project
+
+
+def stub_daemon(tmp_path, runners=(), project_name=None, project=None):
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    project = project or stub_project(tmp_path, project_name)
+    runners = list(runners)
+    for runner in runners:
+        # Every runner belongs to a project; the API asks which.
+        if getattr(runner, "config", None) is None:
+            runner.config = project
+    return SimpleNamespace(
+        runners=runners,
+        store=store,
+        config=project,
+        projects=[SimpleNamespace(config=project, store=store)],
+    )
 
 
 # A real GraphSpec, not a stub: the wiring the board is served comes straight
@@ -68,6 +83,7 @@ def stub_runner(
 ):
     return SimpleNamespace(
         name=name,
+        config=None,
         status=status,
         current_run_id=current,
         last_result=last,
@@ -90,6 +106,7 @@ def test_flows_lists_runner_state(tmp_path):
     assert body["tasks"] == [
         {
             "name": "triage",
+            "project": tmp_path.name,
             "graph": "support-triage",
             "trigger": "interval 30s",
             "status": "waiting",
@@ -355,7 +372,17 @@ def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
         }
     )
     runner = stub_runner(name="chores", workspace=point)
-    return SimpleNamespace(runners=[runner], store=store), change
+    project = stub_project(tmp_path)
+    runner.config = project
+    return (
+        SimpleNamespace(
+            runners=[runner],
+            store=store,
+            config=project,
+            projects=[SimpleNamespace(config=project, store=store)],
+        ),
+        change,
+    )
 
 
 def test_diff_reports_the_files_and_the_patch(tmp_path):
@@ -430,10 +457,15 @@ def daemon_with_two_changes(tmp_path):
         )
 
     runner = stub_runner(name="chores", workspace=point)
-    project = ProjectSpec()
-    project.source_path = tmp_path / MARKER
+    project = stub_project(tmp_path)
+    runner.config = project
     return (
-        SimpleNamespace(runners=[runner], store=store, config=project),
+        SimpleNamespace(
+            runners=[runner],
+            store=store,
+            config=project,
+            projects=[SimpleNamespace(config=project, store=store)],
+        ),
         repo,
         changes,
     )
@@ -460,7 +492,7 @@ def test_accept_puts_the_work_in_the_users_branch(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/tasks/chores/accept", json={})
+    response = client.post(f"/api/tasks/{daemon.config.display_name}/chores/accept", json={})
 
     assert response.status_code == 200
     assert response.json() == {"accepted": 2}
@@ -472,7 +504,7 @@ def test_accept_through_a_run_stops_there(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    body = client.post("/api/tasks/chores/accept", json={"through_run_id": "r1"}).json()
+    body = client.post(f"/api/tasks/{daemon.config.display_name}/chores/accept", json={"through_run_id": "r1"}).json()
 
     assert body == {"accepted": 1}
     assert head(repo, "main") == changes["r1"].head
@@ -485,7 +517,7 @@ def test_accept_refuses_a_dirty_checkout(tmp_path):
     (repo / "README.md").write_text("mine, unsaved", encoding="utf-8")
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/tasks/chores/accept", json={})
+    response = client.post(f"/api/tasks/{daemon.config.display_name}/chores/accept", json={})
 
     assert response.status_code == 409
     assert response.json() == {"dirty": ["README.md"]}
@@ -507,10 +539,9 @@ def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
     git(repo, "commit", "-am", "my own edit")
     before = head(repo, "main")
 
-    daemon = SimpleNamespace(
-        runners=[stub_runner(name="chores", workspace=point)], store=store
-    )
-    response = TestClient(create_app(daemon)).post("/api/tasks/chores/accept", json={})
+    daemon = stub_daemon(tmp_path, [stub_runner(name="chores", workspace=point)])
+    daemon.store = store
+    response = TestClient(create_app(daemon)).post(f"/api/tasks/{daemon.config.display_name}/chores/accept", json={})
 
     assert response.status_code == 409
     assert response.json() == {"conflict": ["README.md"]}
@@ -523,7 +554,7 @@ def test_discard_puts_the_branch_back_and_keeps_the_work_reachable(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    response = client.post("/api/tasks/chores/discard", json={})
+    response = client.post(f"/api/tasks/{daemon.config.display_name}/chores/discard", json={})
 
     assert response.status_code == 200
     assert response.json() == {"discarded": 2}
@@ -535,7 +566,7 @@ def test_discard_from_a_run_keeps_the_earlier_work(tmp_path):
     daemon, repo, changes = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    body = client.post("/api/tasks/chores/discard", json={"from_run_id": "r2"}).json()
+    body = client.post(f"/api/tasks/{daemon.config.display_name}/chores/discard", json={"from_run_id": "r2"}).json()
 
     assert body == {"discarded": 1}
     assert head(repo, "poieo/chores") == changes["r1"].head
@@ -545,8 +576,8 @@ def test_accept_and_discard_404_on_an_unknown_flow(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.post("/api/tasks/nope/accept", json={}).status_code == 404
-    assert client.post("/api/tasks/nope/discard", json={}).status_code == 404
+    assert client.post(f"/api/tasks/{daemon.config.display_name}/nope/accept", json={}).status_code == 404
+    assert client.post(f"/api/tasks/{daemon.config.display_name}/nope/discard", json={}).status_code == 404
 
 
 def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
@@ -554,15 +585,15 @@ def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.get("/api/tasks/chores/accept").status_code == 405
-    assert client.get("/api/tasks/chores/discard").status_code == 405
+    assert client.get(f"/api/tasks/{daemon.config.display_name}/chores/accept").status_code == 405
+    assert client.get(f"/api/tasks/{daemon.config.display_name}/chores/discard").status_code == 405
 
 
 def test_accept_survives_a_missing_body(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
 
-    assert client.post("/api/tasks/chores/accept").status_code == 200
+    assert client.post(f"/api/tasks/{daemon.config.display_name}/chores/accept").status_code == 200
 
 
 def test_the_page_is_revalidated_but_its_assets_are_not(tmp_path, monkeypatch):
@@ -593,7 +624,7 @@ def test_the_board_says_which_project_it_is_showing(tmp_path):
     client = TestClient(create_app(daemon))
 
     body = client.get("/api/tasks").json()
-    assert body["project"] == {"name": "night shift", "root": str(tmp_path)}
+    assert body["projects"] == [{"name": "night shift", "root": str(tmp_path)}]
 
 
 def test_a_board_with_nothing_on_it_still_says_whose_it_is(tmp_path):
@@ -604,7 +635,7 @@ def test_a_board_with_nothing_on_it_still_says_whose_it_is(tmp_path):
 
     body = client.get("/api/tasks").json()
     assert body["tasks"] == []
-    assert body["project"]["name"] == tmp_path.name
+    assert body["projects"][0]["name"] == tmp_path.name
 
 
 async def test_the_board_names_no_model_for_a_step_that_calls_none(tmp_path):
@@ -630,3 +661,30 @@ async def test_the_board_names_no_model_for_a_step_that_calls_none(tmp_path):
     shape = _shape(task)
 
     assert shape["nodes"][0]["model"] is None
+
+
+def test_a_run_recorded_before_projects_still_finds_its_diff(tmp_path):
+    # A record written before the project was on it says nothing about which
+    # one, and the user's own history is full of those. Refusing them would be
+    # losing a diff over a field the record never had the chance to carry.
+    daemon, change = daemon_with_a_change(tmp_path)
+    daemon.store.record_summary(
+        {"run_id": "old", "task": "chores", "status": "completed",
+         "change": change.as_dict()}
+    )
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/runs/old/diff").json()["base"] == change.base
+
+
+def test_a_run_says_which_project_and_the_diff_uses_it(tmp_path):
+    daemon, change = daemon_with_a_change(tmp_path)
+    daemon.store.record_summary(
+        {"run_id": "elsewhere", "task": "chores", "project": "another board",
+         "status": "completed", "change": change.as_dict()}
+    )
+    client = TestClient(create_app(daemon))
+
+    # No task of that name in that project, so there is no copy to diff
+    # against -- which is an answer, not a crash.
+    assert client.get("/api/runs/elsewhere/diff").json()["change"] is None

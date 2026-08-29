@@ -36,12 +36,14 @@ function Refusal({ decision }: { decision: Decision }) {
 }
 
 export function Decide({
+  project,
   task,
   pending,
   into,
   runId,
   onDone,
 }: {
+  project: string
   task: string
   pending: number
   into: string | null
@@ -72,7 +74,7 @@ export function Decide({
         className="decide-take"
         data-do="accept"
         disabled={busy}
-        onClick={() => void act(() => accept(task, runId ?? undefined))}
+        onClick={() => void act(() => accept(project, task, runId ?? undefined))}
       >
         {runId ? "accept up to this run" : "accept this run"}
         {preview}
@@ -84,7 +86,7 @@ export function Decide({
           className="decide-drop"
           data-do="discard-confirm"
           disabled={busy}
-          onClick={() => void act(() => discard(task, runId ?? undefined))}
+          onClick={() => void act(() => discard(project, task, runId ?? undefined))}
         >
           yes, throw it away
         </button>

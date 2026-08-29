@@ -63,7 +63,7 @@ async function show(events: PoieoEvent[]) {
   fetchRuns.mockResolvedValue([run])
   fetchRunEvents.mockResolvedValue(events)
   await act(async () => {
-    root.render(<Drawer task="chores" onClose={() => {}} />)
+    root.render(<Drawer project="board" task="chores" onClose={() => {}} />)
   })
   // Two chained effects: the run list resolves, which picks a run, which
   // fetches its events.
