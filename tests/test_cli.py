@@ -1,12 +1,11 @@
 import json
 
+from conftest import EXAMPLES, at, card
+from test_workspace import make_repo
 from typer.testing import CliRunner
 
-from test_workspace import make_repo
-
-from conftest import card, EXAMPLES, at
-from poieo.layout import layout_for
 from poieo.cli import AFTER, BOARD, SETUP, app
+from poieo.layout import layout_for
 
 runner = CliRunner()
 
@@ -76,13 +75,8 @@ def test_run_json_output_is_machine_readable():
 
 def test_run_reports_a_failure_with_a_nonzero_exit(tmp_path):
     graph = tmp_path / "g.yaml"
-    graph.write_text(
-        "name: j\nentry: a\nnodes:\n"
-        "  - {id: a, type: agent, prompt: go, output: {format: json}}\n"
-    )
-    result = runner.invoke(
-        app, ["run", str(graph), "-b", str(EXAMPLES / "models/mock.yaml"), "--no-log"]
-    )
+    graph.write_text("name: j\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: go, output: {format: json}}\n")
+    result = runner.invoke(app, ["run", str(graph), "-b", str(EXAMPLES / "models/mock.yaml"), "--no-log"])
     assert result.exit_code == 1
     assert "failed" in result.stdout
 
@@ -110,9 +104,7 @@ def test_set_parses_json_scalars():
 
 
 def test_show_emits_a_mermaid_diagram():
-    result = runner.invoke(
-        app, ["show", str(EXAMPLES / "tasks/draft-review.graph.yaml"), "--mermaid"]
-    )
+    result = runner.invoke(app, ["show", str(EXAMPLES / "tasks/draft-review.graph.yaml"), "--mermaid"])
     assert result.exit_code == 0
     assert "flowchart TD" in result.stdout
     assert "revise --> review" in result.stdout
@@ -205,14 +197,19 @@ def test_help_tells_two_stories_not_seventeen():
     stopped too. A command nobody can find is not a hidden convenience there --
     it is a flow that never finishes.
     """
-    visible = {
-        info.name or info.callback.__name__
-        for info in app.registered_commands
-        if not info.hidden
-    }
+    visible = {info.name or info.callback.__name__ for info in app.registered_commands if not info.hidden}
     assert visible == {
-        "init", "daemon", "run", "validate", "check",
-        "tasks", "note", "asking", "answer", "memory", "learn",
+        "init",
+        "daemon",
+        "run",
+        "validate",
+        "check",
+        "tasks",
+        "note",
+        "asking",
+        "answer",
+        "memory",
+        "learn",
     }
     # `runs` and `config` ride along as sub-apps.
     result = runner.invoke(app, ["--help"])
@@ -270,9 +267,7 @@ def test_validate_json_is_machine_readable():
 
 
 def test_check_json_is_machine_readable():
-    result = runner.invoke(
-        app, ["check", "-b", str(EXAMPLES / "models/mock.yaml"), "--json"]
-    )
+    result = runner.invoke(app, ["check", "-b", str(EXAMPLES / "models/mock.yaml"), "--json"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.stdout)
     assert rows and rows[0]["provider"] == "fake"
@@ -294,16 +289,12 @@ def test_runs_list_json_is_machine_readable(tmp_path):
         ],
     )
     assert run.exit_code == 0, run.output
-    result = runner.invoke(
-        app, ["runs", "list", "--store", str(tmp_path / "logs"), "--json"]
-    )
+    result = runner.invoke(app, ["runs", "list", "--store", str(tmp_path / "logs"), "--json"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.stdout)
     assert len(rows) == 1 and rows[0]["status"] == "completed"
 
-    empty = runner.invoke(
-        app, ["runs", "list", "--store", str(tmp_path / "nothing"), "--json"]
-    )
+    empty = runner.invoke(app, ["runs", "list", "--store", str(tmp_path / "nothing"), "--json"])
     assert json.loads(empty.stdout) == []  # JSON stays JSON, even empty
 
 
@@ -316,11 +307,7 @@ def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
         f"trigger: {{type: interval, every: 60s}}\n"
         f"input: {{message: hi}}\n",
     )
-    config.write_text(
-        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
-        f"store: {tmp_path / 'logs'}\n"
-        "tasks: cards\n"
-    )
+    config.write_text(f"binding: {EXAMPLES / 'models/mock.yaml'}\nstore: {tmp_path / 'logs'}\ntasks: cards\n")
     # --no-web: the observation server binds a real port, so without this the
     # test fails on any machine already running a daemon.
     result = runner.invoke(app, ["daemon", str(config), "--once", "--no-web"])
@@ -332,9 +319,7 @@ def test_daemon_once_runs_each_flow_and_logs_them(tmp_path):
 
 
 def test_runs_show_reports_a_missing_run(tmp_path):
-    result = runner.invoke(
-        app, ["runs", "show", "nope", "--store", str(tmp_path / "logs")]
-    )
+    result = runner.invoke(app, ["runs", "show", "nope", "--store", str(tmp_path / "logs")])
     assert result.exit_code == 1
     assert "no events" in result.stderr
 
@@ -458,9 +443,7 @@ def test_note_writes_into_the_journal_and_tasks_shows_it(tmp_path):
 
     noted = runner.invoke(app, ["note", str(path), "leave the README alone"])
     assert noted.exit_code == 0
-    assert "leave the README alone" in layout_for(tmp_path / "tasks").journal("tidy").read_text(
-        encoding="utf-8"
-    )
+    assert "leave the README alone" in layout_for(tmp_path / "tasks").journal("tidy").read_text(encoding="utf-8")
 
     listed = runner.invoke(app, ["tasks", str(config)])
     assert listed.exit_code == 0
@@ -513,6 +496,7 @@ def test_eject_says_the_graph_still_needs_its_task(tmp_path):
     assert result.exit_code == 0
     assert "journal" in result.stdout
 
+
 # -- isolation shows up where a user is already looking ----------------------
 #
 # These assert on MARK, not on the bare word: pytest's tmp_path embeds the test
@@ -524,9 +508,7 @@ MARK = "· isolated"
 
 def _card(tmp_path, block=""):
     (tmp_path / "work").mkdir(exist_ok=True)
-    (tmp_path / "card.yaml").write_text(
-        f"name: boxed\nfolder: work\nprompt: do it\n{block}"
-    )
+    (tmp_path / "card.yaml").write_text(f"name: boxed\nfolder: work\nprompt: do it\n{block}")
     return tmp_path
 
 
@@ -556,17 +538,19 @@ def test_the_listing_never_names_the_machinery(tmp_path):
 
 def test_run_isolate_preflights_before_the_first_model_call(tmp_path, monkeypatch):
     """A bad image must fail here, not eight turns into a run."""
-    monkeypatch.setattr(
-        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
-    )
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH"))
     result = runner.invoke(
         app,
         [
-            "run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
-            "-b", str(EXAMPLES / "models/mock.yaml"),
-            "--set", "message=hi",
+            "run",
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-b",
+            str(EXAMPLES / "models/mock.yaml"),
+            "--set",
+            "message=hi",
             "--no-log",
-            "--isolate", "python:3.12-slim",
+            "--isolate",
+            "python:3.12-slim",
         ],
     )
     assert result.exit_code == 1
@@ -581,9 +565,12 @@ def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
     result = runner.invoke(
         app,
         [
-            "run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
-            "-b", str(EXAMPLES / "models/mock.yaml"),
-            "--set", "message=hi",
+            "run",
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-b",
+            str(EXAMPLES / "models/mock.yaml"),
+            "--set",
+            "message=hi",
             "--no-log",
         ],
     )
@@ -624,8 +611,7 @@ def _self_bound_card(tmp_path):
     (tmp_path / "work").mkdir(exist_ok=True)
     card = tmp_path / "card.yaml"
     card.write_text(
-        "name: hello\nfolder: work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
+        f"name: hello\nfolder: work\nprompt: say hello\nbinding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     return card
 
@@ -665,8 +651,7 @@ def test_a_card_takes_the_project_it_sits_in_not_the_one_you_stand_in(tmp_path, 
     standing_in.mkdir()
     (standing_in / "poieo.yaml").write_text("version: 1\nbinding: models.yaml\n")
     (standing_in / "models.yaml").write_text(
-        "name: b\nversion: 1\nproviders:\n  fake: {type: mock}\n"
-        "default: {provider: fake, model: m}\n"
+        "name: b\nversion: 1\nproviders:\n  fake: {type: mock}\ndefault: {provider: fake, model: m}\n"
     )
     monkeypatch.chdir(standing_in)
 
@@ -686,7 +671,7 @@ def test_a_card_under_a_project_takes_it_from_anywhere(tmp_path, monkeypatch):
     (project / "poieo.yaml").write_text("version: 1\nbinding: models.yaml\n")
     (project / "models.yaml").write_text(
         "name: b\nversion: 1\nproviders:\n"
-        "  fake: {type: mock, options: {responses: {\"*\": ok}}}\n"
+        '  fake: {type: mock, options: {responses: {"*": ok}}}\n'
         "default: {provider: fake, model: m}\n"
     )
     card = project / "card.yaml"
@@ -704,8 +689,7 @@ def test_a_card_under_a_project_takes_it_from_anywhere(tmp_path, monkeypatch):
 def test_run_flag_still_wins_over_the_card(tmp_path):
     result = runner.invoke(
         app,
-        ["run", str(_self_bound_card(tmp_path)), "--no-log",
-         "-b", str(EXAMPLES / "models/mock.yaml")],
+        ["run", str(_self_bound_card(tmp_path)), "--no-log", "-b", str(EXAMPLES / "models/mock.yaml")],
     )
     assert result.exit_code == 0, result.output
 
@@ -717,8 +701,7 @@ def test_daemon_given_a_folder_runs_the_cards_in_it(tmp_path):
     folder.mkdir()
     (tmp_path / "work").mkdir()
     (folder / "hello.yaml").write_text(
-        "name: hello\nfolder: ../work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
+        f"name: hello\nfolder: ../work\nprompt: say hello\nbinding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
@@ -739,8 +722,8 @@ def test_a_typo_gets_one_line_and_a_suggestion(tmp_path):
     result = runner.invoke(app, ["validate", str(card)])
     assert result.exit_code == 1
     assert "promt" in result.stderr
-    assert "prompt" in result.stderr          # the did-you-mean
-    assert "pydantic" not in result.stderr    # internals stay internal
+    assert "prompt" in result.stderr  # the did-you-mean
+    assert "pydantic" not in result.stderr  # internals stay internal
     assert "https://" not in result.stderr
 
 
@@ -752,7 +735,7 @@ def test_validate_checks_the_schedule_too(tmp_path):
     card.write_text("name: hello\nfolder: work\nprompt: hi\nevery: 5 minutes\n")
     result = runner.invoke(app, ["validate", str(card)])
     assert result.exit_code == 1
-    assert "5m" in result.stderr              # the fix is named, not just the fault
+    assert "5m" in result.stderr  # the fix is named, not just the fault
 
 
 # -- a one-shot run is still a task's run ------------------------------------
@@ -780,7 +763,7 @@ def test_run_consumes_a_note_the_way_a_daemon_run_does(tmp_path):
 
     shown = read_journal(load_card(card).journal_path())
     assert "Nothing new" in shown
-    assert "look at the README" in shown       # consumed, not lost
+    assert "look at the README" in shown  # consumed, not lost
 
 
 def test_run_stores_beside_the_card(tmp_path, monkeypatch):
@@ -797,9 +780,7 @@ def test_run_stores_beside_the_card(tmp_path, monkeypatch):
 
 def test_run_store_flag_still_wins(tmp_path):
     card = _self_bound_card(tmp_path)
-    result = runner.invoke(
-        app, ["run", str(card), "--store", str(tmp_path / "mystore")]
-    )
+    result = runner.invoke(app, ["run", str(card), "--store", str(tmp_path / "mystore")])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "mystore" / "events").is_dir()
 
@@ -809,8 +790,14 @@ def test_a_graph_still_stores_in_the_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(
         app,
-        ["run", str(EXAMPLES / "tasks/support-triage.graph.yaml"),
-         "-b", str(EXAMPLES / "models/mock.yaml"), "--set", "message=hi"],
+        [
+            "run",
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-b",
+            str(EXAMPLES / "models/mock.yaml"),
+            "--set",
+            "message=hi",
+        ],
     )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "runs" / "events").is_dir()
@@ -821,8 +808,7 @@ def test_daemon_folder_stores_beside_the_cards(tmp_path):
     folder.mkdir()
     (tmp_path / "work").mkdir()
     (folder / "hello.yaml").write_text(
-        "name: hello\nfolder: ../work\nprompt: say hello\n"
-        f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
+        f"name: hello\nfolder: ../work\nprompt: say hello\nbinding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"
     )
     result = runner.invoke(app, ["daemon", str(folder), "--once", "--no-web"])
     assert result.exit_code == 0, result.output
@@ -842,16 +828,17 @@ def flow_config(tmp_path, workdir):
         encoding="utf-8",
     )
     (tmp_path / "g.yaml").write_text(
-        "name: g" + chr(10)
-        + "entry: work" + chr(10)
-        + "nodes: [{id: work, type: agent, role: p, prompt: do it}]" + chr(10),
+        "name: g"
+        + chr(10)
+        + "entry: work"
+        + chr(10)
+        + "nodes: [{id: work, type: agent, role: p, prompt: do it}]"
+        + chr(10),
         encoding="utf-8",
     )
-    card(tmp_path / "cards", "chores",
-         f"graph: ../g.yaml\nfolder: ../{workdir}\n")
+    card(tmp_path / "cards", "chores", f"graph: ../g.yaml\nfolder: ../{workdir}\n")
     path = tmp_path / "d.yaml"
-    path.write_text("binding: b.yaml" + chr(10) + "tasks: cards" + chr(10),
-                    encoding="utf-8")
+    path.write_text("binding: b.yaml" + chr(10) + "tasks: cards" + chr(10), encoding="utf-8")
     return path
 
 
@@ -951,9 +938,7 @@ def _tiny_project(root, name, task_name):
         encoding="utf-8",
     )
     card(root / "cards", task_name, "prompt: do the thing\nfolder: .\n")
-    (root / "poieo.yaml").write_text(
-        f"name: {name}\nstore: runs\nbinding: b.yaml\ntasks: cards\n", encoding="utf-8"
-    )
+    (root / "poieo.yaml").write_text(f"name: {name}\nstore: runs\nbinding: b.yaml\ntasks: cards\n", encoding="utf-8")
     return root
 
 
@@ -971,9 +956,7 @@ def test_naming_a_task_finds_it_in_whichever_project_has_it(tmp_path):
     a = _tiny_project(tmp_path / "a", "chores", "sweep")
     b = _tiny_project(tmp_path / "b", "notes", "tidy")
 
-    result = runner.invoke(
-        app, ["daemon", str(a), str(b), "--task", "tidy", "--once", "--no-web"]
-    )
+    result = runner.invoke(app, ["daemon", str(a), str(b), "--task", "tidy", "--once", "--no-web"])
 
     assert result.exit_code == 0, result.output
     assert "1 run(s), 0 not completed" in result.output
@@ -983,9 +966,7 @@ def test_a_task_in_none_of_the_projects_is_refused_naming_them_all(tmp_path):
     a = _tiny_project(tmp_path / "a", "chores", "sweep")
     b = _tiny_project(tmp_path / "b", "notes", "tidy")
 
-    result = runner.invoke(
-        app, ["daemon", str(a), str(b), "--task", "nope", "--once", "--no-web"]
-    )
+    result = runner.invoke(app, ["daemon", str(a), str(b), "--task", "nope", "--once", "--no-web"])
 
     assert result.exit_code != 0
     assert "nope" in result.output

@@ -11,7 +11,7 @@ import shlex
 import shutil
 import signal
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from ..providers.base import ToolDef
@@ -39,6 +39,8 @@ def quote_path(path: str) -> str:
     # Only on Windows: a backslash is a legal character in a POSIX filename,
     # and rewriting one there would name a different file.
     return shlex.quote(path.replace("\\", "/") if os.name == "nt" else path)
+
+
 _OUTPUT_CAP = 20_000
 
 
@@ -78,7 +80,10 @@ def posix_shell(windows: bool = os.name == "nt") -> str | None:
     found = shutil.which("bash")
     if not found:
         return None
-    parts = [part.lower() for part in Path(found).parts]
+    # PureWindowsPath, not Path: `windows` says the path is a Windows one, and
+    # a backslash is not a separator to a PosixPath. Reading it as native means
+    # the guard quietly stops guarding anywhere the interpreter is not Windows.
+    parts = [part.lower() for part in PureWindowsPath(found).parts]
     if "system32" in parts:
         return None
     return found
@@ -146,15 +151,11 @@ async def run_here(
         # `-c` and not the shell's own parsing of a whole line: the command is
         # one argument, so nothing between here and the shell gets a chance to
         # reinterpret its quoting.
-        process = await asyncio.create_subprocess_exec(
-            _POSIX_SHELL, "-c", command, **shared
-        )
+        process = await asyncio.create_subprocess_exec(_POSIX_SHELL, "-c", command, **shared)
     else:
         process = await asyncio.create_subprocess_shell(command, **shared)
     try:
-        stdout, _ = await asyncio.wait_for(
-            process.communicate(stdin.encode() if stdin is not None else None), timeout
-        )
+        stdout, _ = await asyncio.wait_for(process.communicate(stdin.encode() if stdin is not None else None), timeout)
     except asyncio.TimeoutError:
         _kill_tree(process)
         await process.communicate()

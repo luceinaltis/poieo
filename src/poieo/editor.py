@@ -23,7 +23,9 @@ from .binding import BindingSpec
 from .graph import GraphSpec
 from .viewer import _FONTS, _TOKENS
 
-_CSS = _TOKENS + """
+_CSS = (
+    _TOKENS
+    + """
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -134,6 +136,7 @@ dialog pre { background: var(--sunk); border-radius: 8px; padding: .8rem; overfl
              max-height: 60vh; font-size: .76rem; margin: .6rem 0; }
 @media (max-width: 900px) { .main { grid-template-columns: 1fr; } .inspector { display: none; } }
 """
+)
 
 _JS = r"""
 const NODE_W = 208, NODE_H = 62;
@@ -682,9 +685,7 @@ $("#save").disabled = true;
 """
 
 
-def _boot_payload(
-    graph: GraphSpec, binding: BindingSpec | None, save: dict[str, Any]
-) -> dict[str, Any]:
+def _boot_payload(graph: GraphSpec, binding: BindingSpec | None, save: dict[str, Any]) -> dict[str, Any]:
     """The editor's initial state: the graph as plain data, plus read-only context."""
     data = graph.model_dump(mode="json")
     for node in data["nodes"]:

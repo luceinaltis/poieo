@@ -30,8 +30,7 @@ class Node(abc.ABC):
         self.spec = spec
 
     @abc.abstractmethod
-    async def run(self, ctx: RunContext) -> NodeResult:
-        ...
+    async def run(self, ctx: RunContext) -> NodeResult: ...
 
 
 def _parse_json(text: str, node_id: str) -> Any:
@@ -95,8 +94,7 @@ def shape_output(spec: NodeSpec, text: str) -> Any:
         for part in out.path.split("."):
             if not isinstance(cursor, dict) or part not in cursor:
                 raise NodeError(
-                    f"node '{spec.id}': output path '{out.path}' "
-                    f"is missing from the parsed JSON",
+                    f"node '{spec.id}': output path '{out.path}' is missing from the parsed JSON",
                     node_id=spec.id,
                 )
             cursor = cursor[part]
@@ -211,10 +209,7 @@ _CLEARED = "[cleared to save room -- call the tool again if you still need this]
 # For the one result that clearing cannot reach: bigger than the window on its
 # own, so no amount of dropping what came before it helps. Says what to do
 # rather than only that something is gone.
-_TOO_BIG = (
-    "[this did not fit in the model's context -- fetch it in pieces instead. "
-    "read_file takes offset and limit]"
-)
+_TOO_BIG = "[this did not fit in the model's context -- fetch it in pieces instead. read_file takes offset and limit]"
 
 
 def _drop_newest_result(messages: list[dict[str, Any]]) -> int:
@@ -435,8 +430,7 @@ async def _compact(
         ctx.emit(
             "node_compact_failed",
             node_id=spec.id,
-            error=f"the summary was longer than the turns it would have replaced "
-            f"({-freed} characters longer)",
+            error=f"the summary was longer than the turns it would have replaced ({-freed} characters longer)",
         )
         return messages
     ctx.emit("node_compacted", node_id=spec.id, folded=freed, kept=_KEEP_TURNS)
@@ -461,11 +455,7 @@ class AgentNode(Node):
         bound = _prepare(spec, ctx)
         toolsets = spec.tools or []
 
-        workdir = (
-            Path(_rendered(spec, spec.workdir, bound.scope)).expanduser()
-            if spec.workdir
-            else ctx.workdir
-        )
+        workdir = Path(_rendered(spec, spec.workdir, bound.scope)).expanduser() if spec.workdir else ctx.workdir
         if toolsets:
             if workdir is None:  # preflight should have caught this
                 raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
@@ -507,6 +497,12 @@ class AgentNode(Node):
             # attempt per node -- more than that and a genuinely broken
             # request gets paid for over and over.
             went_again = False
+            # When this step must be finished by, if the graph said. Checked at
+            # the top of a turn rather than raced against the model call: a
+            # request already sent is paid for whether or not the answer is
+            # kept, and cancelling it mid-flight would waste the tokens it was
+            # set to save.
+            expires = time.monotonic() + spec.deadline if spec.deadline else None
             # Whether the loop itself made the conversation smaller since the
             # last count. Clearing and folding do that on purpose, and reading
             # their effect as the endpoint dropping something would have the
@@ -525,6 +521,11 @@ class AgentNode(Node):
             while True:
                 if ctx.cancel is not None and ctx.cancel.is_set():
                     raise RunAborted(f"cancelled during agent node '{spec.id}'")
+                if expires is not None and time.monotonic() >= expires:
+                    raise NodeError(
+                        f"node '{spec.id}' passed its deadline ({spec.deadline}s) after {turns} turn(s)",
+                        node_id=spec.id,
+                    )
                 turns += 1
                 # Only past the cap, and then all at once. Clearing on every
                 # turn would move the boundary forward by one result each
@@ -590,6 +591,13 @@ class AgentNode(Node):
                 # `sent` and the new count must both be real. A backend that
                 # reports zero has not told us anything, and no measurement is
                 # a different fact from a bad one.
+                # What the endpoint says it charged wins; what the binding
+                # says fills the silence. The same two-tier shape as `context`
+                # and for the same reason -- a reported figure is a fact and a
+                # declared one is somebody's belief -- except that a belief
+                # beats nothing, and Anthropic's API reports no cost at all.
+                if response.usage.cost is None and bound.resolved.prices is not None:
+                    response.usage.cost = bound.resolved.prices.charge(response.usage)
                 took = response.usage.input_tokens
                 if sent and took and took <= sent and not shrank:
                     # Oldest first, as everywhere else. Only when there is
@@ -647,8 +655,7 @@ class AgentNode(Node):
                 # was already being carried this far unread.
                 if response.stop_reason in _CUT_OFF:
                     raise NodeError(
-                        f"node '{spec.id}' was cut off before it finished: the "
-                        f"model reached its output limit mid-turn",
+                        f"node '{spec.id}' was cut off before it finished: the model reached its output limit mid-turn",
                         node_id=spec.id,
                     )
 
@@ -659,10 +666,7 @@ class AgentNode(Node):
                     break
                 if turns >= spec.max_turns:
                     spent = ", ".join(
-                        f"{name} {count}x"
-                        for name, count in sorted(
-                            reached_for.items(), key=lambda pair: -pair[1]
-                        )
+                        f"{name} {count}x" for name, count in sorted(reached_for.items(), key=lambda pair: -pair[1])
                     )
                     raise NodeError(
                         f"node '{spec.id}' hit max_turns ({spec.max_turns}) "
@@ -674,10 +678,7 @@ class AgentNode(Node):
                 assistant_turn: dict[str, Any] = {
                     "role": "assistant",
                     "content": response.text,
-                    "tool_calls": [
-                        {"id": c.id, "name": c.name, "arguments": c.arguments}
-                        for c in response.tool_calls
-                    ],
+                    "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in response.tool_calls],
                 }
                 raw = response.meta.get("raw_content")
                 if raw:
@@ -700,15 +701,11 @@ class AgentNode(Node):
                         error=result.error,
                         duration_ms=round((time.monotonic() - started) * 1000),
                     )
-                    messages.append(
-                        {"role": "tool", "tool_call_id": call.id, "content": result.text}
-                    )
+                    messages.append({"role": "tool", "tool_call_id": call.id, "content": result.text})
 
         # `response` is deliberately the loop's last one, read after the
         # executor has closed: the turn that answered without a tool call.
-        return _finish(
-            spec, ctx, bound, response, turns=turns, tool_calls=tool_call_count
-        )
+        return _finish(spec, ctx, bound, response, turns=turns, tool_calls=tool_call_count)
 
 
 def _workdir_for(spec: NodeSpec, ctx: RunContext, scope: dict[str, Any]) -> Path:
@@ -717,17 +714,11 @@ def _workdir_for(spec: NodeSpec, ctx: RunContext, scope: dict[str, Any]) -> Path
     Physical, so the logical layer may leave it open and the task supply it --
     `preflight()` is where "nowhere to work" fails, before a token is spent.
     """
-    workdir = (
-        Path(_rendered(spec, spec.workdir, scope)).expanduser()
-        if spec.workdir
-        else ctx.workdir
-    )
+    workdir = Path(_rendered(spec, spec.workdir, scope)).expanduser() if spec.workdir else ctx.workdir
     if workdir is None:  # preflight should have caught this
         raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
     if not workdir.is_dir():
-        raise NodeError(
-            f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id
-        )
+        raise NodeError(f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id)
     return workdir
 
 
@@ -766,11 +757,7 @@ class CommandNode(Node):
                     # it is the language's, and rendering would both mangle it
                     # and key the build cache on the run. Its varying part
                     # arrives through `env`, which is rendered below.
-                    code = (
-                        spec.script
-                        if is_compiled(spec.language or "")
-                        else _rendered(spec, spec.script, scope)
-                    )
+                    code = spec.script if is_compiled(spec.language or "") else _rendered(spec, spec.script, scope)
                     # Which interpreter, or which compiler and where its output
                     # is kept, is the executor's business: where a thing is
                     # built is where it has to run.

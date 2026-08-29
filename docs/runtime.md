@@ -262,6 +262,17 @@ the same four files: more room would have bought more of that. The tool counts
 are the difference, and getting them used to mean writing a script against the
 event log after the fact.
 
+**`deadline` is the bound that matches the harm.** Seconds, like the `timeout`
+beside it, and `None` for a node that does not ask. What an unbounded step
+actually costs is not money -- forty turns measured here came to two and a half
+cents -- it is that the step outlives its own schedule and blocks whatever was
+queued behind it. "This fires hourly, so it must not take an hour" is a
+sentence somebody can mean; "forty turns" is not.
+
+Checked at the top of a turn rather than raced against the model call. A
+request already sent is paid for whether or not the answer is kept, so
+cancelling one mid-flight would waste the tokens the deadline was set to save.
+
 **Turns are a poor unit and the counts are there because of it.** In one
 measured run a turn cost between 15 and 1,629 output tokens, and took between
 five seconds and seven minutes. Forty of them is not a budget anybody can

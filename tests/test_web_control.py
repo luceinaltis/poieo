@@ -5,13 +5,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
+from conftest import card
 from starlette.testclient import TestClient
 
-from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web.server import create_app
-
 
 # -- the routes, over a stub runner -------------------------------------------
 
@@ -186,9 +185,8 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
     runner = daemon.runners[0]
 
     transport = httpx.ASGITransport(app=create_app(daemon))
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://poieo"
-    ) as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+
         async def board_status():
             body = (await client.get("/api/tasks")).json()
             return body["tasks"][0]["status"]
@@ -215,9 +213,7 @@ def test_answering_reaches_the_runner():
     runner = StubRunner().waiting_on()
     client = _client(runner)
 
-    reply = client.post(
-        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"}
-    )
+    reply = client.post(f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"})
 
     assert reply.status_code == 200
     assert reply.json() == {"status": "answered", "answer": "land"}
@@ -229,9 +225,7 @@ def test_a_task_that_asked_nothing_says_so():
     with a stale button must be able to tell those apart."""
     client = _client(StubRunner())
 
-    reply = client.post(
-        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"}
-    )
+    reply = client.post(f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"})
 
     assert reply.status_code == 409
     assert "waiting" in reply.json()["error"]
@@ -240,9 +234,7 @@ def test_a_task_that_asked_nothing_says_so():
 def test_an_answer_that_was_not_offered_is_refused_with_the_ones_that_were():
     client = _client(StubRunner().waiting_on())
 
-    reply = client.post(
-        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "merge"}
-    )
+    reply = client.post(f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "merge"})
 
     assert reply.status_code == 400
     assert reply.json()["choices"] == ["land", "hold"]
@@ -251,8 +243,6 @@ def test_an_answer_that_was_not_offered_is_refused_with_the_ones_that_were():
 def test_answering_a_task_that_is_not_there_is_a_404():
     client = _client(StubRunner())
 
-    reply = client.post(
-        f"/api/tasks/{BOARD.display_name}/nope/answer", json={"choice": "land"}
-    )
+    reply = client.post(f"/api/tasks/{BOARD.display_name}/nope/answer", json={"choice": "land"})
 
     assert reply.status_code == 404

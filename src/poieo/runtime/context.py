@@ -6,8 +6,8 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from ..binding import BindingSpec
@@ -103,9 +103,7 @@ class RunContext:
             self.aliases[alias] = value
 
     def emit(self, type_: str, node_id: str | None = None, **data: Any) -> None:
-        self.store.append(
-            Event(run_id=self.run_id, type=type_, node_id=node_id, data=data)
-        )
+        self.store.append(Event(run_id=self.run_id, type=type_, node_id=node_id, data=data))
 
 
 @dataclass(slots=True)

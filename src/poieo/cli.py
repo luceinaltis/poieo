@@ -12,10 +12,13 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, List, NoReturn, Optional
+from typing import TYPE_CHECKING, Any, List, NoReturn, Optional
 
 import typer
 import yaml
+
+if TYPE_CHECKING:  # `_board` names httpx in an annotation; the import is deferred
+    import httpx  # because starting the CLI must not pay for the HTTP stack.
 
 # Model output is arbitrary Unicode; legacy Windows console codepages (cp949,
 # cp1252, ...) cannot encode all of it and would crash every `poieo run` that
@@ -25,9 +28,21 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(errors="replace")
 
 from . import __version__
+from . import detect as engines
 from .binding import load_binding
-from .workspace import Workspace
-from .daemon import Daemon, load_config, load_tasks
+from .card import (
+    CardSpec,
+    append_journal,
+    build_graph,
+    card_payload,
+    expand,
+    is_card_file,
+    load_card,
+    load_cards,
+    read_journal,
+    record_run,
+)
+from .daemon import Daemon, load_config
 from .daemon.config import (
     DaemonConfig,
     TaskSpec,
@@ -35,10 +50,12 @@ from .daemon.config import (
     config_for_tasks_folder,
 )
 from . import detect as engines
+from .editor import render_editor
 from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion, learn as run_learning_pass
+from .learn import last_suggestion
+from .learn import learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
 from .project import (
     MARKER,
@@ -54,21 +71,9 @@ from .providers import ProviderPool
 from .rebind import declare, point_at
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
-from .tools import ToolContext, Isolation
-from .card import (
-    CardSpec,
-    append_journal,
-    build_graph,
-    expand,
-    is_card_file,
-    load_card,
-    load_cards,
-    read_journal,
-    record_run,
-    card_payload,
-)
-from .editor import render_editor
+from .tools import Isolation, ToolContext
 from .viewer import mermaid_source, render_page
+from .workspace import Workspace
 
 # The front page is grouped by what a person is trying to do, in the order
 # they will do it. A panel title is one of the user's three words -- a task, a
@@ -83,14 +88,11 @@ app = typer.Typer(
     name="poieo",
     help="Write down the work you want done. The models on your own machine "
     "keep it running, and you read what they did in the morning.",
-    epilog="New here? `poieo init` sets this folder up, then "
-    "`poieo run tasks/hello.yaml` tries it once.",
+    epilog="New here? `poieo init` sets this folder up, then `poieo run tasks/hello.yaml` tries it once.",
     no_args_is_help=True,
     add_completion=False,
 )
-runs_app = typer.Typer(
-    name="runs", help="What has run, and what each run did.", no_args_is_help=True
-)
+runs_app = typer.Typer(name="runs", help="What has run, and what each run did.", no_args_is_help=True)
 app.add_typer(runs_app, rich_help_panel=AFTER)
 
 # Bare `poieo config` reports rather than printing help: "what am I bound to"
@@ -179,12 +181,9 @@ def init(
     mock: bool = typer.Option(
         False,
         "--mock",
-        help="Lay the project out against the scripted mock model, without "
-        "looking for a real one.",
+        help="Lay the project out against the scripted mock model, without looking for a real one.",
     ),
-    name: Optional[str] = typer.Option(
-        None, "--name", help="What a board calls this project [default: the folder]."
-    ),
+    name: Optional[str] = typer.Option(None, "--name", help="What a board calls this project [default: the folder]."),
 ) -> None:
     """Set this folder up as a poieo project.
 
@@ -222,8 +221,7 @@ def init(
     if name and ("kept", "poieo.yaml") in report:
         typer.echo("")
         typer.echo(
-            f'poieo.yaml was already here, so the name stayed as it is -- '
-            f'set `name: {name}` in it to use "{name}"'
+            f'poieo.yaml was already here, so the name stayed as it is -- set `name: {name}` in it to use "{name}"'
         )
 
     # Automatic is fine, invisible is not: the whole pool is in the file, so
@@ -283,10 +281,7 @@ def _project_file(named: "Path | None") -> Path:
         return named
     found = find_project_file()
     if found is None:
-        _fail(
-            "no poieo.yaml found here or above; pass a config file, "
-            "or run `poieo init`"
-        )
+        _fail("no poieo.yaml found here or above; pass a config file, or run `poieo init`")
     return found
 
 
@@ -349,11 +344,7 @@ def validate(
             "name": spec.name,
             "path": str(binding),
             "from": str(supplied_by) if supplied_by is not None else None,
-            "roles": {
-                role: r.ref
-                for role in sorted(graph.roles())
-                for r in (spec.resolve(role),)
-            },
+            "roles": {role: r.ref for role in sorted(graph.roles()) for r in (spec.resolve(role),)},
         }
 
     if as_json:
@@ -414,15 +405,9 @@ def show(
 @_guarded
 def view(
     graph_paths: list[Path] = typer.Argument(..., help="One or more graph files."),
-    binding: Optional[Path] = typer.Option(
-        None, "--binding", "-b", help="Show which model each role resolves to."
-    ),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Where to write the page [./<name>.html]."
-    ),
-    serve: bool = typer.Option(
-        False, "--serve", help="Serve the page over http instead of just writing it."
-    ),
+    binding: Optional[Path] = typer.Option(None, "--binding", "-b", help="Show which model each role resolves to."),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Where to write the page [./<name>.html]."),
+    serve: bool = typer.Option(False, "--serve", help="Serve the page over http instead of just writing it."),
     port: int = typer.Option(8765, "--port", help="Port for --serve."),
     host: str = typer.Option("127.0.0.1", "--host", help="Interface for --serve."),
 ) -> None:
@@ -453,9 +438,7 @@ def _serve_directory(target: Path, host: str, port: int) -> None:
     import socketserver
 
     directory = str(target.parent.resolve())
-    handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler, directory=directory
-    )
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
     # The mermaid bundle loads from a CDN, so the page needs a real origin
     # rather than file:// to render in a strict browser.
     socketserver.TCPServer.allow_reuse_address = True
@@ -477,7 +460,9 @@ def _jupyter_session() -> dict[str, Any]:
     try:
         proc = subprocess.run(
             ["jupyter", "server", "list", "--json"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
     except (OSError, subprocess.SubprocessError):
         return {}
@@ -495,20 +480,15 @@ def _jupyter_session() -> dict[str, Any]:
 @_guarded
 def edit(
     graph_path: Path = typer.Argument(..., help="Graph file to edit."),
-    binding: Optional[Path] = typer.Option(
-        None, "--binding", "-b", help="Show which model each role resolves to."
-    ),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Where to write the editor page."
-    ),
+    binding: Optional[Path] = typer.Option(None, "--binding", "-b", help="Show which model each role resolves to."),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Where to write the editor page."),
     save_via: str = typer.Option(
-        "auto", "--save-via",
+        "auto",
+        "--save-via",
         help="How the page saves: auto | jupyter | none (download/copy only).",
     ),
     token: Optional[str] = typer.Option(None, "--token", help="Jupyter token."),
-    root: Optional[Path] = typer.Option(
-        None, "--jupyter-root", help="Jupyter's root_dir, for building the save path."
-    ),
+    root: Optional[Path] = typer.Option(None, "--jupyter-root", help="Jupyter's root_dir, for building the save path."),
     serve: bool = typer.Option(False, "--serve", help="Serve the page over http."),
     port: int = typer.Option(8765, "--port"),
     host: str = typer.Option("127.0.0.1", "--host"),
@@ -572,27 +552,24 @@ def edit(
 def run(
     graph_path: Path = typer.Argument(..., help="Graph or task YAML/JSON file."),
     binding: Optional[Path] = typer.Option(
-        None, "--binding", "-b",
+        None,
+        "--binding",
+        "-b",
         help="Binding YAML/JSON file [default: what the card names].",
     ),
-    input_json: Optional[str] = typer.Option(
-        None, "--input", "-i", help="Run payload as JSON, or @file.json."
-    ),
-    set_: list[str] = typer.Option(
-        [], "--set", "-s", help="Payload override, key=value. Repeatable."
-    ),
+    input_json: Optional[str] = typer.Option(None, "--input", "-i", help="Run payload as JSON, or @file.json."),
+    set_: list[str] = typer.Option([], "--set", "-s", help="Payload override, key=value. Repeatable."),
     workdir: Optional[Path] = typer.Option(
         None, "--workdir", "-w", help="Where agent nodes work, if the graph leaves it open."
     ),
     store: Optional[Path] = typer.Option(
-        None, "--store",
+        None,
+        "--store",
         help="Where a run's events and result go [default: the project's runs/].",
     ),
     no_log: bool = typer.Option(False, "--no-log", help="Do not write a run log."),
     as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
-    isolate: Optional[str] = typer.Option(
-        None, "--isolate", help="Run commands isolated, using this image."
-    ),
+    isolate: Optional[str] = typer.Option(None, "--isolate", help="Run commands isolated, using this image."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Run one task now, and say what it did."""
@@ -659,10 +636,7 @@ def run(
         color = typer.colors.GREEN if result.status == "completed" else typer.colors.RED
         typer.secho(f"{result.status}  {result.run_id}", fg=color)
         typer.echo(f"path       {' -> '.join(result.path)}")
-        typer.echo(
-            f"tokens     in={result.usage['input_tokens']} "
-            f"out={result.usage['output_tokens']}"
-        )
+        typer.echo(f"tokens     in={result.usage['input_tokens']} out={result.usage['output_tokens']}")
         if result.error:
             typer.secho(f"error      {result.error}", fg=typer.colors.RED)
             if result.cause:
@@ -699,10 +673,7 @@ def reset(
     removed = docker.remove_containers_for(folder)
     # The one thing the user needs to hear: their files are fine. Everything
     # this throws away is rebuilt the next time the task runs.
-    _ok(
-        f"reset '{task.name}': {removed} environment(s) thrown away. "
-        f"Nothing in {folder} was touched."
-    )
+    _ok(f"reset '{task.name}': {removed} environment(s) thrown away. Nothing in {folder} was touched.")
 
 
 def _daemon_config(config_path: "Path | None") -> "DaemonConfig":
@@ -733,15 +704,10 @@ def _daemon_config(config_path: "Path | None") -> "DaemonConfig":
 def daemon(
     config_paths: Optional[List[Path]] = typer.Argument(
         None,
-        help="One or more project files or task folders "
-        "[default: the project's poieo.yaml].",
+        help="One or more project files or task folders [default: the project's poieo.yaml].",
     ),
-    once: bool = typer.Option(
-        False, "--once", help="Firing each task a single time, then exit."
-    ),
-    task: Optional[str] = typer.Option(
-        None, "--task", help="Run only this task from the config."
-    ),
+    once: bool = typer.Option(False, "--once", help="Firing each task a single time, then exit."),
+    task: Optional[str] = typer.Option(None, "--task", help="Run only this task from the config."),
     port: int = typer.Option(8484, "--port", help="Web observation UI port."),
     no_web: bool = typer.Option(False, "--no-web", help="Disable the web UI."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -777,9 +743,7 @@ def daemon(
                     spec.trigger = spec.trigger.model_copy(update={"type": "loop"})
 
     try:
-        results = asyncio.run(
-            Daemon(configs, web_port=None if no_web else port).serve()
-        )
+        results = asyncio.run(Daemon(configs, web_port=None if no_web else port).serve())
     except KeyboardInterrupt:  # pragma: no cover - interactive
         raise typer.Exit(code=130)
 
@@ -835,12 +799,12 @@ async def _roomier_than_it_is(spec: Any, pool: Any) -> list[str]:
 @_guarded
 def check_providers(
     binding: Optional[Path] = typer.Option(
-        None, "--binding", "-b",
+        None,
+        "--binding",
+        "-b",
         help="Binding YAML/JSON file [default: the project's].",
     ),
-    as_json: bool = typer.Option(
-        False, "--json", help="Print the probe results as JSON."
-    ),
+    as_json: bool = typer.Option(False, "--json", help="Print the probe results as JSON."),
 ) -> None:
     """Ask each model endpoint whether it is answering."""
     binding, _ = _find_binding(binding, None)
@@ -861,10 +825,13 @@ def check_providers(
 
     rows, warnings = asyncio.run(_go())
     if as_json:
-        typer.echo(json.dumps(
-            [{"provider": n, "healthy": h, "detail": d} for n, h, d in rows],
-            ensure_ascii=False, indent=2,
-        ))
+        typer.echo(
+            json.dumps(
+                [{"provider": n, "healthy": h, "detail": d} for n, h, d in rows],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
         for name, healthy, detail in rows:
             mark = "ok  " if healthy else "FAIL"
@@ -914,10 +881,7 @@ def config(
     # reads.
     report: dict[str, Any] = {
         "binding": {"name": spec.name, "path": str(path)},
-        "providers": {
-            name: {"type": p.type, "base_url": p.base_url}
-            for name, p in spec.providers.items()
-        },
+        "providers": {name: {"type": p.type, "base_url": p.base_url} for name, p in spec.providers.items()},
         "default": spec.target("default"),
         "roles": {role: spec.target(role) for role in sorted(spec.roles)},
     }
@@ -961,14 +925,7 @@ def config_models(
     async def _go() -> list[tuple[str, ...]]:
         # All at once: two endpoints asked in single file is two timeouts on a
         # laptop where neither is running.
-        return list(
-            await asyncio.gather(
-                *(
-                    engines.models_for(p.type, p.base_url)
-                    for p in spec.providers.values()
-                )
-            )
-        )
+        return list(await asyncio.gather(*(engines.models_for(p.type, p.base_url) for p in spec.providers.values())))
 
     served = dict(zip(names, asyncio.run(_go())))
     in_use = {target: role for role, target in spec.spoken_for().items()}
@@ -1042,17 +999,13 @@ def config_add() -> None:
             typer.echo(f"  {model}")
     first = by_key[added[0]]
     typer.echo("")
-    typer.echo(
-        f"to use one:  poieo config use {first.key}/{first.models[0]} --role <name>"
-    )
+    typer.echo(f"to use one:  poieo config use {first.key}/{first.models[0]} --role <name>")
 
 
 @config_app.command("use")
 @_guarded
 def config_use(
-    target: str = typer.Argument(
-        ..., help="Which model, as provider/model -- exactly as `poieo config` prints it."
-    ),
+    target: str = typer.Argument(..., help="Which model, as provider/model -- exactly as `poieo config` prints it."),
     role: str = typer.Option(
         "default",
         "--role",
@@ -1088,10 +1041,7 @@ def config_use(
         declared = spec.providers[provider]
         served = asyncio.run(engines.models_for(declared.type, declared.base_url))
         if served and model not in served:
-            _fail(
-                f"'{provider}' does not serve '{model}'. It has: "
-                f"{', '.join(served)}"
-            )
+            _fail(f"'{provider}' does not serve '{model}'. It has: {', '.join(served)}")
 
     point_at(path, role, provider, model)
 
@@ -1101,10 +1051,7 @@ def config_use(
     if provider in spec.providers and not served:
         # Said out loud rather than implied: silence from an endpoint is not
         # the same as its agreement.
-        typer.echo(
-            f"note       '{provider}' did not answer, so the model name could "
-            f"not be checked"
-        )
+        typer.echo(f"note       '{provider}' did not answer, so the model name could not be checked")
 
 
 def _unreviewable(cards: "list[CardSpec]") -> set[str]:
@@ -1136,9 +1083,7 @@ def _unreviewable(cards: "list[CardSpec]") -> set[str]:
     if not with_folders:
         return set()
     answers = asyncio.run(_ask())
-    return {
-        card.folder for card, ok in zip(with_folders, answers) if not ok
-    }
+    return {card.folder for card, ok in zip(with_folders, answers) if not ok}
 
 
 DEFAULT_BOARD_PORT = 8484
@@ -1164,10 +1109,7 @@ def _ask_board(port: int, method: str, path: str, **kwargs) -> "Any":
         with _board(port) as client:
             reply = client.request(method, path, **kwargs)
     except httpx.HTTPError:
-        _fail(
-            f"no poieo daemon answering on port {port}. "
-            f"Start one with `poieo daemon`, or name its port with --port"
-        )
+        _fail(f"no poieo daemon answering on port {port}. Start one with `poieo daemon`, or name its port with --port")
     if reply.status_code >= 400:
         body = {}
         try:
@@ -1190,9 +1132,7 @@ def _this_board() -> str:
 @app.command(rich_help_panel=BOARD)
 @_guarded
 def asking(
-    port: int = typer.Option(
-        DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."
-    ),
+    port: int = typer.Option(DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."),
 ) -> None:
     """What the tasks are waiting for you to decide.
 
@@ -1218,9 +1158,7 @@ def asking(
 def answer(
     task: str = typer.Argument(..., help="The task that is waiting."),
     choice: str = typer.Argument(..., help="One of the answers it offered."),
-    port: int = typer.Option(
-        DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."
-    ),
+    port: int = typer.Option(DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."),
 ) -> None:
     """Answer a question a task stopped to ask.
 
@@ -1239,9 +1177,7 @@ def answer(
 @app.command(rich_help_panel=BOARD)
 @_guarded
 def tasks(
-    target: Optional[Path] = typer.Argument(
-        None, help="A tasks folder, or a config file [default: the project's]."
-    ),
+    target: Optional[Path] = typer.Argument(None, help="A tasks folder, or a config file [default: the project's]."),
 ) -> None:
     """The tasks on the board, when each next runs, and what it last said.
 
@@ -1269,10 +1205,7 @@ def tasks(
     for card in items:
         task, _ = expand(card)
         state = "on " if task.enabled else "off"
-        typer.echo(
-            f"[{state}] {card.slug:<20} {task.trigger.build().describe:<24} "
-            f"{card.folder_path()}"
-        )
+        typer.echo(f"[{state}] {card.slug:<20} {task.trigger.build().describe:<24} {card.folder_path()}")
         # "isolated", never the image: naming it is licensed in configuration
         # and in errors, not in a listing.
         boxed = " · isolated" if card.isolation else ""
@@ -1284,8 +1217,7 @@ def tasks(
             # moment -- the user's own files are about to change -- is exactly
             # this one, and it must not be found out afterwards.
             typer.secho(
-                f"        note: changes in {card.folder_path()} can't be "
-                f"reviewed or undone",
+                f"        note: changes in {card.folder_path()} can't be reviewed or undone",
                 fg=typer.colors.YELLOW,
             )
 
@@ -1319,9 +1251,7 @@ def _memory_target(path: "Path | None") -> "tuple[CardSpec | None, Path]":
 @app.command(rich_help_panel=AFTER)
 @_guarded
 def memory(
-    path: Optional[Path] = typer.Argument(
-        None, help="A card, or a folder in the project [default: here]."
-    ),
+    path: Optional[Path] = typer.Argument(None, help="A card, or a folder in the project [default: here]."),
 ) -> None:
     """What this project remembers, and what a task would be shown.
 
@@ -1332,9 +1262,7 @@ def memory(
 
     report = memory_report(project)
     if report is None:
-        typer.echo(
-            f"no memory here yet. Start one with {layout_for(project).constitution()}"
-        )
+        typer.echo(f"no memory here yet. Start one with {layout_for(project).constitution()}")
         return
 
     typer.echo(f"page       {report['page_chars']} characters (budget {report['page_budget']})")
@@ -1364,9 +1292,7 @@ def memory(
 @app.command(rich_help_panel=AFTER)
 @_guarded
 def learn(
-    path: Optional[Path] = typer.Argument(
-        None, help="A card, or a folder in the project [default: here]."
-    ),
+    path: Optional[Path] = typer.Argument(None, help="A card, or a folder in the project [default: here]."),
     binding: Optional[Path] = typer.Option(
         None, "--binding", "-b", help="Binding whose `learner` role reads the night."
     ),
@@ -1380,9 +1306,7 @@ def learn(
     spec = load_binding(binding)
 
     if not keeps_memory(project):
-        typer.echo(
-            f"no memory here yet. Start one with {layout_for(project).constitution()}"
-        )
+        typer.echo(f"no memory here yet. Start one with {layout_for(project).constitution()}")
         return
 
     async def _go():
@@ -1426,13 +1350,9 @@ def eject(
         _fail(f"{target} already exists")
 
     graph = build_graph(task)
-    document = graph.model_dump(
-        mode="json", by_alias=True, exclude_none=True, exclude_defaults=True
-    )
+    document = graph.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_defaults=True)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    target.write_text(yaml.safe_dump(document, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
     kept: dict[str, Any] = {"name": task.name, "folder": task.folder}
     if task.every is not None:
@@ -1448,9 +1368,7 @@ def eject(
     except ValueError:  # a different drive on Windows: no relative path exists
         named = target.as_posix()
     kept["graph"] = named
-    task_path.write_text(
-        yaml.safe_dump(kept, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
+    task_path.write_text(yaml.safe_dump(kept, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
     _ok(f"wrote {target}")
     typer.echo(f"{task_path} now names it (comments in it were not preserved)")
@@ -1471,7 +1389,8 @@ def _resolve_store(store: "Path | None") -> Path:
 @_guarded
 def runs_list(
     store: Optional[Path] = typer.Option(
-        None, "--store",
+        None,
+        "--store",
         help="Where the run history lives [default: the project's runs/].",
     ),
     limit: int = typer.Option(20, "--limit", "-n"),
@@ -1494,7 +1413,7 @@ def runs_list(
         usage = row.get("usage") or {}
         typer.secho(
             f"{row.get('run_id'):<26} {row.get('status'):<10} "
-            f"{row.get('task','-'):<16} {row.get('graph','-'):<20} "
+            f"{row.get('task', '-'):<16} {row.get('graph', '-'):<20} "
             f"steps={row.get('steps')} out={usage.get('output_tokens', 0)}",
             fg=color,
         )
@@ -1505,7 +1424,8 @@ def runs_list(
 def runs_show(
     run_id: str = typer.Argument(..., help="Run id from `poieo runs list`."),
     store: Optional[Path] = typer.Option(
-        None, "--store",
+        None,
+        "--store",
         help="Where the run history lives [default: the project's runs/].",
     ),
     as_json: bool = typer.Option(False, "--json", help="Print raw events."),

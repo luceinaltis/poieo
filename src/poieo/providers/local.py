@@ -57,15 +57,11 @@ def _translate_history(request: LLMRequest, arguments_as_json: bool) -> list[dic
                         "type": "function",
                         "function": {
                             "name": call["name"],
-                            "arguments": json.dumps(arguments)
-                            if arguments_as_json
-                            else arguments,
+                            "arguments": json.dumps(arguments) if arguments_as_json else arguments,
                         },
                     }
                 )
-            messages.append(
-                {"role": "assistant", "content": message.get("content") or "", "tool_calls": calls}
-            )
+            messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
         else:
             messages.append(dict(message))
     return messages
@@ -88,10 +84,15 @@ class _HttpProvider(Provider):
         key = credential_for(name, spec)
         if key:
             headers["authorization"] = f"Bearer {key}"
+        # Laid over rather than replacing, so an endpoint that wants its key
+        # somewhere else can say so without also having to restate the parts
+        # every endpoint shares.
+        headers.update(spec.headers)
         self.client = httpx.AsyncClient(
             base_url=(spec.base_url or "").rstrip("/"),
             timeout=spec.timeout,
             headers=headers,
+            params=spec.query or None,
         )
         # Asked once per model and remembered. A window does not change while
         # a process runs, and this must not become a round trip per turn.
@@ -182,12 +183,10 @@ class OpenAICompatibleProvider(_HttpProvider):
         data = await self._post("/chat/completions", payload)
         choices = data.get("choices") or []
         if not choices:
-            raise ProviderError(
-                f"{self.name}: response contained no choices", provider=self.name
-            )
+            raise ProviderError(f"{self.name}: response contained no choices", provider=self.name)
         message = choices[0].get("message") or {}
         tool_calls = []
-        for call in (message.get("tool_calls") or []):
+        for call in message.get("tool_calls") or []:
             raw = call["function"].get("arguments") or "{}"
             try:
                 arguments = json.loads(raw)
@@ -219,6 +218,10 @@ class OpenAICompatibleProvider(_HttpProvider):
                 output_tokens=usage.get("completion_tokens", 0) or 0,
                 cache_read_tokens=details.get("cached_tokens", 0) or 0,
                 cache_write_tokens=details.get("cache_write_tokens", 0) or 0,
+                reasoning_tokens=(usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0) or 0,
+                # Absent means the endpoint did not say, which is a different
+                # fact from having charged nothing.
+                cost=usage.get("cost"),
             ),
             stop_reason=choices[0].get("finish_reason"),
             tool_calls=tool_calls,

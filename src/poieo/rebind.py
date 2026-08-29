@@ -139,11 +139,7 @@ def _repoint(text: str, role: str, provider: str, model: str) -> str:
     # at whatever depth its siblings already use.
     start, end = roles
     siblings = [i for i in range(start + 1, end) if lines[i].strip()]
-    depth = (
-        len(lines[siblings[0]]) - len(lines[siblings[0]].lstrip())
-        if siblings
-        else len(INDENT)
-    )
+    depth = len(lines[siblings[0]]) - len(lines[siblings[0]].lstrip()) if siblings else len(INDENT)
     pad = " " * depth
     at = (siblings[-1] + 1) if siblings else end
     lines[at:at] = [
@@ -200,10 +196,7 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
         declared = set(load_binding(path).providers)
     except SpecError as exc:
         path.write_text(original, encoding="utf-8")
-        raise SpecError(
-            f"adding to {path} would have broken it ({exc}); it has been left "
-            f"exactly as it was"
-        ) from exc
+        raise SpecError(f"adding to {path} would have broken it ({exc}); it has been left exactly as it was") from exc
 
     added = [engine.key for engine in fresh]
     if not set(added) <= declared:
@@ -226,10 +219,7 @@ def point_at(path: Path, role: str, provider: str, model: str) -> None:
 
     declared = load_binding(path).providers
     if provider not in declared:
-        raise SpecError(
-            f"{path} declares no provider '{provider}'; it has: "
-            f"{', '.join(sorted(declared))}"
-        )
+        raise SpecError(f"{path} declares no provider '{provider}'; it has: {', '.join(sorted(declared))}")
 
     try:
         updated = _repoint(original, role, provider, model)
@@ -249,7 +239,4 @@ def point_at(path: Path, role: str, provider: str, model: str) -> None:
         # Surgery is verified by reloading, and a bad result is undone rather
         # than left on somebody's disk.
         path.write_text(original, encoding="utf-8")
-        raise SpecError(
-            f"editing {path} would have broken it ({exc}); it has been left "
-            f"exactly as it was"
-        ) from exc
+        raise SpecError(f"editing {path} would have broken it ({exc}); it has been left exactly as it was") from exc

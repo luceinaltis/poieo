@@ -1,0 +1,327 @@
+# The gate from AGENTS.md Part 2, run on every pull request.
+#
+# It does not block a merge -- `main` is unprotected by choice -- so this
+# reports, and a person still decides. What it removes is the honour system
+# under condition 1: the run is here whether or not anyone pasted it.
+#
+# The Python suite runs on the OS this is developed on and on the OS it is not,
+# and on the newest Python as well as the oldest one `requires-python` claims.
+# Everything else here is Ubuntu on 3.10, and macOS is nowhere. See
+# docs/contribution.md for what that leaves.
+
+name: gate
+
+on:
+  # No base-branch filter: a PR stacked on another branch is a documented
+  # workflow here, and filtering on `main` would give those no run at all.
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: gate-${{ github.ref }}
+  # Supersede a PR's older run, never a run on `main` -- back-to-back merges
+  # would otherwise cancel the run that names which commit broke it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    name: python suite (${{ matrix.os }}, ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every result, always. Cancelling the rest on the first red is exactly
+      # backwards here: "one OS, one version, or all of them" is the question
+      # the extra runners were added to answer, and fail-fast deletes it.
+      fail-fast: false
+      matrix:
+        # Spelled out rather than crossed, because the full cross is six runs
+        # to answer three questions. A matrix rather than three jobs, so there
+        # is one pytest invocation to change when it changes: two copies drift,
+        # and the copy that drifts is the one nobody is looking at.
+        include:
+          # The floor `requires-python` declares. It is also what this is
+          # developed on, so it is the one combination already known to work
+          # before CI says anything.
+          - os: ubuntu-latest
+            python: "3.10"
+          # The OS it is developed on. Windows is where `run_command` chooses a
+          # shell, where paths get rewritten, and where a process tree is killed
+          # by name -- and none of that ran anywhere until it ran here.
+          - os: windows-latest
+            python: "3.10"
+          # The ceiling nobody declared. `>=3.10` has no upper bound, so every
+          # release since is a version this package claims to install on and has
+          # never been run on. One end of that range is enough: a break arrives
+          # with a release, and the newest is the one that has it.
+          - os: ubuntu-latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      # No PYTEST_DISABLE_PLUGIN_AUTOLOAD, no -p asyncio. Those are a local
+      # workaround for a broken global plugin; a clean environment needs
+      # neither, and this job is the check that they stay local.
+      - run: pytest -q
+
+  lint:
+    name: lint and format
+    runs-on: ubuntu-latest
+    # Its own job, not a step in the matrix. Ruff reads the same bytes and
+    # reaches the same verdict on every row, so inside the matrix it is either
+    # three copies of one answer or a conditional pinning it to one row -- and
+    # the conditional has to be re-pinned every time a row is added. Out here it
+    # runs once by construction, and in parallel with the suite rather than
+    # after it, which is what Part 2's ordering was protecting: a long line must
+    # never cost the run its test result.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      # The pinned ruff from `[dev]`, not the newest one. A formatter that
+      # updates underneath the repository turns every PR red at once.
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      # --check, never a rewrite: CI reports, and the author commits.
+      - run: ruff format --check .
+
+  web:
+    name: frontend suite, types, and bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test --workspace web-ui
+      - name: types
+        run: npx tsc -b
+        working-directory: web-ui
+
+      # Neither suite reads src/poieo/web/static/, so it drifts in silence.
+      # vite builds straight into it, so rebuilding and finding no change is
+      # proof the committed bundle matches the source it claims to come from.
+      - name: the checked-in bundle is current
+        run: |
+          npm run build --workspace web-ui
+          # --porcelain, not `git diff`: an asset missing from the commit comes
+          # back as untracked, and a diff would call that clean.
+          if [ -n "$(git status --porcelain -- src/poieo/web/static/)" ]; then
+            echo "::error::src/poieo/web/static/ does not match web-ui/src/."
+            echo "Run: npm run build --workspace web-ui, then commit the result."
+            git status --short -- src/poieo/web/static/
+            exit 1
+          fi
+
+  isolation:
+    name: container isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+
+      # The module skips itself unless the daemon answers *and* the image is
+      # already local -- it never pulls, so no test is slow for a reason that
+      # has nothing to do with isolation. The runner has the daemon; this is
+      # the image.
+      - run: docker pull alpine:3.20
+
+      # A skip here exits 0, which would be a green check that checked nothing
+      # -- the same shape of hole the bundle check had. Say so out loud.
+      - name: isolation suite
+        run: |
+          out=$(pytest -q tests/test_tools_docker.py)
+          echo "$out"
+          if echo "$out" | grep -q "skipped"; then
+            echo "::error::the isolation tests skipped rather than ran."
+            echo "A green run here would mean nothing. Check docker and the image."
+            exit 1
+          fi
+
+  cli:
+    name: the installed package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # `.`, not `-e .`. tests/conftest.py puts src/ on sys.path, so every other
+      # job proves the *source* imports and none proves the package installs or
+      # that the console script exists -- it is not installed on the machine
+      # this is developed on at all.
+      - run: pip install .
+
+      # Everything below runs outside the checkout on purpose: inside it, src/
+      # would answer an import whether or not the install did.
+      - name: every command answers for itself
+        working-directory: /tmp
+        run: |
+          poieo --help > /dev/null
+          # Enumerated from the app, never written out here: a hand-kept list
+          # goes stale the first time somebody adds a command, and silently.
+          python -c "
+          import typer, poieo.cli as c
+          stack, out = [((), typer.main.get_command(c.app))], []
+          while stack:
+              path, node = stack.pop()
+              if path:
+                  out.append(' '.join(path))
+              for name, sub in getattr(node, 'commands', {}).items():
+                  stack.append((path + (name,), sub))
+          print(chr(10).join(sorted(out)))
+          " > commands.txt
+          # A loop over an empty list passes, which would be a green check that
+          # checked nothing. There are 24 today; ten is a floor, not a count.
+          echo "$(wc -l < commands.txt) commands"
+          test "$(wc -l < commands.txt)" -ge 10
+          while read -r cmd; do
+            poieo $cmd --help > /dev/null
+          done < commands.txt
+
+      # The daemon serves `src/poieo/web/static/`, which is not a package and
+      # so was not in the wheel at all: `poieo daemon` started, answered, and
+      # served an empty page, guarded by `page.exists()` so it did not even
+      # crash. Nothing caught it because nothing installs what this project
+      # ships -- which is the hole this job was opened for.
+      - name: the installed package has a board to serve
+        env:
+          SOURCE: ${{ github.workspace }}/src/poieo/web/static
+        working-directory: /tmp
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from poieo.web.server import STATIC_DIR
+          from starlette.staticfiles import StaticFiles
+
+          # Every file against the checkout's, by relative path -- not "is
+          # index.html there". A pattern that matches the bundle's shape today
+          # and not tomorrow's drops files while leaving the obvious ones in
+          # place, and a check that names the obvious ones stays green over it.
+          def contents(root: Path) -> set[str]:
+              return {
+                  str(p.relative_to(root)).replace(os.sep, "/")
+                  for p in root.rglob("*")
+                  if p.is_file()
+              }
+
+          source = contents(Path(os.environ["SOURCE"]))
+          shipped = contents(STATIC_DIR) if STATIC_DIR.is_dir() else set()
+
+          if missing := sorted(source - shipped):
+              raise SystemExit(
+                  f"::error::the installed package is missing {len(missing)} of "
+                  f"{len(source)} board files, starting with {missing[:5]}. "
+                  f"Widen [tool.setuptools.package-data] in pyproject.toml."
+              )
+          # Mounting is what the server does at startup, and it raises on a
+          # missing directory -- so this is the failure a user would hit.
+          StaticFiles(directory=str(STATIC_DIR))
+          print(f"ok: all {len(source)} board files shipped")
+          PY
+
+      - name: a project can be made and run without a model
+        working-directory: /tmp
+        run: |
+          mkdir -p smoke && cd smoke
+          poieo init --mock
+          poieo run tasks/hello.yaml
+          # Exit codes alone would pass on a command that printed nothing, and
+          # the run has to reach the log for any of this to have meant anything.
+          poieo runs list | grep -q completed
+          poieo tasks | grep -q hello
+
+      # The step above proves the board's files are *in* the package. This one
+      # proves the daemon *serves* them, which is the other half and the half a
+      # person would notice: `poieo daemon` mounts static only `if
+      # page.exists()`, so a package missing the board starts, answers, and
+      # serves nothing, without a crash or a line in the log.
+      - name: the daemon serves the board it shipped
+        working-directory: /tmp/smoke
+        run: |
+          # The sample card ships disabled -- the daemon has nothing to keep up
+          # without it, warns, and stops.
+          sed -i 's/^enabled: false/enabled: true/' tasks/hello.yaml
+          poieo daemon --port 8599 > daemon.log 2>&1 &
+
+          for _ in $(seq 1 30); do
+            curl -sf -o page.html http://127.0.0.1:8599/ && break
+            sleep 1
+          done
+          test -s page.html || { echo "::error::the board never answered"; cat daemon.log; exit 1; }
+
+          # Not "index.html came back": the bundle it names has to come back
+          # too, or the page is a shell with nothing behind it.
+          ASSET=$(grep -o '/assets/[^"]*\.js' page.html | head -1)
+          test -n "$ASSET" || { echo "::error::the page names no bundle"; cat page.html; exit 1; }
+          curl -sf -o /dev/null "http://127.0.0.1:8599$ASSET"
+
+          # And the API, because a page with no daemon behind it is just a file.
+          curl -sf http://127.0.0.1:8599/api/tasks | grep -q '"tasks"'
+
+          # Staying up is the default; stopping on request is not optional.
+          kill %1
+          sleep 3
+          if curl -sf -o /dev/null --max-time 3 http://127.0.0.1:8599/; then
+            echo "::error::the daemon was told to stop and kept answering"; exit 1
+          fi
+          echo "board, bundle, api, and a clean stop"
+
+  # A number, never a gate. A floor that must not drop rewards a test that runs
+  # code and asserts nothing about it -- a thing this repository has actually
+  # shipped, green, for weeks. What the number is worth is its movement: 92%
+  # today, and a change that takes it to 85% is worth a sentence in the PR.
+  #
+  # Ubuntu only. Coverage asks which lines ran, and that answer does not differ
+  # by OS the way the suite's own can.
+  coverage:
+    name: what is not covered
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+      # Docker is here so the isolation tests run rather than skip, which is the
+      # difference between tools/docker.py reading as untested and reading as
+      # covered. A coverage number taken with a third of the suite skipped is a
+      # worse lie than no number.
+      - run: docker pull alpine:3.20
+      - run: pytest -q --cov=poieo --cov-report=json --cov-report=term
+
+      - name: put it where a reviewer will see it
+        run: |
+          python - <<'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          d = json.load(open("coverage.json"))
+          total = d["totals"]["percent_covered"]
+          worst = sorted(
+              d["files"].items(), key=lambda kv: kv[1]["summary"]["percent_covered"]
+          )[:8]
+
+          print("## {:.0f}% covered".format(total))
+          print()
+          print("Not a gate. The number is worth what its movement is worth.")
+          print()
+          print("Least covered, which is where to look:")
+          print()
+          print("| file | covered | lines missed |")
+          print("|---|---|---|")
+          for name, f in worst:
+              s = f["summary"]
+              print("| `{}` | {:.0f}% | {} |".format(
+                  name, s["percent_covered"], s["missing_lines"]))
+          PYEOF

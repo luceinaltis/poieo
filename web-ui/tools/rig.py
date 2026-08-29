@@ -34,9 +34,7 @@ def task_id() -> str:
 
 def start() -> None:
     source = meshy.tasks()["smith"]["refine"]
-    result = meshy.call(
-        "/v1/rigging", {"input_task_id": source, "height_meters": 1.8}
-    )
+    result = meshy.call("/v1/rigging", {"input_task_id": source, "height_meters": 1.8})
     remember(result["result"])
     print("  rigging queued")
 
@@ -65,9 +63,7 @@ def fetch() -> None:
     # field name, not the extension.
     payload = task.get("result") if isinstance(task.get("result"), dict) else task
     urls = {
-        name: url
-        for name, url in payload.items()
-        if isinstance(url, str) and "glb" in name and url.startswith("http")
+        name: url for name, url in payload.items() if isinstance(url, str) and "glb" in name and url.startswith("http")
     }
     if not urls:
         print("  no glb in response; fields:", list(payload))

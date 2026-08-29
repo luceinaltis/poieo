@@ -4,6 +4,7 @@ nothing here is worth raising over.
 """
 
 from conftest import at
+
 import poieo.blob as blob
 from poieo.blob import digest, path_for, store
 

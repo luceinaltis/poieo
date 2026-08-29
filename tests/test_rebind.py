@@ -150,8 +150,7 @@ def test_pointing_a_role_that_already_exists_moves_it(tmp_path):
     # the substring -- the file's own worked example is a comment saying
     # `classifier:` too.
     entries = [
-        line for line in _read(path).splitlines()
-        if line.strip() == "classifier:" and not line.lstrip().startswith("#")
+        line for line in _read(path).splitlines() if line.strip() == "classifier:" and not line.lstrip().startswith("#")
     ]
     assert len(entries) == 1
 
@@ -179,9 +178,7 @@ def test_a_roles_entry_keeps_its_own_params(tmp_path):
 
     path = _written(
         tmp_path,
-        GENERATED
-        + 'roles:\n  writer:\n    provider: ollama\n    model: "b:2"\n'
-        "    params:\n      temperature: 0\n",
+        GENERATED + 'roles:\n  writer:\n    provider: ollama\n    model: "b:2"\n    params:\n      temperature: 0\n',
     )
     point_at(path, "writer", "claude", "claude-opus-5")
 

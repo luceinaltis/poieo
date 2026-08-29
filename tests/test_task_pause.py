@@ -1,14 +1,14 @@
 """A task that fails the same way three times pauses itself and says so."""
 
-from poieo.layout import layout_for
 import asyncio
 from types import SimpleNamespace
 
 from conftest import card
+
 from poieo.daemon import Daemon, load_config
 from poieo.daemon.service import PAUSE_AFTER, TaskRunner
+from poieo.layout import layout_for
 from poieo.store import NullStore
-
 
 # -- the counter, in isolation ------------------------------------------------
 
@@ -78,8 +78,7 @@ default: {provider: fake, model: m}
 def _config(tmp_path):
     (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
     (tmp_path / "b.yaml").write_text(_PROSE_MOCK, encoding="utf-8")
-    card(tmp_path / "cards", "doomed",
-         "graph: ../g.yaml\ntrigger: {type: loop, cooldown: 0}\n")
+    card(tmp_path / "cards", "doomed", "graph: ../g.yaml\ntrigger: {type: loop, cooldown: 0}\n")
     path = tmp_path / "poieo.yaml"
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
     config = load_config(path)
@@ -113,17 +112,17 @@ async def test_an_identically_failing_flow_pauses_after_three_runs(tmp_path):
 
 async def test_a_paused_task_says_why_in_its_journal(tmp_path):
     (tmp_path / "b.yaml").write_text(
-        'name: mock\n'
-        'providers:\n'
-        '  fake:\n'
-        '    type: mock\n'
-        '    options:\n'
-        '      responses:\n'
+        "name: mock\n"
+        "providers:\n"
+        "  fake:\n"
+        "    type: mock\n"
+        "    options:\n"
+        "      responses:\n"
         '        "*":\n'
-        '          - tool_calls: [{name: list_dir, arguments: {}}]\n'
-        '          - tool_calls: [{name: list_dir, arguments: {}}]\n'
-        '          - tool_calls: [{name: list_dir, arguments: {}}]\n'
-        'default: {provider: fake, model: m}\n',
+        "          - tool_calls: [{name: list_dir, arguments: {}}]\n"
+        "          - tool_calls: [{name: list_dir, arguments: {}}]\n"
+        "          - tool_calls: [{name: list_dir, arguments: {}}]\n"
+        "default: {provider: fake, model: m}\n",
         encoding="utf-8",
     )
     tasks = tmp_path / "tasks"

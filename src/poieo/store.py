@@ -169,6 +169,36 @@ class RunStore:
             rows.append(row)
         return rows
 
+    def spent_since(self, cutoff: str, project: str | None = None) -> float:
+        """What the runs finishing after `cutoff` are known to have cost.
+
+        Read backwards and stopped at the first run older than the cutoff --
+        the index grows for the daemon's lifetime and this is asked before
+        every fire, so it must not walk the whole of it.
+
+        **A run that never said what it cost counts as nothing.** For a local
+        model that is exactly right. For a paid endpoint that was not asked it
+        understates, and a limit set against it will let spend through; the
+        answer to that is to ask the endpoint or declare the prices, not to
+        refuse to enforce anything.
+        """
+        total = 0.0
+        seen: set[str] = set()
+        for row in self._index_backwards():
+            finished = str(row.get("finished_at") or "")
+            if finished and finished < cutoff:
+                break
+            if project and row.get("project") != project:
+                continue
+            run_id = str(row.get("run_id", ""))
+            if run_id in seen:
+                continue
+            seen.add(run_id)
+            cost = (row.get("usage") or {}).get("cost")
+            if isinstance(cost, (int, float)):
+                total += float(cost)
+        return total
+
     def summary(self, run_id: str) -> dict[str, Any] | None:
         """The index row for one run, or None if the store never saw it."""
         for row in self._index_backwards(containing=run_id):

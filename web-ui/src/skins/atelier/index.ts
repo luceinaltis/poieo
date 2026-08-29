@@ -67,20 +67,10 @@ const BASE_HALF = 3.2
  * "facing the work" was chosen by sweeping candidates in tools/bench.html
  * (?facing=45 and so on) and looking at the room view.
  */
-export let FACING = Math.PI * 0.25
-
-/** Tool-only override, so bench.html can photograph facing candidates. */
-export function turnFigure(angle: number) {
-  FACING = angle
-}
+const FACING = Math.PI * 0.25
 
 /** Which way the anvil lies under him; see tools/bench.html. */
-export let ANVIL_TURN = 0
-
-/** Tool-only override, so bench.html can photograph the candidates. */
-export function turnAnvil(angle: number) {
-  ANVIL_TURN = angle
-}
+const ANVIL_TURN = 0
 
 /**
  * How far the anvil's face stands off the floor.
@@ -98,15 +88,10 @@ export function turnAnvil(angle: number) {
  * what makes it read as an anvil rather than a wedge lying on the floor, and
  * the face is close enough to the blow that the hammer meets it.
  */
-export let ANVIL_FACE = 0.38
+const ANVIL_FACE = 0.38
 
 /** How long the anvil is, nose to heel; its height follows from the model. */
 const ANVIL_LONG = 0.92
-
-/** Tool-only override, so bench.html can photograph the candidates. */
-export function standAnvil(face: number) {
-  ANVIL_FACE = face
-}
 
 /** Which hand the model holds its hammer in. */
 const HAMMER_HAND = "Right"

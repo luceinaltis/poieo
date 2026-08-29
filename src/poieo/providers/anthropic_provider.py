@@ -50,10 +50,7 @@ def _matches(model: str, families: tuple[str, ...]) -> bool:
 
 
 def _anthropic_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
-    return [
-        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-        for t in tools
-    ]
+    return [{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools]
 
 
 def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -104,6 +101,20 @@ def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class AnthropicProvider(Provider):
     type = "anthropic"
 
+    # The same Claude, sold at three counters. Companies reach it through
+    # Bedrock or Vertex because the billing and the security review already run
+    # through the cloud account they have; many will not register a card with
+    # Anthropic separately. What differs is the door, not the model -- and the
+    # door signs its requests with AWS or Google credentials rather than taking
+    # an API key, which is why a header could never have bridged it.
+    #
+    # The SDK poieo already installs has all three clients. Nothing new is
+    # needed here but the choosing.
+    _DOORS = {
+        "bedrock": "AsyncAnthropicBedrock",
+        "vertex": "AsyncAnthropicVertex",
+    }
+
     def __init__(self, name: str, spec: ProviderSpec):
         super().__init__(name, spec)
         kwargs: dict[str, Any] = {
@@ -112,12 +123,29 @@ class AnthropicProvider(Provider):
         }
         if spec.base_url:
             kwargs["base_url"] = spec.base_url
-        key = credential_for(name, spec)
-        if key:
-            kwargs["api_key"] = key
-        # With no explicit key the SDK resolves ANTHROPIC_API_KEY, an auth token,
-        # or an `ant auth login` profile on its own.
-        self.client = anthropic.AsyncAnthropic(**kwargs)
+
+        options = dict(spec.options or {})
+        through = str(options.pop("through", "") or "").lower()
+        if through and through not in self._DOORS:
+            # Refused rather than ignored. A typo here would send every request
+            # to Anthropic directly and bill the wrong account, which is the
+            # kind of mistake that is noticed at the end of the month.
+            raise ProviderError(
+                f"provider '{name}': unknown `through: {through}` -- known doors: {', '.join(sorted(self._DOORS))}",
+                provider=name,
+            )
+        if through:
+            # No `api_key`: these authenticate with the cloud account, whose
+            # credentials their own SDK resolves the way boto3 and gcloud do.
+            # Whatever else the binding said (a region, a project) is theirs.
+            self.client = getattr(anthropic, self._DOORS[through])(**kwargs, **options)
+        else:
+            key = credential_for(name, spec)
+            if key:
+                kwargs["api_key"] = key
+            # With no explicit key the SDK resolves ANTHROPIC_API_KEY, an auth
+            # token, or an `ant auth login` profile on its own.
+            self.client = anthropic.AsyncAnthropic(**kwargs)
         self.warnings: list[str] = []
 
     def _build_kwargs(self, request: LLMRequest) -> dict[str, Any]:
@@ -157,13 +185,9 @@ class AnthropicProvider(Provider):
             else:
                 self._warn(f"model '{model}' does not support effort; ignoring")
         # Disabled thinking is only accepted at effort high or below.
-        if (
-            kwargs.get("thinking", {}).get("type") == "disabled"
-            and output_config.get("effort") in {"xhigh", "max"}
-        ):
+        if kwargs.get("thinking", {}).get("type") == "disabled" and output_config.get("effort") in {"xhigh", "max"}:
             raise ProviderError(
-                f"model '{model}': thinking cannot be disabled at effort "
-                f"'{output_config['effort']}'",
+                f"model '{model}': thinking cannot be disabled at effort '{output_config['effort']}'",
                 provider=self.name,
             )
         if output_config:
@@ -204,9 +228,7 @@ class AnthropicProvider(Provider):
                 retryable=exc.status_code == 429 or exc.status_code >= 500,
             ) from exc
         except anthropic.APIConnectionError as exc:
-            raise ProviderError(
-                f"{self.name}: connection error: {exc}", provider=self.name, retryable=True
-            ) from exc
+            raise ProviderError(f"{self.name}: connection error: {exc}", provider=self.name, retryable=True) from exc
 
         if message.stop_reason == "refusal":
             details = getattr(message, "stop_details", None)
@@ -222,9 +244,7 @@ class AnthropicProvider(Provider):
             for b in message.content
             if b.type == "tool_use"
         ]
-        thinking = "\n".join(
-            getattr(b, "thinking", "") for b in message.content if b.type == "thinking"
-        )
+        thinking = "\n".join(getattr(b, "thinking", "") for b in message.content if b.type == "thinking")
         usage = message.usage
         return LLMResponse(
             text=text,

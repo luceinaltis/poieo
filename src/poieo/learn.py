@@ -197,10 +197,7 @@ def _prompt(
     lines.append("Records not yet learned from, oldest first:")
     for record in records:
         summary = " ".join(str(record.get("summary", "")).split())
-        lines.append(
-            f"- {record.get('run_id')} · {record.get('task')} · "
-            f"{record.get('status')} · {summary}"
-        )
+        lines.append(f"- {record.get('run_id')} · {record.get('task')} · {record.get('status')} · {summary}")
     lines += [
         "",
         "Answer with JSON only, no prose:",
@@ -261,9 +258,7 @@ def _apply(
         if not stranded:
             break
         for raw in stranded:
-            result.dropped.append(
-                f"'{raw['slug']}': names '{_dangling(raw, ok)}', which does not exist"
-            )
+            result.dropped.append(f"'{raw['slug']}': names '{_dangling(raw, ok)}', which does not exist")
             accepted.remove(raw)
 
     for raw in accepted:
@@ -308,9 +303,7 @@ def _vet_entry(raw: Any, taken: set[str]) -> str | None:
         return f"'{slug}': an entry needs something to say"
     for key in ("scope", "anchors", "from"):
         value = raw.get(key)
-        if value is not None and not (
-            isinstance(value, list) and all(isinstance(item, str) for item in value)
-        ):
+        if value is not None and not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             return f"'{slug}': '{key}' must be a list of strings"
     links = raw.get("links")
     if links is not None:
@@ -331,9 +324,7 @@ def _dangling(raw: dict[str, Any], ok: set[str]) -> str | None:
     return None
 
 
-def _write_entry(
-    project_dir: Path, raw: dict[str, Any], shown: list[str], result: PassResult
-) -> None:
+def _write_entry(project_dir: Path, raw: dict[str, Any], shown: list[str], result: PassResult) -> None:
     from . import blob
 
     # The harness stamps the source: whatever the model claimed is cut to
@@ -394,9 +385,7 @@ def _set_aside(path: Path, because: str) -> None:
     path.write_text("\n".join(new), encoding="utf-8")
 
 
-def _strengthen(
-    project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]
-) -> None:
+def _strengthen(project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]) -> None:
     """Three factors or nothing: both entries cited in the run's own output,
     the run completed, and a declared connection between them. Co-presence
     alone earns nothing -- reinforcing what retrieval already picks is how
@@ -425,10 +414,7 @@ def _followable(one: Entry, other: Entry) -> bool:
     either side. Never disagrees -- and a disagreement is a veto, not one
     vote among the connections, or "this disputes [[x]]" would strengthen the
     disputed pair in through its own mention."""
-    if (
-        other.slug in one.matter.links.contradicts
-        or one.slug in other.matter.links.contradicts
-    ):
+    if other.slug in one.matter.links.contradicts or one.slug in other.matter.links.contradicts:
         return False
     return (
         other.slug in one.mentions
@@ -467,9 +453,7 @@ def _to_attic(project_dir: Path, entries: list[Entry]) -> list[str]:
             attic.mkdir(exist_ok=True)
             target = attic / entry.path.name
             if target.exists():
-                log.warning(
-                    "the attic already holds %s; leaving it in place", entry.path.name
-                )
+                log.warning("the attic already holds %s; leaving it in place", entry.path.name)
                 continue
             entry.path.rename(target)
             moved.append(entry.slug)

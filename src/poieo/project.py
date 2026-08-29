@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,6 +42,28 @@ __all__ = [
 ]
 
 
+class SpendSpec(BaseModel):
+    """A ceiling on what this project may spend, as a rate.
+
+    A rate rather than a total, because a daemon has no end: "no more than a
+    dollar an hour" is a sentence somebody can mean, and "no more than twenty
+    dollars, ever" is one they would have to keep resetting.
+
+    The exposure is not one run -- forty turns measured here cost two and a
+    half cents -- it is a board firing all night. A handoff loop early in this
+    project burnt $0.19 in ten minutes, which left alone is $27 a day.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # In whatever currency the endpoint bills in. poieo does not know one
+    # currency from another and does not need to: it adds up what it was told
+    # and compares it to what it was given.
+    limit: float = Field(gt=0)
+    # How far back to look. A duration the way every other one here is spelled.
+    over: str = "1h"
+
+
 class ProjectSpec(BaseModel):
     """The shared defaults a ``poieo.yaml`` declares: where things live.
 
@@ -60,6 +82,11 @@ class ProjectSpec(BaseModel):
     # Where a run's events and its result are written. Moves the run history
     # and nothing else: the memory and the working copies stay with the project.
     store: str = "runs"
+    # What this project may spend per unit time, if anybody said. `None` means
+    # nobody has, and nothing is enforced -- which is the right default for a
+    # local model that costs nothing and the honest one for an endpoint whose
+    # charges poieo cannot see.
+    spend: SpendSpec | None = None
     # Default binding for every task here, and for `poieo run`.
     binding: str | None = None
     # The folder of cards. Named for what is in it, while the document key
@@ -114,8 +141,7 @@ def load_project(path: str | Path) -> ProjectSpec:
         project = ProjectSpec.model_validate(data)
     except Exception as exc:
         raise SpecError(
-            f"{path}: invalid project file: "
-            f"{describe_invalid(exc, tuple(ProjectSpec.model_fields))}"
+            f"{path}: invalid project file: {describe_invalid(exc, tuple(ProjectSpec.model_fields))}"
         ) from exc
     project.source_path = path.resolve()
     return project
@@ -406,10 +432,7 @@ def nothing_found() -> str:
     One wording, here, because the sentence a user reads is a thing with one
     wording and two copies are two chances for that to stop being true.
     """
-    looked = "\n".join(
-        f"  {c.label:<16} {c.base_url or 'ANTHROPIC_API_KEY, or `ant auth login`'}"
-        for c in CANDIDATES
-    )
+    looked = "\n".join(f"  {c.label:<16} {c.base_url or 'ANTHROPIC_API_KEY, or `ant auth login`'}" for c in CANDIDATES)
     return (
         "nothing on this machine can answer yet. poieo looked for:\n\n"
         f"{looked}\n\n"
@@ -420,9 +443,7 @@ def nothing_found() -> str:
     )
 
 
-def init_project(
-    root: Path, default_body: str, name: str | None = None
-) -> list[tuple[str, str]]:
+def init_project(root: Path, default_body: str, name: str | None = None) -> list[tuple[str, str]]:
     """Write a working project into ``root``; never touch an existing file.
 
     ``default_body`` is the binding the caller settled on -- see
@@ -465,9 +486,7 @@ def init_project(
         report.append(("kept", ".gitignore"))
     else:
         joined = existing + ("" if existing.endswith("\n") or not existing else "\n")
-        gitignore.write_text(
-            joined + "".join(f"{line}\n" for line in missing), encoding="utf-8"
-        )
+        gitignore.write_text(joined + "".join(f"{line}\n" for line in missing), encoding="utf-8")
         report.append(("wrote", ".gitignore"))
 
     # A generated project that cannot load is an init bug, caught here and not

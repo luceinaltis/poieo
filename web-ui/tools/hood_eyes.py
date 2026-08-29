@@ -74,9 +74,7 @@ def eyes_in(picture: np.ndarray) -> list:
             continue  # white with nothing in it is a tooth, or a highlight
         if not ringed(blob, pupil):
             continue  # dark beside white is a tooth in shadow, not an iris
-        whole = ndimage.binary_fill_holes(
-            ndimage.binary_closing(blob | pupil, iterations=2)
-        )
+        whole = ndimage.binary_fill_holes(ndimage.binary_closing(blob | pupil, iterations=2))
         found.append(whole)
     return found
 
@@ -95,7 +93,14 @@ def ringed(white: np.ndarray, pupil: np.ndarray) -> bool:
     reach = int(max(white.sum() ** 0.5, 6))
     hits = 0
     for down, across in (
-        (0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1),
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
     ):
         for step in range(1, reach):
             row = middle[0] + down * step
@@ -148,15 +153,19 @@ def hood(source: Path, target: Path, drop: float, sheet: Path | None) -> None:
                 & (np.arange(eye.shape[0])[:, None] < top + tall * (drop + LASH))
             )
             pixels[edge] = (skin * 0.42).astype(int)
-            print(f"    eye at x{columns.min()}..{columns.max()} y{top}..{bottom}"
-                  f" ({int(eye.sum())} px), lid over its top {drop:.0%}")
+            print(
+                f"    eye at x{columns.min()}..{columns.max()} y{top}..{bottom}"
+                f" ({int(eye.sum())} px), lid over its top {drop:.0%}"
+            )
 
         if not found:
             continue
         buffer = io.BytesIO()
         Image.fromarray(pixels.astype(np.uint8)).save(
-            buffer, "PNG" if "png" in (image.get("mimeType") or "") else "JPEG",
-            quality=95, optimize=True,
+            buffer,
+            "PNG" if "png" in (image.get("mimeType") or "") else "JPEG",
+            quality=95,
+            optimize=True,
         )
         replaced[index] = buffer.getvalue()
         if sheet is not None:

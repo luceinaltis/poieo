@@ -123,7 +123,7 @@ PATH, so `grep` went 21/23 and `sed` 3/3 -- and then a heredoc came back
 the tool's description now opens by naming it, built from what was found rather
 than hardcoded.
 
-**`C:\Windows\System32ash.exe` is refused.** It is the WSL launcher: it
+**`C:\Windows\System32\bash.exe` is refused.** It is the WSL launcher: it
 starts a Linux distribution with its own filesystem, so the `cwd` points
 somewhere else entirely and the command *succeeds* there. Running quietly in
 the wrong directory is worse than failing in the right one.

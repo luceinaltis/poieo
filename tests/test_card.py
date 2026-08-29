@@ -9,12 +9,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from conftest import at
 
-from conftest import card, at
-from poieo.daemon.config import TaskSpec, load_config, load_tasks
-from poieo.errors import SpecError
-from poieo.graph import GraphSpec
-from poieo.store import NullStore
 from poieo.card import (
     CardSpec,
     append_journal,
@@ -24,6 +20,10 @@ from poieo.card import (
     read_journal,
     system_block,
 )
+from poieo.daemon.config import TaskSpec, load_config, load_tasks
+from poieo.errors import SpecError
+from poieo.graph import GraphSpec
+from poieo.store import NullStore
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -153,9 +153,7 @@ def write_graph(root: Path, stem: str) -> Path:
     tasks = root / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)
     path = tasks / f"{stem}.graph.yaml"
-    path.write_text(
-        "name: g\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8"
-    )
+    path.write_text("name: g\nentry: a\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8")
     return path
 
 
@@ -181,9 +179,7 @@ def test_a_file_answering_to_both_shapes_fails_rather_than_disappearing(tmp_path
     graph would drop a task from the roster without a word."""
     tasks = tmp_path / "tasks"
     tasks.mkdir()
-    (tasks / "both.yaml").write_text(
-        "name: both\nfolder: .\nnodes:\n  - {id: a, type: agent}\n", encoding="utf-8"
-    )
+    (tasks / "both.yaml").write_text("name: both\nfolder: .\nnodes:\n  - {id: a, type: agent}\n", encoding="utf-8")
     with pytest.raises(SpecError):
         load_cards(tasks)
 
@@ -302,8 +298,8 @@ def test_a_config_that_names_no_tasks_folder_has_no_jobs(tmp_path):
 
     loaded = load_config(config)
 
-    assert loaded.cards is None   # no folder named
-    assert loaded.tasks == []     # and so nothing to run
+    assert loaded.cards is None  # no folder named
+    assert loaded.tasks == []  # and so nothing to run
 
 
 # -- the journal -------------------------------------------------------------
@@ -407,9 +403,7 @@ async def test_a_run_writes_what_it_did_into_the_journal(tmp_path):
     for task in config.tasks:
         task.trigger.max_iterations = 1
 
-    await asyncio.wait_for(
-        Daemon(config, store=NullStore()).serve(install_signals=False), timeout=10
-    )
+    await asyncio.wait_for(Daemon(config, store=NullStore()).serve(install_signals=False), timeout=10)
 
     written = load_card(path).journal_path().read_text(encoding="utf-8")
     assert written.startswith("# one\n")
@@ -466,11 +460,10 @@ def test_isolation_reaches_the_flow(tmp_path):
 
 def test_isolation_survives_a_task_that_names_a_graph(tmp_path):
     """Unlike prompt/role/tools, isolation is not a node key -- eject keeps it."""
-    (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: n\nnodes: [{id: n, type: agent, role: r, prompt: hi}]\n"
-    )
+    (tmp_path / "g.yaml").write_text("name: g\nentry: n\nnodes: [{id: n, type: agent, role: r, prompt: hi}]\n")
     task, graph = expand(_load(tmp_path, "graph: g.yaml"))
     assert graph is None and task.isolation == Isolation(image="x")
+
 
 # -- the journal delivers, it does not just record ---------------------------
 #
@@ -654,8 +647,8 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
     """Three readers, one reading. The journal entry, the run record's summary
     and the change's commit subject all come from the last node that said
     anything -- so they can never tell a reader three stories about one run."""
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     result = _finished()
     assert closing_line(result) == "fixed the parser\nand tidied up\n"
@@ -664,8 +657,8 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
 
 
 def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     silent = _finished(path=["work"], outputs={"work": "   "})
     assert closing_line(silent) == "(said nothing)"
@@ -674,10 +667,10 @@ def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
 
 
 def test_a_long_line_is_clipped_for_the_commit_but_not_for_the_record():
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     said = "went through every file and " + "x" * 200
     result = _finished(path=["work"], outputs={"work": said})
-    assert closing_line(result) == said          # the record keeps all of it
+    assert closing_line(result) == said  # the record keeps all of it
     assert len(_change_message(result, "tidy")) == 72

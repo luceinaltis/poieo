@@ -10,27 +10,26 @@ import json
 from dataclasses import replace
 
 import pytest
+from conftest import EXAMPLES, at
+from test_card import write_card
 
-from conftest import card, EXAMPLES, at
-from poieo.layout import layout_for
 from poieo.binding import BindingSpec
+from poieo.card import (
+    JOURNAL_WIDTH,
+    card_payload,
+    load_card,
+    record_run,
+    system_block,
+)
 from poieo.daemon.config import load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
+from poieo.layout import layout_for
+from poieo.memory import check_memory, load_entries
 from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
-from poieo.memory import check_memory, load_entries
-from poieo.card import (
-    JOURNAL_WIDTH,
-    load_card,
-    record_run,
-    system_block,
-    card_payload,
-)
-
-from test_card import write_card
 
 
 def _task(tmp_path):
@@ -192,9 +191,7 @@ def _daemon_flow(tmp_path):
 
 def test_no_memory_folder_means_prompts_identical_to_today(tmp_path):
     task = _task(tmp_path)
-    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
-        name=task.name, folder=task.folder_path()
-    )
+    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(name=task.name, folder=task.folder_path())
     assert "memory" not in card_payload(task)
 
     task, config = _daemon_flow(tmp_path)
@@ -308,9 +305,7 @@ def test_an_empty_memory_folder_behaves_as_absent(tmp_path):
     task = _task(tmp_path)
     at(tmp_path / "tasks").longterm().mkdir(parents=True)
 
-    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(
-        name=task.name, folder=task.folder_path()
-    )
+    assert system_block(task) == TODAY_WITHOUT_MEMORY.format(name=task.name, folder=task.folder_path())
     assert "memory" not in card_payload(task)
 
 
@@ -349,7 +344,11 @@ def test_an_episode_records_what_the_run_was_shown(tmp_path):
     task, result = _task(tmp_path), _result()
     _remember(tmp_path)
     _learn(tmp_path, "tidy-order", "Tidy the project one file at a time.")
-    _learn(tmp_path, "elsewhere", "The exporter flushes nightly.", )
+    _learn(
+        tmp_path,
+        "elsewhere",
+        "The exporter flushes nightly.",
+    )
 
     record_run(task, result)
     data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
@@ -420,17 +419,13 @@ def test_typed_links_in_frontmatter_are_read(tmp_path):
 
 
 def test_an_unknown_link_kind_fails_at_load_naming_the_file(tmp_path):
-    project = _learn(
-        tmp_path, "retry", "---\nlinks:\n  caused_by: [something]\n---\nRetry once."
-    )
+    project = _learn(tmp_path, "retry", "---\nlinks:\n  caused_by: [something]\n---\nRetry once.")
     with pytest.raises(SpecError, match="retry.md"):
         load_entries(project)
 
 
 def test_a_typed_link_to_nothing_fails_at_load_naming_both(tmp_path):
-    project = _learn(
-        tmp_path, "retry", "---\nlinks:\n  depends_on: [ghost]\n---\nRetry once."
-    )
+    project = _learn(tmp_path, "retry", "---\nlinks:\n  depends_on: [ghost]\n---\nRetry once.")
     with pytest.raises(SpecError, match="ghost") as caught:
         check_memory(project)
     assert "retry.md" in str(caught.value)
@@ -468,9 +463,7 @@ def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
     project = _learn(
         tmp_path,
         "feeds-note",
-        '---\nanchors: []\nsealed: {"notebook/feeds.md": "'
-        + "0" * 64
-        + '"}\n---\nFeeds land in one file.',
+        '---\nanchors: []\nsealed: {"notebook/feeds.md": "' + "0" * 64 + '"}\n---\nFeeds land in one file.',
     )
     with pytest.raises(SpecError, match="feeds-note.md"):
         check_memory(project)
@@ -486,9 +479,7 @@ def test_a_restored_entry_naming_an_attic_entry_still_loads(tmp_path):
 
     check_memory(tmp_path / "tasks")  # must not raise
     # A genuine typo -- a name that exists nowhere -- still fails.
-    project = _learn(
-        tmp_path, "typo", "---\nlinks:\n  depends_on: [ghost]\n---\nLeans on air."
-    )
+    project = _learn(tmp_path, "typo", "---\nlinks:\n  depends_on: [ghost]\n---\nLeans on air.")
     with pytest.raises(SpecError, match="ghost"):
         check_memory(project)
 
@@ -496,9 +487,7 @@ def test_a_restored_entry_naming_an_attic_entry_still_loads(tmp_path):
 def test_leaning_on_a_set_aside_entry_is_legal_at_load(tmp_path):
     _learn(tmp_path, "new-cap", "Batches cap at 500 now.")
     _learn(tmp_path, "old-cap", "---\nsuperseded_by: new-cap\n---\nBatches cap at 50.")
-    project = _learn(
-        tmp_path, "retry", "---\nlinks:\n  depends_on: [old-cap]\n---\nRetry once."
-    )
+    project = _learn(tmp_path, "retry", "---\nlinks:\n  depends_on: [old-cap]\n---\nRetry once.")
     check_memory(project)  # legal; the report will flag it, nothing breaks
 
 
@@ -530,11 +519,7 @@ def test_the_learning_pass_reaches_for_nothing_private():
     import poieo.learn
 
     source = pathlib.Path(poieo.learn.__file__).read_text(encoding="utf-8")
-    offenders = [
-        line.strip()
-        for line in source.splitlines()
-        if "memory import" in line and " _" in line
-    ]
+    offenders = [line.strip() for line in source.splitlines() if "memory import" in line and " _" in line]
     assert offenders == []
 
 

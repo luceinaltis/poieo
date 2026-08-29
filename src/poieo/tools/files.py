@@ -9,10 +9,10 @@ from typing import Any
 from ..providers.base import ToolDef
 from . import Tool, ToolError
 
-_READ_CAP = 200_000     # characters
-_GLOB_CAP = 500         # paths
-_SEARCH_CAP = 200       # matches
-_LINE_CAP = 300         # characters of any one matched line
+_READ_CAP = 200_000  # characters
+_GLOB_CAP = 500  # paths
+_SEARCH_CAP = 200  # matches
+_LINE_CAP = 300  # characters of any one matched line
 
 
 def resolve_path(workdir: Path, raw: str) -> Path:
@@ -230,11 +230,7 @@ def _checked_glob(pattern: str) -> str:
 
 async def _glob_files(workdir: Path, args: dict[str, Any]) -> str:
     pattern = _checked_glob(args["pattern"])
-    matches = sorted(
-        p.relative_to(workdir).as_posix()
-        for p in workdir.glob(pattern)
-        if p.is_file()
-    )
+    matches = sorted(p.relative_to(workdir).as_posix() for p in workdir.glob(pattern) if p.is_file())
     if len(matches) > _GLOB_CAP:
         return "\n".join(matches[:_GLOB_CAP]) + f"\n... [{len(matches) - _GLOB_CAP} more]"
     return "\n".join(matches) or "(no matches)"
@@ -323,9 +319,7 @@ FILES_TOOLS: list[Tool] = [
         ToolDef(
             name="write_file",
             description="Write a text file, creating parent directories as needed.",
-            input_schema=_schema(
-                {"path": {"type": "string"}, "content": {"type": "string"}}, ["path"]
-            ),
+            input_schema=_schema({"path": {"type": "string"}, "content": {"type": "string"}}, ["path"]),
         ),
         _write_file,
     ),

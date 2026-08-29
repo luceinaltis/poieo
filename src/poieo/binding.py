@@ -32,6 +32,18 @@ class ProviderSpec(_Spec):
     base_url: str | None = None
     # Read the credential from the environment; never store keys in the file.
     api_key_env: str | None = None
+    # Headers to send with every request, laid over the ones built from
+    # `api_key_env`. For an endpoint that speaks the OpenAI shape and none of
+    # its plumbing: Azure wants the key in `api-key` rather than in an
+    # `Authorization: Bearer`, and without this the largest OpenAI-shaped
+    # endpoint there is could not be reached by the provider named after that
+    # shape. **Values are literal, so a key does not belong here** -- put it in
+    # the environment and name the variable in `api_key_env`, which is the rule
+    # the rest of this file exists to keep.
+    headers: dict[str, str] = Field(default_factory=dict)
+    # Query parameters on every request. Azure's `api-version` is required and
+    # is not part of any path, so a base URL cannot carry it.
+    query: dict[str, str] = Field(default_factory=dict)
     timeout: float = Field(default=600.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=10)
     # Provider-specific extras (e.g. mock scripts, anthropic betas).
@@ -41,10 +53,7 @@ class ProviderSpec(_Spec):
     @classmethod
     def _known_type(cls, value: str) -> str:
         if KNOWN_PROVIDER_TYPES and value not in KNOWN_PROVIDER_TYPES:
-            raise ValueError(
-                f"unknown provider type '{value}'; "
-                f"known types: {sorted(KNOWN_PROVIDER_TYPES)}"
-            )
+            raise ValueError(f"unknown provider type '{value}'; known types: {sorted(KNOWN_PROVIDER_TYPES)}")
         return value
 
     @model_validator(mode="after")
@@ -52,6 +61,44 @@ class ProviderSpec(_Spec):
         if self.type in {"openai_compatible", "ollama"} and not self.base_url:
             raise ValueError(f"provider type '{self.type}' requires a base_url")
         return self
+
+
+class Prices(_Spec):
+    """What an endpoint charges, per million tokens.
+
+    Per million because that is the unit every vendor quotes in, so the number
+    in a binding is the number on the pricing page -- not one somebody
+    converted by hand and got wrong by six zeroes.
+
+    Only for endpoints that bill and do not say so. OpenRouter reports `cost`
+    on the response when asked and needs none of this; Anthropic's API carries
+    no cost at all, and it is the paid backend these examples ship for.
+
+    Every field defaults to zero rather than being required, because a binding
+    that names only what it is charged for reads better than one padded with
+    zeroes -- and a rate nobody wrote is a rate nobody is paying.
+    """
+
+    input: float = Field(default=0.0, ge=0)
+    output: float = Field(default=0.0, ge=0)
+    cache_read: float = Field(default=0.0, ge=0)
+    cache_write: float = Field(default=0.0, ge=0)
+
+    def charge(self, usage: Any) -> float:
+        """What this usage comes to, in whatever currency the rates are in.
+
+        Cached input is charged at the cache rate and **not** also at the input
+        one: `input_tokens` is the whole prompt and `cache_read_tokens` is the
+        part of it that was already there, so counting both would bill the
+        cached half twice.
+        """
+        fresh = max(0, usage.input_tokens - usage.cache_read_tokens - usage.cache_write_tokens)
+        return (
+            fresh * self.input
+            + usage.cache_read_tokens * self.cache_read
+            + usage.cache_write_tokens * self.cache_write
+            + usage.output_tokens * self.output
+        ) / 1_000_000
 
 
 class ModelSpec(_Spec):
@@ -74,6 +121,11 @@ class ModelSpec(_Spec):
     # qwen3.5, 1,310,720 for z-ai/glm-5.3-flash), so any single number is
     # wrong for most of them.
     context: int | None = Field(default=None, gt=0)
+    # What this endpoint charges, for one that bills without saying so. Beside
+    # `model` for the same reason `context` is: it describes the endpoint
+    # rather than asking it for anything, and in `params` it would be posted in
+    # the request body.
+    prices: Prices | None = None
 
     def merged_with(self, base: ModelSpec) -> ModelSpec:
         """Layer this spec over ``base``; params merge key-by-key."""
@@ -82,6 +134,7 @@ class ModelSpec(_Spec):
             model=self.model or base.model,
             params={**base.params, **self.params},
             context=self.context or base.context,
+            prices=self.prices or base.prices,
         )
 
 
@@ -102,9 +155,7 @@ class BindingSpec(_Spec):
         named = [("default", self.default), *self.roles.items()]
         for role, spec in named:
             if spec.provider and spec.provider not in self.providers:
-                raise ValueError(
-                    f"role '{role}' points at undeclared provider '{spec.provider}'"
-                )
+                raise ValueError(f"role '{role}' points at undeclared provider '{spec.provider}'")
         return self
 
     def resolve(self, role: str, overrides: dict[str, Any] | None = None) -> ResolvedModel:
@@ -113,13 +164,9 @@ class BindingSpec(_Spec):
         if overrides:
             spec = ModelSpec(params=overrides).merged_with(spec)
         if not spec.provider:
-            raise BindingError(
-                f"role '{role}' has no provider, and the binding declares no default"
-            )
+            raise BindingError(f"role '{role}' has no provider, and the binding declares no default")
         if not spec.model:
-            raise BindingError(
-                f"role '{role}' has no model id, and the binding declares no default"
-            )
+            raise BindingError(f"role '{role}' has no model id, and the binding declares no default")
         return ResolvedModel(
             role=role,
             provider_name=spec.provider,
@@ -127,6 +174,7 @@ class BindingSpec(_Spec):
             model=spec.model,
             params=spec.params,
             context=spec.context,
+            prices=spec.prices,
         )
 
     def undeclared(self, roles: set[str]) -> list[str]:
@@ -187,6 +235,8 @@ class ResolvedModel(_Spec):
     params: dict[str, Any] = Field(default_factory=dict)
     # Tokens this model can hold, if the binding said. See `ModelSpec.context`.
     context: int | None = None
+    # What it charges, if the binding said. See `ModelSpec.prices`.
+    prices: Prices | None = None
 
     @property
     def ref(self) -> str:
@@ -211,9 +261,6 @@ def load_binding(path: str | Path) -> BindingSpec:
     try:
         binding = BindingSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(
-            f"{path}: invalid binding: "
-            f"{describe_invalid(exc, tuple(BindingSpec.model_fields))}"
-        ) from exc
+        raise SpecError(f"{path}: invalid binding: {describe_invalid(exc, tuple(BindingSpec.model_fields))}") from exc
     binding.source_path = path
     return binding

@@ -28,9 +28,7 @@ PAGE_HEADER = "What this project always requires:"
 LEARNED_HEADER = "What earlier work here has learned:"
 
 
-def read_memory(
-    project_dir: Path, task: Any | None = None, *, preview: bool = False
-) -> str | None:
+def read_memory(project_dir: Path, task: Any | None = None, *, preview: bool = False) -> str | None:
     """The block a run is shown, or None when there is nothing to show.
 
     Re-read every run, like the journal. ``preview`` answers the same question

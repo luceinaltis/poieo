@@ -1,7 +1,7 @@
 import pytest
+from conftest import EXAMPLES
 from pydantic import ValidationError
 
-from conftest import EXAMPLES
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, load_graph
 
@@ -30,9 +30,7 @@ def _spec(**overrides):
 
 def test_rejects_dangling_edge():
     with pytest.raises(Exception, match="unknown node 'ghost'"):
-        GraphSpec.model_validate(
-            _spec(nodes=[{"id": "a", "type": "agent", "prompt": "hi", "next": "ghost"}])
-        )
+        GraphSpec.model_validate(_spec(nodes=[{"id": "a", "type": "agent", "prompt": "hi", "next": "ghost"}]))
 
 
 def test_rejects_unknown_entry():
@@ -66,9 +64,7 @@ def test_rejects_duplicate_ids():
 
 def test_rejects_bad_template_at_load_time():
     with pytest.raises(Exception, match="syntax error"):
-        GraphSpec.model_validate(
-            _spec(nodes=[{"id": "a", "type": "agent", "prompt": "{{ 1 + }}"}])
-        )
+        GraphSpec.model_validate(_spec(nodes=[{"id": "a", "type": "agent", "prompt": "{{ 1 + }}"}]))
 
 
 def test_router_must_have_branches():
@@ -89,9 +85,7 @@ def test_a_typo_in_a_node_is_explained_and_a_near_miss_suggested(tmp_path):
     the exact thing describe_invalid exists to stop.
     """
     path = tmp_path / "g.yaml"
-    path.write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: agent, promt: hi}]\n", encoding="utf-8"
-    )
+    path.write_text("name: g\nentry: a\nnodes: [{id: a, type: agent, promt: hi}]\n", encoding="utf-8")
 
     with pytest.raises(SpecError) as caught:
         load_graph(path)
@@ -219,9 +213,7 @@ def test_a_command_node_refuses_the_model_keys():
         ("max_turns", 3),
     ]:
         with pytest.raises(ValidationError, match="does not take"):
-            GraphSpec.model_validate(
-                _graph({"type": "command", "command": "true", key: value})
-            )
+            GraphSpec.model_validate(_graph({"type": "command", "command": "true", key: value}))
 
 
 def test_a_command_node_takes_what_it_needs():
@@ -251,16 +243,12 @@ def test_a_command_node_needs_no_role():
 
 def test_an_agent_node_may_not_carry_a_command():
     with pytest.raises(ValidationError, match="command"):
-        GraphSpec.model_validate(
-            _graph({"type": "agent", "prompt": "hi", "command": "pytest"})
-        )
+        GraphSpec.model_validate(_graph({"type": "agent", "prompt": "hi", "command": "pytest"}))
 
 
 def test_a_commands_workdir_is_a_template_like_an_agents():
     with pytest.raises(ValidationError):
-        GraphSpec.model_validate(
-            _graph({"type": "command", "command": "true", "workdir": "{{ 1 + }}"})
-        )
+        GraphSpec.model_validate(_graph({"type": "command", "command": "true", "workdir": "{{ 1 + }}"}))
 
 
 def test_a_bad_template_in_a_command_fails_at_load_not_at_3am():
@@ -268,15 +256,11 @@ def test_a_bad_template_in_a_command_fails_at_load_not_at_3am():
     rendered the same way and was not, so a typo in one waited until the
     trigger fired -- which is the failure principle 5 exists to refuse."""
     with pytest.raises(ValidationError):
-        GraphSpec.model_validate(
-            _graph({"type": "command", "command": "pytest {{ 1 + }}"})
-        )
+        GraphSpec.model_validate(_graph({"type": "command", "command": "pytest {{ 1 + }}"}))
 
 
 def test_a_good_template_in_a_command_is_allowed():
-    graph = GraphSpec.model_validate(
-        _graph({"type": "command", "command": "pytest {{ input.suite }}"})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "command", "command": "pytest {{ input.suite }}"}))
     assert "{{ input.suite }}" in graph.node("n").command
 
 
@@ -286,9 +270,7 @@ def test_a_multi_line_command_is_refused_at_load():
     a step that did half its work and called it success. Verified by hand;
     refused here rather than at 3am."""
     with pytest.raises(ValidationError) as caught:
-        GraphSpec.model_validate(
-            _graph({"type": "command", "command": "echo one\necho two"})
-        )
+        GraphSpec.model_validate(_graph({"type": "command", "command": "echo one\necho two"}))
 
     said = str(caught.value)
     # The refusal names the three better routes, since all of them are.
@@ -298,9 +280,7 @@ def test_a_multi_line_command_is_refused_at_load():
 def test_a_trailing_newline_is_not_a_second_line():
     """`command: |` adds one, and YAML block scalars are the readable way to
     write a long command. Refusing that would be refusing the good spelling."""
-    graph = GraphSpec.model_validate(
-        _graph({"type": "command", "command": "pytest -q\n"})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "command", "command": "pytest -q\n"}))
     assert graph.node("n").command == "pytest -q"
 
 
@@ -335,32 +315,24 @@ def test_a_command_and_a_script_are_exclusive():
 
 def test_an_unknown_language_is_refused_by_name():
     with pytest.raises(ValidationError, match="cobol"):
-        GraphSpec.model_validate(
-            _graph({"type": "command", "language": "cobol", "script": "x"})
-        )
+        GraphSpec.model_validate(_graph({"type": "command", "language": "cobol", "script": "x"}))
 
 
 def test_a_script_keeps_its_newlines():
     """The whole point: code, not a shell string. A block scalar is the
     ordinary way to write it and nothing here may flatten it."""
     code = "import json\nprint(json.dumps({'k': 1}))\n"
-    graph = GraphSpec.model_validate(
-        _graph({"type": "command", "language": "python", "script": code})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "command", "language": "python", "script": code}))
     assert graph.node("n").script == code
 
 
 def test_a_bad_template_in_a_script_fails_at_load():
     with pytest.raises(ValidationError):
-        GraphSpec.model_validate(
-            _graph({"type": "command", "language": "python", "script": "x = {{ 1 + }}"})
-        )
+        GraphSpec.model_validate(_graph({"type": "command", "language": "python", "script": "x = {{ 1 + }}"}))
 
 
 def test_a_scripted_node_still_calls_no_model():
-    graph = GraphSpec.model_validate(
-        _graph({"type": "command", "language": "python", "script": "print(1)"})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "command", "language": "python", "script": "print(1)"}))
     assert graph.roles() == set()
 
 
@@ -398,9 +370,7 @@ def test_braces_a_language_owns_are_not_a_template(language, script):
     """`{{` is a template only where the text *is* one. A nested initializer is
     ordinary C and ordinary Go, and refusing it would be refusing the
     language."""
-    graph = GraphSpec.model_validate(
-        _graph({"type": "command", "language": language, "script": script})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "command", "language": language, "script": script}))
 
     assert graph.node("n").script == script
 
@@ -444,15 +414,11 @@ def test_a_compiled_script_without_a_template_is_fine():
 
 @pytest.mark.parametrize("language", ["c", "go", "rust"])
 def test_every_compiled_language_is_accepted(language):
-    GraphSpec.model_validate(
-        _graph({"type": "command", "language": language, "script": "x"})
-    )
+    GraphSpec.model_validate(_graph({"type": "command", "language": language, "script": "x"}))
 
 
 def test_a_confirm_node_asks_a_person_and_offers_choices():
-    graph = GraphSpec.model_validate(
-        _graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge", "hold"]})
-    )
+    graph = GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge", "hold"]}))
     assert graph.node("n").choices == ["merge", "hold"]
 
 
@@ -465,16 +431,12 @@ def test_a_confirm_node_needs_at_least_two_choices():
     """One choice is not a decision, and no choices is free text -- which is
     the `'HOLD' in text` reading this node exists to stop."""
     with pytest.raises(ValidationError, match="two choices"):
-        GraphSpec.model_validate(
-            _graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge"]})
-        )
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge"]}))
 
 
 def test_a_confirm_nodes_choices_must_differ():
     with pytest.raises(ValidationError, match="twice"):
-        GraphSpec.model_validate(
-            _graph({"type": "confirm", "prompt": "?", "choices": ["yes", "yes"]})
-        )
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["yes", "yes"]}))
 
 
 def test_a_confirm_node_refuses_a_next():
@@ -501,9 +463,7 @@ def test_a_confirm_node_refuses_a_next():
 
 def test_only_a_confirm_node_takes_choices():
     with pytest.raises(ValidationError, match="does not offer choices"):
-        GraphSpec.model_validate(
-            _graph({"type": "agent", "prompt": "hi", "choices": ["a", "b"]})
-        )
+        GraphSpec.model_validate(_graph({"type": "agent", "prompt": "hi", "choices": ["a", "b"]}))
 
 
 def test_a_confirm_node_refuses_the_model_keys():
@@ -513,8 +473,4 @@ def test_a_confirm_node_refuses_the_model_keys():
     `prompt` is the exception, and the only one: a confirm node has one, and it
     is read by a person rather than sent anywhere."""
     with pytest.raises(ValidationError, match="it calls no model"):
-        GraphSpec.model_validate(
-            _graph(
-                {"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}
-            )
-        )
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}))

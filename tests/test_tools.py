@@ -98,9 +98,7 @@ async def test_search_narrows_by_glob(tmp_path):
     (tmp_path / "a.py").write_text("needle\n")
     (tmp_path / "b.txt").write_text("needle\n")
 
-    found = await TOOLS["search_files"].run(
-        tmp_path, {"pattern": "needle", "glob": "**/*.py"}
-    )
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle", "glob": "**/*.py"})
 
     assert "a.py" in found
     assert "b.txt" not in found
@@ -140,13 +138,9 @@ async def test_search_says_how_much_it_left_out(tmp_path):
     """
     (tmp_path / "many.txt").write_text("needle\n" * 500)
 
-    found = await TOOLS["search_files"].run(
-        tmp_path, {"pattern": "needle", "max_results": 5}
-    )
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle", "max_results": 5})
 
-    assert len(
-        [line for line in found.splitlines() if line.startswith("many.txt:")]
-    ) == 5
+    assert len([line for line in found.splitlines() if line.startswith("many.txt:")]) == 5
     assert "495 more" in found
 
 
@@ -167,9 +161,7 @@ async def test_search_answers_a_broken_pattern_rather_than_raising(tmp_path):
 
 async def test_search_rejects_an_escaping_glob(tmp_path):
     with pytest.raises(ToolError):
-        await TOOLS["search_files"].run(
-            tmp_path, {"pattern": "x", "glob": "../**/*.py"}
-        )
+        await TOOLS["search_files"].run(tmp_path, {"pattern": "x", "glob": "../**/*.py"})
 
 
 async def test_search_says_so_when_nothing_matches(tmp_path):
@@ -201,9 +193,7 @@ async def test_read_takes_a_range(tmp_path):
     points."""
     (tmp_path / "m.py").write_text("".join(f"line {n}\n" for n in range(1, 101)))
 
-    text = await TOOLS["read_file"].run(
-        tmp_path, {"path": "m.py", "offset": 40, "limit": 3}
-    )
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "m.py", "offset": 40, "limit": 3})
 
     assert "40\tline 40" in text
     assert "42\tline 42" in text
@@ -215,9 +205,7 @@ async def test_a_range_says_what_it_left_out(tmp_path):
     """A window with no edges reads like the whole file."""
     (tmp_path / "m.py").write_text("".join(f"line {n}\n" for n in range(1, 101)))
 
-    text = await TOOLS["read_file"].run(
-        tmp_path, {"path": "m.py", "offset": 40, "limit": 3}
-    )
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "m.py", "offset": 40, "limit": 3})
 
     assert "100" in text  # how many lines there are in total
 
@@ -248,9 +236,7 @@ async def test_edit_replaces_the_one_place_it_matches(tmp_path):
     """
     (tmp_path / "m.py").write_text("a = 1\nb = 2\nc = 3\n")
 
-    said = await TOOLS["edit_file"].run(
-        tmp_path, {"path": "m.py", "old": "b = 2", "new": "b = 20"}
-    )
+    said = await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "b = 2", "new": "b = 20"})
 
     assert (tmp_path / "m.py").read_text() == "a = 1\nb = 20\nc = 3\n"
     assert "m.py" in said
@@ -259,9 +245,7 @@ async def test_edit_replaces_the_one_place_it_matches(tmp_path):
 async def test_edit_refuses_a_string_that_is_not_there(tmp_path):
     (tmp_path / "m.py").write_text("a = 1\n")
     with pytest.raises(ToolError, match="not find"):
-        await TOOLS["edit_file"].run(
-            tmp_path, {"path": "m.py", "old": "z = 9", "new": "z = 8"}
-        )
+        await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "z = 9", "new": "z = 8"})
     assert (tmp_path / "m.py").read_text() == "a = 1\n"
 
 
@@ -273,25 +257,19 @@ async def test_edit_refuses_an_ambiguous_string_and_says_how_many(tmp_path):
     """
     (tmp_path / "m.py").write_text("x = 0\nx = 0\nx = 0\n")
     with pytest.raises(ToolError, match="3 times"):
-        await TOOLS["edit_file"].run(
-            tmp_path, {"path": "m.py", "old": "x = 0", "new": "x = 1"}
-        )
+        await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "x = 0", "new": "x = 1"})
     assert (tmp_path / "m.py").read_text() == "x = 0\nx = 0\nx = 0\n"
 
 
 async def test_edit_refuses_a_missing_file(tmp_path):
     with pytest.raises(ToolError, match="no such file"):
-        await TOOLS["edit_file"].run(
-            tmp_path, {"path": "gone.py", "old": "a", "new": "b"}
-        )
+        await TOOLS["edit_file"].run(tmp_path, {"path": "gone.py", "old": "a", "new": "b"})
 
 
 async def test_edit_refuses_an_edit_that_changes_nothing(tmp_path):
     (tmp_path / "m.py").write_text("a = 1\n")
     with pytest.raises(ToolError):
-        await TOOLS["edit_file"].run(
-            tmp_path, {"path": "m.py", "old": "a = 1", "new": "a = 1"}
-        )
+        await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "a = 1", "new": "a = 1"})
 
 
 async def test_edit_forgives_the_line_numbers_read_file_puts_on(tmp_path):
@@ -305,9 +283,7 @@ async def test_edit_forgives_the_line_numbers_read_file_puts_on(tmp_path):
     """
     (tmp_path / "m.py").write_text("a = 1\nb = 2\n")
 
-    await TOOLS["edit_file"].run(
-        tmp_path, {"path": "m.py", "old": "     2\tb = 2", "new": "b = 20"}
-    )
+    await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "     2\tb = 2", "new": "b = 20"})
 
     assert (tmp_path / "m.py").read_text() == "a = 1\nb = 20\n"
 
@@ -316,9 +292,7 @@ async def test_edit_forgives_trailing_whitespace_and_line_endings(tmp_path):
     """Where the reported 50% edit failure rate on non-native models lives."""
     (tmp_path / "m.py").write_text("a = 1\r\nb = 2  \r\n", newline="")
 
-    await TOOLS["edit_file"].run(
-        tmp_path, {"path": "m.py", "old": "a = 1\nb = 2", "new": "a = 1\nb = 20"}
-    )
+    await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "a = 1\nb = 2", "new": "a = 1\nb = 20"})
 
     assert "b = 20" in (tmp_path / "m.py").read_text()
 
@@ -349,18 +323,14 @@ async def test_edit_refuses_to_leave_a_python_file_unparseable(tmp_path):
     (tmp_path / "m.py").write_text("def f():\n    return 1\n")
 
     with pytest.raises(ToolError, match="would not parse"):
-        await TOOLS["edit_file"].run(
-            tmp_path, {"path": "m.py", "old": "    return 1", "new": "    return ("}
-        )
+        await TOOLS["edit_file"].run(tmp_path, {"path": "m.py", "old": "    return 1", "new": "    return ("})
 
     assert (tmp_path / "m.py").read_text() == "def f():\n    return 1\n"
 
 
 async def test_edit_leaves_other_languages_to_their_own_tools(tmp_path):
     (tmp_path / "notes.md").write_text("# hi\nunbalanced (\n")
-    await TOOLS["edit_file"].run(
-        tmp_path, {"path": "notes.md", "old": "# hi", "new": "# hello ("}
-    )
+    await TOOLS["edit_file"].run(tmp_path, {"path": "notes.md", "old": "# hi", "new": "# hello ("})
     assert "# hello (" in (tmp_path / "notes.md").read_text()
 
 
@@ -384,14 +354,11 @@ async def test_append_refuses_a_missing_file(tmp_path):
         await TOOLS["append_file"].run(tmp_path, {"path": "gone.md", "content": "x"})
 
 
+from conftest import POSIX
+
 from poieo.tools.shell import SHELL_TOOLS, posix_shell
 
 SHELL = {t.definition.name: t for t in SHELL_TOOLS}
-
-# What a command may assume it is being read by. The question is no longer
-# which OS this is -- it is whether a POSIX shell was found, which on Windows
-# is usually yes and used to be irrelevant.
-POSIX = __import__("os").name != "nt" or bool(posix_shell())
 
 
 def test_a_posix_shell_is_preferred_when_there_is_one(monkeypatch):
@@ -413,9 +380,7 @@ def test_the_wsl_launcher_is_not_a_posix_shell_for_this_purpose(monkeypatch):
     """
     import poieo.tools.shell as shell
 
-    monkeypatch.setattr(
-        shell.shutil, "which", lambda name: "C:\\Windows\\System32\\bash.exe"
-    )
+    monkeypatch.setattr(shell.shutil, "which", lambda name: "C:\\Windows\\System32\\bash.exe")
     assert posix_shell(windows=True) is None
 
 
@@ -469,9 +434,7 @@ async def test_run_command_nonzero_exit_is_reported_not_raised(tmp_path):
 
 async def test_run_command_runs_in_workdir(tmp_path):
     (tmp_path / "here.txt").write_text("x")
-    out = await SHELL["run_command"].run(
-        tmp_path, {"command": "ls" if POSIX else "dir /b"}
-    )
+    out = await SHELL["run_command"].run(tmp_path, {"command": "ls" if POSIX else "dir /b"})
     assert "here.txt" in out
 
 
@@ -483,8 +446,10 @@ async def test_run_command_takes_env_without_shell_syntax(tmp_path):
     one exact command cannot tell "this did not start" from "this went red"."""
     out = await SHELL["run_command"].run(
         tmp_path,
-        {"command": "python -c \"import os; print(os.environ['POIEO_PROBE'])\"",
-         "env": {"POIEO_PROBE": "set-by-the-tool"}},
+        {
+            "command": "python -c \"import os; print(os.environ['POIEO_PROBE'])\"",
+            "env": {"POIEO_PROBE": "set-by-the-tool"},
+        },
     )
 
     assert out.startswith("exit code: 0")
@@ -495,8 +460,7 @@ async def test_run_command_env_adds_to_the_environment_rather_than_replacing_it(
     """The command still needs a PATH to find anything at all."""
     out = await SHELL["run_command"].run(
         tmp_path,
-        {"command": "python -c \"import os; print('PATH' in os.environ)\"",
-         "env": {"POIEO_PROBE": "x"}},
+        {"command": "python -c \"import os; print('PATH' in os.environ)\"", "env": {"POIEO_PROBE": "x"}},
     )
 
     assert "True" in out
@@ -507,8 +471,7 @@ async def test_run_command_env_values_are_strings(tmp_path):
     ints -- the tool coerces rather than raising at the model."""
     out = await SHELL["run_command"].run(
         tmp_path,
-        {"command": "python -c \"import os; print(os.environ['POIEO_N'])\"",
-         "env": {"POIEO_N": 7}},
+        {"command": "python -c \"import os; print(os.environ['POIEO_N'])\"", "env": {"POIEO_N": 7}},
     )
 
     assert out.startswith("exit code: 0")
@@ -517,6 +480,7 @@ async def test_run_command_env_values_are_strings(tmp_path):
 
 async def test_run_command_times_out(tmp_path):
     import os
+
     sleeper = "ping -n 30 127.0.0.1 > NUL" if os.name == "nt" else "sleep 30"
     with pytest.raises(ToolError, match="timed out"):
         await SHELL["run_command"].run(tmp_path, {"command": sleeper, "timeout": 1})
@@ -561,7 +525,7 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
 
 import sys
 
-from poieo.tools import ToolContext, Isolation, make_executor
+from poieo.tools import Isolation, ToolContext, make_executor
 
 
 async def test_local_executor_works_as_a_context_manager(tmp_path):
@@ -614,7 +578,7 @@ def test_docker_available_treats_an_empty_version_as_unavailable(monkeypatch):
     class _Done:
         returncode = 0
         stdout = "\n"
-        stderr = 'error during connect: open //./pipe/dockerDesktopLinuxEngine'
+        stderr = "error during connect: open //./pipe/dockerDesktopLinuxEngine"
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Done())
     ok, reason = docker_module.docker_available()
@@ -685,7 +649,7 @@ async def test_a_command_that_could_not_run_still_raises(tmp_path):
 
     async with make_executor(tmp_path, ["shell"]) as executor:
         with pytest.raises(ToolError, match="timed out"):
-            await executor.run_command("python -c \"import time; time.sleep(5)\"", timeout=0.3)
+            await executor.run_command('python -c "import time; time.sleep(5)"', timeout=0.3)
 
 
 # -- the boxed seam, without needing a box -----------------------------------
@@ -696,7 +660,6 @@ async def test_a_command_that_could_not_run_still_raises(tmp_path):
 
 def _boxed(monkeypatch, tmp_path):
     """A DockerExecutor with its docker calls recorded instead of run."""
-    from poieo.tools import Isolation
     from poieo.tools import docker as dock
 
     seen: list[tuple[str, ...]] = []
@@ -708,9 +671,7 @@ def _boxed(monkeypatch, tmp_path):
         return 3, "boxed output"
 
     monkeypatch.setattr(dock, "_docker", fake)
-    executor = dock.DockerExecutor(
-        tmp_path, ["shell"], image="x", network="none", user=None
-    )
+    executor = dock.DockerExecutor(tmp_path, ["shell"], image="x", network="none", user=None)
     executor.container_id = "cafe1234"
     return executor, seen, fed
 
@@ -800,9 +761,7 @@ def _with_stub_compiler(monkeypatch, tmp_path):
     from poieo.tools import CommandResult, LocalExecutor, ToolContext
 
     cache = tmp_path / "cache"
-    executor = LocalExecutor(
-        tmp_path / "work", ["shell"], ToolContext(build_cache=cache)
-    )
+    executor = LocalExecutor(tmp_path / "work", ["shell"], ToolContext(build_cache=cache))
     (tmp_path / "work").mkdir(parents=True, exist_ok=True)
 
     ran: list[str] = []
@@ -892,7 +851,6 @@ async def test_the_box_builds_inside_itself(tmp_path, monkeypatch):
 
 async def test_the_box_skips_a_build_it_already_has(tmp_path, monkeypatch):
     """`test -x` answering 0 means the binary is there, so no compiler runs."""
-    from poieo.tools import CommandResult
     from poieo.tools import docker as dock
 
     executor, seen, _fed = _boxed(monkeypatch, tmp_path)

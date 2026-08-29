@@ -5,10 +5,9 @@ import json
 from pathlib import Path
 
 import pytest
-
+from conftest import card
 from typer.testing import CliRunner
 
-from conftest import card
 from poieo import detect as detect_module
 from poieo.cli import app
 from poieo.detect import Engine
@@ -114,12 +113,8 @@ default: {{provider: fake, model: mock-model}}
 def _project(tmp_path, answer="done"):
     """A minimal project: a marker naming a default binding, and one card."""
     (tmp_path / "bindings").mkdir(exist_ok=True)
-    (tmp_path / "bindings" / "mock.yaml").write_text(
-        _MOCK.format(answer=answer), encoding="utf-8"
-    )
-    (tmp_path / "poieo.yaml").write_text(
-        "version: 1\nbinding: bindings/mock.yaml\ntasks: tasks\n", encoding="utf-8"
-    )
+    (tmp_path / "bindings" / "mock.yaml").write_text(_MOCK.format(answer=answer), encoding="utf-8")
+    (tmp_path / "poieo.yaml").write_text("version: 1\nbinding: bindings/mock.yaml\ntasks: tasks\n", encoding="utf-8")
     card = tmp_path / "tasks" / "hello.yaml"
     card.parent.mkdir(exist_ok=True)
     card.write_text("name: hello\nfolder: .\nprompt: say hi\n", encoding="utf-8")
@@ -189,9 +184,7 @@ def test_the_binding_flag_still_beats_the_project(tmp_path, monkeypatch):
 
 def test_the_cards_own_binding_still_beats_the_project(tmp_path, monkeypatch):
     card = _project(tmp_path, answer="from-project")
-    (tmp_path / "tasks" / "own.yaml").write_text(
-        _MOCK.format(answer="from-card"), encoding="utf-8"
-    )
+    (tmp_path / "tasks" / "own.yaml").write_text(_MOCK.format(answer="from-card"), encoding="utf-8")
     card.write_text(
         "name: hello\nfolder: .\nprompt: say hi\nbinding: own.yaml\n",
         encoding="utf-8",
@@ -256,7 +249,6 @@ def test_flows_without_an_argument_uses_the_project(tmp_path, monkeypatch):
         "name: g\nentry: a\nnodes: [{id: a, type: agent, role: r, prompt: hi}]\n",
         encoding="utf-8",
     )
-    marker = tmp_path / "poieo.yaml"
     card(tmp_path / "tasks", "f", "graph: ../g.yaml\n")
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["tasks"])
@@ -436,9 +428,7 @@ def test_a_single_model_machine_still_writes_a_loadable_binding(tmp_path, monkey
     _machine_with(monkeypatch, only)
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init"]).exit_code == 0
-    assert load_binding(tmp_path / "models" / "default.yaml").resolve("default").model == (
-        "llama3.2:3b"
-    )
+    assert load_binding(tmp_path / "models" / "default.yaml").resolve("default").model == ("llama3.2:3b")
 
 
 def test_mock_is_still_written_as_a_file_to_reach_for(tmp_path, monkeypatch):
@@ -455,9 +445,7 @@ def test_init_twice_keeps_every_existing_file(tmp_path, monkeypatch):
     _machine_with(monkeypatch, OLLAMA)
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init"]).exit_code == 0
-    before = {
-        p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()
-    }
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0, result.output
     assert "wrote" not in result.stdout
@@ -529,12 +517,8 @@ def test_the_store_flag_still_wins_over_the_project(tmp_path, monkeypatch):
 def _project_with_cards(root, *, card_body="name: {n}\nfolder: .\nprompt: do {n}\n"):
     (root / "tasks").mkdir(parents=True, exist_ok=True)
     (root / "bindings").mkdir(parents=True, exist_ok=True)
-    (root / "bindings" / "b.yaml").write_text(
-        "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
-    )
-    (root / "poieo.yaml").write_text(
-        "version: 1\nstore: runs\nbinding: bindings/b.yaml\ntasks: tasks/\n"
-    )
+    (root / "bindings" / "b.yaml").write_text("providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n")
+    (root / "poieo.yaml").write_text("version: 1\nstore: runs\nbinding: bindings/b.yaml\ntasks: tasks/\n")
     for name in ("alpha", "beta", "gamma"):
         (root / "tasks" / f"{name}.yaml").write_text(card_body.format(n=name))
     return root
@@ -550,9 +534,7 @@ def test_finding_a_project_does_not_read_its_cards(tmp_path, monkeypatch):
 
     parsed = []
     real = task_module.load_card
-    monkeypatch.setattr(
-        task_module, "load_card", lambda p: parsed.append(Path(p).name) or real(p)
-    )
+    monkeypatch.setattr(task_module, "load_card", lambda p: parsed.append(Path(p).name) or real(p))
 
     project = find_project(tmp_path)
 

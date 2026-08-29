@@ -54,8 +54,7 @@ def system_block(task: CardSpec, roster: list[str] | None = None) -> str:
         + "What you have already done, and what the user has told you:\n"
         "{{ input.journal }}\n\n"
         "Finish by saying in one line what you did. If there was nothing worth\n"
-        "doing, say that in one line instead."
-        + _roster_block(task, roster)
+        "doing, say that in one line instead." + _roster_block(task, roster)
     )
 
 
@@ -92,7 +91,7 @@ def _roster_block(task: CardSpec, roster: list[str] | None) -> str:
 
 # Keys that describe the single generated node, and therefore have nowhere to
 # go once the task names a graph of its own.
-_NODE_KEYS = ("prompt", "role", "tools", "max_turns")
+_NODE_KEYS = ("prompt", "role", "tools", "max_turns", "deadline")
 
 
 class CardSpec(BaseModel):
@@ -131,6 +130,9 @@ class CardSpec(BaseModel):
     role: str | None = None
     tools: list[str] | None = None
     max_turns: int = Field(default=DEFAULT_MAX_TURNS, ge=1, le=200)
+    # Seconds this task's step may work for. The unit a person can reason
+    # about: "this fires hourly, so it must not take an hour".
+    deadline: float | None = Field(default=None, gt=0)
     enabled: bool = True
     binding: str | None = None
     # Where this task's commands may run. Absent means the host, as before.
@@ -153,15 +155,10 @@ class CardSpec(BaseModel):
         if self.graph:
             named = [k for k in _NODE_KEYS if getattr(self, k) not in (None, DEFAULT_MAX_TURNS)]
             if named:
-                raise ValueError(
-                    f"{', '.join(named)} belong in the graph once a task names one"
-                )
+                raise ValueError(f"{', '.join(named)} belong in the graph once a task names one")
         named = [k for k in ("every", "at", "trigger") if getattr(self, k) is not None]
         if len(named) > 1:
-            raise ValueError(
-                f"a task is scheduled by one of every / at / trigger, not "
-                f"{' and '.join(named)}"
-            )
+            raise ValueError(f"a task is scheduled by one of every / at / trigger, not {' and '.join(named)}")
         return self
 
     @property
@@ -199,10 +196,7 @@ def load_card(path: str | Path) -> CardSpec:
     try:
         task = CardSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(
-            f"{path}: invalid task: "
-            f"{describe_invalid(exc, tuple(CardSpec.model_fields))}"
-        ) from exc
+        raise SpecError(f"{path}: invalid task: {describe_invalid(exc, tuple(CardSpec.model_fields))}") from exc
     task.source_path = path
     folder = task.folder_path()
     if folder is not None and not folder.is_dir():
@@ -267,6 +261,7 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
                 # task had a private copy of it open -- which is every night.
                 tools=task.tools or list(DEFAULT_TOOLSETS),
                 max_turns=task.max_turns,
+                deadline=task.deadline,
                 system=system_block(task, roster),
                 prompt=task.prompt,
                 output=OutputSpec(as_="summary"),
@@ -275,9 +270,7 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
     )
 
 
-def expand(
-    task: CardSpec, roster: list[str] | None = None
-) -> tuple[TaskSpec, GraphSpec | None]:
+def expand(task: CardSpec, roster: list[str] | None = None) -> tuple[TaskSpec, GraphSpec | None]:
     """Desugar a task into the task and graph the rest of poieo understands.
 
     The graph is None when the task names one of its own; the task then points
@@ -328,9 +321,7 @@ def load_cards(folder: str | Path) -> list[CardSpec]:
     """
     folder = Path(folder)
     suffixes = {".yaml", ".yml", ".json"}
-    files = sorted(
-        p for p in folder.iterdir() if p.suffix.lower() in suffixes and not p.name.startswith(".")
-    )
+    files = sorted(p for p in folder.iterdir() if p.suffix.lower() in suffixes and not p.name.startswith("."))
     tasks = []
     for path in files:
         data = load_document(path)
@@ -424,11 +415,7 @@ def _entries(path: Path) -> list[str]:
         # journal repeats itself silently.
         log.warning("could not read the journal %s: %s", path, exc)
         raw = ""
-    return [
-        line.rstrip()
-        for line in raw.splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
+    return [line.rstrip() for line in raw.splitlines() if line.strip() and not line.startswith("#")]
 
 
 def _is_own_entry(line: str) -> bool:
@@ -440,7 +427,7 @@ def _is_own_entry(line: str) -> bool:
     head, sep, rest = line.partition(SEPARATOR)
     if not sep or not head.startswith(PREFIX):
         return False
-    return rest.split(' ', 1)[0] in OWN_KINDS
+    return rest.split(" ", 1)[0] in OWN_KINDS
 
 
 def _bookmark(lines: list[str]) -> int:

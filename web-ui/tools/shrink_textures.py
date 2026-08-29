@@ -37,12 +37,7 @@ def write_glb(path: Path, doc, blob: bytes) -> None:
     text += b" " * (-len(text) % 4)
     blob = bytes(blob) + b"\0" * (-len(blob) % 4)
 
-    body = (
-        struct.pack("<II", len(text), JSON_CHUNK)
-        + text
-        + struct.pack("<II", len(blob), BIN_CHUNK)
-        + blob
-    )
+    body = struct.pack("<II", len(text), JSON_CHUNK) + text + struct.pack("<II", len(blob), BIN_CHUNK) + blob
     path.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
 
 
@@ -86,8 +81,7 @@ def shrink(source: Path, target: Path, longest=512, quality=82) -> None:
 
     doc["buffers"][0]["byteLength"] = len(packed)
     write_glb(target, doc, packed)
-    print(f"  {source.name} {source.stat().st_size // 1024} kB"
-          f" -> {target.name} {target.stat().st_size // 1024} kB")
+    print(f"  {source.name} {source.stat().st_size // 1024} kB -> {target.name} {target.stat().st_size // 1024} kB")
 
 
 if __name__ == "__main__":

@@ -89,6 +89,61 @@ Written as an effort level (`reasoning: {effort: "medium"}`) it says the same
 thing more honestly, and does not depend on a ratio to a second number. Use the
 token form when the endpoint really does take a budget.
 
+### What a run cost, from the endpoint rather than a table
+
+`Usage` carries `cost` alongside the token counts, and `reasoning_tokens` beside
+the output ones. Both come from the endpoint. OpenRouter reports them when the
+request asks:
+
+```yaml
+params:
+  usage: {include: true}
+```
+
+which reaches it through the same passthrough as everything else. The response
+then carries what it actually billed:
+
+```json
+"usage": {"prompt_tokens": 14, "completion_tokens": 16, "cost": 5.05e-06,
+          "completion_tokens_details": {"reasoning_tokens": 9}}
+```
+
+**`cost: None` is not zero.** Zero is a local model that really costs nothing;
+`None` is an endpoint that was not asked or does not say. Anything that spends
+against a budget has to tell those apart, or a backend that stays quiet reads as
+free.
+
+It is not sent by default, and that is deliberate: `usage` is an OpenRouter
+extension, and adding an unrecognised key to every request would risk endpoints
+that reject what they do not know.
+
+**No price table lives here.** Prices change, a table would go stale in silence,
+and it would be wrong in the direction nobody checks — the same reasoning that
+kept a table of context windows out.
+
+For an endpoint that bills and does not say so — Anthropic's API reports no cost
+at all, and it is the paid backend these examples ship for — a binding can write
+the rates down:
+
+```yaml
+default:
+  provider: claude
+  model: claude-opus-5
+  prices: {input: 5.0, output: 25.0, cache_read: 0.5, cache_write: 6.25}
+```
+
+**Per million tokens**, because that is the unit every vendor quotes in: the
+number in the binding is the number on the pricing page rather than one somebody
+converted by hand and got wrong by six zeroes.
+
+The endpoint's own figure still wins where there is one — the same two-tier shape
+as `context`, and for the same reason. What an endpoint reports is a fact; what a
+binding declares is somebody's belief; and a belief beats nothing.
+
+Cached input is charged at the cache rate and **not** also at the input one.
+`input_tokens` is the whole prompt and `cache_read_tokens` is the part of it that
+was already there, so counting both would bill the cached half twice.
+
 ### Two questions about roles, and why both exist
 
 `resolve()` falls back to `default` for **any** role at all — that is the point
@@ -118,10 +173,13 @@ default is the arrangement working.
 
 | type | talks to | notes |
 |---|---|---|
-| `anthropic` | Claude API | official SDK, always streams |
-| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
+| `anthropic` | Claude, direct or through AWS Bedrock / Google Vertex | official SDK, always streams |
+| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI, OpenRouter, Azure, and the hosted endpoints that speak this shape | `POST {base_url}/chat/completions` |
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` fold into `options` |
 | `mock` | nothing | scripted replies for tests and dry runs |
+
+Each preset is registered as a type of its own, so a typo in one is a parse
+error rather than a connection failure at three in the morning.
 
 `ProviderSpec.type` is a plain `str` validated against `KNOWN_PROVIDER_TYPES`
 rather than a closed `Literal`. That is what lets
@@ -129,6 +187,108 @@ rather than a closed `Literal`. That is what lets
 package while a typo in a binding file is still rejected at parse time.
 `base_url` is required for `openai_compatible` and `ollama`, and API keys are
 read from the environment by name (`api_key_env`) — never stored in the file.
+
+### Endpoints poieo knows the address of
+
+```yaml
+providers:
+  groq: {type: groq}          # that is the whole declaration
+```
+
+Fourteen names, each an `openai_compatible` endpoint with its address and key
+variable filled in: `openai`, `openrouter`, `groq`, `deepseek`, `together`,
+`fireworks`, `mistral`, `xai`, `cerebras`, `nebius`, `moonshot`, `zai`,
+`gemini`, `perplexity`.
+
+None of them is a new way of talking — they all speak the same wire format the
+`openai_compatible` type already did. What a preset saves is the part a person
+gets wrong: there is no guessing `https://api.groq.com/openai/v1` from the
+vendor's name, and neither `/v1` nor `/openai` alone reaches it.
+
+**A preset is a starting point, not a cage.** A `base_url` or `api_key_env` in
+the binding wins — somebody pointing at a proxy, a mirror or a gateway means it.
+
+**And this table is safe in a way the ones this project refused are not.** A
+stale price inflates a bill quietly; a stale context window truncates a
+conversation quietly; **a stale address fails to connect, loudly, on the first
+call.** Only tables that are wrong in silence are dangerous.
+
+Every address was probed against the live endpoint when it was written. Two of
+them are why that is worth saying: Gemini and Perplexity answer 404 on `/models`
+and 400/401 on `/chat/completions`, so a check that only asked the first would
+have called two correct addresses wrong.
+
+### The same Claude, three counters
+
+Companies reach Claude through Bedrock or Vertex because the billing and the
+security review already run through the cloud account they have — many will not
+register a card with Anthropic separately. It is the same model behind a
+different counter, and the counter **signs its requests with AWS or Google
+credentials** rather than taking an API key, which is why no header could have
+bridged it.
+
+```yaml
+providers:
+  claude:
+    type: anthropic
+    options: {through: bedrock, aws_region: us-east-1}
+
+  # or
+  claude:
+    type: anthropic
+    options: {through: vertex, region: us-east5, project_id: my-project}
+```
+
+`through` picks the client; everything else in `options` is handed to it, so a
+region or a project goes where that SDK expects it. Credentials are **not**
+named here — those clients resolve them the way boto3 and gcloud do, from the
+environment or a profile.
+
+Model ids differ at those counters (`anthropic.claude-sonnet-4-5-...-v1:0` on
+Bedrock), and that is the binding's `model:` as usual.
+
+**A `through` nobody has heard of is refused rather than ignored.** A typo would
+otherwise send every request to Anthropic directly and bill the wrong account,
+which is the kind of mistake noticed at the end of the month.
+
+### Endpoints that speak the shape and none of the plumbing
+
+`headers` and `query` go on every request, for an endpoint that wants its
+credential or its version somewhere other than where OpenAI put them. Azure is
+the one that needs both:
+
+```yaml
+providers:
+  azure:
+    type: openai_compatible
+    base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
+    api_key_env: AZURE_OPENAI_KEY     # still read from the environment
+    headers: {api-key: "${AZURE_OPENAI_KEY}"}   # ...and Azure wants it here
+    query: {api-version: "2024-10-21"}
+```
+
+`headers` is laid *over* what `api_key_env` built rather than replacing it, so
+an endpoint that wants something extra need not restate the parts every
+endpoint shares. **Values are literal**, so a key does not belong in them — the
+rule the rest of this file exists to keep.
+
+### Where the OpenAI shape is not one shape
+
+OpenAI's own reasoning models (the o-series, GPT-5.x) **reject `max_tokens`**
+and want `max_completion_tokens` instead. Nothing here needs changing for that:
+`max_tokens` is only sent when a binding names it, and anything else in `params`
+is passed through. So name the one that endpoint takes, and do not set the other:
+
+```yaml
+params: {max_completion_tokens: 24000}
+```
+
+A `max_tokens` inherited from `default` will still be sent, which is the trap —
+a role on such a model has to override it away rather than merely not repeat it.
+
+**Bedrock and Vertex are out of reach**, and not by an oversight that a header
+would fix: they authenticate with SigV4 and with Google's own credentials, which
+is a protocol rather than a field.
 
 ## The provider contract
 

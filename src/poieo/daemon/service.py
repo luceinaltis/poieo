@@ -9,12 +9,12 @@ import signal
 import socket
 from collections import deque
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
-from ..workspace import Workspace, WorkspaceError
 from ..binding import BindingSpec, load_binding
+from ..card import append_journal, closing_line, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch
@@ -24,9 +24,9 @@ from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore
-from ..card import append_journal, closing_line, record_run
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
+from ..workspace import Workspace, WorkspaceError
 from .config import DaemonConfig, LoadedTask, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
@@ -41,9 +41,7 @@ def _ensure_port_free(host: str, port: int) -> None:
         try:
             sock.bind((host, port))
         except OSError as exc:
-            raise SpecError(
-                f"web port {port} is already in use on {host}: {exc}"
-            ) from exc
+            raise SpecError(f"web port {port} is already in use on {host}: {exc}") from exc
 
 
 SHUTDOWN_GRACE = 5.0
@@ -204,9 +202,7 @@ class TaskRunner:
         # A task that says where it works keeps a private copy of it.
         workdir = config.workdir_path(task.spec)
         self.workspace = (
-            Workspace(workdir, task.spec.name, config.layout().worktrees())
-            if workdir is not None
-            else None
+            Workspace(workdir, task.spec.name, config.layout().worktrees()) if workdir is not None else None
         )
         self._tracking = False
         self._untracked: str | None = None
@@ -294,9 +290,7 @@ class TaskRunner:
             return  # nothing to do is not nothing done
 
         result.change = change.as_dict()
-        self.store.append(
-            Event(run_id=result.run_id, type="run_change", data=dict(result.change))
-        )
+        self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
 
     @property
     def last_result(self) -> RunResult | None:
@@ -387,9 +381,7 @@ class TaskRunner:
                 # A handoff and a run-now are the same kick; only the reason
                 # differs, and the reason is what the run will record.
                 reason = self._handed.reason if self._handed else "run now"
-                return Firing(
-                    iteration=self._manual_fires, at=datetime.now(), reason=reason
-                )
+                return Firing(iteration=self._manual_fires, at=datetime.now(), reason=reason)
             if self._hold:
                 self.status = "paused"
                 if self._pending is not None and self._pending.done():
@@ -400,9 +392,7 @@ class TaskRunner:
                 self._pending = asyncio.ensure_future(anext(fires))
             woke = asyncio.ensure_future(self._wake.wait())
             try:
-                await asyncio.wait(
-                    {self._pending, woke}, return_when=asyncio.FIRST_COMPLETED
-                )
+                await asyncio.wait({self._pending, woke}, return_when=asyncio.FIRST_COMPLETED)
             finally:
                 woke.cancel()
                 self._wake.clear()
@@ -442,10 +432,38 @@ class TaskRunner:
             await self._quiet(fires)
         log.info("task '%s' stopped", self.name)
 
+    def _over_budget(self) -> str | None:
+        """Why this project may not spend right now, or None.
+
+        Checked where the daemon already decides whether to fire, because
+        "over budget" is a new reason not to rather than a new way to stop
+        something halfway. A run that has started is going to finish -- and a
+        rate limit that killed work in progress would waste exactly the money
+        it was set to save.
+        """
+        spend = self.config.spend
+        if spend is None:
+            return None
+        window = parse_duration(spend.over)
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window)).isoformat()
+        so_far = self.store.spent_since(cutoff, project=self.config.display_name)
+        if so_far < spend.limit:
+            return None
+        return (
+            f"{so_far:.4f} spent in the last {spend.over}, and the limit is "
+            f"{spend.limit} -- not firing until that ages out"
+        )
+
     async def _one_run(self, fire: Firing) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
+        held_back = self._over_budget()
+        if held_back is not None:
+            log.warning("task '%s': %s", self.name, held_back)
+            self.status = "over budget"
+            return True
+
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
         try:
@@ -469,8 +487,7 @@ class TaskRunner:
                 self.reread(self.task.binding_key)
             except PoieoError as exc:
                 log.warning(
-                    "task '%s': %s could not be re-read, so this run uses the "
-                    "last good one: %s",
+                    "task '%s': %s could not be re-read, so this run uses the last good one: %s",
                     self.name,
                     self.task.binding_key,
                     exc,
@@ -551,7 +568,9 @@ class TaskRunner:
             said = (result.cause or {}).get("said") or result.error or "the same failure"
             log.error(
                 "task '%s' paused after %d identical failures: %s",
-                self.name, PAUSE_AFTER, said,
+                self.name,
+                PAUSE_AFTER,
+                said,
             )
             self._journal_pause(said)
             # Parks at the next _next_fire rather than standing down: the
@@ -587,9 +606,7 @@ class TaskRunner:
             depth = kept.pop("depth", 0)
             self._asking, self._asking_depth = RunResult(**kept), int(depth)
         except (OSError, ValueError, TypeError) as exc:
-            log.warning(
-                "task '%s': could not read the question left at %s: %s", self.name, path, exc
-            )
+            log.warning("task '%s': could not read the question left at %s: %s", self.name, path, exc)
             return
         log.info(
             "task '%s' is still waiting on you: %s",
@@ -630,8 +647,7 @@ class TaskRunner:
             # from three weeks ago is worse than no question: it reads as a
             # decision still open when the thing it was about has moved on.
             log.warning(
-                "task '%s' asked again before the last question was answered "
-                "(%r); the older one is dropped.",
+                "task '%s' asked again before the last question was answered (%r); the older one is dropped.",
                 self.name,
                 (self._asking.asked or {}).get("question", ""),
             )
@@ -806,8 +822,7 @@ class Daemon:
             # history. Handing the same one to several would file every
             # project's runs in whichever folder it happened to point at.
             raise SpecError(
-                "a store can only be handed to a daemon running one project; "
-                "with several, each keeps its own"
+                "a store can only be handed to a daemon running one project; with several, each keeps its own"
             )
 
         self.projects = [
@@ -828,17 +843,11 @@ class Daemon:
         # set of clients, which is the point of keying on the file.
         self.pools: dict[str, ProviderPool] = {}
         # One container per distinct folder-and-settings, for the same reason.
-        self.containers: Any = (
-            make_container_pool()
-            if any(f.spec.isolation for f in self.tasks)
-            else None
-        )
+        self.containers: Any = make_container_pool() if any(f.spec.isolation for f in self.tasks) else None
         self.runners: list[TaskRunner] = []
 
     @staticmethod
-    def _history_for(
-        config: DaemonConfig, store: RunStore | None, web_port: int | None
-    ) -> RunStore:
+    def _history_for(config: DaemonConfig, store: RunStore | None, web_port: int | None) -> RunStore:
         """Where this project's runs are written, wrapped to publish if served.
 
         A store per project, because a store is where a project keeps its own
@@ -892,10 +901,7 @@ class Daemon:
 
         return Postbox(
             sender=task.spec.name,
-            recipients={
-                name: other.journal_path()
-                for name, other in project.config.cards_by_task.items()
-            },
+            recipients={name: other.journal_path() for name, other in project.config.cards_by_task.items()},
         )
 
     def _hands_for(self, project: LoadedProject, task: LoadedTask) -> ToolContext:
@@ -983,11 +989,7 @@ class Daemon:
         # namespace it means rather than rely on names being unique daemon-wide,
         # which is a rule this daemon enforces today and will not forever.
         target = next(
-            (
-                r
-                for r in self.runners
-                if r.name == branch.to and r.config is sender.config
-            ),
+            (r for r in self.runners if r.name == branch.to and r.config is sender.config),
             None,
         )
         if target is None:
@@ -996,23 +998,19 @@ class Daemon:
             return
         if target.holding:
             log.warning(
-                "task '%s' handed off to '%s', which is paused: dropped. "
-                "Resume it and the next handoff lands.",
+                "task '%s' handed off to '%s', which is paused: dropped. Resume it and the next handoff lands.",
                 sender.name,
                 branch.to,
             )
             return
 
         label = branch.label or branch.when
-        displaced = target.hand(
-            Handoff(result=run, reason=f"after {sender.name} ({label})", depth=depth + 1)
-        )
+        displaced = target.hand(Handoff(result=run, reason=f"after {sender.name} ({label})", depth=depth + 1))
         if displaced is not None:
             # Always said out loud: a loss nobody hears about is what the
             # one-waits rule would otherwise buy.
             log.warning(
-                "task '%s' was still busy, so an earlier handoff (%s) was "
-                "dropped in favour of this one.",
+                "task '%s' was still busy, so an earlier handoff (%s) was dropped in favour of this one.",
                 branch.to,
                 displaced.reason,
             )
@@ -1044,9 +1042,7 @@ class Daemon:
                 if task.binding_key != key:
                     continue
                 try:
-                    preflight(
-                        task.graph, spec, workdir=project.config.workdir_path(task.spec)
-                    )
+                    preflight(task.graph, spec, workdir=project.config.workdir_path(task.spec))
                     if task.spec.enabled:
                         check_credentials(spec, task.graph.roles())
                 except Exception as exc:
@@ -1101,9 +1097,7 @@ class Daemon:
             return False
         return all(runner.status == "waiting" for runner in self.runners)
 
-    async def _learn_once(
-        self, project: LoadedProject, spec: Any, pool: ProviderPool
-    ) -> None:
+    async def _learn_once(self, project: LoadedProject, spec: Any, pool: ProviderPool) -> None:
         """One guarded attempt. Nothing here may take the daemon down."""
         config = project.config
         folder = config.resolve_path(config.cards)
@@ -1216,14 +1210,10 @@ class Daemon:
         try:
             # return_exceptions: one task blowing up must not orphan the others
             # or tear down pools they are still using.
-            outcomes = await asyncio.gather(
-                *(runner.run() for runner in self.runners), return_exceptions=True
-            )
+            outcomes = await asyncio.gather(*(runner.run() for runner in self.runners), return_exceptions=True)
             for runner, outcome in zip(self.runners, outcomes):
                 if isinstance(outcome, BaseException):
-                    log.exception(
-                        "task '%s' crashed: %s", runner.name, outcome, exc_info=outcome
-                    )
+                    log.exception("task '%s' crashed: %s", runner.name, outcome, exc_info=outcome)
         finally:
             self.cancel.set()
             for learn_task in learn_tasks:

@@ -6,11 +6,12 @@ test here is the address, the payload, and what the user is told.
 """
 
 import json
+
 import httpx
 import pytest
+from conftest import card
 from typer.testing import CliRunner
 
-from conftest import card
 from poieo.cli import app
 
 runner = CliRunner()
@@ -24,14 +25,11 @@ def project(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     (tmp_path / "b.yaml").write_text(
-        "name: mock\nproviders:\n  fake: {type: mock}\n"
-        "default: {provider: fake, model: m}\n",
+        "name: mock\nproviders:\n  fake: {type: mock}\ndefault: {provider: fake, model: m}\n",
         encoding="utf-8",
     )
     card(tmp_path / "cards", "land", "graph: ../g.yaml\ntrigger: {type: manual}\n")
-    (tmp_path / "poieo.yaml").write_text(
-        "name: board\nbinding: b.yaml\ntasks: cards\n", encoding="utf-8"
-    )
+    (tmp_path / "poieo.yaml").write_text("name: board\nbinding: b.yaml\ntasks: cards\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
@@ -41,9 +39,7 @@ def _served(handler):
 
     The base url matters: the commands ask for a path, and it is this that
     turns one into the address a real daemon answers on."""
-    return httpx.Client(
-        transport=httpx.MockTransport(handler), base_url="http://127.0.0.1:8484"
-    )
+    return httpx.Client(transport=httpx.MockTransport(handler), base_url="http://127.0.0.1:8484")
 
 
 def test_answering_posts_the_choice_to_the_task(project, monkeypatch):
@@ -64,9 +60,7 @@ def test_answering_posts_the_choice_to_the_task(project, monkeypatch):
 
 def test_a_refused_choice_shows_the_ones_that_were_offered(project, monkeypatch):
     def handler(request):
-        return httpx.Response(
-            400, json={"error": "'merge' was not offered", "choices": ["land", "hold"]}
-        )
+        return httpx.Response(400, json={"error": "'merge' was not offered", "choices": ["land", "hold"]})
 
     monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
     result = runner.invoke(app, ["answer", "land", "merge"])
@@ -93,9 +87,11 @@ def test_asking_lists_what_is_waiting(project, monkeypatch):
             200,
             json={
                 "tasks": [
-                    {"name": "land", "project": "board",
-                     "asking": {"run_id": "r9", "question": "Land it?",
-                                "choices": ["land", "hold"]}},
+                    {
+                        "name": "land",
+                        "project": "board",
+                        "asking": {"run_id": "r9", "question": "Land it?", "choices": ["land", "hold"]},
+                    },
                     {"name": "quiet", "project": "board", "asking": None},
                 ]
             },

@@ -39,10 +39,7 @@ def write_glb(path: Path, doc, blob) -> None:
     text = json.dumps(doc, separators=(",", ":")).encode()
     text += b" " * (-len(text) % 4)
     blob = bytes(blob) + b"\0" * (-len(blob) % 4)
-    body = (
-        struct.pack("<II", len(text), JSON_CHUNK) + text
-        + struct.pack("<II", len(blob), BIN_CHUNK) + blob
-    )
+    body = struct.pack("<II", len(text), JSON_CHUNK) + text + struct.pack("<II", len(blob), BIN_CHUNK) + blob
     path.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
 
 
@@ -92,9 +89,7 @@ def carry(base, blob, donor, donor_blob, clip_name: str) -> None:
             }
             for channel in animation["channels"]
         ]
-        base.setdefault("animations", []).append(
-            {"name": clip_name, "samplers": samplers, "channels": channels}
-        )
+        base.setdefault("animations", []).append({"name": clip_name, "samplers": samplers, "channels": channels})
     base["buffers"][0]["byteLength"] = len(blob)
 
 

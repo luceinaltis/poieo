@@ -1,6 +1,6 @@
 import pytest
-
 from conftest import EXAMPLES
+
 from poieo.binding import BindingSpec, load_binding
 from poieo.errors import BindingError
 
@@ -62,6 +62,65 @@ def test_context_is_not_sent_to_the_model():
     assert "context" not in binding.resolve("anything").params
 
 
+def test_a_model_can_say_what_it_charges():
+    """For an endpoint that bills and does not say so.
+
+    OpenRouter answers with `cost` when asked; Anthropic's API does not carry
+    one at all, and it is the paid backend this project ships an example for.
+    Somebody who wants a spend limit there has to be able to write the prices
+    down, and beside `model` for the same reason `context` is: it describes
+    the endpoint rather than asking it for anything.
+    """
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"p": {"type": "mock"}},
+            "default": {
+                "provider": "p",
+                "model": "m",
+                "prices": {"input": 5.0, "output": 25.0, "cache_read": 0.5},
+            },
+        }
+    )
+
+    prices = binding.resolve("anything").prices
+    assert prices is not None
+    assert prices.input == 5.0 and prices.output == 25.0 and prices.cache_read == 0.5
+
+
+def test_a_binding_that_says_nothing_about_price_says_nothing():
+    """None means nobody has said, which a spend limit has to treat as "cannot
+    be enforced" rather than as free."""
+    binding = BindingSpec.model_validate(
+        {"providers": {"p": {"type": "mock"}}, "default": {"provider": "p", "model": "m"}}
+    )
+    assert binding.resolve("anything").prices is None
+
+
+def test_prices_are_not_sent_to_the_model():
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"p": {"type": "mock"}},
+            "default": {"provider": "p", "model": "m", "prices": {"input": 1.0}},
+        }
+    )
+    assert "prices" not in binding.resolve("anything").params
+
+
+def test_what_a_call_cost_is_worked_out_per_million_tokens():
+    """The unit every vendor quotes in, so the number in a binding is the
+    number on the pricing page rather than one somebody converted by hand and
+    got wrong by six zeroes."""
+    from poieo.binding import Prices
+    from poieo.providers.base import Usage
+
+    prices = Prices(input=5.0, output=25.0, cache_read=0.5)
+    # A million uncached in, a million out: five dollars and twenty-five.
+    assert prices.charge(Usage(input_tokens=1_000_000, output_tokens=1_000_000)) == 30.0
+    # Cached input is charged at the cache rate, not the input one.
+    spent = prices.charge(Usage(input_tokens=1_000_000, cache_read_tokens=1_000_000, output_tokens=0))
+    assert spent == 0.5
+
+
 def test_unknown_role_falls_back_to_default():
     binding = load_binding(EXAMPLES / "models/claude.yaml")
     assert binding.resolve("anything").model == "claude-opus-5"
@@ -80,9 +139,7 @@ def test_hybrid_binding_splits_roles_across_providers():
 
 
 def test_missing_model_is_reported():
-    binding = BindingSpec.model_validate(
-        {"providers": {"p": {"type": "mock"}}, "default": {"provider": "p"}}
-    )
+    binding = BindingSpec.model_validate({"providers": {"p": {"type": "mock"}}, "default": {"provider": "p"}})
     with pytest.raises(BindingError, match="no model id"):
         binding.resolve("writer")
 

@@ -183,9 +183,7 @@ def world_matrices(doc, tracks, moment):
 
 def unique_edges(indices):
     triangles = indices.reshape(-1, 3)
-    pairs = np.concatenate(
-        [triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]]
-    )
+    pairs = np.concatenate([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
     pairs.sort(axis=1)
     return np.unique(pairs, axis=0)
 
@@ -218,9 +216,7 @@ def stretch(doc, blob, positions, joints, weights, edges, rest_length, clips):
         for step in range(SAMPLES):
             moment = span * step / max(1, SAMPLES - 1)
             world = world_matrices(doc, tracks, moment)
-            matrices = np.array(
-                [world[node] @ binds[i] for i, node in enumerate(skin_def["joints"])]
-            )
+            matrices = np.array([world[node] @ binds[i] for i, node in enumerate(skin_def["joints"])])
             posed = skin(positions, joints, weights, matrices)
             length = np.linalg.norm(posed[edges[:, 0]] - posed[edges[:, 1]], axis=1)
             np.maximum(worst, length - rest_length, out=worst)
@@ -257,9 +253,7 @@ def relax(dense, edges, chosen, pull):
     around = np.zeros_like(dense)
     np.add.at(around, edges[:, 0], dense[edges[:, 1]])
     np.add.at(around, edges[:, 1], dense[edges[:, 0]])
-    around = np.divide(
-        around, counted[:, None], out=dense.copy(), where=counted[:, None] > 0
-    )
+    around = np.divide(around, counted[:, None], out=dense.copy(), where=counted[:, None] > 0)
     out = dense.copy()
     out[chosen] = dense[chosen] * (1 - pull) + around[chosen] * pull
     return out
@@ -353,9 +347,5 @@ if __name__ == "__main__":
 
     allow = flag("--allow", 0.06)
     rounds = flag("--rounds", 12)
-    files = [
-        a
-        for i, a in enumerate(argv)
-        if not a.startswith("--") and (i == 0 or not argv[i - 1].startswith("--"))
-    ]
+    files = [a for i, a in enumerate(argv) if not a.startswith("--") and (i == 0 or not argv[i - 1].startswith("--"))]
     repair(Path(files[0]), None if measure else Path(files[1]), allow, rounds)

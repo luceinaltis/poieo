@@ -20,8 +20,10 @@ from poieo.card import load_card
 from poieo.graph import load_graph
 
 PROJECT = EXAMPLES / "improving-poieo"
-SENDER_OUTPUT = re.compile(r"sender['\"]?[^)]*\)\s*\.get\(\s*['\"]outputs['\"][^)]*\)\s*"
-                           r"\.get\(\s*['\"](?P<key>\w+)['\"]")
+SENDER_OUTPUT = re.compile(
+    r"sender['\"]?[^)]*\)\s*\.get\(\s*['\"]outputs['\"][^)]*\)\s*"
+    r"\.get\(\s*['\"](?P<key>\w+)['\"]"
+)
 
 
 def _cards() -> dict:
@@ -39,9 +41,7 @@ def _graph_of(card):
 
 def _keys_read(graph) -> set[str]:
     """Node ids this graph expects to find in whatever hands it work."""
-    text = "\n".join(
-        (node.prompt or "") + "\n" + (node.system or "") for node in graph.nodes
-    )
+    text = "\n".join((node.prompt or "") + "\n" + (node.system or "") for node in graph.nodes)
     return {m.group("key") for m in SENDER_OUTPUT.finditer(text)}
 
 

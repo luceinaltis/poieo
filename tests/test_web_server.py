@@ -4,17 +4,16 @@ import asyncio
 from types import SimpleNamespace
 
 from starlette.testclient import TestClient
-
 from test_workspace import git, head, make_repo
 
 from poieo.binding import BindingSpec
-from poieo.workspace import Workspace
 from poieo.graph import GraphSpec
 from poieo.project import MARKER, ProjectSpec
 from poieo.store import Event, RunStore
-from poieo.web.events import BroadcastStore
 from poieo.web import server
-from poieo.web.server import create_app, sse_frame, _event_stream
+from poieo.web.events import BroadcastStore
+from poieo.web.server import _event_stream, create_app, sse_frame
+from poieo.workspace import Workspace
 
 
 def stub_project(tmp_path, project_name=None):
@@ -88,7 +87,7 @@ def stub_runner(
         current_run_id=current,
         last_result=last,
         workspace=workspace,
-        trigger=SimpleNamespace(describe=f"interval 30s"),
+        trigger=SimpleNamespace(describe="interval 30s"),
         task=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
             binding=BindingSpec.model_validate(binding or STUB_BINDING),
@@ -195,9 +194,9 @@ def test_each_node_reports_the_model_it_would_call(tmp_path):
     shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
     models = {node["id"]: node["model"] for node in shape["nodes"]}
     assert models == {
-        "classify": "llama3.2:3b",   # its role
-        "route": None,               # a router calls no model
-        "answer": "claude-opus-5",   # no role: through the graph's default_role
+        "classify": "llama3.2:3b",  # its role
+        "route": None,  # a router calls no model
+        "answer": "claude-opus-5",  # no role: through the graph's default_role
     }
 
 
@@ -336,9 +335,7 @@ def test_flows_asks_every_runner_at_once(tmp_path):
         def into(self):
             return "main"
 
-    runners = [
-        stub_runner(name=f"task{i}", workspace=SlowPoint()) for i in range(4)
-    ]
+    runners = [stub_runner(name=f"task{i}", workspace=SlowPoint()) for i in range(4)]
     client = TestClient(create_app(stub_daemon(tmp_path, runners)))
 
     body = client.get("/api/tasks").json()
@@ -406,6 +403,7 @@ def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
     # and not one directory up.
     assert client.get("/assets/app.js").status_code == 200
 
+
 def daemon_with_a_change(tmp_path, body="print(1)" + chr(10), run_id="r1"):
     """A stub daemon whose one task really has a change to show."""
     repo = make_repo(tmp_path)
@@ -446,9 +444,7 @@ def test_diff_reports_the_files_and_the_patch(tmp_path):
 
     assert body["run_id"] == "r1"
     assert body["base"] == change.base and body["head"] == change.head
-    assert body["files"] == [
-        {"path": "new.py", "status": "A", "insertions": 1, "deletions": 0}
-    ]
+    assert body["files"] == [{"path": "new.py", "status": "A", "insertions": 1, "deletions": 0}]
     assert "print(1)" in body["patch"]
     assert body["truncated"] is False
 
@@ -456,9 +452,7 @@ def test_diff_reports_the_files_and_the_patch(tmp_path):
 def test_diff_of_a_run_that_changed_nothing_is_not_an_error(tmp_path):
     daemon = stub_daemon(tmp_path, [stub_runner(name="chores")])
     daemon.store.append(Event(run_id="quiet", type="run_started", data={"task": "chores"}))
-    daemon.store.record_summary(
-        {"run_id": "quiet", "task": "chores", "status": "completed"}
-    )
+    daemon.store.record_summary({"run_id": "quiet", "task": "chores", "status": "completed"})
     client = TestClient(create_app(daemon))
 
     response = client.get("/api/runs/quiet/diff")
@@ -585,9 +579,7 @@ def test_accept_reports_a_conflict_and_leaves_no_mess(tmp_path):
     change = point.commit("r1", "rewrote it")
 
     store = BroadcastStore(RunStore(tmp_path / ".poieo"))
-    store.record_summary(
-        {"run_id": "r1", "task": "chores", "status": "completed", "change": change.as_dict()}
-    )
+    store.record_summary({"run_id": "r1", "task": "chores", "status": "completed", "change": change.as_dict()})
     (repo / "README.md").write_text("mine", encoding="utf-8")
     git(repo, "commit", "-am", "my own edit")
     before = head(repo, "main")
@@ -706,8 +698,7 @@ async def test_the_board_names_no_model_for_a_step_that_calls_none(tmp_path):
         }
     )
     binding = BindingSpec.model_validate(
-        {"name": "b", "providers": {"m": {"type": "mock"}},
-         "default": {"provider": "m", "model": "mock-model"}}
+        {"name": "b", "providers": {"m": {"type": "mock"}}, "default": {"provider": "m", "model": "mock-model"}}
     )
     task = SimpleNamespace(graph=graph, binding=binding)
 
@@ -721,10 +712,7 @@ def test_a_run_recorded_before_projects_still_finds_its_diff(tmp_path):
     # one, and the user's own history is full of those. Refusing them would be
     # losing a diff over a field the record never had the chance to carry.
     daemon, change = daemon_with_a_change(tmp_path)
-    daemon.store.record_summary(
-        {"run_id": "old", "task": "chores", "status": "completed",
-         "change": change.as_dict()}
-    )
+    daemon.store.record_summary({"run_id": "old", "task": "chores", "status": "completed", "change": change.as_dict()})
     client = TestClient(create_app(daemon))
 
     assert client.get("/api/runs/old/diff").json()["base"] == change.base
@@ -733,8 +721,13 @@ def test_a_run_recorded_before_projects_still_finds_its_diff(tmp_path):
 def test_a_run_says_which_project_and_the_diff_uses_it(tmp_path):
     daemon, change = daemon_with_a_change(tmp_path)
     daemon.store.record_summary(
-        {"run_id": "elsewhere", "task": "chores", "project": "another board",
-         "status": "completed", "change": change.as_dict()}
+        {
+            "run_id": "elsewhere",
+            "task": "chores",
+            "project": "another board",
+            "status": "completed",
+            "change": change.as_dict(),
+        }
     )
     client = TestClient(create_app(daemon))
 

@@ -4,27 +4,22 @@ lookup machinery is automatic, so no command exists for either.
 """
 
 from conftest import at
+from test_card import write_card
 from typer.testing import CliRunner
 
+from poieo.card import load_card
 from poieo.cli import app
 from poieo.memory import read_memory
-from poieo.card import load_card
-
-from test_card import write_card
 
 runner = CliRunner()
 
 
 def _project(tmp_path):
-    path = write_card(
-        tmp_path, "importer", "name: mind the importer\nprompt: review the api batches\n"
-    )
+    path = write_card(tmp_path, "importer", "name: mind the importer\nprompt: review the api batches\n")
     memory = at(tmp_path / "tasks")
     memory.facts().mkdir(parents=True)
     memory.constitution().write_text("Never push to main.", encoding="utf-8")
-    (memory.facts() / "batch-cap.md").write_text(
-        "The api rejects batches over 50.\n", encoding="utf-8"
-    )
+    (memory.facts() / "batch-cap.md").write_text("The api rejects batches over 50.\n", encoding="utf-8")
     (memory.facts() / "old-cap.md").write_text(
         "---\nsuperseded_by: batch-cap\n---\nThe api rejects batches over 10.\n",
         encoding="utf-8",
@@ -141,8 +136,8 @@ def test_learn_runs_one_pass_and_says_what_it_kept(tmp_path):
         "    type: mock\n"
         "    options:\n"
         "      responses:\n"
-        "        learner: '{\"entries\": [{\"slug\": \"feed-cap\", \"body\": "
-        "\"Feeds cap at 50.\"}], \"set_aside\": []}'\n"
+        '        learner: \'{"entries": [{"slug": "feed-cap", "body": '
+        '"Feeds cap at 50."}], "set_aside": []}\'\n'
         "default: {provider: fake, model: mock-model}\n",
         encoding="utf-8",
     )
@@ -157,8 +152,7 @@ def test_learn_says_when_there_is_nothing_to_read(tmp_path):
     _, project = _project(tmp_path)
     binding = tmp_path / "learner.yaml"
     binding.write_text(
-        "name: mock\nproviders: {fake: {type: mock}}\n"
-        "default: {provider: fake, model: mock-model}\n",
+        "name: mock\nproviders: {fake: {type: mock}}\ndefault: {provider: fake, model: mock-model}\n",
         encoding="utf-8",
     )
 
@@ -171,8 +165,7 @@ def test_learn_without_memory_says_how_to_start_and_exits_zero(tmp_path):
     write_card(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
     binding = tmp_path / "learner.yaml"
     binding.write_text(
-        "name: mock\nproviders: {fake: {type: mock}}\n"
-        "default: {provider: fake, model: mock-model}\n",
+        "name: mock\nproviders: {fake: {type: mock}}\ndefault: {provider: fake, model: mock-model}\n",
         encoding="utf-8",
     )
 
@@ -260,19 +253,12 @@ def test_memory_shows_the_last_suggestion_and_only_the_last(tmp_path):
         {"at": "t1", "read": 1, "upto": "a", "error": None, "page": "Old idea."},
         {"at": "t2", "read": 1, "upto": "b", "error": None, "page": None},
     ]
-    at(project).learning_log().write_text(
-        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
-    )
+    at(project).learning_log().write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
     quiet = runner.invoke(app, ["memory", str(project)])
     assert "suggests" not in quiet.stdout
 
     with at(project).learning_log().open("a", encoding="utf-8") as handle:
-        handle.write(
-            json.dumps(
-                {"at": "t3", "read": 1, "upto": "c", "error": None, "page": "New idea."}
-            )
-            + "\n"
-        )
+        handle.write(json.dumps({"at": "t3", "read": 1, "upto": "c", "error": None, "page": "New idea."}) + "\n")
     result = runner.invoke(app, ["memory", str(project)])
     assert "the last pass suggests: New idea." in result.stdout
     assert "Old idea" not in result.stdout
@@ -346,10 +332,7 @@ def _record_run(project, run_id, summary, shown, status="completed"):
     episodes = at(project).results()
     episodes.mkdir(parents=True, exist_ok=True)
     (episodes / f"{run_id}.json").write_text(
-        json.dumps(
-            {"run_id": run_id, "task": "importer", "status": status,
-             "summary": summary, "shown": shown}
-        ),
+        json.dumps({"run_id": run_id, "task": "importer", "status": status, "summary": summary, "shown": shown}),
         encoding="utf-8",
     )
 
@@ -357,10 +340,8 @@ def _record_run(project, run_id, summary, shown, status="completed"):
 def test_memory_counts_the_runs_that_used_what_they_were_shown(tmp_path):
     _, project = _project(tmp_path)
     _entry(project, "cap-note", "The feed api rejects batches over fifty exactly.")
-    _record_run(project, "20260824T010000-aaaaaaaa",
-                "split the batches at fifty for the api", ["cap-note"])
-    _record_run(project, "20260824T020000-bbbbbbbb",
-                "nothing worth doing tonight", ["cap-note"])
+    _record_run(project, "20260824T010000-aaaaaaaa", "split the batches at fifty for the api", ["cap-note"])
+    _record_run(project, "20260824T020000-bbbbbbbb", "nothing worth doing tonight", ["cap-note"])
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "kept in mind  1 of 2 recent runs used what they were shown" in result.stdout
@@ -370,8 +351,7 @@ def test_an_entry_shown_often_but_never_used_is_named(tmp_path):
     _, project = _project(tmp_path)
     _entry(project, "zebra-note", "Zebra ordering holds on holidays.")
     for i in range(3):
-        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
-                    "nothing worth doing tonight", ["zebra-note"])
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}", "nothing worth doing tonight", ["zebra-note"])
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "unused" in result.stdout
@@ -382,10 +362,8 @@ def test_an_entry_used_even_once_is_not_named(tmp_path):
     _, project = _project(tmp_path)
     _entry(project, "zebra-note", "Zebra ordering holds on holidays.")
     for i in range(3):
-        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
-                    "nothing worth doing tonight", ["zebra-note"])
-    _record_run(project, "20260824T040000-aaaaaaa4",
-                "held the zebra ordering through the holidays", ["zebra-note"])
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}", "nothing worth doing tonight", ["zebra-note"])
+    _record_run(project, "20260824T040000-aaaaaaa4", "held the zebra ordering through the holidays", ["zebra-note"])
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "unused" not in result.stdout
@@ -395,8 +373,7 @@ def test_a_set_aside_entry_is_not_named_it_was_already_judged(tmp_path):
     _, project = _project(tmp_path)
     # old-cap is set aside in the shared project; old records showed it often.
     for i in range(4):
-        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
-                    "nothing worth doing tonight", ["old-cap"])
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}", "nothing worth doing tonight", ["old-cap"])
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "unused" not in result.stdout
@@ -405,8 +382,7 @@ def test_a_set_aside_entry_is_not_named_it_was_already_judged(tmp_path):
 def test_a_vanished_entry_is_not_named_however_often_shown(tmp_path):
     _, project = _project(tmp_path)
     for i in range(4):
-        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}",
-                    "nothing worth doing tonight", ["long-gone"])
+        _record_run(project, f"20260824T0{i}0000-aaaaaaa{i}", "nothing worth doing tonight", ["long-gone"])
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "unused" not in result.stdout
@@ -441,8 +417,7 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
     log.mkdir(parents=True)
     at(project).learning_log().write_text(
         json.dumps(
-            {"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a",
-             "error": None, "page": "Require ISO dates."}
+            {"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a", "error": None, "page": "Require ISO dates."}
         )
         + "\n",
         encoding="utf-8",
@@ -453,8 +428,6 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
     assert "Require ISO dates." in shown.stdout
 
     # The person edits the page (fresh mtime): they have seen it -- clears.
-    at(project).constitution().write_text(
-        "Never push to main.\nDates are ISO.", encoding="utf-8"
-    )
+    at(project).constitution().write_text("Never push to main.\nDates are ISO.", encoding="utf-8")
     result = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." not in result.stdout

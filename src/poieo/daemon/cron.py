@@ -12,12 +12,7 @@ from datetime import datetime, timedelta
 
 from ..errors import SpecError
 
-_MONTHS = {
-    n: i
-    for i, n in enumerate(
-        "jan feb mar apr may jun jul aug sep oct nov dec".split(), start=1
-    )
-}
+_MONTHS = {n: i for i, n in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), start=1)}
 _DAYS = {n: i for i, n in enumerate("sun mon tue wed thu fri sat".split())}
 
 _FIELDS = (
@@ -33,9 +28,7 @@ _FIELDS = (
 _MAX_DAYS_AHEAD = 366 * 4
 
 
-def _parse_field(
-    raw: str, name: str, low: int, high: int, names: dict[str, int]
-) -> set[int]:
+def _parse_field(raw: str, name: str, low: int, high: int, names: dict[str, int]) -> set[int]:
     values: set[int] = set()
     for part in raw.split(","):
         part = part.strip().lower()
@@ -84,12 +77,10 @@ class CronSchedule:
         parts = self.expression.split()
         if len(parts) != 5:
             raise SpecError(
-                f"cron expression {expression!r} must have 5 fields "
-                f"(minute hour day month weekday), got {len(parts)}"
+                f"cron expression {expression!r} must have 5 fields (minute hour day month weekday), got {len(parts)}"
             )
         self.minutes, self.hours, self.days, self.months, self.weekdays = (
-            _parse_field(raw, name, low, high, names)
-            for raw, (name, low, high, names) in zip(parts, _FIELDS)
+            _parse_field(raw, name, low, high, names) for raw, (name, low, high, names) in zip(parts, _FIELDS)
         )
         self._day_restricted = parts[2].strip() != "*"
         self._weekday_restricted = parts[4].strip() != "*"
@@ -106,11 +97,7 @@ class CronSchedule:
         return dom_ok and dow_ok
 
     def matches(self, moment: datetime) -> bool:
-        return (
-            moment.minute in self.minutes
-            and moment.hour in self.hours
-            and self._day_matches(moment)
-        )
+        return moment.minute in self.minutes and moment.hour in self.hours and self._day_matches(moment)
 
     def next_after(self, after: datetime) -> datetime:
         """The first matching minute strictly after ``after``."""

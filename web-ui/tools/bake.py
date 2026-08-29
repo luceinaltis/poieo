@@ -38,27 +38,38 @@ def bake(source: Path, target: Path, texture_px: int = TEXTURE_PX, keep: float =
     work = Path(tempfile.mkdtemp())
     smaller = work / "textures.glb"
     shrink_textures.shrink(source, smaller, texture_px, TEXTURE_QUALITY)
-    print(f"  textures  {source.stat().st_size // 1024} kB"
-          f" -> {smaller.stat().st_size // 1024} kB")
+    print(f"  textures  {source.stat().st_size // 1024} kB -> {smaller.stat().st_size // 1024} kB")
 
     if keep < 1.0:
         thinner = work / "thinner.glb"
         subprocess.run(
-            ["npx", "--yes", "--package", "@gltf-transform/cli",
-             "gltf-transform", "simplify", str(smaller), str(thinner),
-             "--ratio", str(keep), "--error", "0.001"],
+            [
+                "npx",
+                "--yes",
+                "--package",
+                "@gltf-transform/cli",
+                "gltf-transform",
+                "simplify",
+                str(smaller),
+                str(thinner),
+                "--ratio",
+                str(keep),
+                "--error",
+                "0.001",
+            ],
             check=True,
             shell=True,
             cwd=HERE.parent,
         )
-        print(f"  geometry  {smaller.stat().st_size // 1024} kB"
-              f" -> {thinner.stat().st_size // 1024} kB at {keep:.0%} of the triangles")
+        print(
+            f"  geometry  {smaller.stat().st_size // 1024} kB"
+            f" -> {thinner.stat().st_size // 1024} kB at {keep:.0%} of the triangles"
+        )
         smaller = thinner
 
     packed = work / "packed.glb"
     subprocess.run(
-        ["npx", "--yes", "--package", "@gltf-transform/cli",
-         "gltf-transform", "meshopt", str(smaller), str(packed)],
+        ["npx", "--yes", "--package", "@gltf-transform/cli", "gltf-transform", "meshopt", str(smaller), str(packed)],
         check=True,
         shell=True,
         cwd=HERE.parent,

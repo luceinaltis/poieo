@@ -3,9 +3,9 @@
 Rules for anyone, human or agent, changing this repository. Read this before your
 first commit in a session.
 
-**Nothing on GitHub enforces any of it.** `main` is unprotected by choice: no
-required review, no CI gate, one account, no approval anything can insist on.
-Everything below is what stands in that place instead. That is why it is written down.
+**Nothing on GitHub blocks any of it.** `main` is unprotected by choice: no required
+review, one account, no approval anything can insist on; CI reports on every PR but
+cannot stop a merge. Everything below stands in that place, which is why it is written.
 
 Two halves that rot at different speeds. **Part 1** is judgement. **Part 2** is
 facts about this machine, and goes stale on its own — when it does, fix it.
@@ -53,7 +53,8 @@ true.** Delete hard enough that some of it has to come back.
 
 Merge only when all of these hold:
 
-1. Both suites are green, and the run appears in the PR body.
+1. Both suites are green in the checks, and you ran them here too — CI is Ubuntu
+   only, and this is the Windows machine.
 2. You read the whole diff, an independent pass read it too, and both are in the PR.
 3. The branch is current with `main` and conflict-free.
 4. Every behaviour change has a test that fails without it. This repo is TDD —
@@ -91,9 +92,8 @@ The **PR title becomes the squashed commit subject**, so write it as one:
 imperative, no PR number, no "WIP". An agent ends every commit it authors with a
 trailer naming the model: `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 
-The PR body says what changed and why, and **pastes the actual verification
-output** — the pytest summary line, the vitest run, the curl response. Not "tests
-pass". The output.
+The PR body says what changed and why, and **pastes what CI could not run for you** —
+a curl response, a Windows-only run, anything exercised by hand — as output, not a claim.
 
 ## The shape of the repo
 
@@ -144,14 +144,14 @@ these is wrong, the document is wrong — fix it in the PR where you found out.*
 ## The gate, exactly
 
 ```bash
-# Python — the global pytest plugin on this machine is broken, hence the flags
+# Python — tests, then lint and layout; the flags dodge a broken pytest plugin
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
+ruff check . && ruff format --check .
 
 # Frontend — run mode, never watch (watch mode hangs an agent)
 npm test --workspace web-ui
 
-# ...and the types, which vitest does not check. A fixture that no longer matches
-# an interface in web-ui/src/types.ts passes `npm test` and fails only here.
+# ...and the types: a fixture that has gone stale passes `npm test`, fails here
 cd web-ui && npx tsc -b
 ```
 

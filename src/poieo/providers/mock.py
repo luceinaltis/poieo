@@ -75,10 +75,14 @@ class MockProvider(Provider):
         if isinstance(value, dict):
             # A dict entry scripts an assistant turn that may request tools.
             text = value.get("text", "")
-            for i, call in enumerate(value.get("tool_calls", []), start=1):
+            calls = value.get("tool_calls", [])
+            for i, call in enumerate(calls, start=1):
+                # One call keeps the bare id; several are suffixed, so a
+                # transcript can be read without counting brackets.
+                suffix = "" if len(calls) == 1 else f"_{i}"
                 tool_calls.append(
                     ToolCall(
-                        id=f"mock_{len(self.calls)}" if len(value.get("tool_calls", [])) == 1 else f"mock_{len(self.calls)}_{i}",
+                        id=f"mock_{len(self.calls)}{suffix}",
                         name=call["name"],
                         arguments=dict(call.get("arguments", {})),
                     )

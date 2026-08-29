@@ -4,8 +4,8 @@ from datetime import datetime
 
 import httpx
 import pytest
+from conftest import EXAMPLES, at, card
 
-from conftest import card, EXAMPLES, at
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
@@ -15,9 +15,7 @@ from poieo.store import Event, NullStore
 from poieo.web.events import BroadcastStore
 
 
-@pytest.mark.parametrize(
-    "value,seconds", [("30s", 30), ("5m", 300), ("2h", 7200), ("1d", 86400), (90, 90)]
-)
+@pytest.mark.parametrize("value,seconds", [("30s", 30), ("5m", 300), ("2h", 7200), ("1d", 86400), (90, 90)])
 def test_parse_duration(value, seconds):
     assert parse_duration(value) == seconds
 
@@ -42,9 +40,7 @@ def test_cron_next_fire(expression, now, expected):
     assert schedule.matches(expected)
 
 
-@pytest.mark.parametrize(
-    "expression", ["* * * *", "60 * * * *", "*/0 * * * *", "0 0 * * xyz"]
-)
+@pytest.mark.parametrize("expression", ["* * * *", "60 * * * *", "*/0 * * * *", "0 0 * * xyz"])
 def test_cron_rejects_bad_expressions(expression):
     with pytest.raises(SpecError):
         CronSchedule(expression)
@@ -53,8 +49,8 @@ def test_cron_rejects_bad_expressions(expression):
 def test_cron_or_semantics_when_both_day_fields_are_restricted():
     # Standard cron: "1st of the month OR any Monday".
     schedule = CronSchedule("0 0 1 * mon")
-    assert schedule.matches(datetime(2026, 9, 1))       # a Tuesday, but the 1st
-    assert schedule.matches(datetime(2026, 9, 7))       # a Monday
+    assert schedule.matches(datetime(2026, 9, 1))  # a Tuesday, but the 1st
+    assert schedule.matches(datetime(2026, 9, 7))  # a Monday
     assert not schedule.matches(datetime(2026, 9, 8))
 
 
@@ -75,9 +71,7 @@ async def test_loop_trigger_stops_at_max_iterations():
 
 
 async def test_interval_trigger_fires_immediately_then_periodically():
-    trigger = TriggerSpec(
-        type="interval", every="0.05s", max_iterations=3, run_at_start=True
-    ).build()
+    trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=3, run_at_start=True).build()
     started = asyncio.get_running_loop().time()
     fires = await collect(trigger, 10)
     elapsed = asyncio.get_running_loop().time() - started
@@ -129,13 +123,11 @@ def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
 
 
 def test_startup_validates_every_flow_up_front(tmp_path):
-    (tmp_path / "b.yaml").write_text(
-        "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
-    )
+    (tmp_path / "b.yaml").write_text("providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n")
     (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent}]\n")
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
 
     # The graph is broken (a model node with no prompt); the daemon must refuse
     # to arm rather than discover this when the trigger first fires.
@@ -149,12 +141,10 @@ def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
         f"api_key_env: {variable}}}}}\n"
         "default: {provider: p, model: m}\n"
     )
-    (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
-    )
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
     return path
 
 
@@ -178,7 +168,7 @@ def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypat
     fix it is asking for."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     path = _keyed_config(tmp_path)
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\nenabled: false\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\nenabled: false\n")
     assert len(load_tasks(load_config(path), enabled_only=False)) == 1
 
 
@@ -193,12 +183,10 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
         "api_key_env: POIEO_TEST_KEY}\n"
         "default: {provider: used, model: m}\n"
     )
-    (tmp_path / "g.yaml").write_text(
-        "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
-    )
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
 
     assert len(load_tasks(load_config(path))) == 1
 
@@ -376,9 +364,7 @@ def _isolated_config(tmp_path, image="python:3.12-slim", count=1):
 
 
 def test_a_flow_with_isolation_fails_to_load_without_docker(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
-    )
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH"))
     with pytest.raises(SpecError, match="docker is not on PATH"):
         load_tasks(_isolated_config(tmp_path))
 
@@ -394,15 +380,14 @@ def test_the_same_image_is_only_checked_once(tmp_path, monkeypatch):
     """Ten tasks sharing an image must not cost ten inspects."""
     seen = []
     monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
-    monkeypatch.setattr(
-        "poieo.tools.docker.image_present", lambda image: seen.append(image) or True
-    )
+    monkeypatch.setattr("poieo.tools.docker.image_present", lambda image: seen.append(image) or True)
     load_tasks(_isolated_config(tmp_path, count=5))
     assert seen == ["python:3.12-slim"]
 
 
 def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
     """No ping at all: a machine without docker must not slow down or fail."""
+
     def boom():
         raise AssertionError("docker was probed for a task that never asked")
 
@@ -411,22 +396,15 @@ def test_flows_without_isolation_never_touch_docker(tmp_path, monkeypatch):
     card(
         tmp_path / "cards",
         "plain",
-        f"graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\n"
-        f"trigger: {{type: interval, every: 60s}}\n",
+        f"graph: {EXAMPLES / 'tasks/support-triage.graph.yaml'}\ntrigger: {{type: interval, every: 60s}}\n",
     )
-    config.write_text(
-        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
-        f"store: {tmp_path / 'logs'}\n"
-        "tasks: cards\n"
-    )
+    config.write_text(f"binding: {EXAMPLES / 'models/mock.yaml'}\nstore: {tmp_path / 'logs'}\ntasks: cards\n")
     assert len(load_tasks(load_config(config))) == 1
 
 
 def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
     """Its image may well be gone; it is not going to run."""
-    monkeypatch.setattr(
-        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
-    )
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH"))
     config = _isolated_config(tmp_path)
     config.tasks[0].enabled = False
     assert load_tasks(config) == []
@@ -435,9 +413,7 @@ def test_a_disabled_flow_is_not_preflighted(tmp_path, monkeypatch):
 def test_listing_a_disabled_isolated_flow_does_not_preflight(tmp_path, monkeypatch):
     """`poieo tasks` loads disabled tasks too. It must still list one whose
     image is gone -- that task is not going to run."""
-    monkeypatch.setattr(
-        "poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH")
-    )
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH"))
     config = _isolated_config(tmp_path)
     config.tasks[0].enabled = False
     assert len(load_tasks(config, enabled_only=False)) == 1
@@ -451,15 +427,9 @@ def _tasks_config(tmp_path, tools="[files, notes]"):
     folder.mkdir()
     (tmp_path / "work").mkdir()
     for name in ("build-docs", "check-links"):
-        (folder / f"{name}.yaml").write_text(
-            f"name: {name}\nfolder: ../work\nprompt: go\ntools: {tools}\n"
-        )
+        (folder / f"{name}.yaml").write_text(f"name: {name}\nfolder: ../work\nprompt: go\ntools: {tools}\n")
     path = tmp_path / "poieo.yaml"
-    path.write_text(
-        f"binding: {EXAMPLES / 'models/mock.yaml'}\n"
-        f"store: {tmp_path / 'logs'}\n"
-        "tasks: tasks\n"
-    )
+    path.write_text(f"binding: {EXAMPLES / 'models/mock.yaml'}\nstore: {tmp_path / 'logs'}\ntasks: tasks\n")
     return load_config(path)
 
 
@@ -825,12 +795,8 @@ async def test_one_reader_hears_every_project(tmp_path):
 
     feed = daemon.store.subscribe()
     try:
-        daemon.projects[0].store.append(
-            Event(run_id="r1", type="run_started", data={"task": "sweep"})
-        )
-        daemon.projects[1].store.append(
-            Event(run_id="r2", type="run_started", data={"task": "tidy"})
-        )
+        daemon.projects[0].store.append(Event(run_id="r1", type="run_started", data={"task": "sweep"}))
+        daemon.projects[1].store.append(Event(run_id="r2", type="run_started", data={"task": "tidy"}))
 
         heard = [feed.get_nowait()["run_id"], feed.get_nowait()["run_id"]]
         assert heard == ["r1", "r2"]
@@ -847,9 +813,7 @@ async def test_a_reader_who_left_stops_hearing_every_project(tmp_path):
 
     feed = daemon.store.subscribe()
     daemon.store.unsubscribe(feed)
-    daemon.projects[1].store.append(
-        Event(run_id="r2", type="run_started", data={"task": "tidy"})
-    )
+    daemon.projects[1].store.append(Event(run_id="r2", type="run_started", data={"task": "tidy"}))
 
     assert feed.empty()
 

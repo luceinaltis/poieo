@@ -47,8 +47,7 @@ def preflight(
     missing = binding.check_roles(graph.roles())
     if missing:
         raise BindingError(
-            f"binding '{binding.name}' cannot resolve role(s) "
-            f"{missing} required by graph '{graph.name}'"
+            f"binding '{binding.name}' cannot resolve role(s) {missing} required by graph '{graph.name}'"
         )
     if require_workdir and workdir is None:
         homeless = needs_a_workdir(graph)
@@ -127,8 +126,7 @@ async def execute(
                 raise RunAborted("cancelled before completing the graph")
             if steps >= graph.max_steps:
                 raise RunAborted(
-                    f"exceeded max_steps ({graph.max_steps}); the graph may be "
-                    f"cycling without an exit condition"
+                    f"exceeded max_steps ({graph.max_steps}); the graph may be cycling without an exit condition"
                 )
 
             spec = graph.node(current)
@@ -150,15 +148,18 @@ async def execute(
     except RunAborted as exc:
         status, error = "aborted", str(exc)
         cause = explain_failure(exc)
-        ctx.emit("run_aborted", reason=error,
-                 **({"cause": cause.as_dict()} if cause else {}))
+        ctx.emit("run_aborted", reason=error, **({"cause": cause.as_dict()} if cause else {}))
     except PoieoError as exc:
         status, error = "failed", f"{type(exc).__name__}: {exc}"
         # Classified here, at the one place the original exception still
         # exists -- everything downstream sees only strings.
         cause = explain_failure(exc)
-        ctx.emit("run_failed", node_id=getattr(exc, "node_id", None), error=error,
-                 **({"cause": cause.as_dict()} if cause else {}))
+        ctx.emit(
+            "run_failed",
+            node_id=getattr(exc, "node_id", None),
+            error=error,
+            **({"cause": cause.as_dict()} if cause else {}),
+        )
     except asyncio.CancelledError:
         ctx.emit("run_aborted", reason="cancelled")
         raise
@@ -193,9 +194,7 @@ async def execute(
     )
 
     if status == "completed":
-        ctx.emit(
-            "run_finished", steps=steps, usage=ctx.usage.as_dict(), path=list(ctx.path)
-        )
+        ctx.emit("run_finished", steps=steps, usage=ctx.usage.as_dict(), path=list(ctx.path))
     # Last chance to add to the outcome: the summary written next is what the
     # store keeps, and nobody gets to amend it afterwards.
     if finalize is not None:
