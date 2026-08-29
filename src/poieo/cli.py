@@ -1123,6 +1123,101 @@ def _unreviewable(cards: "list[CardSpec]") -> set[str]:
     }
 
 
+DEFAULT_BOARD_PORT = 8484
+
+
+def _board(port: int) -> "httpx.Client":
+    """A client for the daemon's board.
+
+    The one thing in this CLI that needs poieo to already be running: a
+    question is state the daemon holds, and answering it sets a chain of tasks
+    going in that process.
+    """
+    import httpx
+
+    return httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10.0)
+
+
+def _ask_board(port: int, method: str, path: str, **kwargs) -> "Any":
+    """One call to the board, with its two ordinary failures spelled out."""
+    import httpx
+
+    try:
+        with _board(port) as client:
+            reply = client.request(method, path, **kwargs)
+    except httpx.HTTPError:
+        _fail(
+            f"no poieo daemon answering on port {port}. "
+            f"Start one with `poieo daemon`, or name its port with --port"
+        )
+    if reply.status_code >= 400:
+        body = {}
+        try:
+            body = reply.json()
+        except ValueError:
+            pass
+        said = body.get("error") or f"the board answered {reply.status_code}"
+        offered = body.get("choices")
+        if offered:
+            said = f"{said}. It is asking for one of: {'/'.join(offered)}"
+        _fail(said)
+    return reply.json()
+
+
+def _this_board() -> str:
+    """The name the running daemon knows this project by."""
+    return _daemon_config(None).display_name
+
+
+@app.command(rich_help_panel=BOARD)
+@_guarded
+def asking(
+    port: int = typer.Option(
+        DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."
+    ),
+) -> None:
+    """What the tasks are waiting for you to decide.
+
+    A `confirm` node ends its run with a question rather than doing something
+    that cannot be undone. Until it is answered, nothing downstream of it runs.
+    """
+    body = _ask_board(port, "GET", "/api/tasks")
+    waiting = [row for row in body.get("tasks", []) if row.get("asking")]
+    if not waiting:
+        typer.echo("nothing is waiting on you")
+        return
+    for row in waiting:
+        question = row["asking"]
+        typer.secho(f"{row['name']}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f"  [{'/'.join(question['choices'])}]")
+        for line in question["question"].splitlines():
+            typer.echo(f"    {line}")
+    typer.echo("\nanswer one with: poieo answer <task> <choice>")
+
+
+@app.command(rich_help_panel=BOARD)
+@_guarded
+def answer(
+    task: str = typer.Argument(..., help="The task that is waiting."),
+    choice: str = typer.Argument(..., help="One of the answers it offered."),
+    port: int = typer.Option(
+        DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."
+    ),
+) -> None:
+    """Answer a question a task stopped to ask.
+
+    What happens next is the card's `then:`, which has been held back since the
+    run ended -- so this is the step that lets the rest of the chain run.
+    """
+    body = _ask_board(
+        port,
+        "POST",
+        f"/api/tasks/{_this_board()}/{task}/answer",
+        json={"choice": choice},
+    )
+    _ok(f"{task}: {body.get('answer', choice)}")
+
+
 @app.command(rich_help_panel=BOARD)
 @_guarded
 def tasks(

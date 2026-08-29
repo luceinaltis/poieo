@@ -28,6 +28,14 @@ class StubRunner:
         self.trigger = SimpleNamespace(describe="interval 30s")
         self.task = SimpleNamespace(graph=SimpleNamespace(name="support-triage"))
         self.calls = []
+        self._asking = None
+
+    def waiting_on(self, question="Land it?", choices=("land", "hold")):
+        self._asking = SimpleNamespace(
+            run_id="r9",
+            asked={"node": "confirm", "question": question, "choices": list(choices)},
+        )
+        return self
 
     def pause(self):
         self.calls.append("pause")
@@ -44,6 +52,18 @@ class StubRunner:
     def run_now(self):
         self.calls.append("run_now")
         return self.status != "running"
+
+    def asking(self):
+        return self._asking
+
+    def answer(self, choice):
+        self.calls.append(f"answer:{choice}")
+        if self._asking is None:
+            return False
+        if choice not in self._asking.asked["choices"]:
+            return False
+        self._asking = None
+        return True
 
 
 # The project every stub runner here belongs to. Its name is in the address of
@@ -186,3 +206,53 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
 
     daemon.stop()
     await asyncio.wait_for(serve, timeout=10)
+
+
+# -- answering a question a run left ------------------------------------------
+
+
+def test_answering_reaches_the_runner():
+    runner = StubRunner().waiting_on()
+    client = _client(runner)
+
+    reply = client.post(
+        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"}
+    )
+
+    assert reply.status_code == 200
+    assert reply.json() == {"status": "answered", "answer": "land"}
+    assert runner.calls == ["answer:land"]
+
+
+def test_a_task_that_asked_nothing_says_so():
+    """409, not 404: the task is there, it just has no question open. A board
+    with a stale button must be able to tell those apart."""
+    client = _client(StubRunner())
+
+    reply = client.post(
+        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "land"}
+    )
+
+    assert reply.status_code == 409
+    assert "waiting" in reply.json()["error"]
+
+
+def test_an_answer_that_was_not_offered_is_refused_with_the_ones_that_were():
+    client = _client(StubRunner().waiting_on())
+
+    reply = client.post(
+        f"/api/tasks/{BOARD.display_name}/triage/answer", json={"choice": "merge"}
+    )
+
+    assert reply.status_code == 400
+    assert reply.json()["choices"] == ["land", "hold"]
+
+
+def test_answering_a_task_that_is_not_there_is_a_404():
+    client = _client(StubRunner())
+
+    reply = client.post(
+        f"/api/tasks/{BOARD.display_name}/nope/answer", json={"choice": "land"}
+    )
+
+    assert reply.status_code == 404

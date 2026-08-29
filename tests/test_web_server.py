@@ -114,6 +114,7 @@ def test_flows_lists_runner_state(tmp_path):
             "last_run": {"run_id": "r0", "status": "completed"},
             "pending": 0,
             "into": None,
+            "asking": None,
             "then": [],
             "shape": {
                 "entry": "classify",
@@ -688,3 +689,28 @@ def test_a_run_says_which_project_and_the_diff_uses_it(tmp_path):
     # No task of that name in that project, so there is no copy to diff
     # against -- which is an answer, not a crash.
     assert client.get("/api/runs/elsewhere/diff").json()["change"] is None
+
+
+def _waiting_runner(question="Land it?", choices=("land", "hold")):
+    runner = stub_runner()
+    runner.asking = lambda: SimpleNamespace(
+        run_id="r9",
+        asked={"node": "confirm", "question": question, "choices": list(choices)},
+    )
+    return runner
+
+
+def test_the_board_is_told_what_is_being_asked(tmp_path):
+    """Otherwise the answer route is a button with no label on it."""
+    client = TestClient(create_app(stub_daemon(tmp_path, [_waiting_runner()])))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+
+    assert row["asking"]["question"] == "Land it?"
+    assert row["asking"]["choices"] == ["land", "hold"]
+
+
+def test_a_task_with_no_question_says_nothing_about_one(tmp_path):
+    client = TestClient(create_app(stub_daemon(tmp_path, [stub_runner()])))
+
+    assert client.get("/api/tasks").json()["tasks"][0]["asking"] is None

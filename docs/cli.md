@@ -14,7 +14,7 @@ the panel titles, passed as `rich_help_panel`:
 | panel | commands |
 |---|---|
 | **Setting up** | `init`, `validate`, `check`, `config` |
-| **Your tasks** | `run`, `daemon`, `tasks`, `note` |
+| **Your tasks** | `run`, `daemon`, `tasks`, `note`, `asking`, `answer` |
 | **What happened** | `memory`, `learn`, `runs` |
 
 Six more are registered `hidden=True` — `show`, `view`, `edit`, `eject`,
@@ -26,6 +26,29 @@ it belongs in, or whether it belongs on the page at all.
 cannot find how to list their tasks has not been shown the product. They were
 hidden while `memory` and `learn` — both opt-in, both off unless a folder exists
 — were visible, which had the surface exactly inverted.
+
+### `asking` and `answer` are the only two that need poieo already running
+
+Every other command reads files. These two ask the daemon, because a question a
+[`confirm` node](graph.md) left is state that daemon is holding — and answering
+it releases a `then:` inside that process, setting the rest of a chain going.
+
+```
+$ poieo asking
+land  [land/hold]
+    Merge #181? It changes a public interface.
+
+answer one with: poieo answer <task> <choice>
+
+$ poieo answer land land
+land: land
+```
+
+They are clients of `POST /api/tasks/{project}/{task}/answer` and
+`GET /api/tasks` — the board's own routes, so the terminal and the browser can
+never disagree about what is being asked. `--port` names the board when it is
+not on 8484, and no daemon answering is a sentence saying to start one rather
+than a connection error.
 
 ## The front page speaks the user's three words
 

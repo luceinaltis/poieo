@@ -62,6 +62,19 @@ def _project_of(runner: Any) -> str:
     return runner.config.display_name
 
 
+def _question(runner: Any) -> dict[str, Any] | None:
+    """The question this task is waiting on, as the board needs to show it."""
+    pending = getattr(runner, "asking", lambda: None)()
+    if pending is None:
+        return None
+    asked = pending.asked or {}
+    return {
+        "run_id": pending.run_id,
+        "question": asked.get("question", ""),
+        "choices": list(asked.get("choices", [])),
+    }
+
+
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The one runner a project and a task name between them pick out.
 
@@ -193,6 +206,9 @@ def create_app(daemon: Any) -> Starlette:
                     **state,
                     # The two halves of the work graph: which task this one
                     # hands to, and what it walks on the way there.
+                    # What it is waiting to be told, if anything. Without
+                    # this the answer route is a button with no label on it.
+                    "asking": _question(runner),
                     "then": _branches(runner.task.spec.then),
                     "shape": _shape(runner.task),
                 }
@@ -319,6 +335,42 @@ def create_app(daemon: Any) -> Starlette:
     async def flow_resume(request: Request) -> JSONResponse:
         return await _hold(request, "resume")
 
+    async def flow_answer(request: Request) -> JSONResponse:
+        """The person's half of a `confirm` node, over HTTP.
+
+        Neither a review route nor a control one. It touches no file of the
+        user's, so it is not review; and it outlives the process and can set a
+        chain of tasks going, so it is not control either.
+        """
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        pending = getattr(runner, "asking", lambda: None)()
+        if pending is None:
+            # 409 and not 404: the task is there, it has no question open. A
+            # board holding a button that has gone stale has to tell those two
+            # apart, and so does anybody reading the reply in a terminal.
+            return JSONResponse(
+                {"error": f"task '{runner.name}' is not waiting on an answer"},
+                status_code=409,
+            )
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        choice = str((body or {}).get("choice", ""))
+        if not runner.answer(choice):
+            # The offered ones come back with the refusal: whoever asked is
+            # holding a list that is out of date, and this is the new one.
+            return JSONResponse(
+                {
+                    "error": f"'{choice}' was not offered",
+                    "choices": list((pending.asked or {}).get("choices", [])),
+                },
+                status_code=400,
+            )
+        return JSONResponse({"status": "answered", "answer": choice})
+
     async def flow_run(request: Request) -> JSONResponse:
         # Not folded in with the other two: its refusal is a different answer.
         runner, missing = _asked(request)
@@ -366,6 +418,7 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/run", flow_run, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/answer", flow_answer, methods=["POST"]),
         Route("/", index),
     ]
     # Vite emits static/assets/<hashed name> and references it as /assets/...,

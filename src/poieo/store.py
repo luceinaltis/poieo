@@ -149,6 +149,7 @@ class RunStore:
         stopped being an identity once one daemon could run several projects.
         """
         rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
         for row in self._index_backwards():
             if len(rows) >= limit:
                 break
@@ -156,6 +157,15 @@ class RunStore:
                 continue
             if project and row.get("project") != project:
                 continue
+            # The index is append-only, so revising a run's record means
+            # writing another row for it. Reading backwards, the first one
+            # reached is the latest -- the same rule `summary()` follows, and
+            # skipping the rest is what keeps one run from filling two lines of
+            # the board with the stale one on top.
+            run_id = str(row.get("run_id", ""))
+            if run_id in seen:
+                continue
+            seen.add(run_id)
             rows.append(row)
         return rows
 

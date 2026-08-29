@@ -637,6 +637,10 @@ class TaskRunner:
                 data={"answer": choice, "node": (result.asked or {}).get("node")},
             )
         )
+        # Both records the run has, or the board keeps showing it as waiting
+        # for something that has already been decided. The index is
+        # append-only; another row for the same run is how it is revised.
+        self.store.record_summary(result.summary())
         self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:
             self.handoff(self, result, self._asking_depth)

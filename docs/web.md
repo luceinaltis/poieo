@@ -25,11 +25,24 @@ server and the client keep them together so they stay easy to count.
 | `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
 | `POST /api/tasks/{p}/{f}/resume` | **control** — rearm it |
 | `POST /api/tasks/{p}/{f}/run` | **control** — one fire, now |
+| `POST /api/tasks/{p}/{f}/answer` | **answer** — decide what a `confirm` node asked |
 
 **Review** routes are the only ones that may ever touch the user's own files. If
 you are adding a third of them, stop. **Control** routes touch the daemon's
 runtime state and nothing else: no file, no schedule on disk, nothing that
 survives a restart.
+
+**Answer** is a third kind and only looks like control. It touches none of the
+user's files, so it is not review — but it removes the question kept under
+`runs/asking/`, and the `then:` it releases can set a chain of tasks going. It
+is the one route whose effect outlives the process, which is exactly what a
+person deciding something is for. Its refusals are worth reading: **409** when
+the task is there but has no question open, so a board holding a stale button
+can tell that from a **404**; and **400** with the choices that *were* offered,
+because whoever asked is holding a list that has moved on.
+
+`GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
+route needs it: without it the answer route is a button with no label on it.
 
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
 `.config`), which
