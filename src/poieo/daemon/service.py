@@ -14,14 +14,15 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..workspace import Workspace, WorkspaceError
+from ..binding import BindingSpec, load_binding
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
-from ..providers import ProviderPool
+from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
-from ..runtime.executor import execute
+from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore
 from ..card import append_journal, closing_line, record_run
 from ..tools import ToolContext, make_container_pool, sweep_containers
@@ -157,6 +158,7 @@ class TaskRunner:
         on_run: RunCallback | None = None,
         tool_context: ToolContext | None = None,
         handoff: Callable[["TaskRunner", RunResult, int], None] | None = None,
+        reread: Callable[[str], None] | None = None,
     ):
         self.task = task
         self.config = config
@@ -191,6 +193,11 @@ class TaskRunner:
         self._restore_question()
         self._depth = 0
         self.handoff = handoff
+        # Asked before each run, so an edited binding is in effect on the next
+        # one. The daemon's and not the runner's own: one file is one spec
+        # across every task that names it, and a runner reading only for
+        # itself would leave its siblings behind.
+        self.reread = reread
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
         self._pending: asyncio.Task[Firing] | None = None
@@ -451,6 +458,23 @@ class TaskRunner:
             # knows. `sender`, not `from` -- expressions are parsed as Python,
             # where `input.from.change` would not even parse.
             payload["sender"] = handed.result
+
+        # Beside `read_input` above, and for the same reason: what this run
+        # needs is read now rather than remembered from startup. A file that
+        # will not load, or that would not have started this task, is a
+        # warning and no more -- the spec in memory is still valid, and 3am is
+        # no time to stop working over a config saved half-written.
+        if self.reread is not None:
+            try:
+                self.reread(self.task.binding_key)
+            except PoieoError as exc:
+                log.warning(
+                    "task '%s': %s could not be re-read, so this run uses the "
+                    "last good one: %s",
+                    self.name,
+                    self.task.binding_key,
+                    exc,
+                )
 
         log.info(
             "task '%s' firing (iteration %d, %s)",
@@ -898,6 +922,7 @@ class Daemon:
                 # Bound, so it resolves against self.runners at call time --
                 # which is after this list has been built and assigned.
                 self._hand_off,
+                self.reread,
             )
             for project in self.projects
             for task in project.tasks
@@ -996,6 +1021,63 @@ class Daemon:
         if task.binding_key not in self.pools:
             self.pools[task.binding_key] = ProviderPool(task.binding)
         return self.pools[task.binding_key]
+
+    # -- picking up a binding that changed under us ---------------------------
+
+    def reread(self, key: str) -> None:
+        """Load one binding file again and adopt it, if it still starts.
+
+        Called before every run, so an edit -- `poieo config use`, a hand
+        edit, a pull -- is in effect on the next one rather than after a
+        restart. That is the promise in DESIGN.md, and it is the same shape as
+        `input_file` and a card's journal, which are already re-read each run.
+
+        **Validated before it is adopted**, with the two checks `load_tasks`
+        runs at startup and in its wording: a file saved mid-flight must not
+        put the daemon somewhere it would have refused to start. Raising here
+        leaves the spec in memory untouched, which is still valid and still
+        what the board is claiming.
+        """
+        spec = load_binding(Path(key))
+        for project in self.projects:
+            for task in project.tasks:
+                if task.binding_key != key:
+                    continue
+                try:
+                    preflight(
+                        task.graph, spec, workdir=project.config.workdir_path(task.spec)
+                    )
+                    if task.spec.enabled:
+                        check_credentials(spec, task.graph.roles())
+                except Exception as exc:
+                    raise SpecError(f"task '{task.spec.name}': {exc}") from exc
+        self._adopt(key, spec)
+
+    def _adopt(self, key: str, spec: BindingSpec) -> None:
+        """Put one freshly read spec everywhere the old one was.
+
+        Every task on this file, not just the one that asked: they share a
+        spec because they share a file, and rebinding only the caller would
+        leave its siblings on the old model until each happened to fire --
+        which the board would then paint as a mix, harder to read than
+        uniform staleness.
+
+        The pool keeps its clients. It caches one per provider *name*, built
+        from that provider's own block, and the model id never enters it --
+        it travels per request. Moving a role rewrites `default:`/`roles:`
+        and leaves `providers:` alone, and declaring an endpoint only ever
+        adds one, so no built client is ever superseded. What the pool does
+        need is the new spec itself: `get()` looks a provider up in it, and a
+        role pointed at an endpoint declared after startup would otherwise
+        read as undeclared.
+        """
+        for project in self.projects:
+            for task in project.tasks:
+                if task.binding_key == key:
+                    task.binding = spec
+        pool = self.pools.get(key)
+        if pool is not None:
+            pool.binding = spec
 
     def stop(self) -> None:
         """Request a graceful shutdown; in-flight runs finish their current node."""

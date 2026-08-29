@@ -227,6 +227,21 @@ endpoint once; the daemon holds **one pool per distinct binding file** and close
 them all on shutdown. `ProviderPool` is an async context manager, which is how
 `poieo run` and the learning pass use it.
 
+**A pool survives an edit to the file it was built from**, and that is the point
+of keying it by that file: the daemon re-reads a binding before every run (see
+[daemon.md](daemon.md)) and hands the pool the new spec, without closing
+anything. Nothing has to be closed, because nothing a pool holds can go stale.
+It caches one client per provider *name*, built from that provider's own block,
+and the model id never enters it — that travels per request. Moving a role
+rewrites `default:`/`roles:` and leaves `providers:` alone; declaring an endpoint
+only ever adds one. Neither supersedes a client already built.
+
+What the pool does need is the spec itself, because `get()` looks a provider up
+in it: a role pointed at an endpoint declared after startup would otherwise read
+as undeclared. An edit that *changed* an existing provider's address or key would
+be the third case, and there is no way to make one today — `rebind.declare()`
+refuses to touch a provider already there.
+
 ## Two different checks
 
 They are easy to confuse, and both exist:
