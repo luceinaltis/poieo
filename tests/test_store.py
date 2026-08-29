@@ -180,3 +180,29 @@ def test_a_row_larger_than_one_read_block_still_parses(tmp_path):
     rows = store.list_runs(limit=2)
     assert [r["run_id"] for r in rows] == ["after", "big"]
     assert rows[1]["note"].startswith("메모")
+
+
+def test_a_re_recorded_run_is_listed_once_and_as_its_latest(tmp_path):
+    """`summary()` already reads the newest of a run's rows -- the index is
+    append-only, so revising a record means writing another. A listing that did
+    not agree would show one run twice, and the stale row on top of the fresh
+    one."""
+    store = RunStore(tmp_path)
+    store.record_summary({"run_id": "r1", "task": "review", "status": "asking"})
+    store.record_summary({"run_id": "r2", "task": "other", "status": "completed"})
+    store.record_summary({"run_id": "r1", "task": "review", "status": "completed"})
+
+    rows = store.list_runs()
+
+    assert [row["run_id"] for row in rows] == ["r1", "r2"]
+    assert rows[0]["status"] == "completed"
+
+
+def test_the_limit_counts_runs_and_not_rows(tmp_path):
+    """Otherwise a revised run eats two of the slots the caller asked for."""
+    store = RunStore(tmp_path)
+    for run_id in ("r1", "r2", "r3"):
+        store.record_summary({"run_id": run_id, "status": "completed"})
+    store.record_summary({"run_id": "r3", "status": "completed"})
+
+    assert len(store.list_runs(limit=3)) == 3

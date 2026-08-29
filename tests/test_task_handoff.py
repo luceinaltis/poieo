@@ -708,3 +708,25 @@ async def test_an_answered_question_is_not_asked_again(tmp_path):
 
     assert _named(second, "sender").asking() is None
     await _down(second, task)
+
+
+async def test_answering_updates_what_the_board_will_show(tmp_path):
+    """The run list is read from the index. Left alone it would show a run as
+    waiting on somebody for good, after they had already decided."""
+    from poieo.store import RunStore
+
+    store = RunStore(tmp_path / "runs")
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=store)
+    task = await _up(daemon)
+    sender = _named(daemon, "sender")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    assert store.summary(sender.results[0].run_id)["status"] == "asking"
+
+    sender.answer("land")
+
+    listed = [row for row in store.list_runs() if row["task"] == "sender"]
+    assert len(listed) == 1
+    assert listed[0]["status"] == "completed"
+    await _down(daemon, task)

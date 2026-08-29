@@ -140,6 +140,11 @@ def test_help_tells_two_stories_not_seventeen():
     cannot find how to list their tasks has not been shown the product.
     `memory` and `learn` are on it because a feature nobody can find is a
     feature nobody has.
+
+    `asking` and `answer` are on it for a harder reason: a run that stopped at
+    a `confirm` node is waiting on a person, and everything downstream of it is
+    stopped too. A command nobody can find is not a hidden convenience there --
+    it is a flow that never finishes.
     """
     visible = {
         info.name or info.callback.__name__
@@ -148,7 +153,7 @@ def test_help_tells_two_stories_not_seventeen():
     }
     assert visible == {
         "init", "daemon", "run", "validate", "check",
-        "tasks", "note", "memory", "learn",
+        "tasks", "note", "asking", "answer", "memory", "learn",
     }
     # `runs` and `config` ride along as sub-apps.
     result = runner.invoke(app, ["--help"])
