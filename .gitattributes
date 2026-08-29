@@ -7,3 +7,9 @@
 #
 # Bytes as the bundler wrote them, no conversion either way.
 src/poieo/web/static/** -text
+
+# vite copies this template into the bundle byte for byte, so its line endings
+# end up in checked-in output. Left to `core.autocrlf` it is CRLF on Windows and
+# LF elsewhere, and the same commit then builds two different bundles -- which is
+# how CI first found this. Pin it, and the build is reproducible across machines.
+web-ui/index.html text eol=lf
