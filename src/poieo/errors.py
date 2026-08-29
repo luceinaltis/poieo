@@ -136,6 +136,15 @@ def explain_failure(exc: BaseException) -> Cause | None:
                     "answer. Raising max_tokens alone works too, and buys slower "
                     "and dearer turns to do it",
                 )
+            if "its window is smaller than this step needs" in message:
+                return Cause(
+                    "window_too_small",
+                    "the endpoint kept less of the conversation than it was sent",
+                    "the model cannot hold what this step needs. Say what it "
+                    "really holds with `context:` on the binding, or give the "
+                    "endpoint more room -- on Ollama that is num_ctx, and the "
+                    "number it reports for a model is not the number it loaded",
+                )
             if "expected JSON output" in message or "output path" in message:
                 return Cause(
                     "bad_output",

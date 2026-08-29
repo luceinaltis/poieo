@@ -122,6 +122,26 @@ function Entry({ event }: { event: PoieoEvent }) {
     )
   }
 
+  if (event.type === "node_input_dropped") {
+    // What the endpoint kept against what it was sent. Both numbers, because
+    // the gap is the news -- and because a run that ends badly later is
+    // explained by this line more often than by anything after it.
+    const before = Number(data.before ?? 0)
+    const kept = Number(data.kept ?? 0)
+    return (
+      <li className="drawer-entry" data-kind="stuck">
+        <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+        <div>
+          <div className="drawer-label">
+            {`the endpoint kept ${kept.toLocaleString("en-US")} of `}
+            {`${before.toLocaleString("en-US")} tokens it was sent`}
+          </div>
+          {data.note ? <p className="drawer-text">{String(data.note)}</p> : null}
+        </div>
+      </li>
+    )
+  }
+
   if (event.type === "run_change_failed" || event.type === "node_compact_failed") {
     // Housekeeping that could not do its job. Neither stops the work, which
     // is exactly why both have to be seen: a run whose change was never

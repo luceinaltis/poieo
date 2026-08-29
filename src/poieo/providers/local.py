@@ -97,25 +97,21 @@ class _HttpProvider(Provider):
         # a process runs, and this must not become a round trip per turn.
         self._context: dict[str, int | None] = {}
 
-    async def _remembered(self, model: str, ask, keep_silence: bool = True) -> int | None:
-        """Ask once and remember, unless silence is worth asking again about.
+    async def _remembered(self, model: str, ask) -> int | None:
+        """Ask once and remember. For an answer that holds for the process.
 
-        `keep_silence=False` is for an endpoint whose answer depends on what it
-        is doing rather than what it knows -- Ollama only reports a window for
-        a model it has already loaded, and the first call to that model is what
-        loads it.
+        Ollama's does not, and asks every time instead -- see `context_for`
+        there.
         """
         if model in self._context:
             return self._context[model]
         try:
-            answer = await ask()
+            self._context[model] = await ask()
         except Exception:
             # Asking is an optimisation; a run must not die because the
             # endpoint was slow, gone, or answered something unexpected.
-            answer = None
-        if answer is not None or keep_silence:
-            self._context[model] = answer
-        return answer
+            self._context[model] = None
+        return self._context[model]
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -335,4 +331,11 @@ class OllamaProvider(_HttpProvider):
                     return size if isinstance(size, int) else None
             return None
 
-        return await self._remembered(model, ask, keep_silence=False)
+        # Not remembered at all, unlike the OpenAI-shaped one. That answer is
+        # a property of a deployment and holds for the process; this one is
+        # "what is loaded right now", and a single request from any client --
+        # poieo or the editor someone has open beside it -- reloads the model
+        # at a different size. Measured: `num_ctx=16384` took 5.43s to reload,
+        # and the next plain request took 3.91s to put 4096 back. A localhost
+        # GET once per node execution is cheaper than being wrong about that.
+        return await ask()

@@ -208,6 +208,35 @@ _KEEP_RESULTS = 3
 _CLEAR_AT = 0.5
 _COMPACT_AT = 0.9
 _CLEARED = "[cleared to save room -- call the tool again if you still need this]"
+# For the one result that clearing cannot reach: bigger than the window on its
+# own, so no amount of dropping what came before it helps. Says what to do
+# rather than only that something is gone.
+_TOO_BIG = (
+    "[this did not fit in the model's context -- fetch it in pieces instead. "
+    "read_file takes offset and limit]"
+)
+
+
+def _drop_newest_result(messages: list[dict[str, Any]]) -> int:
+    """Replace the most recent tool result, which clearing always keeps.
+
+    `_clear_old_results` protects the last few on purpose, and that is right
+    until one of them is by itself larger than the window: then every clearing
+    and every retry leaves it in place and fails again. Only called once the
+    endpoint has *shown* that what we sent did not fit -- before that it would
+    be a guess, and a guess that made the tool call pointless would have the
+    model read the same file forever.
+    """
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        if message.get("role") != "tool":
+            continue
+        content = message.get("content")
+        if not isinstance(content, str) or content in (_CLEARED, _TOO_BIG):
+            return 0
+        messages[index] = {**message, "content": _TOO_BIG}
+        return len(content) - len(_TOO_BIG)
+    return 0
 
 
 def _too_big(
@@ -460,6 +489,11 @@ class AgentNode(Node):
             # attempt per node -- more than that and a genuinely broken
             # request gets paid for over and over.
             went_again = False
+            # Whether the loop itself made the conversation smaller since the
+            # last count. Clearing and folding do that on purpose, and reading
+            # their effect as the endpoint dropping something would have the
+            # detector cry wolf on the loop's own housekeeping.
+            shrank = False
             # The binding first, the endpoint second. Someone who wrote the
             # number down meant it -- a smaller real window, a deliberately
             # tighter budget -- so the endpoint is only asked when nobody has
@@ -482,6 +516,7 @@ class AgentNode(Node):
                 if _too_big(window, sent, messages, _CLEAR_AT, _CONTEXT_CAP):
                     freed = _clear_old_results(messages)
                     if freed:
+                        shrank = True
                         ctx.emit(
                             "node_context_cleared",
                             node_id=spec.id,
@@ -495,7 +530,9 @@ class AgentNode(Node):
                 # summary. Second because it costs a model call and cannot be
                 # undone, where clearing is free and one repeated call away.
                 if _too_big(window, sent, messages, _COMPACT_AT, _COMPACT_CAP):
+                    before_fold = len(messages)
                     messages = await _compact(spec, ctx, bound, messages)
+                    shrank = shrank or len(messages) != before_fold
                 request = bound.request(list(messages), tools=offered)
                 try:
                     response = await call_with_retry(spec, bound.provider, request, ctx)
@@ -516,6 +553,7 @@ class AgentNode(Node):
                     if not freed:
                         raise
                     went_again = True
+                    shrank = True
                     ctx.emit(
                         "node_retried_smaller",
                         node_id=spec.id,
@@ -525,7 +563,42 @@ class AgentNode(Node):
                     )
                     request = bound.request(list(messages), tools=offered)
                     response = await call_with_retry(spec, bound.provider, request, ctx)
-                sent = response.usage.input_tokens
+                # The conversation only grows, so the count the endpoint
+                # reports for it must grow too. When it does not, the endpoint
+                # kept less than we sent -- silently, which is what Ollama does
+                # past `num_ctx`: measured, sending 45,000 characters after
+                # 18,000 made the reported count *fall* from 4,010 to 2,050.
+                #
+                # `sent` and the new count must both be real. A backend that
+                # reports zero has not told us anything, and no measurement is
+                # a different fact from a bad one.
+                took = response.usage.input_tokens
+                if sent and took and took <= sent and not shrank:
+                    # Oldest first, as everywhere else. Only when there is
+                    # nothing old enough left is the newest result the problem,
+                    # and by then the endpoint has shown that it is.
+                    freed, note = _clear_old_results(messages), ""
+                    if not freed:
+                        freed = _drop_newest_result(messages)
+                        note = _TOO_BIG if freed else ""
+                    ctx.emit(
+                        "node_input_dropped",
+                        node_id=spec.id,
+                        turn=turns,
+                        before=sent,
+                        kept=took,
+                        freed=freed,
+                        note=note,
+                    )
+                    if not freed:
+                        raise NodeError(
+                            f"node '{spec.id}': the endpoint kept {took} tokens of a "
+                            f"conversation it was sent more of, and there is nothing "
+                            f"left to drop -- its window is smaller than this step needs",
+                            node_id=spec.id,
+                        )
+                shrank = False
+                sent = took
                 ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(
                     "node_turn",
