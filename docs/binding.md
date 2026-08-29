@@ -55,22 +55,39 @@ to answer however it can.
 provider forwards what it does not recognise. A parameter a new API version
 adds is usable from a binding without a code change here, which is deliberate.
 
-The one worth knowing about is how a reasoning model divides its output budget.
-`max_tokens` bounds *everything the model emits*, thinking included, so a model
-that thinks hard can spend the whole ceiling before it starts answering and
-come back cut off mid-turn. A run measured here spent **194,037 output tokens
-over thirty-one turns and was cut off anyway**. OpenAI-shaped endpoints take:
+The one worth knowing about is how much a reasoning model thinks. `max_tokens`
+bounds *everything the model emits*, thinking included, so a model that thinks
+hard can spend the whole ceiling before it starts answering and come back cut
+off mid-turn. A run measured here spent **194,037 output tokens over thirty-one
+turns and was cut off anyway**, at three to seven minutes a turn.
 
 ```yaml
 params:
   max_tokens: 24000
-  reasoning: {max_tokens: 16000}   # thinking gets 16k; 8k is left to answer with
+  reasoning: {max_tokens: 16000}
 ```
 
-The reasoning budget has to leave room under `max_tokens`, or there is nothing
-left to say the answer in. Raising `max_tokens` alone also works, and pays for
-it with turns that are slower and cost more — measured at three to seven
-minutes each on a model given 24,000 to think in.
+**This does not do what its name suggests, and the difference matters.** For a
+model whose endpoint only takes an *effort* level — most of them — OpenRouter
+converts the number into one by its share of `max_tokens`:
+
+| share of `max_tokens` | effort |
+|---|---|
+| ~95% | `max` / `xhigh` |
+| ~80% | `high` |
+| ~50% | `medium` |
+| ~20% | `low` |
+| ~10% | `minimal` |
+
+So `16000` against a ceiling of `24000` is 67% — it asks for **roughly medium
+effort**, not for a 16,000-token cap on thinking. Measured on the same step
+afterwards: output fell to **181 tokens a turn on average**, nowhere near the
+number written down, and the run went from sixty-five minutes to seven. The
+parameter selects a mode; it does not put a lid on one.
+
+Written as an effort level (`reasoning: {effort: "medium"}`) it says the same
+thing more honestly, and does not depend on a ratio to a second number. Use the
+token form when the endpoint really does take a budget.
 
 ### Two questions about roles, and why both exist
 

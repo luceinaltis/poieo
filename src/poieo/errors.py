@@ -128,13 +128,12 @@ def explain_failure(exc: BaseException) -> Cause | None:
                     "out_of_room",
                     "the model was cut off before it finished",
                     "a model that reasons spends max_tokens on thinking as well "
-                    "as answering, and spends more of it the longer the "
-                    "conversation behind it has grown. Where the endpoint lets "
-                    "the two be split, give the thinking its own smaller budget "
-                    "-- OpenAI-shaped ones take `reasoning: {max_tokens: N}` in "
-                    "params, and N must leave room under max_tokens for the "
-                    "answer. Raising max_tokens alone works too, and buys slower "
-                    "and dearer turns to do it",
+                    "as answering, so a hard thinker can use the whole ceiling "
+                    "before it starts to answer. Ask it to think less: "
+                    "OpenAI-shaped endpoints take `reasoning: {effort: \"low\"}` "
+                    "in params, which cost one measured step nothing and took it "
+                    "from sixty-five minutes to seven. Raising max_tokens works "
+                    "too, and buys slower and dearer turns to do it",
                 )
             if "its window is smaller than this step needs" in message:
                 return Cause(
