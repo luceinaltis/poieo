@@ -88,11 +88,13 @@ MAX_CHAIN = 10
 def handoff_scope(result: RunResult) -> dict[str, Any]:
     """What a `then:` branch may test, and what the next run reads as `sender`.
 
-    One shape, not two, so there is no second list to keep in sync. ``usage``
-    is left out; nothing branches on a token count. ``change`` is present and
-    None when a run altered nothing -- unlike :meth:`RunResult.summary`, which
-    drops the key -- because ``when: "run.change"`` has to read false rather
-    than raise.
+    One shape, not two, so there is no second list to keep in sync -- and the
+    same names a router reads inside a run, so a guard on what it spent is
+    written once and moves between the two levels unchanged.
+
+    ``change`` is present and None when a run altered nothing -- unlike
+    :meth:`RunResult.summary`, which drops the key -- because
+    ``when: "run.change"`` has to read false rather than raise.
     """
     return {
         "run_id": result.run_id,
@@ -109,6 +111,10 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
         "error": result.error,
         "cause": result.cause,
         "change": result.change,
+        # What the run cost. A chain is bounded at MAX_CHAIN hops, which says
+        # nothing about what those hops spend, so a card that wants to stop
+        # handing work on before the bill grows has to be able to read it.
+        "usage": result.usage,
     }
 
 

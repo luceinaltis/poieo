@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,6 +53,14 @@ class RunContext:
     aliases: dict[str, Any] = field(default_factory=dict)
     usage: Usage = field(default_factory=Usage)
     path: list[str] = field(default_factory=list)
+    # Monotonic, not the wall clock: a run that starts at 2am may cross an NTP
+    # correction or a daylight-saving change, and a guard set on how long it
+    # has been going must not jump when it does.
+    #
+    # `perf_counter` and not `monotonic`, which on Windows ticks every 15.6ms
+    # -- long enough that a run reads as having taken exactly no time at all
+    # for its first few steps.
+    started: float = field(default_factory=time.perf_counter)
 
     def scope(self) -> dict[str, Any]:
         """Names visible to prompt templates and router conditions."""
@@ -66,6 +75,17 @@ class RunContext:
                     "trigger": self.trigger,
                     "iteration": self.iteration,
                     "path": list(self.path),
+                    # What it has cost so far, and how long it has been at it.
+                    # Both are here so a router can stop a run that is still
+                    # going: `max_steps` bounds the walk, but one agent node
+                    # with tools is a single step however many turns it takes
+                    # inside, so it bounds neither the money nor the night.
+                    #
+                    # Tokens rather than an amount of money: nothing in poieo
+                    # knows what a model charges, and a price table checked in
+                    # here would be wrong the week after it was written.
+                    "usage": self.usage.as_dict(),
+                    "elapsed": time.perf_counter() - self.started,
                 }
             ),
         }

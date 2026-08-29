@@ -53,7 +53,25 @@ graph, binding, pool and store; `input`, `state`, `iteration`; `workdir` and
 | `state` | the mapping that survives across iterations |
 | `nodes.<id>` | any earlier node's output |
 | `<alias>` | an output's `as:` name, hoisted to the top level |
-| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
+| `run` | `id`, `task`, `trigger`, `iteration`, `path`, `usage`, `elapsed` |
+
+`run.usage` (the four token counts) and `run.elapsed` (seconds) are what let a
+router stop a run that is still going. `max_steps` bounds the *walk*, and one
+agent node with tools is a single step however many turns it spends inside it,
+so it bounds neither the money nor the night:
+
+```yaml
+- when: "run.usage.output_tokens > 50000 or run.elapsed > 3600"
+  to: null
+```
+
+Tokens and not an amount of money: nothing in poieo knows what a model charges,
+and a price table checked in here would be wrong the week after it was written.
+`elapsed` is measured on a monotonic clock, so a run that crosses an NTP
+correction or a daylight-saving change does not see time jump under a threshold
+somebody set. It is `perf_counter` rather than `monotonic`, which on Windows
+ticks every 15.6ms — coarse enough that a run would read as having taken
+exactly no time at all for its first few steps.
 
 Aliases use `setdefault`, so a graph cannot shadow `input` or `run` by naming an
 output after them. Everything is `wrap()`ped once here so `input.text` and

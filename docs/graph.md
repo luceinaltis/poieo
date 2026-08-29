@@ -242,6 +242,11 @@ naming a key the run does not carry is the commonest authoring mistake.
 dict lands in the prompt as valid JSON rather than a Python repr with single
 quotes.
 
+Among those names are `run.usage` and `run.elapsed`, which is how a router
+stops a run that has spent or lasted too long — the guard an unattended run
+needs, since `max_steps` counts steps and an agent node with tools is one step
+however long it stays inside. See [runtime.md](runtime.md).
+
 The names in scope are assembled by `RunContext.scope()` — see
 [runtime.md](runtime.md).
 
