@@ -82,9 +82,15 @@ def test_being_cut_off_reads_as_out_of_room_and_names_the_budget():
     # Raising the ceiling is not the only answer and often not the best one.
     # A run measured here spent 194,037 output tokens over thirty-one turns
     # and was cut off anyway: the thinking had eaten the whole budget and left
-    # nothing to answer with. Endpoints that let the two be split say so, and
-    # a reader who is only told "raise it" pays for slower turns instead.
+    # nothing to answer with.
     assert "reasoning" in cause.fix
+    # And it points at `effort`, not at a token budget for the thinking. The
+    # latter is what this used to say and it was wrong: an endpoint that only
+    # takes an effort level converts the number into one by its share of
+    # max_tokens, so `reasoning: {max_tokens: 16000}` under a 24,000 ceiling
+    # asks for medium effort rather than a 16,000-token lid. Naming the thing
+    # that is actually being chosen is the whole fix.
+    assert "effort" in cause.fix
 
 
 def test_unparseable_output_reads_as_bad_output():
