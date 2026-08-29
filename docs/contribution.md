@@ -166,6 +166,24 @@ rather than asking whether `index.html` is there — a pattern that matches
 today's build shape and not tomorrow's leaves the obvious files in place, and a
 check that names the obvious files stays green over it.
 
+Then it starts the daemon and asks for the page the way a browser would, which
+is a different question from whether the files are installed. `index.html` names
+its assets by absolute path and the server mounts them one level into the build,
+so a change to vite's `base` would leave every file present and correct and the
+board blank — the comparison above stays green through that, and a request for
+the asset does not. It also covers the original failure from the other side:
+`index` answers with a sentence and a **200** when there is no bundle, so
+anything checking only a status code passes on an empty board.
+
+Two things that step has to get right, and both were learned by getting them
+wrong. It enables the sample card first, because that card ships
+`enabled: false` on purpose — a project you just made should not start firing at
+you — and a daemon with nothing enabled says so and exits. And before reporting
+anything green it asks `/api/tasks` whether the project answering is the one it
+just made: the first run of that step reached a board already open on 8484 and
+cheerfully reported a stranger's assets as proof. It uses 8585 now, and still
+checks.
+
 The command list is enumerated from the app rather than written down, because a
 list kept by hand goes stale the first time somebody adds a command and says
 nothing about it. Two guards keep the job from passing vacuously: the enumeration

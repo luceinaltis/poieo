@@ -213,3 +213,88 @@ jobs:
           # the run has to reach the log for any of this to have meant anything.
           poieo runs list | grep -q completed
           poieo tasks | grep -q hello
+
+      # The step above proves the files are installed; this one proves they are
+      # reachable, which is not the same failure. `index.html` names its assets
+      # by absolute path and the server mounts them one level into the build,
+      # so a change to vite's `base` leaves every file present and correct and
+      # the board blank -- and the check above would stay green through it.
+      #
+      # It also covers the way the board went missing in the first place from
+      # the other side: `index` falls back to a sentence when there is no
+      # bundle, with a 200 attached. Anything asking only for a status code
+      # passes on an empty board, so this asks what the body says.
+      - name: the daemon serves the board a browser would get
+        working-directory: /tmp/smoke
+        run: |
+          # The sample card ships `enabled: false` on purpose -- a project you
+          # just made should not start firing at you -- and a daemon with
+          # nothing enabled says so and exits. Turning it on is what a person
+          # does next, and it is what gives the daemon a reason to stay up.
+          sed -i 's/^enabled: false/enabled: true/' tasks/hello.yaml
+
+          # Not 8484, the default: running this step by hand on a machine with
+          # a board already open would otherwise reach that one instead, and
+          # the identity check below would be the only thing standing between a
+          # stranger's answers and a green check. It caught exactly that once.
+          poieo daemon --port 8585 > daemon.log 2>&1 &
+          echo $! > daemon.pid
+          # Always, not on failure: a green run that took two seconds and a
+          # green run that took fifty are different, and only the log says which.
+          trap 'kill "$(cat daemon.pid)" 2>/dev/null; echo "--- daemon log ---"; cat daemon.log' EXIT
+          python - <<'PY'
+          import re
+          import time
+          import urllib.error
+          import urllib.request
+
+          BASE = "http://127.0.0.1:8585"
+
+          def get(path):
+              with urllib.request.urlopen(BASE + path, timeout=5) as answer:
+                  return answer.status, answer.read()
+
+          # It has a project to read and a port to bind before it can answer.
+          for _ in range(60):
+              try:
+                  _, body = get("/")
+                  break
+              except (urllib.error.URLError, OSError):
+                  time.sleep(1)
+          else:
+              raise SystemExit("::error::the daemon never answered on 8585")
+
+          # Before anything is reported green: is this the daemon this step
+          # started? A port can be held by something else -- a board left open,
+          # another job -- and then every check below passes on a process that
+          # has nothing to do with the package just installed. This is not
+          # hypothetical; it is how the first run of this step went.
+          _, listing = get("/api/tasks")
+          if b'"smoke"' not in listing:
+              raise SystemExit(
+                  "::error::something other than this step's daemon is answering on 8585: "
+                  f"{listing[:200]}"
+              )
+
+          page = body.decode("utf-8", "replace")
+
+          # The sentence `index` serves when the bundle is not there -- with a
+          # 200, which is exactly why a status check is not enough.
+          if "not built yet" in page:
+              raise SystemExit(f"::error::the daemon served its no-bundle fallback: {page[:200]}")
+
+          refs = sorted(set(re.findall(r'(?:src|href)="(/[^"]+)"', page)))
+          if not refs:
+              raise SystemExit(f"::error::this page names no assets, so it is not the built one: {page[:200]}")
+          for ref in refs:
+              status, blob = get(ref)
+              if status != 200 or not blob:
+                  raise SystemExit(f"::error::{ref} came back {status} with {len(blob)} bytes")
+              print(f"ok  {status}  {len(blob):>9,} bytes  {ref}")
+
+          # And that there is something for it to draw: the card the step above
+          # made, not just the project it lives in.
+          if b'"hello"' not in listing:
+              raise SystemExit(f"::error::/api/tasks does not know this project's task: {listing[:200]}")
+          print("ok  the page, every asset it names, and the task list")
+          PY
