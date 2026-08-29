@@ -362,9 +362,76 @@ async def test_append_refuses_a_missing_file(tmp_path):
         await TOOLS["append_file"].run(tmp_path, {"path": "gone.md", "content": "x"})
 
 
-from poieo.tools.shell import SHELL_TOOLS
+from poieo.tools.shell import SHELL_TOOLS, posix_shell
 
 SHELL = {t.definition.name: t for t in SHELL_TOOLS}
+
+# What a command may assume it is being read by. The question is no longer
+# which OS this is -- it is whether a POSIX shell was found, which on Windows
+# is usually yes and used to be irrelevant.
+POSIX = __import__("os").name != "nt" or bool(posix_shell())
+
+
+def test_a_posix_shell_is_preferred_when_there_is_one(monkeypatch):
+    """A model writes POSIX because that is what its training and this
+    repository's own documents are written in. Where a POSIX shell exists,
+    running commands anywhere else is a translation nobody asked for."""
+    import poieo.tools.shell as shell
+
+    monkeypatch.setattr(shell.shutil, "which", lambda name: "C:/Program Files/Git/bin/bash.exe")
+    assert posix_shell(windows=True) == "C:/Program Files/Git/bin/bash.exe"
+
+
+def test_the_wsl_launcher_is_not_a_posix_shell_for_this_purpose(monkeypatch):
+    """`C:\\Windows\\System32\\bash.exe` starts a Linux distribution.
+
+    Commands would run against a different filesystem, so the workdir handed
+    to `cwd` would point somewhere else entirely -- and the command would
+    *succeed* there. Running quietly in the wrong place is worse than failing.
+    """
+    import poieo.tools.shell as shell
+
+    monkeypatch.setattr(
+        shell.shutil, "which", lambda name: "C:\\Windows\\System32\\bash.exe"
+    )
+    assert posix_shell(windows=True) is None
+
+
+def test_without_a_posix_shell_there_is_none_to_report(monkeypatch):
+    import poieo.tools.shell as shell
+
+    monkeypatch.setattr(shell.shutil, "which", lambda name: None)
+    assert posix_shell(windows=True) is None
+
+
+def test_the_tool_says_which_shell_it_will_use():
+    """Nothing told the model what it was talking to.
+
+    In a measured run the model saw `grep` and `sed` work -- the binaries are
+    on PATH -- concluded it was on a POSIX system, wrote a heredoc, and got
+    `<<은(는) 예상되지 않았습니다` back from cmd.exe. Claude Code's own shell
+    tool opens by naming its shell for this reason.
+    """
+    described = SHELL["run_command"].definition.description
+    # One or the other, and never neither: a model that is told nothing
+    # assumes POSIX, which is how the heredoc above came to be written.
+    assert ("POSIX shell" in described) != ("cmd.exe" in described)
+
+
+async def test_a_heredoc_runs(tmp_path):
+    """POSIX syntax the model actually reached for, and cmd.exe rejected.
+
+    On Linux and macOS this has always passed and proves nothing. On Windows
+    it is red before this change and green after, which is the whole point of
+    it being here.
+    """
+    result = await SHELL["run_command"].run(
+        tmp_path,
+        {"command": "cat > out.txt << 'EOF'\nhello\nEOF"},
+    )
+
+    assert "exit code: 0" in result
+    assert (tmp_path / "out.txt").read_text().strip() == "hello"
 
 
 async def test_run_command_reports_exit_code_and_output(tmp_path):
@@ -380,7 +447,9 @@ async def test_run_command_nonzero_exit_is_reported_not_raised(tmp_path):
 
 async def test_run_command_runs_in_workdir(tmp_path):
     (tmp_path / "here.txt").write_text("x")
-    out = await SHELL["run_command"].run(tmp_path, {"command": "dir /b" if __import__("os").name == "nt" else "ls"})
+    out = await SHELL["run_command"].run(
+        tmp_path, {"command": "ls" if POSIX else "dir /b"}
+    )
     assert "here.txt" in out
 
 

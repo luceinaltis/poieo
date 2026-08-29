@@ -92,6 +92,27 @@ command timed out) and an unexpected one (a bad argument shape from the model)
 both come back as text the model reads and can correct. Only harness bugs
 outside `execute()` raise. An unknown tool name is answered the same way.
 
+## Which shell, and saying so
+
+`run_command` runs through **a POSIX shell where one exists**, including on
+Windows, where `create_subprocess_shell` would otherwise use `COMSPEC` --
+`cmd.exe`. A model writes POSIX; so does this repository's own CLAUDE.md.
+
+The measured run that prompted this is the argument. Unix binaries were on
+PATH, so `grep` went 21/23 and `sed` 3/3 -- and then a heredoc came back
+`<<은(는) 예상되지 않았습니다`, because the *binaries* were POSIX and the
+*syntax* was cmd.exe. Nothing had told the model which it was talking to, so
+the tool's description now opens by naming it, built from what was found rather
+than hardcoded.
+
+**`C:\Windows\System32ash.exe` is refused.** It is the WSL launcher: it
+starts a Linux distribution with its own filesystem, so the `cwd` points
+somewhere else entirely and the command *succeeds* there. Running quietly in
+the wrong directory is worse than failing in the right one.
+
+Where no POSIX shell is found the old behaviour stands, and the description
+says so plainly along with what will not work.
+
 ## Confinement
 
 `files.resolve_path()` resolves every path against the workdir and refuses
