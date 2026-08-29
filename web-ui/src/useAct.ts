@@ -19,7 +19,13 @@ export interface Act<T extends Answer> {
   act(send: () => Promise<T>): Promise<boolean>
 }
 
-export function useAct<T extends Answer>(onDone: () => void): Act<T> {
+/**
+ * `onDone` is handed the answer, because "it worked" is not always the whole
+ * story: a models write can land in the file and still be refused by the
+ * running daemon, and only the answer says which. Callers that do not care
+ * take no argument and are unaffected.
+ */
+export function useAct<T extends Answer>(onDone: (answer: T) => void): Act<T> {
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<T | null>(null)
 
@@ -29,7 +35,7 @@ export function useAct<T extends Answer>(onDone: () => void): Act<T> {
     setRefused(null)
     const answer = await send()
     setBusy(false)
-    if (answer.ok) onDone()
+    if (answer.ok) onDone(answer)
     else setRefused(answer)
     return true
   }

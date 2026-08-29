@@ -432,10 +432,21 @@ def create_app(daemon: Any) -> Starlette:
                         # different facts, and a listing that conflated them
                         # would read as a fault.
                         "askable": engines.askable(provider.type),
-                        # Whether this listing is what is on this machine or
-                        # what the endpoint offers. Two listings that look
-                        # identical and mean different things.
+                        # Whether this listing is what is **pulled** or what the
+                        # endpoint offers. Two listings that look identical and
+                        # mean different things -- and a property of the
+                        # backend, true of an Ollama wherever it runs.
                         "installed": engines.lists_installed(provider.type),
+                        # Whose machine that is, which the type cannot answer:
+                        # an inference server is routinely somewhere else, and
+                        # every Ollama anywhere used to read as "on this
+                        # machine". Null when there is no address to ask.
+                        "here": engines.is_here(provider.base_url),
+                        # Which machine, and no more of the address than that.
+                        # `poieo config` names an Ollama `ollama` wherever it
+                        # runs, so two of them were two endpoints a reader could
+                        # not tell apart. See docs/web.md for what changed.
+                        "host": engines.where(provider.base_url),
                         "api_key_env": provider.api_key_env,
                         "api_key_set": _key_state(key, provider),
                         "models": [
@@ -725,13 +736,20 @@ def create_app(daemon: Any) -> Starlette:
         # The board draws a model on every node off the spec in memory, so
         # without this the file and the picture part company until the next
         # run re-reads it.
+        refused = ""
         try:
             await asyncio.to_thread(daemon.reread, str(path))
-        except PoieoError:
-            # The edit landed and `point_at` verified it reloads; a daemon that
-            # will not adopt it is the next run's problem to report, not a
-            # reason to tell the reader their edit failed.
-            pass
+        except PoieoError as exc:
+            # The edit landed -- `point_at` verified the file reloads -- but the
+            # daemon validates what start-up validates, and may keep the last
+            # good spec instead. Pointing a role at an endpoint whose key is not
+            # set is the case that happens, and it used to pass silently.
+            #
+            # It cannot. The panel reads the same in-memory spec, so it redraws
+            # the *old* model, and a reader who was told "using" watches nothing
+            # change. Worse, the file is now a state the project will not start
+            # from. Saying which of the two happened is the whole answer.
+            refused = str(exc)
 
         return JSONResponse(
             {
@@ -741,6 +759,9 @@ def create_app(daemon: Any) -> Starlette:
                 # Said out loud rather than implied: silence from an endpoint
                 # is not the same as its agreement.
                 "checked": bool(served),
+                # Whether the running daemon took it, and not just the file.
+                "adopted": not refused,
+                **({"why": refused} if refused else {}),
             }
         )
 

@@ -381,6 +381,56 @@ def label_for(type_: str, base_url: str | None = None, said: str | None = None) 
     return None
 
 
+_LOOPBACK = {"localhost", "::1", "0.0.0.0"}
+
+
+def _authority(base_url: str) -> tuple[str, str | None]:
+    """The host and port out of an address, without importing a URL parser's
+    opinion about the rest of it. `("192.168.1.50", "11434")`."""
+    rest = base_url.split("://", 1)[-1]
+    authority = rest.split("/", 1)[0].split("@")[-1]
+    if authority.startswith("["):
+        # IPv6: `[::1]:11434`. The colons inside the brackets are the address.
+        host, _, port = authority.partition("]")
+        return host[1:], (port.lstrip(":") or None)
+    host, _, port = authority.partition(":")
+    return host, (port or None)
+
+
+def where(base_url: str | None) -> str | None:
+    """`host:port`, or None when the endpoint has no address at all.
+
+    What identifies a *machine*, and no more of the address than that. The
+    scheme and the path say nothing about which box answered, and an address
+    is the one binding field that can carry a private host -- so this is the
+    part that crosses to a screen and the rest is not.
+    """
+    if not base_url:
+        return None
+    host, port = _authority(base_url)
+    return f"{host}:{port}" if port else host
+
+
+def is_here(base_url: str | None) -> bool | None:
+    """Whether that address is *this* machine, or None if it is not an address.
+
+    Ollama on the desktop under the desk lists exactly what an Ollama here
+    does -- models pulled and ready, not a catalogue -- so the listing's kind
+    (:func:`lists_installed`) is the backend's property and this is a separate
+    question the *address* answers. Conflating them had every Ollama anywhere
+    reading as "on this machine".
+
+    None, not False, when there is no address: Claude's SDK resolves its own
+    and `mock` has none, and calling those "somewhere else" would be a claim
+    about a machine nobody named.
+    """
+    if not base_url:
+        return None
+    host = _authority(base_url)[0].lower()
+    # `127.anything` is the loopback net, and a config may say any of it.
+    return host in _LOOPBACK or host.startswith("127.")
+
+
 def lists_installed(type_: str) -> bool:
     """Whether this backend lists what is **on this machine** rather than what
     it offers.

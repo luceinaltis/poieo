@@ -213,15 +213,26 @@ def test_an_address_nobody_wrote_down_leaves_the_label_null(tmp_path, monkeypatc
     assert _endpoints(body)["routed"]["label"] is None
 
 
-def test_the_report_carries_no_address(tmp_path, monkeypatch):
-    """A `base_url` is not needed to pick a model -- the endpoint's own name
-    tells one from another -- and it is the one binding field that can carry a
-    private host."""
+def test_the_report_names_the_host_but_not_the_whole_address(tmp_path, monkeypatch):
+    """Which machine, and nothing more of the address.
+
+    This used to withhold the address entirely, on the argument that an
+    endpoint's own name tells one from another. It does not: `poieo config`
+    writes the key `ollama` for an Ollama wherever it runs, so a project with
+    one on this laptop and one on an office server had two endpoints a reader
+    could not tell apart -- and the panel told them both were on this machine.
+    docs/web.md said the argument for letting an address through would have to
+    be concrete. That is the concrete one.
+
+    Host and port, because that is what identifies a machine. The scheme and
+    the path are not part of the answer and do not cross.
+    """
     _asks(monkeypatch)
     response = _models(_client(tmp_path, binding=_TWO))
 
+    assert _endpoints(response.json())["local"]["host"] == "localhost:11434"
     assert "base_url" not in response.text
-    assert "localhost" not in response.text
+    assert "http://" not in response.text
 
 
 def test_the_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch):
@@ -357,6 +368,7 @@ def test_using_a_model_points_the_default_at_it(tmp_path, monkeypatch):
         "role": "default",
         "ref": "local/llama3.2:3b",
         "checked": True,
+        "adopted": True,
     }
     text = (tmp_path / "b.yaml").read_text(encoding="utf-8")
     assert "llama3.2:3b" in text
@@ -883,3 +895,139 @@ def _answers(catalogue):
         return catalogue
 
     return ready()
+
+
+# -- this machine, or somebody else's ----------------------------------------
+#
+# An inference server is routinely somewhere else: an Ollama on the desktop
+# under the desk, a vLLM on an office box. The listing it answers with means
+# the same thing either way -- models pulled and ready, not a menu -- but *whose
+# machine* they are pulled onto is a second fact, and it comes from the address.
+#
+# It used to come from the provider type, so every Ollama anywhere read as "on
+# this machine". Found by declaring one at a network address and reading the
+# panel back.
+
+_ELSEWHERE = """\
+name: two-ollamas
+providers:
+  here: {type: ollama, base_url: "http://localhost:11434"}
+  office: {type: ollama, base_url: "http://192.168.1.50:11434"}
+default: {provider: here, model: "qwen3.5:latest"}
+"""
+
+
+def test_an_ollama_on_another_host_is_not_called_this_machine(tmp_path, monkeypatch):
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_ELSEWHERE)).json()
+
+    at = _endpoints(body)
+    assert at["here"]["here"] is True
+    assert at["office"]["here"] is False
+    # Both still list what is *pulled* rather than a catalogue: that is the
+    # backend's property and does not move with the address.
+    assert at["here"]["installed"] is True
+    assert at["office"]["installed"] is True
+
+
+def test_two_endpoints_of_one_kind_are_told_apart_by_their_host(tmp_path, monkeypatch):
+    """Both are `Ollama`, and `poieo config` would name both `ollama`. The
+    address is the only thing that separates them."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_ELSEWHERE)).json()
+
+    at = _endpoints(body)
+    assert at["here"]["host"] == "localhost:11434"
+    assert at["office"]["host"] == "192.168.1.50:11434"
+
+
+def test_every_way_of_writing_this_machine_is_this_machine(tmp_path, monkeypatch):
+    """A config may say any of these and mean the same box."""
+    binding = _ELSEWHERE.replace('"http://192.168.1.50:11434"', '"http://127.0.0.1:11500"')
+    _asks(monkeypatch)
+    assert _endpoints(_models(_client(tmp_path, binding=binding)).json())["office"]["here"] is True
+
+    binding = _ELSEWHERE.replace('"http://192.168.1.50:11434"', '"http://[::1]:11500/v1"')
+    assert _endpoints(_models(_client(tmp_path, binding=binding)).json())["office"]["here"] is True
+
+
+def test_an_endpoint_with_no_address_is_neither_here_nor_elsewhere(tmp_path, monkeypatch):
+    """Claude's SDK resolves its own address and `mock` has none at all. Null,
+    not false: "somewhere else" would be a claim about a machine nobody named."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path)).json()
+
+    assert _endpoints(body)["fake"]["here"] is None
+    assert _endpoints(body)["fake"]["host"] is None
+
+
+# -- an edit the running daemon will not take --------------------------------
+#
+# `point_at` writes the file and verifies it reloads; `daemon.reread` then
+# validates it the way start-up would and may refuse -- a role pointed at an
+# endpoint whose key is not set is the case that happens. The route used to
+# swallow that, on the reasoning that the next run would report it.
+#
+# Found by clicking it on a real board. The file changed, the answer said
+# `using`, and the panel went on showing the old model, because the panel reads
+# the spec in memory and the daemon had kept the old one. Three answers to one
+# question, and the only visible one was wrong.
+
+_KEYLESS = """name: keyless
+providers:
+  local:
+    type: ollama
+    base_url: http://localhost:11434
+  routed:
+    type: openai_compatible
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: POIEO_ABSENT_KEY
+default:
+  provider: local
+  model: "qwen3.5:latest"
+roles:
+  reader:
+    provider: local
+    model: "qwen3.5:latest"
+"""
+
+
+def test_a_change_the_daemon_will_not_take_says_so_and_says_why(tmp_path, monkeypatch):
+    monkeypatch.delenv("POIEO_ABSENT_KEY", raising=False)
+    _asks(monkeypatch, {"openai_compatible": Catalogue((Served(id="qwen/flash"),))})
+    client = _client(tmp_path, binding=_KEYLESS, tasks=True)
+
+    reply = _use(client, "routed/qwen/flash", role="reader")
+    body = reply.json()
+
+    assert reply.status_code == 200
+    assert body["status"] == "using"
+    # The file really did change -- this is not a refusal.
+    assert "provider: routed" in (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    # But the running daemon kept the last good spec, so the panel is about to
+    # redraw the *old* model, and silence would read as "nothing happened".
+    assert body["adopted"] is False
+    assert "POIEO_ABSENT_KEY" in body["why"]
+
+
+def test_a_change_the_daemon_takes_says_that_too(tmp_path, monkeypatch):
+    """The ordinary case, said out loud rather than implied by the absence of
+    a warning."""
+    _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
+    client = _client(tmp_path, binding=_KEYLESS, tasks=True)
+
+    body = _use(client, "local/llama3.2:3b", role="reader").json()
+
+    assert body["adopted"] is True
+    assert "why" not in body
+
+
+def test_a_warning_about_a_key_never_carries_the_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("POIEO_ABSENT_KEY", "")
+    _asks(monkeypatch, {"openai_compatible": Catalogue((Served(id="qwen/flash"),))})
+    client = _client(tmp_path, binding=_KEYLESS, tasks=True)
+    monkeypatch.setenv("POIEO_ABSENT_KEY", "sk-planted-by-this-test")
+
+    reply = _use(client, "routed/qwen/flash", role="reader")
+
+    assert "sk-planted-by-this-test" not in reply.text

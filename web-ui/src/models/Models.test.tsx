@@ -43,6 +43,8 @@ const REPORT = {
       label: "Ollama",
       askable: true,
       installed: true,
+      here: true,
+      host: "localhost:11434",
       api_key_env: null,
       api_key_set: null,
       models: [LOCAL],
@@ -53,6 +55,8 @@ const REPORT = {
       label: "OpenRouter",
       askable: true,
       installed: false,
+      here: false,
+      host: "openrouter.ai",
       api_key_env: "OPENROUTER_API_KEY",
       api_key_set: true,
       models: [ROUTED],
@@ -656,4 +660,100 @@ test("a filter that hides every model leaves the offer standing", async () => {
 
   expect(container.querySelector("[data-offer]")).not.toBeNull()
   expect(container.textContent).toContain("nothing matches")
+})
+
+// -- this machine, or somebody else's ----------------------------------------
+
+const OFFICE = {
+  name: "office",
+  type: "ollama",
+  label: "Ollama",
+  askable: true,
+  installed: true,
+  here: false,
+  host: "192.168.1.50:11434",
+  api_key_env: null,
+  api_key_set: null,
+  models: [{ ...LOCAL, id: "qwen3.5:32b", ref: "office/qwen3.5:32b", used_by: [] }],
+}
+
+const TWO_OLLAMAS = { ...REPORT, endpoints: [REPORT.endpoints[0], OFFICE] }
+
+test("a listing on another host does not claim to be on this machine", async () => {
+  await render(TWO_OLLAMAS)
+
+  const here = container.querySelector('[data-endpoint="ollama"] .models-count')!
+  const there = container.querySelector('[data-endpoint="office"] .models-count')!
+  expect(here.textContent).toBe("1 on this machine")
+  expect(there.textContent).toBe("1 on that machine")
+  expect(there.getAttribute("data-listing")).toBe("elsewhere")
+})
+
+test("two endpoints of one kind are told apart by the machine they are on", async () => {
+  // Both are "Ollama" and `poieo config` would name both `ollama`. Without the
+  // address there is nothing on screen that separates them.
+  await render(TWO_OLLAMAS)
+
+  expect(
+    container.querySelector('[data-endpoint="office"] .models-host')!.textContent,
+  ).toBe("192.168.1.50:11434")
+})
+
+test("a model on another host is not priced as local", async () => {
+  await render(TWO_OLLAMAS)
+
+  const price = row("office/qwen3.5:32b")!.querySelector(".models-price")!
+  expect(price.textContent).toBe("self-hosted")
+  expect(price.getAttribute("data-price")).toBe("self-hosted")
+})
+
+test("this machine comes before another host, and both before a menu", async () => {
+  await render({ ...REPORT, endpoints: [REPORT.endpoints[1], OFFICE, REPORT.endpoints[0]] })
+
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
+  )
+  expect(blocks).toEqual(["ollama", "office", "routed"])
+})
+
+test("an endpoint with no address says nothing about a machine", async () => {
+  await render({
+    ...REPORT,
+    endpoints: [
+      { ...REPORT.endpoints[0], name: "fake", type: "mock", label: null, askable: false,
+        installed: false, here: null, host: null, models: [] },
+    ],
+  })
+
+  expect(container.querySelector(".models-host")).toBeNull()
+})
+
+// -- an edit the running daemon did not take ---------------------------------
+
+test("a change the daemon would not take is said, with its reason", async () => {
+  // The worst shape a write can have: the file changed, the answer said it
+  // worked, and the panel redrew the old model because the daemon kept the
+  // last good spec. Silence there reads as "nothing happened".
+  pickModel.mockResolvedValue({
+    ok: true,
+    status: "using",
+    ref: "routed/qwen/flash",
+    adopted: false,
+    why: "task 'chores': provider 'routed': $OPENROUTER_API_KEY is not set",
+  })
+  await render()
+
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  const note = container.querySelector("[data-do='use-not-taken']")!
+  expect(note.textContent).toContain("OPENROUTER_API_KEY")
+  expect(note.textContent).toContain("models/default.yaml")
+})
+
+test("an ordinary change says nothing extra", async () => {
+  await render()
+
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(container.querySelector("[data-do='use-not-taken']")).toBeNull()
 })

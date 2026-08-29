@@ -64,12 +64,32 @@ export interface Endpoint {
   /** False for `mock`, which answers from the binding file rather than a port. */
   askable: boolean
   /**
-   * Whether this listing is what is **on this machine** or what the endpoint
-   * offers. Ollama's is `ollama list` -- pulled, here, ready. A routed
-   * endpoint's is a catalogue of what it would run for money, with nothing
-   * here yet. They look identical and are not.
+   * Whether this listing is what is **pulled and ready** or what the endpoint
+   * offers. Ollama's is `ollama list`; a routed endpoint's is a catalogue of
+   * what it would run for money, with nothing here yet. They look identical
+   * and are not. A property of the backend: true of an Ollama wherever it runs.
    */
   installed: boolean
+  /**
+   * Whether that machine is *this* one. Only the address can answer it, and
+   * reading `installed` as both had every Ollama anywhere -- an office server,
+   * the desktop under the desk -- claiming to be on this laptop.
+   *
+   * Null when the endpoint has no address: Claude's SDK resolves its own, and
+   * calling that "somewhere else" would be a claim about a machine nobody
+   * named.
+   */
+  here: boolean | null
+  /**
+   * `host:port`, and no more of the address than that -- the scheme and path
+   * say nothing about which box answered. Null when there is no address.
+   *
+   * This used not to cross at all. `poieo config` names an Ollama `ollama`
+   * wherever it runs, so two of them were two endpoints a reader could not
+   * tell apart; docs/web.md said the argument for letting an address through
+   * would have to be concrete, and that is the concrete one.
+   */
+  host: string | null
   /** The variable a key is read from; null when the endpoint names none. */
   api_key_env: string | null
   /** Null -- not false -- when it names none: its SDK resolves its own. */
@@ -298,6 +318,18 @@ export interface ModelsAnswer extends Answer {
   ref?: string
   /** False when the endpoint stayed silent: the name could not be checked. */
   checked?: boolean
+  /**
+   * Whether the **running daemon** took the edit, not just the file.
+   *
+   * `point_at` verifies the file reloads, but the daemon validates what
+   * start-up validates and may keep the last good spec -- a role pointed at an
+   * endpoint whose key is unset is the case that happens. It went unsaid, and
+   * the panel then redrew the *old* model off that same kept spec, so a reader
+   * told "using" watched nothing change.
+   */
+  adopted?: boolean
+  /** Why it was not taken, in the daemon's words. Absent when it was. */
+  why?: string
   providers?: string[]
   models?: string[]
   /** From `addEngine`: the engine keys detection knows how to look for. */
