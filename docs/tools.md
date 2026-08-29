@@ -39,6 +39,24 @@ points below a window, and a window too *narrow* at 3.7 below a wider one --
 too little context is its own failure. How much to read is the model's to
 choose; only the ceiling is ours.
 
+### `_READ_CAP` is a guard, not context management
+
+It is 200,000 characters and stays there, and that is a decision rather than an
+oversight. The largest file in this repository is 54,921 characters, so the cap
+has never fired on it -- and the conversation that ran to 271,064 characters got
+there on **four mid-sized files**, none of which any per-file cap would have
+stopped.
+
+Bounding the conversation is the agent loop's job, and since the caps became the
+model's (`docs/runtime.md`) it does it against a number that means something.
+This one is here for the pathological single file -- a minified bundle, a log --
+and the tools stay ignorant of which model is reading them, which is worth more
+than making one number derive from another.
+
+What it did owe was a way out: a truncated read now cuts on a line and hands
+back the `offset` to carry on from. Before windows existed `... [truncated]` was
+all there was to say; it is not any more.
+
 ## Changing part of a file
 
 `edit_file` replaces `old` with `new`, and refuses unless `old` appears exactly
