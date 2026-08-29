@@ -18,14 +18,19 @@ from conftest import card
 from typer.testing import CliRunner
 
 from poieo.cli import app
-from poieo.daemon.service import web_exposure
+from poieo.daemon.service import _ensure_port_free, web_exposure
 
 runner = CliRunner()
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
 def test_the_loopback_addresses_say_nothing(host: str):
-    """The default is not a decision anybody made, so it does not warn."""
+    """The default is not a decision anybody made, so it does not warn.
+
+    127.0.0.2 is here because a set of spellings called it the open internet:
+    all of 127.0.0.0/8 is this machine, and warning about an address nothing
+    can route to is how a warning stops being read.
+    """
     assert web_exposure(host) is None
 
 
@@ -91,3 +96,34 @@ def test_the_default_is_still_this_machine(tmp_path, monkeypatch):
 
     assert result.exit_code == 0, result.output
     assert seen.get("web_host") == "127.0.0.1"
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1"])
+def test_the_port_check_binds_the_family_the_address_asks_for(host: str):
+    """`socket()` defaults to AF_INET, so every IPv6 host failed resolution
+    here and was reported as a port already in use -- on a port nothing was
+    holding, with advice that could not fix it."""
+    # A port nothing in this repository serves on, so a pass means the bind.
+    _ensure_port_free(host, 8597)
+
+
+def test_the_board_reader_can_be_pointed_somewhere_else(monkeypatch):
+    """A daemon started on another address has to be answerable, or a
+    `confirm` node's question is stuck until somebody restarts it."""
+    seen: dict[str, object] = {}
+
+    class _Client:
+        def __enter__(self):
+            raise AssertionError("this test is about the address, not the call")
+
+        def __exit__(self, *_):
+            return False
+
+    def _stub(port, host="127.0.0.1"):
+        seen["port"], seen["host"] = port, host
+        return _Client()
+
+    monkeypatch.setattr("poieo.cli._board", _stub)
+    runner.invoke(app, ["asking", "--host", "10.1.2.3", "--port", "9999"])
+
+    assert seen == {"port": 9999, "host": "10.1.2.3"}

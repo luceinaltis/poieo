@@ -1132,7 +1132,7 @@ def _unreviewable(cards: "list[CardSpec]") -> set[str]:
 DEFAULT_BOARD_PORT = 8484
 
 
-def _board(port: int) -> "httpx.Client":
+def _board(port: int, host: str = "127.0.0.1") -> "httpx.Client":
     """A client for the daemon's board.
 
     The one thing in this CLI that needs poieo to already be running: a
@@ -1141,15 +1141,15 @@ def _board(port: int) -> "httpx.Client":
     """
     import httpx
 
-    return httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10.0)
+    return httpx.Client(base_url=f"http://{host}:{port}", timeout=10.0)
 
 
-def _ask_board(port: int, method: str, path: str, **kwargs) -> "Any":
+def _ask_board(port: int, method: str, path: str, *, host: str = "127.0.0.1", **kwargs) -> "Any":
     """One call to the board, with its two ordinary failures spelled out."""
     import httpx
 
     try:
-        with _board(port) as client:
+        with _board(port, host) as client:
             reply = client.request(method, path, **kwargs)
     except httpx.HTTPError:
         _fail(f"no poieo daemon answering on port {port}. Start one with `poieo daemon`, or name its port with --port")
@@ -1176,13 +1176,14 @@ def _this_board() -> str:
 @_guarded
 def asking(
     port: int = typer.Option(DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Where that daemon is listening, if not this machine."),
 ) -> None:
     """What the tasks are waiting for you to decide.
 
     A `confirm` node ends its run with a question rather than doing something
     that cannot be undone. Until it is answered, nothing downstream of it runs.
     """
-    body = _ask_board(port, "GET", "/api/tasks")
+    body = _ask_board(port, "GET", "/api/tasks", host=host)
     waiting = [row for row in body.get("tasks", []) if row.get("asking")]
     if not waiting:
         typer.echo("nothing is waiting on you")
@@ -1202,6 +1203,7 @@ def answer(
     task: str = typer.Argument(..., help="The task that is waiting."),
     choice: str = typer.Argument(..., help="One of the answers it offered."),
     port: int = typer.Option(DEFAULT_BOARD_PORT, "--port", help="The daemon's board port."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Where that daemon is listening, if not this machine."),
 ) -> None:
     """Answer a question a task stopped to ask.
 
@@ -1212,6 +1214,7 @@ def answer(
         port,
         "POST",
         f"/api/tasks/{_this_board()}/{task}/answer",
+        host=host,
         json={"choice": choice},
     )
     _ok(f"{task}: {body.get('answer', choice)}")
