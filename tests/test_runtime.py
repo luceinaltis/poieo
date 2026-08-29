@@ -931,6 +931,40 @@ async def test_running_out_of_turns_says_what_the_turns_bought(tmp_path):
     assert "write_file" in result.error
 
 
+async def test_a_run_is_priced_when_the_endpoint_will_not_price_it(tmp_path):
+    """The endpoint's own figure wins; a declared one fills the silence.
+
+    Same two-tier shape as `context`, and for the same reason: what the
+    endpoint says is a fact and what a binding says is somebody's belief, so
+    the fact goes first. But a belief beats nothing, and Anthropic's API --
+    the paid backend these examples ship for -- reports no cost at all.
+    """
+    graph = GraphSpec.model_validate(
+        {
+            "name": "p",
+            "entry": "a",
+            "nodes": [{"id": "a", "type": "agent", "role": "worker", "prompt": "go"}],
+        }
+    )
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"fake": {"type": "mock", "options": {"responses": {"worker": "done"}}}},
+            "default": {
+                "provider": "fake",
+                "model": "m",
+                "prices": {"input": 5.0, "output": 25.0},
+            },
+        }
+    )
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "completed"
+    # The mock reports tokens and no cost, so the declared rates are what
+    # priced it -- and the number is real rather than zero.
+    assert result.usage["cost"] > 0
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)
