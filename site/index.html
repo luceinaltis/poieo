@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>poieo — a task board whose workers are the models on your machine</title>
+<meta name="description" content="Write down the work you want done. The models on your own machine keep it running, and you read what they did in the morning.">
+
+<meta property="og:title" content="poieo">
+<meta property="og:description" content="Write down the work you want done. The models on your own machine keep it running, and you read what they did in the morning.">
+<meta property="og:image" content="https://luceinaltis.github.io/poieo/img/board-atelier.jpg">
+<meta property="og:url" content="https://luceinaltis.github.io/poieo/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- An ember on a dark ground, drawn rather than fetched: one request fewer,
+     and nothing to keep in sync with a file somebody has to remember. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2314120f'/><circle cx='16' cy='18' r='7' fill='%23d8a657'/><circle cx='16' cy='16' r='3.5' fill='%23f4e3c0'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="bar">
+  <a class="wordmark" href="/poieo/">poieo</a>
+  <span class="bar-sub">an autonomous task board</span>
+  <nav>
+    <a href="https://github.com/luceinaltis/poieo#readme">Docs</a>
+    <a href="https://github.com/luceinaltis/poieo">GitHub</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <h1>Write down the work you want done.</h1>
+  <p class="lead">
+    The models on your own machine keep it running, and you read what they did
+    in the morning.
+  </p>
+
+  <div class="cta">
+    <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp; pip install .</code>
+    <button type="button" data-copy="install" hidden>copy</button>
+  </div>
+
+  <p class="buttons">
+    <a class="button primary" href="#sixty">Sixty seconds</a>
+    <a class="button" href="https://github.com/luceinaltis/poieo">Read the source</a>
+  </p>
+</section>
+
+<figure class="shot glow">
+  <img src="img/board-atelier.jpg" width="1280" height="800"
+       alt="Five workshops laid out on the board, a smith working at each anvil">
+  <figcaption>
+    Five tasks at work. Each one is a card you wrote — a name, a folder, and a
+    sentence saying what to do.
+  </figcaption>
+</figure>
+
+<section id="sixty">
+  <h2>Sixty seconds</h2>
+
+  <div class="steps">
+    <div class="step">
+      <h3>Set a folder up</h3>
+      <pre><code>mkdir ~/board &amp;&amp; cd ~/board
+poieo init</code></pre>
+      <p>
+        It looks at this machine once — Ollama, LM Studio, vLLM, llama.cpp, a
+        Claude key — and writes down whatever answered. No model yet?
+        <code>poieo init --mock</code> lays the same project out with a
+        stand-in that spends nothing.
+      </p>
+    </div>
+
+    <div class="step">
+      <h3>Write a card</h3>
+      <pre><code><span class="c"># ~/board/tasks/keep-green.yaml</span>
+name: keep the tests green
+folder: ~/code/thing
+prompt: |
+  Run the tests. If one fails,
+  find out why and fix it.</code></pre>
+      <p>
+        That is the whole file. Which model serves it, how often it fires,
+        where the output goes — every one of those has a default.
+      </p>
+    </div>
+
+    <div class="step">
+      <h3>Leave it running</h3>
+      <pre><code>poieo daemon</code></pre>
+      <p>
+        Every card in <code>tasks/</code> runs from now on, and the board is at
+        <code>127.0.0.1:8484</code>. Drop a file in to add a task; delete it to
+        stop one. There is nothing else to register it with.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="words">
+  <h2>Three words, and no fourth</h2>
+  <div class="grid">
+    <div class="word">
+      <h3>task</h3>
+      <p>A name, a folder, and a prompt. One file, which you can read.</p>
+    </div>
+    <div class="word">
+      <h3>run</h3>
+      <p>One pass through it. It succeeded, it failed, or it found nothing to do.</p>
+    </div>
+    <div class="word">
+      <h3>change</h3>
+      <p>What a run did to your files — which you accept, or throw away.</p>
+    </div>
+  </div>
+  <p class="aside">
+    Everything underneath — how a run is isolated, how a change is stored, how
+    it is undone — is machinery, and machinery stays out of the way.
+  </p>
+</section>
+
+<section class="morning">
+  <div class="morning-text">
+    <h2>The night, and the morning after</h2>
+    <p>
+      A task does <strong>not</strong> work in your project. It works in a
+      private copy, so the checkout you left open is exactly as you left it.
+      Each run leaves at most one change, carrying the model's own sentence
+      about what it did.
+    </p>
+    <p>
+      In the morning you open the one that left something: read the diff, and
+      <strong>accept</strong> it — the only moment poieo ever writes to your own
+      branch — or <strong>discard</strong> it, recoverably. A run that found
+      nothing to do is not a failure and leaves nothing to read.
+    </p>
+    <p>
+      Each task also keeps a journal it reads before every run, so tonight
+      starts where last night stopped — and you can put a line in it yourself.
+    </p>
+  </div>
+  <figure class="shot">
+    <img src="img/task.png" width="1440" height="900"
+         alt="A task opened on the board: four runs, what the model said, and the change waiting to be accepted">
+    <figcaption>Four runs. Three found nothing. One is waiting.</figcaption>
+  </figure>
+</section>
+
+<section class="why">
+  <h2>Why it runs on your machine</h2>
+  <dl>
+    <div>
+      <dt>Local models first</dt>
+      <dd>
+        A resident that costs nothing per token can be left running. Cloud
+        models plug into the same mechanism as an option, never a requirement.
+      </dd>
+    </div>
+    <div>
+      <dt>Files, not a database</dt>
+      <dd>
+        Tasks, models, journals and run logs are YAML, Markdown and JSONL you
+        can read, diff and commit. Nothing is true because an index says so.
+      </dd>
+    </div>
+    <div>
+      <dt>Nothing touches your files until you accept it</dt>
+      <dd>
+        Autonomy without undo is a different, scarier product.
+      </dd>
+    </div>
+    <div>
+      <dt>Every run is auditable</dt>
+      <dd>
+        Which model answered, which branch it took, which files it touched,
+        which commands it ran, what it cost. One log file answers “what did
+        this thing do last night?”.
+      </dd>
+    </div>
+  </dl>
+</section>
+
+<section class="end">
+  <h2>It is one person's machine, running one person's work</h2>
+  <p>
+    No accounts, no server, no team features, and no plan to have them. The
+    graph, the models, the daemon, the model's hands, the private copy and the
+    undo, container isolation, the memory a project keeps, and the board are
+    built and in use. Making a card from the browser is not — that is still a
+    file you write.
+  </p>
+  <p class="buttons">
+    <a class="button primary" href="https://github.com/luceinaltis/poieo">Get it on GitHub</a>
+    <a class="button" href="https://github.com/luceinaltis/poieo/blob/main/docs/usage.md">The manual</a>
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <p>
+    <a href="https://github.com/luceinaltis/poieo">Source</a> ·
+    <a href="https://github.com/luceinaltis/poieo/blob/main/DESIGN.md">What it promises</a> ·
+    <a href="https://github.com/luceinaltis/poieo/blob/main/docs/README.md">How it works</a> ·
+    <a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT</a>
+  </p>
+  <p class="quiet">poieo is Greek <i lang="el">ποιέω</i>, “to make”.</p>
+</footer>
+
+<script>
+  // The button is hidden in the markup and shown here, so a reader without
+  // JavaScript is not offered one that does nothing. The command is selectable
+  // either way.
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    if (!navigator.clipboard) continue
+    button.hidden = false
+    button.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent)
+      button.textContent = "copied"
+      setTimeout(() => (button.textContent = "copy"), 1600)
+    })
+  }
+</script>
+
+</body>
+</html>

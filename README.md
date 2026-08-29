@@ -121,9 +121,11 @@ isolation, a schedule of its own, a deadline, or the right to leave a note in
 another task's journal.
 
 **[The manual is `docs/usage.md`](docs/usage.md)** — every command, every key,
-and the worked examples. **[DESIGN.md](DESIGN.md)** says what poieo promises
-and what it refuses to become; **[docs/](docs/README.md)** has one document per
-component for anyone changing the code.
+and the worked examples. **[DESIGN.md](DESIGN.md)** says what poieo promises and
+what it refuses to become, and **[docs/](docs/README.md)** has one document per
+component for anyone changing the code. There is a
+**[page](https://luceinaltis.github.io/poieo/)** too, if you would rather send
+somebody that.
 
 ## Where it stands
 
