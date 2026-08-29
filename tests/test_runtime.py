@@ -900,6 +900,37 @@ async def test_a_turn_says_how_big_it_was(tmp_path):
     assert sizes == sorted(sizes)
 
 
+async def test_running_out_of_turns_says_what_the_turns_bought(tmp_path):
+    """The advice on this failure is "raise max_turns, or make the step
+    smaller" -- two opposite actions, with nothing to choose between them.
+
+    A step measured here spent forty turns making ten edits and running the
+    suite four times: it was working and wanted more room. Another spent forty
+    reading the same four files over and over: more room would have bought
+    more of that. The counts are what tell those apart, and they were only
+    obtainable by writing a script against the event log afterwards.
+    """
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path, max_turns=4)
+    binding = mock_binding(
+        {
+            "worker": [
+                {"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]},
+                {"tool_calls": [{"name": "write_file", "arguments": {"path": "a.txt", "content": "x"}}]},
+                {"tool_calls": [{"name": "list_dir", "arguments": {}}]},
+            ]
+        }
+    )
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "failed"
+    assert "max_turns" in result.error
+    # What it did with them, so the next reader does not have to count.
+    assert "read_file" in result.error
+    assert "write_file" in result.error
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)

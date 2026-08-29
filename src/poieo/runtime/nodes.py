@@ -490,6 +490,14 @@ class AgentNode(Node):
             messages: list[dict[str, Any]] = [{"role": "user", "content": bound.prompt}]
             turns = 0
             tool_call_count = 0
+            # Which tools, and how many times each. Only read when the node
+            # runs out of turns, and that is the point: the advice there is
+            # "raise max_turns, or make the step smaller", which are opposite
+            # actions with nothing to choose between them. A step that spent
+            # its turns editing and running tests wanted more room; one that
+            # spent them reading the same four files would only have got more
+            # of that, and the counts are what tell them apart.
+            reached_for: dict[str, int] = {}
             # What the endpoint counted the last request at. Zero until one
             # has been answered, which is why nothing is cleared on turn one --
             # there is nothing there yet to clear.
@@ -650,9 +658,16 @@ class AgentNode(Node):
                 if not response.tool_calls or executor is None:
                     break
                 if turns >= spec.max_turns:
+                    spent = ", ".join(
+                        f"{name} {count}x"
+                        for name, count in sorted(
+                            reached_for.items(), key=lambda pair: -pair[1]
+                        )
+                    )
                     raise NodeError(
                         f"node '{spec.id}' hit max_turns ({spec.max_turns}) "
-                        f"with tool calls still pending",
+                        f"with tool calls still pending; it spent them on "
+                        f"{spent or 'nothing'}",
                         node_id=spec.id,
                     )
 
@@ -674,6 +689,7 @@ class AgentNode(Node):
                     started = time.monotonic()
                     result = await executor.execute(call)
                     tool_call_count += 1
+                    reached_for[call.name] = reached_for.get(call.name, 0) + 1
                     ctx.emit(
                         "node_tool_call",
                         node_id=spec.id,
