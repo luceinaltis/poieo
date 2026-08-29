@@ -148,6 +148,25 @@ loads it with whatever `num_ctx` it was told. **Nothing announces the
 difference** — an endpoint asked to hold more than it loaded simply drops the
 rest — so the smaller number is the only safe one to believe.
 
+**A binding that claims more room than the endpoint gives is warned about, not
+refused.** `poieo check` compares the two and says so:
+
+```
+warn builder          declares context: 1310720 but openrouter reports 1048576
+                      for z-ai/glm-5.3-flash -- the conversation will be
+                      cleared later than this endpoint allows
+```
+
+Said, never enforced, for three reasons and all three were measured. The
+endpoint's answer can be **absent** — Ollama reports nothing for a model it has
+not loaded. It can be **stale** — `num_ctx` is whatever the last request asked
+for, and the next one can change it. And a daemon that will not start because a
+local server happens to have a small model loaded is worse than one that warns.
+
+It is also no longer the last line of defence: the runtime notices when an
+endpoint keeps less than it was sent (`docs/runtime.md`), so a warning ignored
+here becomes a visible event there rather than a silent corruption.
+
 **The two answers keep for different lengths of time, and are cached
 accordingly.** OpenRouter's is a property of a deployment and holds for the
 process. Ollama's is "what is loaded right now", and a single request from any

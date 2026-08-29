@@ -790,6 +790,47 @@ def daemon(
         raise typer.Exit(code=1)
 
 
+async def _roomier_than_it_is(spec: Any, pool: Any) -> list[str]:
+    """Roles whose binding claims more room than the endpoint reports.
+
+    A window declared larger than the endpoint gives means the conversation is
+    cleared later than the endpoint allows -- which is the failure the runtime
+    now catches, and which is much cheaper to hear about here.
+
+    Said, never enforced. The binding wins on purpose: somebody who wrote a
+    number down meant it, and the endpoint's answer can be **absent** (Ollama
+    reports nothing for a model it has not loaded) or **stale** (`num_ctx` is
+    whatever the last request asked for). Refusing to start over either would
+    be worse than the thing it prevents, and the runtime catches the
+    consequence either way.
+    """
+    said: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for role in sorted({*spec.roles, "default"}):
+        try:
+            resolved = spec.resolve(role)
+        except PoieoError:
+            continue
+        if not resolved.context:
+            continue
+        key = (resolved.provider_name, resolved.model)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            actual = await pool.get(resolved.provider_name).context_for(resolved.model)
+        except PoieoError:
+            continue
+        # No answer is not a disagreement.
+        if actual and resolved.context > actual:
+            said.append(
+                f"warn {role:<16} declares context: {resolved.context} but "
+                f"{resolved.provider_name} reports {actual} for {resolved.model} "
+                f"-- the conversation will be cleared later than this endpoint allows"
+            )
+    return said
+
+
 @app.command("check", rich_help_panel=SETUP)
 @_guarded
 def check_providers(
@@ -807,7 +848,7 @@ def check_providers(
         _fail(_NO_BINDING)
     spec = load_binding(binding)
 
-    async def _go() -> list[tuple[str, bool, str]]:
+    async def _go() -> tuple[list[tuple[str, bool, str]], list[str]]:
         rows: list[tuple[str, bool, str]] = []
         async with ProviderPool(spec) as pool:
             for name in spec.providers:
@@ -816,9 +857,9 @@ def check_providers(
                 except PoieoError as exc:
                     healthy, detail = False, str(exc)
                 rows.append((name, healthy, detail))
-        return rows
+            return rows, await _roomier_than_it_is(spec, pool)
 
-    rows = asyncio.run(_go())
+    rows, warnings = asyncio.run(_go())
     if as_json:
         typer.echo(json.dumps(
             [{"provider": n, "healthy": h, "detail": d} for n, h, d in rows],
@@ -829,6 +870,8 @@ def check_providers(
             mark = "ok  " if healthy else "FAIL"
             color = typer.colors.GREEN if healthy else typer.colors.RED
             typer.secho(f"{mark} {name:<16} {detail}", fg=color)
+        for line in warnings:
+            typer.secho(line, fg=typer.colors.YELLOW)
     if any(not healthy for _, healthy, _ in rows):
         raise typer.Exit(code=1)
 
