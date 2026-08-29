@@ -5,7 +5,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const fetchModels = vi.hoisted(() => vi.fn())
 const pickModel = vi.hoisted(() => vi.fn())
-vi.mock("../api", () => ({ fetchModels, pickModel }))
+const addEngine = vi.hoisted(() => vi.fn())
+const fetchUndeclared = vi.hoisted(() => vi.fn())
+vi.mock("../api", () => ({ fetchModels, pickModel, addEngine, fetchUndeclared }))
 
 import { Models } from "./Models"
 
@@ -66,6 +68,10 @@ beforeEach(() => {
   fetchModels.mockReset()
   pickModel.mockReset()
   pickModel.mockResolvedValue({ ok: true, status: "using" })
+  addEngine.mockReset()
+  addEngine.mockResolvedValue({ ok: true, status: "added" })
+  fetchUndeclared.mockReset()
+  fetchUndeclared.mockResolvedValue([])
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -76,8 +82,9 @@ afterEach(() => {
   container.remove()
 })
 
-async function render(report: unknown = REPORT) {
+async function render(report: unknown = REPORT, undeclared: unknown[] = []) {
   fetchModels.mockResolvedValue(report)
+  fetchUndeclared.mockResolvedValue(undeclared)
   await act(async () => {
     root.render(<Models project="board" onClose={() => {}} />)
   })
@@ -113,13 +120,13 @@ test("a published price is shown per million tokens, input then output", async (
   expect(price.getAttribute("data-price")).toBe("paid")
 })
 
-test("a local model says it runs here rather than showing a price of nothing", async () => {
+test("a local model reads local rather than showing a price of nothing", async () => {
   // Ollama does not charge per token, so there is no rate to report -- and a
   // zero would read as a rate somebody looked up.
   await render()
 
   const price = row("ollama/qwen3.5:latest")!.querySelector(".models-price")!
-  expect(price.textContent).toBe("runs here")
+  expect(price.textContent).toBe("local")
   expect(price.getAttribute("data-price")).toBe("local")
 })
 
@@ -483,4 +490,170 @@ test("a role the file stopped naming is not left selected", async () => {
   await act(async () => use().click())
 
   expect(pickModel).toHaveBeenLastCalledWith("board", "ollama/qwen3.5:latest", "default")
+})
+
+// -- engines running here that this project has never used -------------------
+
+const LMSTUDIO = [
+  {
+    name: "lmstudio",
+    label: "LM Studio",
+    type: "openai_compatible",
+    models: ["qwen3-4b", "gemma-3-12b"],
+  },
+]
+
+const offer = (name: string) =>
+  container.querySelector<HTMLElement>(`[data-offer="${name}"]`)
+
+test("an engine answering here that this project cannot reach is offered by name", async () => {
+  await render(REPORT, LMSTUDIO)
+
+  expect(offer("lmstudio")!.textContent).toContain("LM Studio")
+  // What it has, so the offer says what taking it would be worth.
+  expect(offer("lmstudio")!.textContent).toContain("2")
+})
+
+test("nothing is drawn when there is nothing running that this project misses", async () => {
+  // The usual case, and it must cost the reader no screen at all -- a standing
+  // button whose answer is almost always "nothing new" teaches people to
+  // ignore it.
+  await render()
+
+  expect(container.querySelector("[data-offer]")).toBeNull()
+})
+
+test("taking an offer names the engine back, and nothing else", async () => {
+  await render(REPORT, LMSTUDIO)
+
+  await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
+
+  expect(addEngine).toHaveBeenCalledWith("board", "lmstudio")
+})
+
+test("a refusal to add is shown in the daemon's words", async () => {
+  addEngine.mockResolvedValue({
+    ok: false,
+    error: "'lmstudio' is not answering on this machine",
+  })
+  await render(REPORT, LMSTUDIO)
+
+  await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
+
+  expect(container.textContent).toContain("not answering")
+})
+
+test("adding an engine reads the panel again, so its models appear", async () => {
+  await render(REPORT, LMSTUDIO)
+  expect(fetchModels).toHaveBeenCalledTimes(1)
+
+  await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
+
+  expect(fetchModels).toHaveBeenCalledTimes(2)
+})
+
+// -- asking again ------------------------------------------------------------
+
+test("the refresh button asks every endpoint again", async () => {
+  // The panel reads once, when it opens. Pull a model in a terminal with it
+  // open and the list is stale, and closing and reopening was the only way.
+  await render()
+  expect(fetchModels).toHaveBeenCalledTimes(1)
+
+  await act(async () => container.querySelector<HTMLElement>("[data-do='refresh']")!.click())
+
+  expect(fetchModels).toHaveBeenCalledTimes(2)
+})
+
+test("the list stays on screen while it is being asked again", async () => {
+  // Blanking to "asking…" on every refresh makes the panel flash, and the
+  // thing a reader is comparing against is the list they already have.
+  await render()
+  fetchModels.mockReturnValue(new Promise(() => {}))
+
+  await act(async () => container.querySelector<HTMLElement>("[data-do='refresh']")!.click())
+
+  expect(row("ollama/qwen3.5:latest")).not.toBeNull()
+  expect(container.textContent).not.toContain("asking…")
+})
+
+test("the catalogue draws without waiting for the search for new engines", async () => {
+  // Why these are two requests. Looking for an engine means asking ports that
+  // may have nothing on them, and a closed one costs a whole timeout -- so a
+  // catalogue carrying the answer would take a second and a half to draw a
+  // list it already had every part of.
+  fetchModels.mockResolvedValue(REPORT)
+  fetchUndeclared.mockReturnValue(new Promise(() => {}))
+
+  await act(async () => {
+    root.render(<Models project="board" onClose={() => {}} />)
+  })
+
+  expect(row("ollama/qwen3.5:latest")).not.toBeNull()
+  expect(container.querySelector("[data-offer]")).toBeNull()
+})
+
+test("asking again looks for new engines too, not only for new models", async () => {
+  await render(REPORT, LMSTUDIO)
+  expect(fetchUndeclared).toHaveBeenCalledTimes(1)
+
+  await act(async () => container.querySelector<HTMLElement>("[data-do='refresh']")!.click())
+
+  expect(fetchUndeclared).toHaveBeenCalledTimes(2)
+})
+
+// -- what a reader sees first ------------------------------------------------
+//
+// Measured on a real board before this existed: the metered catalogue's 396
+// models pushed the eight on this machine 1786px down, and the offer 2181px --
+// three screens below a 729px panel. The list was in the binding file's order,
+// which is provenance, not an answer to "what can I run".
+
+test("what is on this machine is listed before a catalogue", async () => {
+  // In the file's order, which is what the report carries: `poieo init` writes
+  // the metered endpoint wherever it was declared, and provenance is not an
+  // answer to "what can I run".
+  await render({ ...REPORT, endpoints: [REPORT.endpoints[1], REPORT.endpoints[0]] })
+
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
+  )
+  expect(blocks).toEqual(["ollama", "routed"])
+})
+
+test("two endpoints of the same kind keep the order their file put them in", async () => {
+  // The rule is one step, not a sort: reordering beyond "here before a menu"
+  // would hide the reader's own arrangement from them.
+  const second = { ...REPORT.endpoints[1], name: "other" }
+  await render({ ...REPORT, endpoints: [REPORT.endpoints[1], second] })
+
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
+  )
+  expect(blocks).toEqual(["routed", "other"])
+})
+
+test("an offer is above the lists, not under them", async () => {
+  // It is the one piece of news on the panel. Under a 396-model catalogue it
+  // was the last thing a reader would ever find.
+  await render(REPORT, LMSTUDIO)
+
+  const first = container.querySelector("[data-offer], [data-endpoint]")
+  expect(first!.getAttribute("data-offer")).toBe("lmstudio")
+})
+
+test("a filter that hides every model leaves the offer standing", async () => {
+  // The filter is about models; an offer is about an engine that has none of
+  // them yet, so a search that missed says nothing about it.
+  await render(REPORT, LMSTUDIO)
+
+  await act(async () => {
+    const box = container.querySelector<HTMLInputElement>(".models-filter")!
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    set.call(box, "nothing-matches-this")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+
+  expect(container.querySelector("[data-offer]")).not.toBeNull()
+  expect(container.textContent).toContain("nothing matches")
 })

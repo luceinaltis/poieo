@@ -5,6 +5,12 @@
   background: #191612;
   border-left: 1px solid #2e2820;
   bottom: 0;
+  /* `width` here is what the panel may take of the screen, not what is left
+     after its own padding. Without this, `min(440px, 100vw)` on a 393px phone
+     became 393 + 32 of padding = 425, and because the panel is pinned to the
+     right the extra 32px hung off the *left* edge -- every heading, the filter
+     box and the variable name all silently chopped. */
+  box-sizing: border-box;
   /* A column, and only the body grows. Not a grid: `grid-template-rows: auto
      1fr` names rows by *position*, so the `1fr` lands on whichever child
      happens to be second -- and adding the filter above the body handed the
@@ -64,7 +70,8 @@
   margin-right: auto;
 }
 
-.models-close {
+.models-close,
+.models-again {
   background: none;
   border: 0;
   color: #7a6e60;
@@ -73,8 +80,16 @@
   padding: 0 2px;
 }
 
-.models-close:hover {
+.models-close:hover:not(:disabled),
+.models-again:hover:not(:disabled) {
   color: #e8dcc8;
+}
+
+/* Dimmed rather than hidden while the answers are on their way: the button
+   staying where it is, unpressable, is the whole feedback this needs. */
+.models-again:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 /* Everything below the header scrolls together, and starts at the top: the
@@ -160,9 +175,14 @@
   color: #d16d5a;
 }
 
+/* Further apart between rows than inside one. They were the other way around
+   -- 3px between, 8px within -- and a two-line row then read as two rows: the
+   window and the size of one model looked like they belonged to the name
+   underneath them. Everything else here was correct and the list was still
+   unreadable, which is the whole lesson. */
 .models-list {
   display: grid;
-  gap: 3px;
+  gap: 12px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -175,7 +195,10 @@
   align-items: baseline;
   display: grid;
   font-size: 0.82em;
-  gap: 8px;
+  /* No row gap: the second line is the same row's continuation, and any space
+     there competes with the space that separates one model from the next. */
+  column-gap: 8px;
+  row-gap: 0;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -311,6 +334,50 @@
   flex: none;
   font-size: 0.82em;
   margin: 0 0 10px;
+}
+
+/* A footnote to the catalogue above it, so it reads quieter than an endpoint
+   heading -- but boxed, because it is the one thing here that is news. */
+.models-offer {
+  align-items: baseline;
+  background: #201d17;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: #9a9086;
+  display: flex;
+  font-size: 0.82em;
+  gap: 10px;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.models-offer strong {
+  color: #d6ccbe;
+  font-weight: 600;
+}
+
+.models-offer button {
+  background: #2a251d;
+  border: 1px solid #3a3227;
+  border-radius: 4px;
+  color: #d6ccbe;
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  font-size: 1em;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.models-offer button:hover:not(:disabled) {
+  border-color: #6b6257;
+  color: #e8dcc8;
+}
+
+.models-offer button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* The row is the button: a catalogue is read by scanning names, and a verb

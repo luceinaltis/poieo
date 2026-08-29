@@ -104,6 +104,40 @@ export async function fetchModels(project: string): Promise<ModelsReport | null>
   )
 }
 
+/**
+ * An engine answering on this machine that this project cannot reach.
+ *
+ * Detection otherwise runs once, at `poieo init`. Install Ollama the week
+ * after and the binding has never heard of it, so the panel shows nothing from
+ * it and no reason why -- which reads as "there is nothing there". Almost
+ * always none, and none draws nothing: a standing button whose usual answer is
+ * "nothing new" is a button people learn to ignore.
+ *
+ * No address crosses here either. The panel names one back by `name`, and the
+ * daemon looks up where it lives.
+ */
+export interface UndeclaredEngine {
+  /** The key it would be declared under, and what `models/add` takes back. */
+  name: string
+  label: string
+  type: string
+  /** Ids only: this is a notice that something is here, not a catalogue. */
+  models: string[]
+}
+
+/**
+ * Asked **separately from the catalogue**, and that is the point: a candidate
+ * port nothing is listening on costs a whole timeout rather than refusing, so
+ * a catalogue that carried this would wait a second and a half to draw a list
+ * it already had. This lands under it whenever it arrives.
+ */
+export async function fetchUndeclared(project: string): Promise<UndeclaredEngine[]> {
+  const body = await getJson<{ undeclared: UndeclaredEngine[] }>(
+    `/api/projects/${encodeURIComponent(project)}/models/undeclared`,
+  )
+  return body?.undeclared ?? []
+}
+
 export async function fetchRuns(
   opts: { task?: string; project?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {
@@ -266,6 +300,8 @@ export interface ModelsAnswer extends Answer {
   checked?: boolean
   providers?: string[]
   models?: string[]
+  /** From `addEngine`: the engine keys detection knows how to look for. */
+  engines?: string[]
 }
 
 // Not `useModel`: a plain function wearing React's hook prefix costs every
@@ -278,6 +314,19 @@ export function pickModel(
   return post(`/api/projects/${encodeURIComponent(project)}/models/use`, {
     target,
     role,
+  })
+}
+
+/**
+ * Declare an engine already answering on this machine, so this project can
+ * reach its models.
+ *
+ * Only adds. Nothing about what a role uses moves -- declaring a model and
+ * choosing one are different decisions, and `pickModel` is the second.
+ */
+export function addEngine(project: string, engine: string): Promise<ModelsAnswer> {
+  return post(`/api/projects/${encodeURIComponent(project)}/models/add`, {
+    engine,
   })
 }
 

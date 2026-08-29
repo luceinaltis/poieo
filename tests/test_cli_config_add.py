@@ -186,3 +186,48 @@ def test_added_engines_show_up_in_config_and_are_usable(tmp_path, monkeypatch):
     used = runner.invoke(app, ["config", "use", "lmstudio/qwen2.5-coder-7b", "--role", "coder"])
     assert used.exit_code == 0, used.output
     assert load_binding(path).resolve("coder").provider_name == "lmstudio"
+
+
+# vLLM and SGLang default to the same port, so `CANDIDATES` can only ever call
+# that address the pair. Which one is really there is a thing the server says
+# about itself on its own listing, and having asked, this must not go back to
+# printing the pair -- or reading the name out of the binding, which is what
+# its author believed rather than what answered.
+SGLANG = Engine(
+    "vllm",
+    "vLLM / SGLang",
+    "openai_compatible",
+    ("qwen3-32b",),
+    "http://localhost:8000/v1",
+    said="SGLang",
+)
+
+
+def test_a_server_that_named_itself_is_called_that_and_not_the_pair(tmp_path, monkeypatch):
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _machine_with(monkeypatch, OLLAMA, SGLANG)
+
+    result = runner.invoke(app, ["config", "add"])
+
+    assert result.exit_code == 0, result.output
+    assert "SGLang" in result.stdout
+    assert "vLLM / SGLang" not in result.stdout
+
+
+def test_a_server_that_named_itself_is_called_that_when_there_is_nothing_new(tmp_path, monkeypatch):
+    """The line that says where it looked has to name them the same way."""
+    _project(
+        tmp_path,
+        BINDING.replace(
+            "providers:\n", "providers:\n  vllm:\n    type: openai_compatible\n    base_url: http://localhost:8000/v1\n"
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+    _machine_with(monkeypatch, OLLAMA, SGLANG)
+
+    result = runner.invoke(app, ["config", "add"])
+
+    assert "nothing new" in result.stdout.lower()
+    assert "SGLang" in result.stdout
+    assert "vLLM / SGLang" not in result.stdout

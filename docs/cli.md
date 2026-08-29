@@ -243,6 +243,19 @@ It **only adds**, and the boundary is the point:
 An engine with no address is declared without one — Claude's SDK knows where it
 lives, and a guessed `base_url` is worse than none.
 
+The key leads each block it prints, because that is what `config use` takes
+back — but **what the thing is** is printed beside it, from `Engine.known_as`.
+`vllm` is the name detection picks for a port vLLM and SGLang share, and only
+the server can say which of the two was just declared; see
+[storage.md](storage.md). The board's own offer goes through the same property,
+so the two never name one server differently.
+
+**The board can do this too.** `POST …/models/add` is `config add` from a
+browser, through the same `rebind.declare`, and the board finds the engine
+without being asked: its models panel looks on every paint and offers whatever
+is answering that the project cannot reach. There is no "look again" button, and
+[web.md](web.md) argues why.
+
 ## Cards and graphs are one argument
 
 `validate`, `show`, `run` and `view` all take "a graph or a card".

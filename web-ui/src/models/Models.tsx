@@ -17,8 +17,14 @@
 
 import { useEffect, useState } from "react"
 
-import { fetchModels, pickModel } from "../api"
-import type { Endpoint, ModelsAnswer, ModelsReport, ServedModel } from "../api"
+import { addEngine, fetchModels, fetchUndeclared, pickModel } from "../api"
+import type {
+  Endpoint,
+  ModelsAnswer,
+  ModelsReport,
+  ServedModel,
+  UndeclaredEngine,
+} from "../api"
 import { useAct } from "../useAct"
 import "./models.css"
 
@@ -35,13 +41,36 @@ export function Models({
   // reader picks one -- the common project has no others and never sees this.
   const [role, setRole] = useState("default")
   const [reload, setReload] = useState(0)
+  const [asking, setAsking] = useState(true)
+  // Two requests, not one. Looking for an engine this project has never used
+  // means asking ports nothing may be listening on, and a closed one costs a
+  // whole timeout -- so the catalogue would have waited a second and a half
+  // for its own footnote. This lands under it whenever it arrives.
+  const [offers, setOffers] = useState<UndeclaredEngine[]>([])
   const { busy, refused, act } = useAct<ModelsAnswer>(() => setReload((n) => n + 1))
+
+  // Blanking belongs to a change of subject, not to a re-ask. Every refresh
+  // and every write asks again, and a panel that flashed to "asking…" each
+  // time would take away the list the reader is comparing against.
+  useEffect(() => setReport(undefined), [project])
 
   useEffect(() => {
     let live = true
-    setReport(undefined)
+    setAsking(true)
     void fetchModels(project).then((answer) => {
-      if (live) setReport(answer)
+      if (!live) return
+      setReport(answer)
+      setAsking(false)
+    })
+    return () => {
+      live = false
+    }
+  }, [project, reload])
+
+  useEffect(() => {
+    let live = true
+    void fetchUndeclared(project).then((found) => {
+      if (live) setOffers(found)
     })
     return () => {
       live = false
@@ -56,6 +85,9 @@ export function Models({
   const use = (model: ServedModel) =>
     void act(() => pickModel(project, model.ref, role))
 
+  const add = (engine: UndeclaredEngine) =>
+    void act(() => addEngine(project, engine.name))
+
   return (
     <aside className="models" aria-label="Models">
       <header className="models-head">
@@ -65,6 +97,21 @@ export function Models({
             {shortPath(report.binding.path)}
           </span>
         ) : null}
+        {/* The panel reads when it opens and not again. Pull a model in a
+            terminal with it open and the list is stale, and closing and
+            reopening was the only way to find out. Everything goes out again
+            -- the declared endpoints and the machine both. */}
+        <button
+          type="button"
+          className="models-again"
+          data-do="refresh"
+          aria-label="Ask the endpoints again"
+          title="Ask again"
+          disabled={asking}
+          onClick={() => setReload((n) => n + 1)}
+        >
+          ↻
+        </button>
         <button type="button" className="models-close" onClick={onClose}>
           ✕
         </button>
@@ -117,6 +164,29 @@ export function Models({
         </p>
       ) : null}
       <div className="models-body">
+        {/* Above the lists, not under them. It is the one piece of news here,
+            and under a 396-model catalogue it sat 2181px down a 729px panel --
+            the last thing a reader would ever find. Drawn only when there is
+            one, so the usual panel is not pushed down by an empty slot.
+
+            Outside `Body` on purpose: a filter is about models, and an engine
+            with none of them yet is not something a search can miss. */}
+        {offers.map((one) => (
+          <p className="models-offer" data-offer={one.name} key={one.name}>
+            <span>
+              <strong>{one.label}</strong> is answering on this machine, with{" "}
+              {one.models.length} model{one.models.length === 1 ? "" : "s"} this
+              project cannot use yet.
+            </span>
+            {/* Not "add", which the reader would have to guess the object of.
+                Pressing this declares the endpoint; it moves nothing that is
+                already in use, and choosing among these models is still a
+                separate click on one of them. */}
+            <button type="button" data-do="add" disabled={busy} onClick={() => add(one)}>
+              let it use them
+            </button>
+          </p>
+        ))}
         <Body
           report={report}
           filter={filter.trim().toLowerCase()}
@@ -152,7 +222,18 @@ function Body({
       </p>
     )
   }
-  const blocks = report.endpoints.map((endpoint) => ({
+  // What is on this machine first. The report is in the binding file's order,
+  // which is where `poieo init` happened to write each endpoint -- provenance,
+  // not an answer to "what can I run". Measured on a real board, that order put
+  // the eight models sitting on the disk 1786px below a 396-model menu of
+  // things that cost money and needed a key nobody had set.
+  //
+  // One step, not a sort: `installed` before the rest, and inside each half the
+  // reader's own arrangement is left alone. `sort` is stable, so that holds.
+  const ordered = [...report.endpoints].sort(
+    (a, b) => Number(b.installed) - Number(a.installed),
+  )
+  const blocks = ordered.map((endpoint) => ({
     endpoint,
     shown: filter
       ? endpoint.models.filter((m) => m.id.toLowerCase().includes(filter))
@@ -399,7 +480,7 @@ function priceText(model: ServedModel, local: boolean): string {
     if (model.price.input === 0 && model.price.output === 0) return "free"
     return `$${money(model.price.input)} / $${money(model.price.output)}`
   }
-  return local ? "runs here" : ""
+  return local ? "local" : ""
 }
 
 /**

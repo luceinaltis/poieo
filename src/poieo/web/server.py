@@ -39,7 +39,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
-from ..rebind import point_at
+from ..rebind import declare, point_at
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -147,6 +147,40 @@ def _models_of(project: Any) -> Any:
         if task.binding_key == str(wanted):
             return task.binding
     return load_binding(wanted)
+
+
+def _one_address(base_url: str | None) -> str | None:
+    """An address reduced to what makes two of them the same endpoint.
+
+    `127.0.0.1` and `localhost` are one machine and a config may say either;
+    a trailing slash is nobody's second server. Deliberately no further --
+    resolving a hostname would turn a comparison into a DNS lookup, and being
+    wrong here only ever costs an offer that should not have been made.
+    """
+    if base_url is None:
+        return None
+    return base_url.rstrip("/").replace("//127.0.0.1:", "//localhost:")
+
+
+def _unclaimed(spec: Any) -> list[engines.Candidate]:
+    """The candidates this project cannot already reach.
+
+    **By address, not by key.** Somebody who declared the vLLM on this machine
+    as `fast` has it; offering to add it again under the name detection would
+    have picked writes one server into one file twice.
+
+    A candidate with no address -- `claude`, which is asked through its own SDK
+    -- is claimed by any endpoint of its type instead, for the same reason
+    under a different spelling.
+    """
+    taken = {_one_address(p.base_url) for p in spec.providers.values() if p.base_url}
+    types = {p.type for p in spec.providers.values()}
+    return [
+        candidate
+        for candidate in engines.CANDIDATES
+        if candidate.key not in spec.providers
+        and (_one_address(candidate.base_url) not in taken if candidate.base_url else candidate.type not in types)
+    ]
 
 
 def _key_state(name: str, provider: Any) -> bool | None:
@@ -432,6 +466,53 @@ def create_app(daemon: Any) -> Starlette:
             }
         )
 
+    async def project_models_undeclared(request: Request) -> JSONResponse:
+        """Engines answering on this machine that this project cannot reach.
+
+        Detection otherwise runs once, at `init`: install Ollama the week after
+        and the binding has never heard of it, so the panel shows nothing from
+        it *and no reason why* -- which reads as "there is nothing there".
+
+        **Its own route, and that is the design decision here.** Folded into
+        the report it would have been free only if a closed port refused fast,
+        and measured, it does not: a candidate nothing is listening on costs
+        the full `HTTP_TIMEOUT`, so every paint of the catalogue would have
+        waited a second and a half for its own footnote. Asked separately, the
+        catalogue arrives when it arrives and this lands under it later --
+        which is the order a reader wants them in anyway.
+
+        A read. Nothing is written until somebody presses what it offers, and
+        `models/add` is the route that does.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        spec = await asyncio.to_thread(_models_of, project)
+        if spec is None:
+            # Nowhere to write an answer to, so nothing here is worth a trip.
+            return JSONResponse({"undeclared": []})
+
+        found = await engines.probe(_unclaimed(spec))
+        return JSONResponse(
+            {
+                "undeclared": [
+                    {
+                        "name": engine.key,
+                        # What answered, preferred over the candidate's own
+                        # label -- which is the pair `vLLM / SGLang` for a port
+                        # two products share, and telling those apart was the
+                        # whole reason to ask rather than to read a config.
+                        "label": engine.known_as,
+                        "type": engine.type,
+                        # Ids only. This is a notice, not a second catalogue --
+                        # what it has to say is *that* there is something here.
+                        "models": list(engine.models),
+                    }
+                    for engine in found
+                ]
+            }
+        )
+
     def _slug(title: str) -> str:
         """A filename from a title, or "" if nothing usable is left.
 
@@ -663,6 +744,98 @@ def create_app(daemon: Any) -> Starlette:
             }
         )
 
+    async def project_models_add(request: Request) -> JSONResponse:
+        """Let this project use an engine already answering on this machine.
+
+        The other write on this route, under the same fence, and the browser
+        form of `poieo config add` -- through the same `rebind.declare`, so
+        there is not a second set of rules about what may be written.
+
+        **Only adds.** Nothing about what a role uses moves; declaring a model
+        and choosing one are different decisions, and the second is
+        `models/use`. An endpoint already declared is left exactly as it is,
+        since somebody may have pointed it at another port.
+
+        The engine is named back by **key**, not by address: the board was
+        never told where any of these live, and the table detection looks in
+        is the one place that knows.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        spec = await asyncio.to_thread(_models_of, project)
+        if spec is None:
+            return JSONResponse({"error": "this project names no models file"}, status_code=409)
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        wanted = str((body or {}).get("engine", ""))
+        candidate = next((one for one in _unclaimed(spec) if one.key == wanted), None)
+        if candidate is None:
+            if any(one.key == wanted for one in engines.CANDIDATES):
+                # It exists; this project already has it. The offer was drawn
+                # from a report taken a moment ago, and a terminal may have
+                # added it in between.
+                return JSONResponse(
+                    {"error": f"this project already reaches '{wanted}'"},
+                    status_code=409,
+                )
+            # 400, not 409: the argument names nothing detection knows how to
+            # look for, which is malformed rather than a state that can change.
+            return JSONResponse(
+                {
+                    "error": f"'{wanted}' is not an engine this looks for",
+                    "engines": [one.key for one in engines.CANDIDATES],
+                },
+                status_code=400,
+            )
+
+        # Asked again, because the press is a second trip: it answered when the
+        # panel was painted and may not now, and writing an address that serves
+        # nothing is a binding that fails on the project's next run. The rule
+        # `probe` holds, held here for the same reason.
+        answered = await engines.probe([candidate])
+        if not answered:
+            return JSONResponse(
+                {"error": f"'{candidate.key}' is not answering on this machine"},
+                status_code=409,
+            )
+
+        path = project.config.default_binding_path()
+        try:
+            added = await asyncio.to_thread(declare, path, answered)
+        except PoieoError as exc:
+            # `rebind` writes, sees the result will not load, and puts the file
+            # back exactly as it was. Its words, naming the file.
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        if not added:
+            # `_models_of` answers from the spec in memory, which a terminal
+            # edit can leave a step behind the file. `declare` read the file,
+            # so it is the one that found out.
+            return JSONResponse(
+                {"error": f"this project already reaches '{candidate.key}'"},
+                status_code=409,
+            )
+
+        # Without this the panel would go on offering what it just wrote, and
+        # the board would keep drawing the endpoints of a file that has moved.
+        try:
+            await asyncio.to_thread(daemon.reread, str(path))
+        except PoieoError:
+            # The write landed and `declare` verified it reloads; a daemon that
+            # will not adopt it is the next run's problem to report.
+            pass
+
+        return JSONResponse(
+            {
+                "status": "added",
+                "engine": candidate.key,
+                "models": list(answered[0].models),
+            }
+        )
+
     def runs(request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", "20"))
         task = request.query_params.get("task")
@@ -830,11 +1003,22 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/projects/{project}/models", project_models),
-        # Models: the fourth kind. It writes the project's binding file and
-        # nothing else, and never accepts or returns a credential.
+        # Its own read rather than a field on the one above: a candidate port
+        # nothing is listening on costs a full timeout, and the catalogue must
+        # not wait on its own footnote.
+        Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
+        # Models: the fourth kind. They write the project's binding file and
+        # nothing else, and never accept or return a credential. `add` declares
+        # an endpoint; `use` chooses among the models of one already declared.
+        # Two decisions, kept apart here as `poieo config` keeps them apart.
         Route(
             "/api/projects/{project}/models/use",
             project_models_use,
+            methods=["POST"],
+        ),
+        Route(
+            "/api/projects/{project}/models/add",
+            project_models_add,
             methods=["POST"],
         ),
         # Making: the fifth kind. It creates a file that did not exist, in the

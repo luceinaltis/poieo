@@ -165,16 +165,26 @@ the only reason `project.py` knows the daemon exists.
 
 ## Detection
 
-`detect.py` looks at the machine **once**, at `init`, and asks every address it
+`detect.py` looks at the machine at `init`, and asks every address it
 knows: Ollama, LM Studio, vLLM/SGLang and llama.cpp on their usual ports, and
 the Claude SDK, which resolves an `ANTHROPIC_API_KEY`, an auth token or an
 `ant auth login` profile by itself. All of them at once, 1.5s each, because the
 common case is a machine where most of them are not listening.
 
 It **asks, and never decides**: it returns the engines that answered and the
-models each reported, and touching a file is the caller's business. Detection
-never runs again — **run time reads files, nothing else.** A binding names an
-endpoint because somebody wrote it there, not because a port answered tonight.
+models each reported, and touching a file is the caller's business. **Run time
+reads files, nothing else** — a binding names an endpoint because somebody wrote
+it there, not because a port answered tonight.
+
+Detection does run again in one place, and the boundary is worth stating: the
+board's models panel asks on every paint, to notice an engine installed since
+`init` that the project's binding has never heard of (see [web.md](web.md)). It
+still only asks. Nothing is written until somebody presses the offer, and no run
+is ever routed by what a port said tonight. `probe(candidates)` takes the subset
+to look at, so the panel skips the addresses the project already declares — and
+it is a request of its own, because a candidate nothing is listening on costs a
+whole `HTTP_TIMEOUT` rather than refusing fast, which was measured after being
+assumed the other way.
 
 The order in `CANDIDATES` is the order a picker shows, and the order an
 unattended `init` takes its answer from. **Local servers lead**, for
@@ -229,6 +239,14 @@ A name **typed into the binding** is not among them, and that is the point. It
 says what its author believed when they wrote it; the whole reason to ask an
 endpoint anything is to find out what is really there. The board shows what
 answered first and the author's key second (see [web.md](web.md)).
+
+`probe()` keeps what a server said on the `Engine` it returns (`said`), and
+`Engine.known_as` is `label_for` applied to it, falling back to the candidate's
+own label. **Everything that puts a detected engine on a screen goes through
+that one property** — `init`, `config add`, and the board's offer — so the
+terminal and the browser cannot name one server two different things. Without
+it they printed `vLLM / SGLang`, the pair the address can name, after having
+just been told which of the two it was.
 
 **Every engine found is declared**, not only the one that ends up serving
 `default:`. A role exists so a graph can send its cheap step somewhere cheap,

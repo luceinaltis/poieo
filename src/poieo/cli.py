@@ -244,7 +244,7 @@ def init(
             _fail(nothing_found())
         engine = found[0]
         body = binding_document(found, (engine.key, engine.models[0]))
-        reason = f"{engine.label} -- {engine.models[0]}"
+        reason = f"{engine.known_as} -- {engine.models[0]}"
 
     report = init_project(Path.cwd(), body, name=name)
     for action, relative in report:
@@ -264,7 +264,7 @@ def init(
 
     # Automatic is fine, invisible is not: the whole pool is in the file, so
     # say what else is in it rather than leaving it to be discovered.
-    others = [spare.label for spare in found[1:]]
+    others = [spare.known_as for spare in found[1:]]
     if others:
         typer.echo("")
         typer.echo(f"also declared, ready for a role to name: {', '.join(others)}")
@@ -1023,7 +1023,7 @@ def config_add() -> None:
     if not added:
         # Say where it looked, so "nothing new" is an answer rather than a
         # shrug. An engine already declared is not news.
-        seen = ", ".join(engine.label for engine in found) or "nothing"
+        seen = ", ".join(engine.known_as for engine in found) or "nothing"
         typer.echo(f"nothing new -- this machine answers with: {seen}")
         return
 
@@ -1032,7 +1032,11 @@ def config_add() -> None:
     for key in added:
         engine = by_key[key]
         typer.echo("")
-        typer.echo(f"{key:<12}{engine.base_url or ''}".rstrip())
+        # The key leads because it is what `config use` takes back, but what
+        # the thing *is* has to be here too: `vllm` is the name detection
+        # picked for a port vLLM and SGLang share, and only the server can say
+        # which of them just got declared.
+        typer.echo(f"{key:<12}{engine.known_as:<16}{engine.base_url or ''}".rstrip())
         for model in engine.models:
             typer.echo(f"  {model}")
     first = by_key[added[0]]

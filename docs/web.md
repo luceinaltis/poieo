@@ -20,6 +20,7 @@ server and the client keep them together so they stay easy to count.
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
 | `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
+| `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
@@ -29,6 +30,7 @@ server and the client keep them together so they stay easy to count.
 | `POST /api/tasks/{p}/{f}/run` | **control** — one fire, now |
 | `POST /api/tasks/{p}/{f}/answer` | **answer** — decide what a `confirm` node asked |
 | `POST /api/projects/{p}/models/use` | **models** — point a role at another model |
+| `POST /api/projects/{p}/models/add` | **models** — declare an engine already running here |
 
 **Review** routes are the only ones that may ever touch the user's own files. If
 you are adding a third of them, stop. **Control** routes touch the daemon's
@@ -121,6 +123,49 @@ carry a private host. If a real confusion turns up — two `openai_compatible`
 endpoints a reader cannot tell apart — the argument for letting it through will
 be concrete.
 
+### `GET /api/projects/{p}/models/undeclared`
+
+**What is running on this machine that this project cannot reach.** Detection
+otherwise runs once, at `poieo init`: install Ollama the week after and the
+binding has never heard of it, so the panel shows nothing from it *and no reason
+why* — which reads as "there is nothing there", and the only cure was a terminal.
+
+`detect.probe()` over the candidates this project cannot already reach, reported
+as `{name, label, type, models}` — ids only, because this is a notice that
+something is here rather than a second catalogue. Almost always empty.
+
+**Its own route, and that is the decision worth recording.** It was first written
+as a field on the report, on the assumption that a closed local port refuses
+immediately and joining the existing gather would therefore be free. Measured, it
+is not: on Windows a candidate nothing is listening on costs the **full
+`HTTP_TIMEOUT`** — 1.5s, not 1.5ms. Folded in, every paint of the catalogue would
+have waited a second and a half for its own footnote. Asked apart, the catalogue
+arrives when it arrives and this lands under it later, which is the order a
+reader wants them in anyway. `test_the_catalogue_does_not_go_looking_for_engines`
+holds the split.
+
+**Still not behind a button.** A standing "look again" would have been worse than
+a slow paint: its usual answer is "nothing new", and a control whose usual answer
+is nothing is one people learn to ignore. Two requests cost nobody anything.
+
+`_unclaimed` decides *cannot reach* **by address, not by key**: somebody who
+declared the vLLM on this machine as `fast` has it, and offering it again under
+the name detection would have picked writes one server into one file twice.
+`127.0.0.1` and `localhost` are one machine and a config may say either; a
+trailing slash is nobody's second endpoint. It goes no further than that —
+resolving a hostname would turn a comparison into a DNS lookup, and being wrong
+here only ever costs an offer that should not have been made. A candidate with no
+address (`claude`, asked through its own SDK) is claimed by any endpoint of its
+type instead.
+
+`label` is `Engine.known_as` — **what the server said it was**, not the label of
+the address it was found at, which for the port vLLM and SGLang share is the
+pair. Having asked, printing the pair back would be throwing the answer away;
+[storage.md](storage.md) has the sources and their order.
+
+**No address crosses here either.** The board names an engine back by `name`, and
+the daemon looks up where it lives in `CANDIDATES` — the one place that knows.
+
 ### `POST /api/projects/{p}/models/use`
 
 `{target, role}` — a `provider/model` reference and the role to point at it,
@@ -174,6 +219,49 @@ the question — the panel falls back to the type then.
 provider's key is the handle its author typed; reading a config back to somebody
 is not telling them what is there. So `OpenRouter` is the heading and `routed`
 sits beside it, and only when nothing identified the endpoint does the key lead.
+
+### `POST /api/projects/{p}/models/add`
+
+`{engine}` — one of the keys the read report offered under `undeclared`. It
+answers `{status: "added", engine, models}`, and is the browser form of
+`poieo config add`, through the same `rebind.declare`, so there is not a second
+set of rules about what may be written.
+
+**Only adds.** Nothing about what a role uses moves — declaring a model and
+choosing one are different decisions, and the second is `models/use`. An endpoint
+already declared is left exactly as it is, since somebody may have pointed it at
+another port.
+
+| code | when | carries |
+|---|---|---|
+| **404** | no such project | the names that do answer |
+| **409** | this project names no models file | — |
+| **400** | not an engine detection looks for | the keys it does |
+| **409** | this project already reaches it | — |
+| **409** | it is not answering on this machine | — |
+| **409** | `rebind` could not add to that file | its own sentence, naming the file |
+
+**It asks again before it writes.** The offer was drawn from a report taken a
+moment ago, and the press is a second trip: an engine that has stopped answering
+must not be written, because an address that serves nothing is a binding that
+fails on the project's next run. That is the rule `probe` already holds, held
+here for the same reason.
+
+Two of those refusals are the same fact found in two places. `_unclaimed` reads
+the spec **in memory**, which a terminal edit can leave a step behind the file;
+`declare` reads the file, so when it reports nothing added it is the one that
+found out. Both say the project already reaches it.
+
+**The write rereads**, for the reason `use` does and one more: without it the
+panel would go on offering what it has just written.
+
+`rebind.declare` **verifies and restores** rather than refusing up front, which
+is the one place its two writes differ. `providers:` written as a single flow
+mapping is legal YAML and not a shape a sibling can be appended to, so `declare`
+writes, finds the result will not load, puts the file back byte for byte, and
+raises. Block-form `providers:` with flow-style *children* takes an addition
+fine — adding only ever appends a sibling, never edits inside one — which is why
+that shape is not a refusal here though it is one for `use`.
 
 `installed` is the difference between two listings that look identical.
 Ollama's `/api/tags` is `ollama list` — models pulled onto *this disk*, ready
@@ -368,6 +456,22 @@ replaced. An endpoint with nothing matching leaves the list entirely: left in
 place it would show "no answer" under its own heading, which is a different and
 more alarming thing than a search that missed.
 
+**What is on this machine is listed first.** The report comes in the binding
+file's order, which is where `poieo init` happened to write each endpoint —
+provenance, and not an answer to "what can I run". On a real board that put the
+eight models sitting on the disk 1786px below a 396-model menu of things that
+cost money through a key nobody had set. The panel does one step, not a sort:
+`installed` before the rest, stable, so a reader's own arrangement survives
+inside each half.
+
+**The list is read on a phone.** Two rules, both found by photographing it at
+393px rather than by reasoning about it. The panel's `width: min(440px, 100vw)`
+was content-box, so its own 32px of padding pushed it wider than the screen and,
+pinned to the right, hung that off the *left* edge — every heading, the filter
+and the variable name silently chopped. And the rail lies down under 720px: two
+words down the side cost 92px of a 393px screen, a quarter of it, permanently,
+for a list two items long.
+
 **The row is the button.** A catalogue is read by scanning names, and a verb
 beside each of four hundred of them is four hundred words the eye has to skip.
 What a click moves is chosen once, above the list — and only where there is a
@@ -376,10 +480,32 @@ with one option in it is furniture.
 
 **A row is what the endpoint said, and a blank is what it did not.** A local
 model shows the two numbers that are its real price -- its size and
-quantization -- and says it *runs here* rather than showing a rate of nothing; a
+quantization -- and reads *local* rather than showing a rate of nothing; a
 routed one shows the rate it published. An endpoint that charges but publishes
 nothing leaves the column empty, because "free" would be a guess and an
 expensive one to be wrong about.
+
+**An offer sits above the lists, and only when there is one.** The panel makes a
+second request for it, so the catalogue never waits; when it comes back with
+something, a line appears saying an engine is answering here with models this
+project cannot use yet, and a button that declares it. It was written under the
+lists, as a footnote to them, and photographed there: 2181px down a 729px panel,
+three screens below the fold. The one piece of news on the page cannot be the
+last thing on it. Silent otherwise — which is the point, and why this is not a "look again" button: a
+control whose usual answer is "nothing new" teaches people to stop pressing it,
+and the information arrives without anyone having to know it exists. The button reads
+**"let it use them"** rather than "add", because *add* leaves a reader to guess
+the object; it declares the endpoint and moves nothing that is already in use,
+and choosing among the new models is still a separate click on one of them.
+
+**Refresh, because the panel reads once.** It asks when it opens and not again,
+so a model pulled in a terminal with it open does not appear, and closing and
+reopening was the only way to find out. `↻` in the header re-asks *everything* —
+both requests, the declared endpoints and the machine — and the list stays on
+screen while it does: blanking belongs to a change of subject, and a panel that flashed to
+"asking…" on every refresh and every write would take away the very list the
+reader is comparing against. No timer: a model listing changes rarely, and
+polling would re-ask a 396-model catalogue with nobody watching.
 
 **`Question` is drawn first in the drawer, above the controls.** Everything
 after a `confirm` node is held until it is answered, so a reader who scrolls
