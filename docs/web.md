@@ -429,6 +429,13 @@ refused rather than quietly rewritten. It takes the three things DESIGN.md says
 a task cannot do without and no fourth, and the folder is required because it is
 the one thing the model's hands will touch.
 
+The rail's third item is the page that calls it: `make/MakeTask.tsx`, beside
+`models/` because making a task is what the board is *for* rather than something
+one task does. It asks for the three fields and names the folder in a sentence
+above the button — the card starts running when it is saved, and that sentence
+is principle 7's one exception to hiding the machinery. One panel holds the
+stage's single margin, so opening it closes the other.
+
 There is **no reload call behind it**. The daemon watches that folder, so the
 route's whole job is the file; one door rather than two that must agree.
 
@@ -450,12 +457,9 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **The page that would call it.** `POST /api/projects/{p}/tasks` exists and
-  writes a card the daemon then finds, the way it finds one written by a hand —
-  but nothing in `web-ui/src/` calls it yet, so from a browser this is still an
-  API and not a button.
-- **Editing and removing a card.** Changing a card's name or folder, and
-  deleting it, still mean editing the file.
+- **Editing and removing a card.** Making one is live — the rail's `new task`
+  writes a card and the daemon finds it — but changing a card's name or folder,
+  and deleting it, still mean editing the file.
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.
