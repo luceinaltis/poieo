@@ -424,12 +424,22 @@ async def _compact(
         {**task, "content": f"{task.get('content') or ''}\n\n{_SUMMARY_HEADER}\n{response.text}"},
         *tail,
     ]
-    ctx.emit(
-        "node_compacted",
-        node_id=spec.id,
-        folded=before - _conversation_size(folded),
-        kept=_KEEP_TURNS,
-    )
+    freed = before - _conversation_size(folded)
+    if freed <= 0:
+        # A summary longer than what it replaced is not a summary. Watched in
+        # another harness: a compression pass took a conversation from 64,186
+        # tokens to 71,173 -- fourteen messages in, fourteen out, seven
+        # thousand tokens larger -- and reported it as done. Rebuilding is not
+        # shrinking, and the model was asked to be brief rather than made to
+        # be, so this is checked rather than assumed.
+        ctx.emit(
+            "node_compact_failed",
+            node_id=spec.id,
+            error=f"the summary was longer than the turns it would have replaced "
+            f"({-freed} characters longer)",
+        )
+        return messages
+    ctx.emit("node_compacted", node_id=spec.id, folded=freed, kept=_KEEP_TURNS)
     return folded
 
 

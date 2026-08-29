@@ -778,6 +778,102 @@ async def test_a_result_too_large_to_fit_is_replaced_with_what_to_do(tmp_path, m
     assert any("offset" in str(e.data.get("note", "")) for e in said)
 
 
+class _VerboseSummariser:
+    """Answers the summarising call with more than it was given.
+
+    The summarising call is the one made with no tools, which is how every
+    other test here identifies it too. Scripting it through the mock is not
+    possible: both it and the agent's turns resolve to the same role.
+    """
+
+    def __init__(self, name, spec):
+        from poieo.providers.mock import MockProvider
+
+        self.inner = MockProvider(name, spec)
+
+    async def complete(self, request):
+        if not request.tools:
+            from poieo.providers.base import LLMResponse, Usage
+
+            return LLMResponse(
+                text="y" * 200_000,
+                model=request.model,
+                usage=Usage(input_tokens=1, output_tokens=1),
+            )
+        return await self.inner.complete(request)
+
+    async def context_for(self, model):
+        return None
+
+    async def health(self):
+        return True, "verbose"
+
+    async def aclose(self):
+        return
+
+
+def verbose_summariser_binding(responses):
+    from poieo.providers import register
+
+    register("verbose", _VerboseSummariser)
+    return BindingSpec.model_validate(
+        {
+            "providers": {"v": {"type": "verbose", "options": {"responses": responses}}},
+            "default": {"provider": "v", "model": "m"},
+        }
+    )
+
+
+async def test_a_fold_that_would_make_it_bigger_is_not_taken(tmp_path, monkeypatch):
+    """Watched in the wild, in another harness: a compression pass took a
+    conversation from 64,186 tokens to 71,173 -- fourteen messages in,
+    fourteen out, seven thousand tokens larger. Rebuilding is not shrinking,
+    and a summary longer than what it replaced is not a summary.
+    """
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    reads = {"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}
+    store = _CapturingStore()
+
+    result = await run_graph(
+        graph,
+        verbose_summariser_binding({"worker": [dict(reads) for _ in range(8)] + ["done"]}),
+        store=store,
+    )
+
+    assert result.status == "completed", result.error
+    assert not [e for e in store.events if e.type == "node_compacted"]
+    said = [e for e in store.events if e.type == "node_compact_failed"]
+    assert said and "longer" in said[0].data["error"]
+
+
+async def test_what_a_fold_freed_is_never_negative(tmp_path, monkeypatch):
+    """The number reaches the board. A fold that grew the conversation used to
+    put a negative there and call it progress."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    monkeypatch.setattr(nodes, "_COMPACT_CAP", 400)
+    monkeypatch.setattr(nodes, "_FOLD_AT_LEAST", 100)
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path)
+    reads = {"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}
+    store = _CapturingStore()
+
+    await run_graph(
+        graph,
+        verbose_summariser_binding({"worker": [dict(reads) for _ in range(8)] + ["done"]}),
+        store=store,
+    )
+
+    assert all(e.data["folded"] > 0 for e in store.events if e.type == "node_compacted")
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)
