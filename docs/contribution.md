@@ -60,3 +60,33 @@ was wrong: `git rebase --abort` and pick it again.
 
 Then re-run the full gate from `AGENTS.md` Part 2. A rebase that applied cleanly
 past a rename refactor proves the syntax still fits, not that the meaning does.
+
+## Getting a reviewer that is not you
+
+*Merge condition 2.* One account, no required review, and the person who wrote a
+change is usually the one merging it. Self-review still catches a great deal —
+a stale comment, a file staged by accident — but it cannot catch a wrong belief,
+because the belief is what produced both the code and the review.
+
+So the second pass has one requirement: **the reviewer must not carry your
+reasoning.** Not a second look by you, and not an agent you have been explaining
+yourself to for an hour. It needs the diff and the repository, and nothing else.
+
+Any of these qualifies:
+
+- A person.
+- A fresh agent session, given the branch and no history of the work.
+- A review tool that starts from the diff. In Claude Code the `/code-review`
+  command does this; other tools do the same thing from a PR URL.
+
+Give it the diff, not the story behind the diff. "Here is what I changed and why"
+hands over the belief you wanted checked.
+
+Then write both passes into the PR, including findings you disagreed with and
+why — a review that only records what you already fixed reads as a review that
+found nothing.
+
+**A condition, not an approval.** `AGENTS.md` lists this under *merge only when
+all of these hold*, so skipping it is skipping a condition, the same as merging on
+an unrun suite. What is missing is not force but anyone to apply it: like every
+other condition here, it is worth exactly what the person recording it is honest.

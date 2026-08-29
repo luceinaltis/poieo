@@ -4,8 +4,8 @@ Rules for anyone, human or agent, changing this repository. Read this before you
 first commit in a session.
 
 **Nothing on GitHub enforces any of it.** `main` is unprotected by choice: no
-required review, no CI gate, one account and no second reviewer. Everything below
-is what stands in that place instead. That is why it is written down.
+required review, no CI gate, one account, no approval anything can insist on.
+Everything below is what stands in that place instead. That is why it is written down.
 
 Two halves that rot at different speeds. **Part 1** is judgement. **Part 2** is
 facts about this machine, and goes stale on its own — when it does, fix it.
@@ -32,18 +32,18 @@ own.
 Building a feature in slices means **one PR per slice**: a scaffold, then a reducer,
 then the screen that uses it land as separate commits, not one seven-part blob.
 Group two slices only when both are small and neither stands alone. Commit freely
-*inside* the branch — squash discards those; the PR title and body are what survive.
+inside the branch; only the PR title and body survive the squash.
 
 ## Before you merge
 
 Agents may merge their own PRs. Run the gate — the exact three commands are in
 Part 2 — and do not assume it.
 
-**Review your own diff before merging** (`git diff main...HEAD`). With no second
-reviewer, self-review *is* the review: expected, not a shortcut. Look for what a
-green suite cannot tell you — a dropped error path, a public surface that quietly
-widened, a stale comment, a file staged by accident. Then write in the PR what you
-checked and found. "Self-reviewed, no findings" under a 400-line diff is not one.
+**Review your own diff before merging** (`git diff main...HEAD`), then have a reader
+that did not write it go over the same diff; `docs/contribution.md` says what counts.
+Self-review cannot see what you already believe. Look for what a green suite cannot:
+a dropped error path, a surface that quietly widened, a stale comment, a file staged
+by accident. "Self-reviewed, no findings" under a 400-line diff is not one.
 
 And ask where each part came from. Most requirements here arrive from
 `docs/archive/`, written by earlier sessions no longer available to be asked —
@@ -54,7 +54,7 @@ true.** Delete hard enough that some of it has to come back.
 Merge only when all of these hold:
 
 1. Both suites are green, and the run appears in the PR body.
-2. You have read the full diff and recorded that review in the PR.
+2. You read the whole diff, an independent pass read it too, and both are in the PR.
 3. The branch is current with `main` and conflict-free.
 4. Every behaviour change has a test that fails without it. This repo is TDD —
    write the test first, and the history follows it.

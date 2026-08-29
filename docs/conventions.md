@@ -130,3 +130,27 @@ in the product.
 
 Before introducing a name, look for the one already in use. Before keeping both,
 delete one.
+
+## Say what you assumed, before it is only in the code
+
+A change almost always rests on something you could not check: what a caller
+expects, whether a rule still holds, which of two readings of the request was
+meant. **Notice it while you are writing, and put it in the PR** — this belongs
+here rather than with the PR rules because the moment it applies is the moment
+you decide, not the moment you write the description.
+
+This is not general caution, it is specific to how this repository is built.
+Most of what the code answers to came from `docs/archive/`, written by sessions
+that no longer exist to be asked, so a fair number of assumptions cannot be
+resolved at all — only declared. An assumption you state is one a reader can
+disagree with. An assumption that reaches `main` only as code is indistinguishable
+from a decision, and the next session will defend it.
+
+This is *Not knowing is an answer worth returning*, above, turned toward the
+reader: the code declines to name a cause it is unsure of, and you decline to
+encode a belief you could not check.
+
+Two readings that lead to different work are still not a reason to stop. Asking a
+human is reserved for the four one-way doors `AGENTS.md` names, and ambiguity is
+not one of them: take the likelier reading, say which you took, and carry on. A
+question costs a round trip; a declared assumption costs a sentence.
