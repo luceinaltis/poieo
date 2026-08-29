@@ -202,7 +202,41 @@ def _clip(value: Any, limit: int = 400) -> str:
 _CONTEXT_CAP = 120_000
 # How many of the most recent tool results survive a clearing, whole.
 _KEEP_RESULTS = 3
+# The share of a model's window at which each of the two caps fires, for a
+# binding that says how much its model holds. Anthropic's own defaults are the
+# same shape -- clear at 100k of a 200k window, compact at 180k.
+_CLEAR_AT = 0.5
+_COMPACT_AT = 0.9
 _CLEARED = "[cleared to save room -- call the tool again if you still need this]"
+
+
+def _too_big(
+    window: int | None,
+    sent: int,
+    messages: list[dict[str, Any]],
+    share: float,
+    cap: int,
+) -> bool:
+    """Whether the conversation has grown past a threshold.
+
+    Two readings of the same question, and the first is the real one. When the
+    binding says how much the model holds, `sent` is what the endpoint counted
+    the last request at -- a measurement, not an estimate, and free because it
+    arrives on every response. Where nobody has said, the character count is
+    what this loop had before anyone could.
+
+    The difference is not academic. `_CONTEXT_CAP` is 2.3% of what
+    `z-ai/glm-5.3-flash` holds and 11.4% of a local qwen3.5; a step was watched
+    re-reading one file eight times because its history was emptied at a
+    fortieth of what the model could carry.
+
+    `sent` lags by a turn -- it describes the request before this one. That is
+    what a threshold on a measurement costs, and it is the same lag Anthropic's
+    server-side trigger has.
+    """
+    if window:
+        return sent > window * share
+    return _conversation_size(messages) > cap
 
 
 def _conversation_size(messages: list[dict[str, Any]]) -> int:
@@ -417,6 +451,10 @@ class AgentNode(Node):
             messages: list[dict[str, Any]] = [{"role": "user", "content": bound.prompt}]
             turns = 0
             tool_call_count = 0
+            # What the endpoint counted the last request at. Zero until one
+            # has been answered, which is why nothing is cleared on turn one --
+            # there is nothing there yet to clear.
+            sent = 0
 
             while True:
                 if ctx.cancel is not None and ctx.cancel.is_set():
@@ -427,7 +465,8 @@ class AgentNode(Node):
                 # time, and an endpoint that caches prompt prefixes would find
                 # a different prefix every turn -- paying the whole
                 # conversation again to save part of it.
-                if _conversation_size(messages) > _CONTEXT_CAP:
+                window = bound.resolved.context
+                if _too_big(window, sent, messages, _CLEAR_AT, _CONTEXT_CAP):
                     freed = _clear_old_results(messages)
                     if freed:
                         ctx.emit(
@@ -442,10 +481,11 @@ class AgentNode(Node):
                 # file in its arguments -- the older ones are folded into a
                 # summary. Second because it costs a model call and cannot be
                 # undone, where clearing is free and one repeated call away.
-                if _conversation_size(messages) > _COMPACT_CAP:
+                if _too_big(window, sent, messages, _COMPACT_AT, _COMPACT_CAP):
                     messages = await _compact(spec, ctx, bound, messages)
                 request = bound.request(list(messages), tools=offered)
                 response = await call_with_retry(spec, bound.provider, request, ctx)
+                sent = response.usage.input_tokens
                 ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(
                     "node_turn",

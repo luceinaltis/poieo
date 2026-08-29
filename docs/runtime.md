@@ -114,8 +114,8 @@ which is how a one-word verdict comes back empty.
 result is appended and resent on every turn after it, so a step that reads
 twenty files pays for all twenty on every remaining turn -- one run measured
 here spent 160,360 input tokens to produce 6,578 of output before it was cut
-off mid-turn. Past `_CONTEXT_CAP` characters the older tool results are
-replaced by a short note and `node_context_cleared` says how much that freed.
+off mid-turn. Past half of what the model can hold the older tool results are replaced by
+a short note, and `node_context_cleared` says how much that freed.
 **Only the result goes, never the request:** the assistant turn that asked for
 the file stays, so the model still knows it has read it, and the tools are
 offered again every turn, so it can read it again. The worst case is one
@@ -145,6 +145,21 @@ and the run carries on to fail honestly on room if it is going to.
 Clearing before folding, and not the other way around, because clearing costs
 nothing and is one repeated tool call away from being undone, while a fold
 costs a model call and loses whatever the summary left out.
+
+**Both caps are the model's, when the binding says whose they are.** A model's
+window is a fact about the model, so it lives on the binding's `context:` --
+and both thresholds read it: clearing at half of it, folding at nine tenths,
+the same shape as Anthropic's own 100k/180k defaults for a 200k window. What is
+compared against it is `usage.input_tokens` from the previous response, which
+is a measurement the endpoint already sends rather than an estimate from
+characters. It lags by one turn, which is what a threshold on a measurement
+costs and what the server-side version costs too.
+
+Where the binding says nothing, the character caps above are what this loop had
+before anyone could say. They are wrong for every model these examples bind --
+`_CONTEXT_CAP` is 2.3% of what `z-ai/glm-5.3-flash` holds and 11.4% of a local
+qwen3.5 -- which is why the binding is the better answer and the constant is
+only the fallback.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with
