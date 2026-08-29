@@ -42,6 +42,28 @@ __all__ = [
 ]
 
 
+class SpendSpec(BaseModel):
+    """A ceiling on what this project may spend, as a rate.
+
+    A rate rather than a total, because a daemon has no end: "no more than a
+    dollar an hour" is a sentence somebody can mean, and "no more than twenty
+    dollars, ever" is one they would have to keep resetting.
+
+    The exposure is not one run -- forty turns measured here cost two and a
+    half cents -- it is a board firing all night. A handoff loop early in this
+    project burnt $0.19 in ten minutes, which left alone is $27 a day.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # In whatever currency the endpoint bills in. poieo does not know one
+    # currency from another and does not need to: it adds up what it was told
+    # and compares it to what it was given.
+    limit: float = Field(gt=0)
+    # How far back to look. A duration the way every other one here is spelled.
+    over: str = "1h"
+
+
 class ProjectSpec(BaseModel):
     """The shared defaults a ``poieo.yaml`` declares: where things live.
 
@@ -60,6 +82,11 @@ class ProjectSpec(BaseModel):
     # Where a run's events and its result are written. Moves the run history
     # and nothing else: the memory and the working copies stay with the project.
     store: str = "runs"
+    # What this project may spend per unit time, if anybody said. `None` means
+    # nobody has, and nothing is enforced -- which is the right default for a
+    # local model that costs nothing and the honest one for an endpoint whose
+    # charges poieo cannot see.
+    spend: SpendSpec | None = None
     # Default binding for every task here, and for `poieo run`.
     binding: str | None = None
     # The folder of cards. Named for what is in it, while the document key

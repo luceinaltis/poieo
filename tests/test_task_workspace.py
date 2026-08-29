@@ -6,11 +6,13 @@ that only holds if git is actually involved.
 """
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from test_workspace import git, head, make_repo
 
 from conftest import card
 from poieo.daemon import Daemon, load_config
+from poieo.project import SpendSpec
 from poieo.store import RunStore
 
 BINDING = """
@@ -93,6 +95,10 @@ async def run_once(config):
     daemon = Daemon(config, store=RunStore(config.store_path()))
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=60)
     return daemon, results[0]
+
+
+def _ago(**delta):
+    return (datetime.now(timezone.utc) - timedelta(**delta)).isoformat()
 
 
 def events_of(config, run_id):
@@ -264,6 +270,70 @@ async def test_a_change_that_could_not_be_recorded_is_visible(tmp_path, monkeypa
     said = [e for e in events_of(config, result.run_id) if e["type"] == "run_change_failed"]
     assert said, "a change that could not be recorded has to reach the run's own log"
     assert "fd0489dc" in said[0]["data"]["error"]
+
+
+async def test_a_project_over_its_spend_limit_does_not_fire(tmp_path):
+    """Somebody running this unattended on a paid API wants a ceiling.
+
+    The exposure is not one run -- forty turns cost two and a half cents --
+    but a daemon firing all night. A handoff loop early in this project burnt
+    $0.19 in ten minutes, which left alone is $27 a day.
+
+    The check goes where the daemon already decides whether to fire, because
+    "over budget" is a new reason not to rather than a new way to stop
+    something halfway.
+    """
+    repo, config = build(tmp_path)
+    config.spend = SpendSpec(limit=0.01, over="1h")
+    store = RunStore(config.store_path())
+    # A run an hour ago costs nothing now; one a minute ago is the whole budget.
+    store.record_summary(
+        {
+            "run_id": "old",
+            "task": "chores",
+            "status": "completed",
+            "project": config.display_name,
+            "finished_at": _ago(hours=2),
+            "usage": {"cost": 5.0},
+        }
+    )
+    store.record_summary(
+        {
+            "run_id": "recent",
+            "task": "chores",
+            "status": "completed",
+            "project": config.display_name,
+            "finished_at": _ago(minutes=1),
+            "usage": {"cost": 0.02},
+        }
+    )
+
+    daemon = Daemon(config, store=store)
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=60)
+
+    assert results == [] or all(r is None for r in results), "nothing should have run"
+
+
+async def test_spending_that_has_aged_out_does_not_count(tmp_path):
+    """It is a rate, not a total. Yesterday's bill does not stop today."""
+    repo, config = build(tmp_path)
+    config.spend = SpendSpec(limit=0.01, over="1h")
+    store = RunStore(config.store_path())
+    store.record_summary(
+        {
+            "run_id": "old",
+            "task": "chores",
+            "status": "completed",
+            "project": config.display_name,
+            "finished_at": _ago(hours=2),
+            "usage": {"cost": 5.0},
+        }
+    )
+
+    daemon = Daemon(config, store=store)
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=60)
+
+    assert results and results[0] is not None
 
 
 CARD = """

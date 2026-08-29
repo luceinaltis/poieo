@@ -226,6 +226,36 @@ only logging. A line in the daemon's log is where nobody is looking; the run is
 where somebody would. The two that happen before the run exists keep their
 reason until there is a run to hang it on.
 
+## A ceiling on the spend
+
+A project may say what it is allowed to spend, as a rate:
+
+```yaml
+# poieo.yaml
+spend:
+  limit: 1.00
+  over: 1h
+```
+
+**A rate rather than a total**, because a daemon has no end. "No more than a
+dollar an hour" is a sentence somebody can mean; "no more than twenty dollars,
+ever" is one they would have to keep resetting.
+
+Checked where the daemon already decides whether to fire, and that placement is
+the design. A run that has started is going to finish: a rate limit that killed
+work halfway would waste exactly the money it was set to save. **Over budget is
+a new reason not to fire, not a new way to stop.**
+
+`RunStore.spent_since` reads the index backwards and stops at the first run
+older than the window, so this costs a handful of lines read before each fire
+rather than a walk through a log that grows all night.
+
+**A run that never said what it cost counts as nothing.** For a local model that
+is exactly right. For a paid endpoint that was not asked it understates, and a
+limit set against it will let spend through — the answer to which is to ask the
+endpoint (`usage: {include: true}`) or to declare the prices on the binding, not
+to refuse to enforce anything. `docs/binding.md` covers both.
+
 ## Handoff
 
 `then:` on a task is the router's `branches`, one level up: `graph.Branch`
