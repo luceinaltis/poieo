@@ -86,6 +86,7 @@ Then write both passes into the PR, including findings you disagreed with and
 why — a review that only records what you already fixed reads as a review that
 found nothing.
 
-**What it is not.** This is not a merge blocker in the sense of an approval,
-because nothing here can enforce one. It is a second reading, and it is worth
-about as much as the honesty of the person recording it.
+**A condition, not an approval.** `AGENTS.md` lists this under *merge only when
+all of these hold*, so skipping it is skipping a condition, the same as merging on
+an unrun suite. What is missing is not force but anyone to apply it: like every
+other condition here, it is worth exactly what the person recording it is honest.

@@ -135,7 +135,9 @@ delete one.
 
 A change almost always rests on something you could not check: what a caller
 expects, whether a rule still holds, which of two readings of the request was
-meant. **Write that down in the PR before you write the code that assumes it.**
+meant. **Notice it while you are writing, and put it in the PR** — this belongs
+here rather than with the PR rules because the moment it applies is the moment
+you decide, not the moment you write the description.
 
 This is not general caution, it is specific to how this repository is built.
 Most of what the code answers to came from `docs/archive/`, written by sessions
@@ -144,10 +146,11 @@ resolved at all — only declared. An assumption you state is one a reader can
 disagree with. An assumption that reaches `main` only as code is indistinguishable
 from a decision, and the next session will defend it.
 
-The same instinct already runs through the code: `explain_failure` returns `None`
-rather than name a cause it is not sure of. Do for the reader what the code does
-for the user.
+This is *Not knowing is an answer worth returning*, above, turned toward the
+reader: the code declines to name a cause it is unsure of, and you decline to
+encode a belief you could not check.
 
-If stating it makes you realise you cannot proceed either way — the two readings
-lead to different work, and the wrong one wastes it — that is the case for asking
-a human, and `AGENTS.md` names the four kinds that always are.
+Two readings that lead to different work are still not a reason to stop. Asking a
+human is reserved for the four one-way doors `AGENTS.md` names, and ambiguity is
+not one of them: take the likelier reading, say which you took, and carry on. A
+question costs a round trip; a declared assumption costs a sentence.
