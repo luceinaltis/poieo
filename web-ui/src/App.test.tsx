@@ -60,6 +60,7 @@ vi.mock("./api", () => ({
 
 import App from "./App"
 import { AGENT_RUN } from "./state/fixtures"
+import { SKINS } from "./skins/registry"
 import { initialStage, reduce, replay } from "./state/stage"
 import type { StageState } from "./state/stage"
 import type { StageStore } from "./shell/stageStore"
@@ -166,10 +167,13 @@ test("the picker lists the registered skins and the board carries the tasks", as
   await render(initialStage(FLOWS))
 
   const picker = container.querySelector("select")!
-  expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual([
-    "atelier",
-    "basic",
-  ])
+  // Against the registry rather than a list written out here: which skins
+  // exist is `registry.test.ts`'s question, and this one is only whether the
+  // picker offers all of them. Spelled out, it failed every time a skin was
+  // added and said nothing about the picker either way.
+  expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual(
+    SKINS.map((skin) => skin.id).sort(),
+  )
   expect(picker.value).toBe("basic")
   expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
 })
