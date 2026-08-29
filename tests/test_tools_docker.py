@@ -16,6 +16,7 @@ import pytest
 from poieo.providers.base import ToolCall
 from poieo.tools import DEFAULT_TOOLSETS, LocalExecutor
 from poieo.tools.docker import DockerExecutor, docker_available, image_present
+from poieo.tools.shell import _POSIX_SHELL
 
 IMAGE = os.environ.get("POIEO_TEST_IMAGE", "alpine:3.20")
 
@@ -26,8 +27,13 @@ if _ok and not image_present(IMAGE):
 pytestmark = pytest.mark.skipif(not _ok, reason=f"isolation needs docker: {_reason}")
 
 SECRET = "the-host-filesystem"
-# The host shell is cmd.exe on Windows; the container's is always POSIX.
-HOST_READ_PARENT = "type ..\\secret.txt" if os.name == "nt" else "cat ../secret.txt"
+# Which shell reads a *host* command is a fact about this machine rather than
+# about the platform: `posix_shell()` finds one on Windows too -- now the norm
+# -- and only where there is none does `cmd` read the line. Asked the way
+# `shell._dialect()` asks it, so this cannot drift from what really runs. The
+# container's shell is always POSIX.
+HOST_IS_POSIX = os.name != "nt" or bool(_POSIX_SHELL)
+HOST_READ_PARENT = "cat ../secret.txt" if HOST_IS_POSIX else "type ..\\secret.txt"
 BOX_READ_PARENT = "cat ../secret.txt"
 
 
