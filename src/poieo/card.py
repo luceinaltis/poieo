@@ -366,6 +366,13 @@ def record_run(task: CardSpec, result: Any) -> None:
     write_result(task, result)
     if result.status == "completed":
         kind, text = "did", closing_line(result)
+    elif result.status == "asking":
+        # A run that stopped to ask somebody something did not go wrong, and
+        # the journal is what they read in the morning. The question itself is
+        # the line worth having there.
+        asked = getattr(result, "asked", None) or {}
+        kind = "asked"
+        text = asked.get("question") or "a question with no words"
     else:
         kind = "failed"
         cause = getattr(result, "cause", None)

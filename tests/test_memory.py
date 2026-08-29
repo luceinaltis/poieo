@@ -536,3 +536,33 @@ def test_the_learning_pass_reaches_for_nothing_private():
         if "memory import" in line and " _" in line
     ]
     assert offenders == []
+
+
+def test_a_run_waiting_on_a_person_reads_as_a_question(tmp_path):
+    """Not a failure. The journal is what somebody reads in the morning, and a
+    run that stopped to ask them something did not go wrong."""
+    task = _task(tmp_path)
+    result = _result(
+        status="asking",
+        asked={"node": "confirm", "question": "Land it?", "choices": ["land", "hold"]},
+    )
+
+    record_run(task, result)
+
+    line = task.journal_path().read_text(encoding="utf-8")
+    assert "asked" in line
+    assert "Land it?" in line
+    assert "failed" not in line
+
+
+def test_a_question_is_not_a_bookmark(tmp_path):
+    """`OWN_KINDS` marks where the task last read to. A question is not the end
+    of the work, so the notes it saw stay new -- reading one twice is
+    recoverable, losing one is not."""
+    from poieo.card import _is_own_entry
+
+    task = _task(tmp_path)
+    record_run(task, _result(status="asking", asked={"question": "Land it?"}))
+
+    entry = task.journal_path().read_text(encoding="utf-8").strip().splitlines()[-1]
+    assert not _is_own_entry(entry)

@@ -447,3 +447,74 @@ def test_every_compiled_language_is_accepted(language):
     GraphSpec.model_validate(
         _graph({"type": "command", "language": language, "script": "x"})
     )
+
+
+def test_a_confirm_node_asks_a_person_and_offers_choices():
+    graph = GraphSpec.model_validate(
+        _graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge", "hold"]})
+    )
+    assert graph.node("n").choices == ["merge", "hold"]
+
+
+def test_a_confirm_node_needs_something_to_ask():
+    with pytest.raises(ValidationError, match="has nothing to ask"):
+        GraphSpec.model_validate(_graph({"type": "confirm", "choices": ["a", "b"]}))
+
+
+def test_a_confirm_node_needs_at_least_two_choices():
+    """One choice is not a decision, and no choices is free text -- which is
+    the `'HOLD' in text` reading this node exists to stop."""
+    with pytest.raises(ValidationError, match="two choices"):
+        GraphSpec.model_validate(
+            _graph({"type": "confirm", "prompt": "Merge it?", "choices": ["merge"]})
+        )
+
+
+def test_a_confirm_nodes_choices_must_differ():
+    with pytest.raises(ValidationError, match="twice"):
+        GraphSpec.model_validate(
+            _graph({"type": "confirm", "prompt": "?", "choices": ["yes", "yes"]})
+        )
+
+
+def test_a_confirm_node_refuses_a_next():
+    """The run ends at the question. What happens after the answer is the
+    card's `then:`, one level up, because the answer arrives after the run."""
+    with pytest.raises(ValidationError, match="ends the run"):
+        GraphSpec.model_validate(
+            {
+                "name": "g",
+                "entry": "n",
+                "nodes": [
+                    {
+                        "id": "n",
+                        "type": "confirm",
+                        "prompt": "?",
+                        "choices": ["a", "b"],
+                        "next": "after",
+                    },
+                    {"id": "after", "type": "agent", "prompt": "go"},
+                ],
+            }
+        )
+
+
+def test_only_a_confirm_node_takes_choices():
+    with pytest.raises(ValidationError, match="does not offer choices"):
+        GraphSpec.model_validate(
+            _graph({"type": "agent", "prompt": "hi", "choices": ["a", "b"]})
+        )
+
+
+def test_a_confirm_node_refuses_the_model_keys():
+    """It calls no model, exactly as a command node does not -- and says so in
+    the same words, because two phrasings for one rule is one too many.
+
+    `prompt` is the exception, and the only one: a confirm node has one, and it
+    is read by a person rather than sent anywhere."""
+    with pytest.raises(ValidationError, match="it calls no model"):
+        GraphSpec.model_validate(
+            _graph(
+                {"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}
+            )
+        )

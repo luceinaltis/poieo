@@ -19,7 +19,7 @@ GraphSpec
   default_role     role for model nodes that do not name one
 ```
 
-`NodeSpec` is one class for both node types rather than a union, with a
+`NodeSpec` is one class for every node type rather than a union, with a
 `_check_shape` validator that rejects the combinations that make no sense: an
 `agent` with `branches`, a `router` with a `prompt` or a `workdir`. One class
 keeps the YAML flat and the error messages specific ("router node 'route' does
@@ -30,11 +30,13 @@ not call a model; drop prompt/role").
 | `agent` | `role`, `system`, `prompt`, `output`, `retry`, `params`, and — only with hands — `tools`, `workdir`, `max_turns` | the completion of the turn that used no tool |
 | `command` | `command` **or** `script` + `language`; `output`, and optionally `workdir`, `timeout`, `env` | `{exit_code, output}` — the code as the number the process returned |
 | `router` | `branches[].when` / `.to` / `.label`, `default` | the matched branch's label |
+| `confirm` | `prompt`, `choices` | the question it asked — and the run ends |
 
-Three types, split by **who does the step**: the model (`agent`), the machine
-exactly as written (`command`), or nobody (`router`). That line is not a
-detail — it decides whether a step costs a turn, whether it gives the same
-answer twice, and whether the log records a fact or a paraphrase of one.
+Four types, split by **who does the step**: the model (`agent`), the machine
+exactly as written (`command`), nobody (`router`), or **you** (`confirm`). That
+line is not a detail — it decides whether a step costs a turn, whether it gives
+the same answer twice, and whether the log records a fact or a paraphrase of
+one.
 
 A `command` node exists because the alternative is asking a model to read
 `exit code: 0` and say so. That is a turn spent on no judgement, and a place
@@ -156,6 +158,59 @@ on every *hit*, which is the cost this exists to remove.
 
 A build that fails comes back as its own exit code and the compiler's own
 output, exactly as a red test suite does.
+
+## `confirm` — the step nobody else can take
+
+```yaml
+- id: confirm
+  type: confirm
+  prompt: |
+    Merge #{{ nodes.open_pr }}? It changes a public interface.
+  choices: [merge, hold]
+```
+
+poieo's other safeguard is the worktree: a run works in a private copy, and the
+morning reads the diff and accepts or discards it (see
+[workspace.md](workspace.md)). That covers everything a run *writes*. It does
+not cover what leaves the copy — a push, a merge, a deployment, an email, a
+charge. Discarding a worktree does not unsend a message, and this is the node
+for the step before one of those.
+
+**The run ends here.** Not suspended: ended. `next:` is refused, because what
+happens after the answer is the card's `then:`, one level up —
+
+```yaml
+then:
+  - when: "run.answer == 'merge'"
+    to: land
+```
+
+— and the answer is one more fact about a finished run, beside `run.usage`
+and `run.change`. Suspending mid-walk instead would mean keeping a whole run's
+scope alive until somebody woke up, and holding the task's only runner while it
+waited. Ending costs neither, and the irreversible step is already its own card
+in every flow that has one.
+
+The status while it waits is **`asking`** — its own, so that a `then:` written
+as `run.status == 'completed'` cannot fire underneath a question. The branch is
+**deferred, not skipped**: it is evaluated the moment an answer arrives.
+
+`choices:` is required, and two or more. One is not a decision, and free text
+would put the run back to being read by `'HOLD' in text`, which is the guess
+this node replaces. An answer that was not offered is refused.
+
+**A card waiting on an answer keeps to its schedule.** That is what ending
+rather than suspending buys, and it has a price: a card that asks every night
+asks again tomorrow, and the older question is dropped for the newer one. Where
+the work before the question is expensive, give that card
+`trigger: {type: manual}` so it only wakes on a handoff.
+
+**Today an outstanding question does not survive a daemon restart.** The run is
+still in the store as `asking` and the journal still holds the question, but the
+daemon does not read them back at startup, so nothing is left to answer and the
+deferred `then:` never fires. Answering is a daemon-side call for now; the way
+to reach it from a terminal or the board, and the reading-back that makes a
+question outlive the process, are not built yet.
 
 ### An agent node's hands
 

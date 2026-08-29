@@ -29,6 +29,14 @@ those mean the task is misconfigured rather than flaky. This is what lets a
 daemon task log a failure and stay up. `asyncio.CancelledError` is the one
 exception that is re-raised, after emitting `run_aborted`.
 
+There is a fourth status, and it is neither of those two. A walk that ends at a
+[`confirm` node](graph.md) leaves `ctx.asked` set, and the run comes back
+**`asking`**: it did not succeed and it did not fail, it is waiting on a
+person. It has its own name so that a `then:` written as
+`run.status == 'completed'` cannot fire while a question stands — see
+[daemon.md](daemon.md), which defers that block until the answer arrives and
+then reads it as `run.answer`.
+
 `preflight()` checks the two things that make a run impossible before it costs
 anything: every role the graph names resolves against the binding, and every
 agent node has somewhere to work (its own `workdir`, or the task's). Checking a

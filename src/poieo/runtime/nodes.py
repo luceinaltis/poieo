@@ -693,10 +693,47 @@ class RouterNode(Node):
         )
 
 
+class ConfirmNode(Node):
+    """Puts a question to a person, and ends the run there. Calls no model.
+
+    The step nobody else can take. poieo's other safeguard is the worktree --
+    the run works in a private copy and the morning accepts or discards the
+    diff -- and that covers everything a run writes to a file. It does not
+    cover what leaves the copy: a push, a merge, a deployment, an email, a
+    charge. Discarding a worktree does not unsend a message.
+
+    The run **ends** rather than suspending. Nothing is held open, no runner
+    waits, and the answer arrives afterwards as one more fact about a finished
+    run -- which is why what happens next is the card's `then:` and not a
+    `next:` here. Suspending mid-walk would need the whole run's scope kept
+    alive until morning, and would hold the task's only runner while it waited.
+    """
+
+    async def run(self, ctx: RunContext) -> NodeResult:
+        spec = self.spec
+        question = _rendered(spec, spec.prompt or "", ctx.scope())
+        ctx.asked = {
+            "node": spec.id,
+            "question": question,
+            "choices": list(spec.choices),
+        }
+        # The question, not the answer. The answer is a fact about the run and
+        # lives in one place, `run.answer`; a second copy here would be a
+        # second thing to keep true.
+        ctx.record_output(spec.id, question, spec.output.as_)
+        return NodeResult(
+            node_id=spec.id,
+            next_node=None,
+            output=question,
+            meta={"asked": True, "choices": list(spec.choices)},
+        )
+
+
 NODE_TYPES: dict[str, type[Node]] = {
     "agent": AgentNode,
     "command": CommandNode,
     "router": RouterNode,
+    "confirm": ConfirmNode,
 }
 
 

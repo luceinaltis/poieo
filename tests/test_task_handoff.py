@@ -503,6 +503,36 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
         "run.status == 'completed'", "run.usage.output_tokens > 1000"
     )
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
+_ASKING = """\
+name: quick
+entry: a
+nodes:
+  - {id: a, type: agent, role: r, prompt: hi, next: ask}
+  - id: ask
+    type: confirm
+    prompt: "Land it?"
+    choices: [land, hold]
+"""
+
+_ON_ANSWER = """\
+then:
+  - when: "run.answer == 'land'"
+    to: receiver
+    label: approved
+"""
+
+
+def _asking_pair(tmp_path):
+    """A sender whose graph ends by asking, wired to fire only on `land`."""
+    path = _wired(tmp_path, _ON_ANSWER)
+    (tmp_path / "g.yaml").write_text(_ASKING, encoding="utf-8")
+    return path
+
+
+async def test_a_run_waiting_on_a_person_hands_off_to_nobody(tmp_path, caplog):
+    """The whole point. `then:` is deferred, not skipped -- nothing downstream
+    moves until somebody says so."""
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
     task = await _up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
@@ -512,4 +542,105 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
 
     assert len(receiver.results) == 0
     assert "no 'usage' here" not in caplog.text
+    assert sender.results[0].status == "asking"
+    assert sender.results[0].asked["question"] == "Land it?"
+    assert len(receiver.results) == 0
+    # Deferred, and not merely unreadable: a `then:` that raised on the missing
+    # name would also wake nobody, and would be the wrong reason.
+    assert "no 'answer' here" not in caplog.text
+    await _down(daemon, task)
+
+
+async def test_answering_lets_the_chain_carry_on(tmp_path):
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
+    task = await _up(daemon)
+    sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+
+    assert sender.answer("land") is True
+    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+
+    assert sender.results[0].answer == "land"
+    await _down(daemon, task)
+
+
+async def test_the_other_answer_wakes_nobody(tmp_path):
+    """A decision, not a formality: `hold` is an answer and it stops here."""
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
+    task = await _up(daemon)
+    sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+
+    assert sender.answer("hold") is True
+    await asyncio.sleep(0.2)
+
+    assert len(receiver.results) == 0
+    await _down(daemon, task)
+
+
+async def test_an_answer_that_was_not_offered_is_refused(tmp_path):
+    """Only what the node offered. Anything else is somebody guessing, which
+    is the reading this node exists to replace."""
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
+    task = await _up(daemon)
+    sender = _named(daemon, "sender")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+
+    assert sender.answer("merge") is False
+    assert sender.results[0].status == "asking"
+    await _down(daemon, task)
+
+
+async def test_answering_a_task_that_asked_nothing_is_refused(tmp_path):
+    daemon = Daemon(load_config(_wired(tmp_path, _TO_RECEIVER)), store=NullStore())
+    task = await _up(daemon)
+
+    assert _named(daemon, "sender").answer("land") is False
+    await _down(daemon, task)
+
+
+async def test_unanswered_questions_are_not_failures(tmp_path):
+    """A card that asks every night must not pause itself for asking. Nothing
+    failed: it ran, and it is waiting."""
+    from poieo.daemon.service import PAUSE_AFTER
+
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
+    task = await _up(daemon)
+    sender = _named(daemon, "sender")
+
+    for n in range(PAUSE_AFTER + 1):
+        sender.run_now()
+        await _until(lambda: len(sender.results) == n + 1, f"run {n + 1}")
+
+    assert sender.holding is False
+    await _down(daemon, task)
+
+
+async def test_an_answer_is_written_down(tmp_path):
+    """The answer rewrites the run's record -- from `asking` to `completed` --
+    so something has to say why. A record that changed with no event behind it
+    is the one thing this project's log is for."""
+    from poieo.store import RunStore
+
+    store = RunStore(tmp_path / "runs")
+    daemon = Daemon(load_config(_asking_pair(tmp_path)), store=store)
+    task = await _up(daemon)
+    sender = _named(daemon, "sender")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    sender.answer("land")
+
+    kinds = [e["type"] for e in store.events(sender.results[0].run_id)]
+    assert "run_asking" in kinds
+    assert "run_answered" in kinds
+    answered = next(e for e in store.events(sender.results[0].run_id)
+                    if e["type"] == "run_answered")
+    assert answered["data"]["answer"] == "land"
     await _down(daemon, task)
