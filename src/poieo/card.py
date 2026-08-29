@@ -206,7 +206,23 @@ def load_card(path: str | Path) -> CardSpec:
 
 # What only a card says. A file with `nodes:` and one of these is ambiguous,
 # and ambiguity here is a job that quietly stops running.
-_CARD_KEYS = {"prompt", "folder", "every", "at", "then", "input", "input_file"}
+#
+# `graph` and `trigger` are the two most card-shaped words there are -- a graph
+# has neither, and a card that names a graph is the whole reason `graph:` is a
+# key. They were missing, so a card with no `folder:` and no `then:` was read as
+# a graph and the reader was told `'graph' is not a setting here` about the very
+# key that made it a card.
+_CARD_KEYS = {
+    "prompt",
+    "graph",
+    "trigger",
+    "folder",
+    "every",
+    "at",
+    "then",
+    "input",
+    "input_file",
+}
 
 
 def is_card_document(data: dict[str, Any]) -> bool:

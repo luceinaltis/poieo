@@ -150,19 +150,6 @@ def _models_of(project: Any) -> Any:
     return load_binding(wanted)
 
 
-def _one_address(base_url: str | None) -> str | None:
-    """An address reduced to what makes two of them the same endpoint.
-
-    `127.0.0.1` and `localhost` are one machine and a config may say either;
-    a trailing slash is nobody's second server. Deliberately no further --
-    resolving a hostname would turn a comparison into a DNS lookup, and being
-    wrong here only ever costs an offer that should not have been made.
-    """
-    if base_url is None:
-        return None
-    return base_url.rstrip("/").replace("//127.0.0.1:", "//localhost:")
-
-
 def _unclaimed(spec: Any) -> list[engines.Candidate]:
     """The candidates this project cannot already reach.
 
@@ -170,18 +157,26 @@ def _unclaimed(spec: Any) -> list[engines.Candidate]:
     as `fast` has it; offering to add it again under the name detection would
     have picked writes one server into one file twice.
 
+    `detect.one_machine` is what "the same address" means, and it is there
+    rather than here because `detect` already reads addresses for `here` and
+    `host`. This module had its own weaker rules beside them and was wrong for
+    `http://localhost:8000` -- which `detect.ask` writes itself.
+
     A candidate with no address -- `claude`, which is asked through its own SDK
     -- is claimed by any endpoint of its type instead, for the same reason
     under a different spelling.
     """
-    taken = {_one_address(p.base_url) for p in spec.providers.values() if p.base_url}
+    taken = {engines.one_machine(p.base_url) for p in spec.providers.values() if p.base_url}
     types = {p.type for p in spec.providers.values()}
-    return [
-        candidate
-        for candidate in engines.CANDIDATES
-        if candidate.key not in spec.providers
-        and (_one_address(candidate.base_url) not in taken if candidate.base_url else candidate.type not in types)
-    ]
+
+    def reached(candidate: engines.Candidate) -> bool:
+        if candidate.key in spec.providers:
+            return True
+        if candidate.base_url:
+            return engines.one_machine(candidate.base_url) in taken
+        return candidate.type in types
+
+    return [candidate for candidate in engines.CANDIDATES if not reached(candidate)]
 
 
 def _key_state(name: str, provider: Any) -> bool | None:

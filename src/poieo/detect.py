@@ -416,6 +416,29 @@ def where(base_url: str | None) -> str | None:
     return f"{host}:{port}" if port else host
 
 
+def one_machine(base_url: str | None) -> str | None:
+    """An address reduced to what makes two of them the same endpoint.
+
+    **A port is a server.** Two of them cannot share one, so `host:port` is the
+    whole identity -- which listing path a server hangs off (`/v1` or its root)
+    and which of the four spellings of this machine a config happened to use are
+    not second endpoints. `web/server.py` compares these to decide whether an
+    engine it has just found is one the project already reaches.
+
+    It once did that with its own string rules, next door to these, and was
+    wrong three ways -- including for `http://localhost:8000`, which is what
+    :func:`ask` itself writes for a server answering at its root. One rule, in
+    the module that already knows how to read an address.
+    """
+    if not base_url:
+        return None
+    host, port = _authority(base_url)
+    # Every spelling of this machine reduces to one, so a file that said
+    # `127.0.0.1` and a candidate that says `localhost` are one endpoint.
+    here = "localhost" if is_here(base_url) else host.lower()
+    return f"{here}:{port}" if port else here
+
+
 def is_here(base_url: str | None) -> bool | None:
     """Whether that address is *this* machine, or None if it is not an address.
 

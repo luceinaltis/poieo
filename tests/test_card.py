@@ -15,6 +15,7 @@ from poieo.card import (
     CardSpec,
     append_journal,
     expand,
+    is_card_document,
     load_card,
     load_cards,
     read_journal,
@@ -674,3 +675,21 @@ def test_a_long_line_is_clipped_for_the_commit_but_not_for_the_record():
     result = _finished(path=["work"], outputs={"work": said})
     assert closing_line(result) == said  # the record keeps all of it
     assert len(_change_message(result, "tidy")) == 72
+
+
+def test_a_card_that_only_names_a_graph_and_a_trigger_is_a_card():
+    """`graph:` and `trigger:` are the two most card-shaped words there are --
+    a graph has neither -- and neither was evidence.
+
+    A card with no `folder:` and no `then:` fell through to being read as a
+    graph, and the error a person got said `'graph' is not a setting here`
+    about the very key that makes it a card.
+    """
+    assert is_card_document({"name": "nightly", "graph": "g.yaml", "trigger": {"type": "manual"}})
+    assert is_card_document({"name": "nightly", "graph": "g.yaml"})
+
+
+def test_a_graph_is_still_a_graph():
+    """`nodes:` outranks everything, and a file with neither is neither."""
+    assert not is_card_document({"name": "g", "entry": "a", "nodes": [{"id": "a"}]})
+    assert not is_card_document({"name": "proj", "store": "runs", "binding": "b.yaml"})
