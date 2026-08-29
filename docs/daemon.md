@@ -245,6 +245,13 @@ itself on a third failure is exactly the one whose `broke` branch someone wanted
 3. The target is woken by `hand()`, which — unlike `run_now()` — does not refuse
    mid-run. It **parks**, and the run loop finds it when the current run ends.
 
+   A run that ended at a [`confirm` node](graph.md) is the one case where none
+   of this happens yet: its status is `asking`, and the block is **deferred**
+   rather than evaluated. The moment somebody answers, the run's status becomes
+   `completed`, `run.answer` holds what they chose, and the branch is picked
+   from there. Deferred and not skipped — otherwise the question would be
+   theatre, with the chain carrying on underneath it.
+
 The payload key is **`sender`, not `from`**: conditions and templates are parsed
 as Python, where `from` is a keyword, so `input.from.change` would not even
 parse. It is also what `tools/notes.py` already calls the other end of a message.

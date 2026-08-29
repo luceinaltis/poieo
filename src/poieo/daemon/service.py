@@ -115,6 +115,10 @@ def handoff_scope(result: RunResult) -> dict[str, Any]:
         # nothing about what those hops spend, so a card that wants to stop
         # handing work on before the bill grows has to be able to read it.
         "usage": result.usage,
+        # What a person answered, when the run ended by asking one. None on
+        # every other run, so `when: "run.answer == 'land'"` reads false
+        # rather than raising on the runs that never asked.
+        "answer": result.answer,
     }
 
 
@@ -171,6 +175,11 @@ class TaskRunner:
         # A handoff waiting for this task to be free, and the depth of the run
         # currently in flight. At most one waits: see `hand`.
         self._handed: Handoff | None = None
+        # A finished run waiting on a person, and the chain depth it stopped
+        # at -- kept beside it because the runner's own depth moves on if the
+        # task runs again before anybody answers.
+        self._asking: RunResult | None = None
+        self._asking_depth = 0
         self._depth = 0
         self.handoff = handoff
         # The trigger's next fire, once armed. While holding it stays put:
@@ -435,7 +444,9 @@ class TaskRunner:
             self.state = result.state
 
         pause = self._note_outcome(result)
-        if self.handoff is not None and self.task.spec.then:
+        if result.status == "asking":
+            self._park(result)
+        elif self.handoff is not None and self.task.spec.then:
             # Ahead of the stand-down below: the run happened, so what it says
             # should work next does not depend on this runner carrying on.
             self.handoff(self, result, self._depth)
@@ -448,7 +459,11 @@ class TaskRunner:
                 result.steps,
                 " -> ".join(result.path),
             )
-        else:
+        elif result.status != "asking":
+            # Asking is not one of these. `_park` has already said so, at the
+            # level a question deserves; reporting it here as well would put
+            # `run ... asking: None` in the log at ERROR every time a card did
+            # what it was written to do.
             log.error(
                 "task '%s' run %s %s: %s",
                 self.name,
@@ -476,6 +491,79 @@ class TaskRunner:
             self.status = "paused"
         return True
 
+    def _park(self, result: RunResult) -> None:
+        """Hold a run that ended by asking, until somebody answers it.
+
+        Its `then:` is **deferred, not skipped**: nothing downstream moves, and
+        the branch that would have fired is evaluated the moment an answer
+        arrives. The runner itself is free -- the run really did end -- so the
+        task keeps to its schedule while it waits.
+        """
+        if self._asking is not None:
+            # Newest wins, as a parked handoff does. A question about a merge
+            # from three weeks ago is worse than no question: it reads as a
+            # decision still open when the thing it was about has moved on.
+            log.warning(
+                "task '%s' asked again before the last question was answered "
+                "(%r); the older one is dropped.",
+                self.name,
+                (self._asking.asked or {}).get("question", ""),
+            )
+        self._asking, self._asking_depth = result, self._depth
+        log.info(
+            "task '%s' run %s is waiting on you: %s [%s]",
+            self.name,
+            result.run_id,
+            (result.asked or {}).get("question", ""),
+            "/".join((result.asked or {}).get("choices", [])),
+        )
+
+    def asking(self) -> RunResult | None:
+        """The run waiting on a person, if there is one."""
+        return self._asking
+
+    def answer(self, choice: str) -> bool:
+        """Answer the outstanding question. False when there is nothing to answer.
+
+        Only what the node offered: an answer read loosely is the guess this
+        node exists to replace, and it would be read here rather than by the
+        person who typed it.
+        """
+        result = self._asking
+        if result is None:
+            log.warning("task '%s' is not waiting on an answer", self.name)
+            return False
+        choices = (result.asked or {}).get("choices", [])
+        if choice not in choices:
+            log.warning(
+                "task '%s' was not offered %r; it asked for one of %s",
+                self.name,
+                choice,
+                "/".join(choices),
+            )
+            return False
+
+        result.answer = choice
+        # It is finished now, and finished is what it is: a `then:` written as
+        # `run.status == 'completed'` should see the run it waited for.
+        result.status = "completed"
+        self._asking = None
+        # Said out loud before the record is rewritten. `_remember` overwrites
+        # the run's file from `asking` to `completed`, and a record that
+        # changed with nothing in the log to account for it is the one thing
+        # this project keeps a log to avoid.
+        self.store.append(
+            Event(
+                run_id=result.run_id,
+                type="run_answered",
+                data={"answer": choice, "node": (result.asked or {}).get("node")},
+            )
+        )
+        self._remember(result)
+        if self.handoff is not None and self.task.spec.then:
+            self.handoff(self, result, self._asking_depth)
+        return True
+
     def _note_outcome(self, result: Any) -> bool:
         """Track consecutive identical failures; True when it is time to pause.
 
@@ -483,7 +571,10 @@ class TaskRunner:
         nothing classified -- so one unreachable server counts as one thing
         however its message varies.
         """
-        if result.status == "completed":
+        if result.status in ("completed", "asking"):
+            # Asking is not failing. A card that ends every night by putting
+            # the same question to somebody would otherwise pause itself for
+            # doing exactly what it was written to do.
             self._repeat_key, self._repeat_count = None, 0
             return False
         key = (result.cause or {}).get("slug") or result.error or result.status

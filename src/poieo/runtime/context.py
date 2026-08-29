@@ -61,6 +61,9 @@ class RunContext:
     # -- long enough that a run reads as having taken exactly no time at all
     # for its first few steps.
     started: float = field(default_factory=time.perf_counter)
+    # Set by a confirm node: the question this run stopped at. Its presence is
+    # what turns a finished walk into a run that is waiting for a person.
+    asked: dict[str, Any] | None = None
 
     def scope(self) -> dict[str, Any]:
         """Names visible to prompt templates and router conditions."""
@@ -120,7 +123,7 @@ class RunResult:
     run_id: str
     task: str
     graph: str
-    status: str  # completed | failed | aborted
+    status: str  # completed | failed | aborted | asking
     started_at: str
     finished_at: str
     steps: int
@@ -143,6 +146,11 @@ class RunResult:
     project: str = ""
     # Set after the run by the daemon when the task keeps a private copy.
     change: dict[str, Any] | None = None
+    # The question a confirm node put to a person: {node, question, choices}.
+    asked: dict[str, Any] | None = None
+    # What they answered, once they have. Until then the run is `asking` and
+    # the card's `then:` has not been evaluated -- deferred, not skipped.
+    answer: str | None = None
 
     def said(self, fallback: str = "") -> str:
         """What the model said last: the last node on the path that produced text.

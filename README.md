@@ -129,8 +129,12 @@ nodes:
 | `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
 | `command` | runs a command, or a script in a named language, through the executor seam; calls no model | `command` **or** `script` + `language`; `output`, `next`, and optionally `workdir`, `timeout`, `env` |
 | `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
+| `confirm` | puts a question to **you** and ends the run there; the card's `then:` waits for the answer | `prompt`, `choices` |
 
-Three types, by who does the step: the model, the machine, or nobody.
+Four types, by who does the step: the model, the machine, nobody, or you.
+`confirm` is for the step before something that cannot be undone -- a push, a
+merge, a deployment, an email. poieo's other safeguard is the private copy the
+run works in, and discarding that does not unsend a message.
 **No `tools:` line means no tools** — the node calls the model once and reads
 the answer, and cannot touch a file. Hands are asked for, never defaulted.
 

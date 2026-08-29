@@ -1158,6 +1158,25 @@ def _guard_graph(when: str) -> GraphSpec:
     )
 
 
+def _confirm_graph(**node) -> GraphSpec:
+    return GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "look",
+            "nodes": [
+                {"id": "look", "type": "agent", "prompt": "look", "next": "confirm"},
+                {
+                    "id": "confirm",
+                    "type": "confirm",
+                    "prompt": "Merge it? {{ nodes.look }}",
+                    "choices": ["merge", "hold"],
+                    **node,
+                },
+            ],
+        }
+    )
+
+
 async def test_a_run_can_stop_itself_on_what_it_has_spent():
     """The guard an unattended run needs. Nothing bounds cost today: max_steps
     counts steps, and one agent node with tools is a single step no matter how
@@ -1215,3 +1234,27 @@ async def test_a_run_knows_how_long_it_has_been_going(tmp_path):
     # raises, the run fails, and the path stops here for the wrong reason.
     assert result.status == "completed", result.error
     assert result.path == ["wait", "guard"]
+async def test_a_confirm_node_ends_the_run_asking():
+    """Not paused mid-walk: the run really ends. Nothing is held open, and the
+    answer arrives afterwards as a fact about a finished run."""
+    result = await run_graph(_confirm_graph(), mock_binding({}, fallback="a PR"))
+
+    assert result.status == "asking"
+    assert result.path == ["look", "confirm"]
+
+
+async def test_a_confirm_node_records_the_question_it_asked():
+    """Rendered, so what the person reads is what the run actually found."""
+    result = await run_graph(_confirm_graph(), mock_binding({}, fallback="a PR"))
+
+    assert result.asked["question"] == "Merge it? a PR"
+    assert result.asked["choices"] == ["merge", "hold"]
+    assert result.asked["node"] == "confirm"
+
+
+async def test_a_run_that_asks_spends_no_model_turn_on_the_question():
+    """One turn for the node before it, none for the asking."""
+    result = await run_graph(_confirm_graph(), mock_binding({}, fallback="x"))
+
+    assert result.outputs["confirm"] == "Merge it? x"
+    assert result.status == "asking"

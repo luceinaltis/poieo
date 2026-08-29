@@ -163,6 +163,13 @@ async def execute(
         ctx.emit("run_aborted", reason="cancelled")
         raise
 
+    if ctx.asked is not None and status == "completed":
+        # The walk ended because somebody has to answer, which is neither a
+        # success nor a failure. A status of its own so that a `then:` written
+        # as `run.status == 'completed'` cannot fire while the run waits.
+        status = "asking"
+        ctx.emit("run_asking", **ctx.asked)
+
     finished_at = utcnow()
     run_result = RunResult(
         run_id=ctx.run_id,
@@ -175,6 +182,7 @@ async def execute(
         steps=steps,
         path=list(ctx.path),
         usage=ctx.usage.as_dict(),
+        asked=ctx.asked,
         outputs=unwrap(ctx.outputs),
         state=unwrap(ctx.state),
         trigger=trigger,

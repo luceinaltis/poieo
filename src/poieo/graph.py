@@ -66,7 +66,7 @@ class Branch(_Spec):
 
 class NodeSpec(_Spec):
     id: str
-    type: Literal["agent", "command", "router"]
+    type: Literal["agent", "command", "router", "confirm"]
     description: str | None = None
 
     # --- model nodes ---
@@ -94,6 +94,11 @@ class NodeSpec(_Spec):
     env: dict[str, str] = Field(default_factory=dict)
 
     # --- router nodes ---
+    # --- confirm nodes ---
+    # What a person may answer. A fixed set, never free text: an answer read
+    # out of prose is the `'HOLD' in text` guess this node exists to replace.
+    choices: list[str] = Field(default_factory=list)
+
     branches: list[Branch] = Field(default_factory=list)
     default: str | None = None
 
@@ -143,8 +148,12 @@ class NodeSpec(_Spec):
     # that is missing, because it reads as configured.
     _MODEL_KEYS = ("role", "system", "prompt", "params", "tools")
 
-    def _refuse_model_keys(self) -> None:
-        named = [key for key in self._MODEL_KEYS if getattr(self, key)]
+    def _refuse_model_keys(self, keep: str = "") -> None:
+        """``keep`` names the one key this type does use for something else --
+        a confirm node's ``prompt`` is read by a person, not sent anywhere."""
+        named = [
+            key for key in self._MODEL_KEYS if key != keep and getattr(self, key)
+        ]
         if self.max_turns != type(self).model_fields["max_turns"].default:
             named.append("max_turns")
         if self.retry != RetrySpec():
@@ -293,6 +302,42 @@ class NodeSpec(_Spec):
                 raise ValueError(
                     f"router node '{self.id}' routes via branches/default, not next"
                 )
+        if self.type != "confirm" and self.choices:
+            raise ValueError(
+                f"{self.type} node '{self.id}' does not offer choices. Change "
+                f"`type` to `confirm` for a step that asks a person"
+            )
+        if self.type == "confirm":
+            # It calls no model and runs nothing: it puts a question to the
+            # person and the run ends there.
+            self._refuse_model_keys(keep="prompt")
+            if not self.prompt:
+                raise ValueError(
+                    f"confirm node '{self.id}' has nothing to ask; give it a prompt"
+                )
+            if self.branches or self.default:
+                raise ValueError(
+                    f"confirm node '{self.id}' does not branch: a person answers "
+                    f"it, and the card's `then:` reads that answer"
+                )
+            if self.next:
+                raise ValueError(
+                    f"confirm node '{self.id}' ends the run -- the answer arrives "
+                    f"after it, so what happens next is the card's `then:`"
+                )
+            if len(self.choices) < 2:
+                raise ValueError(
+                    f"confirm node '{self.id}' needs two choices or more: one is "
+                    f"not a decision, and none is free text"
+                )
+            if len(set(self.choices)) != len(self.choices):
+                raise ValueError(
+                    f"confirm node '{self.id}' offers the same choice twice"
+                )
+            try:
+                validate_template(self.prompt)
+            except ExpressionError as exc:
+                raise ValueError(f"node '{self.id}': {exc}") from exc
         return self
 
 
