@@ -207,6 +207,35 @@ async def test_a_broken_repository_does_not_stop_the_flow(tmp_path):
     # No review is possible, but 3am is no time to stop working.
     assert result.status == "completed"
     assert result.change is None
+    # And it says so where somebody would look. #188 gave the *commit* failure
+    # a voice; a repository that could not be opened at all had the same
+    # consequence -- no change, so no handoff, ever -- and none.
+    said = [e for e in events_of(config, result.run_id) if e["type"] == "run_change_failed"]
+    assert said, "a run that could not be tracked has to say so"
+
+
+async def test_a_worktree_that_could_not_be_prepared_says_so(tmp_path, monkeypatch):
+    """The other silent branch, and the one seen in the wild.
+
+    A repository present and usable enough to answer `available`, and then
+    refusing to make a worktree -- a missing object, a broken index. Watched
+    against a real one: `error: Could not read fd0489dc...`, three tasks in a
+    row, and the board showed three healthy runs that changed nothing.
+    """
+    from poieo import workspace as workspace_module
+
+    def refuse(*args, **kwargs):
+        raise workspace_module.WorkspaceError("Could not read fd0489dc")
+
+    repo, config = build(tmp_path)
+    monkeypatch.setattr(workspace_module.Workspace, "prepare", refuse)
+
+    _, result = await run_once(config)
+
+    assert result.status == "completed"
+    assert result.change is None
+    said = [e for e in events_of(config, result.run_id) if e["type"] == "run_change_failed"]
+    assert said and "fd0489dc" in said[0]["data"]["error"]
 
 
 async def test_a_change_that_could_not_be_recorded_is_visible(tmp_path, monkeypatch):
