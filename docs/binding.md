@@ -178,12 +178,45 @@ default is the arrangement working.
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` fold into `options` |
 | `mock` | nothing | scripted replies for tests and dry runs |
 
+Each preset is registered as a type of its own, so a typo in one is a parse
+error rather than a connection failure at three in the morning.
+
 `ProviderSpec.type` is a plain `str` validated against `KNOWN_PROVIDER_TYPES`
 rather than a closed `Literal`. That is what lets
 `poieo.providers.register("my_type", MyProvider)` add a backend from outside the
 package while a typo in a binding file is still rejected at parse time.
 `base_url` is required for `openai_compatible` and `ollama`, and API keys are
 read from the environment by name (`api_key_env`) — never stored in the file.
+
+### Endpoints poieo knows the address of
+
+```yaml
+providers:
+  groq: {type: groq}          # that is the whole declaration
+```
+
+Fourteen names, each an `openai_compatible` endpoint with its address and key
+variable filled in: `openai`, `openrouter`, `groq`, `deepseek`, `together`,
+`fireworks`, `mistral`, `xai`, `cerebras`, `nebius`, `moonshot`, `zai`,
+`gemini`, `perplexity`.
+
+None of them is a new way of talking — they all speak the same wire format the
+`openai_compatible` type already did. What a preset saves is the part a person
+gets wrong: there is no guessing `https://api.groq.com/openai/v1` from the
+vendor's name, and neither `/v1` nor `/openai` alone reaches it.
+
+**A preset is a starting point, not a cage.** A `base_url` or `api_key_env` in
+the binding wins — somebody pointing at a proxy, a mirror or a gateway means it.
+
+**And this table is safe in a way the ones this project refused are not.** A
+stale price inflates a bill quietly; a stale context window truncates a
+conversation quietly; **a stale address fails to connect, loudly, on the first
+call.** Only tables that are wrong in silence are dangerous.
+
+Every address was probed against the live endpoint when it was written. Two of
+them are why that is worth saying: Gemini and Perplexity answer 404 on `/models`
+and 400/401 on `/chat/completions`, so a check that only asked the first would
+have called two correct addresses wrong.
 
 ### The same Claude, three counters
 
