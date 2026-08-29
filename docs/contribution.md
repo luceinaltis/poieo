@@ -100,9 +100,32 @@ isolation against a real docker daemon; the package as a user gets it,
 installed, served, and exercised outside the checkout; and coverage, reported
 and deliberately not gated.
 
-It **reports and does not block.** `main` has no required checks, so a red run
-stops nothing by itself. That is deliberate for now — a gate turned on before it
-has been watched fails honest work and gets routed around.
+**Five of the six are required to merge.** `main` was left unprotected until the
+jobs had been watched — a gate turned on before that fails honest work and gets
+routed around — and after 53 runs on its first day, 48 green and 5 red with every
+red a real defect, they were made required. Admins included; the escape hatch is
+turning the setting off, not merging past it.
+
+`what is not covered` is deliberately **not** required. It reports a number and
+judges nothing, so its failure would mean the job broke rather than the code did.
+
+**Required checks refuse direct pushes too**, not only merges — `git push origin
+main` comes back with *5 of 5 required status checks are expected*. That was a
+surprise, and it retired the rule that let a Markdown typo go straight to `main`.
+The escape hatch, if a job ever breaks and blocks honest work, is to turn the
+setting off for as long as it takes:
+
+    gh api -X DELETE repos/luceinaltis/poieo/branches/main/protection
+
+**Renaming a job renames a required check**, and a required check that never
+reports leaves every PR waiting for it forever — including the one that would fix
+the name. The list is pinned by name:
+
+    gh api repos/luceinaltis/poieo/branches/main/protection --jq '.required_status_checks.contexts[]'
+
+If you change a job's `name:`, or add a matrix dimension so `python suite
+(ubuntu-latest)` becomes `python suite (ubuntu-latest, 3.10)`, update that list in
+the same breath. This has already happened once, an hour after the setting went on.
 
 Three things are worth knowing when a run disagrees with your machine.
 
