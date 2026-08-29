@@ -186,6 +186,11 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
             # Absent, not empty, when the backend's own SDK knows where it
             # lives: a guessed address is worse than no address.
             block.append(f"{INDENT * 2}base_url: {engine.base_url}")
+        if engine.api_key_env:
+            # The variable's **name**. A hosted endpoint wants a key and this
+            # file is one people commit, so the name lives here and the value
+            # lives in the environment -- see providers.credential_for.
+            block.append(f"{INDENT * 2}api_key_env: {engine.api_key_env}")
 
     body = [i for i in range(span[0] + 1, span[1]) if lines[i].strip()]
     at = (body[-1] + 1) if body else span[1]

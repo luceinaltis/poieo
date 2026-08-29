@@ -118,11 +118,28 @@ not decoration: an endpoint whose key is unset lists nothing, and it is the whol
 explanation. `api_key_set` is **null rather than false** when an endpoint names
 no variable, because "its SDK resolves its own" is a different fact from "the key
 is missing", and a panel warning about the first would cry wolf on every local
-endpoint. And a **`base_url`** does not cross either: an endpoint's own name
-tells one from another, and an address is the one field in a binding that can
-carry a private host. If a real confusion turns up — two `openai_compatible`
-endpoints a reader cannot tell apart — the argument for letting it through will
-be concrete.
+endpoint.
+
+**The address now crosses, as `host` — and only as much of it as names a
+machine.** This route used to withhold it entirely, on the argument that an
+endpoint's own name tells one from another, and said the argument for letting
+it through would have to be concrete. It became concrete: `poieo config` writes
+the key `ollama` for an Ollama wherever it runs, so a project with one on this
+laptop and one on an office server had two endpoints a reader could not tell
+apart — and, worse, the panel told them both were on this machine. `host:port`
+answers that; the scheme and the path say nothing about which box replied and
+still do not cross.
+
+**`installed` and `here` are two facts, and were one.** `installed` says the
+listing is things *pulled and ready* rather than a menu — a property of the
+backend, as true of an Ollama on a server as of one here. `here` says whether
+that machine is this one, which only the address can answer; `detect.is_here`
+reads it, treating `localhost`, `::1` and the whole `127.` net as this box.
+It is **null, not false**, for an endpoint with no address: Claude's SDK
+resolves its own, and "somewhere else" would be a claim about a machine nobody
+named. Reading the first as both is what had every Ollama anywhere claiming to
+be on this laptop — found by declaring one at a network address and reading the
+panel back, not by reasoning about the code.
 
 ### `GET /api/projects/{p}/models/undeclared`
 
@@ -185,6 +202,16 @@ any shape it does not recognise. In order:
 | **409** | the endpoint answered and does not serve that model | what it does serve |
 | **409** | `rebind` will not edit that shape | its own sentence, naming the file and the key |
 
+**`adopted` says whether the running daemon took it, not just the file.**
+`point_at` verifies the file reloads, but `daemon.reread` validates what
+start-up validates and may refuse — a role pointed at an endpoint whose key is
+unset is the case that happens. That used to pass silently, on the reasoning
+that the next run would report it. It cannot: the panel draws from the same
+in-memory spec the daemon kept, so it redraws the **old** model, and a reader
+told `using` watches nothing change while the file quietly becomes a state the
+project will not start from. `why` carries the daemon's own sentence, and the
+panel shows it until the next write.
+
 An endpoint that **did not answer does not block the edit**, exactly as
 `poieo config use` allows: a laptop with its server switched off still gets to
 edit its own config. `checked: false` says so out loud rather than implying a
@@ -223,10 +250,31 @@ sits beside it, and only when nothing identified the endpoint does the key lead.
 
 ### `POST /api/projects/{p}/models/add`
 
-`{engine}` — one of the keys the read report offered under `undeclared`. It
-answers `{status: "added", engine, models}`, and is the browser form of
+Either `{engine}` — one of the keys the read report offered under `undeclared`
+— or `{url}`, an address nobody detected. It answers
+`{status: "added", engine, models}`, and is the browser form of
 `poieo config add`, through the same `rebind.declare`, so there is not a second
 set of rules about what may be written.
+
+**`{url}` is the whole input.** Detection knows four ports on *this* machine,
+and an inference server is routinely somewhere else: one on 8001 because 8000
+was taken, an Ollama on the desktop under the desk, a shared box in an office.
+Until this there was no route to any of them — the only way in was opening the
+binding file and typing a block by hand.
+
+`detect.ask` decides *what* is there rather than making the reader classify
+their own server: both listing shapes are tried, and the one that answers says
+which backend it is. `/v1` is tried as well, because `http://box:8001` is what a
+person reads off a terminal and the OpenAI shape lives one segment further down.
+The name comes from what the server called itself, and from the **host** when it
+said nothing — `gpu-box` is something the reader will recognise where
+`openai_compatible` tells them nothing. `{name}` overrides it, which the project
+with two vLLMs needs.
+
+**`{key_env}` is a variable's name, and there is no field for a key.** The
+value belongs in the environment the daemon reads; this file is one people
+commit. That is the same fence the rest of this route has held since it was one
+screen, at the one place a hosted endpoint makes it tempting to break.
 
 **Only adds.** Nothing about what a role uses moves — declaring a model and
 choosing one are different decisions, and the second is `models/use`. An endpoint
@@ -237,7 +285,10 @@ another port.
 |---|---|---|
 | **404** | no such project | the names that do answer |
 | **409** | this project names no models file | — |
+| **400** | neither an engine nor an address | — |
 | **400** | not an engine detection looks for | the keys it does |
+| **409** | nothing usable answered at that address | — |
+| **409** | that name is already in the file | — |
 | **409** | this project already reaches it | — |
 | **409** | it is not answering on this machine | — |
 | **409** | `rebind` could not add to that file | its own sentence, naming the file |
@@ -457,7 +508,7 @@ replaced. An endpoint with nothing matching leaves the list entirely: left in
 place it would show "no answer" under its own heading, which is a different and
 more alarming thing than a search that missed.
 
-**What is on this machine is listed first.** The report comes in the binding
+**This machine, then somebody else's, then the menus.** The report comes in the binding
 file's order, which is where `poieo init` happened to write each endpoint —
 provenance, and not an answer to "what can I run". On a real board that put the
 eight models sitting on the disk 1786px below a 396-model menu of things that
@@ -481,10 +532,17 @@ with one option in it is furniture.
 
 **A row is what the endpoint said, and a blank is what it did not.** A local
 model shows the two numbers that are its real price -- its size and
-quantization -- and reads *local* rather than showing a rate of nothing; a
-routed one shows the rate it published. An endpoint that charges but publishes
+quantization -- and reads *local* rather than showing a rate of nothing; the
+same model on another host reads *self-hosted*, because it costs no tokens
+either but it is not this machine's memory being spent; a routed one shows the
+rate it published. An endpoint that charges but publishes
 nothing leaves the column empty, because "free" would be a guess and an
 expensive one to be wrong about.
+
+**The form for an address is last in the panel**, because it is what a reader
+reaches for when nothing above it was what they were looking for. One field
+that matters and two that are usually left alone. No key field anywhere on the
+page.
 
 **An offer sits above the lists, and only when there is one.** The panel makes a
 second request for it, so the catalogue never waits; when it comes back with

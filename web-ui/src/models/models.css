@@ -153,6 +153,25 @@
   color: #a9b665;
 }
 
+/* Ready to run, but on somebody else's machine: between the two, because that
+   is exactly where it sits -- nothing to pull, and nothing of yours spent. */
+.models-count[data-listing="elsewhere"] {
+  color: #8a9a6a;
+}
+
+/* Which machine answered. Quiet, because most projects have one endpoint per
+   kind and the reader already knows where it is -- it earns its place only in
+   the project that has two, where nothing else on the line differs. */
+.models-host {
+  color: #6b6257;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.82em;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A key sits after the count rather than pushing it around. */
 .models-endpoint h3 .models-key {
   margin-left: 0;
@@ -221,6 +240,7 @@
 /* A local model costs memory rather than money, and the row says so in words
    instead of a number that would read as a rate somebody looked up. */
 .models-price[data-price="local"],
+.models-price[data-price="self-hosted"],
 .models-price[data-price="free"] {
   color: #6b6257;
 }
@@ -329,6 +349,26 @@
   padding: 3px 6px;
 }
 
+/* Not a refusal, and not styled as one: the edit landed. What it reports is a
+   gap between the file and the daemon running from it, which the reader has to
+   close in a terminal -- so it is a warning that stays until the next write,
+   rather than a red line about something that failed. */
+.models-not-taken {
+  background: #241f16;
+  border-left: 2px solid #d8a657;
+  color: #c9b98f;
+  flex: none;
+  font-size: 0.82em;
+  line-height: 1.45;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+}
+
+.models-not-taken code {
+  color: #e8dcc8;
+  font-size: 0.95em;
+}
+
 .models-refusal {
   color: #d16d5a;
   flex: none;
@@ -404,4 +444,59 @@
 
 .models-id:disabled {
   cursor: default;
+}
+
+/* An engine at an address nobody guessed. Last in the body and quiet with it:
+   most projects never need this, and the four ports detection knows cover the
+   ordinary machine. It earns its place for the vLLM on 8001 and the box in an
+   office, which had no way in at all. */
+.models-at {
+  border-top: 1px solid #221e18;
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.models-at h3 {
+  color: #7a6e60;
+  font-size: 0.82em;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* The address is the one field that matters, so it gets the width. */
+.models-at input {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82em;
+  padding: 4px 8px;
+  width: 100%;
+}
+
+.models-at input:focus-visible {
+  border-color: #4a4034;
+  outline: none;
+}
+
+/* The two that are usually left alone, side by side and out of the way. */
+.models-at-more {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.models-at button {
+  justify-self: start;
+}
+
+/* One column when there is not room for two -- a phone, where these would
+   otherwise be two boxes too narrow to read what is typed in them. */
+@media (max-width: 460px) {
+  .models-at-more {
+    grid-template-columns: 1fr;
+  }
 }

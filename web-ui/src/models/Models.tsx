@@ -47,7 +47,17 @@ export function Models({
   // whole timeout -- so the catalogue would have waited a second and a half
   // for its own footnote. This lands under it whenever it arrives.
   const [offers, setOffers] = useState<UndeclaredEngine[]>([])
-  const { busy, refused, act } = useAct<ModelsAnswer>(() => setReload((n) => n + 1))
+  // An edit can land in the file and still be refused by the running daemon,
+  // which keeps the last good spec -- and the panel reads that same spec, so it
+  // would redraw the old model with nothing said. Kept until the next write.
+  const [notTaken, setNotTaken] = useState<ModelsAnswer | null>(null)
+  const [at, setAt] = useState("")
+  const [atName, setAtName] = useState("")
+  const [atKeyEnv, setAtKeyEnv] = useState("")
+  const { busy, refused, act } = useAct<ModelsAnswer>((answer) => {
+    setNotTaken(answer.adopted === false ? answer : null)
+    setReload((n) => n + 1)
+  })
 
   // Blanking belongs to a change of subject, not to a re-ask. Every refresh
   // and every write asks again, and a panel that flashed to "asking…" each
@@ -86,7 +96,24 @@ export function Models({
     void act(() => pickModel(project, model.ref, role))
 
   const add = (engine: UndeclaredEngine) =>
-    void act(() => addEngine(project, engine.name))
+    void act(() => addEngine(project, { engine: engine.name }))
+
+  // An engine at an address nobody guessed. Detection knows four ports on this
+  // machine; a vLLM on 8001, an Ollama on a desktop and an office box had no
+  // way in at all. The reader types where it is -- which backend it is comes
+  // from asking it, not from a field asking them to classify their own server.
+  const addAt = () => {
+    if (!at.trim()) return
+    void act(() =>
+      addEngine(project, {
+        url: at.trim(),
+        ...(atName.trim() ? { name: atName.trim() } : {}),
+        ...(atKeyEnv.trim() ? { key_env: atKeyEnv.trim() } : {}),
+      }),
+    ).then((sent) => {
+      if (sent) setAt("")
+    })
+  }
 
   return (
     <aside className="models" aria-label="Models">
@@ -152,6 +179,18 @@ export function Models({
           </select>
         </label>
       ) : null}
+      {/* Not a refusal: the file really did change. What did not happen is the
+          running daemon taking it -- and since the panel draws from what the
+          daemon kept, the reader is about to see the old model with no
+          explanation. This is that explanation. */}
+      {notTaken ? (
+        <p className="models-not-taken" data-do="use-not-taken" role="alert">
+          {report?.binding ? shortPath(report.binding.path) : "The models file"} now
+          says <code>{notTaken.ref}</code>, but the daemon has not taken it —{" "}
+          {notTaken.why} It is still running the previous model, and will not
+          start from this file until that is fixed.
+        </p>
+      ) : null}
       {refused ? (
         <p className="models-refusal" role="alert">
           {refused.error || "That didn't work."}
@@ -193,6 +232,47 @@ export function Models({
           onUse={use}
           busy={busy}
         />
+        {/* Last, because it is what you reach for when nothing above it was
+            what you were looking for. One field that matters: which backend an
+            address is comes from asking it, and the name from what it answers.
+            The other two are for the project that has two vLLMs, or an
+            endpoint that wants a key.
+
+            No key field, here or anywhere on this page. A variable's *name* is
+            not a secret and belongs in the file; the key belongs in the
+            environment the daemon reads. */}
+        {report?.binding ? (
+          <section className="models-at">
+            <h3>somewhere else</h3>
+            <input
+              data-do="url"
+              type="url"
+              aria-label="Address of an engine"
+              placeholder="http://gpu-box:8001"
+              value={at}
+              onChange={(event) => setAt(event.target.value)}
+            />
+            <div className="models-at-more">
+              <input
+                data-do="url-name"
+                aria-label="What to call it"
+                placeholder="name it (optional)"
+                value={atName}
+                onChange={(event) => setAtName(event.target.value)}
+              />
+              <input
+                data-do="url-key-env"
+                aria-label="Variable its key is read from"
+                placeholder="key variable (optional)"
+                value={atKeyEnv}
+                onChange={(event) => setAtKeyEnv(event.target.value)}
+              />
+            </div>
+            <button type="button" data-do="add-at" disabled={busy || !at.trim()} onClick={addAt}>
+              ask it
+            </button>
+          </section>
+        ) : null}
       </div>
     </aside>
   )
@@ -230,9 +310,7 @@ function Body({
   //
   // One step, not a sort: `installed` before the rest, and inside each half the
   // reader's own arrangement is left alone. `sort` is stable, so that holds.
-  const ordered = [...report.endpoints].sort(
-    (a, b) => Number(b.installed) - Number(a.installed),
-  )
+  const ordered = [...report.endpoints].sort((a, b) => rank(b) - rank(a))
   const blocks = ordered.map((endpoint) => ({
     endpoint,
     shown: filter
@@ -292,9 +370,18 @@ function EndpointBlock({
             `ollama list` -- pulled onto this disk, ready now. A routed
             endpoint's is a catalogue of what it would run for money, with
             nothing here yet. Identical-looking lists, different things. */}
+        {/* Which machine. `poieo config` names an Ollama `ollama` wherever it
+            runs, so a project with one here and one on an office server had
+            two headings a reader could not tell apart -- and both of them said
+            "on this machine". Host and port, and no more of the address. */}
+        {endpoint.host ? (
+          <span className="models-host" title={endpoint.host}>
+            {endpoint.host}
+          </span>
+        ) : null}
         <span
           className="models-count"
-          data-listing={endpoint.installed ? "here" : "offered"}
+          data-listing={runsOn(endpoint) ?? "offered"}
         >
           {countText(endpoint, shown, filtered)}
         </span>
@@ -326,7 +413,7 @@ function EndpointBlock({
                 <Row
                   key={model.id}
                   model={model}
-                  local={endpoint.installed}
+                  runs={runsOn(endpoint)}
                   // The maker is the card's own heading; repeating it on every
                   // row inside costs the width the model's name needs.
                   drop={`${maker}/`}
@@ -343,7 +430,7 @@ function EndpointBlock({
             <Row
               key={model.id}
               model={model}
-              local={endpoint.installed}
+              runs={runsOn(endpoint)}
               onUse={onUse}
               busy={busy}
             />
@@ -402,10 +489,39 @@ function emptyBecause(endpoint: Endpoint): string {
 }
 
 /** How many, and of what -- the endpoint's own count when a filter narrows it. */
+/**
+ * Where this endpoint's models actually run.
+ *
+ * Two facts the panel used to carry as one. `installed` says the listing is
+ * things **pulled and ready** rather than a menu -- a property of the backend,
+ * as true of an Ollama on an office server as of one here. `here` says whose
+ * machine that is, which only the address can answer. Reading the first as
+ * both had every Ollama anywhere claiming to be on this laptop.
+ */
+type Runs = "here" | "elsewhere" | null
+
+function rank(endpoint: Endpoint): number {
+  // This machine, then somebody else's, then the menus. Both of the first two
+  // are models that exist and are ready; only the first costs nothing but the
+  // memory in front of the reader.
+  const runs = runsOn(endpoint)
+  return runs === "here" ? 2 : runs === "elsewhere" ? 1 : 0
+}
+
+function runsOn(endpoint: Endpoint): Runs {
+  if (!endpoint.installed) return null
+  return endpoint.here === false ? "elsewhere" : "here"
+}
+
+const WHERE: Record<string, string> = {
+  here: "on this machine",
+  elsewhere: "on that machine",
+}
+
 function countText(endpoint: Endpoint, shown: ServedModel[], filtered: boolean): string {
   const whole = endpoint.models.length
   if (!whole) return ""
-  const what = endpoint.installed ? "on this machine" : "offered"
+  const what = WHERE[runsOn(endpoint) ?? ""] ?? "offered"
   if (filtered && shown.length !== whole) return `${shown.length} of ${whole} ${what}`
   return `${whole} ${what}`
 }
@@ -413,13 +529,13 @@ function countText(endpoint: Endpoint, shown: ServedModel[], filtered: boolean):
 
 function Row({
   model,
-  local,
+  runs,
   drop = "",
   onUse,
   busy,
 }: {
   model: ServedModel
-  local: boolean
+  runs: Runs
   /** A prefix the surrounding card already shows; stripped from the name. */
   drop?: string
   onUse(model: ServedModel): void
@@ -457,8 +573,8 @@ function Row({
             </span>
           ))}
       </span>
-      <span className="models-price" data-price={priceKind(model, local)}>
-        {priceText(model, local)}
+      <span className="models-price" data-price={priceKind(model, runs)}>
+        {priceText(model, runs)}
       </span>
       {/* One word, and only on the models a role is actually on. */}
       {model.used_by.length > 0 ? (
@@ -468,19 +584,22 @@ function Row({
   )
 }
 
-function priceKind(model: ServedModel, local: boolean): string {
+function priceKind(model: ServedModel, runs: Runs): string {
   if (model.price) return model.price.input === 0 && model.price.output === 0 ? "free" : "paid"
-  // Ollama runs the model here and bills nothing for it. That is a fact about
-  // the backend, not a rate looked up in a table.
-  return local ? "local" : "unknown"
+  // Ollama bills nothing per token wherever it runs -- a fact about the
+  // backend, not a rate looked up in a table. Which machine is running it is
+  // still worth saying, because it is the difference between spending your own
+  // memory and spending somebody's server.
+  if (runs === "here") return "local"
+  return runs === "elsewhere" ? "self-hosted" : "unknown"
 }
 
-function priceText(model: ServedModel, local: boolean): string {
+function priceText(model: ServedModel, runs: Runs): string {
   if (model.price) {
     if (model.price.input === 0 && model.price.output === 0) return "free"
     return `$${money(model.price.input)} / $${money(model.price.output)}`
   }
-  return local ? "local" : ""
+  return runs === "here" ? "local" : runs === "elsewhere" ? "self-hosted" : ""
 }
 
 /**

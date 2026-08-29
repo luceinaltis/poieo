@@ -469,3 +469,86 @@ async def test_what_the_server_said_beats_what_the_address_suggests(monkeypatch)
     # Without the listing this address reads as LM Studio.
     assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1") == "LM Studio"
     assert detect_module.label_for("openai_compatible", "http://localhost:1234/v1", answered.server) == "vLLM"
+
+
+# -- an engine at an address nobody guessed -----------------------------------
+#
+# `CANDIDATES` knows four ports on this machine. An inference server is
+# routinely somewhere else -- a vLLM on 8001 because 8000 was taken, an Ollama
+# on the desktop under the desk, a shared box in an office -- and there was no
+# way to reach any of them but opening the binding file by hand.
+#
+# `ask` takes the address and finds out what is there, rather than making the
+# user classify it: the two listing shapes are tried, and whichever answers
+# says which backend it is.
+
+
+@pytest.mark.asyncio
+async def test_an_address_that_speaks_ollama_is_found_to_be_one(monkeypatch):
+    _serves(monkeypatch, {"http://box:11434/api/tags": {"models": [{"name": "qwen3:32b"}]}})
+
+    engine = await detect_module.ask("http://box:11434")
+
+    assert engine is not None
+    assert (engine.type, engine.models) == ("ollama", ("qwen3:32b",))
+    assert engine.base_url == "http://box:11434"
+
+
+@pytest.mark.asyncio
+async def test_an_address_that_speaks_openai_is_found_to_be_one(monkeypatch):
+    _serves(monkeypatch, {"http://box:8001/v1/models": {"data": [{"id": "qwen3-32b"}]}})
+
+    engine = await detect_module.ask("http://box:8001/v1")
+
+    assert engine is not None
+    assert (engine.type, engine.models) == ("openai_compatible", ("qwen3-32b",))
+
+
+@pytest.mark.asyncio
+async def test_the_v1_everybody_forgets_is_tried_too(monkeypatch):
+    """`http://box:8001` is what a person reads off a terminal; the OpenAI
+    shape lives one segment further down. Refusing the address they have is
+    making them debug a URL to answer a question this can answer itself."""
+    _serves(monkeypatch, {"http://box:8001/v1/models": {"data": [{"id": "qwen3-32b"}]}})
+
+    engine = await detect_module.ask("http://box:8001")
+
+    assert engine is not None
+    assert engine.base_url == "http://box:8001/v1"
+
+
+@pytest.mark.asyncio
+async def test_a_server_that_names_itself_is_named_that(monkeypatch):
+    """vLLM and SGLang share a port and a listing shape. What separates them is
+    what they say about themselves, and that is what the name comes from."""
+    _serves(
+        monkeypatch,
+        {"http://box:8001/v1/models": {"data": [{"id": "m", "owned_by": "sglang"}]}},
+    )
+
+    engine = await detect_module.ask("http://box:8001/v1")
+
+    assert engine is not None
+    assert engine.known_as == "SGLang"
+    assert engine.key == "sglang"
+
+
+@pytest.mark.asyncio
+async def test_an_address_with_nothing_on_it_is_not_an_engine(monkeypatch):
+    """The rule `probe` holds: naming an endpoint that serves nothing writes a
+    binding that fails on the project's first run."""
+    _serves(monkeypatch, {})
+
+    assert await detect_module.ask("http://box:9999") is None
+
+
+@pytest.mark.asyncio
+async def test_an_address_is_named_after_its_host_when_it_says_nothing(monkeypatch):
+    """Something has to go in `providers:`, and a host a person typed is a name
+    they will recognise -- where `openai_compatible` would tell them nothing."""
+    _serves(monkeypatch, {"http://gpu-box:8080/v1/models": {"data": [{"id": "m"}]}})
+
+    engine = await detect_module.ask("http://gpu-box:8080/v1")
+
+    assert engine is not None
+    assert engine.key == "gpu-box"

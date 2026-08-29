@@ -250,6 +250,15 @@ the server can say which of the two was just declared; see
 [storage.md](storage.md). The board's own offer goes through the same property,
 so the two never name one server differently.
 
+**With an address, it asks that one instead.** `poieo config add <url>` is for
+the engine detection cannot guess: a vLLM on 8001, an Ollama on another host, a
+box in an office. Which backend it is comes from `detect.ask` trying both
+listing shapes rather than from a flag, and `/v1` is tried too because that is
+the segment everyone leaves off. `--name` for the project that has two of one
+kind, `--key-env` for the endpoint that wants a key — the **name** of the
+variable, never the key, since this file is one people commit. The
+no-argument form is unchanged and still looks at this machine.
+
 **The board can do this too.** `POST …/models/add` is `config add` from a
 browser, through the same `rebind.declare`, and the board finds the engine
 without being asked: its models panel looks on every paint and offers whatever
