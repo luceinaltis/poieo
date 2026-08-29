@@ -25,7 +25,7 @@ exists. Read it before reshaping anything under `src/`.
 **[contribution.md](contribution.md)** — the longer procedures the rules in
 `AGENTS.md` send you to: rebuilding the checked-in bundle, rebasing a branch
 stacked on another branch, getting a review pass that is not your own, and what
-CI checks for you. Read a section when you are in its situation.
+CI checks for you — including the one job that runs the installed command. Read a section when you are in its situation.
 
 ## The components
 

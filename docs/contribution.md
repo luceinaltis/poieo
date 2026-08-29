@@ -129,6 +129,27 @@ means the committed bundle does not match the source it claims to come from;
 changes nothing in the output — a comment, which minification drops — correctly
 leaves the check green; it is asking about the bundle, not about your diff.
 
+**The installed command has its own job.** Every other job runs against the
+source tree — `tests/conftest.py` puts `src/` on `sys.path`, and `poieo` is not
+installed on the machine this is developed on at all — so nothing else here would
+notice if the package stopped installing or the console script stopped existing.
+The `cli` job does `pip install .` (a real install, not `-e`), works outside the
+checkout so `src/` cannot answer an import the install should have, walks **every**
+command and subcommand asking each for its own `--help`, and then makes a project
+and runs it end to end against the mock binding, which exists precisely so the
+wiring can be exercised without spending a token.
+
+The command list is enumerated from the app rather than written down, because a
+list kept by hand goes stale the first time somebody adds a command and says
+nothing about it. Two guards keep the job from passing vacuously: the enumeration
+must yield at least ten commands, and `runs list` must actually show the run.
+
+What it does **not** do is re-run each command's behaviour through a shell — that
+is what the suite already covers, and repeating it per command would cost twenty
+times as much to learn the same thing. What only a real process can show is the
+process itself: the entry point, a fresh interpreter's import, and the exit code a
+shell sees.
+
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and
 whether the change fits the design at all (9).

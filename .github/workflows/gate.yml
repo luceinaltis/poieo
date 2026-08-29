@@ -100,3 +100,56 @@ jobs:
             echo "A green run here would mean nothing. Check docker and the image."
             exit 1
           fi
+
+  cli:
+    name: the installed command
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # `.`, not `-e .`. tests/conftest.py puts src/ on sys.path, so every other
+      # job proves the *source* imports and none proves the package installs or
+      # that the console script exists -- it is not installed on the machine
+      # this is developed on at all.
+      - run: pip install .
+
+      # Everything below runs outside the checkout on purpose: inside it, src/
+      # would answer an import whether or not the install did.
+      - name: every command answers for itself
+        working-directory: /tmp
+        run: |
+          poieo --help > /dev/null
+          # Enumerated from the app, never written out here: a hand-kept list
+          # goes stale the first time somebody adds a command, and silently.
+          python -c "
+          import typer, poieo.cli as c
+          stack, out = [((), typer.main.get_command(c.app))], []
+          while stack:
+              path, node = stack.pop()
+              if path:
+                  out.append(' '.join(path))
+              for name, sub in getattr(node, 'commands', {}).items():
+                  stack.append((path + (name,), sub))
+          print(chr(10).join(sorted(out)))
+          " > commands.txt
+          # A loop over an empty list passes, which would be a green check that
+          # checked nothing. There are 24 today; ten is a floor, not a count.
+          echo "$(wc -l < commands.txt) commands"
+          test "$(wc -l < commands.txt)" -ge 10
+          while read -r cmd; do
+            poieo $cmd --help > /dev/null
+          done < commands.txt
+
+      - name: a project can be made and run without a model
+        working-directory: /tmp
+        run: |
+          mkdir -p smoke && cd smoke
+          poieo init --mock
+          poieo run tasks/hello.yaml
+          # Exit codes alone would pass on a command that printed nothing, and
+          # the run has to reach the log for any of this to have meant anything.
+          poieo runs list | grep -q completed
+          poieo tasks | grep -q hello
