@@ -97,9 +97,7 @@ def accounting(project_dir: Path, entries: list[Entry]) -> dict[str, Any] | None
     return {"runs_shown": runs_shown, "runs_used": runs_used, "unused": unused}
 
 
-def doubts(
-    project_dir: Path, entries: list[Entry] | None = None
-) -> list[tuple[str, str]]:
+def doubts(project_dir: Path, entries: list[Entry] | None = None) -> list[tuple[str, str]]:
     """Every kept entry worth a second look, with the sentence saying why.
 
     A lean on a set-aside entry, an anchor whose target is gone, or one that
@@ -114,9 +112,7 @@ def doubts(
             continue
         for target in entry.matter.links.depends_on:
             if target in aside:
-                out.append(
-                    (entry.slug, f"{entry.slug} leans on {target}, which is set aside")
-                )
+                out.append((entry.slug, f"{entry.slug} leans on {target}, which is set aside"))
         for anchor in entry.matter.anchors:
             part = anchor.split("::", 1)[0]
             named = project_dir / part
@@ -129,23 +125,18 @@ def doubts(
                     # Sealed: doubt by content, not clocks, so a touched-but-
                     # identical file raises nothing. The mtime check stays
                     # so revising the entry still clears the flag.
-                    if (
-                        digest(named) != seal
-                        and named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns
-                    ):
+                    if digest(named) != seal and named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns:
                         out.append(
                             (
                                 entry.slug,
-                                f"{entry.slug} names {anchor}, which no longer "
-                                "matches what it was written against",
+                                f"{entry.slug} names {anchor}, which no longer matches what it was written against",
                             )
                         )
                 elif named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns:
                     out.append(
                         (
                             entry.slug,
-                            f"{entry.slug} names {anchor}, "
-                            "which changed after it was written",
+                            f"{entry.slug} names {anchor}, which changed after it was written",
                         )
                     )
             except OSError:

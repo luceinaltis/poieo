@@ -270,9 +270,7 @@ def test_diff_reports_files_and_truncates(tmp_path):
 
     report = point.diff(change.base, change.head)
 
-    assert report["files"] == [
-        {"path": "new.py", "status": "A", "insertions": 2, "deletions": 0}
-    ]
+    assert report["files"] == [{"path": "new.py", "status": "A", "insertions": 2, "deletions": 0}]
     assert "new.py" in report["patch"]
     assert report["truncated"] is False
 

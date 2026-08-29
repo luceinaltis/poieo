@@ -66,8 +66,7 @@ def examples_stay_clean():
     yield
     after = _fingerprint(EXAMPLES)
     touched = sorted(
-        set(before) ^ set(after)
-        | {path for path in before.keys() & after.keys() if before[path] != after[path]}
+        set(before) ^ set(after) | {path for path in before.keys() & after.keys() if before[path] != after[path]}
     )
     assert not touched, (
         "the suite wrote into examples/, which is in git: "

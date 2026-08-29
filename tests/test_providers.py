@@ -17,9 +17,7 @@ def anthropic_provider(monkeypatch):
 
 
 def build(provider, model, **params):
-    return provider._build_kwargs(
-        LLMRequest(model=model, messages=[{"role": "user", "content": "hi"}], params=params)
-    )
+    return provider._build_kwargs(LLMRequest(model=model, messages=[{"role": "user", "content": "hi"}], params=params))
 
 
 def test_adaptive_thinking_and_effort_on_a_current_model(anthropic_provider):
@@ -34,9 +32,7 @@ def test_thinking_can_be_summarized_or_disabled(anthropic_provider):
         "type": "adaptive",
         "display": "summarized",
     }
-    assert build(anthropic_provider, "claude-opus-5", thinking="off")["thinking"] == {
-        "type": "disabled"
-    }
+    assert build(anthropic_provider, "claude-opus-5", thinking="off")["thinking"] == {"type": "disabled"}
 
 
 def test_disabled_thinking_at_high_effort_is_refused_before_the_request(anthropic_provider):
@@ -91,9 +87,7 @@ def test_a_known_endpoint_needs_only_its_name(monkeypatch):
 def test_a_preset_is_a_starting_point_not_a_cage(monkeypatch):
     """Somebody pointing at a proxy, a mirror or a gateway means it."""
     monkeypatch.setenv("GROQ_API_KEY", "sk-test")
-    provider = build_provider(
-        "groq", ProviderSpec(type="groq", base_url="http://my-gateway/v1")
-    )
+    provider = build_provider("groq", ProviderSpec(type="groq", base_url="http://my-gateway/v1"))
     assert str(provider.client.base_url).rstrip("/") == "http://my-gateway/v1"
 
 
@@ -139,8 +133,7 @@ def test_claude_can_be_bought_through_aws():
         "claude",
         ProviderSpec(
             type="anthropic",
-            options={"through": "bedrock", "aws_region": "us-east-1",
-                     "aws_access_key": "x", "aws_secret_key": "y"},
+            options={"through": "bedrock", "aws_region": "us-east-1", "aws_access_key": "x", "aws_secret_key": "y"},
         ),
     )
     assert isinstance(provider.client, anthropic.AsyncAnthropicBedrock)
@@ -191,9 +184,7 @@ def _mock_client(provider, handler):
 
 
 async def test_openai_compatible_provider_maps_the_response():
-    provider = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -230,9 +221,7 @@ async def test_openai_compatible_provider_counts_the_cache_it_read():
     one, and an agent loop resends its whole conversation every turn -- so this
     is the number that says what a long run actually cost. It was reported as
     zero on every OpenRouter run because nothing read it."""
-    provider = build_provider(
-        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -252,9 +241,7 @@ async def test_openai_compatible_provider_counts_the_cache_it_read():
         )
 
     _mock_client(provider, handler)
-    response = await provider.complete(
-        LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}])
-    )
+    response = await provider.complete(LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}]))
     await provider.aclose()
 
     assert response.usage.input_tokens == 8000
@@ -271,9 +258,7 @@ async def test_an_endpoint_that_says_what_it_charged_is_believed():
     wrong in a direction nobody notices. The same reasoning that kept a table
     of context windows out of this repository.
     """
-    provider = build_provider(
-        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -291,9 +276,7 @@ async def test_an_endpoint_that_says_what_it_charged_is_believed():
         )
 
     _mock_client(provider, handler)
-    response = await provider.complete(
-        LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}])
-    )
+    response = await provider.complete(LLMRequest(model="glm", messages=[{"role": "user", "content": "hi"}]))
     await provider.aclose()
 
     assert response.usage.cost == 5.05e-06
@@ -306,9 +289,7 @@ async def test_an_endpoint_that_charges_nothing_says_nothing():
     """A local model costs nothing and reports nothing, and zero is the honest
     answer for it -- but `None` would be the honest answer for a paid endpoint
     that simply was not asked. They are told apart by the field being absent."""
-    provider = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -321,9 +302,7 @@ async def test_an_endpoint_that_charges_nothing_says_nothing():
         )
 
     _mock_client(provider, handler)
-    response = await provider.complete(
-        LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}])
-    )
+    response = await provider.complete(LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}]))
     await provider.aclose()
 
     assert response.usage.cost is None
@@ -332,9 +311,7 @@ async def test_an_endpoint_that_charges_nothing_says_nothing():
 async def test_openai_compatible_provider_reports_no_cache_when_none_is_offered():
     """Ollama and a plain llama.cpp server send no `prompt_tokens_details` at
     all. Absent must read as zero rather than raising."""
-    provider = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -347,9 +324,7 @@ async def test_openai_compatible_provider_reports_no_cache_when_none_is_offered(
         )
 
     _mock_client(provider, handler)
-    response = await provider.complete(
-        LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}])
-    )
+    response = await provider.complete(LLMRequest(model="qwen", messages=[{"role": "user", "content": "hi"}]))
     await provider.aclose()
 
     assert response.usage.cache_read_tokens == 0
@@ -364,9 +339,7 @@ async def test_an_openai_shaped_endpoint_is_asked_how_much_a_model_holds():
     clearing cap was 2.3% of that, and a step was watched re-reading one file
     eight times because of it.
     """
-    provider = build_provider(
-        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
     asked = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -398,9 +371,7 @@ async def test_an_openai_shaped_endpoint_is_asked_how_much_a_model_holds():
 
 
 async def test_a_model_the_endpoint_does_not_list_has_no_answer():
-    provider = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
     _mock_client(provider, lambda r: httpx.Response(200, json={"data": []}))
     assert await provider.context_for("qwen") is None
     await provider.aclose()
@@ -408,9 +379,7 @@ async def test_a_model_the_endpoint_does_not_list_has_no_answer():
 
 async def test_an_endpoint_that_will_not_answer_is_not_a_failure():
     """Asking is an optimisation. A run must not die because it could not."""
-    provider = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
     _mock_client(provider, lambda r: httpx.Response(500, text="nope"))
     assert await provider.context_for("qwen") is None
     await provider.aclose()
@@ -453,9 +422,7 @@ async def test_ollama_is_asked_every_time_because_the_answer_can_change():
 
     def handler(request: httpx.Request) -> httpx.Response:
         tries.append(1)
-        return httpx.Response(
-            200, json={"models": [{"name": "qwen3.5:latest", "context_length": 4_096}]}
-        )
+        return httpx.Response(200, json={"models": [{"name": "qwen3.5:latest", "context_length": 4_096}]})
 
     _mock_client(provider, handler)
     assert await provider.context_for("qwen3.5:latest") == 4_096
@@ -514,9 +481,7 @@ async def test_an_endpoint_that_wants_its_key_somewhere_else():
         )
 
     _mock_client(provider, handler)
-    await provider.complete(
-        LLMRequest(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
-    )
+    await provider.complete(LLMRequest(model="gpt-4o", messages=[{"role": "user", "content": "hi"}]))
     await provider.aclose()
 
     assert seen["api_key"] == "secret"
@@ -531,9 +496,7 @@ async def test_a_key_from_the_environment_still_goes_in_the_usual_place():
     os.environ["POIEO_TEST_KEY"] = "sk-test"
     provider = build_provider(
         "vllm",
-        ProviderSpec(
-            type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY"
-        ),
+        ProviderSpec(type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY"),
     )
     seen = {}
 
@@ -556,9 +519,7 @@ async def test_a_key_from_the_environment_still_goes_in_the_usual_place():
 
 
 async def test_ollama_provider_moves_params_into_options():
-    provider = build_provider(
-        "ollama", ProviderSpec(type="ollama", base_url="http://x")
-    )
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -588,9 +549,7 @@ async def test_each_local_backend_lists_its_own_models_when_probed():
     """`poieo check` asks every declared endpoint whether it is there. The two
     local backends answer the same question at different paths, with the model
     names under different keys."""
-    vllm = build_provider(
-        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
-    )
+    vllm = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
     asked = {}
 
     def openai_handler(request: httpx.Request) -> httpx.Response:
@@ -668,9 +627,7 @@ def test_missing_api_key_env_is_reported_at_construction():
     with pytest.raises(ProviderError, match=r"\$NOPE_KEY is not set"):
         build_provider(
             "vllm",
-            ProviderSpec(
-                type="openai_compatible", base_url="http://x/v1", api_key_env="NOPE_KEY"
-            ),
+            ProviderSpec(type="openai_compatible", base_url="http://x/v1", api_key_env="NOPE_KEY"),
         )
 
 
@@ -683,9 +640,7 @@ def test_credential_for_reads_the_environment_without_opening_anything(monkeypat
     spec = ProviderSpec(type="openai_compatible", base_url="http://x/v1")
     assert credential_for("vllm", spec) is None
 
-    keyed = ProviderSpec(
-        type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY"
-    )
+    keyed = ProviderSpec(type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY")
     monkeypatch.setenv("POIEO_TEST_KEY", "sk-whatever")
     assert credential_for("vllm", keyed) == "sk-whatever"
 
@@ -762,9 +717,7 @@ def _message(**overrides):
 
 
 async def test_completion_joins_text_blocks_and_reports_usage(anthropic_provider, monkeypatch):
-    monkeypatch.setattr(
-        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(_message())
-    )
+    monkeypatch.setattr(anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(_message()))
     response = await anthropic_provider.complete(
         LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "hi"}])
     )
@@ -773,17 +726,13 @@ async def test_completion_joins_text_blocks_and_reports_usage(anthropic_provider
     assert response.usage.cache_read_tokens == 6
 
 
-async def test_completion_stashes_raw_content_including_thinking_blocks(
-    anthropic_provider, monkeypatch
-):
+async def test_completion_stashes_raw_content_including_thinking_blocks(anthropic_provider, monkeypatch):
     thinking = _block(type="thinking", thinking="let me see...", signature="sig-abc")
     text = _block(type="text", text="checking")
     tool_use = _block(type="tool_use", id="c1", name="read_file", input={"path": "a"})
     message = _message(content=[thinking, text, tool_use], stop_reason="tool_use")
 
-    monkeypatch.setattr(
-        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message)
-    )
+    monkeypatch.setattr(anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message))
     response = await anthropic_provider.complete(
         LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "hi"}])
     )
@@ -804,9 +753,7 @@ async def test_a_refusal_becomes_a_provider_error(anthropic_provider, monkeypatc
         stop_details=SimpleNamespace(category="cyber", explanation="no"),
         content=[],
     )
-    monkeypatch.setattr(
-        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(refused)
-    )
+    monkeypatch.setattr(anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(refused))
     with pytest.raises(ProviderError, match="declined the request"):
         await anthropic_provider.complete(LLMRequest(model="claude-opus-5", messages=[]))
 
@@ -881,6 +828,7 @@ def test_openai_messages_translation():
     assert assistant["tool_calls"][0]["id"] == "c1"
     assert assistant["tool_calls"][0]["function"]["name"] == "read_file"
     import json
+
     assert json.loads(assistant["tool_calls"][0]["function"]["arguments"]) == {"path": "a"}
     assert messages[3] == {"role": "tool", "tool_call_id": "c1", "content": "data"}
 
@@ -895,25 +843,27 @@ def test_ollama_messages_translation():
 
 
 async def test_openai_complete_parses_tool_calls(monkeypatch):
-    spec = ProviderSpec.model_validate(
-        {"type": "openai_compatible", "base_url": "http://x"}
-    )
+    spec = ProviderSpec.model_validate({"type": "openai_compatible", "base_url": "http://x"})
     provider = OpenAICompatibleProvider("vllm", spec)
 
     async def fake_post(path, payload):
         assert payload["tools"][0]["function"]["name"] == "read_file"
         return {
             "model": "m",
-            "choices": [{
-                "message": {
-                    "content": "",
-                    "tool_calls": [{
-                        "id": "c9",
-                        "function": {"name": "read_file", "arguments": '{"path": "a"}'},
-                    }],
-                },
-                "finish_reason": "tool_calls",
-            }],
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "c9",
+                                "function": {"name": "read_file", "arguments": '{"path": "a"}'},
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
         }
 
     monkeypatch.setattr(provider, "_post", fake_post)
@@ -925,27 +875,25 @@ async def test_openai_complete_parses_tool_calls(monkeypatch):
 
 
 async def test_openai_complete_rejects_malformed_tool_arguments(monkeypatch):
-    spec = ProviderSpec.model_validate(
-        {"type": "openai_compatible", "base_url": "http://x"}
-    )
+    spec = ProviderSpec.model_validate({"type": "openai_compatible", "base_url": "http://x"})
     provider = OpenAICompatibleProvider("vllm", spec)
 
     async def fake_post(path, payload):
         return {
             "model": "m",
-            "choices": [{
-                "message": {
-                    "content": "",
-                    "tool_calls": [{"function": {"name": "read_file", "arguments": "{not json"}}],
-                },
-            }],
+            "choices": [
+                {
+                    "message": {
+                        "content": "",
+                        "tool_calls": [{"function": {"name": "read_file", "arguments": "{not json"}}],
+                    },
+                }
+            ],
         }
 
     monkeypatch.setattr(provider, "_post", fake_post)
     with pytest.raises(ProviderError, match="malformed"):
-        await provider.complete(
-            LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL])
-        )
+        await provider.complete(LLMRequest(model="m", messages=[{"role": "user", "content": "go"}], tools=[A_TOOL]))
     await provider.aclose()
 
 
@@ -1003,9 +951,7 @@ def test_anthropic_messages_translation_merges_tool_results():
     assistant = messages[1]
     assert assistant["role"] == "assistant"
     assert assistant["content"][0] == {"type": "text", "text": "checking"}
-    assert assistant["content"][1] == {
-        "type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}
-    }
+    assert assistant["content"][1] == {"type": "tool_use", "id": "c1", "name": "read_file", "input": {"path": "a"}}
     # Both tool results land in ONE user turn.
     results = messages[2]
     assert results["role"] == "user"
@@ -1052,9 +998,7 @@ async def test_ollama_captures_separated_thinking(monkeypatch):
         }
 
     monkeypatch.setattr(provider, "_post", fake_post)
-    response = await provider.complete(
-        LLMRequest(model="m", messages=[{"role": "user", "content": "q"}])
-    )
+    response = await provider.complete(LLMRequest(model="m", messages=[{"role": "user", "content": "q"}]))
     assert response.meta["thinking"] == "hmm, tricky"
     await provider.aclose()
 
@@ -1066,9 +1010,7 @@ async def test_anthropic_captures_thinking_blocks(monkeypatch, anthropic_provide
             _block(type="text", text="final answer"),
         ]
     )
-    monkeypatch.setattr(
-        anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message)
-    )
+    monkeypatch.setattr(anthropic_provider.client.messages, "stream", lambda **kw: _FakeStream(message))
     response = await anthropic_provider.complete(
         LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "q"}])
     )
@@ -1084,9 +1026,7 @@ async def test_mock_latency_makes_a_call_take_time():
     from poieo.providers.base import LLMRequest
     from poieo.providers.mock import MockProvider
 
-    spec = ProviderSpec.model_validate(
-        {"type": "mock", "options": {"responses": {"*": "hi"}, "latency": 0.05}}
-    )
+    spec = ProviderSpec.model_validate({"type": "mock", "options": {"responses": {"*": "hi"}, "latency": 0.05}})
     provider = MockProvider("slow", spec)
 
     started = time.monotonic()

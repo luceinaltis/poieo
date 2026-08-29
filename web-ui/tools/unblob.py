@@ -52,9 +52,7 @@ def unblob(source: Path, target: Path, keep: int, cuts: int) -> None:
     doc, blob = read_glb(source)
     prim = doc["meshes"][0]["primitives"][0]
     points = np.array(read(doc, blob, prim["attributes"]["POSITION"]), dtype=float)
-    faces = np.array(
-        [i[0] for i in read(doc, blob, prim["indices"])], dtype=np.int64
-    ).reshape(-1, 3)
+    faces = np.array([i[0] for i in read(doc, blob, prim["indices"])], dtype=np.int64).reshape(-1, 3)
     used = np.zeros(len(points), bool)
     used[faces.reshape(-1)] = True
 

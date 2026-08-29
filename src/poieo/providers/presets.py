@@ -48,8 +48,6 @@ PRESETS: dict[str, Preset] = {
     "zai": Preset("https://api.z.ai/api/paas/v4", "ZAI_API_KEY"),
     # No `/models` route on either of these; both were verified by asking
     # `/chat/completions` instead.
-    "gemini": Preset(
-        "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"
-    ),
+    "gemini": Preset("https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"),
     "perplexity": Preset("https://api.perplexity.ai", "PERPLEXITY_API_KEY"),
 }

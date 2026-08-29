@@ -37,10 +37,7 @@ def used_in(entry: Entry, record: dict[str, Any]) -> bool:
     behavioural stand-in until a serving stack can report attention. Shared by
     reinforcement and the accounting, so the two can never disagree.
     """
-    said = words(
-        f"{record.get('summary', '')} "
-        f"{json.dumps(record.get('outputs', {}), ensure_ascii=False)}"
-    )
+    said = words(f"{record.get('summary', '')} {json.dumps(record.get('outputs', {}), ensure_ascii=False)}")
     return len(words(entry.body) & said) >= 2
 
 

@@ -44,10 +44,7 @@ def _tell_tool(postbox: Postbox) -> Tool:
         if not message:
             raise ToolError("a note needs something to say")
         if name == postbox.sender:
-            raise ToolError(
-                "a task does not leave notes for itself; say it in your own "
-                "summary instead"
-            )
+            raise ToolError("a task does not leave notes for itself; say it in your own summary instead")
         if name not in postbox.recipients:
             known = ", ".join(postbox.others()) or "(none)"
             raise ToolError(f"no task called '{name}'. There is: {known}")

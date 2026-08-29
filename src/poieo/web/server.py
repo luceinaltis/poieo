@@ -196,9 +196,7 @@ def create_app(daemon: Any) -> Starlette:
     async def tasks(request: Request) -> JSONResponse:
         # Each review state is two git subprocesses; asked one runner at a
         # time, the board's first paint waits for all of them in single file.
-        states = await asyncio.gather(
-            *(asyncio.to_thread(_review_state, runner) for runner in daemon.runners)
-        )
+        states = await asyncio.gather(*(asyncio.to_thread(_review_state, runner) for runner in daemon.runners))
         rows = []
         for runner, state in zip(daemon.runners, states):
             last = runner.last_result
@@ -248,9 +246,7 @@ def create_app(daemon: Any) -> Starlette:
         # Both, for the same reason a control route takes both: `?task=chores`
         # alone would answer with every project's chores mixed together.
         project = request.query_params.get("project")
-        return JSONResponse(
-            {"runs": daemon.store.list_runs(limit=limit, task=task, project=project)}
-        )
+        return JSONResponse({"runs": daemon.store.list_runs(limit=limit, task=task, project=project)})
 
     def run_detail(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
@@ -282,15 +278,11 @@ def create_app(daemon: Any) -> Starlette:
         task = request.path_params["task"]
         runner = _runner_for(daemon, project, task)
         if runner is None:
-            return JSONResponse(
-                {"error": f"no task '{task}' in '{project}'"}, status_code=404
-            )
+            return JSONResponse({"error": f"no task '{task}' in '{project}'"}, status_code=404)
 
         point = getattr(runner, "workspace", None)
         if point is None:
-            return JSONResponse(
-                {"error": f"task '{task}' keeps no reviewable copy"}, status_code=409
-            )
+            return JSONResponse({"error": f"task '{task}' keeps no reviewable copy"}, status_code=409)
 
         try:
             body = await request.json()
@@ -303,9 +295,7 @@ def create_app(daemon: Any) -> Starlette:
             summary = await asyncio.to_thread(daemon.store.summary, run_id)
             change = (summary or {}).get("change")
             if not change:
-                return JSONResponse(
-                    {"error": f"run '{run_id}' has no change"}, status_code=404
-                )
+                return JSONResponse({"error": f"run '{run_id}' has no change"}, status_code=404)
             target = change["head"]
 
         try:
@@ -328,9 +318,7 @@ def create_app(daemon: Any) -> Starlette:
         task = request.path_params["task"]
         runner = _runner_for(daemon, project, task)
         if runner is None:
-            return None, JSONResponse(
-                {"error": f"no task '{task}' in '{project}'"}, status_code=404
-            )
+            return None, JSONResponse({"error": f"no task '{task}' in '{project}'"}, status_code=404)
         return runner, None
 
     async def _hold(request: Request, verb: str) -> JSONResponse:
@@ -411,9 +399,7 @@ def create_app(daemon: Any) -> Starlette:
             # This document names the build. Let a browser cache it and the
             # reader keeps running an old page with no way to find out.
             return FileResponse(page, headers={"cache-control": "no-cache"})
-        return PlainTextResponse(
-            "poieo web UI is not built yet. The API is live: /api/tasks"
-        )
+        return PlainTextResponse("poieo web UI is not built yet. The API is live: /api/tasks")
 
     routes = [
         Route("/api/tasks", tasks),
@@ -437,7 +423,5 @@ def create_app(daemon: Any) -> Starlette:
     assets = STATIC_DIR / "assets"
     if assets.is_dir():
         # Asset names carry a content hash, so they can never go stale.
-        routes.append(
-            Mount("/assets", ImmutableFiles(directory=assets), name="assets")
-        )
+        routes.append(Mount("/assets", ImmutableFiles(directory=assets), name="assets"))
     return Starlette(routes=routes)

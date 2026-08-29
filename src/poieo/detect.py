@@ -109,11 +109,7 @@ async def _listed(base_url: str, reader: tuple[str, str, str]) -> tuple[str, ...
 
     # In the server's own order, which is the order the user already knows
     # from `ollama list`.
-    return tuple(
-        str(entry[field])
-        for entry in listed
-        if isinstance(entry, dict) and entry.get(field)
-    )[:MODEL_CAP]
+    return tuple(str(entry[field]) for entry in listed if isinstance(entry, dict) and entry.get(field))[:MODEL_CAP]
 
 
 async def _claude_models() -> tuple[str, ...]:

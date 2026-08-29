@@ -79,9 +79,7 @@ trigger: {{type: loop, max_iterations: 1}}
 def build(tmp_path, *, responses=WRITES_A_FILE, graph=None, workdir=True, max_turns=10):
     repo = make_repo(tmp_path)
     (tmp_path / "b.yaml").write_text(BINDING.format(responses=responses), encoding="utf-8")
-    (tmp_path / "g.yaml").write_text(
-        graph if graph else GRAPH.format(max_turns=max_turns), encoding="utf-8"
-    )
+    (tmp_path / "g.yaml").write_text(graph if graph else GRAPH.format(max_turns=max_turns), encoding="utf-8")
     card(
         tmp_path / "cards",
         "chores",
@@ -362,9 +360,7 @@ async def test_a_card_works_in_a_private_copy_like_any_other_job(tmp_path):
     """
     repo = make_repo(tmp_path)
     before = head(repo)
-    (tmp_path / "b.yaml").write_text(
-        BINDING.format(responses=WRITES_A_FILE), encoding="utf-8"
-    )
+    (tmp_path / "b.yaml").write_text(BINDING.format(responses=WRITES_A_FILE), encoding="utf-8")
     (tmp_path / "g.yaml").write_text(GRAPH.format(max_turns=10), encoding="utf-8")
     (tmp_path / "cards").mkdir()
     (tmp_path / "cards" / "chores.yaml").write_text(CARD, encoding="utf-8")

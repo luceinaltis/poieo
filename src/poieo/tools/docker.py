@@ -85,20 +85,17 @@ def image_present(image: str) -> bool:
     return done.returncode == 0
 
 
-async def _docker(
-    *args: str, timeout: float = _PROBE_TIMEOUT, stdin: str | None = None
-) -> tuple[int, str]:
+async def _docker(*args: str, timeout: float = _PROBE_TIMEOUT, stdin: str | None = None) -> tuple[int, str]:
     """Run a docker command off the event loop's back."""
     process = await asyncio.create_subprocess_exec(
-        "docker", *args,
+        "docker",
+        *args,
         stdin=asyncio.subprocess.PIPE if stdin is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
     try:
-        stdout, _ = await asyncio.wait_for(
-            process.communicate(stdin.encode() if stdin is not None else None), timeout
-        )
+        stdout, _ = await asyncio.wait_for(process.communicate(stdin.encode() if stdin is not None else None), timeout)
     except asyncio.TimeoutError:
         process.kill()
         await process.communicate()
@@ -120,18 +117,21 @@ def _resolved(workdir: Path) -> Path:
     return Path(workdir).expanduser().resolve()
 
 
-async def _start(
-    workdir: Path, isolation: Isolation, labels: dict[str, str] | None = None
-) -> str:
+async def _start(workdir: Path, isolation: Isolation, labels: dict[str, str] | None = None) -> str:
     """Start one detached container and return its id."""
     workdir = _resolved(workdir)
     if not workdir.is_dir():
         raise IsolationError(f"workdir is not a directory: {workdir}")
     args = [
-        "run", "-d", "--rm",
-        "-v", f"{workdir}:{_MOUNT}",
-        "-w", _MOUNT,
-        "--network", isolation.network,
+        "run",
+        "-d",
+        "--rm",
+        "-v",
+        f"{workdir}:{_MOUNT}",
+        "-w",
+        _MOUNT,
+        "--network",
+        isolation.network,
     ]
     if isolation.user:
         args += ["--user", isolation.user]
@@ -182,9 +182,7 @@ class Container:
         """
         if self.container_id and await _alive(self.container_id):
             return self.container_id
-        self.container_id = await _start(
-            self.workdir, self.isolation, {BOX_LABEL: self.key}
-        )
+        self.container_id = await _start(self.workdir, self.isolation, {BOX_LABEL: self.key})
         return self.container_id
 
     async def remove(self) -> None:
@@ -264,9 +262,7 @@ class DockerExecutor(Executor):
         self._load(toolsets, tool_context.postbox if tool_context else None)
         # The one substitution this class exists to make.
         if "run_command" in self.tools:
-            self.tools["run_command"] = Tool(
-                self.tools["run_command"].definition, self._run_command_in_box
-            )
+            self.tools["run_command"] = Tool(self.tools["run_command"].definition, self._run_command_in_box)
 
     # -- lifecycle -----------------------------------------------------------
     async def __aenter__(self) -> "DockerExecutor":
@@ -302,9 +298,7 @@ class DockerExecutor(Executor):
         """
         if not self.container_id:
             raise ToolError("the isolated environment is not running")
-        seconds = min(
-            float(_DEFAULT_TIMEOUT if timeout is None else timeout), _MAX_TIMEOUT
-        )
+        seconds = min(float(_DEFAULT_TIMEOUT if timeout is None else timeout), _MAX_TIMEOUT)
         # `-i` or the interpreter reads an empty stdin and exits 0 having run
         # nothing -- success reported over no work.
         argv = ["exec", "-w", _MOUNT] + (["-i"] if stdin is not None else [])
@@ -312,8 +306,13 @@ class DockerExecutor(Executor):
             argv += ["-e", f"{key}={value}"]
         try:
             code, text = await _docker(
-                *argv, self.container_id, "sh", "-c", command,
-                timeout=seconds, stdin=stdin,
+                *argv,
+                self.container_id,
+                "sh",
+                "-c",
+                command,
+                timeout=seconds,
+                stdin=stdin,
             )
         except asyncio.TimeoutError:
             raise ToolError(f"command timed out after {seconds:.0f}s: {command}")
@@ -336,7 +335,6 @@ class DockerExecutor(Executor):
         home = f"{_BUILD}/{key}"
         return f"{home}/{source}", f"{home}/prog"
 
-
     async def _is_built(self, binary: str) -> bool:
         code, _ = await self._exec(f"test -x {self.quote(binary)}")
         return code == 0
@@ -347,9 +345,7 @@ class DockerExecutor(Executor):
 
     async def _put(self, path: str, content: str) -> None:
         parent = path.rsplit("/", 1)[0]
-        code, out = await self._exec(
-            f"mkdir -p {self.quote(parent)} && cat > {self.quote(path)}", stdin=content
-        )
+        code, out = await self._exec(f"mkdir -p {self.quote(parent)} && cat > {self.quote(path)}", stdin=content)
         if code != 0:
             raise ToolError(f"could not write {path} in the box: {out.strip()}")
 
@@ -358,9 +354,7 @@ class DockerExecutor(Executor):
         if not self.container_id:
             raise ToolError("the isolated environment is not running")
         argv = ["exec", "-w", _MOUNT] + (["-i"] if stdin is not None else [])
-        return await _docker(
-            *argv, self.container_id, "sh", "-c", command, stdin=stdin
-        )
+        return await _docker(*argv, self.container_id, "sh", "-c", command, stdin=stdin)
 
     async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
         """The same run, shaped for a model to read."""
@@ -370,7 +364,6 @@ class DockerExecutor(Executor):
             env=args.get("env"),
         )
         return result.as_text()
-
 
 
 def container_key(workdir: Path, isolation: Isolation) -> str:

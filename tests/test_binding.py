@@ -117,9 +117,7 @@ def test_what_a_call_cost_is_worked_out_per_million_tokens():
     # A million uncached in, a million out: five dollars and twenty-five.
     assert prices.charge(Usage(input_tokens=1_000_000, output_tokens=1_000_000)) == 30.0
     # Cached input is charged at the cache rate, not the input one.
-    spent = prices.charge(
-        Usage(input_tokens=1_000_000, cache_read_tokens=1_000_000, output_tokens=0)
-    )
+    spent = prices.charge(Usage(input_tokens=1_000_000, cache_read_tokens=1_000_000, output_tokens=0))
     assert spent == 0.5
 
 
@@ -141,9 +139,7 @@ def test_hybrid_binding_splits_roles_across_providers():
 
 
 def test_missing_model_is_reported():
-    binding = BindingSpec.model_validate(
-        {"providers": {"p": {"type": "mock"}}, "default": {"provider": "p"}}
-    )
+    binding = BindingSpec.model_validate({"providers": {"p": {"type": "mock"}}, "default": {"provider": "p"}})
     with pytest.raises(BindingError, match="no model id"):
         binding.resolve("writer")
 

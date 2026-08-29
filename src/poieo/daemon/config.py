@@ -117,9 +117,7 @@ class DaemonConfig(ProjectSpec):
             raise ValueError(f"duplicate task names: {sorted(duplicates)}")
         for task in self.tasks:
             if not task.binding and not self.binding:
-                raise ValueError(
-                    f"task '{task.name}' has no binding and the daemon declares no default"
-                )
+                raise ValueError(f"task '{task.name}' has no binding and the daemon declares no default")
         if self.learn is not None:
             from .triggers import parse_duration
 
@@ -128,9 +126,7 @@ class DaemonConfig(ProjectSpec):
             if parse_duration(self.learn) <= 0:
                 raise ValueError("learn must be a positive duration")
             if self.binding is None:
-                raise ValueError(
-                    "learn needs the daemon's default binding to read with"
-                )
+                raise ValueError("learn needs the daemon's default binding to read with")
         return self
 
     # -- path helpers the tasks need; the rest are the project's -------------
@@ -167,9 +163,7 @@ class LoadedTask(BaseModel):
             except json.JSONDecodeError as exc:
                 raise SpecError(f"task '{self.spec.name}': {path}: {exc}") from exc
             if not isinstance(data, dict):
-                raise SpecError(
-                    f"task '{self.spec.name}': {path} must contain a mapping"
-                )
+                raise SpecError(f"task '{self.spec.name}': {path} must contain a mapping")
             payload.update(data)
         task = config.cards_by_task.get(self.spec.name)
         if task is not None:
@@ -184,8 +178,7 @@ def load_config(path: str | Path) -> DaemonConfig:
         config = DaemonConfig.model_validate(data)
     except Exception as exc:
         raise SpecError(
-            f"{path}: invalid daemon config: "
-            f"{describe_invalid(exc, tuple(DaemonConfig.model_fields))}"
+            f"{path}: invalid daemon config: {describe_invalid(exc, tuple(DaemonConfig.model_fields))}"
         ) from exc
     config.source_path = path.resolve()
     _load_cards(config)
@@ -224,9 +217,7 @@ def _load_cards(config: DaemonConfig) -> None:
     for card in cards:
         task, graph = expand(card, roster=roster)
         if task.name in taken:
-            raise SpecError(
-                f"card '{card.source_path}' is already a task named '{task.name}'"
-            )
+            raise SpecError(f"card '{card.source_path}' is already a task named '{task.name}'")
         taken.add(task.name)
         if not card.binding and not config.binding:
             raise SpecError(
@@ -340,9 +331,7 @@ def check_handoffs(config: DaemonConfig) -> None:
                 task.name,
             )
 
-    cycle = _first_cycle(
-        {f.name: [b.to for b in f.then if b.to is not None] for f in config.tasks}
-    )
+    cycle = _first_cycle({f.name: [b.to for b in f.then if b.to is not None] for f in config.tasks})
     if cycle is not None:
         # A warning, not a failure: review -> fix -> review is a legitimate
         # feedback loop, and the chain-depth guard is what keeps it finite.
@@ -383,8 +372,7 @@ def check_isolation(tasks: list[TaskSpec]) -> None:
         checked.add(image)
         if not docker.image_present(image):
             raise SpecError(
-                f"task '{task.name}' runs isolated in '{image}', which is not on "
-                f"this machine. Run: docker pull {image}"
+                f"task '{task.name}' runs isolated in '{image}', which is not on this machine. Run: docker pull {image}"
             )
 
 
@@ -437,11 +425,7 @@ def load_tasks(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         # `default_role` is excluded (a node that named no role reaching the
         # default is the arrangement working), and a binding that declares no
         # roles is not asked at all: it is saying "one model for everything".
-        strangers = (
-            binding.undeclared(graph.roles() - {graph.default_role})
-            if binding.roles
-            else []
-        )
+        strangers = binding.undeclared(graph.roles() - {graph.default_role}) if binding.roles else []
         if strangers:
             log.warning(
                 "task '%s': graph '%s' asks for role(s) %s, which binding '%s' "

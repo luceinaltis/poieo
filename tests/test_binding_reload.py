@@ -157,9 +157,7 @@ async def test_two_tasks_sharing_one_binding_file_are_rebound_together(tmp_path)
     await _down(daemon, serving)
 
 
-async def test_a_binding_that_will_not_parse_leaves_the_last_good_one_running(
-    tmp_path, caplog
-):
+async def test_a_binding_that_will_not_parse_leaves_the_last_good_one_running(tmp_path, caplog):
     """3am is no time to stop. The spec in memory is still valid and still
     what the board is claiming, so the run goes ahead on it and says why."""
     daemon = Daemon(_project(tmp_path), store=NullStore())
@@ -201,9 +199,7 @@ async def test_a_reread_that_cannot_resolve_a_role_is_not_adopted(tmp_path):
     await _down(daemon, serving)
 
 
-async def test_a_reread_that_needs_a_key_that_is_not_set_is_not_adopted(
-    tmp_path, monkeypatch
-):
+async def test_a_reread_that_needs_a_key_that_is_not_set_is_not_adopted(tmp_path, monkeypatch):
     """The other startup check, applied to the same moment."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     daemon = Daemon(_project(tmp_path), store=NullStore())

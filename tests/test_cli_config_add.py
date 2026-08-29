@@ -35,12 +35,13 @@ default:
 #   ollama  qwen3:32b
 """
 
-OLLAMA = Engine(
-    "ollama", "Ollama", "ollama", ("qwen3:32b",), "http://localhost:11434"
-)
+OLLAMA = Engine("ollama", "Ollama", "ollama", ("qwen3:32b",), "http://localhost:11434")
 LMSTUDIO = Engine(
-    "lmstudio", "LM Studio", "openai_compatible",
-    ("qwen2.5-coder-7b",), "http://localhost:1234/v1",
+    "lmstudio",
+    "LM Studio",
+    "openai_compatible",
+    ("qwen2.5-coder-7b",),
+    "http://localhost:1234/v1",
 )
 CLAUDE = Engine("claude", "Claude API", "anthropic", ("claude-opus-5",))
 
@@ -91,9 +92,7 @@ def test_an_engine_with_no_address_is_declared_without_one(tmp_path, monkeypatch
 def test_what_is_already_declared_is_left_exactly_alone(tmp_path, monkeypatch):
     """Somebody may have pointed ollama at another port, or tuned it. Adding
     is adding; it is not a second round of `init`."""
-    path = _project(
-        tmp_path, BINDING.replace("localhost:11434", "gpubox.local:11434")
-    )
+    path = _project(tmp_path, BINDING.replace("localhost:11434", "gpubox.local:11434"))
     monkeypatch.chdir(tmp_path)
     _machine_with(monkeypatch, OLLAMA, LMSTUDIO)
 
@@ -184,8 +183,6 @@ def test_added_engines_show_up_in_config_and_are_usable(tmp_path, monkeypatch):
     monkeypatch.setattr(detect_module, "models_for", models_for)
 
     assert "lmstudio" in runner.invoke(app, ["config"]).stdout
-    used = runner.invoke(
-        app, ["config", "use", "lmstudio/qwen2.5-coder-7b", "--role", "coder"]
-    )
+    used = runner.invoke(app, ["config", "use", "lmstudio/qwen2.5-coder-7b", "--role", "coder"])
     assert used.exit_code == 0, used.output
     assert load_binding(path).resolve("coder").provider_name == "lmstudio"

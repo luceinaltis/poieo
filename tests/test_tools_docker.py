@@ -76,9 +76,7 @@ async def test_the_same_command_succeeds_without_isolation(tmp_path):
 async def test_a_host_write_is_visible_in_the_box(tmp_path):
     work = _workdir(tmp_path)
     async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE) as ex:
-        await ex.execute(
-            ToolCall(id="1", name="write_file", arguments={"path": "a.txt", "content": "from-host"})
-        )
+        await ex.execute(ToolCall(id="1", name="write_file", arguments={"path": "a.txt", "content": "from-host"}))
         result = await ex.execute(_shell("cat a.txt"))
     assert "from-host" in result.text
 
@@ -144,20 +142,16 @@ async def test_a_timed_out_command_still_tears_down(tmp_path):
     work = _workdir(tmp_path)
     async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE) as ex:
         container_id = ex.container_id
-        result = await ex.execute(
-            ToolCall(id="1", name="run_command", arguments={"command": "sleep 30", "timeout": 1})
-        )
+        result = await ex.execute(ToolCall(id="1", name="run_command", arguments={"command": "sleep 30", "timeout": 1}))
     assert result.error and "timed out" in result.text
     assert not _container_exists(container_id)
 
 
 async def test_the_container_carries_a_run_id_label(tmp_path):
     work = _workdir(tmp_path)
-    async with DockerExecutor(
-        work, DEFAULT_TOOLSETS, image=IMAGE, labels={"poieo.run_id": "r-1"}
-    ) as ex:
+    async with DockerExecutor(work, DEFAULT_TOOLSETS, image=IMAGE, labels={"poieo.run_id": "r-1"}) as ex:
         done = subprocess.run(
-            ["docker", "inspect", "-f", "{{index .Config.Labels \"poieo.run_id\"}}", ex.container_id],
+            ["docker", "inspect", "-f", '{{index .Config.Labels "poieo.run_id"}}', ex.container_id],
             capture_output=True,
             text=True,
         )
@@ -277,9 +271,7 @@ async def test_a_changed_image_gets_a_different_box(tmp_path):
     work = _workdir(tmp_path)
     keeper = ContainerPool()
     try:
-        assert keeper.get(work, ISO) is not keeper.get(
-            work, Isolation(image="busybox:latest")
-        )
+        assert keeper.get(work, ISO) is not keeper.get(work, Isolation(image="busybox:latest"))
     finally:
         await keeper.aclose()
 
@@ -368,7 +360,7 @@ async def test_the_sweep_is_what_reclaims_a_hard_kill(tmp_path):
     work = _workdir(tmp_path)
     container = Container("orphan", work, ISO)
     container_id = await container.ensure()
-    container.container_id = None          # as if the process died holding it
+    container.container_id = None  # as if the process died holding it
     try:
         await sweep(older_than=timedelta(seconds=0))
         assert not _container_exists(container_id)

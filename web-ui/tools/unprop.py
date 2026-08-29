@@ -40,12 +40,7 @@ def write_glb(path: Path, doc, blob: bytearray) -> None:
     text = json.dumps(doc, separators=(",", ":")).encode()
     text += b" " * (-len(text) % 4)
     blob += b"\0" * (-len(blob) % 4)
-    body = (
-        struct.pack("<II", len(text), JSON_CHUNK)
-        + text
-        + struct.pack("<II", len(blob), 0x004E4942)
-        + bytes(blob)
-    )
+    body = struct.pack("<II", len(text), JSON_CHUNK) + text + struct.pack("<II", len(blob), 0x004E4942) + bytes(blob)
     path.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
 
 
@@ -55,10 +50,7 @@ def read(doc, blob, index):
     start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
     per, code = COUNT[acc["type"]], COMPONENT[acc["componentType"]]
     stride = view.get("byteStride") or per * struct.calcsize(code)
-    return [
-        struct.unpack_from(f"<{per}{code}", blob, start + i * stride)
-        for i in range(acc["count"])
-    ]
+    return [struct.unpack_from(f"<{per}{code}", blob, start + i * stride) for i in range(acc["count"])]
 
 
 def append(doc, blob, values, code, kind):
@@ -66,9 +58,7 @@ def append(doc, blob, values, code, kind):
     start = len(blob)
     for value in values:
         blob += struct.pack(f"<{code}", value)
-    doc["bufferViews"].append(
-        {"buffer": 0, "byteOffset": start, "byteLength": len(blob) - start}
-    )
+    doc["bufferViews"].append({"buffer": 0, "byteOffset": start, "byteLength": len(blob) - start})
     doc["buffers"][0]["byteLength"] = len(blob)
     doc["accessors"].append(
         {
@@ -88,8 +78,7 @@ def inverse(m):
     metres scale the generator exports with, and transposing a scaled rotation
     is off by the square of it.
     """
-    rows = [[m[c * 4 + r] for c in range(4)] + [1.0 if i == r else 0.0 for i in range(4)]
-            for r in range(4)]
+    rows = [[m[c * 4 + r] for c in range(4)] + [1.0 if i == r else 0.0 for i in range(4)] for r in range(4)]
     for col in range(4):
         pivot = max(range(col, 4), key=lambda r: abs(rows[r][col]))
         rows[col], rows[pivot] = rows[pivot], rows[col]
@@ -140,8 +129,7 @@ def cut(source: Path, target: Path, bone_name: str, radius: float) -> None:
             continue
         kept.extend(corners)
 
-    print(f"  {bone_name}: {sum(far)} verts beyond {radius}, "
-          f"{dropped} of {len(indices) // 3} triangles cut")
+    print(f"  {bone_name}: {sum(far)} verts beyond {radius}, {dropped} of {len(indices) // 3} triangles cut")
 
     code = "I" if len(positions) > 65535 else "H"
     prim["indices"] = append(doc, blob, kept, code, "SCALAR")
@@ -152,5 +140,4 @@ def cut(source: Path, target: Path, bone_name: str, radius: float) -> None:
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         raise SystemExit(__doc__)
-    cut(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3],
-        float(sys.argv[4]) if len(sys.argv) > 4 else 0.10)
+    cut(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], float(sys.argv[4]) if len(sys.argv) > 4 else 0.10)

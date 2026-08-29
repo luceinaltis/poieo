@@ -21,7 +21,7 @@ def test_boot_payload_carries_the_whole_graph():
     assert ids == ["draft", "review", "gate", "revise"]
     gate = next(n for n in payload["graph"]["nodes"] if n["id"] == "gate")
     assert gate["branches"][0]["when"] == "review.approved"
-    assert gate["branches"][0]["to"] is None      # a terminal branch stays null
+    assert gate["branches"][0]["to"] is None  # a terminal branch stays null
     assert payload["bindings"]["writer"] == "claude/claude-opus-5"
 
 
@@ -37,7 +37,7 @@ def test_every_node_has_the_fields_the_editor_expects():
 def test_unbound_roles_are_reported_not_raised():
     graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     binding = load_binding(EXAMPLES / "models/mock.yaml")
-    binding.default.model = None                  # break the fallback
+    binding.default.model = None  # break the fallback
     payload = _boot_payload(graph, binding, {"mode": "none"})
     assert set(payload["bindings"].values()) == {"unbound"}
 
@@ -80,5 +80,9 @@ def test_a_prompt_cannot_close_the_script_tag():
     assert "</script>" not in boot_line[: boot_line.rindex("</script>")]
     assert "<\\/script>" in boot_line
     # And it still decodes back to the original text in the browser.
-    assert json.loads(boot_line[len("<script>const BOOT = "):-len(";</script>")]
-                      .replace("<\\/", "</"))["graph"]["nodes"][0]["prompt"] == 'say "</script><img>" now'
+    assert (
+        json.loads(boot_line[len("<script>const BOOT = ") : -len(";</script>")].replace("<\\/", "</"))["graph"][
+            "nodes"
+        ][0]["prompt"]
+        == 'say "</script><img>" now'
+    )

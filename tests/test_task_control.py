@@ -60,9 +60,7 @@ async def _down(daemon, task):
 
 
 async def test_pause_skips_due_fires_and_resume_rearms_the_schedule(tmp_path):
-    config = _config(
-        tmp_path, "{type: interval, every: 0.05s, run_at_start: false}"
-    )
+    config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
     runner = daemon.runners[0]
@@ -84,9 +82,7 @@ async def test_a_paused_loop_flow_neither_runs_nor_burns_its_schedule(tmp_path):
     consuming fires while paused would exhaust the schedule during the pause,
     and resume would have nothing left to run.
     """
-    config = _config(
-        tmp_path, "{type: loop, cooldown: 0.05s, max_iterations: 5}"
-    )
+    config = _config(tmp_path, "{type: loop, cooldown: 0.05s, max_iterations: 5}")
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
     runner = daemon.runners[0]
@@ -119,9 +115,7 @@ async def test_run_now_is_the_first_way_a_manual_flow_ever_runs(tmp_path):
 
 
 async def test_run_now_on_a_paused_flow_runs_once_and_stays_paused(tmp_path):
-    config = _config(
-        tmp_path, "{type: interval, every: 60s, run_at_start: false}"
-    )
+    config = _config(tmp_path, "{type: interval, every: 60s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
     runner = daemon.runners[0]
@@ -191,9 +185,7 @@ async def test_a_self_paused_flow_comes_back_with_resume(tmp_path):
 
 
 async def test_shutdown_reaches_a_paused_runner_promptly(tmp_path):
-    config = _config(
-        tmp_path, "{type: interval, every: 0.05s, run_at_start: false}"
-    )
+    config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
     runner = daemon.runners[0]

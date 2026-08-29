@@ -1,4 +1,4 @@
-﻿"""Repair skin weights that smear the body when an arm goes overhead.
+"""Repair skin weights that smear the body when an arm goes overhead.
 
 Auto-rigging weights by proximity in the rest pose, and an apron hem hanging
 near a relaxed hand picks up arm weight. Raise the arm overhead -- the swing
@@ -86,10 +86,7 @@ def repair(source: Path, target: Path, reach: float) -> None:
             side = next((s for s, c in chains.items() if j[slot] in c["slots"]), None)
             if side is None:
                 continue
-            past = min(
-        segment_distance(p, a, b) - allowed * reach
-        for a, b, allowed in chains[side]["segments"]
-            )
+            past = min(segment_distance(p, a, b) - allowed * reach for a, b, allowed in chains[side]["segments"])
             if past <= 0:
                 continue
             # Too far from the arm to be sleeve: this weight belongs to the body.
@@ -135,4 +132,3 @@ if __name__ == "__main__":
         Path(sys.argv[2]),
         float(sys.argv[3]) if len(sys.argv) > 3 else 1.0,
     )
-

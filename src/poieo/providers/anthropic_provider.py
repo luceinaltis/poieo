@@ -50,10 +50,7 @@ def _matches(model: str, families: tuple[str, ...]) -> bool:
 
 
 def _anthropic_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
-    return [
-        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-        for t in tools
-    ]
+    return [{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools]
 
 
 def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -134,8 +131,7 @@ class AnthropicProvider(Provider):
             # to Anthropic directly and bill the wrong account, which is the
             # kind of mistake that is noticed at the end of the month.
             raise ProviderError(
-                f"provider '{name}': unknown `through: {through}` -- "
-                f"known doors: {', '.join(sorted(self._DOORS))}",
+                f"provider '{name}': unknown `through: {through}` -- known doors: {', '.join(sorted(self._DOORS))}",
                 provider=name,
             )
         if through:
@@ -189,13 +185,9 @@ class AnthropicProvider(Provider):
             else:
                 self._warn(f"model '{model}' does not support effort; ignoring")
         # Disabled thinking is only accepted at effort high or below.
-        if (
-            kwargs.get("thinking", {}).get("type") == "disabled"
-            and output_config.get("effort") in {"xhigh", "max"}
-        ):
+        if kwargs.get("thinking", {}).get("type") == "disabled" and output_config.get("effort") in {"xhigh", "max"}:
             raise ProviderError(
-                f"model '{model}': thinking cannot be disabled at effort "
-                f"'{output_config['effort']}'",
+                f"model '{model}': thinking cannot be disabled at effort '{output_config['effort']}'",
                 provider=self.name,
             )
         if output_config:
@@ -236,9 +228,7 @@ class AnthropicProvider(Provider):
                 retryable=exc.status_code == 429 or exc.status_code >= 500,
             ) from exc
         except anthropic.APIConnectionError as exc:
-            raise ProviderError(
-                f"{self.name}: connection error: {exc}", provider=self.name, retryable=True
-            ) from exc
+            raise ProviderError(f"{self.name}: connection error: {exc}", provider=self.name, retryable=True) from exc
 
         if message.stop_reason == "refusal":
             details = getattr(message, "stop_details", None)
@@ -254,9 +244,7 @@ class AnthropicProvider(Provider):
             for b in message.content
             if b.type == "tool_use"
         ]
-        thinking = "\n".join(
-            getattr(b, "thinking", "") for b in message.content if b.type == "thinking"
-        )
+        thinking = "\n".join(getattr(b, "thinking", "") for b in message.content if b.type == "thinking")
         usage = message.usage
         return LLMResponse(
             text=text,

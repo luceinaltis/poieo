@@ -203,9 +203,7 @@ class Workspace:
             _git(self.repo, "update-ref", f"refs/poieo/failed/{run_id}", head)
             _git(work, "reset", "--hard", base)
 
-        files, insertions, deletions = _parse_numstat(
-            _git(self.repo, "diff", "--numstat", base, head)
-        )
+        files, insertions, deletions = _parse_numstat(_git(self.repo, "diff", "--numstat", base, head))
         return Change(
             base=base,
             head=head,
@@ -236,9 +234,7 @@ class Workspace:
             except WorkspaceError:
                 # Read the conflicted paths before undoing the merge, then leave
                 # the checkout exactly as it was found.
-                conflicted = _git(
-                    self.repo, "diff", "--name-only", "--diff-filter=U"
-                ).split()
+                conflicted = _git(self.repo, "diff", "--name-only", "--diff-filter=U").split()
                 _git(self.repo, "merge", "--abort")
                 return {"conflict": conflicted}
             _git(self.repo, "commit", "-m", f"poieo: accept {self.task}")
@@ -252,9 +248,7 @@ class Workspace:
 
         old_tip = _git(self.repo, "rev-parse", self.branch).strip()
         back_to = (
-            _git(self.repo, "rev-parse", f"{since}^").strip()
-            if since
-            else _git(self.repo, "rev-parse", "HEAD").strip()
+            _git(self.repo, "rev-parse", f"{since}^").strip() if since else _git(self.repo, "rev-parse", "HEAD").strip()
         )
         dropped = _git(self.repo, "rev-list", f"{back_to}..{old_tip}").split()
         if not dropped:

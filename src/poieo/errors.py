@@ -134,7 +134,7 @@ def explain_failure(exc: BaseException) -> Cause | None:
                     "a model that reasons spends max_tokens on thinking as well "
                     "as answering, so a hard thinker can use the whole ceiling "
                     "before it starts to answer. Ask it to think less: "
-                    "OpenAI-shaped endpoints take `reasoning: {effort: \"low\"}` "
+                    'OpenAI-shaped endpoints take `reasoning: {effort: "low"}` '
                     "in params, which cost one measured step nothing and took it "
                     "from sixty-five minutes to seven. Raising max_tokens works "
                     "too, and buys slower and dearer turns to do it",
