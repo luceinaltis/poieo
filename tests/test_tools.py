@@ -297,9 +297,11 @@ def _boxed(monkeypatch, tmp_path):
     from poieo.tools import docker as dock
 
     seen: list[tuple[str, ...]] = []
+    fed: list[str | None] = []
 
-    async def fake(*args: str, timeout: float = 0):
+    async def fake(*args: str, timeout: float = 0, stdin: str | None = None):
         seen.append(args)
+        fed.append(stdin)
         return 3, "boxed output"
 
     monkeypatch.setattr(dock, "_docker", fake)
@@ -307,11 +309,11 @@ def _boxed(monkeypatch, tmp_path):
         tmp_path, ["shell"], image="x", network="none", user=None
     )
     executor.container_id = "cafe1234"
-    return executor, seen
+    return executor, seen, fed
 
 
 async def test_the_boxed_seam_reports_the_code_as_a_number(tmp_path, monkeypatch):
-    executor, _ = _boxed(monkeypatch, tmp_path)
+    executor, _, _fed = _boxed(monkeypatch, tmp_path)
 
     result = await executor.run_command("exit 3")
 
@@ -323,7 +325,7 @@ async def test_the_boxed_seam_passes_env_to_the_container(tmp_path, monkeypatch)
     """`env` reached the host path and was dropped on the way into a box, so a
     task that asked to be fenced silently lost the one thing #154 added to stop
     a gate reporting a suite it never ran."""
-    executor, seen = _boxed(monkeypatch, tmp_path)
+    executor, seen, fed = _boxed(monkeypatch, tmp_path)
 
     await executor.run_command("pytest", env={"POIEO_PROBE": "1"})
 
@@ -335,9 +337,48 @@ async def test_the_boxed_seam_passes_env_to_the_container(tmp_path, monkeypatch)
 
 
 async def test_the_boxed_tool_and_the_boxed_seam_agree(tmp_path, monkeypatch):
-    executor, _ = _boxed(monkeypatch, tmp_path)
+    executor, _, _fed = _boxed(monkeypatch, tmp_path)
 
     text = await executor._run_command_in_box(tmp_path, {"command": "exit 3"})
 
     assert text.startswith("exit code: 3")
     assert "boxed output" in text
+
+
+# -- a script goes to the interpreter, not through a shell -------------------
+
+
+async def test_the_seam_feeds_a_script_on_stdin(tmp_path):
+    """Quotes, a colon and newlines all at once -- the case that does not even
+    parse as a `command:` in YAML, and would be mangled by a shell if it did."""
+    from poieo.tools import make_executor
+
+    code = "import json\nprint(json.dumps({'k': 'v'}))\n"
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        result = await executor.run_command("python -", stdin=code)
+
+    assert result.exit_code == 0
+    assert '"k": "v"' in result.output
+
+
+async def test_a_scripts_exit_code_is_the_processs_own(tmp_path):
+    from poieo.tools import make_executor
+
+    async with make_executor(tmp_path, ["shell"]) as executor:
+        result = await executor.run_command("python -", stdin="import sys\nsys.exit(4)\n")
+
+    assert result.exit_code == 4
+
+
+async def test_the_boxed_seam_feeds_stdin_interactively(tmp_path, monkeypatch):
+    """`docker exec` needs `-i` or the interpreter reads an empty stdin and
+    exits 0 having run nothing -- success over no work, again."""
+    executor, seen, fed = _boxed(monkeypatch, tmp_path)
+
+    await executor.run_command("python -", stdin="print(1)")
+
+    argv = seen[0]
+    assert "-i" in argv
+    assert argv[0] == "exec"
+    # ...and the code itself actually went down the pipe.
+    assert fed[0] == "print(1)"

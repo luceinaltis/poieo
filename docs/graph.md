@@ -28,7 +28,7 @@ not call a model; drop prompt/role").
 | type | reads | produces |
 |---|---|---|
 | `agent` | `role`, `system`, `prompt`, `output`, `retry`, `params`, and — only with hands — `tools`, `workdir`, `max_turns` | the completion of the turn that used no tool |
-| `command` | `command`, `output`, and optionally `workdir`, `timeout`, `env` | `{exit_code, output}` -- the code as the number the process returned |
+| `command` | `command` **or** `script` + `language`; `output`, and optionally `workdir`, `timeout`, `env` | `{exit_code, output}` — the code as the number the process returned |
 | `router` | `branches[].when` / `.to` / `.label`, `default` | the matched branch's label |
 
 Three types, split by **who does the step**: the model (`agent`), the machine
@@ -54,7 +54,54 @@ report a suite it never ran.
 `max_turns` and `tools`: a key that does nothing reads as configured, which is
 worse than one that is missing. The command runs through
 `tools.make_executor()`, the same seam the model's own commands go through, so
-a task that asked to be fenced is fenced here too. **No `tools:` line
+a task that asked to be fenced is fenced here too.
+
+### A command is one command
+
+A `command:` with a second line is refused at load. Two lines are one shell
+string, and Windows `cmd` drops everything after the newline while still
+reporting exit 0 — a step that did half its work and called it success. Chain
+with `&&`, give each line its own node, or use a script.
+
+### `script:` — the node carries its code
+
+```yaml
+- id: gate
+  type: command
+  language: python
+  script: |
+    import json, sys
+    report = json.load(open("coverage.json"))
+    sys.exit(0 if report["pct"] >= 90 else 1)
+```
+
+The code goes to the interpreter's **stdin** (`python -`, `node -`, `sh -`),
+never through a shell. That is what stops a quote, a colon or a newline from
+meaning something on the way past — `command: python -c "print(json.dumps({'k':
+1}))"` does not even parse as YAML, and the quoted spelling that does needs
+`''k''`.
+
+Stdin rather than a temp file, which is what GitHub Actions writes: a file
+would have to live in the workdir for a container to see it, and
+[workspace.md](workspace.md) commits the workdir whole as the night's change —
+so a scratch file would arrive in somebody's diff. (Their reason for a file is
+`cmd` and `powershell` needing extensions; poieo calls interpreters, not
+shells, and every one of those reads stdin.)
+
+`LANGUAGES` in `tools/__init__.py` is the table, and adding one is a line. An
+interpreter that is not installed fails with its own message, which is the
+honest report; `sh` is absent on a bare Windows box, and that is a run-time
+fact rather than something to pretend about at load.
+
+`command:` and `script:` are exclusive, and `language:` is required with a
+script — nothing can be read off the code itself, and guessing wrong runs the
+wrong interpreter over somebody's program. A script is templated and checked at
+parse time, exactly as a command and a prompt are.
+
+Compiled languages are not in the table: a compiler wants a path, so stdin does
+not serve. `command: cc -o gate gate.c && ./gate` covers it, and `&&` chains
+correctly — the first command's failure stops the second and its exit code is
+what arrives. **No `tools:` line
 means no tools**: the node calls the model once, reads the answer, and cannot
 touch a file. Tools are what bring the loop, the `workdir` and the turn budget
 with them, which is why there is no separate type for a call without them —

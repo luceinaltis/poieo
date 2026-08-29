@@ -261,3 +261,104 @@ def test_a_commands_workdir_is_a_template_like_an_agents():
         GraphSpec.model_validate(
             _graph({"type": "command", "command": "true", "workdir": "{{ 1 + }}"})
         )
+
+
+def test_a_bad_template_in_a_command_fails_at_load_not_at_3am():
+    """`prompt` and `workdir` are checked when the graph parses. A command is
+    rendered the same way and was not, so a typo in one waited until the
+    trigger fired -- which is the failure principle 5 exists to refuse."""
+    with pytest.raises(ValidationError):
+        GraphSpec.model_validate(
+            _graph({"type": "command", "command": "pytest {{ 1 + }}"})
+        )
+
+
+def test_a_good_template_in_a_command_is_allowed():
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "command": "pytest {{ input.suite }}"})
+    )
+    assert "{{ input.suite }}" in graph.node("n").command
+
+
+def test_a_multi_line_command_is_refused_at_load():
+    """Two lines in a `command:` run as one shell string, and Windows `cmd`
+    drops everything after the first newline while still reporting exit 0 --
+    a step that did half its work and called it success. Verified by hand;
+    refused here rather than at 3am."""
+    with pytest.raises(ValidationError) as caught:
+        GraphSpec.model_validate(
+            _graph({"type": "command", "command": "echo one\necho two"})
+        )
+
+    said = str(caught.value)
+    # The refusal names the three better routes, since all of them are.
+    assert "&&" in said and "script" in said
+
+
+def test_a_trailing_newline_is_not_a_second_line():
+    """`command: |` adds one, and YAML block scalars are the readable way to
+    write a long command. Refusing that would be refusing the good spelling."""
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "command": "pytest -q\n"})
+    )
+    assert graph.node("n").command == "pytest -q"
+
+
+# -- script: the node carries its own code -----------------------------------
+
+
+def test_a_script_needs_a_language():
+    """Nothing can be inferred from the text, and guessing wrong runs the
+    wrong interpreter over somebody's code."""
+    with pytest.raises(ValidationError, match="language"):
+        GraphSpec.model_validate(_graph({"type": "command", "script": "print(1)"}))
+
+
+def test_a_language_needs_a_script():
+    with pytest.raises(ValidationError, match="script"):
+        GraphSpec.model_validate(_graph({"type": "command", "language": "python"}))
+
+
+def test_a_command_and_a_script_are_exclusive():
+    with pytest.raises(ValidationError, match="command"):
+        GraphSpec.model_validate(
+            _graph(
+                {
+                    "type": "command",
+                    "command": "pytest",
+                    "language": "python",
+                    "script": "print(1)",
+                }
+            )
+        )
+
+
+def test_an_unknown_language_is_refused_by_name():
+    with pytest.raises(ValidationError, match="cobol"):
+        GraphSpec.model_validate(
+            _graph({"type": "command", "language": "cobol", "script": "x"})
+        )
+
+
+def test_a_script_keeps_its_newlines():
+    """The whole point: code, not a shell string. A block scalar is the
+    ordinary way to write it and nothing here may flatten it."""
+    code = "import json\nprint(json.dumps({'k': 1}))\n"
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "language": "python", "script": code})
+    )
+    assert graph.node("n").script == code
+
+
+def test_a_bad_template_in_a_script_fails_at_load():
+    with pytest.raises(ValidationError):
+        GraphSpec.model_validate(
+            _graph({"type": "command", "language": "python", "script": "x = {{ 1 + }}"})
+        )
+
+
+def test_a_scripted_node_still_calls_no_model():
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "language": "python", "script": "print(1)"})
+    )
+    assert graph.roles() == set()

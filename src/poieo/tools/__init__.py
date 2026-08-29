@@ -28,6 +28,23 @@ class ToolResult:
     error: bool = False
 
 
+# How to hand a script to an interpreter: the argv that reads it from stdin.
+#
+# Stdin, not a file. A file would have to live in the workdir for a container
+# to see it, and the workdir is committed whole as the night's change -- so a
+# scratch file would arrive in somebody's diff. Going through stdin also keeps
+# the code away from a shell, which is what stops a quote, a colon or a newline
+# from meaning something on the way past.
+#
+# Adding a language is a line. An interpreter that is not installed fails with
+# its own message, which is the honest report.
+LANGUAGES: dict[str, list[str]] = {
+    "python": ["python", "-"],
+    "node": ["node", "-"],
+    "sh": ["sh", "-"],
+}
+
+
 @dataclass(slots=True)
 class CommandResult:
     """What a command did, as the two facts the machine actually knows.
@@ -118,7 +135,11 @@ class Executor:
             return ToolResult(f"{type(exc).__name__}: {exc}", error=True)
 
     async def run_command(
-        self, command: str, timeout: float | None = None, env: Any = None
+        self,
+        command: str,
+        timeout: float | None = None,
+        env: Any = None,
+        stdin: str | None = None,
     ) -> CommandResult:
         """Run one command **where this executor runs things**, and report it.
 
@@ -149,7 +170,11 @@ class LocalExecutor(Executor):
         self._load(toolsets, tool_context.postbox if tool_context else None)
 
     async def run_command(
-        self, command: str, timeout: float | None = None, env: Any = None
+        self,
+        command: str,
+        timeout: float | None = None,
+        env: Any = None,
+        stdin: str | None = None,
     ) -> CommandResult:
         from .shell import _DEFAULT_TIMEOUT, run_here
 
@@ -158,6 +183,7 @@ class LocalExecutor(Executor):
             command,
             timeout=_DEFAULT_TIMEOUT if timeout is None else timeout,
             env=env,
+            stdin=stdin,
         )
 
 
