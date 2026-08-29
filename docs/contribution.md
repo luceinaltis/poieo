@@ -100,9 +100,14 @@ isolation against a real docker daemon; the package as a user gets it,
 installed, served, and exercised outside the checkout; and coverage, reported
 and deliberately not gated.
 
-It **reports and does not block.** `main` has no required checks, so a red run
-stops nothing by itself. That is deliberate for now — a gate turned on before it
-has been watched fails honest work and gets routed around.
+**Five of the six are required to merge.** `main` was left unprotected until the
+jobs had been watched — a gate turned on before that fails honest work and gets
+routed around — and after 53 runs on its first day, 48 green and 5 red with every
+red a real defect, they were made required. Admins included; the escape hatch is
+turning the setting off, not merging past it.
+
+`what is not covered` is deliberately **not** required. It reports a number and
+judges nothing, so its failure would mean the job broke rather than the code did.
 
 Three things are worth knowing when a run disagrees with your machine.
 

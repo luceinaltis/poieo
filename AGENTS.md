@@ -3,9 +3,9 @@
 Rules for anyone, human or agent, changing this repository. Read this before your
 first commit in a session.
 
-**Nothing on GitHub blocks any of it.** `main` is unprotected by choice: no required
-review, one account, no approval anything can insist on; CI reports on every PR but
-cannot stop a merge. Everything below stands in that place, which is why it is written.
+**One thing on GitHub blocks anything: the suites.** A PR merges only when the five
+gate jobs are green, admins included. Nothing else is enforced — no required review,
+one account — so everything below still stands where a reviewer would, and is written.
 
 Two halves that rot at different speeds. **Part 1** is judgement. **Part 2** is
 facts about this machine, and goes stale on its own — when it does, fix it.
