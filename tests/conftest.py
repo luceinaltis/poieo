@@ -1,4 +1,5 @@
 import hashlib
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -15,6 +16,15 @@ EXAMPLES = ROOT / "examples"
 _DERIVED = shutil.ignore_patterns("runs", "worktrees", "__pycache__")
 
 from poieo.layout import Layout  # noqa: E402  (needs the path above)
+from poieo.tools.shell import posix_shell  # noqa: E402
+
+# What a command a test writes may assume it is being read by. The question is
+# not which OS this is: `run_command` sends the command to a POSIX shell when
+# it can find one, and on Windows it usually can. Two test modules were asking
+# it and only one had the current answer -- the other still said "Windows means
+# cmd.exe", which was true until a POSIX shell became the first choice, and it
+# spent that time passing for the wrong reason on the machine this is built on.
+POSIX = os.name != "nt" or bool(posix_shell())
 
 
 @pytest.fixture

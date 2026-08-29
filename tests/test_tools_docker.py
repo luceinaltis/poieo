@@ -12,6 +12,7 @@ import os
 import subprocess
 
 import pytest
+from conftest import POSIX
 
 from poieo.providers.base import ToolCall
 from poieo.tools import DEFAULT_TOOLSETS, LocalExecutor
@@ -26,8 +27,9 @@ if _ok and not image_present(IMAGE):
 pytestmark = pytest.mark.skipif(not _ok, reason=f"isolation needs docker: {_reason}")
 
 SECRET = "the-host-filesystem"
-# The host shell is cmd.exe on Windows; the container's is always POSIX.
-HOST_READ_PARENT = "type ..\\secret.txt" if os.name == "nt" else "cat ../secret.txt"
+# The host shell is whatever `run_command` found; the container's is always
+# POSIX, which is why only one of these two asks.
+HOST_READ_PARENT = "cat ../secret.txt" if POSIX else r"type ..\secret.txt"
 BOX_READ_PARENT = "cat ../secret.txt"
 
 
