@@ -144,14 +144,14 @@ these is wrong, the document is wrong — fix it in the PR where you found out.*
 ## The gate, exactly
 
 ```bash
-# Python — tests then lint; the flags dodge a broken global pytest plugin here
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio && ruff check .
+# Python — tests, then lint and layout; the flags dodge a broken pytest plugin
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p asyncio
+ruff check . && ruff format --check .
 
 # Frontend — run mode, never watch (watch mode hangs an agent)
 npm test --workspace web-ui
 
-# ...and the types, which vitest does not check. A fixture that no longer matches
-# an interface in web-ui/src/types.ts passes `npm test` and fails only here.
+# ...and the types: a fixture that has gone stale passes `npm test`, fails here
 cd web-ui && npx tsc -b
 ```
 

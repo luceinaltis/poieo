@@ -40,6 +40,8 @@ jobs:
       # After the suite, and in that order in Part 2 too: a step that fails ends
       # the job, and a long line must never cost the run its test result.
       - run: ruff check .
+      # --check, never a rewrite: CI reports, and the author commits.
+      - run: ruff format --check .
 
   web:
     name: frontend suite, types, and bundle
