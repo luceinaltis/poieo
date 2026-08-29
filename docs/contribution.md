@@ -183,6 +183,25 @@ times as much to learn the same thing. What only a real process can show is the
 process itself: the entry point, a fresh interpreter's import, and the exit code a
 shell sees.
 
+**Coverage is reported, never gated.** A separate job runs the suite under
+`pytest --cov` and writes the total and the eight least-covered files into the
+run's summary, where a reviewer sees it without opening a log. It is 92% today.
+
+There is deliberately **no floor**. A number that must not drop rewards a test
+that runs code and asserts nothing about it, and this repository has shipped
+exactly that — green, for weeks, until a linter noticed the unused variable.
+What the number is worth is its movement: a change that takes 92% to 85% is
+worth a sentence in the PR, and a threshold would have turned that sentence into
+a fight about the threshold.
+
+Be careful what it can and cannot see. It would have caught the thirty isolation
+tests that skipped for months, because skipped tests leave their lines unrun. It
+would **not** have caught the test that asserted nothing, because a sibling test
+covered the same lines — coverage answers *did this code run*, never *did anyone
+check what it did*. That job runs `docker pull` first for the same reason: a
+coverage number taken with a thirtieth of the suite skipped is a worse lie than
+no number.
+
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and
 whether the change fits the design at all (9).

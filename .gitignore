@@ -12,6 +12,11 @@ runs/
 worktrees/
 memory/cache/
 
+# what measuring coverage leaves behind. Condition 7 asks for a clean tree after
+# the suite has run, and `--cov` writes these wherever it is invoked from.
+.coverage
+coverage.json
+
 # secrets
 .env
 .env.*
