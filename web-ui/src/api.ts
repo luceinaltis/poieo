@@ -89,6 +89,12 @@ export interface Endpoint {
 export interface ModelsReport {
   /** Where these endpoints were declared. Null if the project names no file. */
   binding: { name: string; path: string } | null
+  /**
+   * What a model may be pointed at: `default`, then the roles this file
+   * already names. Not every role the graphs call -- offering one the file has
+   * never named is how a panel creates a misspelled role.
+   */
+  roles: string[]
   endpoints: Endpoint[]
 }
 
@@ -243,6 +249,36 @@ export function answer(
   choice: string,
 ): Promise<AnswerReply> {
   return post(taskUrl(project, task, "answer"), { choice })
+}
+
+/**
+ * Pointing a role at another model: the fourth kind of write here.
+ *
+ * It edits the project's models file and nothing else, and never carries a
+ * credential. A refusal brings what the reader needs to fix it -- the
+ * endpoints that *are* declared, or the models one really has.
+ */
+export interface ModelsAnswer extends Answer {
+  status?: string
+  role?: string
+  ref?: string
+  /** False when the endpoint stayed silent: the name could not be checked. */
+  checked?: boolean
+  providers?: string[]
+  models?: string[]
+}
+
+// Not `useModel`: a plain function wearing React's hook prefix costs every
+// reader a double-take. The route, the CLI and the button all still say `use`.
+export function pickModel(
+  project: string,
+  target: string,
+  role: string,
+): Promise<ModelsAnswer> {
+  return post(`/api/projects/${encodeURIComponent(project)}/models/use`, {
+    target,
+    role,
+  })
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"

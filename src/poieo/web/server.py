@@ -26,9 +26,10 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from .. import detect as engines
-from ..binding import load_binding
+from ..binding import load_binding, split_ref
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
+from ..rebind import point_at
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -296,6 +297,26 @@ def create_app(daemon: Any) -> Starlette:
             }
         )
 
+    def _asked_project(request: Request) -> tuple[Any, JSONResponse | None]:
+        """The project a models route is about, or the 404 saying there is none.
+
+        The refusal carries the names that *do* answer: the board remembers a
+        project across restarts, so a picker holding one the daemon was started
+        without is a real state rather than a typo, and the list is what fixes
+        it.
+        """
+        name = request.path_params["project"]
+        project = _project_for(daemon, name)
+        if project is None:
+            return None, JSONResponse(
+                {
+                    "error": f"no project '{name}'",
+                    "projects": [p.config.display_name for p in daemon.projects],
+                },
+                status_code=404,
+            )
+        return project, None
+
     async def project_models(request: Request) -> JSONResponse:
         """Every model this project can reach, endpoint by endpoint.
 
@@ -317,19 +338,9 @@ def create_app(daemon: Any) -> Starlette:
         does a `base_url`: the endpoint's own name tells one from another, and
         an address is the one field in a binding that can carry a private host.
         """
-        name = request.path_params["project"]
-        project = _project_for(daemon, name)
-        if project is None:
-            # The board remembers a project across restarts, so a picker
-            # holding one the daemon was started without is a real state
-            # rather than a typo -- and the list is what fixes it.
-            return JSONResponse(
-                {
-                    "error": f"no project '{name}'",
-                    "projects": [p.config.display_name for p in daemon.projects],
-                },
-                status_code=404,
-            )
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
         # `_models_of` may read a file when nothing armed is bound to it.
         spec = await asyncio.to_thread(_models_of, project)
         if spec is None:
@@ -356,6 +367,11 @@ def create_app(daemon: Any) -> Starlette:
         return JSONResponse(
             {
                 "binding": {"name": spec.name, "path": str(spec.source_path)},
+                # What a model may be pointed at: `default`, and the roles this
+                # file already names. Not every role the graphs call -- offering
+                # one the file has never named is how a panel creates the
+                # `role: classifer` typo that binding.md spends a page on.
+                "roles": ["default", *sorted(spec.roles)],
                 "endpoints": [
                     {
                         "name": key,
@@ -403,6 +419,95 @@ def create_app(daemon: Any) -> Starlette:
                     }
                     for (key, provider), answered in zip(declared, catalogues)
                 ],
+            }
+        )
+
+    async def project_models_use(request: Request) -> JSONResponse:
+        """Point a role at another model, and repaint what that changed.
+
+        The **fourth kind** of write here. It edits a file the reader keeps,
+        which is not the review -- review moves what a run wrote into their own
+        branch, and everything it touches was written by a run. Its effect
+        outlives the process, which is not control. It is the same edit
+        `poieo config use` makes, through the same `rebind.point_at`, so there
+        is no second set of refusals to keep in step.
+
+        Its own fence: **it may write the project's binding file and nothing
+        else, and it never accepts or returns a credential.**
+
+        Every refusal below is decided *before* `rebind` opens the file, so a
+        request that will be refused never touches it -- and `rebind` itself
+        refuses before writing on any shape it does not recognise.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        spec = await asyncio.to_thread(_models_of, project)
+        if spec is None:
+            return JSONResponse({"error": "this project names no models file"}, status_code=409)
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        role = str((body or {}).get("role") or "default")
+        try:
+            provider, model = split_ref(str((body or {}).get("target", "")))
+        except BindingError as exc:
+            # 400 and not 409: the argument is malformed, not the state.
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        declared = spec.providers.get(provider)
+        if declared is None:
+            return JSONResponse(
+                {
+                    "error": f"this project declares no endpoint '{provider}'",
+                    "providers": sorted(spec.providers),
+                },
+                status_code=409,
+            )
+        # Best effort, and only when the endpoint answers: a laptop with its
+        # server switched off still gets to edit its own config, exactly as
+        # `poieo config use` allows. But a model named from memory is the typo
+        # this exists to prevent, so an answer is believed.
+        answered = await engines.catalogue_for(declared.type, declared.base_url, limit=None)
+        served = [one.id for one in answered.models]
+        if served and model not in served:
+            return JSONResponse(
+                {
+                    "error": f"'{provider}' does not serve '{model}'",
+                    "models": served,
+                },
+                status_code=409,
+            )
+
+        path = project.config.default_binding_path()
+        try:
+            await asyncio.to_thread(point_at, path, role, provider, model)
+        except PoieoError as exc:
+            # `rebind` refuses before writing when it cannot find what it came
+            # to change, and names the file and the key. Said in its words.
+            return JSONResponse({"error": str(exc)}, status_code=409)
+
+        # The board draws a model on every node off the spec in memory, so
+        # without this the file and the picture part company until the next
+        # run re-reads it.
+        try:
+            await asyncio.to_thread(daemon.reread, str(path))
+        except PoieoError:
+            # The edit landed and `point_at` verified it reloads; a daemon that
+            # will not adopt it is the next run's problem to report, not a
+            # reason to tell the reader their edit failed.
+            pass
+
+        return JSONResponse(
+            {
+                "status": "using",
+                "role": role,
+                "ref": f"{provider}/{model}",
+                # Said out loud rather than implied: silence from an endpoint
+                # is not the same as its agreement.
+                "checked": bool(served),
             }
         )
 
@@ -573,6 +678,13 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/projects/{project}/models", project_models),
+        # Models: the fourth kind. It writes the project's binding file and
+        # nothing else, and never accepts or returns a credential.
+        Route(
+            "/api/projects/{project}/models/use",
+            project_models_use,
+            methods=["POST"],
+        ),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.

@@ -283,3 +283,58 @@
 .models-maker .models-list {
   padding: 0 0 6px 14px;
 }
+
+/* What a click will move. Beside the filter because both narrow what happens
+   next, and only drawn when the file names more than one role. */
+.models-for {
+  align-items: center;
+  color: #7a6e60;
+  display: flex;
+  flex: none;
+  font-size: 0.82em;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.models-role {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: #d6ccbe;
+  font: inherit;
+  font-size: 1em;
+  padding: 3px 6px;
+}
+
+.models-refusal {
+  color: #d16d5a;
+  flex: none;
+  font-size: 0.82em;
+  margin: 0 0 10px;
+}
+
+/* The row is the button: a catalogue is read by scanning names, and a verb
+   beside each of four hundred of them is four hundred words to skip. */
+.models-id {
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: #d6ccbe;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1em;
+  grid-column: 1;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.models-id:hover:not(:disabled) {
+  color: #d8a657;
+}
+
+.models-id:disabled {
+  cursor: default;
+}

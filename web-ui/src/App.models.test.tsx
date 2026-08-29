@@ -58,6 +58,7 @@ const PROJECTS = [
 
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/a/models/default.yaml" },
+  roles: ["default"],
   endpoints: [
     {
       name: "ollama",

@@ -32,7 +32,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 from . import __version__
 from . import detect as engines
-from .binding import load_binding
+from .binding import load_binding, split_ref
 from .card import (
     CardSpec,
     append_journal,
@@ -53,7 +53,7 @@ from .daemon.config import (
     config_for_tasks_folder,
 )
 from .editor import render_editor
-from .errors import PoieoError
+from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
 from .learn import last_suggestion
@@ -1059,14 +1059,10 @@ def config_use(
     """
     path, spec = _configured()
 
-    # Split once: a model id is full of slashes (`hf.co/empero-ai/...`) and a
-    # provider name never is.
-    provider, sep, model = target.partition("/")
-    if not sep or not model:
-        _fail(
-            f"'{target}' is not a provider/model reference. `poieo config` "
-            f"prints them in exactly the form this takes back."
-        )
+    try:
+        provider, model = split_ref(target)
+    except BindingError as exc:
+        _fail(str(exc))
 
     # Empty covers both "not declared" -- point_at refuses that below, in one
     # wording -- and "declared but silent".
