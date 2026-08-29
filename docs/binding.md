@@ -121,7 +121,7 @@ provider-neutral:
 ```
 LLMRequest    model, messages, system, params, role, tools[]
 LLMResponse   text, model, usage, stop_reason, meta, tool_calls[]
-Provider      complete()  ·  health()  ·  aclose()
+Provider      complete()  ·  health()  ·  aclose()  ·  context_for()
 ```
 
 `role` travels on the request for logging and for the mock's scripting, and is
@@ -129,6 +129,14 @@ never sent to a backend. `meta` carries anything provider-specific worth keeping
 — notably `raw_content`, the provider's own content blocks, which the agent loop
 replays verbatim on the next turn so thinking blocks and their signatures
 survive a tool round trip. Other providers ignore the key.
+
+`context_for(model)` answers how many tokens that model can hold, and the base
+class answers `None` — so a backend that cannot say inherits the right answer
+and writes nothing. It is the second place the runtime looks: the binding's
+`context:` is the first, because somebody who wrote the number down meant it.
+Implementations cache; a window does not change while a process runs, and this
+must not become a round trip per turn. An endpoint that will not answer is not
+a failure — asking is an optimisation, and the character caps take over.
 
 `ProviderError` carries `retryable`, and that flag is the whole retry policy:
 `call_with_retry()` in the runtime backs off only when it is set.

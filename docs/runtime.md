@@ -172,9 +172,10 @@ Clearing before folding, and not the other way around, because clearing costs
 nothing and is one repeated tool call away from being undone, while a fold
 costs a model call and loses whatever the summary left out.
 
-**Both caps are the model's, when the binding says whose they are.** A model's
+**Both caps are the model's.** A model's
 window is a fact about the model, so it lives on the binding's `context:` --
-and both thresholds read it: clearing at half of it, folding at nine tenths,
+and where nobody has written it down, the endpoint is asked once and its
+answer remembered. Both thresholds read it: clearing at half of it, folding at nine tenths,
 the same shape as Anthropic's own 100k/180k defaults for a 200k window. What is
 compared against it is `usage.input_tokens` from the previous response, which
 is a measurement the endpoint already sends rather than an estimate from

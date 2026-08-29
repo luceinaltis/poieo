@@ -93,6 +93,19 @@ class _HttpProvider(Provider):
             timeout=spec.timeout,
             headers=headers,
         )
+        # Asked once per model and remembered. A window does not change while
+        # a process runs, and this must not become a round trip per turn.
+        self._context: dict[str, int | None] = {}
+
+    async def _remembered(self, model: str, ask) -> int | None:
+        if model not in self._context:
+            try:
+                self._context[model] = await ask()
+            except Exception:
+                # Asking is an optimisation; a run must not die because the
+                # endpoint was slow, gone, or answered something unexpected.
+                self._context[model] = None
+        return self._context[model]
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -208,6 +221,20 @@ class OpenAICompatibleProvider(_HttpProvider):
     async def health(self) -> tuple[bool, str]:
         return await self._list_health("/models", key="data", field="id")
 
+    async def context_for(self, model: str) -> int | None:
+        """`/models` lists every model with its `context_length`."""
+
+        async def ask() -> int | None:
+            response = await self.client.get("/models")
+            if response.status_code >= 400:
+                return None
+            for entry in response.json().get("data") or []:
+                if entry.get("id") == model:
+                    return int(entry["context_length"])
+            return None
+
+        return await self._remembered(model, ask)
+
 
 class OllamaProvider(_HttpProvider):
     """Ollama's native /api/chat endpoint."""
@@ -262,3 +289,20 @@ class OllamaProvider(_HttpProvider):
 
     async def health(self) -> tuple[bool, str]:
         return await self._list_health("/api/tags", key="models", field="name")
+
+    async def context_for(self, model: str) -> int | None:
+        """`/api/show` knows, but files it under the architecture's own name --
+        `qwen35.context_length`, `llama.context_length` -- so the key cannot be
+        looked up directly and is found by its suffix instead."""
+
+        async def ask() -> int | None:
+            response = await self.client.post("/api/show", json={"model": model})
+            if response.status_code >= 400:
+                return None
+            info = response.json().get("model_info") or {}
+            for key, value in info.items():
+                if key.endswith(".context_length") and isinstance(value, int):
+                    return value
+            return None
+
+        return await self._remembered(model, ask)

@@ -180,6 +180,80 @@ async def test_openai_compatible_provider_reports_no_cache_when_none_is_offered(
     assert response.usage.cache_write_tokens == 0
 
 
+async def test_an_openai_shaped_endpoint_is_asked_how_much_a_model_holds():
+    """A binding that says nothing should not force a guess.
+
+    Both endpoints this project uses publish the number -- OpenRouter reports
+    1,310,720 for z-ai/glm-5.3-flash -- and a wrong guess is expensive: the
+    clearing cap was 2.3% of that, and a step was watched re-reading one file
+    eight times because of it.
+    """
+    provider = build_provider(
+        "openrouter", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+    asked = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "other/model", "context_length": 8192},
+                    {"id": "z-ai/glm-5.3-flash", "context_length": 1_310_720},
+                ]
+            },
+        )
+
+    _mock_client(provider, handler)
+    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_310_720
+    # Asked once and remembered: this cannot be a round trip per turn.
+    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_310_720
+    assert len(asked) == 1
+    await provider.aclose()
+
+
+async def test_a_model_the_endpoint_does_not_list_has_no_answer():
+    provider = build_provider(
+        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+    _mock_client(provider, lambda r: httpx.Response(200, json={"data": []}))
+    assert await provider.context_for("qwen") is None
+    await provider.aclose()
+
+
+async def test_an_endpoint_that_will_not_answer_is_not_a_failure():
+    """Asking is an optimisation. A run must not die because it could not."""
+    provider = build_provider(
+        "vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1")
+    )
+    _mock_client(provider, lambda r: httpx.Response(500, text="nope"))
+    assert await provider.context_for("qwen") is None
+    await provider.aclose()
+
+
+async def test_ollama_is_asked_the_way_ollama_answers():
+    """Ollama buries it under the architecture's name -- `qwen35.context_length`
+    -- so the key cannot be looked up directly."""
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model_info": {
+                    "general.architecture": "qwen35",
+                    "qwen35.block_count": 48,
+                    "qwen35.context_length": 262_144,
+                }
+            },
+        )
+
+    _mock_client(provider, handler)
+    assert await provider.context_for("qwen3.5:latest") == 262_144
+    await provider.aclose()
+
+
 async def test_ollama_provider_moves_params_into_options():
     provider = build_provider(
         "ollama", ProviderSpec(type="ollama", base_url="http://x")
