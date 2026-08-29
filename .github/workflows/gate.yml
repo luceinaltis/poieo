@@ -275,7 +275,7 @@ jobs:
 
       - name: put it where a reviewer will see it
         run: |
-          python - <<PYEOF >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PYEOF' >> "$GITHUB_STEP_SUMMARY"
           import json
 
           d = json.load(open("coverage.json"))
