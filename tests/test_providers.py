@@ -74,6 +74,59 @@ def test_system_prompt_is_forwarded(anthropic_provider):
     assert kwargs["system"] == "be terse"
 
 
+def test_claude_can_be_bought_through_aws():
+    """Three doors sell the same Claude, and poieo knew one of them.
+
+    Companies reach it through Bedrock or Vertex because the billing and the
+    security review already run through the AWS or GCP account they have --
+    many will not register a card with Anthropic separately. It is the same
+    model behind a different counter, and the counter signs its requests with
+    AWS credentials rather than taking an API key.
+
+    The SDK poieo already installs has the clients. Nothing new is needed but
+    the choosing.
+    """
+    import anthropic
+
+    provider = build_provider(
+        "claude",
+        ProviderSpec(
+            type="anthropic",
+            options={"through": "bedrock", "aws_region": "us-east-1",
+                     "aws_access_key": "x", "aws_secret_key": "y"},
+        ),
+    )
+    assert isinstance(provider.client, anthropic.AsyncAnthropicBedrock)
+
+
+def test_claude_can_be_bought_through_google():
+    import anthropic
+
+    provider = build_provider(
+        "claude",
+        ProviderSpec(
+            type="anthropic",
+            options={"through": "vertex", "region": "us-east5", "project_id": "p"},
+        ),
+    )
+    assert isinstance(provider.client, anthropic.AsyncAnthropicVertex)
+
+
+def test_the_usual_door_is_still_the_default():
+    import anthropic
+
+    provider = build_provider("claude", ProviderSpec(type="anthropic"))
+    assert type(provider.client) is anthropic.AsyncAnthropic
+
+
+def test_a_door_nobody_has_heard_of_is_refused():
+    """A typo here would otherwise send every request to Anthropic directly and
+    bill the wrong account, which is the kind of mistake that is noticed at the
+    end of the month."""
+    with pytest.raises(ProviderError, match="through"):
+        build_provider("claude", ProviderSpec(type="anthropic", options={"through": "bedroc"}))
+
+
 def _mock_client(provider, handler):
     """Swap the transport, keeping everything the provider built around it.
 

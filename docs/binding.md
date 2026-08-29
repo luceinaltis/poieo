@@ -173,7 +173,7 @@ default is the arrangement working.
 
 | type | talks to | notes |
 |---|---|---|
-| `anthropic` | Claude API | official SDK, always streams |
+| `anthropic` | Claude, direct or through AWS Bedrock / Google Vertex | official SDK, always streams |
 | `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI, OpenRouter, Azure, and the hosted endpoints that speak this shape | `POST {base_url}/chat/completions` |
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` fold into `options` |
 | `mock` | nothing | scripted replies for tests and dry runs |
@@ -184,6 +184,39 @@ rather than a closed `Literal`. That is what lets
 package while a typo in a binding file is still rejected at parse time.
 `base_url` is required for `openai_compatible` and `ollama`, and API keys are
 read from the environment by name (`api_key_env`) — never stored in the file.
+
+### The same Claude, three counters
+
+Companies reach Claude through Bedrock or Vertex because the billing and the
+security review already run through the cloud account they have — many will not
+register a card with Anthropic separately. It is the same model behind a
+different counter, and the counter **signs its requests with AWS or Google
+credentials** rather than taking an API key, which is why no header could have
+bridged it.
+
+```yaml
+providers:
+  claude:
+    type: anthropic
+    options: {through: bedrock, aws_region: us-east-1}
+
+  # or
+  claude:
+    type: anthropic
+    options: {through: vertex, region: us-east5, project_id: my-project}
+```
+
+`through` picks the client; everything else in `options` is handed to it, so a
+region or a project goes where that SDK expects it. Credentials are **not**
+named here — those clients resolve them the way boto3 and gcloud do, from the
+environment or a profile.
+
+Model ids differ at those counters (`anthropic.claude-sonnet-4-5-...-v1:0` on
+Bedrock), and that is the binding's `model:` as usual.
+
+**A `through` nobody has heard of is refused rather than ignored.** A typo would
+otherwise send every request to Anthropic directly and bill the wrong account,
+which is the kind of mistake noticed at the end of the month.
 
 ### Endpoints that speak the shape and none of the plumbing
 
