@@ -202,6 +202,18 @@ check what it did*. That job runs `docker pull` first for the same reason: a
 coverage number taken with a thirtieth of the suite skipped is a worse lie than
 no number.
 
+**A few of the repository's own rules are held by tests.**
+`tests/test_agreements.py` checks the ones that need no judgement: `AGENTS.md`
+under its own 200-line limit, every link in every document pointing at something,
+every component document present in the index, the index naming code that exists,
+every module's `Design:` pointer resolving, and no dated file outside
+`docs/archive/`. Each was verified by breaking it on purpose and watching the
+test fail, because a check that cannot fail is worse than none.
+
+It is a test rather than a CI step so it runs where you already run the suite.
+The 200-line one earned its place immediately: hand-counting caught two overruns
+in a single day and would eventually not.
+
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and
 whether the change fits the design at all (9).
