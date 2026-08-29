@@ -117,6 +117,16 @@ setting off for as long as it takes:
 
     gh api -X DELETE repos/luceinaltis/poieo/branches/main/protection
 
+**Renaming a job renames a required check**, and a required check that never
+reports leaves every PR waiting for it forever — including the one that would fix
+the name. The list is pinned by name:
+
+    gh api repos/luceinaltis/poieo/branches/main/protection --jq '.required_status_checks.contexts[]'
+
+If you change a job's `name:`, or add a matrix dimension so `python suite
+(ubuntu-latest)` becomes `python suite (ubuntu-latest, 3.10)`, update that list in
+the same breath. This has already happened once, an hour after the setting went on.
+
 Three things are worth knowing when a run disagrees with your machine.
 
 **CI drops two flags you use locally.** Part 2 of `AGENTS.md` runs pytest as
