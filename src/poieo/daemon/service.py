@@ -1030,8 +1030,19 @@ class Daemon:
         since the board began painting which model would answer; the graph half
         is the same promise kept for the file that says what the run does.
         """
-        self._reread_binding(task.binding_key)
-        self._reread_graph(task)
+        problems: list[str] = []
+        # Attempted independently: a half-written binding must not silently
+        # freeze the graph's reread, which is what one raise for both did.
+        try:
+            self._reread_binding(task.binding_key)
+        except PoieoError as exc:
+            problems.append(f"binding: {exc}")
+        try:
+            self._reread_graph(task)
+        except PoieoError as exc:
+            problems.append(f"graph: {exc}")
+        if problems:
+            raise SpecError("; ".join(problems))
 
     def _reread_graph(self, task: LoadedTask) -> None:
         """The graph this task runs, read again from wherever it came from.
@@ -1042,10 +1053,17 @@ class Daemon:
         saved mid-flight must not put the daemon somewhere it would have
         refused to start.
 
-        Only the graph is adopted, never the rest of the spec. A schedule, a
-        folder or an `enabled:` read here would have to reach a trigger that
-        was built when the daemon started, and half-adopting a spec is worse
-        than not adopting it.
+        **Only the graph is adopted, and only when nothing else changed.** A
+        card expands into a spec *and* a graph, and the two split fields a
+        reader would call one thing: `tools:` lands on the node, `isolation:`
+        and `folder:` on the spec. Adopting the graph alone would honour a
+        card's new tools while ignoring the isolation it asked for in the same
+        edit -- shell on the host instead of in a container -- and would tell
+        the model it works in a folder the tools are not rooted in. So a card
+        whose expansion changes anything but its graph is refused, and says so:
+        a schedule, a folder or an `enabled:` has to reach a trigger built when
+        the daemon started, and half-adopting a spec is worse than not
+        adopting one.
         """
         project = next((p for p in self.projects if task in p.tasks), None)
         if project is None:
@@ -1054,15 +1072,23 @@ class Daemon:
         card = config.cards_by_task.get(task.spec.name)
         if card is not None and config.card_graphs.get(task.spec.name) is not None:
             roster = [c.slug for c in config.cards_by_task.values()]
-            _, graph = expand(load_card(card.source_path), roster=roster)
-            if graph is None:
-                return
+            spec, graph = expand(load_card(card.source_path), roster=roster)
+            if graph is None or spec != task.spec:
+                raise SpecError(
+                    f"task '{task.spec.name}': the card changed more than its prompt, "
+                    f"and the rest of it only takes effect on a restart"
+                )
         elif task.spec.graph:
             graph = load_graph(config.resolve_path(task.spec.graph).resolve())
         else:
             return
         try:
             preflight(graph, task.binding, workdir=config.workdir_path(task.spec))
+            # Both startup checks, not one. A graph naming a role whose key is
+            # unset would be adopted, die opening the provider, and then make
+            # every later binding reread raise on the roles it just added.
+            if task.spec.enabled:
+                check_credentials(task.binding, graph.roles())
         except Exception as exc:
             raise SpecError(f"task '{task.spec.name}': {exc}") from exc
         task.graph = graph

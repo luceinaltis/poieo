@@ -12,6 +12,8 @@ Design: docs/daemon.md
 """
 
 import asyncio
+import logging
+from contextlib import contextmanager
 
 from conftest import card
 
@@ -151,5 +153,119 @@ async def test_a_graph_that_will_not_parse_leaves_the_last_good_one_running(tmp_
     # Both halves: it kept working, and it did not keep quiet about why.
     assert "first" in _prompts(daemon)[-1]
     assert any("last good one" in message for message in caplog.messages), caplog.messages
+
+    await _down(daemon, task)
+
+
+@contextmanager
+def caplog_at_warning():
+    """caplog with a live list: the assertion reads it after the block."""
+    messages: list[str] = []
+
+    class _Sink(logging.Handler):
+        def emit(self, record):
+            messages.append(record.getMessage())
+
+    logger, sink = logging.getLogger("poieo.daemon"), _Sink()
+    logger.addHandler(sink)
+    try:
+        yield messages
+    finally:
+        logger.removeHandler(sink)
+
+
+async def test_a_card_that_changed_more_than_its_prompt_is_refused(tmp_path):
+    """A card expands into a spec *and* a graph, and they split fields a reader
+    would call one thing. Adopting the graph alone would honour new `tools:`
+    while ignoring the `isolation:` asked for in the same edit -- shell on the
+    host rather than in a container. So the whole edit waits for a restart."""
+    daemon = Daemon(_card_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+    runner = daemon.runners[0]
+
+    assert runner.run_now() is True
+    await _until(lambda: len(runner.results) == 1, "the first run")
+
+    (tmp_path / "elsewhere").mkdir()
+    card(
+        tmp_path / "cards",
+        "f",
+        "folder: ../elsewhere\nprompt: second\ntrigger: {type: manual}\n",
+    )
+
+    with caplog_at_warning() as messages:
+        assert runner.run_now() is True
+        await _until(lambda: len(runner.results) == 2, "the run after the edit")
+
+    # The prompt moved with the folder, so taking one without the other would
+    # tell the model it works somewhere the tools are not rooted.
+    assert "second" not in " ".join(_prompts(daemon))
+    assert any("more than its prompt" in m for m in messages), messages
+
+    await _down(daemon, task)
+
+
+async def test_a_broken_binding_does_not_freeze_the_graphs_reread(tmp_path):
+    """Two files, two failures. One saved half-written must not quietly stop
+    the other from being read -- which is what a single raise for both did."""
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+    runner = daemon.runners[0]
+
+    assert runner.run_now() is True
+    await _until(lambda: len(runner.results) == 1, "the first run")
+
+    (tmp_path / "b.yaml").write_text("providers: [", encoding="utf-8")
+    (tmp_path / "g.yaml").write_text(_GRAPH.replace("prompt: first", "prompt: second"), encoding="utf-8")
+
+    assert runner.run_now() is True
+    await _until(lambda: len(runner.results) == 2, "the run after both saves")
+
+    assert "second" in _prompts(daemon)[-1], "the graph waited on the binding"
+
+    await _down(daemon, task)
+
+
+_KEYED = """\
+name: mock
+providers:
+  fake: {type: mock, options: {responses: {"*": "done"}}}
+  keyed: {type: openai_compatible, base_url: 'http://x/v1', api_key_env: POIEO_RELOAD_KEY}
+default: {provider: fake, model: m1}
+roles:
+  reviewer: {provider: keyed, model: m}
+"""
+
+
+async def test_a_graph_naming_a_role_with_no_key_is_refused(tmp_path, monkeypatch):
+    """The reread runs both checks startup runs, not one.
+
+    A graph edited to reach a role whose key is unset would otherwise be
+    adopted, die opening the provider, and then make every later binding
+    reread raise on the roles it had just added -- a task stuck until restart
+    by a file it read itself.
+    """
+    monkeypatch.delenv("POIEO_RELOAD_KEY", raising=False)
+    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
+    (tmp_path / "b.yaml").write_text(_KEYED, encoding="utf-8")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    path = tmp_path / "poieo.yaml"
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
+
+    daemon = Daemon(load_config(path), store=NullStore())
+    task = await _up(daemon)
+    runner = daemon.runners[0]
+
+    assert runner.run_now() is True
+    await _until(lambda: len(runner.results) == 1, "the first run")
+
+    (tmp_path / "g.yaml").write_text(_GRAPH.replace("role: r", "role: reviewer"), encoding="utf-8")
+
+    with caplog_at_warning() as messages:
+        assert runner.run_now() is True
+        await _until(lambda: len(runner.results) == 2, "the run after the edit")
+
+    assert runner.results[-1].status == "completed", "the run should have gone ahead"
+    assert any("POIEO_RELOAD_KEY" in m for m in messages), messages
 
     await _down(daemon, task)

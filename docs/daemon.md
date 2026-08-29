@@ -126,10 +126,23 @@ person actually edits is the one that says what the run *does*, and until now
 that one alone needed the daemon restarted. A card carrying its own prompt is
 re-expanded from the card file; a task naming a graph file re-reads that.
 
-**Only the graph is adopted, never the rest of the spec.** A schedule, a folder
-or an `enabled:` read here would have to reach a trigger built when the daemon
-started, and half-adopting a spec is worse than not adopting one. Those still
-want a restart, and adding a card at runtime is its own piece of work.
+**Only the graph is adopted, and only when nothing else changed.** A card expands
+into a spec *and* a graph, and the two split fields a reader would call one
+thing: `tools:` lands on the node, `isolation:` and `folder:` on the spec.
+Adopting the graph alone would honour a card's new tools while ignoring the
+isolation it asked for in the same edit — shell on the host rather than in a
+container — and would tell the model it works in a folder the tools are not
+rooted in. So a card whose expansion changed anything but its graph is refused
+and says so. A schedule, a folder or an `enabled:` still wants a restart, and
+adding a card at runtime is its own piece of work.
+
+**Both files are attempted, and the graph runs both startup checks.** Each is
+read in its own attempt, so a half-written binding cannot silently freeze the
+graph's reread, and the warning names whichever failed. `check_credentials` runs
+beside `preflight`: a graph reaching a role whose key is unset would otherwise be
+adopted, die opening the provider, and then make every later binding reread raise
+on the roles it had just added — a task stuck until restart by a file it read
+itself.
 
 It is the **daemon's** reread and not the runner's, because one file is one spec
 across every task that names it: a runner reading only for itself would leave its
