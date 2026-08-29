@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import locale
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -18,6 +19,26 @@ from . import CommandResult, Tool, ToolError
 
 _DEFAULT_TIMEOUT = 120.0
 _MAX_TIMEOUT = 600.0
+
+
+def quote_path(path: str) -> str:
+    """A path spelled so the shell that will run it survives it.
+
+    *Which* shell decides the answer, so the answer is given here rather than
+    where the path is made. On Windows with a POSIX shell -- now the norm, see
+    above -- backslashes are read as escapes and eaten, and a command that is
+    one double-quoted word with no space in it loses its quotes before bash
+    ever parses it, which fails as an unterminated string. Forward slashes and
+    POSIX quoting survive both, with or without a space in the path.
+
+    Without a POSIX shell the reverse holds: `cmd` wants backslashes and does
+    not read single quotes as quoting at all.
+    """
+    if _POSIX_SHELL is None:
+        return f'"{path}"'
+    # Only on Windows: a backslash is a legal character in a POSIX filename,
+    # and rewriting one there would name a different file.
+    return shlex.quote(path.replace("\\", "/") if os.name == "nt" else path)
 _OUTPUT_CAP = 20_000
 
 

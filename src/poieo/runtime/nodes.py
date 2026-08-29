@@ -17,7 +17,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..tools import ToolError, make_executor
+from ..tools import ToolError, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -563,25 +563,38 @@ class CommandNode(Node):
         # Through the seam, never a bare subprocess: a task that asked to be
         # fenced is fenced here too.
         scope = ctx.scope()
+        # Rendered like the command and the script are. For a compiled script
+        # this is the *only* way the run reaches the program, which is why it
+        # is a template and the code is not.
+        env = {k: _rendered(spec, v, scope) for k, v in spec.env.items()} or None
 
         async with make_executor(workdir, ["shell"], ctx.tool_context) as executor:
             started = time.monotonic()
             try:
                 if spec.script is not None:
+                    # A compiled script is a program, not a template: `{{` in
+                    # it is the language's, and rendering would both mangle it
+                    # and key the build cache on the run. Its varying part
+                    # arrives through `env`, which is rendered below.
+                    code = (
+                        spec.script
+                        if is_compiled(spec.language or "")
+                        else _rendered(spec, spec.script, scope)
+                    )
                     # Which interpreter, or which compiler and where its output
                     # is kept, is the executor's business: where a thing is
                     # built is where it has to run.
                     result = await executor.run_script(
                         spec.language or "",
-                        _rendered(spec, spec.script, scope),
+                        code,
                         timeout=spec.timeout,
-                        env=spec.env or None,
+                        env=env,
                     )
                 else:
                     result = await executor.run_command(
                         _rendered(spec, spec.command or "", scope),
                         timeout=spec.timeout,
-                        env=spec.env or None,
+                        env=env,
                     )
             except ToolError as exc:
                 # It never ran. That is the node failing, unlike an exit code.

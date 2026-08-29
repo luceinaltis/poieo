@@ -1,4 +1,5 @@
 import pathlib
+import shlex
 
 import pytest
 
@@ -789,10 +790,12 @@ def _with_stub_compiler(monkeypatch, tmp_path):
 
     async def fake(command, timeout=None, env=None, stdin=None):
         ran.append(command)
-        # A build leaves a binary behind, as a real compiler would. Split on
-        # " -o " with its spaces: a temp path really does contain "-of".
-        if " -o " in command:
-            target = command.split(" -o ", 1)[1].split('" ')[0].strip('"')
+        # A build leaves a binary behind, as a real compiler would. Read the
+        # line as a shell would rather than by hand: how a path is quoted is
+        # the shell's business, and a temp path really does contain "-of".
+        argv = shlex.split(command, posix=True)
+        if "-o" in argv:
+            target = argv[argv.index("-o") + 1]
             pathlib.Path(target).write_text("binary", encoding="utf-8")
         return CommandResult(exit_code=0, output="")
 
@@ -884,3 +887,49 @@ async def test_the_box_skips_a_build_it_already_has(tmp_path, monkeypatch):
 
     joined = " ".join(" ".join(a) for a in seen)
     assert "cc " not in joined
+
+
+async def test_a_compiled_script_reaches_the_compiler_verbatim(tmp_path, monkeypatch):
+    """`{{` belongs to the language here. A nested initializer is ordinary C,
+    and anything that rendered it would hand the compiler a different program
+    than the one written."""
+    executor, _, cache = _with_stub_compiler(monkeypatch, tmp_path)
+    code = "int m[2][2] = {{1, 0}, {0, 1}};\nint main(void){return m[0][0];}"
+
+    await executor.run_script("c", code)
+
+    written = list(cache.rglob("main.c"))
+    assert len(written) == 1
+    assert written[0].read_text(encoding="utf-8") == code
+
+
+@pytest.mark.parametrize("folder", ["cache", "cache with a space"])
+async def test_a_built_binary_is_actually_runnable(tmp_path, monkeypatch, folder):
+    """Through the real shell, which is the only thing that can say whether a
+    path was spelled right. A quoted Windows path with no space in it loses its
+    quotes before bash sees it and dies as an unterminated string; an unquoted
+    one loses its backslashes. Both build fine and fail at the last step."""
+    from poieo.tools import CommandResult, LocalExecutor, ToolContext
+
+    cache = tmp_path / folder
+    executor = LocalExecutor(tmp_path, ["shell"], ToolContext(build_cache=cache))
+
+    async def compiler(command, timeout=None, env=None, stdin=None):
+        # Stand in for `cc`: write something the shell can really execute.
+        if command.startswith("cc "):
+            # Read it as a shell would: the path may hold a space, which is
+            # the case this test exists for.
+            argv = shlex.split(command, posix=True)
+            target = pathlib.Path(argv[argv.index("-o") + 1])
+            target.write_text("#!/bin/sh\necho ran-ok\n", encoding="utf-8")
+            target.chmod(0o755)
+            return CommandResult(exit_code=0, output="")
+        return await real(command, timeout=timeout, env=env, stdin=stdin)
+
+    real = executor.run_command
+    monkeypatch.setattr(executor, "run_command", compiler)
+
+    result = await executor.run_script("c", "int main(void){return 0;}")
+
+    assert result.exit_code == 0, result.output
+    assert "ran-ok" in result.output

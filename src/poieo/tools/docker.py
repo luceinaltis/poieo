@@ -17,13 +17,14 @@ import asyncio
 import locale
 import hashlib
 import logging
+import shlex
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
 from ..errors import IsolationError
-from . import CommandResult, Executor, Isolation, Tool, ToolError, _quote
+from . import CommandResult, Executor, Isolation, Tool, ToolError
 from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
@@ -337,13 +338,17 @@ class DockerExecutor(Executor):
 
 
     async def _is_built(self, binary: str) -> bool:
-        code, _ = await self._exec(f"test -x {binary}")
+        code, _ = await self._exec(f"test -x {self.quote(binary)}")
         return code == 0
+
+    def quote(self, path: str) -> str:
+        """POSIX quoting, always: whatever the host is, the box is Linux."""
+        return shlex.quote(path)
 
     async def _put(self, path: str, content: str) -> None:
         parent = path.rsplit("/", 1)[0]
         code, out = await self._exec(
-            f"mkdir -p {_quote(parent)} && cat > {path}", stdin=content
+            f"mkdir -p {self.quote(parent)} && cat > {self.quote(path)}", stdin=content
         )
         if code != 0:
             raise ToolError(f"could not write {path} in the box: {out.strip()}")

@@ -1060,3 +1060,24 @@ async def test_a_script_can_read_the_scope_it_runs_in(tmp_path):
     )
 
     assert "floor is 90" in result.outputs["gate"]["output"]
+
+
+async def test_env_values_are_templated(tmp_path):
+    """The escape hatch a compiled script depends on. `script:` and `command:`
+    are rendered against the run, and `env:` has to be too or "put what varies
+    in env" is advice that does not work."""
+    graph = _command_graph(
+        language="python",
+        script="import os; print(os.environ['WHO'])",
+        env={"WHO": "{{ input.who }}"},
+        output={"as": "check"},
+        workdir=str(tmp_path),
+    )
+
+    result = await run_graph(
+        graph, mock_binding({}), input={"who": "world"}, workdir=tmp_path
+    )
+
+    assert result.status == "completed"
+    assert "world" in result.outputs["check"]["output"]
+    assert "{{" not in result.outputs["check"]["output"]

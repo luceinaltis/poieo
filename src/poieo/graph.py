@@ -16,7 +16,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .errors import ExpressionError, SpecError, describe_invalid
-from .expr import compile_expr, validate_template
+from .expr import compile_expr, reaches_for_run_data, validate_template
 
 
 class _Spec(BaseModel):
@@ -163,6 +163,14 @@ class NodeSpec(_Spec):
                 f"`type` to `command` for a step that runs one without a model"
             )
         if self.type == "command":
+            for name, value in self.env.items():
+                # `env` is rendered like a command and a prompt, so it is
+                # checked where they are -- and it is the one way a compiled
+                # script gets anything from the run.
+                try:
+                    validate_template(value)
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}', env '{name}': {exc}") from exc
             if self.command and self.script:
                 raise ValueError(
                     f"command node '{self.id}' takes a command or a script, not "
@@ -181,7 +189,7 @@ class NodeSpec(_Spec):
                 )
             if self.language:
                 # late import; tools pulls in providers
-                from .tools import COMPILED, LANGUAGES, known_language
+                from .tools import COMPILED, LANGUAGES, is_compiled, known_language
 
                 if not known_language(self.language):
                     raise ValueError(
@@ -189,17 +197,22 @@ class NodeSpec(_Spec):
                         f"'{self.language}'; known: "
                         f"{sorted(set(LANGUAGES) | set(COMPILED))}"
                     )
-                if self.language in COMPILED:
-                    # A template renders differently each run, so the hash
-                    # changes, so the build cache never hits and grows without
-                    # bound. What varies belongs in `env`, which is templated
-                    # and never reaches the compiler.
-                    if "{{" in (self.script or ""):
+                if is_compiled(self.language):
+                    # A compiled script is not a template: it is cached by its
+                    # own text, and a template would render differently each
+                    # run, so the cache would never hit and would grow without
+                    # bound. So `{{` here means what the *language* means by
+                    # it -- `[][]int{{1,2},{3,4}}` is ordinary Go, and passes.
+                    #
+                    # What is worth catching at load is the mistake the rule
+                    # invites: reaching for run data that will never arrive.
+                    reach = reaches_for_run_data(self.script or "")
+                    if reach is not None:
                         raise ValueError(
                             f"command node '{self.id}': a {self.language} script is "
-                            f"compiled and cached by its own text, so a template in "
-                            f"it would rebuild every run. Put what varies in `env:` "
-                            f"and read it at run time"
+                            f"compiled and cached by its own text, so {reach} is not "
+                            f"substituted. Put what varies in `env:` and read it at "
+                            f"run time"
                         )
                 else:
                     try:

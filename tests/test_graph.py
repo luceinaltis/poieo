@@ -368,9 +368,9 @@ def test_a_scripted_node_still_calls_no_model():
 
 
 def test_a_compiled_script_is_refused_a_template():
-    """A template renders differently each run, so the hash changes, so the
-    build cache never hits and grows without bound. What varies belongs in
-    `env`, which is templated and does not reach the compiler."""
+    """A compiled script is cached by its own text, so a template in it would
+    never be substituted. What varies belongs in `env`, which is templated and
+    does not reach the compiler."""
     with pytest.raises(ValidationError) as caught:
         GraphSpec.model_validate(
             _graph(
@@ -383,6 +383,42 @@ def test_a_compiled_script_is_refused_a_template():
         )
 
     assert "env" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "language,script",
+    [
+        ("go", "grid := [][]int{{1, 2}, {3, 4}}"),
+        ("c", "int m[2][2] = {{1, 0}, {0, 1}};"),
+        ("c", "int m[1][1] = {{0}};"),
+        ("rust", "let m = [[1, 2], [3, 4]];"),
+    ],
+)
+def test_braces_a_language_owns_are_not_a_template(language, script):
+    """`{{` is a template only where the text *is* one. A nested initializer is
+    ordinary C and ordinary Go, and refusing it would be refusing the
+    language."""
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "language": language, "script": script})
+    )
+
+    assert graph.node("n").script == script
+
+
+def test_a_bad_template_in_env_fails_at_load():
+    """`env` is rendered, so it is checked where every other template is."""
+    with pytest.raises(ValidationError) as caught:
+        GraphSpec.model_validate(
+            _graph(
+                {
+                    "type": "command",
+                    "command": "true",
+                    "env": {"FLOOR": "{{ input.floor( }}"},
+                }
+            )
+        )
+
+    assert "FLOOR" in str(caught.value)
 
 
 def test_an_interpreted_script_still_takes_a_template():

@@ -71,19 +71,18 @@ COMPILED: dict[str, Compiled] = {
 }
 
 
-def _quote(path: str) -> str:
-    """A path that may hold a space, safe for the shell that will see it.
-
-    Double quotes, not `shlex.quote`: that is POSIX and picks single ones,
-    which `cmd` does not read as quoting at all -- it would pass the quote
-    marks through as part of the filename. Both shells agree on double quotes,
-    and these paths are ours: a temp root, a hex digest and a fixed name.
-    """
-    return f'"{path}"'
-
-
 def known_language(name: str) -> bool:
     return name in LANGUAGES or name in COMPILED
+
+
+def is_compiled(name: str) -> bool:
+    """Whether this language is built before it runs -- and so is cached.
+
+    Callers outside this package ask this rather than reading `COMPILED`: what
+    they want to know is whether the text is a program or a template, which is
+    a smaller question than what to do about it.
+    """
+    return name in COMPILED
 
 
 def cache_key(language: str, script: str) -> str:
@@ -234,7 +233,9 @@ class Executor:
         if not await self._is_built(binary):
             await self._put(source, script)
             built = await self.run_command(
-                " ".join(spec.build).format(src=_quote(source), bin=_quote(binary)),
+                " ".join(spec.build).format(
+                    src=self.quote(source), bin=self.quote(binary)
+                ),
                 timeout=timeout,
             )
             if built.exit_code != 0:
@@ -242,7 +243,7 @@ class Executor:
                 # router exactly as a red test suite is.
                 return built
 
-        return await self.run_command(_quote(binary), timeout=timeout, env=env)
+        return await self.run_command(self.quote(binary), timeout=timeout, env=env)
 
     def build_paths(self, key: str, source: str) -> tuple[str, str]:
         """Where this key's source and binary live, spelled for this filesystem.
@@ -250,6 +251,15 @@ class Executor:
         Each executor answers for its own: a container is posix whatever the
         host is, and a host path built with forward slashes reads wrong in
         every error message it appears in.
+        """
+        raise NotImplementedError
+
+    def quote(self, path: str) -> str:
+        """The same path, spelled for the shell this executor commands.
+
+        Alongside :meth:`build_paths` and for the same reason: only the
+        executor knows which shell reads what it hands over, and a path is
+        quoted differently for each.
         """
         raise NotImplementedError
 
@@ -286,6 +296,11 @@ class LocalExecutor(Executor):
         root = self._cache or Path(tempfile.gettempdir()) / "poieo-build"
         home = root / key
         return str(home / source), str(home / "prog")
+
+    def quote(self, path: str) -> str:
+        from .shell import quote_path
+
+        return quote_path(path)
 
     async def _is_built(self, binary: str) -> bool:
         return Path(binary).is_file()

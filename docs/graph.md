@@ -99,6 +99,10 @@ wrong interpreter over somebody's program. An interpreted script is templated
 and checked at parse time, exactly as a command and a prompt are; a compiled one
 is not, for the reason below.
 
+`env:` is templated too, and its values are checked at load like everything
+else. That matters more than it looks: it is the one channel by which a run
+reaches a *compiled* script, which is not rendered.
+
 ### Compiled languages, and why the cache is not extra
 
 `c`, `go` and `rust` are in the table too, and they cannot use stdin: a
@@ -123,8 +127,16 @@ Inside the container rather than a second mount, and that is not only
 simplicity: a binary built there is for the image's platform, so a cache shared
 with the host would eventually hand a Windows executable to a Linux container.
 
-**A compiled script is refused a template.** A template renders differently
-each run, so the hash changes, so the cache never hits and grows without bound.
+**A compiled script is not a template.** Rendering one would change the hash
+every run, so the cache would never hit and would grow without bound — and it
+would also be wrong about the code: `{{` belongs to the *language* here.
+`[][]int{{1,2},{3,4}}` is ordinary Go and `int m[1][1] = {{0}};` is ordinary C,
+and a rule that refused them would be refusing the language. So the text goes
+to the compiler exactly as written, and only one thing is caught at load — a
+placeholder reaching for the run's own data (`input`, `state`, `nodes`, `run`),
+which is the mistake the rule invites and which no compiler explains well at
+3am.
+
 What varies belongs in `env:` — which *is* templated, and never reaches the
 compiler:
 
