@@ -41,7 +41,7 @@ afterEach(() => {
 function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
   act(() => {
     root.render(
-      <MakeTask project="board" onClose={props.onClose ?? (() => {})} onMade={props.onMade ?? (() => {})} />,
+      <MakeTask project="board" onClose={props.onClose ?? (() => {})} />,
     )
   })
 }
@@ -86,9 +86,8 @@ test("it says whose files are about to change before the button is pressed", () 
   expect(host.textContent?.toLowerCase()).toContain("files")
 })
 
-test("a saved card is sent as the three things and closes the form", async () => {
-  const onMade = vi.fn()
-  show({ onMade })
+test("a saved card is sent as the three things, and says so in place", async () => {
+  show()
   type("name", "tidy up")
   type("folder", "../work")
   type("prompt", "look around")
@@ -98,13 +97,17 @@ test("a saved card is sent as the three things and closes the form", async () =>
   })
 
   expect(createTask).toHaveBeenCalledWith("board", "tidy up", "../work", "look around")
-  expect(onMade).toHaveBeenCalledWith("tidy-up")
+  // Said here, not by closing. Closing was the first shape, and it unmounted
+  // the panel in the same batch that set the confirmation -- so a save gave
+  // no sign at all that anything had happened.
+  expect(host.textContent).toContain("tidy-up")
+  // And cleared, because the next card is a different card.
+  expect(field("prompt").value).toBe("")
 })
 
 test("a refusal is shown and the form keeps what was typed", async () => {
   createTask.mockResolvedValue({ ok: false, error: "the folder it would work in is not there" })
-  const onMade = vi.fn()
-  show({ onMade })
+  show()
   type("name", "tidy up")
   type("folder", "../gone")
   type("prompt", "look around")
@@ -114,7 +117,36 @@ test("a refusal is shown and the form keeps what was typed", async () => {
   })
 
   expect(host.textContent).toContain("is not there")
-  expect(onMade).not.toHaveBeenCalled()
   // Retyping three fields to fix one of them is the refusal happening twice.
   expect(field("prompt").value).toBe("look around")
+})
+
+
+test("an answer with no task is a refusal, not a card", async () => {
+  // A 2xx whose body did not parse arrives as {ok: true} and nothing else.
+  // Taken as made it would clear the form over a card that may not exist, and
+  // the next press would either duplicate it or be refused.
+  createTask.mockResolvedValue({ ok: true })
+  show()
+  type("name", "tidy up")
+  type("folder", "../work")
+  type("prompt", "look around")
+
+  await act(async () => {
+    save().click()
+  })
+
+  expect(host.textContent).toContain("not with a task")
+  expect(field("prompt").value).toBe("look around")
+})
+
+test("a relative folder says which folder it is relative to", async () => {
+  // The server reads it from the project's tasks folder, not the project
+  // root. The sentence naming whose files change has to say which `work`.
+  show()
+  type("folder", "work")
+  expect(host.textContent).toContain("tasks folder")
+
+  type("folder", "/tmp/elsewhere")
+  expect(host.textContent).not.toContain("tasks folder")
 })

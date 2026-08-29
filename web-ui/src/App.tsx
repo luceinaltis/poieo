@@ -60,14 +60,25 @@ export default function App({ store }: { store?: StageStore }) {
     return () => theStore.stop()
   }, [theStore])
 
+  // The stage reserves one margin. A task picked on the board takes it, so a
+  // panel that was holding it has to let go -- the rail already does this for
+  // its own two, and this is the third way in.
+  const selectTask = useCallback((key: string | null) => {
+    setSelected(key)
+    if (key) {
+      setShowModels(false)
+      setShowMake(false)
+    }
+  }, [])
+
   useEffect(() => {
-    const host = createSkinHost(boardRef.current!, { onSelectTask: setSelected })
+    const host = createSkinHost(boardRef.current!, { onSelectTask: selectTask })
     hostRef.current = host
     return () => {
       host.destroy()
       hostRef.current = null
     }
-  }, [])
+  }, [selectTask])
 
   useEffect(() => {
     hostRef.current?.show(skinId)
@@ -117,9 +128,6 @@ export default function App({ store }: { store?: StageStore }) {
     setSelected(null)
   }, [])
   const closeMake = useCallback(() => setShowMake(false), [])
-  // The card is written; the daemon finds it within seconds, and the feed
-  // brings it in. Nothing to insert here, which is the point of one door.
-  const made = useCallback(() => setShowMake(false), [])
 
   const empty = Object.keys(shown.tasks).length === 0
   // `selected` is the board's key -- the project and the task -- because a
@@ -229,7 +237,10 @@ export default function App({ store }: { store?: StageStore }) {
       ) : null}
 
       {showMake && project ? (
-        <MakeTask project={project.name} onClose={closeMake} onMade={made} />
+        // Keyed on the project: a half-typed folder is read against *that*
+        // project's tasks folder, so carrying the form across a switch would
+        // post it somewhere it means something else.
+        <MakeTask key={project.name} project={project.name} onClose={closeMake} />
       ) : null}
 
       {selected ? (

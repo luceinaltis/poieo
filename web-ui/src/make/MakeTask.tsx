@@ -27,11 +27,9 @@ import "./make.css"
 export function MakeTask({
   project,
   onClose,
-  onMade,
 }: {
   project: string
   onClose(): void
-  onMade(task: string): void
 }) {
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
@@ -44,9 +42,22 @@ export function MakeTask({
   const send = () =>
     void act(async () => {
       const answer = await createTask(project, name.trim(), folder.trim(), prompt.trim())
+      // `ok` alone is not enough: a 2xx whose body did not parse arrives as
+      // {ok: true} with no task, and treating that as made would clear the
+      // form over a card that may not exist -- and a second press would
+      // either duplicate it or be refused.
+      if (answer.ok && !answer.task) {
+        return { ok: false, error: "the daemon answered, but not with a task" }
+      }
       if (answer.ok && answer.task) {
         setMade(answer.task)
-        onMade(answer.task)
+        // Cleared rather than closed. Closing was the first shape and it made
+        // the confirmation unreachable -- the panel unmounted in the same
+        // batch that set it, so a save gave no sign at all. The board is one
+        // click away on the rail, and the card takes a moment to appear there.
+        setName("")
+        setFolder("")
+        setPrompt("")
       }
       return answer
     })
@@ -101,7 +112,14 @@ export function MakeTask({
       {folder.trim() ? (
         <p className="make-warning">
           Saving starts this task. It will read and change files in{" "}
-          <code>{folder.trim()}</code>.
+          <code>{folder.trim()}</code>
+          {folder.trim().startsWith("/") || /^[A-Za-z]:/.test(folder.trim()) ? null : (
+            // A relative folder is read from the project's tasks folder, not
+            // from the project root -- so the sentence that names whose files
+            // change has to say which `work` it means.
+            <>, read from this project’s tasks folder</>
+          )}
+          .
         </p>
       ) : (
         <p className="make-note">

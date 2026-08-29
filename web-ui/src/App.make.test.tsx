@@ -121,3 +121,21 @@ test("the board is where you land back", async () => {
 
   expect(panel("New task")).toBeNull()
 })
+
+test("picking a task on the board takes the margin back", async () => {
+  await open()
+  await act(async () => button("open-make")!.click())
+  expect(panel("New task")).not.toBeNull()
+
+  await act(async () => {
+    container
+      .querySelector<HTMLElement>('[data-task="night shift/chores"] .basic-pick')!
+      .click()
+  })
+
+  // The third way into the one margin the stage reserves, and the one the
+  // rail cannot defend on its own: a task picked on the board opens the
+  // drawer, so whatever was holding the margin has to let go of it.
+  expect(panel("New task")).toBeNull()
+  expect(container.querySelector(".drawer")).not.toBeNull()
+})
