@@ -94,9 +94,10 @@ other condition here, it is worth exactly what the person recording it is honest
 ## What CI checks, and what it cannot
 
 *Merge condition 1.* `.github/workflows/gate.yml` runs on every PR against `main`
-and on every push to it. Three jobs: the Python suite on the lowest Python the
+and on every push to it. Four jobs: the Python suite on the lowest Python the
 project claims to support; the frontend suite, the types, and a rebuild of the
-checked-in bundle; and container isolation against a real docker daemon.
+checked-in bundle; container isolation against a real docker daemon; and the
+package as a user gets it, installed and exercised outside the checkout.
 
 It **reports and does not block.** `main` has no required checks, so a red run
 stops nothing by itself. That is deliberate for now — a gate turned on before it
@@ -129,7 +130,7 @@ means the committed bundle does not match the source it claims to come from;
 changes nothing in the output — a comment, which minification drops — correctly
 leaves the check green; it is asking about the bundle, not about your diff.
 
-**The installed command has its own job.** Every other job runs against the
+**The installed package has its own job.** Every other job runs against the
 source tree — `tests/conftest.py` puts `src/` on `sys.path`, and `poieo` is not
 installed on the machine this is developed on at all — so nothing else here would
 notice if the package stopped installing or the console script stopped existing.
@@ -138,6 +139,18 @@ checkout so `src/` cannot answer an import the install should have, walks **ever
 command and subcommand asking each for its own `--help`, and then makes a project
 and runs it end to end against the mock binding, which exists precisely so the
 wiring can be exercised without spending a token.
+
+It also asks whether the board is in there, because for as long as this project
+had one, it was not. `src/poieo/web/static/` is neither Python nor inside a
+package, so `packages.find` walked past it and the wheel contained the daemon
+and none of the page it serves; `server.py` guards the mount with
+`page.exists()`, so `poieo daemon` started, answered, and served a blank screen
+without a crash or a log line. Every suite was green over it the whole time.
+`[tool.setuptools.package-data]` names the files now, and the job compares
+**every** file in the installed package against the checkout by relative path
+rather than asking whether `index.html` is there — a pattern that matches
+today's build shape and not tomorrow's leaves the obvious files in place, and a
+check that names the obvious files stays green over it.
 
 The command list is enumerated from the app rather than written down, because a
 list kept by hand goes stale the first time somebody adds a command and says

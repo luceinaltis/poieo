@@ -102,7 +102,7 @@ jobs:
           fi
 
   cli:
-    name: the installed command
+    name: the installed package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,6 +142,49 @@ jobs:
           while read -r cmd; do
             poieo $cmd --help > /dev/null
           done < commands.txt
+
+      # The daemon serves `src/poieo/web/static/`, which is not a package and
+      # so was not in the wheel at all: `poieo daemon` started, answered, and
+      # served an empty page, guarded by `page.exists()` so it did not even
+      # crash. Nothing caught it because nothing installs what this project
+      # ships -- which is the hole this job was opened for.
+      - name: the installed package has a board to serve
+        env:
+          SOURCE: ${{ github.workspace }}/src/poieo/web/static
+        working-directory: /tmp
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from poieo.web.server import STATIC_DIR
+          from starlette.staticfiles import StaticFiles
+
+          # Every file against the checkout's, by relative path -- not "is
+          # index.html there". A pattern that matches the bundle's shape today
+          # and not tomorrow's drops files while leaving the obvious ones in
+          # place, and a check that names the obvious ones stays green over it.
+          def contents(root: Path) -> set[str]:
+              return {
+                  str(p.relative_to(root)).replace(os.sep, "/")
+                  for p in root.rglob("*")
+                  if p.is_file()
+              }
+
+          source = contents(Path(os.environ["SOURCE"]))
+          shipped = contents(STATIC_DIR) if STATIC_DIR.is_dir() else set()
+
+          if missing := sorted(source - shipped):
+              raise SystemExit(
+                  f"::error::the installed package is missing {len(missing)} of "
+                  f"{len(source)} board files, starting with {missing[:5]}. "
+                  f"Widen [tool.setuptools.package-data] in pyproject.toml."
+              )
+          # Mounting is what the server does at startup, and it raises on a
+          # missing directory -- so this is the failure a user would hit.
+          StaticFiles(directory=str(STATIC_DIR))
+          print(f"ok: all {len(source)} board files shipped")
+          PY
 
       - name: a project can be made and run without a model
         working-directory: /tmp
