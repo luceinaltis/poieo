@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any, AsyncIterator
 
+import yaml
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
@@ -422,6 +424,97 @@ def create_app(daemon: Any) -> Starlette:
             }
         )
 
+    def _slug(title: str) -> str:
+        """A filename from a title, or "" if nothing usable is left.
+
+        A card's identity is its filename and the `name:` inside is a title the
+        reader may rewrite, so the two are made here and never again. Anything
+        that is not a letter, a digit, a dash or an underscore is dropped --
+        which is also the fence: a name is the one place a path could get into
+        a route whose whole promise is one file, in one folder.
+        """
+        slug = re.sub(r"[^a-z0-9_-]+", "-", title.strip().lower()).strip("-")
+        return slug
+
+    async def project_tasks_create(request: Request) -> JSONResponse:
+        """Write one card into the project's tasks folder.
+
+        The **fifth kind** of write here, and the first that makes a file that
+        did not exist. Its effect outlives the process, which is not control;
+        nothing a run wrote is involved, which is not review.
+
+        Its own fence: **one card, in this project's tasks folder, and nothing
+        else.** No graph, no binding, and no path that leaves that folder --
+        the name is turned into a filename here rather than taken as one.
+
+        Three fields and no more, which is DESIGN.md's second principle: a
+        name, the folder it works in, and its prompt. The folder is required on
+        purpose. It is the one thing the model's hands will touch, and filling
+        it in by default would fill in the single moment the user is meant to
+        see.
+
+        Every refusal is decided before the file is opened, so a request that
+        will be refused never leaves a half-written card in a folder the daemon
+        is watching.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        if not config.cards:
+            return JSONResponse({"error": "this project names no tasks folder"}, status_code=409)
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        body = body or {}
+        title = str(body.get("name") or "").strip()
+        prompt = str(body.get("prompt") or "").strip()
+        folder = str(body.get("folder") or "").strip()
+
+        # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
+        # is a spelling; "../escape" becoming "escape" is a different request
+        # answered without saying so, and the fence is exactly here.
+        if "/" in title or chr(92) in title or title.strip(".") == "":
+            return JSONResponse({"error": "a task's name is not a path"}, status_code=400)
+        slug = _slug(title)
+        if not slug:
+            return JSONResponse({"error": "a task needs a name that can be a filename"}, status_code=400)
+        if not prompt:
+            return JSONResponse({"error": "a task needs a prompt"}, status_code=400)
+        if not folder:
+            return JSONResponse(
+                {"error": "a task needs the folder it works in; there is no default"},
+                status_code=400,
+            )
+
+        cards = config.resolve_path(config.cards)
+        # Relative to the card, because that is how a card reads it back.
+        where = (cards / folder).resolve()
+        if not where.is_dir():
+            return JSONResponse(
+                {"error": f"the folder it would work in is not there: {where}"},
+                status_code=400,
+            )
+
+        path = cards / f"{slug}.yaml"
+        if path.exists():
+            return JSONResponse(
+                {"error": f"this project already has a task called '{slug}'"},
+                status_code=409,
+            )
+
+        payload = yaml.safe_dump(
+            {"name": title, "folder": folder, "prompt": prompt},
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        await asyncio.to_thread(path.write_text, payload, encoding="utf-8")
+        # No reload here: the daemon watches this folder and will find it, the
+        # same way it finds one written by a hand. One door, not two.
+        return JSONResponse({"ok": True, "task": slug, "path": str(path)})
+
     async def project_models_use(request: Request) -> JSONResponse:
         """Point a role at another model, and repaint what that changed.
 
@@ -680,6 +773,11 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/projects/{project}/models", project_models),
         # Models: the fourth kind. It writes the project's binding file and
         # nothing else, and never accepts or returns a credential.
+        Route(
+            "/api/projects/{project}/tasks",
+            project_tasks_create,
+            methods=["POST"],
+        ),
         Route(
             "/api/projects/{project}/models/use",
             project_models_use,

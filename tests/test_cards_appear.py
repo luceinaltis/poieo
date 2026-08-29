@@ -10,10 +10,12 @@ Design: docs/daemon.md
 
 import asyncio
 
+import httpx
 from conftest import card
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
+from poieo.web import create_app
 
 _GRAPH = """\
 name: quick
@@ -190,3 +192,34 @@ async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeyp
     assert _named(daemon, "fenced") is None
 
     await _down(daemon, task)
+
+
+async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
+    """The two halves meeting, which is the only thing neither test proves on
+    its own: the route writes a file, and the daemon that was already running
+    picks it up. No reload call between them -- one door, and the daemon finds
+    a card written by a browser the same way it finds one written by a hand."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    (tmp_path / "work").mkdir()
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    serving = await _up(daemon)
+
+    transport = httpx.ASGITransport(app=create_app(daemon))
+    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+        answer = await client.post(
+            f"/api/projects/{daemon.config.display_name}/tasks",
+            json={"name": "from the board", "folder": "../work", "prompt": "look around"},
+        )
+        assert answer.status_code == 200, answer.text
+
+        await _until(
+            lambda: _named(daemon, "from-the-board") is not None,
+            "the posted card to start running",
+        )
+        # And it is a task, not just a name in a list.
+        made = _named(daemon, "from-the-board")
+        assert made.run_now() is True
+        await _until(lambda: len(made.results) == 1, "its first run")
+        assert made.results[-1].status == "completed"
+
+    await _down(daemon, serving)
