@@ -249,3 +249,51 @@ jobs:
             echo "::error::the daemon was told to stop and kept answering"; exit 1
           fi
           echo "board, bundle, api, and a clean stop"
+
+  # A number, never a gate. A floor that must not drop rewards a test that runs
+  # code and asserts nothing about it -- a thing this repository has actually
+  # shipped, green, for weeks. What the number is worth is its movement: 92%
+  # today, and a change that takes it to 85% is worth a sentence in the PR.
+  #
+  # Ubuntu only. Coverage asks which lines ran, and that answer does not differ
+  # by OS the way the suite's own can.
+  coverage:
+    name: what is not covered
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+      # Docker is here so the isolation tests run rather than skip, which is the
+      # difference between tools/docker.py reading as untested and reading as
+      # covered. A coverage number taken with a third of the suite skipped is a
+      # worse lie than no number.
+      - run: docker pull alpine:3.20
+      - run: pytest -q --cov=poieo --cov-report=json --cov-report=term
+
+      - name: put it where a reviewer will see it
+        run: |
+          python - <<'PYEOF' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          d = json.load(open("coverage.json"))
+          total = d["totals"]["percent_covered"]
+          worst = sorted(
+              d["files"].items(), key=lambda kv: kv[1]["summary"]["percent_covered"]
+          )[:8]
+
+          print("## {:.0f}% covered".format(total))
+          print()
+          print("Not a gate. The number is worth what its movement is worth.")
+          print()
+          print("Least covered, which is where to look:")
+          print()
+          print("| file | covered | lines missed |")
+          print("|---|---|---|")
+          for name, f in worst:
+              s = f["summary"]
+              print("| `{}` | {:.0f}% | {} |".format(
+                  name, s["percent_covered"], s["missing_lines"]))
+          PYEOF
