@@ -109,6 +109,14 @@ turning the setting off, not merging past it.
 `what is not covered` is deliberately **not** required. It reports a number and
 judges nothing, so its failure would mean the job broke rather than the code did.
 
+**Required checks refuse direct pushes too**, not only merges — `git push origin
+main` comes back with *5 of 5 required status checks are expected*. That was a
+surprise, and it retired the rule that let a Markdown typo go straight to `main`.
+The escape hatch, if a job ever breaks and blocks honest work, is to turn the
+setting off for as long as it takes:
+
+    gh api -X DELETE repos/luceinaltis/poieo/branches/main/protection
+
 Three things are worth knowing when a run disagrees with your machine.
 
 **CI drops two flags you use locally.** Part 2 of `AGENTS.md` runs pytest as

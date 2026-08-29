@@ -16,12 +16,9 @@ facts about this machine, and goes stale on its own — when it does, fix it.
 
 ## What needs a PR
 
-**Anything touching `src/` or `tests/` goes through a PR.** That is the code, and
-the code is what breaks. Commit straight to `main` only for typo and wording fixes
-in Markdown, and documentation no code depends on yet.
-
-When you cannot tell which side of the line a change falls on, open the PR. An
-unnecessary PR costs a minute; a broken `main` costs the next agent an hour.
+**Everything goes through a PR.** `main` refuses a push that has not passed the
+gate, so there is no longer a line to judge — only how much ceremony a change
+deserves. A typo fix wants a title and a green run, not a rehearsal.
 
 ## How big a PR should be
 
