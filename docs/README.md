@@ -23,8 +23,9 @@ codebase keeps that generic good taste would not predict, and the reason each on
 exists. Read it before reshaping anything under `src/`.
 
 **[contribution.md](contribution.md)** — the longer procedures the rules in
-`AGENTS.md` send you to: rebuilding the checked-in bundle, and rebasing a branch
-stacked on another branch. Read a section when you are in its situation.
+`AGENTS.md` send you to: rebuilding the checked-in bundle, rebasing a branch
+stacked on another branch, and getting a review pass that is not your own. Read
+a section when you are in its situation.
 
 ## The components
 

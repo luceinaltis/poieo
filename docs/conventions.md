@@ -130,3 +130,24 @@ in the product.
 
 Before introducing a name, look for the one already in use. Before keeping both,
 delete one.
+
+## Say what you assumed, before it is only in the code
+
+A change almost always rests on something you could not check: what a caller
+expects, whether a rule still holds, which of two readings of the request was
+meant. **Write that down in the PR before you write the code that assumes it.**
+
+This is not general caution, it is specific to how this repository is built.
+Most of what the code answers to came from `docs/archive/`, written by sessions
+that no longer exist to be asked, so a fair number of assumptions cannot be
+resolved at all — only declared. An assumption you state is one a reader can
+disagree with. An assumption that reaches `main` only as code is indistinguishable
+from a decision, and the next session will defend it.
+
+The same instinct already runs through the code: `explain_failure` returns `None`
+rather than name a cause it is not sure of. Do for the reader what the code does
+for the user.
+
+If stating it makes you realise you cannot proceed either way — the two readings
+lead to different work, and the wrong one wastes it — that is the case for asking
+a human, and `AGENTS.md` names the four kinds that always are.

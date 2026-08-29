@@ -39,11 +39,11 @@ Group two slices only when both are small and neither stands alone. Commit freel
 Agents may merge their own PRs. Run the gate — the exact three commands are in
 Part 2 — and do not assume it.
 
-**Review your own diff before merging** (`git diff main...HEAD`). With no second
-reviewer, self-review *is* the review: expected, not a shortcut. Look for what a
-green suite cannot tell you — a dropped error path, a public surface that quietly
-widened, a stale comment, a file staged by accident. Then write in the PR what you
-checked and found. "Self-reviewed, no findings" under a 400-line diff is not one.
+**Review your own diff before merging** (`git diff main...HEAD`), and then have a
+reviewer that did not write it read the same diff — self-review cannot see what you
+already believe. Look for what a green suite cannot tell you: a dropped error path,
+a surface that quietly widened, a stale comment, a file staged by accident. Both
+passes go in the PR. "Self-reviewed, no findings" under 400 lines is not one.
 
 And ask where each part came from. Most requirements here arrive from
 `docs/archive/`, written by earlier sessions no longer available to be asked —
@@ -54,7 +54,7 @@ true.** Delete hard enough that some of it has to come back.
 Merge only when all of these hold:
 
 1. Both suites are green, and the run appears in the PR body.
-2. You have read the full diff and recorded that review in the PR.
+2. You read the whole diff, an independent pass read it too, and both are in the PR.
 3. The branch is current with `main` and conflict-free.
 4. Every behaviour change has a test that fails without it. This repo is TDD —
    write the test first, and the history follows it.
