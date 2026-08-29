@@ -138,3 +138,50 @@ async def test_a_card_whose_filename_is_its_identity(tmp_path, monkeypatch):
     assert sorted(r.name for r in daemon.runners) == ["first", "later"]
 
     await _down(daemon, task)
+
+
+async def test_a_daemon_with_nothing_to_run_still_watches(tmp_path, monkeypatch):
+    """The case the board exists for. `poieo daemon` on a project whose tasks
+    folder is empty used to warn and stop, so the first card written from the
+    browser would have had nowhere to land."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    (tmp_path / "cards").mkdir()
+    path = tmp_path / "poieo.yaml"
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
+
+    daemon = Daemon(load_config(path), store=NullStore())
+    serving = asyncio.create_task(daemon.serve(install_signals=False))
+    await asyncio.sleep(0.1)
+    assert not serving.done(), "the daemon stopped instead of waiting for a card"
+
+    card(tmp_path / "cards", "born", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    await _until(lambda: _named(daemon, "born") is not None, "the first card ever")
+
+    await _down(daemon, serving)
+
+
+async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeypatch, caplog):
+    """Refused rather than half-given, the rule the graph reread follows. The
+    container keeper is built from the startup task set, so an isolated card
+    noticed at noon would run with none -- rebuilding a throwaway container
+    every run while believing it was fenced."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        card(
+            tmp_path / "cards",
+            "fenced",
+            "graph: ../g.yaml\ntrigger: {type: manual}\nisolation: {image: alpine:3.20}\n",
+        )
+        await _until(
+            lambda: any("asks for isolation" in m for m in caplog.messages),
+            "the daemon to refuse it",
+        )
+
+    assert _named(daemon, "fenced") is None
+
+    await _down(daemon, task)

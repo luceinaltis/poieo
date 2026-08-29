@@ -254,6 +254,27 @@ down the tasks that have been running all night beside it.
 **A task's identity is its filename**, so a card retitled at noon is the same
 task, and the watcher does not read it as a second one.
 
+**The scan runs in a thread.** `load_tasks` calls `check_isolation`, the only
+preflight that reaches outside the process, and it shells out to docker with a
+twenty-second timeout. On the event loop that would freeze the board, the timers
+and every run in flight, every `SCAN_SECONDS`, for as long as the daemon is up.
+
+**Nothing but shutdown ends the loop.** A raise anywhere in a scan is caught and
+logged, because a loop that dies takes every future card with it and says so only
+on the way down. The same complaint is logged once, not every five seconds.
+
+**Two kinds of card are refused rather than half-given**, the rule the graph
+reread follows. One asking for `isolation:` would run with no container keeper —
+`self.containers` is built from the startup task set — and rebuild a throwaway
+container per run while believing it was fenced. One taking the `notes` toolset
+would be handed a postbox whose roster is a startup snapshot, so its own prompt
+would name recipients the postbox then refuses. Both wait for a restart, and say
+so.
+
+**A daemon with nothing to run still waits**, as long as it has a folder to
+watch. It used to warn and stop, which would have left the first card the board
+ever writes with nowhere to land.
+
 Removal is not here yet: a card deleted while its run is in flight is a
 different question, and this one only had to answer *appeared*.
 
