@@ -508,6 +508,129 @@ async def test_the_binding_is_not_second_guessed(tmp_path):
     assert [e for e in store.events if e.type == "node_context_cleared"]
 
 
+class _RefusesOnce:
+    """Refuses the first call the way an endpoint refuses an oversized one.
+
+    Non-retryable, because that is what a 400 is: sending the same bytes again
+    buys the same answer. Only something *smaller* has a chance.
+    """
+
+    instances: dict[str, "_RefusesOnce"] = {}
+
+    def __init__(self, name, spec):
+        from poieo.providers.mock import MockProvider
+
+        self.inner = MockProvider(name, spec)
+        # Which call to start refusing on. A real endpoint takes the small
+        # requests and refuses once the conversation has grown, so refusing
+        # from the first call would be a different test.
+        self.refuse_from = spec.options.get("refuse_from", 1)
+        self.refusals = spec.options.get("refusals", 1)
+        self.calls = 0
+        _RefusesOnce.instances[name] = self
+
+    async def complete(self, request):
+        self.calls += 1
+        if self.calls >= self.refuse_from and self.refusals > 0:
+            self.refusals -= 1
+            from poieo.errors import ProviderError
+
+            raise ProviderError(
+                "maximum context length exceeded", provider="x", retryable=False
+            )
+        return await self.inner.complete(request)
+
+    async def context_for(self, model):
+        return None
+
+    async def health(self):
+        return True, "refuses"
+
+    async def aclose(self):
+        return
+
+
+def refusing_binding(responses, refusals=1, refuse_from=1):
+    from poieo.providers import register
+
+    register("refuses", _RefusesOnce)
+    return BindingSpec.model_validate(
+        {
+            "providers": {
+                "r": {
+                    "type": "refuses",
+                    "options": {
+                        "responses": responses,
+                        "refusals": refusals,
+                        "refuse_from": refuse_from,
+                    },
+                }
+            },
+            "default": {"provider": "r", "model": "m"},
+        }
+    )
+
+
+async def test_a_refused_request_goes_again_smaller(tmp_path, monkeypatch):
+    """An endpoint that says no to a size is telling us something we could not
+    have measured. Sending the same bytes again buys the same answer; only
+    something smaller has a chance."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)  # keep clearing out of it
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    script = {
+        "worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5
+        + ["done"]
+    }
+    store = _CapturingStore()
+
+    # Refused on the fifth call, by which point four tool results have piled
+    # up and one of them is old enough to drop.
+    result = await run_graph(
+        graph, refusing_binding(script, refusals=1, refuse_from=5), store=store
+    )
+
+    assert result.status == "completed", result.error
+    assert [e for e in store.events if e.type == "node_retried_smaller"]
+
+
+async def test_it_only_goes_again_once(tmp_path, monkeypatch):
+    """Otherwise a genuinely broken request is paid for over and over."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    script = {
+        "worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5
+        + ["done"]
+    }
+
+    result = await run_graph(graph, refusing_binding(script, refusals=99, refuse_from=5))
+
+    assert result.status == "failed"
+    # One turn's worth of calls, plus the one retry. Not a loop.
+    assert _RefusesOnce.instances["r"].calls <= 8
+
+
+async def test_nothing_to_clear_means_nothing_to_retry(tmp_path, monkeypatch):
+    """A refusal on the first turn is not about size -- there is only the
+    prompt. Trying again would buy the same answer a second time."""
+    from poieo.runtime import nodes
+
+    monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    result = await run_graph(graph, refusing_binding({"worker": ["done"]}, refusals=1), store=store)
+
+    assert result.status == "failed"
+    assert _RefusesOnce.instances["r"].calls == 1
+    assert not [e for e in store.events if e.type == "node_retried_smaller"]
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)
