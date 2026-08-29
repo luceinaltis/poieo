@@ -9,7 +9,7 @@ Three other documents sit outside this folder and answer different questions:
 | document | answers |
 |---|---|
 | `DESIGN.md` | what poieo promises its *user* — vision, principles, roadmap |
-| `README.md` | how to *use* poieo — commands, file formats, examples |
+| `README.md` | what poieo is, for somebody who has never seen it |
 | `AGENTS.md` | how to *change* this repository — branches, PRs, the merge gate |
 
 ## Start here
@@ -17,6 +17,11 @@ Three other documents sit outside this folder and answer different questions:
 **[architecture.md](architecture.md)** — the whole system in one page: the
 layers, one run end to end, which module owns what, and the invariants every
 component is written to hold.
+
+**[usage.md](usage.md)** — how to *use* poieo: every command, every key a task
+file takes, and the worked examples. The rest of this folder describes the code;
+this one describes the product, and is where `README.md` sends a reader who wants
+more than the tour.
 
 **[conventions.md](conventions.md)** — how the code is written: the habits this
 codebase keeps that generic good taste would not predict, and the reason each one

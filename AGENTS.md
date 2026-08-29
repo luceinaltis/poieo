@@ -94,11 +94,12 @@ a curl response, a Windows-only run, anything exercised by hand — as output, n
 
 ## The shape of the repo
 
-- `docs/` — **one document per component**, describing how it works today, plus two
-  that are not components: `conventions.md`, how code here is written and where that
-  departs from generic good taste, read before your first change to `src/`; and
-  `contribution.md`, the longer procedures these rules send you to. `docs/README.md`
-  is the index, and a component's document is edited in the PR that changes its shape.
+- `docs/` — **one document per component**, describing how it works today, plus three
+  that are not: `usage.md`, the manual `README.md` sends a reader to; `conventions.md`,
+  how code here is written and where that departs from generic good taste, read before
+  your first change to `src/`; and `contribution.md`, the longer procedures these rules
+  send you to. `docs/README.md` is the index, and a component's document is edited in
+  the PR that changes its shape.
 - `docs/archive/` — dated design specs features were built from. History: read it
   for intent, never for current behaviour, and never add to it. Do not start a new
   dated file anywhere; a design belongs in the component document it describes.
