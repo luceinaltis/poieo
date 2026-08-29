@@ -164,17 +164,13 @@ export function Models({
         </p>
       ) : null}
       <div className="models-body">
-        <Body
-          report={report}
-          filter={filter.trim().toLowerCase()}
-          onUse={use}
-          busy={busy}
-        />
-        {/* Under the catalogue, because it is a footnote to it: something is
-            running here that none of the blocks above could have shown. Drawn
-            only when there is one, which is the point -- a standing button
-            whose usual answer is "nothing new" is one people learn to ignore,
-            and this is silent until there is something to say. */}
+        {/* Above the lists, not under them. It is the one piece of news here,
+            and under a 396-model catalogue it sat 2181px down a 729px panel --
+            the last thing a reader would ever find. Drawn only when there is
+            one, so the usual panel is not pushed down by an empty slot.
+
+            Outside `Body` on purpose: a filter is about models, and an engine
+            with none of them yet is not something a search can miss. */}
         {offers.map((one) => (
           <p className="models-offer" data-offer={one.name} key={one.name}>
             <span>
@@ -191,6 +187,12 @@ export function Models({
             </button>
           </p>
         ))}
+        <Body
+          report={report}
+          filter={filter.trim().toLowerCase()}
+          onUse={use}
+          busy={busy}
+        />
       </div>
     </aside>
   )
@@ -220,7 +222,18 @@ function Body({
       </p>
     )
   }
-  const blocks = report.endpoints.map((endpoint) => ({
+  // What is on this machine first. The report is in the binding file's order,
+  // which is where `poieo init` happened to write each endpoint -- provenance,
+  // not an answer to "what can I run". Measured on a real board, that order put
+  // the eight models sitting on the disk 1786px below a 396-model menu of
+  // things that cost money and needed a key nobody had set.
+  //
+  // One step, not a sort: `installed` before the rest, and inside each half the
+  // reader's own arrangement is left alone. `sort` is stable, so that holds.
+  const ordered = [...report.endpoints].sort(
+    (a, b) => Number(b.installed) - Number(a.installed),
+  )
+  const blocks = ordered.map((endpoint) => ({
     endpoint,
     shown: filter
       ? endpoint.models.filter((m) => m.id.toLowerCase().includes(filter))

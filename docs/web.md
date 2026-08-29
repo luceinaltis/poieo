@@ -455,6 +455,22 @@ replaced. An endpoint with nothing matching leaves the list entirely: left in
 place it would show "no answer" under its own heading, which is a different and
 more alarming thing than a search that missed.
 
+**What is on this machine is listed first.** The report comes in the binding
+file's order, which is where `poieo init` happened to write each endpoint —
+provenance, and not an answer to "what can I run". On a real board that put the
+eight models sitting on the disk 1786px below a 396-model menu of things that
+cost money through a key nobody had set. The panel does one step, not a sort:
+`installed` before the rest, stable, so a reader's own arrangement survives
+inside each half.
+
+**The list is read on a phone.** Two rules, both found by photographing it at
+393px rather than by reasoning about it. The panel's `width: min(440px, 100vw)`
+was content-box, so its own 32px of padding pushed it wider than the screen and,
+pinned to the right, hung that off the *left* edge — every heading, the filter
+and the variable name silently chopped. And the rail lies down under 720px: two
+words down the side cost 92px of a 393px screen, a quarter of it, permanently,
+for a list two items long.
+
 **The row is the button.** A catalogue is read by scanning names, and a verb
 beside each of four hundred of them is four hundred words the eye has to skip.
 What a click moves is chosen once, above the list — and only where there is a
@@ -468,11 +484,13 @@ routed one shows the rate it published. An endpoint that charges but publishes
 nothing leaves the column empty, because "free" would be a guess and an
 expensive one to be wrong about.
 
-**An offer is a footnote under the catalogue, and only when there is one.** The
-panel makes a second request for it, so the catalogue never waits; when it comes
-back with something, a line appears saying an engine is answering here with
-models this project cannot use yet, and a button that declares it. Silent
-otherwise — which is the point, and why this is not a "look again" button: a
+**An offer sits above the lists, and only when there is one.** The panel makes a
+second request for it, so the catalogue never waits; when it comes back with
+something, a line appears saying an engine is answering here with models this
+project cannot use yet, and a button that declares it. It was written under the
+lists, as a footnote to them, and photographed there: 2181px down a 729px panel,
+three screens below the fold. The one piece of news on the page cannot be the
+last thing on it. Silent otherwise — which is the point, and why this is not a "look again" button: a
 control whose usual answer is "nothing new" teaches people to stop pressing it,
 and the information arrives without anyone having to know it exists. The button reads
 **"let it use them"** rather than "add", because *add* leaves a reader to guess

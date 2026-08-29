@@ -7,6 +7,9 @@
   /* The rail is fixed, so the stage has to reserve exactly its width; spelling
      it twice is how the board ends up under it by a pixel. */
   --rail-width: 92px;
+  /* What it takes across the top instead, on a screen too narrow to give it a
+     quarter of the width. Same reason to name it: the stage reserves it. */
+  --rail-lying-down: 38px;
 }
 
 /* Every small bordered button on the page -- close, pause, run now, accept,

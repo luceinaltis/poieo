@@ -601,3 +601,59 @@ test("asking again looks for new engines too, not only for new models", async ()
 
   expect(fetchUndeclared).toHaveBeenCalledTimes(2)
 })
+
+// -- what a reader sees first ------------------------------------------------
+//
+// Measured on a real board before this existed: the metered catalogue's 396
+// models pushed the eight on this machine 1786px down, and the offer 2181px --
+// three screens below a 729px panel. The list was in the binding file's order,
+// which is provenance, not an answer to "what can I run".
+
+test("what is on this machine is listed before a catalogue", async () => {
+  // In the file's order, which is what the report carries: `poieo init` writes
+  // the metered endpoint wherever it was declared, and provenance is not an
+  // answer to "what can I run".
+  await render({ ...REPORT, endpoints: [REPORT.endpoints[1], REPORT.endpoints[0]] })
+
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
+  )
+  expect(blocks).toEqual(["ollama", "routed"])
+})
+
+test("two endpoints of the same kind keep the order their file put them in", async () => {
+  // The rule is one step, not a sort: reordering beyond "here before a menu"
+  // would hide the reader's own arrangement from them.
+  const second = { ...REPORT.endpoints[1], name: "other" }
+  await render({ ...REPORT, endpoints: [REPORT.endpoints[1], second] })
+
+  const blocks = [...container.querySelectorAll("[data-endpoint]")].map((e) =>
+    e.getAttribute("data-endpoint"),
+  )
+  expect(blocks).toEqual(["routed", "other"])
+})
+
+test("an offer is above the lists, not under them", async () => {
+  // It is the one piece of news on the panel. Under a 396-model catalogue it
+  // was the last thing a reader would ever find.
+  await render(REPORT, LMSTUDIO)
+
+  const first = container.querySelector("[data-offer], [data-endpoint]")
+  expect(first!.getAttribute("data-offer")).toBe("lmstudio")
+})
+
+test("a filter that hides every model leaves the offer standing", async () => {
+  // The filter is about models; an offer is about an engine that has none of
+  // them yet, so a search that missed says nothing about it.
+  await render(REPORT, LMSTUDIO)
+
+  await act(async () => {
+    const box = container.querySelector<HTMLInputElement>(".models-filter")!
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+    set.call(box, "nothing-matches-this")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+
+  expect(container.querySelector("[data-offer]")).not.toBeNull()
+  expect(container.textContent).toContain("nothing matches")
+})

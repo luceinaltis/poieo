@@ -5,6 +5,12 @@
   background: #191612;
   border-left: 1px solid #2e2820;
   bottom: 0;
+  /* `width` here is what the panel may take of the screen, not what is left
+     after its own padding. Without this, `min(440px, 100vw)` on a 393px phone
+     became 393 + 32 of padding = 425, and because the panel is pinned to the
+     right the extra 32px hung off the *left* edge -- every heading, the filter
+     box and the variable name all silently chopped. */
+  box-sizing: border-box;
   /* A column, and only the body grows. Not a grid: `grid-template-rows: auto
      1fr` names rows by *position*, so the `1fr` lands on whichever child
      happens to be second -- and adding the filter above the body handed the
@@ -169,9 +175,14 @@
   color: #d16d5a;
 }
 
+/* Further apart between rows than inside one. They were the other way around
+   -- 3px between, 8px within -- and a two-line row then read as two rows: the
+   window and the size of one model looked like they belonged to the name
+   underneath them. Everything else here was correct and the list was still
+   unreadable, which is the whole lesson. */
 .models-list {
   display: grid;
-  gap: 3px;
+  gap: 12px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -184,7 +195,10 @@
   align-items: baseline;
   display: grid;
   font-size: 0.82em;
-  gap: 8px;
+  /* No row gap: the second line is the same row's continuation, and any space
+     there competes with the space that separates one model from the next. */
+  column-gap: 8px;
+  row-gap: 0;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 

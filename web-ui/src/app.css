@@ -154,4 +154,31 @@
   .shell-stage[data-drawer="true"] {
     margin-right: 0;
   }
+
+  /* And the rail lies down. Two words down the side cost 92px of a 393px
+     phone -- a quarter of the screen, permanently, for a list that is two
+     items long. Across the top it costs a line. */
+  .shell-rail {
+    align-content: center;
+    border-bottom: 1px solid #2e2820;
+    border-right: 0;
+    bottom: auto;
+    box-sizing: border-box;
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: 4px;
+    /* Held to the height the stage reserves rather than taking whatever the
+       buttons come to. Two numbers that have to agree is how the board ends
+       up under it, which is the note on `--rail-width` one line up. */
+    height: var(--rail-lying-down);
+    padding: 0 10px;
+    right: 0;
+    width: auto;
+  }
+
+  .shell-stage {
+    height: calc(100vh - var(--bar-height) - var(--rail-lying-down));
+    margin-left: 0;
+    margin-top: var(--rail-lying-down);
+  }
 }
