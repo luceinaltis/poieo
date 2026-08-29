@@ -455,6 +455,11 @@ class AgentNode(Node):
             # has been answered, which is why nothing is cleared on turn one --
             # there is nothing there yet to clear.
             sent = 0
+            # An endpoint that refuses a size is telling us something we could
+            # not have measured beforehand. Trying again smaller is worth one
+            # attempt per node -- more than that and a genuinely broken
+            # request gets paid for over and over.
+            went_again = False
             # The binding first, the endpoint second. Someone who wrote the
             # number down meant it -- a smaller real window, a deliberately
             # tighter budget -- so the endpoint is only asked when nobody has
@@ -492,7 +497,34 @@ class AgentNode(Node):
                 if _too_big(window, sent, messages, _COMPACT_AT, _COMPACT_CAP):
                     messages = await _compact(spec, ctx, bound, messages)
                 request = bound.request(list(messages), tools=offered)
-                response = await call_with_retry(spec, bound.provider, request, ctx)
+                try:
+                    response = await call_with_retry(spec, bound.provider, request, ctx)
+                except NodeError:
+                    # `call_with_retry` has already spent this node's retry
+                    # budget on sending the *same* bytes. The one thing left to
+                    # vary is how many of them there are.
+                    #
+                    # The error is not read. Endpoints spell "too long"
+                    # differently and a regular expression over English breaks
+                    # on the next API version; instead this is bounded by what
+                    # it can actually do -- once per node, and only when
+                    # clearing found something to clear. A refusal with nothing
+                    # older to drop was not about size, or was about a size we
+                    # cannot help, and either way sending it again buys the
+                    # same answer twice.
+                    freed = 0 if went_again else _clear_old_results(messages)
+                    if not freed:
+                        raise
+                    went_again = True
+                    ctx.emit(
+                        "node_retried_smaller",
+                        node_id=spec.id,
+                        turn=turns,
+                        freed=freed,
+                        kept=_KEEP_RESULTS,
+                    )
+                    request = bound.request(list(messages), tools=offered)
+                    response = await call_with_retry(spec, bound.provider, request, ctx)
                 sent = response.usage.input_tokens
                 ctx.usage = ctx.usage.merge(response.usage)
                 ctx.emit(

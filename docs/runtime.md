@@ -91,7 +91,7 @@ the runtime stays unaware that containers, or journals, exist at all — see
 
 `ctx.emit()` appends one event to the run's stream. The event types are
 `run_started`, `node_started`, `node_retry`, `node_turn`, `node_tool_call`,
-`node_context_cleared`, `node_compacted`, `node_compact_failed`,
+`node_context_cleared`, `node_retried_smaller`, `node_compacted`, `node_compact_failed`,
 `node_finished`, `run_finished`, `run_failed`, `run_aborted`, and
 `run_change` and `run_change_failed` (both written by the daemon, not here).
 
@@ -133,6 +133,7 @@ why the run ends here rather than suspending.
 render prompt → over the cap? clear the older tool results
              → still over the second cap? fold the older turns into a summary
              → ask the model, offering tool definitions
+  ↳ refused?        clear and ask once more, if there was anything to clear
   ↳ cut off?        not an answer — `out_of_room`
   ↳ no tool calls?  the node is done, that answer is its output
   ↳ tool calls?     execute each, append the results, ask again
@@ -199,6 +200,20 @@ before anyone could say. They are wrong for every model these examples bind --
 `_CONTEXT_CAP` is 2.3% of what `z-ai/glm-5.3-flash` holds and 11.4% of a local
 qwen3.5 -- which is why the binding is the better answer and the constant is
 only the fallback.
+
+**A refusal is a measurement nobody could have taken.** An endpoint that
+rejects a request for its size knows something the loop does not: the caps
+above fire on the *previous* turn's token count, so a turn that grows sharply
+-- one large file, one long command -- goes out over the line before anything
+here can know it. When that happens the request is cleared and sent once more.
+
+The error text is never read. Endpoints spell "too long" differently and a
+regular expression over English breaks on the next API version, so this is
+bounded by what it can do rather than by what it recognises: **once per node,
+and only when clearing found something to clear.** A refusal with nothing older
+to drop was not about size, or was about a size nothing here can help, and
+sending it again would buy the same answer twice. `node_retried_smaller` says
+when it happened and what it freed.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with
