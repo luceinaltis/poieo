@@ -42,6 +42,25 @@ async def test_read_truncates_large_files(tmp_path):
     assert "truncated" in text
 
 
+async def test_a_truncated_read_says_how_to_see_the_rest(tmp_path):
+    """`... [truncated]` is a dead end, and it stopped being one in #178.
+
+    A file can be read in windows now, so a read that hit the ceiling should
+    hand back the number to carry on from rather than leaving the model to
+    guess that `offset` exists.
+    """
+    body = "".join("line %d" % n + chr(10) for n in range(1, 40_001))
+    (tmp_path / "long.py").write_text(body)
+
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "long.py"})
+
+    assert "truncated" in text
+    assert "offset" in text
+    # Cut on a line, not mid-word: half a line of code is a line of code that
+    # does not exist, and `edit_file` matches on exact text.
+    assert text.rstrip().splitlines()[-2].startswith(("1", "2", "3"))
+
+
 async def test_list_dir_and_glob(tmp_path):
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "m.py").write_text("x = 1")

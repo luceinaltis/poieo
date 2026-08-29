@@ -61,7 +61,18 @@ async def _read_file(workdir: Path, args: dict[str, Any]) -> str:
 
     numbered = "\n".join(f"{offset + i}\t{line}" for i, line in enumerate(window))
     if len(numbered) > _READ_CAP:
-        numbered = numbered[:_READ_CAP] + "\n... [truncated]"
+        # Cut on a line, and say where it stopped. `... [truncated]` was a
+        # dead end until this tool could read a window; now the number to
+        # carry on from is the useful half of the message, and a line cut in
+        # half is a line of code that does not exist -- which `edit_file`
+        # would then fail to match, without either of them saying why.
+        kept = numbered[:_READ_CAP].rsplit("\n", 1)[0].split("\n")
+        last = offset + len(kept) - 1
+        return (
+            f"{args['path']} lines {offset}-{last} of {len(lines)}, truncated\n"
+            + "\n".join(kept)
+            + f"\n... [give offset={last + 1} to read on]"
+        )
     if len(window) == len(lines):
         # The whole file: the last number already says how many lines there
         # are, and a header saying "lines 1-40 of 40" would be a line of
