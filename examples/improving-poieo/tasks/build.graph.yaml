@@ -23,7 +23,7 @@ nodes:
 
       {{ input.get('sender', {}).get('outputs', {}).get('carry', '(nothing was handed over -- stop and say so)') }}
 
-      This project is test-first and its rules are in CLAUDE.md. Read it before
+      This project is test-first and its rules are in AGENTS.md. Read it before
       your first commit. In short:
 
       1. Cut a branch off main. Name it after the topic, no prefix.
@@ -37,7 +37,7 @@ nodes:
          runs tsc, and vitest does not type-check.
 
          pytest needs PYTEST_DISABLE_PLUGIN_AUTOLOAD=1. Pass it as the tool's
-         `env` argument rather than writing it into the command: CLAUDE.md
+         `env` argument rather than writing it into the command: AGENTS.md
          spells it the POSIX way, `VAR=1 command`, and a Windows shell rejects
          that outright.
       5. Commit with a Conventional Commits subject, and end the message with

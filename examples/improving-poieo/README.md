@@ -48,7 +48,7 @@ Everything before it is reversible: a branch you delete, a pull request you
 close, a private copy you throw away. Merging is not, and it is the only card
 that changes something other people can see.
 
-`CLAUDE.md` says a human decides when a change touches a public interface,
+`AGENTS.md` says a human decides when a change touches a public interface,
 deletes a test, adds a dependency, or moves how credentials are loaded. The
 `review` card is told to answer `HOLD` on all four so they never reach `land`
 — but **that guard is a prompt, and a prompt is not a fence.** Turn `land` on

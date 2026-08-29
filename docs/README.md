@@ -10,13 +10,17 @@ Three other documents sit outside this folder and answer different questions:
 |---|---|
 | `DESIGN.md` | what poieo promises its *user* — vision, principles, roadmap |
 | `README.md` | how to *use* poieo — commands, file formats, examples |
-| `CLAUDE.md` | how to *change* this repository — branches, PRs, the merge gate |
+| `AGENTS.md` | how to *change* this repository — branches, PRs, the merge gate |
 
 ## Start here
 
 **[architecture.md](architecture.md)** — the whole system in one page: the
 layers, one run end to end, which module owns what, and the invariants every
 component is written to hold.
+
+**[conventions.md](conventions.md)** — how the code is written: the habits this
+codebase keeps that generic good taste would not predict, and the reason each one
+exists. Read it before reshaping anything under `src/`.
 
 ## The components
 
@@ -42,6 +46,10 @@ component is written to hold.
   own the other half. There is no separate roadmap here — `DESIGN.md` has one.
 - No dated files. When a component changes, edit its document; git already
   records when and why.
+- `AGENTS.md` is the agent-facing page under the name every tool knows. Root
+  `CLAUDE.md` is one `@AGENTS.md` import line so Claude Code loads it too — the
+  page is written once. `.claude/rules/` holds pointers into `docs/`, never rules
+  of its own, so nothing an agent must know is locked to one vendor's folder.
 
 ## archive/
 

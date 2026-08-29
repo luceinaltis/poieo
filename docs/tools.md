@@ -114,7 +114,7 @@ outside `execute()` raise. An unknown tool name is answered the same way.
 
 `run_command` runs through **a POSIX shell where one exists**, including on
 Windows, where `create_subprocess_shell` would otherwise use `COMSPEC` --
-`cmd.exe`. A model writes POSIX; so does this repository's own CLAUDE.md.
+`cmd.exe`. A model writes POSIX; so does this repository's own AGENTS.md.
 
 The measured run that prompted this is the argument. Unix binaries were on
 PATH, so `grep` went 21/23 and `sed` 3/3 -- and then a heredoc came back
