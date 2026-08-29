@@ -32,6 +32,18 @@ class ProviderSpec(_Spec):
     base_url: str | None = None
     # Read the credential from the environment; never store keys in the file.
     api_key_env: str | None = None
+    # Headers to send with every request, laid over the ones built from
+    # `api_key_env`. For an endpoint that speaks the OpenAI shape and none of
+    # its plumbing: Azure wants the key in `api-key` rather than in an
+    # `Authorization: Bearer`, and without this the largest OpenAI-shaped
+    # endpoint there is could not be reached by the provider named after that
+    # shape. **Values are literal, so a key does not belong here** -- put it in
+    # the environment and name the variable in `api_key_env`, which is the rule
+    # the rest of this file exists to keep.
+    headers: dict[str, str] = Field(default_factory=dict)
+    # Query parameters on every request. Azure's `api-version` is required and
+    # is not part of any path, so a base URL cannot carry it.
+    query: dict[str, str] = Field(default_factory=dict)
     timeout: float = Field(default=600.0, gt=0)
     max_retries: int = Field(default=2, ge=0, le=10)
     # Provider-specific extras (e.g. mock scripts, anthropic betas).
