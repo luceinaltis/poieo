@@ -25,7 +25,9 @@ from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, S
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from ..binding import load_binding
 from ..errors import BindingError, PoieoError
+from ..providers import credential_for
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -98,6 +100,59 @@ def _workspace_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The private copy behind a task, if it keeps one."""
     runner = _runner_for(daemon, project, task)
     return getattr(runner, "workspace", None) if runner else None
+
+
+def _project_for(daemon: Any, name: str) -> Any:
+    """The one project answering to a name, or None.
+
+    A name is an identity here for the same reason it is on a task: the daemon
+    refuses to start two projects that share one.
+    """
+    for project in daemon.projects:
+        if project.config.display_name == name:
+            return project
+    return None
+
+
+def _models_of(project: Any) -> Any:
+    """The binding this project's models panel is about, or None.
+
+    **The spec already in memory**, taken off any task bound to the project's
+    own file -- not a fresh read of that file. The board draws a resolved model
+    on every node from that same object, and a panel reading the file instead
+    would disagree with the graph three inches to its left the moment anybody
+    typed `poieo config use`. One truth per screen; a run re-reads the file and
+    moves both together (see daemon.md).
+
+    Falling back to a read is for the project whose every task is disabled or
+    bound elsewhere: it still has a binding, and refusing to show it because
+    nothing happens to be armed would be the check getting in the way.
+    """
+    wanted = project.config.default_binding_path()
+    if wanted is None:
+        return None
+    for task in getattr(project, "tasks", ()):
+        if task.binding_key == str(wanted):
+            return task.binding
+    return load_binding(wanted)
+
+
+def _key_state(name: str, provider: Any) -> bool | None:
+    """Whether the variable this endpoint names is set -- never what is in it.
+
+    `None` rather than `False` when it names none: "its SDK resolves its own"
+    is a different fact from "the key is missing", and a panel that warned
+    about the first would cry wolf on every local endpoint. Asked through
+    `credential_for`, so the rule about where a key comes from stays in one
+    place and the value never comes back here to be leaked.
+    """
+    if not provider.api_key_env:
+        return None
+    try:
+        credential_for(name, provider)
+    except PoieoError:
+        return False
+    return True
 
 
 def _review_state(runner: Any) -> dict[str, Any]:
@@ -239,6 +294,59 @@ def create_app(daemon: Any) -> Starlette:
                     for project in daemon.projects
                 ],
                 "tasks": rows,
+            }
+        )
+
+    async def project_models(request: Request) -> JSONResponse:
+        """Which models this project runs on, and where that was decided.
+
+        The same facts `poieo config` prints, so the terminal and the browser
+        cannot disagree about what a project is bound to. Reads what is
+        already in memory and opens no socket; asking the endpoints what they
+        currently serve is a different question and will be a different route.
+
+        Two things deliberately do not cross. A **key** never does -- only the
+        name of the variable it comes from, and whether that is set. Nor does
+        a `base_url`: the endpoint's own name tells one from another, and an
+        address is the one field in a binding that can carry a private host.
+        """
+        name = request.path_params["project"]
+        project = _project_for(daemon, name)
+        if project is None:
+            # The board remembers a project across restarts, so a picker
+            # holding one the daemon was started without is a real state
+            # rather than a typo -- and the list is what fixes it.
+            return JSONResponse(
+                {
+                    "error": f"no project '{name}'",
+                    "projects": [p.config.display_name for p in daemon.projects],
+                },
+                status_code=404,
+            )
+        # `_models_of` may read a file when nothing armed is bound to it.
+        spec = await asyncio.to_thread(_models_of, project)
+        if spec is None:
+            # An answer, not a failure: a project may legitimately name none.
+            return JSONResponse(
+                {"binding": None, "providers": {}, "default": None, "roles": {}}
+            )
+        return JSONResponse(
+            {
+                "binding": {"name": spec.name, "path": str(spec.source_path)},
+                "providers": {
+                    key: {
+                        "type": provider.type,
+                        "api_key_env": provider.api_key_env,
+                        "api_key_set": _key_state(key, provider),
+                    }
+                    for key, provider in spec.providers.items()
+                },
+                "default": spec.target("default"),
+                # Null for a role this binding cannot resolve, exactly as
+                # `poieo config` prints `(unresolvable)` rather than dropping
+                # the line. It is in the file, so it is on the screen; leaving
+                # it out would hide the only case worth looking at.
+                "roles": {role: spec.target(role) for role in sorted(spec.roles)},
             }
         )
 
@@ -420,6 +528,7 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
+        Route("/api/projects/{project}/models", project_models),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.

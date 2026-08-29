@@ -19,6 +19,7 @@ server and the client keep them together so they stay easy to count.
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
+| `GET /api/projects/{p}/models` | which models this project runs on, and where that was decided |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
@@ -43,6 +44,43 @@ because whoever asked is holding a list that has moved on.
 
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.
+
+### `GET /api/projects/{p}/models`
+
+The same facts `poieo config` prints, so the terminal and the browser cannot
+disagree about what a project is bound to: the file, every endpoint it declares,
+what runs by default, and what each **named** role runs on. It reads what is
+already in memory and opens no socket — asking the endpoints what they *serve*
+right now is a different question, and `poieo config models` keeps those apart
+for a reason worth keeping here too.
+
+It is addressed by **project**, not by task, because that is `poieo config`'s own
+scope: a binding belongs to the project, and hanging the answer off a task would
+put the same answer on every card. `_project_for` is the lookup, and a name that
+answers for nothing is a **404 carrying the names that do** — the board remembers
+a project across restarts, so a picker holding one the daemon was started without
+is a real state rather than a typo.
+
+`_models_of` takes the spec **already in memory**, off any task bound to the
+project's own file, rather than reading that file again. The board draws a
+resolved model on every node from that same object, and a panel reading the file
+would disagree with the graph three inches to its left the moment anybody typed
+`poieo config use`. One truth per screen; a run re-reads the file and moves both
+together (see [daemon.md](daemon.md)). It falls back to a read only for a project
+whose every task is disabled or bound elsewhere — it still has a binding, and
+refusing to show it because nothing is armed would be the check getting in the way.
+
+Two things deliberately do not cross. A **key** never does: only the name of the
+variable it comes from, and whether that is set — read through
+`providers.credential_for`, so the rule about where a credential comes from stays
+in one place and the value never reaches this module to be leaked. `api_key_set`
+is **null rather than false** when an endpoint names no variable, because "its
+SDK resolves its own" is a different fact from "the key is missing", and a panel
+warning about the first would cry wolf on every local endpoint. And a
+**`base_url`** does not cross either: an endpoint's own name tells one from
+another, and an address is the one field in a binding that can carry a private
+host. If a real confusion turns up — two `openai_compatible` endpoints a reader
+cannot tell apart — the argument for letting it through will be concrete.
 
 `create_app(daemon)` takes a daemon-shaped object (`.runners`, `.store`,
 `.config`), which
@@ -183,7 +221,21 @@ web-ui/src/
   detail/           the drawer: one task, turn by turn, plus control
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
+  models/           which models this project runs on
 ```
+
+**`Models` hangs off the bar, not off a card.** A project's models are the
+project's, and putting them in the drawer would repeat one answer on every task.
+It is the drawer's twin otherwise — the same fixed aside on the same edge at the
+same width — so only one of the two is ever open, and `.shell-stage` reserves one
+margin for whichever it is.
+
+**Roles are gated on content**, the way a card's generated prompt gates its
+memory block: a project whose file names none shows no trace of them, because
+most projects run everything on one model and a heading over an empty list is
+furniture. A project whose file *does* name roles gets them, because without them
+the panel would be lying by omission — the default is not what the step pinned to
+`role: reader` will use.
 
 **`Question` is drawn first in the drawer, above the controls.** Everything
 after a `confirm` node is held until it is answered, so a reader who scrolls

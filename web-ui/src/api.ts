@@ -25,6 +25,44 @@ export async function fetchTasks(): Promise<Listing> {
   return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
 }
 
+/**
+ * Which models a project runs on, and where that was decided.
+ *
+ * A key never crosses -- only the name of the variable it comes from, and
+ * whether that is set. Nor does an endpoint's address: its own name tells one
+ * from another, and a `base_url` is the one field in a binding that can carry
+ * a private host.
+ */
+export interface ModelsReport {
+  /** Null when the project names no models file at all. */
+  binding: { name: string; path: string } | null
+  providers: Record<
+    string,
+    {
+      type: string
+      /** The variable a key is read from; null when the endpoint names none. */
+      api_key_env: string | null
+      /** Null -- not false -- when it names none: its SDK resolves its own. */
+      api_key_set: boolean | null
+    }
+  >
+  /** `provider/model` for everything that does not name a role, or null. */
+  default: string | null
+  /**
+   * The roles this project's models file names, and nothing else -- a role a
+   * graph calls but the file has never named runs on the default and is not
+   * this panel's business. Null for one the binding cannot resolve at all,
+   * which is a broken file rather than a missing entry.
+   */
+  roles: Record<string, string | null>
+}
+
+export async function fetchModels(project: string): Promise<ModelsReport | null> {
+  return getJson<ModelsReport>(
+    `/api/projects/${encodeURIComponent(project)}/models`,
+  )
+}
+
 export async function fetchRuns(
   opts: { task?: string; project?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {

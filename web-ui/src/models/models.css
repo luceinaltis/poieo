@@ -1,0 +1,105 @@
+/* The same aside the drawer is, on the same edge and at the same width: two
+   panels of different shapes fighting over one margin is furniture, and only
+   one of them is ever open. */
+.models {
+  background: #191612;
+  border-left: 1px solid #2e2820;
+  bottom: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  padding: 12px 16px;
+  position: fixed;
+  right: 0;
+  top: var(--bar-height);
+  width: min(440px, 100vw);
+}
+
+.models-head {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.models-head h2 {
+  font-size: 1em;
+  margin: 0;
+}
+
+/* The file, not the whole path: enough to recognise which project's models
+   these are, with the rest on the tooltip for whoever has to go and edit it. */
+.models-file {
+  color: #7a6e60;
+  font-size: 0.82em;
+  margin-right: auto;
+}
+
+.models-close {
+  background: none;
+  border: 0;
+  color: #7a6e60;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.models-close:hover {
+  color: #e8dcc8;
+}
+
+.models-note {
+  color: #7a6e60;
+  font-size: 0.86em;
+  margin: 0;
+}
+
+.models-endpoints,
+.models-bound {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.models-endpoints li,
+.models-bound li {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.86em;
+  gap: 8px;
+}
+
+.models-endpoint-name,
+.models-role {
+  color: #e8dcc8;
+  min-width: 88px;
+}
+
+.models-kind,
+.models-ref {
+  color: #9a9086;
+}
+
+/* Named, never valued. The colour is the only thing that shouts: a step whose
+   endpoint has no key will not run, and that is worth finding without
+   reading. */
+.models-key {
+  font-size: 0.94em;
+  margin-left: auto;
+}
+
+.models-key[data-key="set"] {
+  color: #6b6257;
+}
+
+.models-key[data-key="missing"] {
+  color: #d16d5a;
+}
+
+/* Same red as a missing key, and for the same reason: a step bound to this
+   role has nothing to call. */
+.models-ref[data-unresolved="true"] {
+  color: #d16d5a;
+}

@@ -76,6 +76,25 @@
   padding: 3px 6px;
 }
 
+/* Beside the view picker, and wearing the same box: both open something about
+   the whole board rather than about one task. */
+.shell-models {
+  background: #1c1915;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 3px 8px;
+}
+
+.shell-models:hover,
+.shell-models[aria-expanded="true"] {
+  border-color: #4a4034;
+  color: #e8dcc8;
+}
+
 .shell-stage {
   height: calc(100vh - var(--bar-height));
   position: relative;

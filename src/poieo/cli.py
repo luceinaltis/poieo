@@ -35,7 +35,7 @@ from .daemon.config import (
     config_for_tasks_folder,
 )
 from . import detect as engines
-from .errors import BindingError, PoieoError
+from .errors import PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
 from .learn import last_suggestion, learn as run_learning_pass
@@ -894,31 +894,6 @@ def _configured() -> "tuple[Path, Any]":
     return path, load_binding(path)
 
 
-def _target(spec: Any, role: str) -> str | None:
-    """``provider/model`` for a role, or None when the binding cannot say.
-
-    Slash-separated, because this is the form `poieo config use` takes back --
-    a reader who types what they just read has to be right. It splits once, so
-    a model id full of slashes (`hf.co/empero-ai/...`) survives it intact.
-
-    Only a binding with no default to fall back on gets None -- the same call
-    the board makes, and for the same reason: reporting what would really run
-    beats refusing to report.
-    """
-    try:
-        resolved = spec.resolve(role)
-    except BindingError:
-        return None
-    return resolved.ref
-
-
-def _spoken_for(spec: Any) -> dict[str, str]:
-    """Which `provider:model` each named role -- and `default` -- points at."""
-    named = {"default": _target(spec, "default")}
-    named.update({role: _target(spec, role) for role in spec.roles})
-    return {role: target for role, target in named.items() if target}
-
-
 @config_app.callback(invoke_without_command=True)
 @_guarded
 def config(
@@ -943,8 +918,8 @@ def config(
             name: {"type": p.type, "base_url": p.base_url}
             for name, p in spec.providers.items()
         },
-        "default": _target(spec, "default"),
-        "roles": {role: _target(spec, role) for role in sorted(spec.roles)},
+        "default": spec.target("default"),
+        "roles": {role: spec.target(role) for role in sorted(spec.roles)},
     }
     if as_json:
         typer.echo(json.dumps(report, ensure_ascii=False, indent=2))
@@ -996,7 +971,7 @@ def config_models(
         )
 
     served = dict(zip(names, asyncio.run(_go())))
-    in_use = {target: role for role, target in _spoken_for(spec).items()}
+    in_use = {target: role for role, target in spec.spoken_for().items()}
 
     report = {
         name: {

@@ -144,6 +144,16 @@ class DaemonConfig(ProjectSpec):
         assert target is not None  # guaranteed by _check_flows
         return self.resolve_path(target)
 
+    def default_binding_path(self) -> Path | None:
+        """The file this project's tasks fall back to, or None if it names one
+        for none of them.
+
+        Resolved, because that is the spelling `LoadedTask.binding_key` is
+        built from and a caller comparing an unresolved path against one would
+        match nothing at all.
+        """
+        return self.resolve_path(self.binding).resolve() if self.binding else None
+
 
 class LoadedTask(BaseModel):
     """A task with its graph and binding parsed and cross-checked."""
