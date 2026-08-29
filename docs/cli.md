@@ -172,6 +172,12 @@ find a subcommand to ask it is a tax. The subcommands are for changing the answe
 which is where `provider/model` used to be spelled twice; the browser sees less
 of the answer than the terminal does, and that difference is argued there.
 
+**And makes the same edit.** `POST …/models/use` is `config use` from a browser:
+same `binding.split_ref` reading the reference back, same `rebind.point_at`
+doing the surgery, same two refusals before it — an undeclared provider, and a
+model the endpoint says it does not serve. A third would be two behaviours to
+keep in step, which is what sharing the pieces rather than the command avoids.
+
 Three neighbouring questions stay apart, because they are easy to confuse:
 `check` asks whether an endpoint is **up**, `config` reads what the **file**
 decided, and `config models` asks the endpoints for their **catalogue**. Only

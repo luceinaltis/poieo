@@ -17,8 +17,9 @@
 
 import { useEffect, useState } from "react"
 
-import { fetchModels } from "../api"
-import type { Endpoint, ModelsReport, ServedModel } from "../api"
+import { fetchModels, pickModel } from "../api"
+import type { Endpoint, ModelsAnswer, ModelsReport, ServedModel } from "../api"
+import { useAct } from "../useAct"
 import "./models.css"
 
 export function Models({
@@ -30,6 +31,11 @@ export function Models({
 }) {
   const [report, setReport] = useState<ModelsReport | null | undefined>(undefined)
   const [filter, setFilter] = useState("")
+  // Which role a click moves. `default` unless the file names others and the
+  // reader picks one -- the common project has no others and never sees this.
+  const [role, setRole] = useState("default")
+  const [reload, setReload] = useState(0)
+  const { busy, refused, act } = useAct<ModelsAnswer>(() => setReload((n) => n + 1))
 
   useEffect(() => {
     let live = true
@@ -40,7 +46,15 @@ export function Models({
     return () => {
       live = false
     }
-  }, [project])
+  }, [project, reload])
+
+  // A role the file stopped naming is not a role to keep pointing at.
+  useEffect(() => {
+    if (report && !report.roles.includes(role)) setRole("default")
+  }, [report, role])
+
+  const use = (model: ServedModel) =>
+    void act(() => pickModel(project, model.ref, role))
 
   return (
     <aside className="models" aria-label="Models">
@@ -71,8 +85,44 @@ export function Models({
       {/* One box under the header, because the aside is a two-row grid: left
           loose, its `1fr` lands on whichever child happens to be second and
           stretches that one alone. */}
+      {/* What a click will move. Only where there is a choice: a project whose
+          file names no roles has one answer, and a picker with one option in
+          it is furniture -- the same rule the project picker follows. */}
+      {report?.roles && report.roles.length > 1 ? (
+        <label className="models-for">
+          use for
+          <select
+            className="models-role"
+            aria-label="Role to bind"
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+          >
+            {report.roles.map((one) => (
+              <option key={one} value={one}>
+                {one === "default" ? "everything" : one}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {refused ? (
+        <p className="models-refusal" role="alert">
+          {refused.error || "That didn't work."}
+          {refused.providers?.length
+            ? ` This project declares: ${refused.providers.join(", ")}.`
+            : ""}
+          {refused.models?.length
+            ? ` It has: ${refused.models.slice(0, 6).join(", ")}.`
+            : ""}
+        </p>
+      ) : null}
       <div className="models-body">
-        <Body report={report} filter={filter.trim().toLowerCase()} />
+        <Body
+          report={report}
+          filter={filter.trim().toLowerCase()}
+          onUse={use}
+          busy={busy}
+        />
       </div>
     </aside>
   )
@@ -81,9 +131,13 @@ export function Models({
 function Body({
   report,
   filter,
+  onUse,
+  busy,
 }: {
   report: ModelsReport | null | undefined
   filter: string
+  onUse(model: ServedModel): void
+  busy: boolean
 }) {
   if (report === undefined) return <p className="models-note">asking…</p>
   // Null is the daemon not answering, which is a different thing from a
@@ -119,6 +173,8 @@ function Body({
           endpoint={endpoint}
           shown={shown}
           filtered={Boolean(filter)}
+          onUse={onUse}
+          busy={busy}
         />
       ))}
     </>
@@ -129,10 +185,14 @@ function EndpointBlock({
   endpoint,
   shown,
   filtered,
+  onUse,
+  busy,
 }: {
   endpoint: Endpoint
   shown: ServedModel[]
   filtered: boolean
+  onUse(model: ServedModel): void
+  busy: boolean
 }) {
   const groups = groupsOf(endpoint, shown)
   return (
@@ -189,6 +249,8 @@ function EndpointBlock({
                   // The maker is the card's own heading; repeating it on every
                   // row inside costs the width the model's name needs.
                   drop={`${maker}/`}
+                  onUse={onUse}
+                  busy={busy}
                 />
               ))}
             </ul>
@@ -197,7 +259,13 @@ function EndpointBlock({
       ) : (
         <ul className="models-list">
           {shown.map((model) => (
-            <Row key={model.id} model={model} local={endpoint.installed} />
+            <Row
+              key={model.id}
+              model={model}
+              local={endpoint.installed}
+              onUse={onUse}
+              busy={busy}
+            />
           ))}
         </ul>
       )}
@@ -266,20 +334,34 @@ function Row({
   model,
   local,
   drop = "",
+  onUse,
+  busy,
 }: {
   model: ServedModel
   local: boolean
   /** A prefix the surrounding card already shows; stripped from the name. */
   drop?: string
+  onUse(model: ServedModel): void
+  busy: boolean
 }) {
   const shown = drop && model.id.startsWith(drop) ? model.id.slice(drop.length) : model.id
   return (
     <li data-model={model.ref}>
-      {/* The whole id on the tooltip either way: it is the half of `ref` a
-          reader copies out, and a stripped name is not one they could type. */}
-      <span className="models-id" title={model.id}>
+      {/* The row is the button. A catalogue is read by scanning names, and a
+          verb beside each of four hundred of them is four hundred words the
+          eye has to skip. The whole id is on the tooltip either way: it is the
+          half of `ref` a reader copies out, and a stripped name is not one
+          they could type. */}
+      <button
+        type="button"
+        className="models-id"
+        title={model.id}
+        data-do="use"
+        disabled={busy}
+        onClick={() => onUse(model)}
+      >
         {shown}
-      </span>
+      </button>
       <span className="models-facts">
         {model.context ? <span data-fact="context">{compact(model.context)}</span> : null}
         {model.size ? <span data-fact="size">{model.size}</span> : null}

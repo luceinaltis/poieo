@@ -4,7 +4,8 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const fetchModels = vi.hoisted(() => vi.fn())
-vi.mock("../api", () => ({ fetchModels }))
+const pickModel = vi.hoisted(() => vi.fn())
+vi.mock("../api", () => ({ fetchModels, pickModel }))
 
 import { Models } from "./Models"
 
@@ -32,6 +33,7 @@ const ROUTED = {
 
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/proj/models/default.yaml" },
+  roles: ["default"],
   endpoints: [
     {
       name: "ollama",
@@ -62,6 +64,8 @@ let root: Root
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   fetchModels.mockReset()
+  pickModel.mockReset()
+  pickModel.mockResolvedValue({ ok: true, status: "using" })
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -201,7 +205,7 @@ test("an endpoint whose key is missing says so where the models would be", async
 })
 
 test("a project with no models file says so instead of an empty list", async () => {
-  await render({ binding: null, endpoints: [] })
+  await render({ binding: null, roles: [], endpoints: [] })
 
   expect(container.textContent).toContain("no models file")
   expect(container.querySelector("[data-endpoint]")).toBeNull()
@@ -373,4 +377,110 @@ test("a short listing stays flat, because folders holding one row each help nobo
 
   expect(makers()).toEqual([])
   expect(container.querySelector('[data-model="ollama/qwen3.5:latest"]')).not.toBeNull()
+})
+
+// -- pointing a role at another model ---------------------------------------
+
+const WITH_ROLES = { ...REPORT, roles: ["default", "reader"] }
+
+test("clicking a model uses it, for everything by default", async () => {
+  await render()
+
+  await act(async () => row("routed/qwen/qwen3.8-flash")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(pickModel).toHaveBeenCalledWith("board", "routed/qwen/qwen3.8-flash", "default")
+})
+
+test("a project whose file names one role is not asked which", async () => {
+  // A picker with one option in it is furniture -- the rule the project picker
+  // in the bar already follows.
+  await render()
+
+  expect(container.querySelector(".models-role")).toBeNull()
+})
+
+test("where there is a choice, the click goes to the role that was chosen", async () => {
+  await render(WITH_ROLES)
+
+  await act(async () => {
+    const pick = container.querySelector<HTMLSelectElement>(".models-role")!
+    pick.value = "reader"
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(pickModel).toHaveBeenCalledWith("board", "ollama/qwen3.5:latest", "reader")
+})
+
+test("a double click cannot post twice", async () => {
+  let release: (value: unknown) => void = () => {}
+  pickModel.mockReturnValue(new Promise((resolve) => (release = resolve)))
+  await render()
+
+  const button = () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!
+  await act(async () => button().click())
+  expect(button().hasAttribute("disabled")).toBe(true)
+  await act(async () => button().click())
+
+  expect(pickModel).toHaveBeenCalledTimes(1)
+  await act(async () => release({ ok: true, status: "using" }))
+})
+
+test("a refusal is shown with the models the endpoint does say it has", async () => {
+  pickModel.mockResolvedValue({
+    ok: false,
+    error: "'local' does not serve 'qwen9.9'",
+    models: ["qwen3.5:latest", "llama3.2:3b"],
+  })
+  await render()
+
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(container.textContent).toContain("does not serve")
+  expect(container.textContent).toContain("qwen3.5:latest, llama3.2:3b")
+})
+
+test("a refusal names the endpoints that are declared", async () => {
+  pickModel.mockResolvedValue({
+    ok: false,
+    error: "this project declares no endpoint 'nowhere'",
+    providers: ["ollama", "routed"],
+  })
+  await render()
+
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(container.textContent).toContain("declares: ollama, routed")
+})
+
+test("a successful use reads the panel again, so the marks move", async () => {
+  // `used_by` is on the report, not in the click -- the panel has to ask again
+  // or the row a reader just bound goes on saying somebody else has it.
+  await render()
+  expect(fetchModels).toHaveBeenCalledTimes(1)
+
+  await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
+
+  expect(fetchModels).toHaveBeenCalledTimes(2)
+})
+
+test("a role the file stopped naming is not left selected", async () => {
+  await render(WITH_ROLES)
+  await act(async () => {
+    const pick = container.querySelector<HTMLSelectElement>(".models-role")!
+    pick.value = "reader"
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+
+  // Somebody edits the file and `reader` goes away. The read that follows the
+  // next write is where the panel finds out, and it must not leave a click
+  // pointed at a role that is no longer there.
+  fetchModels.mockResolvedValue(REPORT)
+  const use = () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!
+  await act(async () => use().click())
+  expect(pickModel).toHaveBeenLastCalledWith("board", "ollama/qwen3.5:latest", "reader")
+
+  await act(async () => use().click())
+
+  expect(pickModel).toHaveBeenLastCalledWith("board", "ollama/qwen3.5:latest", "default")
 })

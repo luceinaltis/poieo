@@ -27,6 +27,7 @@ server and the client keep them together so they stay easy to count.
 | `POST /api/tasks/{p}/{f}/resume` | **control** — rearm it |
 | `POST /api/tasks/{p}/{f}/run` | **control** — one fire, now |
 | `POST /api/tasks/{p}/{f}/answer` | **answer** — decide what a `confirm` node asked |
+| `POST /api/projects/{p}/models/use` | **models** — point a role at another model |
 
 **Review** routes are the only ones that may ever touch the user's own files. If
 you are adding a third of them, stop. **Control** routes touch the daemon's
@@ -41,6 +42,20 @@ person deciding something is for. Its refusals are worth reading: **409** when
 the task is there but has no question open, so a board holding a stale button
 can tell that from a **404**; and **400** with the choices that *were* offered,
 because whoever asked is holding a list that has moved on.
+
+**Models** is a fourth kind, and it should be the last one anybody argues for.
+It writes a file the user keeps, so it is not control — control's own rule is
+that nothing it does survives a restart. But the file is not the *work*, so it
+is not the review either: review moves what a model wrote into the user's own
+branch, and everything it touches was written by a run. This touches one file
+the user chose and poieo generated, rewrites the two lines it came for, and
+leaves every other byte — comments included — exactly as they were; it is the
+same edit `poieo config use` makes, through the same `rebind.point_at`, which
+is why there is no second set of refusals to keep in step. Its own fence: **it
+may write the project's binding file and nothing else, and it never accepts or
+returns a credential.** A key is a variable *name* here and a value nowhere. If
+a route in this group ever needs to take one, that is the signal this kind has
+stopped being what this paragraph describes.
 
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.
@@ -104,6 +119,43 @@ tells one from another, and an address is the one field in a binding that can
 carry a private host. If a real confusion turns up — two `openai_compatible`
 endpoints a reader cannot tell apart — the argument for letting it through will
 be concrete.
+
+### `POST /api/projects/{p}/models/use`
+
+`{target, role}` — a `provider/model` reference and the role to point at it,
+`default` when the body names none. It answers `{status: "using", role, ref,
+checked}`.
+
+**Every refusal is decided before `rebind` opens the file**, so a request that
+will be refused never touches it — and `rebind` itself refuses before writing on
+any shape it does not recognise. In order:
+
+| code | when | carries |
+|---|---|---|
+| **404** | no such project | the names that do answer |
+| **400** | `target` is not `provider/model` | — the argument is malformed, not the state |
+| **409** | this project declares no such endpoint | the ones it does |
+| **409** | the endpoint answered and does not serve that model | what it does serve |
+| **409** | `rebind` will not edit that shape | its own sentence, naming the file and the key |
+
+An endpoint that **did not answer does not block the edit**, exactly as
+`poieo config use` allows: a laptop with its server switched off still gets to
+edit its own config. `checked: false` says so out loud rather than implying a
+check happened — silence from an endpoint is not its agreement. The key is not
+checked either, for the same reason: pointing a role at Claude before exporting
+the key is a legitimate order to do things in, and the panel already shows that
+the variable is unset.
+
+**`status: "using"`, not `"changed"`.** *Change* is one of the user's three words
+and already means what a run did to the files.
+
+**The write rereads.** `daemon.reread()` runs after `point_at` returns, because
+the board draws each node's model off the spec in memory — without it the file
+and the picture part company the moment somebody clicks, and the reader is
+looking at two answers to one question. `roles` on the read report is what the
+panel may offer: `default` plus the roles the file already names, and **not**
+every role the graphs call, because offering one the file has never named is how
+a panel creates the misspelled role `binding.md` spends a page warning about.
 
 `askable` is the third fact an empty list can mean: `mock` answers from the
 binding file, so there is nothing to ask, and a panel that ran that together with
@@ -314,6 +366,12 @@ of 396 offered" — so the filter does not become the same silent truncation it
 replaced. An endpoint with nothing matching leaves the list entirely: left in
 place it would show "no answer" under its own heading, which is a different and
 more alarming thing than a search that missed.
+
+**The row is the button.** A catalogue is read by scanning names, and a verb
+beside each of four hundred of them is four hundred words the eye has to skip.
+What a click moves is chosen once, above the list — and only where there is a
+choice, since a project whose file names no roles has one answer and a picker
+with one option in it is furniture.
 
 **A row is what the endpoint said, and a blank is what it did not.** A local
 model shows the two numbers that are its real price -- its size and

@@ -255,6 +255,25 @@ class ResolvedModel(_Spec):
         return f"{self.role} -> {self.ref}"
 
 
+def split_ref(target: str) -> tuple[str, str]:
+    """``provider/model`` read back into its two halves.
+
+    The inverse of :attr:`ResolvedModel.ref`, and here beside it: one place
+    builds the spelling and one place reads it, so a reader who types what
+    they just read is right.
+
+    **Split once.** A model id is full of slashes (``hf.co/empero-ai/...``)
+    and a provider name never is.
+    """
+    provider, sep, model = target.partition("/")
+    if not sep or not model or not provider:
+        raise BindingError(
+            f"'{target}' is not a provider/model reference. `poieo config` "
+            f"prints them in exactly the form this takes back."
+        )
+    return provider, model
+
+
 def load_binding(path: str | Path) -> BindingSpec:
     path = Path(path)
     data = load_document(path)

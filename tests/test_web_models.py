@@ -9,6 +9,9 @@ of this pair.
 Design: docs/web.md
 """
 
+import asyncio
+
+import httpx
 from conftest import card
 from starlette.testclient import TestClient
 
@@ -103,6 +106,24 @@ default: {provider: local, model: "qwen3.5:latest"}
 
 # The same two, with the routed one at an address that has a name.
 _ROUTED = _TWO.replace("http://x/v1", "https://openrouter.ai/api/v1")
+
+# Block form, which is what `poieo init` writes and the only shape `rebind`
+# will edit -- the flow style above is legal, rare, and exactly where guessing
+# corrupts a config, so it refuses instead. Written out here because a test
+# that expects a write has to be given a file that can be written to.
+_BLOCK = """name: block
+providers:
+  local:
+    type: ollama
+    base_url: http://localhost:11434
+default:
+  provider: local
+  model: "qwen3.5:latest"
+roles:
+  reader:
+    provider: local
+    model: "qwen3.5:latest"
+"""
 
 
 def test_every_declared_endpoint_is_listed_with_what_it_serves(tmp_path, monkeypatch):
@@ -301,3 +322,212 @@ def test_the_report_names_the_file_these_endpoints_came_from(tmp_path, monkeypat
 
     assert body["binding"]["name"] == "models-for-a-board"
     assert body["binding"]["path"].endswith("b.yaml")
+
+
+# -- pointing a role at another model ---------------------------------------
+#
+# The one write here, and the fourth kind of route in this API: it edits a file
+# the reader keeps, which is not the review, and its effect outlives the
+# process, which is not control. Every refusal below is checked *before*
+# `rebind` opens the file, so a request that will be refused never touches it.
+
+
+def _use(client, target, role=None, project="board"):
+    body = {"target": target}
+    if role is not None:
+        body["role"] = role
+    return client.post(f"/api/projects/{project}/models/use", json=body)
+
+
+def test_using_a_model_points_the_default_at_it(tmp_path, monkeypatch):
+    _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _use(client, "local/llama3.2:3b")
+
+    assert reply.status_code == 200
+    assert reply.json() == {
+        "status": "using",
+        "role": "default",
+        "ref": "local/llama3.2:3b",
+        "checked": True,
+    }
+    text = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert "llama3.2:3b" in text
+    # Comments and every other line survive: this is text surgery on the two
+    # lines it came for, not a parse and a dump.
+    assert "base_url: http://localhost:11434" in text
+
+
+def test_using_a_model_for_one_role_leaves_the_default_alone(tmp_path, monkeypatch):
+    _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _use(client, "local/llama3.2:3b", role="reader")
+
+    assert reply.status_code == 200
+    assert reply.json()["role"] == "reader"
+    text = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    # The role moved; the default did not.
+    assert text.index("llama3.2:3b") > text.index("default:")
+    assert 'model: "qwen3.5:latest"' in text
+
+
+def test_a_reference_without_a_slash_is_refused_in_the_products_voice(tmp_path, monkeypatch):
+    """400 and not 409: the argument is malformed, not the state."""
+    _asks(monkeypatch)
+    before = (tmp_path / "b.yaml").read_bytes() if (tmp_path / "b.yaml").exists() else None
+    client = _client(tmp_path)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    reply = _use(client, "just-a-name")
+
+    assert reply.status_code == 400
+    assert "provider/model" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
+def test_a_provider_that_is_not_declared_is_refused_and_names_the_ones_that_are(tmp_path, monkeypatch):
+    _asks(monkeypatch)
+    client = _client(tmp_path, binding=_TWO)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    reply = _use(client, "nowhere/m")
+
+    assert reply.status_code == 409
+    assert sorted(reply.json()["providers"]) == ["local", "routed"]
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
+def test_a_model_the_endpoint_says_it_does_not_serve_is_refused_with_what_it_has(tmp_path, monkeypatch):
+    """The typo this pair exists to prevent: a model named from memory does not
+    fail here, it fails at 3am in a run."""
+    _asks(monkeypatch)
+    client = _client(tmp_path, binding=_TWO)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    reply = _use(client, "local/qwen9.9:imagined")
+
+    assert reply.status_code == 409
+    assert reply.json()["models"] == ["qwen3.5:latest"]
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
+def test_an_endpoint_that_did_not_answer_does_not_block_the_edit_and_says_so(tmp_path, monkeypatch):
+    """A laptop with its server switched off still gets to edit its own config,
+    exactly as `poieo config use` allows -- silence is not agreement, so the
+    reply says the name could not be checked rather than implying it was."""
+
+    async def silent(type_, base_url=None, limit=None):
+        return Catalogue()
+
+    monkeypatch.setattr(detect_module, "catalogue_for", silent)
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _use(client, "local/anything-at-all")
+
+    assert reply.status_code == 200
+    assert reply.json()["checked"] is False
+
+
+def test_a_shape_the_file_does_not_allow_is_refused_and_the_file_is_untouched(tmp_path, monkeypatch):
+    """Flow-style YAML is legal, rare, and exactly where guessing corrupts a
+    config. `rebind` refuses before writing and names the key; the route says
+    so in its own words rather than swallowing it."""
+    _asks(monkeypatch)
+    flow = (
+        "name: flow\nproviders:\n"
+        '  local: {type: ollama, base_url: "http://localhost:11434"}\n'
+        'default: {provider: local, model: "qwen3.5:latest"}\n'
+    )
+    client = _client(tmp_path, binding=flow, tasks=False)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    reply = _use(client, "local/qwen3.5:latest")
+
+    assert reply.status_code == 409
+    assert "by hand" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
+def test_using_a_model_on_an_unknown_project_is_404(tmp_path, monkeypatch):
+    _asks(monkeypatch)
+    reply = _use(_client(tmp_path), "fake/m2", project="gone")
+
+    assert reply.status_code == 404
+    assert reply.json()["projects"] == ["board"]
+
+
+def test_a_get_on_the_write_route_is_not_allowed(tmp_path, monkeypatch):
+    _asks(monkeypatch)
+    client = _client(tmp_path)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    assert client.get("/api/projects/board/models/use").status_code == 405
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
+def test_a_refusal_never_carries_the_key_it_is_about(tmp_path, monkeypatch):
+    """A refusal message is where a value is likeliest to be interpolated by
+    accident."""
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-planted-by-this-test")
+    _asks(monkeypatch)
+    binding = _MOCK.replace("fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,")
+    client = _client(tmp_path, binding=binding)
+
+    reply = _use(client, "nowhere/m")
+
+    assert reply.status_code == 409
+    assert "sk-planted-by-this-test" not in reply.text
+
+
+async def test_the_board_and_the_daemon_agree_about_the_model_after_a_use(tmp_path, monkeypatch):
+    """The one this whole slice exists to make pass.
+
+    `/api/tasks` draws each node's model off the spec in memory. Without the
+    reread behind the write, the file and the picture part company the moment
+    somebody clicks, and the reader is looking at two answers to one question.
+
+    Served for real and driven on one event loop, as uvicorn shares the
+    daemon's: the nodes a board paints come off runners, and runners exist only
+    once `serve()` has built them.
+    """
+    _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
+    (tmp_path / "b.yaml").write_text(_BLOCK, encoding="utf-8")
+    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    (tmp_path / "poieo.yaml").write_text("name: board\ntasks: cards\nbinding: b.yaml\n", encoding="utf-8")
+    daemon = Daemon(load_config(tmp_path / "poieo.yaml"), store=NullStore())
+    serving = asyncio.create_task(daemon.serve(install_signals=False))
+    while not daemon.runners:
+        await asyncio.sleep(0.01)
+
+    transport = httpx.ASGITransport(app=create_app(daemon))
+    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+
+        async def painted():
+            body = (await client.get("/api/tasks")).json()
+            return body["tasks"][0]["shape"]["nodes"][0]["model"]
+
+        assert await painted() == "qwen3.5:latest"
+
+        reply = await client.post(
+            "/api/projects/board/models/use",
+            json={"target": "local/llama3.2:3b", "role": "reader"},
+        )
+        assert reply.status_code == 200
+
+        assert await painted() == "llama3.2:3b"
+
+    daemon.stop()
+    await asyncio.wait_for(serving, timeout=10)
+
+
+def test_the_panel_offers_the_roles_the_file_names(tmp_path, monkeypatch):
+    """`default` plus what the binding declares, and nothing else. Offering a
+    role a graph calls but the file never named would let the panel create the
+    `role: classifer` typo docs/binding.md spends a page warning about."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_BLOCK, tasks=False)).json()
+
+    assert body["roles"] == ["default", "reader"]
