@@ -552,6 +552,30 @@ async def test_a_card_can_hand_off_on_what_the_run_spent(tmp_path):
     await _down(daemon, task)
 
 
+async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
+    """The threshold is read, not assumed.
+
+    The log matters as much as the count here: an unreadable condition is also
+    treated as no match, so "nobody was woken" on its own cannot tell a guard
+    that held from a name the scope never had.
+    """
+    block = _TO_RECEIVER.replace(
+        "run.status == 'completed'", "run.usage.output_tokens > 1000"
+    )
+    daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
+    task = await _up(daemon)
+    sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        sender.run_now()
+        await _until(lambda: len(sender.results) == 1, "the sender's run")
+        await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
+
+    assert len(receiver.results) == 0
+    assert caplog.messages == []
+    await _down(daemon, task)
+
+
 _ASKING = """\
 name: quick
 entry: a

@@ -325,14 +325,6 @@ only at that point, and a handoff is entitled to name one):
 - handing off from a `loop` trigger **warns**, since everything downstream
   inherits that pace
 
-**Untested: a condition that holds and hands off to nobody.** The positive case
-has a test — a `then:` on `run.usage.output_tokens` firing when the run was cheap.
-The negative one does not. A test claiming to cover it existed but asserted
-nothing, and was deleted rather than left reading as coverage. Writing a real one
-needs a signal that says *the handoff decision was made and was no*: checking
-straight after the sender's run races the handoff, and shutting the daemon down
-first suppresses it, so both pass whatever the condition says.
-
 ### What happens when a run ends
 
 `Daemon._hand_off()` is bound into every runner, and fires after the run —

@@ -16,7 +16,6 @@ sit. The upper arm runs close to the chest, so its own reach is kept tight
 regardless: an apron bib is not a sleeve. Default 1.0.
 """
 
-import json
 import struct
 import sys
 from pathlib import Path

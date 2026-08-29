@@ -33,13 +33,13 @@ jobs:
           # The floor pyproject declares, so the floor is what gets tested.
           python-version: "3.10"
       - run: pip install -e ".[dev]"
-      # Before the suite: a name that does not exist is cheaper to hear about
-      # than to watch fail.
-      - run: ruff check src tests
       # No PYTEST_DISABLE_PLUGIN_AUTOLOAD, no -p asyncio. Those are a local
       # workaround for a broken global plugin; a clean environment needs
       # neither, and this job is the check that they stay local.
       - run: pytest -q
+      # After the suite, and in that order in Part 2 too: a step that fails ends
+      # the job, and a long line must never cost the run its test result.
+      - run: ruff check .
 
   web:
     name: frontend suite, types, and bundle

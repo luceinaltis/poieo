@@ -135,7 +135,7 @@ whether the change fits the design at all (9).
 
 ## What lint enforces, and what it refuses to
 
-*Merge condition 1.* `ruff check src tests`, configured in `pyproject.toml` and
+*Merge condition 1.* `ruff check .`, configured in `pyproject.toml` and
 run by the same CI job as the Python suite. Three rule families, and the choice
 of *which* is the whole point:
 
