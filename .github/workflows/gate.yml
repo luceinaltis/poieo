@@ -27,6 +27,7 @@ concurrency:
 jobs:
   python:
     name: python suite (${{ matrix.os }}, ${{ matrix.python }})
+    timeout-minutes: 15
     runs-on: ${{ matrix.os }}
     strategy:
       # Every result, always. Cancelling the rest on the first red is exactly
@@ -59,6 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
       # No PYTEST_DISABLE_PLUGIN_AUTOLOAD, no -p asyncio. Those are a local
@@ -68,6 +70,7 @@ jobs:
 
   lint:
     name: lint and format
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     # Its own job, not a step in the matrix. Ruff reads the same bytes and
     # reaches the same verdict on every row, so inside the matrix it is either
@@ -80,6 +83,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: "3.10"
       # The pinned ruff from `[dev]`, not the newest one. A formatter that
       # updates underneath the repository turns every PR red at once.
@@ -90,6 +94,7 @@ jobs:
 
   web:
     name: frontend suite, types, and bundle
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,11 +125,13 @@ jobs:
 
   isolation:
     name: container isolation
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: "3.10"
       - run: pip install -e ".[dev]"
 
@@ -148,11 +155,13 @@ jobs:
 
   cli:
     name: the installed package
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: "3.10"
 
       # `.`, not `-e .`. tests/conftest.py puts src/ on sys.path, so every other
@@ -287,11 +296,13 @@ jobs:
   # by OS the way the suite's own can.
   coverage:
     name: what is not covered
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
+          cache: pip
           python-version: "3.10"
       - run: pip install -e ".[dev]"
       # Docker is here so the isolation tests run rather than skip, which is the
