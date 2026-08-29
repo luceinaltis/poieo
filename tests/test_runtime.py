@@ -965,6 +965,43 @@ async def test_a_run_is_priced_when_the_endpoint_will_not_price_it(tmp_path):
     assert result.usage["cost"] > 0
 
 
+async def test_a_step_stops_when_its_time_is_up(tmp_path):
+    """Turns are the wrong unit and time is the right one.
+
+    Measured in one run, a turn cost between 15 and 1,629 output tokens and
+    took between five seconds and seven minutes. "Forty turns" is not a budget
+    anybody can reason about. "This fires hourly, so a step must not take an
+    hour" is.
+    """
+    (tmp_path / "big.txt").write_text("x" * 100)
+    # A hundred turns it will never reach, and no time at all to reach them in.
+    graph = agent_graph(tmp_path, max_turns=100, deadline=0.05)
+    binding = mock_binding(
+        {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}]},
+        # Slow enough that the deadline lands first.
+    )
+    binding.providers["fake"].options["latency"] = 0.03
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "failed"
+    assert "deadline" in result.error
+
+
+async def test_a_step_with_no_deadline_runs_as_it_always_did(tmp_path):
+    """Nothing changes for a graph that does not ask for one."""
+    (tmp_path / "big.txt").write_text("x" * 100)
+    graph = agent_graph(tmp_path, max_turns=3)
+    binding = mock_binding(
+        {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}]}
+    )
+
+    result = await run_graph(graph, binding)
+
+    assert result.status == "failed"
+    assert "max_turns" in result.error
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)

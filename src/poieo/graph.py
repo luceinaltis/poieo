@@ -112,6 +112,14 @@ class NodeSpec(_Spec):
     tools: list[str] | None = None
     # Upper bound on model calls in one node execution.
     max_turns: int = Field(default=20, ge=1, le=200)
+    # How long this node may work, as a duration. `None` means only `max_turns`
+    # bounds it, which is how this began and is the wrong unit for the job:
+    # measured in one run, a turn cost between 15 and 1,629 output tokens and
+    # took between five seconds and seven minutes. "Forty turns" is not a
+    # budget anybody can reason about. "This fires hourly, so a step must not
+    # take an hour" is -- and the harm an unbounded step does is precisely that
+    # it outlives its own schedule and blocks what was queued behind it.
+    deadline: float | None = Field(default=None, gt=0)
 
     # `None` means "this node ends the run".
     next: str | None = None
