@@ -354,14 +354,11 @@ async def test_append_refuses_a_missing_file(tmp_path):
         await TOOLS["append_file"].run(tmp_path, {"path": "gone.md", "content": "x"})
 
 
+from conftest import POSIX
+
 from poieo.tools.shell import SHELL_TOOLS, posix_shell
 
 SHELL = {t.definition.name: t for t in SHELL_TOOLS}
-
-# What a command may assume it is being read by. The question is no longer
-# which OS this is -- it is whether a POSIX shell was found, which on Windows
-# is usually yes and used to be irrelevant.
-POSIX = __import__("os").name != "nt" or bool(posix_shell())
 
 
 def test_a_posix_shell_is_preferred_when_there_is_one(monkeypatch):
