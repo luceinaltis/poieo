@@ -125,4 +125,6 @@ async def test_the_other_toolsets_still_work_alongside_it(tmp_path):
     result = await _executor(tmp_path, postbox).execute(
         ToolCall(id="1", name="read_file", arguments={"path": "a.txt"})
     )
-    assert result.text == "data"
+    # read_file numbers its lines now; what this test means is
+    # that the executor handed the file's text back unchanged.
+    assert result.text.endswith("data")

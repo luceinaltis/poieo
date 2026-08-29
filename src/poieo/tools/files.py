@@ -29,13 +29,46 @@ def resolve_path(workdir: Path, raw: str) -> Path:
 
 
 async def _read_file(workdir: Path, args: dict[str, Any]) -> str:
+    """Read a file, numbered, and optionally only a window of it.
+
+    A step that read whole files ran its conversation to 271,064 characters of
+    file text and was still resending all of it every turn; one that read
+    ranges never reached the cap at all. SWE-agent measured the same thing
+    from the other side -- showing whole files rather than a window cost 5.3
+    points, and a window too *narrow* cost 3.7, which is why there is no
+    default window here. The size of the window is the model's to choose; only
+    the ceiling is ours.
+
+    The numbers are what make a range askable at all -- Anthropic's text editor
+    calls them "essential" for exactly that. They cost something: a model may
+    copy one into an `edit_file` call, which is why `_place` takes them back
+    off rather than failing on them.
+    """
     path = resolve_path(workdir, args["path"])
     if not path.is_file():
         raise ToolError(f"no such file: {args['path']}")
     text = path.read_text(encoding="utf-8", errors="replace")
-    if len(text) > _READ_CAP:
-        return text[:_READ_CAP] + f"\n... [truncated: file is {len(text)} characters]"
-    return text
+    lines = text.splitlines()
+
+    offset = max(1, int(args.get("offset") or 1))
+    limit = args.get("limit")
+    last = len(lines) if limit is None else offset + max(0, int(limit)) - 1
+    window = lines[offset - 1 : last]
+
+    if not window:
+        # Silence would read as an empty file and the model would believe it.
+        return f"(no lines there: {args['path']} has {len(lines)} line(s))"
+
+    numbered = "\n".join(f"{offset + i}\t{line}" for i, line in enumerate(window))
+    if len(numbered) > _READ_CAP:
+        numbered = numbered[:_READ_CAP] + "\n... [truncated]"
+    if len(window) == len(lines):
+        # The whole file: the last number already says how many lines there
+        # are, and a header saying "lines 1-40 of 40" would be a line of
+        # nothing on every read.
+        return numbered
+    shown = f"{offset}-{offset + len(window) - 1}"
+    return f"{args['path']} lines {shown} of {len(lines)}\n{numbered}"
 
 
 async def _write_file(workdir: Path, args: dict[str, Any]) -> str:
@@ -254,8 +287,24 @@ FILES_TOOLS: list[Tool] = [
     Tool(
         ToolDef(
             name="read_file",
-            description="Read a text file. Paths are relative to the working directory.",
-            input_schema=_schema({"path": {"type": "string"}}, ["path"]),
+            description=(
+                "Read a text file, with line numbers. Paths are relative to the "
+                "working directory. Give `offset` and `limit` to read a window "
+                "rather than the whole file -- a long file read whole stays in "
+                "the conversation and is sent again on every turn after it. "
+                "search_files answers with line numbers you can use here."
+            ),
+            input_schema=_schema(
+                {
+                    "path": {"type": "string"},
+                    "offset": {
+                        "type": "number",
+                        "description": "first line to read, counting from 1",
+                    },
+                    "limit": {"type": "number", "description": "how many lines"},
+                },
+                ["path"],
+            ),
         ),
         _read_file,
     ),
