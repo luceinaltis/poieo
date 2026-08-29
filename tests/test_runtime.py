@@ -366,6 +366,11 @@ def reads_the_same_file(times, path="big.txt"):
     return mock_binding({"worker": [dict(turn) for _ in range(times)] + ["done"]})
 
 
+def numbered(line):
+    """What `read_file` gives back for a one-line file: it numbers its lines."""
+    return f"1	{line}"
+
+
 def tool_contents(call):
     return [m["content"] for m in call.messages if m["role"] == "tool"]
 
@@ -380,7 +385,7 @@ async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     assert result.status == "completed"
     # Four reads of a hundred characters is nowhere near the cap, so every
     # result is still there in full on the last request.
-    assert tool_contents(provider.calls[-1]) == ["x" * 100] * 4
+    assert tool_contents(provider.calls[-1]) == [numbered("x" * 100)] * 4
 
 
 async def test_an_overgrown_conversation_loses_its_oldest_tool_results(tmp_path, monkeypatch):
@@ -406,7 +411,7 @@ async def test_an_overgrown_conversation_loses_its_oldest_tool_results(tmp_path,
     # The two oldest are gone; the three most recent are whole.
     assert sent[0] == nodes._CLEARED
     assert sent[1] == nodes._CLEARED
-    assert sent[2:] == ["x" * 100] * 3
+    assert sent[2:] == [numbered("x" * 100)] * 3
 
 
 async def test_clearing_keeps_the_record_that_the_tool_was_called(tmp_path, monkeypatch):
@@ -449,7 +454,7 @@ async def test_clearing_says_so_in_the_run_log(tmp_path, monkeypatch):
     assert cleared[0].data["kept"] == nodes._KEEP_RESULTS
     # Net, not gross: the note takes the result's place, so what a hundred
     # characters actually bought back is a hundred less the note.
-    assert cleared[0].data["freed"] == 100 - len(nodes._CLEARED)
+    assert cleared[0].data["freed"] == len(numbered("x" * 100)) - len(nodes._CLEARED)
 
 
 async def test_a_result_is_only_cleared_once(tmp_path, monkeypatch):

@@ -22,6 +22,23 @@ factory, built per executor; the rest are shared module-level lists.
 A `Tool` is a `ToolDef` (name, description, JSON Schema) plus a coroutine taking
 `(workdir, arguments)`. Adding one is a function and a list entry.
 
+## Reading part of a file
+
+`read_file` numbers its lines, and takes `offset` and `limit` to read a window
+rather than the whole thing. The numbers are what make a range askable --
+Anthropic's text editor calls them "essential" for exactly that -- and
+`search_files` answers with line numbers that go straight into one.
+
+They cost something: a model may copy a number into an `edit_file` call. That
+is why matching takes them back off rather than failing on them. The reference
+implementations instead tell the model to strip them, which works until the
+model forgets.
+
+**There is no default window.** SWE-agent measured whole-file reads at 5.3
+points below a window, and a window too *narrow* at 3.7 below a wider one --
+too little context is its own failure. How much to read is the model's to
+choose; only the ceiling is ours.
+
 ## Changing part of a file
 
 `edit_file` replaces `old` with `new`, and refuses unless `old` appears exactly

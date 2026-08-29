@@ -156,6 +156,66 @@ async def test_search_says_so_when_nothing_matches(tmp_path):
     assert found == "(no matches)"
 
 
+async def test_read_numbers_the_lines(tmp_path):
+    """Numbers are what make a range askable.
+
+    Anthropic's text editor calls them "essential for successfully using the
+    `view_range` parameter", and Claude Code's Read prints them too. The cost
+    is that a model may copy one into an edit, which `edit_file` takes back
+    off rather than failing on.
+    """
+    (tmp_path / "m.py").write_text("first\nsecond\n")
+
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "m.py"})
+
+    assert "1\tfirst" in text
+    assert "2\tsecond" in text
+
+
+async def test_read_takes_a_range(tmp_path):
+    """A step that read whole files ran its conversation to 271,064
+    characters; one that read ranges never reached the cap at all. SWE-agent
+    measured the same thing: showing whole files instead of a window cost 5.3
+    points."""
+    (tmp_path / "m.py").write_text("".join(f"line {n}\n" for n in range(1, 101)))
+
+    text = await TOOLS["read_file"].run(
+        tmp_path, {"path": "m.py", "offset": 40, "limit": 3}
+    )
+
+    assert "40\tline 40" in text
+    assert "42\tline 42" in text
+    assert "line 43" not in text
+    assert "line 39" not in text
+
+
+async def test_a_range_says_what_it_left_out(tmp_path):
+    """A window with no edges reads like the whole file."""
+    (tmp_path / "m.py").write_text("".join(f"line {n}\n" for n in range(1, 101)))
+
+    text = await TOOLS["read_file"].run(
+        tmp_path, {"path": "m.py", "offset": 40, "limit": 3}
+    )
+
+    assert "100" in text  # how many lines there are in total
+
+
+async def test_a_range_past_the_end_says_so_rather_than_answering_nothing(tmp_path):
+    """Silence would read as an empty file, and the model would believe it."""
+    (tmp_path / "m.py").write_text("one\ntwo\n")
+
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "m.py", "offset": 900})
+
+    assert text.strip()
+    assert "2" in text
+
+
+async def test_read_without_a_range_still_reads_the_whole_file(tmp_path):
+    (tmp_path / "m.py").write_text("alpha\nbeta\n")
+    text = await TOOLS["read_file"].run(tmp_path, {"path": "m.py"})
+    assert "alpha" in text and "beta" in text
+
+
 async def test_edit_replaces_the_one_place_it_matches(tmp_path):
     """Ten of seventy shell commands in a measured run were file surgery.
 
@@ -393,7 +453,9 @@ async def test_executor_runs_a_call(tmp_path):
     ex = LocalExecutor(tmp_path, DEFAULT_TOOLSETS)
     result = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "a.txt"}))
     assert not result.error
-    assert result.text == "data"
+    # read_file numbers its lines now; what this test means is
+    # that the executor handed the file's text back unchanged.
+    assert result.text.endswith("data")
 
 
 async def test_executor_turns_failures_into_error_results(tmp_path):
@@ -415,7 +477,9 @@ async def test_local_executor_works_as_a_context_manager(tmp_path):
     (tmp_path / "a.txt").write_text("data")
     async with LocalExecutor(tmp_path, DEFAULT_TOOLSETS) as ex:
         result = await ex.execute(ToolCall(id="1", name="read_file", arguments={"path": "a.txt"}))
-    assert result.text == "data"
+    # read_file numbers its lines now; what this test means is
+    # that the executor handed the file's text back unchanged.
+    assert result.text.endswith("data")
 
 
 async def test_make_executor_returns_local_without_hands(tmp_path):
