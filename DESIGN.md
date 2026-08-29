@@ -186,6 +186,17 @@ Autonomous execution needs explicit fences:
   isolation is opt-in, never a prerequisite for getting started. (See safety
   boundaries.)
 
+Each of these was a good idea. At WWDC 1997 Jobs said focus "means saying no
+to the hundred other good ideas that there are"; at the same event, defending
+the end of a technology he granted did "some things ... that nothing else out
+there does," he gave the test he used instead — "you've got to start with the
+customer experience and work backwards to the technology" — and admitted he
+had made the opposite mistake more than anyone else in the room. So the
+question for anything proposed is neither whether it is good nor whether it is
+unique. It is whether a line runs from it back to *my work keeps running on my
+machine*. **When no line can be drawn, the idea belongs on this list, not on
+the roadmap.**
+
 ## Roadmap
 
 What is not built yet. Everything marked done in the table above is, and how
