@@ -97,15 +97,25 @@ class _HttpProvider(Provider):
         # a process runs, and this must not become a round trip per turn.
         self._context: dict[str, int | None] = {}
 
-    async def _remembered(self, model: str, ask) -> int | None:
-        if model not in self._context:
-            try:
-                self._context[model] = await ask()
-            except Exception:
-                # Asking is an optimisation; a run must not die because the
-                # endpoint was slow, gone, or answered something unexpected.
-                self._context[model] = None
-        return self._context[model]
+    async def _remembered(self, model: str, ask, keep_silence: bool = True) -> int | None:
+        """Ask once and remember, unless silence is worth asking again about.
+
+        `keep_silence=False` is for an endpoint whose answer depends on what it
+        is doing rather than what it knows -- Ollama only reports a window for
+        a model it has already loaded, and the first call to that model is what
+        loads it.
+        """
+        if model in self._context:
+            return self._context[model]
+        try:
+            answer = await ask()
+        except Exception:
+            # Asking is an optimisation; a run must not die because the
+            # endpoint was slow, gone, or answered something unexpected.
+            answer = None
+        if answer is not None or keep_silence:
+            self._context[model] = answer
+        return answer
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -229,8 +239,18 @@ class OpenAICompatibleProvider(_HttpProvider):
             if response.status_code >= 400:
                 return None
             for entry in response.json().get("data") or []:
-                if entry.get("id") == model:
-                    return int(entry["context_length"])
+                if entry.get("id") != model:
+                    continue
+                # Two numbers, and the smaller one is the true one. The top
+                # level is what the model can do; `top_provider` is what the
+                # endpoint serving it will allow, and forty of OpenRouter's
+                # models disagree with themselves here -- z-ai/glm-5.3-flash
+                # says 1,310,720 and 1,048,576. Believing the larger means
+                # filling a window past where it will be refused.
+                served = (entry.get("top_provider") or {}).get("context_length")
+                if isinstance(served, int):
+                    return served
+                return int(entry["context_length"])
             return None
 
         return await self._remembered(model, ask)
@@ -291,18 +311,28 @@ class OllamaProvider(_HttpProvider):
         return await self._list_health("/api/tags", key="models", field="name")
 
     async def context_for(self, model: str) -> int | None:
-        """`/api/show` knows, but files it under the architecture's own name --
-        `qwen35.context_length`, `llama.context_length` -- so the key cannot be
-        looked up directly and is found by its suffix instead."""
+        """What Ollama **loaded**, which is not what the model can do.
+
+        `/api/show` reports the model's own capability -- 262,144 for a
+        qwen3.5 -- and the server then loads it with whatever `num_ctx` it was
+        told, measured on this machine at **4,096**. Sixty-four times smaller,
+        and nothing announces the difference: an endpoint asked to hold more
+        than it loaded just drops the rest. So the answer comes from
+        `/api/ps`, which says what is actually running.
+
+        A model that is not loaded has no answer yet, and the silence is not
+        remembered -- the first call to that model is what loads it, so the
+        next node can ask again and get a number.
+        """
 
         async def ask() -> int | None:
-            response = await self.client.post("/api/show", json={"model": model})
+            response = await self.client.get("/api/ps")
             if response.status_code >= 400:
                 return None
-            info = response.json().get("model_info") or {}
-            for key, value in info.items():
-                if key.endswith(".context_length") and isinstance(value, int):
-                    return value
+            for entry in response.json().get("models") or []:
+                if entry.get("name") == model:
+                    size = entry.get("context_length")
+                    return size if isinstance(size, int) else None
             return None
 
-        return await self._remembered(model, ask)
+        return await self._remembered(model, ask, keep_silence=False)
