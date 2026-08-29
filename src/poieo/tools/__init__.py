@@ -8,6 +8,9 @@ only harness bugs raise.
 
 from __future__ import annotations
 
+import hashlib
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal, Sequence
@@ -43,6 +46,55 @@ LANGUAGES: dict[str, list[str]] = {
     "node": ["node", "-"],
     "sh": ["sh", "-"],
 }
+
+
+@dataclass(frozen=True)
+class Compiled:
+    """A language that wants a path before it will do anything.
+
+    ``build`` names the compiler with ``{src}`` and ``{bin}`` to fill in.
+    Nothing here knows where those paths are: that is the executor's business,
+    because where a thing is built is where it has to run.
+    """
+
+    source: str
+    build: tuple[str, ...]
+
+
+# A compiler cannot read from stdin, so these need a file somewhere -- and once
+# there is a somewhere, naming it by the hash of what goes in it *is* the cache.
+# Skipping the build is then one `if it is already there`.
+COMPILED: dict[str, Compiled] = {
+    "c": Compiled("main.c", ("cc", "-O2", "-o", "{bin}", "{src}")),
+    "go": Compiled("main.go", ("go", "build", "-o", "{bin}", "{src}")),
+    "rust": Compiled("main.rs", ("rustc", "-O", "-o", "{bin}", "{src}")),
+}
+
+
+def _quote(path: str) -> str:
+    """A path that may hold a space, safe for the shell that will see it.
+
+    Double quotes, not `shlex.quote`: that is POSIX and picks single ones,
+    which `cmd` does not read as quoting at all -- it would pass the quote
+    marks through as part of the filename. Both shells agree on double quotes,
+    and these paths are ours: a temp root, a hex digest and a fixed name.
+    """
+    return f'"{path}"'
+
+
+def known_language(name: str) -> bool:
+    return name in LANGUAGES or name in COMPILED
+
+
+def cache_key(language: str, script: str) -> str:
+    """Same code, same language, same name -- as `blob.py` names its keepsakes.
+
+    The toolchain's version is deliberately absent. Upgrading a compiler over
+    unchanged source almost never changes what the program does, both caches
+    carry a "delete freely" contract already, and reading a version would cost
+    a process on every *hit* -- which is the cost this exists to remove.
+    """
+    return hashlib.sha256(f"{language}\0{script}".encode("utf-8")).hexdigest()[:16]
 
 
 @dataclass(slots=True)
@@ -98,6 +150,14 @@ class ToolContext:
     # the tools package may know what they are.
     containers: Any = None
     postbox: Any = None
+    # Where a compiled script's source and binary are kept, on this machine.
+    # The project's `memory/cache/`, which is gitignored and safe to delete.
+    #
+    # Passed in rather than derived from the workdir, and that is not fussiness:
+    # `layout_for()` answers with the workdir *itself* when it holds no
+    # `poieo.yaml`, so a cache worked out from there would land inside the
+    # user's repository -- which is committed whole as the night's change.
+    build_cache: Path | None = None
 
 
 class Executor:
@@ -150,6 +210,55 @@ class Executor:
         """
         raise NotImplementedError
 
+    async def run_script(
+        self, language: str, script: str, timeout: float | None = None, env: Any = None
+    ) -> CommandResult:
+        """Run code in a named language, where this executor runs things.
+
+        An interpreted language reads it from stdin and leaves nothing behind.
+        A compiled one cannot -- a compiler wants a path -- so it is written,
+        built and run under :meth:`build_paths`, keyed by the hash of the code.
+        The build is skipped when the binary from that hash is already there.
+
+        Languages live here rather than in the node because *where a thing is
+        built is where it has to run*: a binary made on this host will not run
+        in a Linux container, and only the executor knows which it is.
+        """
+        if language in LANGUAGES:
+            return await self.run_command(
+                " ".join(LANGUAGES[language]), timeout=timeout, env=env, stdin=script
+            )
+        spec = COMPILED[language]
+        source, binary = self.build_paths(cache_key(language, script), spec.source)
+
+        if not await self._is_built(binary):
+            await self._put(source, script)
+            built = await self.run_command(
+                " ".join(spec.build).format(src=_quote(source), bin=_quote(binary)),
+                timeout=timeout,
+            )
+            if built.exit_code != 0:
+                # The compiler's own words. A build that failed is a fact for a
+                # router exactly as a red test suite is.
+                return built
+
+        return await self.run_command(_quote(binary), timeout=timeout, env=env)
+
+    def build_paths(self, key: str, source: str) -> tuple[str, str]:
+        """Where this key's source and binary live, spelled for this filesystem.
+
+        Each executor answers for its own: a container is posix whatever the
+        host is, and a host path built with forward slashes reads wrong in
+        every error message it appears in.
+        """
+        raise NotImplementedError
+
+    async def _is_built(self, binary: str) -> bool:
+        raise NotImplementedError
+
+    async def _put(self, path: str, content: str) -> None:
+        raise NotImplementedError
+
     async def __aenter__(self) -> "Executor":
         return self
 
@@ -167,7 +276,29 @@ class LocalExecutor(Executor):
         self, workdir: Path, toolsets: "Sequence[str]", tool_context: "ToolContext | None" = None
     ):
         self.workdir = workdir
+        self._cache = tool_context.build_cache if tool_context else None
         self._load(toolsets, tool_context.postbox if tool_context else None)
+
+    def build_paths(self, key: str, source: str) -> tuple[str, str]:
+        # Outside any project -- `poieo run` from a bare folder -- the OS's
+        # temp directory, which is transient by definition and, crucially, is
+        # not inside somebody's repository.
+        root = self._cache or Path(tempfile.gettempdir()) / "poieo-build"
+        home = root / key
+        return str(home / source), str(home / "prog")
+
+    async def _is_built(self, binary: str) -> bool:
+        return Path(binary).is_file()
+
+    async def _put(self, path: str, content: str) -> None:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # tmp-then-rename, as `blob.py` writes its keepsakes: a torn write must
+        # not leave a wrong body under a right name, which here would mean
+        # building yesterday's code and calling it today's.
+        temp = target.with_name(f".{target.name}.tmp")
+        temp.write_text(content, encoding="utf-8")
+        os.replace(temp, target)
 
     async def run_command(
         self,

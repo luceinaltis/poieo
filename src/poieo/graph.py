@@ -180,17 +180,32 @@ class NodeSpec(_Spec):
                     f"command node '{self.id}' names a language but has no script"
                 )
             if self.language:
-                from .tools import LANGUAGES  # late import; tools pulls in providers
+                # late import; tools pulls in providers
+                from .tools import COMPILED, LANGUAGES, known_language
 
-                if self.language not in LANGUAGES:
+                if not known_language(self.language):
                     raise ValueError(
                         f"command node '{self.id}' names unknown language "
-                        f"'{self.language}'; known: {sorted(LANGUAGES)}"
+                        f"'{self.language}'; known: "
+                        f"{sorted(set(LANGUAGES) | set(COMPILED))}"
                     )
-                try:
-                    validate_template(self.script or "")
-                except ExpressionError as exc:
-                    raise ValueError(f"node '{self.id}': {exc}") from exc
+                if self.language in COMPILED:
+                    # A template renders differently each run, so the hash
+                    # changes, so the build cache never hits and grows without
+                    # bound. What varies belongs in `env`, which is templated
+                    # and never reaches the compiler.
+                    if "{{" in (self.script or ""):
+                        raise ValueError(
+                            f"command node '{self.id}': a {self.language} script is "
+                            f"compiled and cached by its own text, so a template in "
+                            f"it would rebuild every run. Put what varies in `env:` "
+                            f"and read it at run time"
+                        )
+                else:
+                    try:
+                        validate_template(self.script or "")
+                    except ExpressionError as exc:
+                        raise ValueError(f"node '{self.id}': {exc}") from exc
             if not self.command and not self.script:
                 raise ValueError(
                     f"command node '{self.id}' requires a command or a script"

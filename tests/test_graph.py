@@ -362,3 +362,52 @@ def test_a_scripted_node_still_calls_no_model():
         _graph({"type": "command", "language": "python", "script": "print(1)"})
     )
     assert graph.roles() == set()
+
+
+# -- compiled languages ------------------------------------------------------
+
+
+def test_a_compiled_script_is_refused_a_template():
+    """A template renders differently each run, so the hash changes, so the
+    build cache never hits and grows without bound. What varies belongs in
+    `env`, which is templated and does not reach the compiler."""
+    with pytest.raises(ValidationError) as caught:
+        GraphSpec.model_validate(
+            _graph(
+                {
+                    "type": "command",
+                    "language": "c",
+                    "script": "int main(void){return {{ input.code }};}",
+                }
+            )
+        )
+
+    assert "env" in str(caught.value)
+
+
+def test_an_interpreted_script_still_takes_a_template():
+    """Nothing is compiled, so nothing is cached, so nothing is defeated."""
+    graph = GraphSpec.model_validate(
+        _graph(
+            {
+                "type": "command",
+                "language": "python",
+                "script": "print('{{ input.who }}')",
+            }
+        )
+    )
+    assert "{{ input.who }}" in graph.node("n").script
+
+
+def test_a_compiled_script_without_a_template_is_fine():
+    graph = GraphSpec.model_validate(
+        _graph({"type": "command", "language": "c", "script": "int main(void){return 0;}"})
+    )
+    assert graph.node("n").language == "c"
+
+
+@pytest.mark.parametrize("language", ["c", "go", "rust"])
+def test_every_compiled_language_is_accepted(language):
+    GraphSpec.model_validate(
+        _graph({"type": "command", "language": language, "script": "x"})
+    )

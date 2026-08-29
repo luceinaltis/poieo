@@ -622,7 +622,13 @@ def run(
         store = layout_for(task.dir if task is not None else Path.cwd()).runs()
     run_store = NullStore() if no_log else RunStore(store)
 
-    tool_context = ToolContext(isolation=Isolation(image=isolate)) if isolate else None
+    # A build cache for compiled scripts, in the project if there is one --
+    # `LocalExecutor` falls back to the OS temp dir when there is not.
+    here = find_project()
+    tool_context = ToolContext(
+        isolation=Isolation(image=isolate) if isolate else None,
+        build_cache=(here.layout().cache() / "builds") if here else None,
+    )
     isolation = tool_context.isolation if tool_context else None
     if isolation is not None:
         # The daemon's preflight, for the same reason: better here than eight

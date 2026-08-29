@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from ..errors import IsolationError
-from . import CommandResult, Executor, Isolation, Tool, ToolError
+from . import CommandResult, Executor, Isolation, Tool, ToolError, _quote
 from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
@@ -31,6 +31,8 @@ from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
 # make every later exec fail with an unhelpful "is not running".
 _IDLE = "2147483647"
 _MOUNT = "/work"
+# Where compiled scripts are built and kept, inside the container.
+_BUILD = "/tmp/poieo-build"
 # How an orphaned container is found after a hard kill, and what the sweep matches on.
 BOX_LABEL = "poieo.box"
 _PROBE_TIMEOUT = 20.0
@@ -317,6 +319,43 @@ class DockerExecutor(Executor):
         if len(text) > _OUTPUT_CAP:
             text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
         return CommandResult(exit_code=code, output=text)
+
+    def build_paths(self, key: str, source: str) -> tuple[str, str]:
+        """Built things live **inside the container**, not on a mounted folder.
+
+        Two reasons, and the second is the one that would bite. It needs no
+        second mount -- and a binary built here is for the image's platform,
+        so a cache shared with the host would eventually hand a Windows
+        executable to a Linux container.
+
+        Its lifetime is the container's, which is the lifetime of everything
+        else that container installed: kept between runs, gone when the daemon
+        stops or `poieo reset` throws it away. No new contract to explain.
+        """
+        home = f"{_BUILD}/{key}"
+        return f"{home}/{source}", f"{home}/prog"
+
+
+    async def _is_built(self, binary: str) -> bool:
+        code, _ = await self._exec(f"test -x {binary}")
+        return code == 0
+
+    async def _put(self, path: str, content: str) -> None:
+        parent = path.rsplit("/", 1)[0]
+        code, out = await self._exec(
+            f"mkdir -p {_quote(parent)} && cat > {path}", stdin=content
+        )
+        if code != 0:
+            raise ToolError(f"could not write {path} in the box: {out.strip()}")
+
+    async def _exec(self, command: str, stdin: str | None = None) -> tuple[int, str]:
+        """One `docker exec` of a shell line, without the CommandResult shaping."""
+        if not self.container_id:
+            raise ToolError("the isolated environment is not running")
+        argv = ["exec", "-w", _MOUNT] + (["-i"] if stdin is not None else [])
+        return await _docker(
+            *argv, self.container_id, "sh", "-c", command, stdin=stdin
+        )
 
     async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
         """The same run, shaped for a model to read."""

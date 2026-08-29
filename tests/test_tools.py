@@ -1,3 +1,5 @@
+import pathlib
+
 import pytest
 
 from poieo.tools import ToolError
@@ -763,3 +765,122 @@ async def test_the_boxed_seam_feeds_stdin_interactively(tmp_path, monkeypatch):
     assert argv[0] == "exec"
     # ...and the code itself actually went down the pipe.
     assert fed[0] == "print(1)"
+
+
+# -- compiled scripts: the build happens once --------------------------------
+#
+# This machine has no `cc` and no `go` -- checked. So these drive the compiler
+# through a recording stub rather than really building, the same way the boxed
+# tests drive `_docker`. What is under test is the argv and the cache decision,
+# which is all this feature is.
+
+
+def _with_stub_compiler(monkeypatch, tmp_path):
+    """A LocalExecutor whose subprocesses are recorded, not run."""
+    from poieo.tools import CommandResult, LocalExecutor, ToolContext
+
+    cache = tmp_path / "cache"
+    executor = LocalExecutor(
+        tmp_path / "work", ["shell"], ToolContext(build_cache=cache)
+    )
+    (tmp_path / "work").mkdir(parents=True, exist_ok=True)
+
+    ran: list[str] = []
+
+    async def fake(command, timeout=None, env=None, stdin=None):
+        ran.append(command)
+        # A build leaves a binary behind, as a real compiler would. Split on
+        # " -o " with its spaces: a temp path really does contain "-of".
+        if " -o " in command:
+            target = command.split(" -o ", 1)[1].split('" ')[0].strip('"')
+            pathlib.Path(target).write_text("binary", encoding="utf-8")
+        return CommandResult(exit_code=0, output="")
+
+    monkeypatch.setattr(executor, "run_command", fake)
+    return executor, ran, cache
+
+
+async def test_the_same_script_is_built_once(tmp_path, monkeypatch):
+    """The whole claim. Second run finds the binary and skips the compiler."""
+    executor, ran, _ = _with_stub_compiler(monkeypatch, tmp_path)
+    code = "int main(void){return 0;}"
+
+    await executor.run_script("c", code)
+    await executor.run_script("c", code)
+
+    builds = [c for c in ran if c.startswith("cc ")]
+    assert len(builds) == 1, ran
+    # ...and it ran both times.
+    assert len(ran) == 3
+
+
+async def test_changing_the_script_builds_again(tmp_path, monkeypatch):
+    executor, ran, _ = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("c", "int main(void){return 0;}")
+    await executor.run_script("c", "int main(void){return 1;}")
+
+    assert len([c for c in ran if c.startswith("cc ")]) == 2
+
+
+async def test_the_build_never_touches_the_workdir(tmp_path, monkeypatch):
+    """The workdir is committed whole as the night's change, so a source file
+    or a binary left there would arrive in somebody's morning diff."""
+    executor, _, cache = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    assert list((tmp_path / "work").iterdir()) == []
+    assert list(cache.rglob("main.c"))
+
+
+async def test_an_interpreted_script_still_goes_over_stdin(tmp_path, monkeypatch):
+    """No file, no cache, nothing to build -- the #175 path is untouched."""
+    executor, ran, cache = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("python", "print(1)")
+
+    assert ran == ["python -"]
+    assert not cache.exists()
+
+
+async def test_the_box_builds_inside_itself(tmp_path, monkeypatch):
+    """Not on a mounted host folder. A binary built in the image is for the
+    image's platform, and a cache shared with the host would eventually hand a
+    Windows executable to a Linux container."""
+    from poieo.tools import docker as dock
+
+    executor, seen, fed = _boxed(monkeypatch, tmp_path)
+
+    async def miss(*args: str, timeout: float = 0, stdin: str | None = None):
+        seen.append(args)
+        fed.append(stdin)
+        # `test -x` says no; everything else succeeds. A cache miss, in full.
+        return (1 if "test -x" in args[-1] else 0), ""
+
+    monkeypatch.setattr(dock, "_docker", miss)
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    joined = " ".join(" ".join(a) for a in seen)
+    assert "/tmp/poieo-build/" in joined
+    # The source went in over stdin, and no host path was mounted for it.
+    assert "int main(void){return 0;}" in [f for f in fed if f]
+    assert str(tmp_path) not in joined
+
+
+async def test_the_box_skips_a_build_it_already_has(tmp_path, monkeypatch):
+    """`test -x` answering 0 means the binary is there, so no compiler runs."""
+    from poieo.tools import CommandResult
+    from poieo.tools import docker as dock
+
+    executor, seen, _fed = _boxed(monkeypatch, tmp_path)
+
+    async def already_built(*args: str, timeout: float = 0, stdin: str | None = None):
+        seen.append(args)
+        return 0, ""  # every exec succeeds, including `test -x`
+
+    monkeypatch.setattr(dock, "_docker", already_built)
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    joined = " ".join(" ".join(a) for a in seen)
+    assert "cc " not in joined

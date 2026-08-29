@@ -95,17 +95,62 @@ fact rather than something to pretend about at load.
 
 `command:` and `script:` are exclusive, and `language:` is required with a
 script — nothing can be read off the code itself, and guessing wrong runs the
-wrong interpreter over somebody's program. A script is templated and checked at
-parse time, exactly as a command and a prompt are.
+wrong interpreter over somebody's program. An interpreted script is templated
+and checked at parse time, exactly as a command and a prompt are; a compiled one
+is not, for the reason below.
 
-Compiled languages are not in the table: a compiler wants a path, so stdin does
-not serve. `command: cc -o gate gate.c && ./gate` covers it, and `&&` chains
-correctly — the first command's failure stops the second and its exit code is
-what arrives. **No `tools:` line
-means no tools**: the node calls the model once, reads the answer, and cannot
-touch a file. Tools are what bring the loop, the `workdir` and the turn budget
-with them, which is why there is no separate type for a call without them —
-and why hands are asked for rather than defaulted.
+### Compiled languages, and why the cache is not extra
+
+`c`, `go` and `rust` are in the table too, and they cannot use stdin: a
+compiler wants a **path**. Once there has to be a file somewhere, naming its
+folder by the hash of the code *is* the cache — skipping the build is then one
+`if the binary is already there`. Building once and running many times is not a
+feature added on top; it is what content-addressing gives for free.
+
+Two constraints decide where that folder is, and both come from
+[workspace.md](workspace.md): the workdir is committed whole as the night's
+change, so nothing scratch may go there — and `layout_for()` answers with the
+workdir *itself* when it holds no `poieo.yaml`, so a cache worked out from the
+workdir would land inside the user's repository. The project's cache path is
+passed in on `ToolContext` instead.
+
+| | where | how long |
+|---|---|---|
+| local | the project's `memory/cache/builds/` | the folder's own "delete freely" contract |
+| isolated | `/tmp/poieo-build/` **inside the container** | the container's, like everything else it installed |
+
+Inside the container rather than a second mount, and that is not only
+simplicity: a binary built there is for the image's platform, so a cache shared
+with the host would eventually hand a Windows executable to a Linux container.
+
+**A compiled script is refused a template.** A template renders differently
+each run, so the hash changes, so the cache never hits and grows without bound.
+What varies belongs in `env:` — which *is* templated, and never reaches the
+compiler:
+
+```yaml
+language: c
+env: {FLOOR: "{{ input.floor }}"}
+script: |
+  #include <stdlib.h>
+  int main(void) { return atof(getenv("FLOOR")) >= 90 ? 0 : 1; }
+```
+
+That rule is also why there is no expiry to write: the cache is bounded by the
+number of distinct scripts in the project. The toolchain's version is
+deliberately not in the key — upgrading a compiler over unchanged source almost
+never changes what the program does, and reading a version would cost a process
+on every *hit*, which is the cost this exists to remove.
+
+A build that fails comes back as its own exit code and the compiler's own
+output, exactly as a red test suite does.
+
+### An agent node's hands
+
+**No `tools:` line means no tools**: the node calls the model once, reads the
+answer, and cannot touch a file. Tools are what bring the loop, the `workdir`
+and the turn budget with them, which is why there is no separate type for a
+call without them — and why hands are asked for rather than defaulted.
 
 `next: null`, or an omitted `next`, ends the run. A branch with `to: null` ends
 it too — matched, and deliberately no further.
