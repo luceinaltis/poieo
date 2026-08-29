@@ -50,7 +50,7 @@ def test_answering_posts_the_choice_to_the_task(project, monkeypatch):
         seen["body"] = json.loads(request.content)
         return httpx.Response(200, json={"status": "answered", "answer": "land"})
 
-    monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
+    monkeypatch.setattr("poieo.cli._board", lambda port, host="127.0.0.1": _served(handler))
     result = runner.invoke(app, ["answer", "land", "land"])
 
     assert result.exit_code == 0
@@ -62,7 +62,7 @@ def test_a_refused_choice_shows_the_ones_that_were_offered(project, monkeypatch)
     def handler(request):
         return httpx.Response(400, json={"error": "'merge' was not offered", "choices": ["land", "hold"]})
 
-    monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
+    monkeypatch.setattr("poieo.cli._board", lambda port, host="127.0.0.1": _served(handler))
     result = runner.invoke(app, ["answer", "land", "merge"])
 
     assert result.exit_code != 0
@@ -74,7 +74,7 @@ def test_no_daemon_says_so_rather_than_a_stack_trace(project, monkeypatch):
     def handler(request):
         raise httpx.ConnectError("nothing listening")
 
-    monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
+    monkeypatch.setattr("poieo.cli._board", lambda port, host="127.0.0.1": _served(handler))
     result = runner.invoke(app, ["answer", "land", "land"])
 
     assert result.exit_code != 0
@@ -97,7 +97,7 @@ def test_asking_lists_what_is_waiting(project, monkeypatch):
             },
         )
 
-    monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
+    monkeypatch.setattr("poieo.cli._board", lambda port, host="127.0.0.1": _served(handler))
     result = runner.invoke(app, ["asking"])
 
     assert result.exit_code == 0
@@ -110,7 +110,7 @@ def test_asking_with_nothing_waiting_says_so(project, monkeypatch):
     def handler(request):
         return httpx.Response(200, json={"tasks": [{"name": "land", "asking": None}]})
 
-    monkeypatch.setattr("poieo.cli._board", lambda port: _served(handler))
+    monkeypatch.setattr("poieo.cli._board", lambda port, host="127.0.0.1": _served(handler))
     result = runner.invoke(app, ["asking"])
 
     assert result.exit_code == 0

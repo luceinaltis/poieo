@@ -2,7 +2,8 @@
 
 `src/poieo/web/` (server, event fan-out, the built page) · `web-ui/` (its source)
 
-While `poieo daemon` runs it serves a page on `http://127.0.0.1:8484`
+While `poieo daemon` runs it serves a page on `http://127.0.0.1:8484` —
+`--host` moves that, and `docs/daemon.md` says what moving it costs
 (`--port` to change it, `--no-web` to turn it off). The page ships built under
 `src/poieo/web/static/`, which is deliberately checked in — there is nothing for
 a user to install.

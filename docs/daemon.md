@@ -225,6 +225,24 @@ which is what stood here first, refused the ordinary case: every project has a
   failure is *logged*, not swallowed — a learning pass that blew up at 3am used
   to go down with the daemon without leaving a word behind
 
+## Where the board listens
+
+`127.0.0.1`, and `--host` is how that changes. The default is not a precaution
+somebody added; it is what makes the rest of the design honest. DESIGN.md says
+poieo is one person's machine and that there is no auth — and *no auth* is a
+decision resting on *nothing outside can reach it*.
+
+So `web_exposure()` returns a sentence for every address that is not loopback,
+logged at **warning** before the port is bound. It names what is reachable
+rather than observing that the address changed: the board accepts a night's
+work into the reader's own files, repoints a role at another model, and writes
+a task that runs shell commands on this machine. None of it asks for a
+password.
+
+Opening it is a real thing to want — a phone is not this machine — and the flag
+exists so that wanting it is written down rather than patched around. What it
+is not is a default.
+
 ## Cards that appear while it runs
 
 The tasks folder used to be read once, at startup, so a card written afterwards
