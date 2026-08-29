@@ -480,7 +480,7 @@ function priceText(model: ServedModel, local: boolean): string {
     if (model.price.input === 0 && model.price.output === 0) return "free"
     return `$${money(model.price.input)} / $${money(model.price.output)}`
   }
-  return local ? "runs here" : ""
+  return local ? "local" : ""
 }
 
 /**

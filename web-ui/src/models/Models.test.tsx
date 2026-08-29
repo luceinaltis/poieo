@@ -120,13 +120,13 @@ test("a published price is shown per million tokens, input then output", async (
   expect(price.getAttribute("data-price")).toBe("paid")
 })
 
-test("a local model says it runs here rather than showing a price of nothing", async () => {
+test("a local model reads local rather than showing a price of nothing", async () => {
   // Ollama does not charge per token, so there is no rate to report -- and a
   // zero would read as a rate somebody looked up.
   await render()
 
   const price = row("ollama/qwen3.5:latest")!.querySelector(".models-price")!
-  expect(price.textContent).toBe("runs here")
+  expect(price.textContent).toBe("local")
   expect(price.getAttribute("data-price")).toBe("local")
 })
 

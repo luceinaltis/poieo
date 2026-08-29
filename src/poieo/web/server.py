@@ -1,13 +1,15 @@
 """The observation and control API served from inside the daemon.
 
 Almost everything answers "what is happening / what happened". The routes that
-change anything come in exactly two kinds, marked again where they are
-registered:
+change anything are marked again where they are registered:
 
 - **The review** -- accept and discard, the only routes that may ever touch the
   user's own files. If you are adding a third of these, stop.
 - **Control** -- pause, resume, run-now. The daemon's runtime state and nothing
   else: no file, no schedule on disk, nothing that survives a restart.
+- **Editing what the reader keeps** -- pointing a role at a model, and writing
+  one task card. Both change a file whose effect outlives the process, and each
+  carries its own fence where it is defined.
 
 Design: docs/web.md
 """
@@ -16,14 +18,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any, AsyncIterator
 
+import yaml
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
+
+# Every suffix `card.load_cards` reads, so one name is refused in every spelling.
+_CARD_SUFFIXES = {".yaml", ".yml", ".json"}
+# Windows keeps these in every directory, whatever the extension is.
+_RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {f"LPT{n}" for n in range(1, 10)}
 
 from .. import detect as engines
 from ..binding import load_binding, split_ref
@@ -503,6 +513,148 @@ def create_app(daemon: Any) -> Starlette:
             }
         )
 
+    def _slug(title: str) -> str:
+        """A filename from a title, or "" if nothing usable is left.
+
+        A card's identity is its filename and the `name:` inside is a title the
+        reader may rewrite, so the two are made here and never again. Anything
+        that is not a letter, a digit, a dash or an underscore is dropped --
+        which is also the fence: a name is the one place a path could get into
+        a route whose whole promise is one file, in one folder.
+        """
+        # \w and not [a-z0-9_]: a title in Korean, Cyrillic or Japanese
+        # slugged to nothing under ASCII, so those readers could never make a
+        # card at all. The dump already writes unicode through.
+        return re.sub(r"[^\w-]+", "-", title.strip().lower(), flags=re.UNICODE).strip("-")
+
+    async def project_tasks_create(request: Request) -> JSONResponse:
+        """Write one card into the project's tasks folder.
+
+        The **fifth kind** of write here, and the first that makes a file that
+        did not exist. Its effect outlives the process, which is not control;
+        nothing a run wrote is involved, which is not review.
+
+        Its own fence: **one card, in this project's tasks folder, and nothing
+        else.** No graph, no binding, and no path that leaves that folder --
+        the name is turned into a filename here rather than taken as one.
+
+        Three fields and no more, which is DESIGN.md's second principle: a
+        name, the folder it works in, and its prompt. The folder is required on
+        purpose. It is the one thing the model's hands will touch, and filling
+        it in by default would fill in the single moment the user is meant to
+        see.
+
+        Every refusal is decided before the file is opened, so a request that
+        will be refused never leaves a half-written card in a folder the daemon
+        is watching.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        if not config.cards:
+            return JSONResponse({"error": "this project names no tasks folder"}, status_code=409)
+        if not config.binding:
+            # A card written here names no binding of its own, so with no
+            # default it would not load -- and one unloadable card in a watched
+            # folder stops every later card from being noticed at all.
+            return JSONResponse(
+                {"error": "this project has no default models file for a new task to use"},
+                status_code=409,
+            )
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        body = body or {}
+        title = str(body.get("name") or "").strip()
+        prompt = str(body.get("prompt") or "").strip()
+        folder = str(body.get("folder") or "").strip()
+
+        # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
+        # is a spelling; "../escape" becoming "escape" is a different request
+        # answered without saying so, and the fence is exactly here.
+        if "/" in title or chr(92) in title or title.strip(".") == "":
+            return JSONResponse({"error": "a task's name is not a path"}, status_code=400)
+        slug = _slug(title)
+        if not slug:
+            return JSONResponse({"error": "a task needs a name that can be a filename"}, status_code=400)
+        if not prompt:
+            return JSONResponse({"error": "a task needs a prompt"}, status_code=400)
+        if not folder:
+            return JSONResponse(
+                {"error": "a task needs the folder it works in; there is no default"},
+                status_code=400,
+            )
+
+        cards = config.resolve_path(config.cards)
+        # expanduser, because a card does that when it reads this back; without
+        # it `~/code/x` is refused as a folder inside the tasks folder.
+        asked = Path(os.path.expanduser(folder))
+        # Relative to the card, because that is how a card reads it back.
+        where = (asked if asked.is_absolute() else cards / asked).resolve()
+        if not where.is_dir():
+            return JSONResponse(
+                {"error": f"the folder it would work in is not there: {where}"},
+                status_code=400,
+            )
+
+        # **Inside this project, and nowhere else.** A card takes the files and
+        # shell toolsets and fires within seconds of being written, so without
+        # this one request starts a shell-capable agent anywhere on the machine
+        # -- over a port any page in the browser can reach. Pointing a task at
+        # another checkout is still done by writing the card by hand, which is a
+        # deliberate act rather than a request.
+        root = Path(config.base_dir).resolve()
+        if root != where and root not in where.parents:
+            return JSONResponse(
+                {"error": f"a task made here works inside this project; {where} is outside {root}"},
+                status_code=400,
+            )
+        # Windows answers exists() for these in every directory, and a write
+        # would reach the console rather than a file.
+        if slug.split(".")[0].upper() in _RESERVED:
+            return JSONResponse({"error": f"'{slug}' is not a usable filename"}, status_code=400)
+        path = cards / f"{slug}.yaml"
+        # Every suffix load_cards reads, not only the one written: a .yml card
+        # of the same name would load beside this one, and the folder would then
+        # stop loading at all -- taking every later card with it.
+        taken = [
+            other.name for other in cards.iterdir() if other.stem == slug and other.suffix.lower() in _CARD_SUFFIXES
+        ]
+        if taken:
+            return JSONResponse(
+                {"error": f"this project already has a task called '{slug}' ({taken[0]})"},
+                status_code=409,
+            )
+
+        payload = yaml.safe_dump(
+            {"name": title, "folder": folder, "prompt": prompt},
+            allow_unicode=True,
+            sort_keys=False,
+        )
+
+        def _write() -> bool:
+            # Exclusive create, so the check above and the write are one act:
+            # two requests naming the same card in the same second would both
+            # answer ok, and the second would overwrite the first in silence.
+            try:
+                with open(path, "x", encoding="utf-8") as handle:
+                    handle.write(payload)
+            except FileExistsError:
+                return False
+            return True
+
+        if not await asyncio.to_thread(_write):
+            return JSONResponse(
+                {"error": f"this project already has a task called '{slug}'"},
+                status_code=409,
+            )
+        # No reload here: the daemon watches this folder and will find it, the
+        # same way it finds one written by a hand. One door, not two.
+        return JSONResponse({"ok": True, "task": slug, "path": str(path)})
+
     async def project_models_use(request: Request) -> JSONResponse:
         """Point a role at another model, and repaint what that changed.
 
@@ -867,6 +1019,14 @@ def create_app(daemon: Any) -> Starlette:
         Route(
             "/api/projects/{project}/models/add",
             project_models_add,
+            methods=["POST"],
+        ),
+        # Making: the fifth kind. It creates a file that did not exist, in the
+        # folder the daemon watches, and nothing else -- one card, inside this
+        # project.
+        Route(
+            "/api/projects/{project}/tasks",
+            project_tasks_create,
             methods=["POST"],
         ),
         Route("/api/events", events),

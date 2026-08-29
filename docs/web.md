@@ -22,6 +22,7 @@ server and the client keep them together so they stay easy to count.
 | `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
+| `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
 | `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
@@ -479,7 +480,7 @@ with one option in it is furniture.
 
 **A row is what the endpoint said, and a blank is what it did not.** A local
 model shows the two numbers that are its real price -- its size and
-quantization -- and says it *runs here* rather than showing a rate of nothing; a
+quantization -- and reads *local* rather than showing a rate of nothing; a
 routed one shows the rate it published. An endpoint that charges but publishes
 nothing leaves the column empty, because "free" would be a guess and an
 expensive one to be wrong about.
@@ -546,6 +547,24 @@ so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it
 against anyway.
 
+**Making a card is the fifth kind of write**, and the first that creates a file
+that did not exist. Its fence is one card in the project's tasks folder: no
+graph, no binding, and no path out of that folder — the name is turned into a
+filename here rather than taken as one, and a name that reads like a path is
+refused rather than quietly rewritten. It takes the three things DESIGN.md says
+a task cannot do without and no fourth, and the folder is required because it is
+the one thing the model's hands will touch.
+
+The rail's third item is the page that calls it: `make/MakeTask.tsx`, beside
+`models/` because making a task is what the board is *for* rather than something
+one task does. It asks for the three fields and names the folder in a sentence
+above the button — the card starts running when it is saved, and that sentence
+is principle 7's one exception to hiding the machinery. One panel holds the
+stage's single margin, so opening it closes the other.
+
+There is **no reload call behind it**. The daemon watches that folder, so the
+route's whole job is the file; one door rather than two that must agree.
+
 **Every write answers rather than throwing** (`Answer { ok, ... }`), so a
 refusal — uncommitted edits in the reader's own project, a run already in flight,
 a daemon that went away — travels the same path as a success.
@@ -564,8 +583,9 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Task card CRUD from the board.** Observe, review and control are live;
-  creating or editing a card still means editing the file.
+- **Editing and removing a card.** Making one is live — the rail's `new task`
+  writes a card and the daemon finds it — but changing a card's name or folder,
+  and deleting it, still mean editing the file.
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.
