@@ -59,6 +59,17 @@ surface that quietly widened, a comment that no longer matches the code below it
 a file staged by accident. Then write in the PR what you checked and what you
 found. "Self-reviewed, no findings" under a 400-line diff is not a review.
 
+And ask where each part came from. Musk's algorithm puts questioning the
+requirement before simplifying it: take every requirement with "the name of the
+person who made it" attached, never a department, and never more trustingly
+because that person was smart — "requirements from smart people are the most
+dangerous." Many of the requirements here arrive from `docs/archive/`, written
+by earlier sessions at least as capable as this one and no longer available to
+be asked. That is the department. **Before making a part faster or more
+configurable, find out whether the reason it exists is still true**; it is the
+most common error of a smart engineer to optimize a thing that should not
+exist. And if nothing ever gets added back, the deleting was too timid.
+
 Merge only when all of these hold:
 
 1. Both suites are green, and the run appears in the PR body.
@@ -79,10 +90,32 @@ Merge only when all of these hold:
    behind `main` before anyone opened the daemon and looked, and one of those
    four was a CSS fix -- so a fresh checkout served the bug that `main` had
    already fixed, with both suites green over it the whole time.
+9. The change fits the one set of ideas the product already has. Conceptual
+   integrity is the most important consideration in system design, and it is
+   "better to have a system omit certain anomalous features and improvements,
+   but to reflect one set of design ideas, than to have one that contains many
+   good but independent and uncoordinated ideas" (Fred Brooks, *The Mythical
+   Man-Month*, 1975). Brooks was writing about large teams, where no one mind
+   holds the whole design; a repo built by successive agent sessions has that
+   problem in a different costume, and DESIGN.md is the architect it
+   substitutes for. So a PR that works and runs green is still refused if it
+   adds a fourth word beside task / run / change, or a second way to say what
+   there is already one way to say.
 
 Stop and ask a human instead of merging when the PR changes a public interface,
 deletes a test, adds a dependency nothing asked for, or touches how bindings and
 credentials are loaded.
+
+That list is short on purpose, and each item on it is a **one-way door**: a
+revert undoes a merge, but it does not un-publish an interface other code has
+started calling, un-delete the test that was the only written record of a
+behaviour, or un-leak a credential. Nearly everything else is a two-way door,
+and those "can and should be made quickly by high-level individuals or small
+groups" (Jeff Bezos, 2015 letter to shareholders) — which is exactly what an
+agent merging its own PR is. His warning was not against moving fast: it was
+that the slow process creeps onto reversible decisions too, and buys
+"unthoughtful risk aversion" with the time it costs. **Stopping to ask is what
+the one-way items are for; do not spend it on the rest.**
 
 ## Commit and PR messages
 
