@@ -54,6 +54,108 @@ async def test_glob_rejects_escaping_pattern(tmp_path):
         await TOOLS["glob_files"].run(tmp_path, {"pattern": "../**/*.py"})
 
 
+async def test_search_reports_the_file_the_line_and_the_line_number(tmp_path):
+    """Searching a repository was the shell's job and it should not have been.
+
+    Twenty-three of seventy shell commands in a measured run were `grep`, and
+    the POSIX spelling of one of them died on a Windows shell -- the same
+    dialect problem the `env` argument exists to keep out of the tool.
+    """
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "m.py").write_text("import os\nDEBUG = True\n")
+    (tmp_path / "other.py").write_text("DEBUG = False\n")
+
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "DEBUG"})
+
+    lines = found.replace("\\", "/").splitlines()
+    assert "pkg/m.py:2: DEBUG = True" in lines
+    assert "other.py:1: DEBUG = False" in lines
+
+
+async def test_search_narrows_by_glob(tmp_path):
+    (tmp_path / "a.py").write_text("needle\n")
+    (tmp_path / "b.txt").write_text("needle\n")
+
+    found = await TOOLS["search_files"].run(
+        tmp_path, {"pattern": "needle", "glob": "**/*.py"}
+    )
+
+    assert "a.py" in found
+    assert "b.txt" not in found
+
+
+async def test_search_stays_out_of_dot_directories(tmp_path):
+    """A run's folder is a git copy, and `.git` is full of packs and objects.
+
+    Matching inside them fills the answer with noise the model cannot act on,
+    and the packs are binary besides.
+    """
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "COMMIT_EDITMSG").write_text("needle\n")
+    (tmp_path / "kept.py").write_text("needle\n")
+
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle"})
+
+    assert "kept.py" in found
+    assert "COMMIT_EDITMSG" not in found
+
+
+async def test_search_skips_files_it_cannot_read_as_text(tmp_path):
+    (tmp_path / "blob.bin").write_bytes(b"\x00\xff needle \x00")
+    (tmp_path / "plain.txt").write_text("needle\n")
+
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle"})
+
+    assert "plain.txt" in found
+    assert "blob.bin" not in found
+
+
+async def test_search_says_how_much_it_left_out(tmp_path):
+    """An unbounded search refills the conversation the clearing just emptied.
+
+    In SWE-agent's own ablation an unsummarized, iterative search scored six
+    points *below* having no search at all.
+    """
+    (tmp_path / "many.txt").write_text("needle\n" * 500)
+
+    found = await TOOLS["search_files"].run(
+        tmp_path, {"pattern": "needle", "max_results": 5}
+    )
+
+    assert len(
+        [line for line in found.splitlines() if line.startswith("many.txt:")]
+    ) == 5
+    assert "495 more" in found
+
+
+async def test_search_clips_a_very_long_line(tmp_path):
+    (tmp_path / "wide.txt").write_text("needle " + "x" * 5000 + "\n")
+
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle"})
+
+    assert len(found.splitlines()[0]) < 500
+
+
+async def test_search_answers_a_broken_pattern_rather_than_raising(tmp_path):
+    """`docs/tools.md`: failure is text the model can read and correct."""
+    (tmp_path / "a.txt").write_text("x\n")
+    with pytest.raises(ToolError, match="pattern"):
+        await TOOLS["search_files"].run(tmp_path, {"pattern": "(unclosed"})
+
+
+async def test_search_rejects_an_escaping_glob(tmp_path):
+    with pytest.raises(ToolError):
+        await TOOLS["search_files"].run(
+            tmp_path, {"pattern": "x", "glob": "../**/*.py"}
+        )
+
+
+async def test_search_says_so_when_nothing_matches(tmp_path):
+    (tmp_path / "a.txt").write_text("nothing here\n")
+    found = await TOOLS["search_files"].run(tmp_path, {"pattern": "needle"})
+    assert found == "(no matches)"
+
+
 from poieo.tools.shell import SHELL_TOOLS
 
 SHELL = {t.definition.name: t for t in SHELL_TOOLS}
