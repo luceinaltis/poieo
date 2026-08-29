@@ -170,6 +170,7 @@ export default function App({ store }: { store?: StageStore }) {
           status={openRow?.status ?? "waiting"}
           pending={openRow?.pending ?? 0}
           into={openRow?.into ?? null}
+          asking={openRow?.asking ?? null}
           onClose={closeDrawer}
           onDecided={decided}
         />

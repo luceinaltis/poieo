@@ -10,12 +10,13 @@ import { memo, useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
 import { Control } from "./Control"
+import { Question } from "./Question"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { RunList } from "../review/RunList"
 import { initialStage, keyOfTask, replay, subjectOf } from "../state/stage"
 import type { TaskState } from "../state/stage"
-import type { PoieoEvent, RunSummary } from "../types"
+import type { PoieoEvent, Question as Asked, RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
 
@@ -173,6 +174,7 @@ export const Drawer = memo(function Drawer({
   status = "waiting",
   pending = 0,
   into = null,
+  asking = null,
   onClose,
   onDecided,
 }: {
@@ -181,6 +183,7 @@ export const Drawer = memo(function Drawer({
   status?: string
   pending?: number
   into?: string | null
+  asking?: Asked | null
   onClose(): void
   onDecided?(): void
 }) {
@@ -237,6 +240,7 @@ export const Drawer = memo(function Drawer({
         last_run: null,
         pending: 0,
         into: null,
+        asking: null,
         then: [],
         shape: { entry: "", nodes: [] },
       },
@@ -254,6 +258,11 @@ export const Drawer = memo(function Drawer({
       </header>
 
       <div className="drawer-body">
+        {/* First, above the controls: everything after the question is held
+            until it is answered, so a reader who misses it is looking at a
+            flow that has quietly stopped. */}
+        <Question project={project} task={task} asking={asking} onAnswered={decided} />
+
         <Control project={project} task={task} status={status} onActed={decided} />
 
         <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />

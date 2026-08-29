@@ -100,6 +100,13 @@ export interface Listing {
   tasks: TaskRow[]
 }
 
+/** A question a run left behind, and the only answers it will take. */
+export interface Question {
+  run_id: string
+  question: string
+  choices: string[]
+}
+
 export interface TaskRow {
   name: string
   /** Which project's. With `name`, this is the task's identity. */
@@ -113,6 +120,12 @@ export interface TaskRow {
   pending: number
   /** What accepting them would add to; null when the task keeps no copy. */
   into: string | null
+  /**
+   * What this task stopped to ask a person, or null. A `confirm` node ends its
+   * run with one rather than doing something that cannot be undone, and
+   * nothing downstream of it runs until it is answered.
+   */
+  asking: Question | null
   /** Which task works next, and on what condition. Empty for most tasks. */
   then: Arrow[]
   /** What this task walks on the way there. */
