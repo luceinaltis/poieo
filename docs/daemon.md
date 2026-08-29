@@ -113,11 +113,40 @@ nothing that survives a restart.
 [workspace.md](workspace.md). A repository that cannot be tracked is logged and
 the work happens in place — not a reason to stop working at 3am.
 
-**A run re-reads its binding first.** `Daemon.reread()` is called before every
-firing, beside `read_input` and for the same reason: what the run needs is read
-now rather than remembered from startup. An edit — `poieo config use`, a hand
-edit, a pull — is in effect on the next run rather than after a restart, which
-is what [DESIGN.md](../DESIGN.md) promises.
+**A run re-reads both files it answers to first.** `Daemon.refresh()` is called
+before every firing, beside `read_input` and for the same reason: what the run
+needs is read now rather than remembered from startup. An edit — `poieo config
+use`, a hand edit, a pull, and now a changed prompt — is in effect on the next
+run rather than after a restart, which is what [DESIGN.md](../DESIGN.md)
+promises.
+
+The binding half has been here since the board began painting which model would
+answer. The graph half is newer, and it closes the more visible gap: the file a
+person actually edits is the one that says what the run *does*, and until now
+that one alone needed the daemon restarted. A card carrying its own prompt is
+re-expanded from the card file; a task naming a graph file re-reads that.
+
+**Only the graph is adopted, and only when nothing else changed.** A card expands
+into a spec *and* a graph, and the two split fields a reader would call one
+thing: `tools:` lands on the node, `isolation:` and `folder:` on the spec.
+Adopting the graph alone would honour a card's new tools while ignoring the
+isolation it asked for in the same edit — shell on the host rather than in a
+container — and would tell the model it works in a folder the tools are not
+rooted in. So a card whose expansion changed anything but its graph is refused
+and says so. A schedule, a folder or an `enabled:` still wants a restart, and
+adding a card at runtime is its own piece of work.
+
+**Both files are attempted, and the graph runs both startup checks.** Each is
+read in its own attempt, so a half-written binding cannot silently freeze the
+graph's reread, and the warning names whichever failed. `check_credentials` runs
+beside `preflight`: a graph reaching a role whose key is unset would otherwise be
+adopted, die opening the provider, and then make every later binding reread raise
+on the roles it had just added — a task stuck until restart by a file it read
+itself.
+
+`reread(key)` stays beside it and stays a key: the board writes a binding file
+and asks for that one back (`POST /api/projects/{p}/models/use`), which is a
+different question from "everything this run answers to". Two callers, two doors.
 
 It is the **daemon's** reread and not the runner's, because one file is one spec
 across every task that names it: a runner reading only for itself would leave its

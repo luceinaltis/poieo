@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..binding import BindingSpec, load_binding
-from ..card import append_journal, closing_line, record_run
+from ..card import append_journal, closing_line, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
-from ..graph import Branch
+from ..graph import Branch, load_graph
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
 from ..providers import ProviderPool, check_credentials
@@ -156,7 +156,7 @@ class TaskRunner:
         on_run: RunCallback | None = None,
         tool_context: ToolContext | None = None,
         handoff: Callable[["TaskRunner", RunResult, int], None] | None = None,
-        reread: Callable[[str], None] | None = None,
+        refresh: Callable[["LoadedTask"], None] | None = None,
     ):
         self.task = task
         self.config = config
@@ -195,7 +195,7 @@ class TaskRunner:
         # one. The daemon's and not the runner's own: one file is one spec
         # across every task that names it, and a runner reading only for
         # itself would leave its siblings behind.
-        self.reread = reread
+        self.refresh = refresh
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
         self._pending: asyncio.Task[Firing] | None = None
@@ -482,14 +482,13 @@ class TaskRunner:
         # will not load, or that would not have started this task, is a
         # warning and no more -- the spec in memory is still valid, and 3am is
         # no time to stop working over a config saved half-written.
-        if self.reread is not None:
+        if self.refresh is not None:
             try:
-                self.reread(self.task.binding_key)
+                self.refresh(self.task)
             except PoieoError as exc:
                 log.warning(
-                    "task '%s': %s could not be re-read, so this run uses the last good one: %s",
+                    "task '%s': a file it answers to could not be re-read, so this run uses the last good one: %s",
                     self.name,
-                    self.task.binding_key,
                     exc,
                 )
 
@@ -928,7 +927,7 @@ class Daemon:
                 # Bound, so it resolves against self.runners at call time --
                 # which is after this list has been built and assigned.
                 self._hand_off,
-                self.reread,
+                self.refresh,
             )
             for project in self.projects
             for task in project.tasks
@@ -1022,8 +1021,84 @@ class Daemon:
 
     # -- picking up a binding that changed under us ---------------------------
 
+    def refresh(self, task: LoadedTask) -> None:
+        """Load both files a run answers to again, and adopt what still starts.
+
+        A run reads its binding *and* its graph now rather than remembering
+        them from startup, which is what DESIGN.md means by "picked up by the
+        daemon from the next run. No restarts." The binding half has been here
+        since the board began painting which model would answer; the graph half
+        is the same promise kept for the file that says what the run does.
+        """
+        problems: list[str] = []
+        # Attempted independently: a half-written binding must not silently
+        # freeze the graph's reread, which is what one raise for both did.
+        try:
+            self.reread(task.binding_key)
+        except PoieoError as exc:
+            problems.append(f"binding: {exc}")
+        try:
+            self._reread_graph(task)
+        except PoieoError as exc:
+            problems.append(f"graph: {exc}")
+        if problems:
+            raise SpecError("; ".join(problems))
+
+    def _reread_graph(self, task: LoadedTask) -> None:
+        """The graph this task runs, read again from wherever it came from.
+
+        A card that carries its own prompt is re-expanded from the card file; a
+        task naming a graph file re-reads that. Validated against the binding
+        already in memory before it is adopted, for the reason below: a file
+        saved mid-flight must not put the daemon somewhere it would have
+        refused to start.
+
+        **Only the graph is adopted, and only when nothing else changed.** A
+        card expands into a spec *and* a graph, and the two split fields a
+        reader would call one thing: `tools:` lands on the node, `isolation:`
+        and `folder:` on the spec. Adopting the graph alone would honour a
+        card's new tools while ignoring the isolation it asked for in the same
+        edit -- shell on the host instead of in a container -- and would tell
+        the model it works in a folder the tools are not rooted in. So a card
+        whose expansion changes anything but its graph is refused, and says so:
+        a schedule, a folder or an `enabled:` has to reach a trigger built when
+        the daemon started, and half-adopting a spec is worse than not
+        adopting one.
+        """
+        project = next((p for p in self.projects if task in p.tasks), None)
+        if project is None:
+            return
+        config = project.config
+        card = config.cards_by_task.get(task.spec.name)
+        if card is not None and config.card_graphs.get(task.spec.name) is not None:
+            roster = [c.slug for c in config.cards_by_task.values()]
+            spec, graph = expand(load_card(card.source_path), roster=roster)
+            if graph is None or spec != task.spec:
+                raise SpecError(
+                    f"task '{task.spec.name}': the card changed more than its prompt, "
+                    f"and the rest of it only takes effect on a restart"
+                )
+        elif task.spec.graph:
+            graph = load_graph(config.resolve_path(task.spec.graph).resolve())
+        else:
+            return
+        try:
+            preflight(graph, task.binding, workdir=config.workdir_path(task.spec))
+            # Both startup checks, not one. A graph naming a role whose key is
+            # unset would be adopted, die opening the provider, and then make
+            # every later binding reread raise on the roles it just added.
+            if task.spec.enabled:
+                check_credentials(task.binding, graph.roles())
+        except Exception as exc:
+            raise SpecError(f"task '{task.spec.name}': {exc}") from exc
+        task.graph = graph
+
     def reread(self, key: str) -> None:
         """Load one binding file again and adopt it, if it still starts.
+
+        The board's own entry point: `POST /api/projects/{p}/models/use` writes
+        the file and then asks for exactly this, which is why it stays a key
+        and not a task. A run wants `refresh` instead -- both its files.
 
         Called before every run, so an edit -- `poieo config use`, a hand
         edit, a pull -- is in effect on the next one rather than after a
