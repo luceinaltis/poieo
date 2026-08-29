@@ -9,7 +9,7 @@ import signal
 import socket
 from collections import deque
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
@@ -442,10 +442,38 @@ class TaskRunner:
             await self._quiet(fires)
         log.info("task '%s' stopped", self.name)
 
+    def _over_budget(self) -> str | None:
+        """Why this project may not spend right now, or None.
+
+        Checked where the daemon already decides whether to fire, because
+        "over budget" is a new reason not to rather than a new way to stop
+        something halfway. A run that has started is going to finish -- and a
+        rate limit that killed work in progress would waste exactly the money
+        it was set to save.
+        """
+        spend = self.config.spend
+        if spend is None:
+            return None
+        window = parse_duration(spend.over)
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window)).isoformat()
+        so_far = self.store.spent_since(cutoff, project=self.config.display_name)
+        if so_far < spend.limit:
+            return None
+        return (
+            f"{so_far:.4f} spent in the last {spend.over}, and the limit is "
+            f"{spend.limit} -- not firing until that ages out"
+        )
+
     async def _one_run(self, fire: Firing) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
+        held_back = self._over_budget()
+        if held_back is not None:
+            log.warning("task '%s': %s", self.name, held_back)
+            self.status = "over budget"
+            return True
+
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
         try:
