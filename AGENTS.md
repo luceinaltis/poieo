@@ -53,7 +53,8 @@ true.** Delete hard enough that some of it has to come back.
 
 Merge only when all of these hold:
 
-1. Both suites are green. CI runs them on every PR and the run is in the checks.
+1. Both suites are green in the checks, and you ran them here too — CI is Ubuntu
+   only, and this is the Windows machine.
 2. You read the whole diff, an independent pass read it too, and both are in the PR.
 3. The branch is current with `main` and conflict-free.
 4. Every behaviour change has a test that fails without it. This repo is TDD —
@@ -92,8 +93,7 @@ imperative, no PR number, no "WIP". An agent ends every commit it authors with a
 trailer naming the model: `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 
 The PR body says what changed and why, and **pastes what CI could not run for you** —
-the curl response, a command you exercised by hand, a Windows-only run. The suites are
-in the checks; what you verified yourself goes in the body as output, not as a claim.
+a curl response, a Windows-only run, anything exercised by hand — as output, not a claim.
 
 ## The shape of the repo
 

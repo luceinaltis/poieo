@@ -115,10 +115,18 @@ the problem was never local and Part 2 is wrong.
 caught by hand. The reverse is also true and newer: code that only ever ran on
 Windows is now exercised on Linux for the first time.
 
+**Thirty tests still skip.** `tests/test_tools_docker.py` needs a docker daemon
+*and* `alpine:3.20` already pulled, and CI does neither yet, so container isolation
+is as unverified in CI as it is on this machine. A green run does not cover it.
+Making those thirty run is a separate change, because they have never executed on
+Linux and the first run that includes them is likely to be red.
+
 **The bundle check is a rebuild, not a heuristic.** vite writes straight into
 `src/poieo/web/static/`, so CI rebuilds and fails if anything changed. A failure
 means the committed bundle does not match the source it claims to come from;
-`npm run build --workspace web-ui` and commit the result.
+`npm run build --workspace web-ui` and commit the result. A source edit that
+changes nothing in the output — a comment, which minification drops — correctly
+leaves the check green; it is asking about the bundle, not about your diff.
 
 What CI cannot judge stays prose, and stays yours: whether a second reader looked
 (condition 2), whether the component documents still describe the code (5), and

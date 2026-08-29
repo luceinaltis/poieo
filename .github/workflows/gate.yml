@@ -10,14 +10,17 @@
 name: gate
 
 on:
+  # No base-branch filter: a PR stacked on another branch is a documented
+  # workflow here, and filtering on `main` would give those no run at all.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
 concurrency:
   group: gate-${{ github.ref }}
-  cancel-in-progress: true
+  # Supersede a PR's older run, never a run on `main` -- back-to-back merges
+  # would otherwise cancel the run that names which commit broke it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   python:
@@ -56,7 +59,9 @@ jobs:
       - name: the checked-in bundle is current
         run: |
           npm run build --workspace web-ui
-          if ! git diff --quiet -- src/poieo/web/static/; then
+          # --porcelain, not `git diff`: an asset missing from the commit comes
+          # back as untracked, and a diff would call that clean.
+          if [ -n "$(git status --porcelain -- src/poieo/web/static/)" ]; then
             echo "::error::src/poieo/web/static/ does not match web-ui/src/."
             echo "Run: npm run build --workspace web-ui, then commit the result."
             git status --short -- src/poieo/web/static/
