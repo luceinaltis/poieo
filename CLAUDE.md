@@ -189,9 +189,9 @@ diff. The **`stack-branch` skill** has the `--onto` incantation and the check fo
 
 ## Things that break here
 
-`gh pr merge --squash --delete-branch` **fails after the merge has already gone
-through**: it tries to switch this checkout to `main`, held by the primary worktree,
-so git refuses. The PR is merged and the remote branch gone. Confirm, then clean up:
+`gh pr merge --squash --delete-branch` can **fail after the merge has gone through**:
+if another worktree holds `main` it tries to switch there and git refuses. It exits 0
+when nothing does. The merge landed either way — trust the state, not the exit code:
 
 ```bash
 gh pr view <n> --json state --jq .state    # expect MERGED
