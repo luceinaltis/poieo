@@ -131,6 +131,65 @@ def test_check_probes_every_provider():
     assert "ok   fake" in result.stdout
 
 
+def test_check_says_when_a_binding_claims_more_room_than_it_has(tmp_path):
+    """A window declared larger than the endpoint gives is the failure this
+    whole line of work is about, arriving through the front door.
+
+    The binding wins on purpose -- somebody who wrote a number down meant it --
+    so nothing here overrides it. But a number bigger than what the endpoint
+    reports means the conversation gets cleared later than the endpoint allows,
+    and this is the one moment a person is looking.
+    """
+    binding = tmp_path / "b.yaml"
+    binding.write_text(
+        chr(10).join(
+            [
+                "providers:",
+                "  fake: {type: mock}",
+                "default: {provider: fake, model: m, context: 1000000}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    from poieo.providers.mock import MockProvider
+
+    async def says_less(self, model):
+        return 4096
+
+    original = MockProvider.context_for
+    MockProvider.context_for = says_less
+    try:
+        result = runner.invoke(app, ["check", "-b", str(binding)])
+    finally:
+        MockProvider.context_for = original
+
+    assert "1000000" in result.stdout and "4096" in result.stdout
+    # Said, not refused. The endpoint's answer can be absent or stale, and a
+    # daemon that will not start over it is worse than one that warns.
+    assert result.exit_code == 0
+
+
+def test_check_is_quiet_when_the_endpoint_will_not_say(tmp_path):
+    """No answer is not a disagreement. Ollama reports nothing for a model it
+    has not loaded, and a warning there would be noise on every run."""
+    binding = tmp_path / "b.yaml"
+    binding.write_text(
+        chr(10).join(
+            [
+                "providers:",
+                "  fake: {type: mock}",
+                "default: {provider: fake, model: m, context: 1000000}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["check", "-b", str(binding)])
+
+    assert result.exit_code == 0
+    assert "1000000" not in result.stdout
+
+
 def test_help_tells_two_stories_not_seventeen():
     """A short list -- the person's and the agent's story. The rest keep
     working, hidden: plumbing, files the user edits directly, or views the
