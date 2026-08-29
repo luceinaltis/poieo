@@ -352,7 +352,7 @@ def load_cards(folder: str | Path) -> list[CardSpec]:
     return tasks
 
 
-def record_run(task: CardSpec, result: Any) -> None:
+def record_run(task: CardSpec, result: Any, replace: bool = False) -> None:
     """Add one run to the task's journal, so the next one can read it.
 
     **Every runner of a task must land here** -- the daemon's and the CLI's
@@ -363,7 +363,7 @@ def record_run(task: CardSpec, result: Any) -> None:
     does not grow a dependency on the runtime.
     """
     # Both writes swallow their own failures, so neither can cost the other.
-    write_result(task, result)
+    write_result(task, result, replace=replace)
     if result.status == "completed":
         kind, text = "did", closing_line(result)
     elif result.status == "asking":

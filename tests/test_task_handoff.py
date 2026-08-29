@@ -644,3 +644,67 @@ async def test_an_answer_is_written_down(tmp_path):
                     if e["type"] == "run_answered")
     assert answered["data"]["answer"] == "land"
     await _down(daemon, task)
+
+
+async def test_a_question_survives_the_daemon(tmp_path):
+    """A question is worth nothing if a restart eats it. The card would have to
+    be run again to ask it, and the run that raised it is already gone."""
+    config = _asking_pair(tmp_path)
+
+    first = Daemon(load_config(config), store=NullStore())
+    task = await _up(first)
+    sender = _named(first, "sender")
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    asked_run = sender.results[0].run_id
+    await _down(first, task)
+
+    second = Daemon(load_config(config), store=NullStore())
+    task = await _up(second)
+    restored = _named(second, "sender").asking()
+
+    assert restored is not None
+    assert restored.run_id == asked_run
+    assert restored.asked["question"] == "Land it?"
+    await _down(second, task)
+
+
+async def test_an_answer_after_a_restart_still_carries_the_chain_on(tmp_path):
+    """Restored well enough to be acted on, not merely displayed: the branch
+    reads the run's outputs, so a husk with the right run_id is not enough."""
+    config = _asking_pair(tmp_path)
+
+    first = Daemon(load_config(config), store=NullStore())
+    task = await _up(first)
+    sender = _named(first, "sender")
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await _down(first, task)
+
+    second = Daemon(load_config(config), store=NullStore())
+    task = await _up(second)
+    receiver = _named(second, "receiver")
+
+    assert _named(second, "sender").answer("land") is True
+    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await _down(second, task)
+
+
+async def test_an_answered_question_is_not_asked_again(tmp_path):
+    """Answering clears it. Otherwise every restart re-opens a decision that
+    was already made -- and the chain it fires would run twice."""
+    config = _asking_pair(tmp_path)
+
+    first = Daemon(load_config(config), store=NullStore())
+    task = await _up(first)
+    sender = _named(first, "sender")
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    sender.answer("hold")
+    await _down(first, task)
+
+    second = Daemon(load_config(config), store=NullStore())
+    task = await _up(second)
+
+    assert _named(second, "sender").asking() is None
+    await _down(second, task)
