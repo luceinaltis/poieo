@@ -113,7 +113,7 @@ nothing that survives a restart.
 [workspace.md](workspace.md). A repository that cannot be tracked is logged and
 the work happens in place — not a reason to stop working at 3am.
 
-**A run re-reads both files it answers to first.** `Daemon.reread()` is called
+**A run re-reads both files it answers to first.** `Daemon.refresh()` is called
 before every firing, beside `read_input` and for the same reason: what the run
 needs is read now rather than remembered from startup. An edit — `poieo config
 use`, a hand edit, a pull, and now a changed prompt — is in effect on the next
@@ -143,6 +143,10 @@ beside `preflight`: a graph reaching a role whose key is unset would otherwise b
 adopted, die opening the provider, and then make every later binding reread raise
 on the roles it had just added — a task stuck until restart by a file it read
 itself.
+
+`reread(key)` stays beside it and stays a key: the board writes a binding file
+and asks for that one back (`POST /api/projects/{p}/models/use`), which is a
+different question from "everything this run answers to". Two callers, two doors.
 
 It is the **daemon's** reread and not the runner's, because one file is one spec
 across every task that names it: a runner reading only for itself would leave its

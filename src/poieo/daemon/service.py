@@ -156,7 +156,7 @@ class TaskRunner:
         on_run: RunCallback | None = None,
         tool_context: ToolContext | None = None,
         handoff: Callable[["TaskRunner", RunResult, int], None] | None = None,
-        reread: Callable[["LoadedTask"], None] | None = None,
+        refresh: Callable[["LoadedTask"], None] | None = None,
     ):
         self.task = task
         self.config = config
@@ -195,7 +195,7 @@ class TaskRunner:
         # one. The daemon's and not the runner's own: one file is one spec
         # across every task that names it, and a runner reading only for
         # itself would leave its siblings behind.
-        self.reread = reread
+        self.refresh = refresh
         # The trigger's next fire, once armed. While holding it stays put:
         # the generator sits suspended at its yield instead of spinning.
         self._pending: asyncio.Task[Firing] | None = None
@@ -482,9 +482,9 @@ class TaskRunner:
         # will not load, or that would not have started this task, is a
         # warning and no more -- the spec in memory is still valid, and 3am is
         # no time to stop working over a config saved half-written.
-        if self.reread is not None:
+        if self.refresh is not None:
             try:
-                self.reread(self.task)
+                self.refresh(self.task)
             except PoieoError as exc:
                 log.warning(
                     "task '%s': a file it answers to could not be re-read, so this run uses the last good one: %s",
@@ -927,7 +927,7 @@ class Daemon:
                 # Bound, so it resolves against self.runners at call time --
                 # which is after this list has been built and assigned.
                 self._hand_off,
-                self.reread,
+                self.refresh,
             )
             for project in self.projects
             for task in project.tasks
@@ -1021,7 +1021,7 @@ class Daemon:
 
     # -- picking up a binding that changed under us ---------------------------
 
-    def reread(self, task: LoadedTask) -> None:
+    def refresh(self, task: LoadedTask) -> None:
         """Load both files a run answers to again, and adopt what still starts.
 
         A run reads its binding *and* its graph now rather than remembering
@@ -1034,7 +1034,7 @@ class Daemon:
         # Attempted independently: a half-written binding must not silently
         # freeze the graph's reread, which is what one raise for both did.
         try:
-            self._reread_binding(task.binding_key)
+            self.reread(task.binding_key)
         except PoieoError as exc:
             problems.append(f"binding: {exc}")
         try:
@@ -1093,8 +1093,12 @@ class Daemon:
             raise SpecError(f"task '{task.spec.name}': {exc}") from exc
         task.graph = graph
 
-    def _reread_binding(self, key: str) -> None:
+    def reread(self, key: str) -> None:
         """Load one binding file again and adopt it, if it still starts.
+
+        The board's own entry point: `POST /api/projects/{p}/models/use` writes
+        the file and then asks for exactly this, which is why it stays a key
+        and not a task. A run wants `refresh` instead -- both its files.
 
         Called before every run, so an edit -- `poieo config use`, a hand
         edit, a pull -- is in effect on the next one rather than after a
