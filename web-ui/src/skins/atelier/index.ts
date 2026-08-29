@@ -1456,7 +1456,7 @@ async function build(THREE: Three, el: HTMLElement, callbacks: SkinCallbacks) {
       const flowState = stage.tasks[task]
       const tag = tagFor(task)
       tag.dataset.status = flowState.status
-      tag.querySelector("b")!.textContent = task
+      tag.querySelector("b")!.textContent = stage.tasks[task]?.name || task
       tag.querySelector("span")!.textContent = flowState.currentNode
         ? `${flowState.currentNode}${flowState.turn > 0 ? ` · turn ${flowState.turn}` : ""}`
         : "idle"

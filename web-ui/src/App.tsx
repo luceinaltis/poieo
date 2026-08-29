@@ -12,6 +12,7 @@ import type { SkinHost } from "./shell/skinHost"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { SKINS, skinById } from "./skins/registry"
+import { keyOfTask } from "./state/stage"
 import "./app.css"
 
 const STATUS_LABEL: Record<string, string> = {
@@ -25,7 +26,11 @@ export default function App({ store }: { store?: StageStore }) {
   const stage = useSyncExternalStore(theStore.subscribe, theStore.getStage)
   const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
   const tasks = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
-  const project = useSyncExternalStore(theStore.subscribe, theStore.getProject)
+  const projects = useSyncExternalStore(theStore.subscribe, theStore.getProjects)
+  // One project is the ordinary case, and the bar names it. Several is what
+  // the switcher is for; until then the bar says how many rather than lying
+  // about which.
+  const project = projects.length === 1 ? projects[0] : null
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
@@ -70,7 +75,11 @@ export default function App({ store }: { store?: StageStore }) {
   const decided = useCallback(() => void theStore.resync(), [theStore])
 
   const empty = Object.keys(stage.tasks).length === 0
-  const openRow = selected ? tasks.find((row) => row.name === selected) : undefined
+  // `selected` is the board's key -- the project and the task -- because a
+  // name alone stopped picking out one task.
+  const openRow = selected
+    ? tasks.find((row) => keyOfTask(row.project, row.name) === selected)
+    : undefined
 
   return (
     <>
@@ -117,7 +126,8 @@ export default function App({ store }: { store?: StageStore }) {
           // A fresh drawer per flowState: its selected run, its opened files and
           // its expanded-failures toggle all belong to the task being read.
           key={selected}
-          task={selected}
+          project={openRow?.project ?? ""}
+          task={openRow?.name ?? selected}
           status={openRow?.status ?? "waiting"}
           pending={openRow?.pending ?? 0}
           into={openRow?.into ?? null}

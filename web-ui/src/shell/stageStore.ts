@@ -12,7 +12,7 @@ import {
   openFeed as defaultOpenFeed,
 } from "../api"
 import type { FeedStatus } from "../api"
-import { WINDOW, initialStage, reduce, replay, setRuns } from "../state/stage"
+import { WINDOW, initialStage, keyOfTask, reduce, replay, setRuns } from "../state/stage"
 import type { StageState, TaskState } from "../state/stage"
 import type { ProjectRow, TaskRow, PoieoEvent } from "../types"
 
@@ -30,8 +30,9 @@ export const REVIEW_LIMIT = WINDOW
 export interface StageStore {
   getStage(): StageState
   getFlows(): TaskRow[]
-  /** Whose board this is; null until the first listing answers. */
-  getProject(): ProjectRow | null
+  /** Whose board this is -- every project the daemon runs. Empty until the
+   *  first listing answers. */
+  getProjects(): ProjectRow[]
   getStatus(): FeedStatus
   subscribe(listener: () => void): () => void
   start(): Promise<void>
@@ -84,7 +85,7 @@ export function createStageStore(api: StageApi = {
 }): StageStore {
   let stage = initialStage([])
   let tasks: TaskRow[] = []
-  let project: ProjectRow | null = null
+  let projects: ProjectRow[] = []
   let status: FeedStatus = "connecting"
   let closeFeed: (() => void) | null = null
 
@@ -119,12 +120,16 @@ export function createStageStore(api: StageApi = {
     const tallies = await Promise.all(
       rows.map(async (row) => ({
         row,
-        runs: await api.fetchRuns({ task: row.name, limit: REVIEW_LIMIT }),
+        runs: await api.fetchRuns({
+          task: row.name,
+          project: row.project,
+          limit: REVIEW_LIMIT,
+        }),
       })),
     )
     let next = current
     for (const { row, runs } of tallies) {
-      next = setRuns(next, row.name, runs)
+      next = setRuns(next, keyOfTask(row.project, row.name), runs)
     }
     return next
   }
@@ -135,7 +140,7 @@ export function createStageStore(api: StageApi = {
     try {
       const listing = await api.fetchTasks()
       tasks = listing.tasks
-      project = listing.project
+      projects = listing.projects
       stage = seed(stage, tasks)
 
       // Both reads are independent of each other; fetch everything at once
@@ -159,7 +164,7 @@ export function createStageStore(api: StageApi = {
   return {
     getStage: () => stage,
     getFlows: () => tasks,
-    getProject: () => project,
+    getProjects: () => projects,
     getStatus: () => status,
 
     subscribe(listener) {
@@ -172,7 +177,7 @@ export function createStageStore(api: StageApi = {
       // the board should still say what the daemon is running.
       const listing = await api.fetchTasks()
       tasks = listing.tasks
-      project = listing.project
+      projects = listing.projects
       stage = seed(stage, tasks)
       stage = await tally(stage, tasks)
       announce()

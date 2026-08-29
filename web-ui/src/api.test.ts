@@ -73,19 +73,19 @@ beforeEach(() => {
 test("fetchTasks keeps the whole listing, project and all", async () => {
   // Not unwrapped to the tasks any more: the project rides on the listing,
   // and the listing with no tasks in it is the one that most needs a name.
-  const project = { name: "night shift", root: "/home/k/chores" }
-  stubFetch({ "/api/tasks": { body: { project, tasks: [{ name: "triage" }] } } })
-  expect(await fetchTasks()).toEqual({ project, tasks: [{ name: "triage" }] })
+  const projects = [{ name: "night shift", root: "/home/k/chores" }]
+  stubFetch({ "/api/tasks": { body: { projects, tasks: [{ name: "triage" }] } } })
+  expect(await fetchTasks()).toEqual({ projects, tasks: [{ name: "triage" }] })
 })
 
 test("a listing the daemon did not answer is an empty board, not a crash", async () => {
   stubFetch({})
-  expect(await fetchTasks()).toEqual({ project: null, tasks: [] })
+  expect(await fetchTasks()).toEqual({ projects: [], tasks: [] })
 })
 
 test("an older daemon that names no project still lists its tasks", async () => {
   stubFetch({ "/api/tasks": { body: { tasks: [{ name: "triage" }] } } })
-  expect(await fetchTasks()).toEqual({ project: null, tasks: [{ name: "triage" }] })
+  expect(await fetchTasks()).toEqual({ projects: [], tasks: [{ name: "triage" }] })
 })
 
 test("fetchRuns passes task and limit through as query params", async () => {
@@ -102,14 +102,14 @@ test("fetchRunEvents returns [] for a 404 run", async () => {
 
 test("the control verbs post to their routes and unwrap the answer", async () => {
   const fetchStub = stubFetch({
-    "/api/tasks/chores/pause": { body: { status: "paused" } },
-    "/api/tasks/chores/resume": { body: { status: "waiting" } },
-    "/api/tasks/chores/run": { body: { status: "starting" } },
+    "/api/tasks/board/chores/pause": { body: { status: "paused" } },
+    "/api/tasks/board/chores/resume": { body: { status: "waiting" } },
+    "/api/tasks/board/chores/run": { body: { status: "starting" } },
   })
 
-  expect(await pause("chores")).toEqual({ ok: true, status: "paused" })
-  expect(await resume("chores")).toEqual({ ok: true, status: "waiting" })
-  expect(await runNow("chores")).toEqual({ ok: true, status: "starting" })
+  expect(await pause("board", "chores")).toEqual({ ok: true, status: "paused" })
+  expect(await resume("board", "chores")).toEqual({ ok: true, status: "waiting" })
+  expect(await runNow("board", "chores")).toEqual({ ok: true, status: "starting" })
   for (const call of fetchStub.mock.calls) {
     expect(call[1]).toEqual({ method: "POST" })
   }
@@ -117,13 +117,13 @@ test("the control verbs post to their routes and unwrap the answer", async () =>
 
 test("a refused run comes back as an answer, not a throw", async () => {
   stubFetch({
-    "/api/tasks/chores/run": {
+    "/api/tasks/board/chores/run": {
       status: 409,
       body: { error: "a run is in flight", run_id: "r7" },
     },
   })
 
-  expect(await runNow("chores")).toEqual({
+  expect(await runNow("board", "chores")).toEqual({
     ok: false,
     error: "a run is in flight",
     run_id: "r7",

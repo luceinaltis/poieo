@@ -14,6 +14,7 @@ import type { TaskRow, PoieoEvent } from "../types"
 const FLOWS: TaskRow[] = [
   {
     name: "chores",
+    project: "board",
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
@@ -26,6 +27,7 @@ const FLOWS: TaskRow[] = [
   },
   {
     name: "revision",
+    project: "board",
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
@@ -42,9 +44,9 @@ const start = () => initialStage(FLOWS)
 
 test("initialStage seeds one flowState per task", () => {
   const stage = start()
-  expect(Object.keys(stage.tasks)).toEqual(["chores", "revision"])
-  expect(stage.tasks.chores.status).toBe("waiting")
-  expect(stage.tasks.chores.currentNode).toBeNull()
+  expect(Object.keys(stage.tasks)).toEqual(["board/chores", "board/revision"])
+  expect(stage.tasks["board/chores"].status).toBe("waiting")
+  expect(stage.tasks["board/chores"].currentNode).toBeNull()
 })
 
 test("a full run walks waiting -> running -> waiting", () => {
@@ -52,22 +54,22 @@ test("a full run walks waiting -> running -> waiting", () => {
   const seen: string[] = []
   for (const event of AGENT_RUN) {
     stage = reduce(stage, event)
-    seen.push(stage.tasks.chores.status)
+    seen.push(stage.tasks["board/chores"].status)
   }
   expect(seen[0]).toBe("running")
   expect(seen.at(-1)).toBe("waiting")
-  expect(stage.tasks.chores.currentNode).toBeNull()
+  expect(stage.tasks["board/chores"].currentNode).toBeNull()
   // the other task never moved
-  expect(stage.tasks.revision.status).toBe("waiting")
+  expect(stage.tasks["board/revision"].status).toBe("waiting")
 })
 
 test("node_turn records text and thinking", () => {
   const stage = replay(start(), AGENT_RUN)
   const turns = AGENT_RUN.filter((e) => e.type === "node_turn")
-  expect(stage.tasks.chores.turn).toBe(turns.length)
+  expect(stage.tasks["board/chores"].turn).toBe(turns.length)
   // the mock's first turn thinks out loud before reaching for a tool
   const first = replay(start(), AGENT_RUN.slice(0, 3))
-  expect(first.tasks.chores.lastThinking).toBe("First see what is in this directory.")
+  expect(first.tasks["board/chores"].lastThinking).toBe("First see what is in this directory.")
 })
 
 test("tool calls accumulate newest-first and cap at 8", () => {
@@ -81,7 +83,7 @@ test("tool calls accumulate newest-first and cap at 8", () => {
       data: { turn: i, name: `tool_${i}`, error: null, result: "", arguments: {} },
     })
   }
-  const calls = replay(start(), many).tasks.chores.recentToolCalls
+  const calls = replay(start(), many).tasks["board/chores"].recentToolCalls
   expect(calls).toHaveLength(8)
   expect(calls[0].name).toBe("tool_10")
   expect(calls.at(-1)!.name).toBe("tool_3")
@@ -106,7 +108,7 @@ test("a tool call carries what it acted on and what came back", () => {
       },
     },
   ])
-  const call = stage.tasks.chores.recentToolCalls[0]
+  const call = stage.tasks["board/chores"].recentToolCalls[0]
   expect(call.subject).toBe("DESIGN.md")
   expect(call.result).toBe("# poieo Design")
   expect(call.failed).toBe(false)
@@ -130,7 +132,7 @@ test("a failed tool call is marked failed, and error is a boolean", () => {
       },
     },
   ])
-  expect(stage.tasks.chores.recentToolCalls[0].failed).toBe(true)
+  expect(stage.tasks["board/chores"].recentToolCalls[0].failed).toBe(true)
 })
 
 test("node_finished does not clear the current node", () => {
@@ -138,18 +140,18 @@ test("node_finished does not clear the current node", () => {
   const upToFirstFinish = LLM_RUN.slice(0, 3)
   expect(upToFirstFinish.at(-1)!.type).toBe("node_finished")
   const stage = replay(start(), upToFirstFinish)
-  expect(stage.tasks.revision.currentNode).toBe("draft")
+  expect(stage.tasks["board/revision"].currentNode).toBe("draft")
 })
 
 test("run_failed puts the flowState in error", () => {
   const stage = replay(start(), FAILED_RUN)
-  expect(stage.tasks.chores.status).toBe("error")
-  expect(stage.tasks.chores.currentNode).toBeNull()
+  expect(stage.tasks["board/chores"].status).toBe("error")
+  expect(stage.tasks["board/chores"].currentNode).toBeNull()
 })
 
 test("run_summary reads flat fields and fills lastRun", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
-  expect(stage.tasks.chores.lastRun).toEqual({
+  expect(stage.tasks["board/chores"].lastRun).toEqual({
     status: "completed",
     steps: AGENT_SUMMARY.steps,
     finished_at: AGENT_SUMMARY.finished_at,
@@ -160,7 +162,7 @@ test("run_summary reads flat fields and fills lastRun", () => {
 
 test("a failed run's summary still lands", () => {
   const stage = reduce(replay(start(), FAILED_RUN), FAILED_SUMMARY)
-  expect(stage.tasks.chores.lastRun!.status).toBe("failed")
+  expect(stage.tasks["board/chores"].lastRun!.status).toBe("failed")
 })
 
 test("replaying history then applying the live overlap is idempotent", () => {
@@ -217,22 +219,23 @@ test("replay equals folding one at a time", () => {
 test("a run summary adds to the task's recent tally", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
 
-  expect(stage.tasks.chores.recent.runs).toBe(1)
+  expect(stage.tasks["board/chores"].recent.runs).toBe(1)
   // the fixture run changed nothing the store recorded, so it is a quiet run
-  expect(stage.tasks.chores.recent.failed).toBe(0)
+  expect(stage.tasks["board/chores"].recent.failed).toBe(0)
 })
 
 test("a failed run's summary is tallied as failed", () => {
   const stage = reduce(replay(start(), FAILED_RUN), FAILED_SUMMARY)
 
-  expect(stage.tasks.chores.recent.failed).toBe(1)
-  expect(stage.tasks.chores.recent.succeeded).toBe(0)
+  expect(stage.tasks["board/chores"].recent.failed).toBe(1)
+  expect(stage.tasks["board/chores"].recent.succeeded).toBe(0)
 })
 
 function aRun(run_id: string, over: Record<string, unknown> = {}) {
   return {
     run_id,
     task: "chores",
+    project: "board",
     graph: "agent-task",
     status: "completed",
     started_at: "2026-08-27T02:00:00+00:00",
@@ -248,16 +251,16 @@ function aRun(run_id: string, over: Record<string, unknown> = {}) {
 }
 
 test("setRuns seeds the window the events cannot supply", () => {
-  const seeded = setRuns(start(), "chores", [
+  const seeded = setRuns(start(), "board/chores", [
     aRun("a", { change: { base: "x", head: "y", files: ["f"], insertions: 40, deletions: 2, message: "did" } }),
     aRun("b", { change: { base: "x", head: "y", files: ["f"], insertions: 0, deletions: 0, message: "did" } }),
     aRun("c", { status: "failed", error: "boom" }),
   ])
 
-  expect(seeded.tasks.chores.recent.runs).toBe(3)
-  expect(seeded.tasks.chores.recent.failed).toBe(1)
-  expect(seeded.tasks.chores.recent.insertions).toBe(40)
-  expect(seeded.tasks.revision.recent.runs).toBe(0)
+  expect(seeded.tasks["board/chores"].recent.runs).toBe(3)
+  expect(seeded.tasks["board/chores"].recent.failed).toBe(1)
+  expect(seeded.tasks["board/chores"].recent.insertions).toBe(40)
+  expect(seeded.tasks["board/revision"].recent.runs).toBe(0)
   expect(setRuns(seeded, "ghost", [])).toBe(seeded)
 })
 
@@ -267,22 +270,23 @@ test("the tally stays inside the window the work list shows", () => {
   // without a bound, so a page left open all night drifted past both.
   const seeded = setRuns(
     start(),
-    "chores",
+    "board/chores",
     Array.from({ length: WINDOW }, (_, i) => aRun(`seed${i}`)),
   )
-  expect(seeded.tasks.chores.recent.runs).toBe(WINDOW)
+  expect(seeded.tasks["board/chores"].recent.runs).toBe(WINDOW)
 
   const after = reduce(seeded, {
     run_id: "fresh",
     type: "run_summary",
     task: "chores",
+    project: "board",
     status: "completed",
     steps: 1,
     finished_at: "2026-08-27T02:00:00+00:00",
   })
 
-  expect(after.tasks.chores.recent.runs).toBe(WINDOW)
-  expect(after.tasks.chores.runs[0].run_id).toBe("fresh")
+  expect(after.tasks["board/chores"].recent.runs).toBe(WINDOW)
+  expect(after.tasks["board/chores"].runs[0].run_id).toBe("fresh")
 })
 
 test("a summary for a task that is not on the board changes nothing", () => {
@@ -290,4 +294,35 @@ test("a summary for a task that is not on the board changes nothing", () => {
   expect(
     reduce(state, { run_id: "r", type: "run_summary", task: "ghost", status: "completed" }),
   ).toBe(state)
+})
+
+
+test("two projects may each have a chores, and they do not become one", () => {
+  // The whole reason the key is a pair. Filed under the task name alone,
+  // the second project's chores landed on top of the first's and the board
+  // showed one card doing two things.
+  const rows = [
+    { ...FLOWS[0], project: "night shift" },
+    { ...FLOWS[0], project: "day job" },
+  ]
+  const stage = initialStage(rows)
+
+  expect(Object.keys(stage.tasks)).toEqual(["night shift/chores", "day job/chores"])
+
+  const running = reduce(stage, {
+    run_id: "r1",
+    type: "run_started",
+    data: { task: "chores", project: "day job" },
+  })
+  expect(running.tasks["day job/chores"].status).toBe("running")
+  expect(running.tasks["night shift/chores"].status).toBe("waiting")
+})
+
+
+test("a task still knows what it is called, whatever it is filed under", () => {
+  const stage = initialStage([{ ...FLOWS[0], project: "night shift" }])
+  const one = stage.tasks["night shift/chores"]
+
+  expect(one.name).toBe("chores")
+  expect(one.project).toBe("night shift")
 })

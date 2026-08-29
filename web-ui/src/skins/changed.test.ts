@@ -7,6 +7,7 @@ import type { TaskRow } from "../types"
 
 const row = (name: string): TaskRow => ({
   name,
+  project: "board",
   graph: "g",
   trigger: "loop",
   status: "waiting",
@@ -21,7 +22,7 @@ const row = (name: string): TaskRow => ({
 test("every flowState is changed the first time a skin sees it", () => {
   const stage = initialStage([row("a"), row("b")])
   const painted = new Map<string, TaskState>()
-  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["a", "b"])
+  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["board/a", "board/b"])
 })
 
 test("a frame that touched one task repaints one task", () => {
@@ -32,9 +33,9 @@ test("a frame that touched one task repaints one task", () => {
   const next = reduce(stage, {
     run_id: "r1",
     type: "run_started",
-    data: { task: "a" },
+    data: { task: "a", project: "board" },
   })
-  expect(changedTasks(next.tasks, painted).map(([task]) => task)).toEqual(["a"])
+  expect(changedTasks(next.tasks, painted).map(([task]) => task)).toEqual(["board/a"])
   // and painting it once is enough
   expect(changedTasks(next.tasks, painted)).toEqual([])
 })
@@ -47,5 +48,5 @@ test("a task that leaves the board is forgotten, so its return repaints", () => 
   changedTasks({}, painted) // the task disappears
   expect(painted.size).toBe(0)
 
-  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["a"])
+  expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["board/a"])
 })

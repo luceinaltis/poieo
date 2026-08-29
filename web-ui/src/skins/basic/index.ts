@@ -19,6 +19,7 @@
 
 import { changedTasks } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
+import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
@@ -35,6 +36,7 @@ const MAP = { width: 200, height: 140 }
 
 interface Box {
   root: HTMLElement
+  name: HTMLElement
   toggle: HTMLElement
   when: HTMLElement
   now: HTMLElement
@@ -124,7 +126,7 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
   ;(pick as HTMLButtonElement).type = "button"
   pick.addEventListener("click", () => callbacks.onSelectTask(task))
   element("span", "basic-dot", pick)
-  element("span", "basic-name", pick).textContent = task
+  const name = element("span", "basic-name", pick)
 
   const toggle = element("button", "basic-toggle", head)
   ;(toggle as HTMLButtonElement).type = "button"
@@ -137,6 +139,7 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     // Shut, this is the whole of what a task says about right now. It sits
     // above the graph because it is the answer to the question a person came
     // to the board with, and the graph is the answer to the next one.
+    name,
     now: element("div", "basic-now", root),
     inside: element("div", "basic-inside", root),
     said: element("p", "basic-said", root),
@@ -201,6 +204,9 @@ function fillInside(box: Box, flowState: TaskState): void {
 
 /** What moves: which node is lit, and what the task has been saying. */
 function paint(box: Box, flowState: TaskState, open: boolean): void {
+  // The name on the card, not the key it is filed under: that carries the
+  // project as well, which is the board's business and not the reader's.
+  box.name.textContent = flowState.name
   box.root.dataset.status = flowState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
@@ -272,7 +278,12 @@ function drawWires(
     const from = at.get(task)
     if (from === undefined) continue
     for (const arrow of flowState.then) {
-      const to = arrow.to === null ? undefined : at.get(arrow.to)
+      // `then:` names a task in the sender's own project, which is the only
+      // place a handoff can reach -- so the key is built from that project.
+      const to =
+        arrow.to === null
+          ? undefined
+          : at.get(keyOfTask(flowState.project, arrow.to))
       // A branch that deliberately stops has nothing to point at, and a target
       // that is disabled has no box on this board.
       if (to === undefined) continue
@@ -476,9 +487,12 @@ export const basic: Skin = {
       const tasks = Object.keys(stage.tasks)
       const handoffs: Record<string, string[]> = {}
       for (const [task, flowState] of Object.entries(stage.tasks)) {
+        // Keyed the way the board is: `then:` names a task in the sender's
+        // own project, which is the only place a handoff can reach.
         handoffs[task] = flowState.then
           .map((arrow) => arrow.to)
           .filter((to): to is string => to !== null)
+          .map((to) => keyOfTask(flowState.project, to))
       }
       const placed = place(tasks, handoffs)
       const rows = measure(placed, boxes)

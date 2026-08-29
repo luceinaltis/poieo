@@ -29,7 +29,8 @@ afterEach(() => {
 function render(props: Record<string, unknown> = {}) {
   act(() => {
     root.render(
-      <Decide task="chores" pending={3} into="main" runId={null} onDone={() => {}} {...props} />,
+      <Decide project="board"
+        task="chores" pending={3} into="main" runId={null} onDone={() => {}} {...props} />,
     )
   })
 }
@@ -52,7 +53,7 @@ test("accept posts once and reports back", async () => {
   await act(async () => button("accept").click())
 
   expect(accept).toHaveBeenCalledTimes(1)
-  expect(accept).toHaveBeenCalledWith("chores", undefined)
+  expect(accept).toHaveBeenCalledWith("board", "chores", undefined)
   expect(done).toHaveBeenCalledTimes(1)
 })
 
@@ -103,7 +104,7 @@ test("discard asks first, and does not promise the change is gone forever", asyn
   expect(container.textContent).not.toMatch(/forever|permanent|cannot be undone/i)
 
   await act(async () => button("discard-confirm").click())
-  expect(discard).toHaveBeenCalledWith("chores", undefined)
+  expect(discard).toHaveBeenCalledWith("board", "chores", undefined)
 })
 
 test("the per-run controls act from and up to that run", async () => {
@@ -114,7 +115,7 @@ test("the per-run controls act from and up to that run", async () => {
   expect(button("discard").textContent).toMatch(/from/i)
 
   await act(async () => button("accept").click())
-  expect(accept).toHaveBeenCalledWith("chores", "r7")
+  expect(accept).toHaveBeenCalledWith("board", "chores", "r7")
 })
 
 test("the buttons call a run a run", () => {

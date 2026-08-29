@@ -13,7 +13,7 @@ import { Control } from "./Control"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { RunList } from "../review/RunList"
-import { initialStage, replay, subjectOf } from "../state/stage"
+import { initialStage, keyOfTask, replay, subjectOf } from "../state/stage"
 import type { TaskState } from "../state/stage"
 import type { PoieoEvent, RunSummary } from "../types"
 import { shortTime } from "../when"
@@ -147,6 +147,7 @@ function Entry({ event }: { event: PoieoEvent }) {
 // Memoized because the shell re-renders on every SSE frame: a drawer being
 // read must not re-reconcile its whole timeline because another task spoke.
 export const Drawer = memo(function Drawer({
+  project,
   task,
   status = "waiting",
   pending = 0,
@@ -154,6 +155,7 @@ export const Drawer = memo(function Drawer({
   onClose,
   onDecided,
 }: {
+  project: string
   task: string
   status?: string
   pending?: number
@@ -168,7 +170,7 @@ export const Drawer = memo(function Drawer({
 
   useEffect(() => {
     let live = true
-    void fetchRuns({ task, limit: 10 }).then((rows) => {
+    void fetchRuns({ task, project, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
       setPicked(
@@ -206,6 +208,7 @@ export const Drawer = memo(function Drawer({
     const scratch = initialStage([
       {
         name: task,
+        project,
         graph: "",
         trigger: "",
         status: "waiting",
@@ -217,8 +220,8 @@ export const Drawer = memo(function Drawer({
         shape: { entry: "", nodes: [] },
       },
     ])
-    return replay(scratch, events).tasks[task] ?? null
-  }, [events, task])
+    return replay(scratch, events).tasks[keyOfTask(project, task)] ?? null
+  }, [events, project, task])
 
   return (
     <aside className="drawer" data-task={task}>
@@ -230,9 +233,9 @@ export const Drawer = memo(function Drawer({
       </header>
 
       <div className="drawer-body">
-        <Control task={task} status={status} onActed={decided} />
+        <Control project={project} task={task} status={status} onActed={decided} />
 
-        <Decide task={task} pending={pending} into={into} runId={null} onDone={decided} />
+        <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />
 
         <RunList
           runs={runs}
@@ -242,6 +245,7 @@ export const Drawer = memo(function Drawer({
           controls={(run) =>
             run.change ? (
               <Decide
+                project={project}
                 task={task}
                 pending={pending}
                 into={into}

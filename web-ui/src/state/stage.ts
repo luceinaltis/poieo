@@ -27,6 +27,9 @@ export interface LastRun {
 }
 
 export interface TaskState {
+  /** What to call it on screen. The key it is filed under is the identity. */
+  name: string
+  project: string
   status: "waiting" | "running" | "error"
   currentNode: string | null
   nodeType: string | null
@@ -125,6 +128,8 @@ export function subjectOf(raw: unknown): string {
 function blankFlow(): TaskState {
   return {
     status: "waiting",
+    name: "",
+    project: "",
     currentNode: null,
     nodeType: null,
     step: 0,
@@ -142,11 +147,25 @@ function blankFlow(): TaskState {
   }
 }
 
+/**
+ * A task's identity on the board: which project, and which task in it.
+ *
+ * A name alone stopped being enough when one daemon could run several
+ * projects -- every project has a `chores`. The daemon refuses to run two
+ * projects answering to one name, which is what makes this pair unique.
+ * Built, never split: whoever needs the halves has them already.
+ */
+export function keyOfTask(project: string, task: string): string {
+  return `${project}/${task}`
+}
+
 export function initialStage(rows: TaskRow[]): StageState {
   const tasks: Record<string, TaskState> = {}
   for (const row of rows) {
-    tasks[row.name] = {
+    tasks[keyOfTask(row.project, row.name)] = {
       ...blankFlow(),
+      name: row.name,
+      project: row.project,
       tracked: row.into !== null,
       then: row.then,
       shape: row.shape,
@@ -180,7 +199,8 @@ function flowFor(state: StageState, event: PoieoEvent): string | null {
     // Ad-hoc `poieo run` executions have no task and do not belong on a board
     // of daemon tasks.
     const task = event.data?.task
-    return typeof task === "string" ? task : null
+    if (typeof task !== "string") return null
+    return keyOfTask(asString(event.data?.project, ""), task)
   }
   return state.runTask[event.run_id] ?? null
 }
@@ -254,7 +274,8 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
  * It is also the last word on a run, so it retires that run's bookkeeping.
  */
 function applySummary(state: StageState, event: PoieoEvent): StageState {
-  const task = asString(event.task, "")
+  const name = asString(event.task, "")
+  const task = name && keyOfTask(asString(event.project, ""), name)
   if (!task || !(task in state.tasks)) return state
 
   for (const key of state.seen) {

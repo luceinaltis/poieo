@@ -740,20 +740,37 @@ def test_each_project_writes_its_runs_under_its_own_root(tmp_path):
     assert roots == [tmp_path / "a" / "runs", tmp_path / "b" / "runs"]
 
 
-def test_two_projects_may_not_share_a_task_name(tmp_path):
-    # The task name is still the only namespace there is -- the board's routes
-    # and the run index both key on it -- so a collision has to be refused at
-    # launch rather than found at 3am by whichever runner asked second.
+def test_two_projects_may_share_a_task_name(tmp_path):
+    # Every project has a `chores`. Requiring task names to be unique across
+    # projects made the daemon refuse the ordinary case; the identity is the
+    # project and the task, and the project is what has to be unique.
     a = load_config(_project(tmp_path / "a", "chores", ["sweep"]))
     b = load_config(_project(tmp_path / "b", "notes", ["sweep"]))
+
+    daemon = Daemon([a, b])
+
+    assert [(r.config.display_name, r.name) for r in daemon._runners()] == [
+        ("chores", "sweep"),
+        ("notes", "sweep"),
+    ]
+
+
+def test_two_projects_may_not_answer_to_the_same_name(tmp_path):
+    # A name is what tells one project from another -- on the board, in a run
+    # record, in the address of every control route. And they collide by
+    # default: a project falls back to its folder name, and a worktree is a
+    # second folder called the same thing as the first.
+    a = load_config(_project(tmp_path / "a", "poieo", ["sweep"]))
+    b = load_config(_project(tmp_path / "b", "poieo", ["tidy"]))
 
     with pytest.raises(SpecError) as caught:
         Daemon([a, b])
 
     said = str(caught.value)
-    assert "sweep" in said
-    # and it names both, so the reader knows which two to go and look at
-    assert "chores" in said and "notes" in said
+    assert "poieo" in said
+    # naming both files, and the key that fixes it
+    assert str(tmp_path / "a") in said and str(tmp_path / "b") in said
+    assert "name:" in said
 
 
 async def test_two_projects_run_their_own_tasks(tmp_path):

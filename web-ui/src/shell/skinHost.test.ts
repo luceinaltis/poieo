@@ -9,6 +9,7 @@ import type { TaskRow } from "../types"
 const FLOWS: TaskRow[] = [
   {
     name: "chores",
+    project: "board",
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",

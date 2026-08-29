@@ -30,7 +30,7 @@ afterEach(() => {
 
 function render(props: Record<string, unknown> = {}) {
   act(() => {
-    root.render(<Control task="chores" status="waiting" onActed={() => {}} {...props} />)
+    root.render(<Control project="board" task="chores" status="waiting" onActed={() => {}} {...props} />)
   })
 }
 
@@ -44,7 +44,7 @@ test("a waiting task offers pause, and the toggle sends it", async () => {
   expect(button("resume")).toBeNull()
   await act(async () => button("pause")!.click())
 
-  expect(pause).toHaveBeenCalledWith("chores")
+  expect(pause).toHaveBeenCalledWith("board", "chores")
   expect(resume).not.toHaveBeenCalled()
   expect(acted).toHaveBeenCalledTimes(1)
 })
@@ -56,7 +56,7 @@ test("a paused task offers resume, and the toggle sends it", async () => {
   expect(button("pause")).toBeNull()
   await act(async () => button("resume")!.click())
 
-  expect(resume).toHaveBeenCalledWith("chores")
+  expect(resume).toHaveBeenCalledWith("board", "chores")
   expect(pause).not.toHaveBeenCalled()
 })
 
@@ -65,7 +65,7 @@ test("run now fires, and is disabled while the task is running", async () => {
   render()
 
   await act(async () => button("run-now")!.click())
-  expect(runNow).toHaveBeenCalledWith("chores")
+  expect(runNow).toHaveBeenCalledWith("board", "chores")
 
   render({ status: "running" })
   expect(button("run-now")!.hasAttribute("disabled")).toBe(true)

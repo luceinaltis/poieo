@@ -134,17 +134,27 @@ class RunStore:
             lines = (line for line in lines if containing in line)
         yield from json_records(lines)
 
-    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:
+    def list_runs(
+        self,
+        limit: int = 20,
+        task: str | None = None,
+        project: str | None = None,
+    ) -> list[dict[str, Any]]:
         """The newest ``limit`` summaries, newest first.
 
         Read from the end and parsed only until enough have matched: the index
         grows for the daemon's lifetime and the web UI asks per request.
+
+        ``task`` and ``project`` narrow together, because a task name alone
+        stopped being an identity once one daemon could run several projects.
         """
         rows: list[dict[str, Any]] = []
         for row in self._index_backwards():
             if len(rows) >= limit:
                 break
             if task and row.get("task") != task:
+                continue
+            if project and row.get("project") != project:
                 continue
             rows.append(row)
         return rows
@@ -184,7 +194,7 @@ class NullStore(RunStore):
     def record_summary(self, summary: dict[str, Any]) -> None:  # noqa: D102
         return
 
-    def list_runs(self, limit: int = 20, task: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
+    def list_runs(self, limit: int = 20, task: str | None = None, project: str | None = None) -> list[dict[str, Any]]:  # noqa: D102
         return []
 
     def summary(self, run_id: str) -> dict[str, Any] | None:  # noqa: D102

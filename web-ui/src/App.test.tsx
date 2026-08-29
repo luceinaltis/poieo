@@ -69,6 +69,7 @@ import type { TaskRow } from "./types"
 const FLOWS: TaskRow[] = [
   {
     name: "chores",
+    project: "board",
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
@@ -81,6 +82,7 @@ const FLOWS: TaskRow[] = [
   },
   {
     name: "revision",
+    project: "board",
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
@@ -98,11 +100,14 @@ function fakeStore(
   project: ProjectRow | null = { name: "chores", root: "/home/k/chores" },
 ): StageStore & { push(next: StageState): void } {
   let current = stage
+  // One array, not a fresh one per call: useSyncExternalStore compares
+  // snapshots by identity and re-renders forever if they never match.
+  const projectList = project ? [project] : []
   const listeners = new Set<() => void>()
   return {
     getStage: () => current,
     getFlows: () => FLOWS,
-    getProject: () => project,
+    getProjects: () => projectList,
     getStatus: () => "live",
     subscribe: (listener) => {
       listeners.add(listener)
@@ -176,7 +181,7 @@ test("selecting a flowState opens the drawer, and reading it leaves the board al
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
@@ -191,7 +196,7 @@ test("closing the drawer puts it away", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
   await act(async () => {
     container.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
@@ -207,13 +212,13 @@ test("opening a different flowState does not show the previous one's runs", asyn
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
   const first = container.querySelector("[data-run][data-selected='true']")
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="revision"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/revision"] .basic-pick')!.click()
   })
 
   const drawer = container.querySelector(".drawer")!
@@ -231,7 +236,7 @@ test("a frame for another task leaves the open drawer alone", async () => {
   const store = await render(stage)
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
   expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
 
@@ -251,7 +256,7 @@ test("the drawer opens on the run that changed something", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="chores"] .basic-pick')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
 
   const selected = container.querySelector("[data-run][data-selected='true']")!

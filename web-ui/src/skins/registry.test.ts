@@ -9,6 +9,7 @@ import type { TaskRow } from "../types"
 const FLOWS: TaskRow[] = [
   {
     name: "chores",
+    project: "board",
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
@@ -24,6 +25,7 @@ const FLOWS: TaskRow[] = [
   },
   {
     name: "revision",
+    project: "board",
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
@@ -84,11 +86,11 @@ test("basic renders one box per task and reflects status", () => {
   handle.update(midRun())
 
   expect(el.querySelectorAll("[data-task]")).toHaveLength(2)
-  expect(el.querySelector('[data-task="chores"]')!.getAttribute("data-status")).toBe("running")
-  expect(el.querySelector('[data-task="revision"]')!.getAttribute("data-status")).toBe("waiting")
+  expect(el.querySelector('[data-task="board/chores"]')!.getAttribute("data-status")).toBe("running")
+  expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-status")).toBe("waiting")
   // A running task opens itself, so the node it is on is visible without
   // anyone having asked -- detail where something is happening, and only there.
-  expect(el.querySelector('[data-task="chores"]')!.textContent).toContain("work")
+  expect(el.querySelector('[data-task="board/chores"]')!.textContent).toContain("work")
 
   handle.destroy()
 })
@@ -98,7 +100,7 @@ test("the latest thinking and tool call surface on an open task", () => {
   const handle = basic.mount(el, { onSelectTask: () => {} })
   handle.update(replay(initialStage(FLOWS), AGENT_RUN))
 
-  const card = el.querySelector('[data-task="chores"]')!
+  const card = el.querySelector('[data-task="board/chores"]')!
   expect(card.textContent).toContain("list_dir")
   handle.destroy()
 })
@@ -109,8 +111,8 @@ test("clicking a task's name selects it; the chevron is for opening", () => {
   const handle = basic.mount(el, { onSelectTask: (task) => picked.push(task) })
   handle.update(midRun())
 
-  el.querySelector<HTMLElement>('[data-task="revision"] .basic-pick')!.click()
-  expect(picked).toEqual(["revision"])
+  el.querySelector<HTMLElement>('[data-task="board/revision"] .basic-pick')!.click()
+  expect(picked).toEqual(["board/revision"])
 
   handle.destroy()
 })

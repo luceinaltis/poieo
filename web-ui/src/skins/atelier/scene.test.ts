@@ -20,6 +20,8 @@ import type { TaskState } from "../../state/stage"
 
 function flowState(over: Partial<TaskState> = {}): TaskState {
   return {
+    name: "chores",
+    project: "board",
     status: "waiting",
     currentNode: null,
     nodeType: null,

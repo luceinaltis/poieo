@@ -58,16 +58,32 @@ class ImmutableFiles(StaticFiles):
         return response
 
 
-def _runner_for(daemon: Any, task: str | None) -> Any:
+def _project_of(runner: Any) -> str:
+    return runner.config.display_name
+
+
+def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
+    """The one runner a project and a task name between them pick out.
+
+    Both, because every project may have a `chores`. The daemon refuses to
+    start two projects answering to one name, which is what makes this pair an
+    identity rather than a guess.
+    """
     for runner in daemon.runners:
-        if runner.name == task:
+        if runner.name != task:
+            continue
+        # `None` is not "any project" from a route -- those always name one.
+        # It is a run record written before the project was on it, which the
+        # user's own history is full of, and refusing to show its diff would
+        # be losing something over a field it never had the chance to carry.
+        if project is None or _project_of(runner) == project:
             return runner
     return None
 
 
-def _workspace_for(daemon: Any, task: str | None) -> Any:
+def _workspace_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The private copy behind a task, if it keeps one."""
-    runner = _runner_for(daemon, task)
+    runner = _runner_for(daemon, project, task)
     return getattr(runner, "workspace", None) if runner else None
 
 
@@ -165,6 +181,10 @@ def create_app(daemon: Any) -> Starlette:
             rows.append(
                 {
                     "name": runner.name,
+                    # Which project's. A name alone stopped being an identity
+                    # when one daemon could run several: every project has a
+                    # `chores`, and the pair is what a control route takes.
+                    "project": _project_of(runner),
                     "graph": runner.task.graph.name,
                     "trigger": runner.trigger.describe,
                     "status": runner.status,
@@ -177,17 +197,20 @@ def create_app(daemon: Any) -> Starlette:
                     "shape": _shape(runner.task),
                 }
             )
-        # Whose board this is. Two daemons on two ports serve pages that are
-        # otherwise identical, and the listing with no tasks on it -- the one
-        # a reader can recognise least -- needs it most, so it rides on the
-        # response rather than on each row.
-        project = daemon.config
+        # Whose board this is -- all of them. Two daemons on two ports serve
+        # pages that are otherwise identical, and the listing with no tasks on
+        # it, the one a reader can recognise least, needs saying most; so it
+        # rides on the response rather than on each row, and it is a list
+        # because a daemon runs as many projects as it was given.
         return JSONResponse(
             {
-                "project": {
-                    "name": project.display_name,
-                    "root": str(project.base_dir),
-                },
+                "projects": [
+                    {
+                        "name": project.config.display_name,
+                        "root": str(project.config.base_dir),
+                    }
+                    for project in daemon.projects
+                ],
                 "tasks": rows,
             }
         )
@@ -195,7 +218,12 @@ def create_app(daemon: Any) -> Starlette:
     def runs(request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", "20"))
         task = request.query_params.get("task")
-        return JSONResponse({"runs": daemon.store.list_runs(limit=limit, task=task)})
+        # Both, for the same reason a control route takes both: `?task=chores`
+        # alone would answer with every project's chores mixed together.
+        project = request.query_params.get("project")
+        return JSONResponse(
+            {"runs": daemon.store.list_runs(limit=limit, task=task, project=project)}
+        )
 
     def run_detail(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
@@ -212,7 +240,7 @@ def create_app(daemon: Any) -> Starlette:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
         change = summary.get("change")
-        point = _workspace_for(daemon, summary.get("task"))
+        point = _workspace_for(daemon, summary.get("project"), summary.get("task"))
         if not change or point is None:
             # A run that altered nothing has nothing to review. That is an
             # answer, not a failure.
@@ -223,10 +251,13 @@ def create_app(daemon: Any) -> Starlette:
 
     async def _decide(request: Request, action: str, key: str) -> JSONResponse:
         """accept and discard differ only in which verb and which run id."""
+        project = request.path_params["project"]
         task = request.path_params["task"]
-        runner = _runner_for(daemon, task)
+        runner = _runner_for(daemon, project, task)
         if runner is None:
-            return JSONResponse({"error": f"no task '{task}'"}, status_code=404)
+            return JSONResponse(
+                {"error": f"no task '{task}' in '{project}'"}, status_code=404
+            )
 
         point = getattr(runner, "workspace", None)
         if point is None:
@@ -266,10 +297,13 @@ def create_app(daemon: Any) -> Starlette:
 
     def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
         """The runner a control route is about, or the 404 saying there isn't one."""
+        project = request.path_params["project"]
         task = request.path_params["task"]
-        runner = _runner_for(daemon, task)
+        runner = _runner_for(daemon, project, task)
         if runner is None:
-            return None, JSONResponse({"error": f"no task '{task}'"}, status_code=404)
+            return None, JSONResponse(
+                {"error": f"no task '{task}' in '{project}'"}, status_code=404
+            )
         return runner, None
 
     async def _hold(request: Request, verb: str) -> JSONResponse:
@@ -326,12 +360,12 @@ def create_app(daemon: Any) -> Starlette:
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.
-        Route("/api/tasks/{task}/accept", flow_accept, methods=["POST"]),
-        Route("/api/tasks/{task}/discard", flow_discard, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
-        Route("/api/tasks/{task}/pause", flow_pause, methods=["POST"]),
-        Route("/api/tasks/{task}/resume", flow_resume, methods=["POST"]),
-        Route("/api/tasks/{task}/run", flow_run, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/run", flow_run, methods=["POST"]),
         Route("/", index),
     ]
     # Vite emits static/assets/<hashed name> and references it as /assets/...,
