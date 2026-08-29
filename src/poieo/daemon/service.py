@@ -27,7 +27,7 @@ from ..store import Event, RunStore
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
-from .config import DaemonConfig, LoadedTask, load_tasks
+from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
@@ -45,6 +45,13 @@ def _ensure_port_free(host: str, port: int) -> None:
 
 
 SHUTDOWN_GRACE = 5.0
+
+# How often the tasks folder is looked at again. A card written by hand or by
+# the board has to start without a restart, and there is no run to hang that on
+# the way a graph's reread hangs on the next firing -- so the daemon looks. The
+# cost is one directory listing; the wait is what somebody stares at after
+# pressing save, so it is seconds and not minutes.
+SCAN_SECONDS = 5.0
 
 
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
@@ -914,6 +921,79 @@ class Daemon:
             build_cache=project.config.layout().cache() / "builds",
         )
 
+    async def _watch_cards(self) -> None:
+        """Cards that appear while the daemon runs, started while it runs.
+
+        A loop beside the learning pass rather than a change to the wait every
+        existing runner already sits in: `serve` gathers a fixed set, and a
+        runner made after that gather began has nowhere to be started from.
+        This owns the ones it starts and waits them out on the way down.
+
+        A folder that will not load is a warning and no more. A card saved
+        half-written must not take down the tasks that have been running all
+        night beside it -- the same rule the binding and the graph follow.
+        """
+        started: list[asyncio.Task[Any]] = []
+        try:
+            while not self.cancel.is_set():
+                # False means shutdown asked first, which is the only way out.
+                if not await _sleep_or_cancel(SCAN_SECONDS, self.cancel):
+                    break
+                for project in self.projects:
+                    for runner in self._appeared(project):
+                        started.append(asyncio.create_task(runner.run()))
+        finally:
+            for task in started:
+                await _stopped(task, "a task added while running")
+
+    def _appeared(self, project: LoadedProject) -> list[TaskRunner]:
+        """Every card in this project's folder that is not a task yet.
+
+        The whole config is read again rather than the one file: a card names
+        the tasks it may tell, and that roster is only known once the folder
+        has been read. Validated by `load_tasks`, which is the same door
+        startup came through, so a card that would not have started here does
+        not start now either.
+        """
+        config = project.config
+        if not config.cards:
+            return []
+        try:
+            fresh = load_config(config.source_path)
+            loaded = load_tasks(fresh)
+        except Exception as exc:
+            log.warning("the tasks folder could not be read, so nothing new starts: %s", exc)
+            return []
+
+        known = {task.spec.name for task in project.tasks}
+        appeared: list[TaskRunner] = []
+        for task in loaded:
+            if task.spec.name in known:
+                continue
+            # The live config learns the card too, or the graph reread would
+            # have nothing to re-expand it from.
+            config.tasks.append(task.spec)
+            if (card := fresh.cards_by_task.get(task.spec.name)) is not None:
+                config.cards_by_task[task.spec.name] = card
+            if (graph := fresh.card_graphs.get(task.spec.name)) is not None:
+                config.card_graphs[task.spec.name] = graph
+            project.tasks.append(task)
+            runner = TaskRunner(
+                task,
+                config,
+                self._pool_for(task),
+                project.store,
+                self.cancel,
+                self.on_run,
+                self._hands_for(project, task),
+                self._hand_off,
+                self.refresh,
+            )
+            self.runners.append(runner)
+            appeared.append(runner)
+            log.info("task '%s' appeared in %s and is running", runner.name, config.cards)
+        return appeared
+
     def _runners(self) -> list[TaskRunner]:
         return [
             TaskRunner(
@@ -1270,6 +1350,7 @@ class Daemon:
             for project in self.projects
             if project.config.learn is not None
         ]
+        watcher = asyncio.create_task(self._watch_cards())
         for project in self.projects:
             if project.config.learn is not None:
                 log.info(
@@ -1293,6 +1374,7 @@ class Daemon:
             self.cancel.set()
             for learn_task in learn_tasks:
                 await _stopped(learn_task, "learning pass")
+            await _stopped(watcher, "the tasks folder watch")
             if web_task is not None:
                 server.should_exit = True
                 await _stopped(web_task, "web server")

@@ -1,0 +1,140 @@
+"""A card written while the daemon runs starts running.
+
+Until now the tasks folder was read once, at startup. A card added after that
+sat there doing nothing until somebody restarted the daemon -- which is the
+last thing a board that can create tasks may ask of the person using it, and
+the reason DESIGN.md's roadmap says the daemon gains add at runtime.
+
+Design: docs/daemon.md
+"""
+
+import asyncio
+
+from conftest import card
+
+from poieo.daemon import Daemon, load_config
+from poieo.store import NullStore
+
+_GRAPH = """\
+name: quick
+entry: a
+nodes:
+  - {id: a, type: agent, role: r, prompt: hi}
+"""
+
+_MOCK = """\
+name: mock
+providers:
+  fake: {type: mock, options: {responses: {"*": "done"}}}
+default: {provider: fake, model: m1}
+"""
+
+
+def _project(tmp_path):
+    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    card(tmp_path / "cards", "first", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    path = tmp_path / "poieo.yaml"
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
+    return load_config(path)
+
+
+async def _up(daemon):
+    task = asyncio.create_task(daemon.serve(install_signals=False))
+    while not daemon.runners:
+        await asyncio.sleep(0.01)
+    return task
+
+
+async def _until(predicate, what="the condition", timeout=5.0):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError(f"timed out waiting for {what}")
+        await asyncio.sleep(0.01)
+
+
+async def _down(daemon, task):
+    daemon.stop()
+    return await asyncio.wait_for(task, timeout=10)
+
+
+def _named(daemon, name):
+    return next((r for r in daemon.runners if r.name == name), None)
+
+
+async def test_a_card_written_while_the_daemon_runs_starts_running(tmp_path, monkeypatch):
+    """The whole slice, in one file appearing."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+    assert [r.name for r in daemon.runners] == ["first"]
+
+    card(tmp_path / "cards", "second", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+
+    await _until(lambda: _named(daemon, "second") is not None, "the new card to be noticed")
+    added = _named(daemon, "second")
+
+    # Noticed is not running. It has to be able to take a kick and finish one.
+    assert added.run_now() is True
+    await _until(lambda: len(added.results) == 1, "the new card's first run")
+    assert added.results[-1].status == "completed"
+
+    await _down(daemon, task)
+
+
+async def test_a_card_saved_half_written_does_not_take_the_others_down(tmp_path, monkeypatch, caplog):
+    """The same rule the binding and the graph follow. A folder that will not
+    load is a warning: the tasks that have run all night beside it keep going,
+    and the daemon says why nothing new started."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        (tmp_path / "cards" / "broken.yaml").write_text("name: [", encoding="utf-8")
+        await _until(
+            lambda: any("nothing new starts" in m for m in caplog.messages),
+            "the daemon to say it could not read the folder",
+        )
+
+    # The one that was already running still is, and still works.
+    running = _named(daemon, "first")
+    assert running is not None
+    assert running.run_now() is True
+    await _until(lambda: len(running.results) == 1, "the surviving task's run")
+
+    await _down(daemon, task)
+
+
+async def test_the_daemon_still_comes_down_with_a_task_it_grew(tmp_path, monkeypatch):
+    """The risk this loop introduces. `serve` waits on the runners it built at
+    startup; one started later is held by the watcher instead, so shutdown has
+    to reach it there. If it does not, the daemon hangs on the way down -- the
+    one failure a resident process may never have."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+
+    card(tmp_path / "cards", "late", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    await _until(lambda: _named(daemon, "late") is not None, "the new card")
+
+    # Never kicked, so it is parked waiting for a trigger that will not come:
+    # exactly the state a task is in at 3am when somebody stops the daemon.
+    await asyncio.wait_for(_down(daemon, task), timeout=15)
+
+
+async def test_a_card_whose_filename_is_its_identity(tmp_path, monkeypatch):
+    """`name:` is a title and rewritable; the filename is what the task is
+    called. Worth pinning here because the watcher decides what is new by that
+    name, and a card retitled at noon must not read as a second task."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=NullStore())
+    task = await _up(daemon)
+
+    card(tmp_path / "cards", "later", "name: a title\ngraph: ../g.yaml\ntrigger: {type: manual}\n")
+    await _until(lambda: len(daemon.runners) == 2, "the new card")
+
+    assert sorted(r.name for r in daemon.runners) == ["first", "later"]
+
+    await _down(daemon, task)
