@@ -169,13 +169,20 @@ default: {provider: fake, model: m}
 """
 
 
-def _wired(tmp_path, then_block: str, *, takes: str = "hi", slow: bool = False):
+def _wired(
+    tmp_path,
+    then_block: str,
+    *,
+    takes: str = "hi",
+    slow: bool = False,
+    sender_graph: str = _GRAPH,
+):
     """Two manual tasks -- `sender` wired to `receiver` by the given block.
 
     Manual on both sides so nothing fires on its own: every run in these tests
     is either a kick or a handoff, which is what makes them assertable.
     """
-    (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
+    (tmp_path / "g.yaml").write_text(sender_graph, encoding="utf-8")
     (tmp_path / "t.yaml").write_text(
         f'name: taking\nentry: t\nnodes:\n  - {{id: t, type: agent, role: taker, prompt: "{takes}"}}\n',
         encoding="utf-8",
@@ -249,6 +256,59 @@ async def test_a_matching_branch_starts_the_other_flow(tmp_path):
     await _until(lambda: len(receiver.results) == 1, "the handoff to land")
 
     assert receiver.results[0].status == "completed"
+    await _down(daemon, task)
+
+
+# A node whose output answers to a name of its own -- which is what almost
+# every graph does to the value its `then:` is about.
+_ALIASED = """\
+name: quick
+entry: a
+nodes:
+  - {id: a, type: agent, role: r, prompt: hi, output: {as: verdict}}
+"""
+
+
+async def test_a_then_block_reads_an_output_by_the_name_the_graph_gave_it(tmp_path):
+    """The alias a router reads inside the run, read by `then:` outside it.
+
+    `outputs` is keyed by node id, so an output aliased `verdict` on a node
+    called `a` was `verdict` everywhere inside the graph and reachable by no
+    spelling at all once the run had ended -- and it is the value a handoff is
+    most often about. The condition below is exactly what a router one level
+    down would have been given.
+    """
+    block = _TO_RECEIVER.replace("run.status == 'completed'", "verdict == 'done'")
+    daemon = Daemon(
+        load_config(_wired(tmp_path, block, sender_graph=_ALIASED)), store=NullStore()
+    )
+    task = await _up(daemon)
+    receiver = _named(daemon, "receiver")
+
+    assert _named(daemon, "sender").run_now() is True
+    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await _down(daemon, task)
+
+
+async def test_an_alias_cannot_shadow_the_run_it_describes(tmp_path):
+    """The same `setdefault` rule a graph's own scope follows, one level up.
+
+    A graph may name an output anything, `run` included, and a `then:` whose
+    `run.status` had quietly become a node's completion text would be the
+    quietest possible bug -- the block is skipped on an unreadable condition,
+    so it would simply never fire again.
+    """
+    shadow = _ALIASED.replace("as: verdict", "as: run")
+    daemon = Daemon(
+        load_config(_wired(tmp_path, _TO_RECEIVER, sender_graph=shadow)),
+        store=NullStore(),
+    )
+    task = await _up(daemon)
+    receiver = _named(daemon, "receiver")
+
+    # `run.status == 'completed'` still reads the run, not the string "done".
+    assert _named(daemon, "sender").run_now() is True
+    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
     await _down(daemon, task)
 
 

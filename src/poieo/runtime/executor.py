@@ -184,6 +184,7 @@ async def execute(
         usage=ctx.usage.as_dict(),
         asked=ctx.asked,
         outputs=unwrap(ctx.outputs),
+        aliases=unwrap(ctx.aliases),
         state=unwrap(ctx.state),
         trigger=trigger,
         error=error,

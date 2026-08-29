@@ -223,6 +223,40 @@ then:
     label: something changed
 ```
 
+### What a branch can read
+
+`handoff_scope(result)` is the `run` a condition tests, and it is also what the
+next run reads as `input.sender` — one shape, so there is no second list to keep
+in sync.
+
+**Output aliases sit at the top level**, exactly as `RunContext.scope()` puts
+them inside a run, so a condition on what a node said is written once and means
+the same at both levels:
+
+```yaml
+# the graph                       # the card
+output: {as: verdict}             then:
+                                    - when: "verdict == 'GREEN'"
+```
+
+They are carried on `RunResult.aliases` and merged in by `_chosen()`. Before
+that they were carried nowhere: `outputs` is keyed by **node id**, so an output
+aliased `verdict` on a node called `a` was `verdict` everywhere inside the graph
+and reachable by no spelling at all out here — which is the value a handoff is
+most often about. The merge uses `setdefault` for the reason the graph's own
+scope does: a graph may alias an output `run`, and a `then:` whose `run.status`
+had quietly become a node's completion text is the worst bug this block can
+have.
+
+`run.outputs` still answers by node id, and it is the spelling to reach for
+when **the node may not have run at all**. A bare name that never arrived
+raises, and an unreadable condition here is logged and skipped rather than
+raised — so `run.outputs.get('gate', '')` is deliberate in
+`examples/improving-poieo`, whose gate is not reached when the step before it
+fails. `and` short-circuits, so `run.change and verdict == 'GREEN'` is safe
+whenever the first half is false on exactly the runs the second half is missing
+from.
+
 ### What is checked at load
 
 `check_handoffs()` runs after the tasks folder is read (a card becomes a task

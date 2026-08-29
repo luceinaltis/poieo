@@ -240,8 +240,14 @@ sentence, and the raw error is always kept beside the cause.
 
 What comes back, and what the store keeps a summary of: `run_id`, `task`,
 `graph`, `status`, `trigger`, timestamps, `steps`, `path`, `usage`, `outputs`,
-`state`, `error`, `cause`, `iteration`, and `change` (set afterwards by the
-daemon). `summary()` omits `change` and `cause` when absent rather than writing
+`aliases`, `state`, `error`, `cause`, `iteration`, and `change` (set afterwards
+by the daemon).
+
+`aliases` is those same outputs under the names their nodes gave them, kept
+beside `outputs` rather than merged into it — that mapping is keyed by node id,
+an alias may be anything, and one dictionary would let a graph bury one node's
+output under another's alias. It exists so the card's `then:` can read a node's
+result by the name the graph already calls it; see [daemon.md](daemon.md). `summary()` omits `change` and `cause` when absent rather than writing
 nulls — a run that changed nothing has nothing to review, and the difference
 matters to the card that reads it.
 
