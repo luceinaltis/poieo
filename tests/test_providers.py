@@ -74,6 +74,53 @@ def test_system_prompt_is_forwarded(anthropic_provider):
     assert kwargs["system"] == "be terse"
 
 
+def test_a_known_endpoint_needs_only_its_name(monkeypatch):
+    """The address is the part a person gets wrong, and it is the part poieo
+    can know.
+
+    `https://api.groq.com/openai/v1` is not guessable -- neither `/v1` nor
+    `/openai` alone reaches it -- and getting it wrong fails without saying
+    which half was the mistake.
+    """
+    monkeypatch.setenv("GROQ_API_KEY", "sk-test")
+    provider = build_provider("groq", ProviderSpec(type="groq"))
+
+    assert str(provider.client.base_url).rstrip("/") == "https://api.groq.com/openai/v1"
+
+
+def test_a_preset_is_a_starting_point_not_a_cage(monkeypatch):
+    """Somebody pointing at a proxy, a mirror or a gateway means it."""
+    monkeypatch.setenv("GROQ_API_KEY", "sk-test")
+    provider = build_provider(
+        "groq", ProviderSpec(type="groq", base_url="http://my-gateway/v1")
+    )
+    assert str(provider.client.base_url).rstrip("/") == "http://my-gateway/v1"
+
+
+def test_a_preset_names_the_variable_its_vendor_uses(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    provider = build_provider("deepseek", ProviderSpec(type="deepseek"))
+    assert provider.client.headers.get("authorization") == "Bearer sk-test"
+
+
+def test_every_preset_points_somewhere_reachable():
+    """Not a network test -- a shape test.
+
+    Each address here was probed against the live endpoint while it was
+    written, and two of them taught the lesson that made this test worth
+    having: Gemini and Perplexity answer 404 on `/models` and 400/401 on
+    `/chat/completions`, so a probe that only asked the first would have
+    declared two correct addresses wrong. What is checked here is that none
+    goes back to being a guess.
+    """
+    from poieo.providers.presets import PRESETS
+
+    assert len(PRESETS) >= 12
+    for name, preset in PRESETS.items():
+        assert preset.base_url.startswith("https://"), name
+        assert preset.api_key_env.isupper(), name
+
+
 def test_claude_can_be_bought_through_aws():
     """Three doors sell the same Claude, and poieo knew one of them.
 

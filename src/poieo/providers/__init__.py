@@ -8,6 +8,7 @@ from .anthropic_provider import AnthropicProvider
 from .base import LLMRequest, LLMResponse, Provider, Usage, credential_for
 from .local import OllamaProvider, OpenAICompatibleProvider
 from .mock import MockProvider
+from .presets import PRESETS
 
 _REGISTRY: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
@@ -15,6 +16,29 @@ _REGISTRY: dict[str, type[Provider]] = {
     "ollama": OllamaProvider,
     "mock": MockProvider,
 }
+
+# Every preset is the OpenAI wire format with its address filled in, so each
+# name is a type in its own right -- which is what makes a typo in one a parse
+# error rather than a connection failure at three in the morning.
+_REGISTRY.update({name: OpenAICompatibleProvider for name in PRESETS})
+
+
+def _addressed(spec: ProviderSpec) -> ProviderSpec:
+    """Fill in what a preset knows and the binding did not say.
+
+    Filled rather than forced: somebody who wrote a `base_url` meant it -- a
+    proxy, a mirror, a gateway in front of the real thing -- and the same for a
+    key variable. A preset is a starting point, not a cage.
+    """
+    preset = PRESETS.get(spec.type)
+    if preset is None:
+        return spec
+    return spec.model_copy(
+        update={
+            "base_url": spec.base_url or preset.base_url,
+            "api_key_env": spec.api_key_env or preset.api_key_env,
+        }
+    )
 
 
 def register(type_name: str, cls: type[Provider]) -> None:
@@ -27,6 +51,7 @@ KNOWN_PROVIDER_TYPES.update(_REGISTRY)
 
 
 def build_provider(name: str, spec: ProviderSpec) -> Provider:
+    spec = _addressed(spec)
     cls = _REGISTRY.get(spec.type)
     if cls is None:
         raise ProviderError(f"unknown provider type '{spec.type}'", provider=name)
