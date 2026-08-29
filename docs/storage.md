@@ -63,7 +63,7 @@ drifted. Three answers to one question is two too many.
   memory/shortterm/   memory/longterm/   what a person reads and edits (git)
   memory/cache/                          derived; delete and lose nothing
   runs/                                  what happened — `store:` moves this
-    index.jsonl · events/ · results/
+    index.jsonl · events/ · results/ · asking/
   worktrees/                             each task's private checkout
 ```
 
@@ -102,6 +102,17 @@ and never looks at it, the same way it carries `task`. It is on the
 `run_started` frame too — the board learns what is happening from the stream,
 not from the index. `runs/results/<run_id>.json` is the third file, written by
 [memory](memory.md) — the same run's full outcome, unclipped.
+
+`runs/asking/<card>.json` is the fourth, and the only one that is deleted
+rather than accumulated: the run a [`confirm` node](graph.md) parked, kept
+whole so that the answer can still fire the card's `then:` after a restart, and
+removed the moment somebody answers. One per card, because only the newest
+question stands.
+
+**A record is written once, with one exception.** `write_result` refuses to
+overwrite — one run, one record — except when an answer arrives for a run that
+ended by asking. Without that exception the record would read `asking` for
+good: a run that never finished, about a decision somebody made.
 
 ### Durability
 

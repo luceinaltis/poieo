@@ -205,12 +205,17 @@ asks again tomorrow, and the older question is dropped for the newer one. Where
 the work before the question is expensive, give that card
 `trigger: {type: manual}` so it only wakes on a handoff.
 
-**Today an outstanding question does not survive a daemon restart.** The run is
-still in the store as `asking` and the journal still holds the question, but the
-daemon does not read them back at startup, so nothing is left to answer and the
-deferred `then:` never fires. Answering is a daemon-side call for now; the way
-to reach it from a terminal or the board, and the reading-back that makes a
-question outlive the process, are not built yet.
+**An outstanding question outlives the daemon.** It is written to
+`runs/asking/<card>.json` when the run parks and removed the moment it is
+answered, and a daemon starting up picks up whatever the last one left. That
+file has to exist: a question that a restart ate would leave the decision
+reachable only by running the card again, which for the card this node is
+written for means doing the whole night's work a second time. It is gitignored
+like the rest of `runs/`, and a file that cannot be read is a warning and no
+question — the recovery is the one the user has anyway.
+
+**Answering is still a daemon-side call.** The way to reach it from a terminal
+or the board is the next slice.
 
 ### An agent node's hands
 

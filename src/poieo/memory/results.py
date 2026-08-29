@@ -44,12 +44,17 @@ def used_in(entry: Entry, record: dict[str, Any]) -> bool:
     return len(words(entry.body) & said) >= 2
 
 
-def write_result(task: Any, result: Any) -> Path | None:
+def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     """One record per run, anchored to the task's folder: one project, one
     memory, however many configs drive it.
 
     Returns the path written, or None when nothing was -- already recorded, or
     unwritable. Memory is not worth killing a night's work over.
+
+    ``replace`` is for the one thing that legitimately arrives after a run has
+    already been recorded: the answer to a question it ended by asking. Without
+    it that record would say `asking` for good -- a run that never finished,
+    about a decision somebody made.
     """
     from ..card import closing_line  # late: task.py imports this package
 
@@ -70,6 +75,10 @@ def write_result(task: Any, result: Any) -> Path | None:
         "summary": closing_line(result),
         "outputs": result.outputs,
     }
+    for key in ("asked", "answer"):
+        # Only when there is one, so every other run's record keeps its shape.
+        if getattr(result, key, None) is not None:
+            record[key] = getattr(result, key)
     try:
         # Recomputed rather than passed in, and emphasis-grade: it may fail
         # without costing the record, let alone the run.
@@ -78,7 +87,7 @@ def write_result(task: Any, result: Any) -> Path | None:
     except Exception as exc:
         log.warning("task '%s': could not record what was shown: %s", task.slug, exc)
     try:
-        if path.exists():
+        if path.exists() and not replace:
             return None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(

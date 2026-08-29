@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import signal
 import socket
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
@@ -180,6 +181,7 @@ class TaskRunner:
         # task runs again before anybody answers.
         self._asking: RunResult | None = None
         self._asking_depth = 0
+        self._restore_question()
         self._depth = 0
         self.handoff = handoff
         # The trigger's next fire, once armed. While holding it stays put:
@@ -505,6 +507,63 @@ class TaskRunner:
             self.status = "paused"
         return True
 
+    def _asking_path(self) -> Path | None:
+        """Where this task's outstanding question waits out a restart."""
+        card = self.config.cards_by_task.get(self.name)
+        if card is None:
+            return None
+        return self.config.layout().asking() / f"{card.slug}.json"
+
+    def _restore_question(self) -> None:
+        """Pick up a question the last daemon left unanswered.
+
+        A question that a restart eats is worse than one never asked: the run
+        that raised it is gone, so the only way back to the decision is to run
+        the card again -- which for the card this is written for means doing
+        the whole night's work a second time.
+
+        Anything wrong with the file is a warning and no question. It is
+        derived from a run that already happened, and the recovery is the same
+        one the user has anyway.
+        """
+        path = self._asking_path()
+        if path is None or not path.exists():
+            return
+        try:
+            kept = json.loads(path.read_text(encoding="utf-8"))
+            depth = kept.pop("depth", 0)
+            self._asking, self._asking_depth = RunResult(**kept), int(depth)
+        except (OSError, ValueError, TypeError) as exc:
+            log.warning(
+                "task '%s': could not read the question left at %s: %s", self.name, path, exc
+            )
+            return
+        log.info(
+            "task '%s' is still waiting on you: %s",
+            self.name,
+            (self._asking.asked or {}).get("question", ""),
+        )
+
+    def _keep_question(self) -> None:
+        """Write the outstanding question down, or forget it once answered."""
+        path = self._asking_path()
+        if path is None:
+            return
+        try:
+            if self._asking is None:
+                path.unlink(missing_ok=True)
+                return
+            path.parent.mkdir(parents=True, exist_ok=True)
+            kept = asdict(self._asking) | {"depth": self._asking_depth}
+            path.write_text(
+                json.dumps(kept, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            # The question still stands in this process; it just will not
+            # outlive it. Worth saying, never worth failing the run over.
+            log.warning("task '%s': could not keep the question: %s", self.name, exc)
+
     def _park(self, result: RunResult) -> None:
         """Hold a run that ended by asking, until somebody answers it.
 
@@ -524,6 +583,7 @@ class TaskRunner:
                 (self._asking.asked or {}).get("question", ""),
             )
         self._asking, self._asking_depth = result, self._depth
+        self._keep_question()
         log.info(
             "task '%s' run %s is waiting on you: %s [%s]",
             self.name,
@@ -562,8 +622,12 @@ class TaskRunner:
         # `run.status == 'completed'` should see the run it waited for.
         result.status = "completed"
         self._asking = None
-        # Said out loud before the record is rewritten. `_remember` overwrites
-        # the run's file from `asking` to `completed`, and a record that
+        # Before anything else it might fire: a question answered twice would
+        # hand the same work on twice.
+        self._keep_question()
+        # Said out loud before the record is revised. `_remember` below rewrites
+        # this run's record from `asking` to `completed` -- the one case where
+        # a record legitimately changes after the fact -- and a record that
         # changed with nothing in the log to account for it is the one thing
         # this project keeps a log to avoid.
         self.store.append(
@@ -573,7 +637,7 @@ class TaskRunner:
                 data={"answer": choice, "node": (result.asked or {}).get("node")},
             )
         )
-        self._remember(result)
+        self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:
             self.handoff(self, result, self._asking_depth)
         return True
@@ -614,10 +678,10 @@ class TaskRunner:
         except OSError as exc:
             log.warning("task '%s': could not journal the pause: %s", self.name, exc)
 
-    def _remember(self, result: RunResult) -> None:
+    def _remember(self, result: RunResult, replace: bool = False) -> None:
         task = self.config.cards_by_task.get(self.name)
         if task is not None:
-            record_run(task, result)
+            record_run(task, result, replace=replace)
 
 
 @dataclass(slots=True)

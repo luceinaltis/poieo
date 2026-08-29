@@ -566,3 +566,30 @@ def test_a_question_is_not_a_bookmark(tmp_path):
 
     entry = task.journal_path().read_text(encoding="utf-8").strip().splitlines()[-1]
     assert not _is_own_entry(entry)
+
+
+def test_an_answered_run_is_recorded_as_answered(tmp_path):
+    """The record is the project's memory of the run, and a learning pass reads
+    it. Left alone it would say `asking` forever -- a run that never finished,
+    for a decision somebody made."""
+    task = _task(tmp_path)
+    asked = {"node": "confirm", "question": "Land it?", "choices": ["land", "hold"]}
+    result = _result(status="asking", asked=asked)
+    record_run(task, result)
+
+    answered = _result(status="completed", asked=asked, answer="land")
+    record_run(task, answered, replace=True)
+
+    kept = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
+    assert kept["status"] == "completed"
+    assert kept["answer"] == "land"
+
+
+def test_a_record_is_not_rewritten_by_default(tmp_path):
+    """One run, one record. Only an answer arriving late may revise it."""
+    task = _task(tmp_path)
+    record_run(task, _result(status="completed"))
+    record_run(task, _result(status="failed", error="later and wrong"))
+
+    kept = json.loads(_record_file(task, _result()).read_text(encoding="utf-8"))
+    assert kept["status"] == "completed"

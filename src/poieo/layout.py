@@ -91,6 +91,12 @@ class Layout:
         # the same run, or a learning pass can read one and not the other.
         return self.runs() / "results"
 
+    def asking(self) -> Path:
+        # Under runs(), because a question is the tail of one run and lives as
+        # long as it does. Gitignored with the rest of runs/: losing one costs
+        # a card being run again to ask it, never anybody's work.
+        return self.runs() / "asking"
+
     def worktrees(self) -> Path:
         return self.root / "worktrees"
 

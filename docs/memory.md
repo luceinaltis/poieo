@@ -26,6 +26,7 @@ memory/
     blobs/                  copies of what entries were written against
     learning.jsonl          what every pass did
 runs/results/<run_id>.json  the full record of one run
+runs/asking/<card>.json     a question that run left for you, until it is answered
 ```
 
 Truth is markdown under git. Everything under `cache/` is derived and rebuilt
