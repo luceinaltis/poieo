@@ -48,6 +48,30 @@ most of them, and wrong while looking like a measurement. `None` means "nobody
 has said", which is a different fact from any number and is left for the caller
 to answer however it can.
 
+### Params the provider has never heard of, on purpose
+
+`params` is passed to the endpoint as it stands — `local.py` does
+`payload.update(params)` after lifting `max_tokens` out, and the Anthropic
+provider forwards what it does not recognise. A parameter a new API version
+adds is usable from a binding without a code change here, which is deliberate.
+
+The one worth knowing about is how a reasoning model divides its output budget.
+`max_tokens` bounds *everything the model emits*, thinking included, so a model
+that thinks hard can spend the whole ceiling before it starts answering and
+come back cut off mid-turn. A run measured here spent **194,037 output tokens
+over thirty-one turns and was cut off anyway**. OpenAI-shaped endpoints take:
+
+```yaml
+params:
+  max_tokens: 24000
+  reasoning: {max_tokens: 16000}   # thinking gets 16k; 8k is left to answer with
+```
+
+The reasoning budget has to leave room under `max_tokens`, or there is nothing
+left to say the answer in. Raising `max_tokens` alone also works, and pays for
+it with turns that are slower and cost more — measured at three to seven
+minutes each on a model given 24,000 to think in.
+
 ### Two questions about roles, and why both exist
 
 `resolve()` falls back to `default` for **any** role at all — that is the point
