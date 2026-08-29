@@ -113,6 +113,26 @@ nothing that survives a restart.
 [workspace.md](workspace.md). A repository that cannot be tracked is logged and
 the work happens in place — not a reason to stop working at 3am.
 
+**A run re-reads its binding first.** `Daemon.reread()` is called before every
+firing, beside `read_input` and for the same reason: what the run needs is read
+now rather than remembered from startup. An edit — `poieo config use`, a hand
+edit, a pull — is in effect on the next run rather than after a restart, which
+is what [DESIGN.md](../DESIGN.md) promises.
+
+It is the **daemon's** reread and not the runner's, because one file is one spec
+across every task that names it: a runner reading only for itself would leave its
+siblings on the old model until each happened to fire, and the board would paint
+that as a mix — harder to read than uniform staleness.
+
+The new spec is **validated before it is adopted**, with the two checks
+`load_tasks` runs at startup and in its wording: a file saved mid-flight must not
+put the daemon somewhere it would have refused to start. A file that will not
+load, or would not have armed this task, is a **warning and no more** — the spec
+in memory is still valid and still what the board is claiming, and 3am is no time
+to stop over a config caught half-written.
+
+The pool keeps its clients through all of this; [binding.md](binding.md) says why.
+
 **Failing the same way.** `_note_outcome()` counts consecutive failures sharing
 one `cause.slug` (or the raw error text when nothing classified), so "Ollama down
 at 2am" counts as one thing however its message varies. After `PAUSE_AFTER = 3`
