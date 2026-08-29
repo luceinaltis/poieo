@@ -463,8 +463,9 @@ web-ui/src/
   api.ts            everything that talks to the daemon
   shell/stageStore  fetch history, open the stream, hold the model
   state/stage.ts    the one place run events are interpreted
-  skins/            how that model is drawn — atelier, basic
+  skins/            how that model is drawn — atelier, basic, hours
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
+  skins/hours/span  where a run falls on the shared clock; pure, and tested alone
   detail/           the drawer: one task, turn by turn, plus control
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
@@ -595,7 +596,13 @@ shell and onto every future skin to serve one skin's private problem.
 The chosen skin lives in `localStorage`. `basic` is the default, and is also
 where a stale or unknown id lands rather than blanking the page -- so a reader
 with nothing stored and a reader with something unreadable stored get the same
-page. `atelier` is a click away.
+page. `hours` and `atelier` are a click away.
+
+**Each skin answers one question, and a new one has to bring its own.** `basic`
+answers what this project does and where it is right now; `atelier` answers
+whether it is working; `hours` answers what it has been doing, and when. A
+fourth skin that answers a question one of those already answers is a second way
+of saying an existing thing, which DESIGN.md refuses.
 `basic` draws the work as a graph — the tasks, their nodes, the arrows between
 them, the model each node calls, and which of them have **hands**. That last one
 is marked with the word rather than a glyph, and on every node that has them
@@ -605,6 +612,34 @@ an answer capable of being wrong (where containers go, in what order nodes are r
 so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it
 against anyway.
+
+`hours` draws the same board against time: one clock across the top, one lane per
+task, one mark per run, and the hour rules carried down through every lane. The
+rules are the reason it exists — a tally says three tasks failed, and only a
+shared clock says they all failed at 04:12, which is one problem rather than
+three. The window is the last day, and stretches back further only when the
+newest run on the board is older than that, so a board that stopped on Tuesday
+does not open looking like a board that has never run. Runs the window opened
+after are counted at the left edge rather than dropped, and marks too close to
+tell apart — a 15-minute task on a phone — are folded into one carrying the
+worst of them, so a dense night is a fence of folds rather than a fused bar,
+and a failure is never averaged away by the quiet runs around it.
+
+A mark carries its run's outcome in **silhouette**, not only colour — a quiet run
+is a low tick on the baseline, a run that changed something is a full post, and a
+failure hangs from the rail above. Colour agrees with all three and carries none
+of them alone, which matters most for the pair the view rests on: amber and red
+are one colour to a red-green reader, and those two are the same height. The
+counts are deliberately **not** written beside the lane: the marks are the
+counts. They are on the lane's `aria-label`, which is the one place there
+is no picture to read them off. `skins/hours/span.ts` is the part capable of
+being wrong — how wide the window is, which runs fall inside it, where each one
+lands, how many hour labels the width can carry — so it is pure and tested alone,
+exactly as `wiring.ts` is for the graph.
+
+`outcomeOf` is imported rather than reimplemented: the tally under a card on the
+graph view and a mark's height here are the same judgement, and two views
+disagreeing about whether a night was quiet is worth an import to avoid.
 
 **Making a card is the fifth kind of write**, and the first that creates a file
 that did not exist. Its fence is one card in the project's tasks folder: no

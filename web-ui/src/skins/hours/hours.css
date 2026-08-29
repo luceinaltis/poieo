@@ -1,0 +1,280 @@
+/* One clock across the top, one lane per task, and the hour rules running down
+   through all of them. The rules are the point: they are what lets a reader
+   see that three lanes broke at the same moment rather than three times. */
+
+.hours {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 18px 26px 32px 22px;
+  /* Named once. The lane heads and the rules behind them are two elements that
+     have to agree on where the clock starts, and a second number is how they
+     stop agreeing. */
+  --hours-gutter: 190px;
+  /* Three outcomes, and they are the page's own three: amber is what the board
+     already uses for something happening, red for something broken. A quiet
+     run gets the colour of a hairline, because most runs are quiet and a wall
+     of bright ticks would say every night was eventful. */
+  --hours-quiet: #7d6f57;
+  --hours-changed: #d8a657;
+  --hours-failed: #d16d5a;
+  --hours-now: #a9b665;
+  /* The register: clock times, triggers, counts. Tabular by nature, and the
+     vernacular of a tool that is otherwise driven from a terminal. No web font
+     -- the daemon serves a bundle off disk with no network behind it, and a
+     face fetched from elsewhere would be a blank axis on a train. */
+  --hours-register: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Sticky, because a lane read halfway down the page is unreadable without the
+   clock it is measured against. */
+.hours-axis {
+  align-items: end;
+  background: #14120f;
+  border-bottom: 1px solid #2e2820;
+  display: grid;
+  grid-template-columns: var(--hours-gutter) 1fr;
+  padding-bottom: 6px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* The page's own secondary colour, not a dimmer one. At ten pixels these were
+   set at 3.1:1 against the page, which is under the 4.5:1 a line of text this
+   size needs -- and this view is mostly ten-pixel text. Hierarchy is carried by
+   size and tracking instead, which costs no legibility. */
+.hours-caption,
+.hours-tick {
+  color: #9a9086;
+  font-family: var(--hours-register);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hours-caption {
+  padding-right: 14px;
+}
+
+.hours-scale {
+  height: 12px;
+  position: relative;
+}
+
+.hours-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.hours-body {
+  display: grid;
+  position: relative;
+}
+
+/* One set for the board, behind every lane, rather than a copy inside each. */
+.hours-rules {
+  bottom: 0;
+  left: var(--hours-gutter);
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.hours-rule {
+  background: #2e2820;
+  bottom: 0;
+  position: absolute;
+  top: 0;
+  width: 1px;
+}
+
+/* Now. Every lane ends here, so a mark against it is still going rather than
+   merely the most recent one. */
+.hours-edge {
+  background: #a9b6653d;
+  bottom: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 1px;
+}
+
+.hours-lane {
+  align-items: center;
+  border-bottom: 1px solid #1e1a15;
+  display: grid;
+  grid-template-columns: var(--hours-gutter) 1fr;
+  grid-template-rows: auto auto;
+  padding: 10px 0 8px;
+}
+
+.hours-head {
+  align-self: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 3px;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  justify-items: start;
+  padding: 0 14px 0 0;
+  text-align: left;
+}
+
+.hours-head:focus-visible {
+  outline: 1px solid #6b6257;
+  outline-offset: 3px;
+}
+
+/* The one thing on this page set at a size worth calling display. There are a
+   handful of tasks and each owns a lane, so the name is the handle you reach
+   for -- everything else here is register. */
+.hours-name {
+  color: #e8e2d8;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hours-head:hover .hours-name {
+  color: #f2ecdf;
+}
+
+.hours-trigger {
+  color: #9a9086;
+  font-family: var(--hours-register);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Not the axis's treatment, though it is the same family: uppercase and
+   tracked out, a line of these down the right edge read as a second scale
+   competing with the real one along the top. */
+.hours-last {
+  color: #9a9086;
+  font-family: var(--hours-register);
+  font-size: 10px;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  padding-top: 3px;
+}
+
+.hours-track {
+  grid-column: 2;
+  grid-row: 1;
+  height: 38px;
+  position: relative;
+}
+
+.hours-lane[data-status="error"] .hours-last {
+  color: var(--hours-failed);
+}
+
+/* Three silhouettes, so the shape of a night survives being printed, dimmed, or
+   read by somebody who does not separate amber from red -- which is the pair
+   this view would otherwise rest on. A quiet run is a low tick from the
+   baseline, a run that changed something is a full post from the baseline, and
+   a failure hangs from the rail instead. Colour agrees with all three and
+   carries none of them alone. */
+.hours-mark {
+  border-radius: 1px;
+  bottom: 0;
+  margin-left: -1.5px;
+  position: absolute;
+  width: 3px;
+}
+
+/* Tall enough to be a rhythm rather than a smudge. Most runs are quiet, so
+   this is the mark that draws the shape of a night -- a lane of these too faint
+   to see is a lane that only shows its exceptions, which is the tally the
+   board already has. */
+.hours-mark[data-outcome="nothing"] {
+  background: var(--hours-quiet);
+  height: 9px;
+}
+
+.hours-mark[data-outcome="succeeded"] {
+  background: var(--hours-changed);
+  height: 26px;
+}
+
+/* Hung from the top rather than stood on the baseline: amber and red are the
+   same value to a red-green reader and these two are the same height, so
+   without this the one distinction the view most needs to make is the one it
+   cannot. Upside down also reads as wrong before it is read as anything. */
+.hours-mark[data-outcome="failed"] {
+  background: var(--hours-failed);
+  bottom: auto;
+  height: 26px;
+  top: 0;
+}
+
+/* Runs the window opened after: on the baseline with the marks and pointing
+   off the edge they are over, because a number floating above the lane reads
+   as a label for the lane rather than as more of it. Backed in the page colour
+   so a busy left edge does not run through it. */
+.hours-earlier {
+  background: #14120f;
+  bottom: 0;
+  color: #9a9086;
+  font-family: var(--hours-register);
+  font-size: 9px;
+  left: 0;
+  padding-right: 5px;
+  position: absolute;
+}
+
+/* The only mark placed by the clock rather than by a finish, and the only one
+   that moves on its own. */
+.hours-live {
+  background: var(--hours-now);
+  border-radius: 1px;
+  bottom: 0;
+  height: 38px;
+  position: absolute;
+  right: 0;
+  width: 3px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hours-live {
+    animation: hours-alive 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes hours-alive {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* On a phone the gutter is most of the screen, and a lane with no room left
+   for its clock is not this view. The name drops a size and the register
+   loses its tracking rather than the clock losing its width. */
+@media (max-width: 720px) {
+  .hours {
+    --hours-gutter: 108px;
+    padding: 14px 14px 24px 12px;
+  }
+
+  .hours-name {
+    font-size: 13px;
+  }
+
+  .hours-trigger,
+  .hours-caption {
+    letter-spacing: 0.02em;
+  }
+}
