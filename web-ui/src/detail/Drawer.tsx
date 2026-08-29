@@ -61,6 +61,8 @@ function Entry({ event }: { event: PoieoEvent }) {
     // it. The tool calls below already say the turn happened, so an empty row
     // here is only a gap in the timeline.
     if (!text && !thinking) return null
+    const sent = Number(data.input_tokens ?? 0)
+    const wrote = Number(data.output_tokens ?? 0)
     // The turn number is the loop's bookkeeping. What a reader wants from a
     // second turn is that the model spoke again, which the entry already is.
     return (
@@ -73,6 +75,15 @@ function Entry({ event }: { event: PoieoEvent }) {
               <summary>thinking</summary>
               <p>{thinking}</p>
             </details>
+          ) : null}
+          {/* What this turn cost. The run's total says what the whole step
+              spent; a reader chasing a step that slowed down wants to know
+              which turn it happened on. */}
+          {sent > 0 ? (
+            <p className="drawer-cost">
+              {`${sent.toLocaleString("en-US")} in`}
+              {wrote > 0 ? ` · ${wrote.toLocaleString("en-US")} out` : ""}
+            </p>
           ) : null}
         </div>
       </li>

@@ -617,6 +617,17 @@ class AgentNode(Node):
                     text=_clip(response.text),
                     thinking=_clip(response.meta.get("thinking") or ""),
                     tool_call_count=len(response.tool_calls),
+                    # What this turn cost, turn by turn. The run's own record
+                    # carries one total for the whole of itself, which cannot
+                    # answer the question the caps keep raising: does a model
+                    # write more as the conversation it reads grows? Two runs
+                    # measured here differed by ninety times on output and
+                    # also in whether the step was working or thrashing, so
+                    # neither said which caused which. Only the pair, inside
+                    # one run, can.
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    cache_read_tokens=response.usage.cache_read_tokens,
                 )
 
                 # A turn the model was cut off in the middle of is not an

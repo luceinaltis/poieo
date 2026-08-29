@@ -156,6 +156,14 @@
   color: #d16d5a;
 }
 
+/* Quieter than what the model said, because it is bookkeeping about the
+   saying rather than the saying itself. */
+.drawer-cost {
+  color: #6b6257;
+  font-size: 0.85em;
+  margin: 2px 0 0;
+}
+
 .drawer-thinking {
   color: #9a9086;
   font-style: italic;

@@ -256,7 +256,10 @@ that, a truncating endpoint would be answered forever with garbage.
 `NodeError` carrying the `out_of_turns` cause. The executor is opened with
 `async with`, so an isolated environment is set up and torn down around the whole
 loop, not per call. Each turn emits `node_turn` (with the model's text and
-thinking, clipped) and each call emits `node_tool_call` (arguments, result,
+thinking, clipped, and what that turn cost in tokens -- a run's own record
+carries one total for the whole of itself, which cannot say which turn a step
+slowed down on, nor whether a model writes more as the conversation it reads
+grows) and each call emits `node_tool_call` (arguments, result,
 error flag, duration). The final `response` read after the loop is deliberately
 the one that answered without a tool call.
 

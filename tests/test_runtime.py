@@ -874,6 +874,32 @@ async def test_what_a_fold_freed_is_never_negative(tmp_path, monkeypatch):
     assert all(e.data["folded"] > 0 for e in store.events if e.type == "node_compacted")
 
 
+async def test_a_turn_says_how_big_it_was(tmp_path):
+    """A run reports one usage total for the whole of itself, which cannot
+    answer the question that keeps coming up: does a model write more as the
+    conversation it is reading grows?
+
+    Two runs measured here disagreed by ninety times on output -- 2,165 tokens
+    against 194,037 -- but they also differed in whether the step was working
+    or thrashing, so neither says which caused which. Telling those apart
+    needs the two numbers turn by turn, inside one run, and nothing recorded
+    them.
+    """
+    (tmp_path / "big.txt").write_text("x" * 4_000)
+    graph = agent_graph(tmp_path)
+    store = _CapturingStore()
+
+    await run_graph(graph, reads_the_same_file(4), store=store)
+
+    turns = [e for e in store.events if e.type == "node_turn"]
+    assert len(turns) > 2
+    assert all(t.data["input_tokens"] > 0 for t in turns)
+    # And the conversation grows, so the input does too -- which is the shape
+    # the question is about.
+    sizes = [t.data["input_tokens"] for t in turns]
+    assert sizes == sorted(sizes)
+
+
 async def test_a_conversation_under_the_cap_is_sent_whole(tmp_path):
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path)
