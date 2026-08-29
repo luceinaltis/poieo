@@ -46,6 +46,120 @@ async def _write_file(workdir: Path, args: dict[str, Any]) -> str:
     return f"wrote {len(content)} characters to {args['path']}"
 
 
+# A line number the way a file viewer writes one, so an `old` copied straight
+# out of a listing can have them taken back off.
+_NUMBERED = re.compile(r"^\s*\d+[\t:]\s?", re.MULTILINE)
+
+
+def _loosened(text: str) -> str:
+    """The same text with what models get wrong about it taken out.
+
+    Line endings and trailing spaces, and nothing else. **Not indentation**:
+    in Python indentation is meaning, and a tool that matched it loosely would
+    be guessing at which block the model meant.
+    """
+    return "\n".join(line.rstrip() for line in text.replace("\r\n", "\n").split("\n"))
+
+
+def _place(text: str, old: str) -> tuple[str, int] | None:
+    """Where `old` sits in `text`, trying three readings of "the same".
+
+    Exact first. Then without the line numbers a file viewer prints, because
+    both reference implementations number their output and then ask the model
+    to remember to strip them -- and the models that need reminding are the
+    ones that will not. Then ignoring trailing whitespace and line endings,
+    which is where the reported edit failure rates on models that were never
+    trained on this tool mostly come from.
+
+    Returns the text it matched and how many times it appears, or None.
+    Uniqueness is checked by the caller and is **not** relaxed here: matching
+    is what becomes forgiving, never the safeguard.
+    """
+    for candidate in (old, _NUMBERED.sub("", old), None):
+        if candidate is None:
+            break
+        count = text.count(candidate)
+        if count:
+            return candidate, count
+    loose_old = _loosened(_NUMBERED.sub("", old))
+    loose_text = _loosened(text)
+    count = loose_text.count(loose_old)
+    if count:
+        return loose_old, count
+    return None
+
+
+def _would_parse(path: Path, text: str) -> str | None:
+    """Whether Python would still read this file, or why not.
+
+    Worth three points in SWE-agent's ablation and free from the standard
+    library. A file left unparseable is worse than a refused edit: the model
+    finds out one test run later and spends the next turns debugging its own
+    typo instead of the task. Anything that is not Python is left to whatever
+    tools that language has.
+    """
+    if path.suffix != ".py":
+        return None
+    try:
+        compile(text, str(path), "exec")
+    except SyntaxError as exc:
+        return f"{exc.msg} (line {exc.lineno})"
+    return None
+
+
+async def _edit_file(workdir: Path, args: dict[str, Any]) -> str:
+    path = resolve_path(workdir, args["path"])
+    if not path.is_file():
+        raise ToolError(f"no such file: {args['path']}")
+    old, new = str(args.get("old", "")), str(args.get("new", ""))
+    if old == new:
+        raise ToolError("`old` and `new` are the same; that edit would do nothing")
+
+    text = path.read_text(encoding="utf-8")
+    found = _place(text, old)
+    if found is None:
+        raise ToolError(
+            f"could not find that text in {args['path']}. It has to match the "
+            f"file exactly, indentation included -- read the file and copy the "
+            f"lines you mean"
+        )
+    matched, count = found
+    if count > 1:
+        raise ToolError(
+            f"that text appears {count} times in {args['path']}; include more "
+            f"of the lines around it so there is only one place it can mean"
+        )
+    # `_loosened` may have been what matched, in which case the replacement
+    # lands in the loosened text -- which is the file with its line endings
+    # normalised and its trailing spaces gone. Both are changes nobody minds.
+    body = text if matched in text else _loosened(text)
+    updated = body.replace(matched, new, 1)
+
+    broken = _would_parse(path, updated)
+    if broken:
+        raise ToolError(f"that edit would not parse as Python: {broken}")
+    path.write_text(updated, encoding="utf-8")
+    return f"replaced one occurrence in {args['path']}"
+
+
+async def _append_file(workdir: Path, args: dict[str, Any]) -> str:
+    """Add to the end of a file, which was four of five surgeries in a run.
+
+    `cat >> file << 'EOF'` is how a model reaches for this, and a Windows
+    shell answers `<<은(는) 예상되지 않았습니다`. The other spelling seen in
+    the wild wrote a temporary file, appended it, and deleted it again.
+    """
+    path = resolve_path(workdir, args["path"])
+    if not path.is_file():
+        # Making a file is `write_file`'s job. A typo in a path here should
+        # not quietly become a new file nobody asked for.
+        raise ToolError(f"no such file: {args['path']} -- use write_file to make one")
+    content = str(args.get("content", ""))
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(content)
+    return f"added {len(content)} characters to the end of {args['path']}"
+
+
 async def _list_dir(workdir: Path, args: dict[str, Any]) -> str:
     path = resolve_path(workdir, args.get("path", "."))
     if not path.is_dir():
@@ -154,6 +268,43 @@ FILES_TOOLS: list[Tool] = [
             ),
         ),
         _write_file,
+    ),
+    Tool(
+        ToolDef(
+            name="edit_file",
+            description=(
+                "Change one place in a file: `old` is replaced by `new`. Prefer "
+                "this to rewriting a whole file with write_file -- the parts you "
+                "did not mean to touch cannot come back different, and the file's "
+                "body does not have to travel. `old` must match exactly, "
+                "indentation included, and must appear exactly once; if it "
+                "appears more than once, include more of the surrounding lines."
+            ),
+            input_schema=_schema(
+                {
+                    "path": {"type": "string"},
+                    "old": {"type": "string", "description": "text to replace"},
+                    "new": {"type": "string", "description": "what to put there"},
+                },
+                ["path", "old", "new"],
+            ),
+        ),
+        _edit_file,
+    ),
+    Tool(
+        ToolDef(
+            name="append_file",
+            description=(
+                "Add text to the end of an existing file. Use this rather than "
+                "a shell redirect: heredocs and `>>` are spelled differently "
+                "from one shell to the next, and some do not have them at all."
+            ),
+            input_schema=_schema(
+                {"path": {"type": "string"}, "content": {"type": "string"}},
+                ["path", "content"],
+            ),
+        ),
+        _append_file,
     ),
     Tool(
         ToolDef(
