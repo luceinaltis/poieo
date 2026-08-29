@@ -127,7 +127,7 @@ nodes:
 | type | does | keys |
 |---|---|---|
 | `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
-| `command` | runs one command through the executor seam and reports it; calls no model | `command`, `output`, `next`, and optionally `workdir`, `timeout`, `env` |
+| `command` | runs a command, or a script in a named language, through the executor seam; calls no model | `command` **or** `script` + `language`; `output`, `next`, and optionally `workdir`, `timeout`, `env` |
 | `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
 
 Three types, by who does the step: the model, the machine, or nobody.

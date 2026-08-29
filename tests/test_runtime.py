@@ -992,3 +992,62 @@ async def test_a_command_node_runs_where_the_task_works(tmp_path):
     result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
 
     assert "marker.txt" in result.outputs["check"]["output"]
+
+
+async def test_a_script_node_runs_real_code_with_quotes_and_newlines(tmp_path):
+    """The case a `command:` cannot express: this does not parse as YAML on one
+    line, and a shell would eat the quotes if it did."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "gate",
+            "nodes": [
+                {
+                    "id": "gate",
+                    "type": "command",
+                    "language": "python",
+                    "script": (
+                        "import json, sys\n"
+                        "report = {'pct': 87.5}\n"
+                        "print(json.dumps(report))\n"
+                        "sys.exit(0 if report['pct'] >= 90 else 1)\n"
+                    ),
+                    "output": {"as": "gate"},
+                }
+            ],
+        }
+    )
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    assert result.status == "completed"
+    assert result.outputs["gate"]["exit_code"] == 1
+    assert '"pct": 87.5' in result.outputs["gate"]["output"]
+    # No model was asked anything about it.
+    assert result.usage["output_tokens"] == 0
+
+
+async def test_a_script_can_read_the_scope_it_runs_in(tmp_path):
+    """Templated like a command and a prompt are, so a script can act on what
+    an earlier step produced."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "gate",
+            "nodes": [
+                {
+                    "id": "gate",
+                    "type": "command",
+                    "language": "python",
+                    "script": "print('floor is {{ input.floor }}')",
+                    "output": {"as": "gate"},
+                }
+            ],
+        }
+    )
+
+    result = await run_graph(
+        graph, mock_binding({}), workdir=tmp_path, input={"floor": 90}
+    )
+
+    assert "floor is 90" in result.outputs["gate"]["output"]

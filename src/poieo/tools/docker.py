@@ -82,15 +82,20 @@ def image_present(image: str) -> bool:
     return done.returncode == 0
 
 
-async def _docker(*args: str, timeout: float = _PROBE_TIMEOUT) -> tuple[int, str]:
+async def _docker(
+    *args: str, timeout: float = _PROBE_TIMEOUT, stdin: str | None = None
+) -> tuple[int, str]:
     """Run a docker command off the event loop's back."""
     process = await asyncio.create_subprocess_exec(
         "docker", *args,
+        stdin=asyncio.subprocess.PIPE if stdin is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
     try:
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout)
+        stdout, _ = await asyncio.wait_for(
+            process.communicate(stdin.encode() if stdin is not None else None), timeout
+        )
     except asyncio.TimeoutError:
         process.kill()
         await process.communicate()
@@ -281,7 +286,11 @@ class DockerExecutor(Executor):
     # only the tool bound to run_command differs.
 
     async def run_command(
-        self, command: str, timeout: float | None = None, env: Any = None
+        self,
+        command: str,
+        timeout: float | None = None,
+        env: Any = None,
+        stdin: str | None = None,
     ) -> CommandResult:
         """The seam, entered directly -- and it lands *inside the box*.
 
@@ -293,12 +302,15 @@ class DockerExecutor(Executor):
         seconds = min(
             float(_DEFAULT_TIMEOUT if timeout is None else timeout), _MAX_TIMEOUT
         )
-        argv = ["exec", "-w", _MOUNT]
+        # `-i` or the interpreter reads an empty stdin and exits 0 having run
+        # nothing -- success reported over no work.
+        argv = ["exec", "-w", _MOUNT] + (["-i"] if stdin is not None else [])
         for key, value in (env or {}).items():
             argv += ["-e", f"{key}={value}"]
         try:
             code, text = await _docker(
-                *argv, self.container_id, "sh", "-c", command, timeout=seconds
+                *argv, self.container_id, "sh", "-c", command,
+                timeout=seconds, stdin=stdin,
             )
         except asyncio.TimeoutError:
             raise ToolError(f"command timed out after {seconds:.0f}s: {command}")

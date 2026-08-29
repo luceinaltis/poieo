@@ -17,7 +17,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..tools import ToolError, make_executor
+from ..tools import LANGUAGES, ToolError, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -562,13 +562,25 @@ class CommandNode(Node):
 
         # Through the seam, never a bare subprocess: a task that asked to be
         # fenced is fenced here too.
+        scope = ctx.scope()
+        if spec.script is not None:
+            # The code never passes through a shell: the interpreter reads it
+            # from stdin, so a quote, a colon or a newline in it means what it
+            # says rather than something to the shell on the way past.
+            command = " ".join(LANGUAGES[spec.language or ""])
+            stdin = _rendered(spec, spec.script, scope)
+        else:
+            command = _rendered(spec, spec.command or "", scope)
+            stdin = None
+
         async with make_executor(workdir, ["shell"], ctx.tool_context) as executor:
             started = time.monotonic()
             try:
                 result = await executor.run_command(
-                    _rendered(spec, spec.command or "", ctx.scope()),
+                    command,
                     timeout=spec.timeout,
                     env=spec.env or None,
+                    stdin=stdin,
                 )
             except ToolError as exc:
                 # It never ran. That is the node failing, unlike an exit code.

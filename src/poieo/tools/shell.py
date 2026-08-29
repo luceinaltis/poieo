@@ -52,6 +52,7 @@ async def run_here(
     command: str,
     timeout: float = _DEFAULT_TIMEOUT,
     env: Any = None,
+    stdin: str | None = None,
 ) -> CommandResult:
     """Run one command on this machine and report what it did.
 
@@ -64,12 +65,15 @@ async def run_here(
         command,
         cwd=workdir,
         env=_environment(env),
+        stdin=asyncio.subprocess.PIPE if stdin is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=(os.name != "nt"),
     )
     try:
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout)
+        stdout, _ = await asyncio.wait_for(
+            process.communicate(stdin.encode() if stdin is not None else None), timeout
+        )
     except asyncio.TimeoutError:
         _kill_tree(process)
         await process.communicate()

@@ -82,6 +82,11 @@ class NodeSpec(_Spec):
     # The command runs where the model's would: through the executor seam, so
     # a task that asked to be fenced is fenced here too.
     command: str | None = None
+    # Code the node carries, handed to `language`'s interpreter on stdin. The
+    # alternative is a shell string, where a quote or a colon or a newline all
+    # mean something on the way past.
+    script: str | None = None
+    language: str | None = None
     timeout: float | None = Field(default=None, gt=0, le=600)
     # Laid over the process environment, never replacing it. Shells disagree
     # about `VAR=1 cmd`, and getting it wrong looks exactly like the command
@@ -158,8 +163,57 @@ class NodeSpec(_Spec):
                 f"`type` to `command` for a step that runs one without a model"
             )
         if self.type == "command":
-            if not self.command:
-                raise ValueError(f"command node '{self.id}' requires a command")
+            if self.command and self.script:
+                raise ValueError(
+                    f"command node '{self.id}' takes a command or a script, not "
+                    f"both: one is a line for a shell, the other is code for an "
+                    f"interpreter"
+                )
+            if self.script and not self.language:
+                raise ValueError(
+                    f"command node '{self.id}' has a script but no language. "
+                    f"Nothing can be read off the code itself, and guessing "
+                    f"wrong runs the wrong interpreter over it"
+                )
+            if self.language and not self.script:
+                raise ValueError(
+                    f"command node '{self.id}' names a language but has no script"
+                )
+            if self.language:
+                from .tools import LANGUAGES  # late import; tools pulls in providers
+
+                if self.language not in LANGUAGES:
+                    raise ValueError(
+                        f"command node '{self.id}' names unknown language "
+                        f"'{self.language}'; known: {sorted(LANGUAGES)}"
+                    )
+                try:
+                    validate_template(self.script or "")
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}': {exc}") from exc
+            if not self.command and not self.script:
+                raise ValueError(
+                    f"command node '{self.id}' requires a command or a script"
+                )
+            # `command: |` is the readable way to write a long one, and it
+            # adds a trailing newline. That is a spelling, not a second line.
+            if self.command:
+                # `command: |` is the readable way to write a long one, and it
+                # adds a trailing newline. That is a spelling, not a second line.
+                self.command = self.command.strip()
+                if "\n" in self.command:
+                    raise ValueError(
+                        f"command node '{self.id}': a command is one command, and "
+                        f"a second line is silently dropped by some shells -- the "
+                        f"step reports success having run half of it. Chain with "
+                        f"`&&`, give each line its own node, or use `script:`"
+                    )
+                # Rendered at run time, so checked at parse time -- the same
+                # rule a prompt gets. A typo here used to wait for the trigger.
+                try:
+                    validate_template(self.command)
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}': {exc}") from exc
             if self.branches:
                 raise ValueError(f"command node '{self.id}' cannot declare branches")
             self._refuse_model_keys()
