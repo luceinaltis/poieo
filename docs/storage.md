@@ -205,6 +205,24 @@ ids, so there is still one request and one place that knows where to send it.
 the binding file itself, and so does a backend somebody registered through
 `providers.register()`.
 
+### Whose machine
+
+Two questions that look like one, and were one. `lists_installed(type)` says a
+listing is things **pulled and ready** rather than a menu — a property of the
+backend, as true of an Ollama on an office server as of one here.
+`is_here(base_url)` says whether that machine is **this** one, which only the
+address can answer: `localhost`, `::1`, and the whole `127.` net. It returns
+None where there is no address, because Claude's SDK resolves its own and
+calling that "somewhere else" would be a claim about a machine nobody named.
+
+Reading the first as both had every Ollama anywhere telling the board it was on
+this laptop. `where(base_url)` is `host:port` — the part of an address that
+names a machine, and the only part [web.md](web.md) lets through.
+
+Deliberately no further than string comparison. Resolving a hostname would turn
+a question about a config into a DNS lookup, and being wrong costs a label,
+never a request going somewhere it should not.
+
 ### Who is actually answering
 
 `openai_compatible` is four products in a trench coat: vLLM, SGLang, LM Studio,
