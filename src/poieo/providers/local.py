@@ -219,6 +219,12 @@ class OpenAICompatibleProvider(_HttpProvider):
                 output_tokens=usage.get("completion_tokens", 0) or 0,
                 cache_read_tokens=details.get("cached_tokens", 0) or 0,
                 cache_write_tokens=details.get("cache_write_tokens", 0) or 0,
+                reasoning_tokens=(usage.get("completion_tokens_details") or {}).get(
+                    "reasoning_tokens", 0
+                ) or 0,
+                # Absent means the endpoint did not say, which is a different
+                # fact from having charged nothing.
+                cost=usage.get("cost"),
             ),
             stop_reason=choices[0].get("finish_reason"),
             tool_calls=tool_calls,
