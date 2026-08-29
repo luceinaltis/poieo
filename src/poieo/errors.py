@@ -127,9 +127,14 @@ def explain_failure(exc: BaseException) -> Cause | None:
                 return Cause(
                     "out_of_room",
                     "the model was cut off before it finished",
-                    "raise max_tokens for this node or its role -- a model that "
-                    "reasons spends that budget on thinking too, and spends more "
-                    "of it the longer the conversation behind it has grown",
+                    "a model that reasons spends max_tokens on thinking as well "
+                    "as answering, and spends more of it the longer the "
+                    "conversation behind it has grown. Where the endpoint lets "
+                    "the two be split, give the thinking its own smaller budget "
+                    "-- OpenAI-shaped ones take `reasoning: {max_tokens: N}` in "
+                    "params, and N must leave room under max_tokens for the "
+                    "answer. Raising max_tokens alone works too, and buys slower "
+                    "and dearer turns to do it",
                 )
             if "expected JSON output" in message or "output path" in message:
                 return Cause(
