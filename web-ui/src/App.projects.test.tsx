@@ -29,7 +29,7 @@ const row = (name: string, project: string): TaskRow => ({
   into: null,
   asking: null,
   then: [],
-  shape: { entry: "work", nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null }] },
+  shape: { entry: "work", nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }] },
 })
 
 const PROJECTS = [

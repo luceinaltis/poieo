@@ -92,7 +92,7 @@ second fetch — the tasks route already had the graph in hand:
 
 - **`then`** — which task works next, and the word on that arrow
 - **`shape`** — `entry`, and each node's `next` / `branches` / `default` /
-  `model`
+  `model` / `tools`
 
 Both arrows have **one shape**, because a router's branches and a task's `then:`
 are the same `Branch` one level apart: a view that can draw one can draw the
@@ -110,8 +110,18 @@ different model. This is why `_shape` takes the `LoadedTask` and not the
 `GraphSpec` — a role resolves against a binding, and the same graph under two
 bindings is two different afternoons.
 
-`shape` is deliberately **not** the whole `GraphSpec`, and only the bare model
-id crosses. Prompts and system messages are long, are of no use to a drawing,
+`tools` is which toolsets the node may use, and so **whether it can reach the
+folder at all**. It is the one field here that is not about drawing: two agent
+nodes are otherwise the same picture — same type, same model, same box — and
+one of them rewrites the project while the other only answers. A board that
+cannot tell them apart asks the reader to guess at exactly the thing
+`DESIGN.md`'s safety boundaries say they should never have to. It crosses as a
+**list, never absent**: `None` and `[]` both mean no hands, and a field a view
+can forget to read is one whose absence draws every step as harmless.
+
+`shape` is deliberately **not** the whole `GraphSpec`, and little more than the
+bare model id and those toolset names crosses. Prompts and system messages are
+long, are of no use to a drawing,
 and this rides every board paint out to every browser watching; a graph's text
 is exactly the sort of thing a person would be surprised to have broadcast. A
 `ProviderSpec` knows a `base_url` and the name of the variable its key comes
@@ -206,7 +216,10 @@ where a stale or unknown id lands rather than blanking the page -- so a reader
 with nothing stored and a reader with something unreadable stored get the same
 page. `atelier` is a click away.
 `basic` draws the work as a graph — the tasks, their nodes, the arrows between
-them, and the model each node calls. `skins/wiring.ts` is the part of that with
+them, the model each node calls, and which of them have **hands**. That last one
+is marked with the word rather than a glyph, and on every node that has them
+rather than only when the nodes disagree, because unlike the model it is never
+answered by some other step having said it. `skins/wiring.ts` is the part of that with
 an answer capable of being wrong (where containers go, in what order nodes are read),
 so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it

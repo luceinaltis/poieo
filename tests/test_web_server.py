@@ -126,6 +126,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "default": None,
                         "branches": [],
                         "model": "llama3.2:3b",
+                        "tools": [],
                     },
                     {
                         "id": "route",
@@ -134,6 +135,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "default": "answer",
                         "branches": [{"to": "answer", "label": "bug"}],
                         "model": None,
+                        "tools": [],
                     },
                     {
                         "id": "answer",
@@ -142,6 +144,7 @@ def test_flows_lists_runner_state(tmp_path):
                         "default": None,
                         "branches": [],
                         "model": "claude-opus-5",
+                        "tools": [],
                         "ui": {"x": 40.0, "y": 8.0},
                     },
                 ],
@@ -196,6 +199,48 @@ def test_each_node_reports_the_model_it_would_call(tmp_path):
         "route": None,               # a router calls no model
         "answer": "claude-opus-5",   # no role: through the graph's default_role
     }
+
+
+def test_each_node_says_whether_it_has_hands(tmp_path):
+    """The one thing on a board a reader cannot afford to guess at.
+
+    Two agent nodes on one model are the same picture -- same type, same box,
+    same id beside it -- and one of them can rewrite the folder while the other
+    can only answer. `tools:` is the whole difference, so it has to cross.
+    """
+    graph = {
+        "name": "build",
+        "entry": "work",
+        "nodes": [
+            {
+                "id": "work",
+                "type": "agent",
+                "prompt": "x",
+                "tools": ["files", "shell"],
+                "next": "say",
+            },
+            {"id": "say", "type": "agent", "prompt": "y"},
+        ],
+    }
+    daemon = stub_daemon(tmp_path, [stub_runner(graph=graph)])
+    client = TestClient(create_app(daemon))
+
+    shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
+    assert {node["id"]: node["tools"] for node in shape["nodes"]} == {
+        "work": ["files", "shell"],
+        "say": [],
+    }
+
+
+def test_a_node_that_names_no_tools_says_so_with_a_list(tmp_path):
+    """`None` and `[]` both mean no hands, so one of them crosses -- and it is
+    the list. A field that is sometimes missing is one a view can forget to
+    read, and forgetting this one draws every step as harmless."""
+    daemon = stub_daemon(tmp_path, [stub_runner()])
+    client = TestClient(create_app(daemon))
+
+    shape = client.get("/api/tasks").json()["tasks"][0]["shape"]
+    assert all(node["tools"] == [] for node in shape["nodes"])
 
 
 def test_one_graph_on_two_bindings_reports_two_models(tmp_path):
