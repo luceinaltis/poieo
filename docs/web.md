@@ -450,9 +450,11 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Editing and removing a card from the board.** Creating one is live —
-  `POST /api/projects/{p}/tasks` writes it and the daemon finds it the way it
-  finds one written by a hand — but changing a card's name or folder, and
+- **The page that would call it.** `POST /api/projects/{p}/tasks` exists and
+  writes a card the daemon then finds, the way it finds one written by a hand —
+  but nothing in `web-ui/src/` calls it yet, so from a browser this is still an
+  API and not a button.
+- **Editing and removing a card.** Changing a card's name or folder, and
   deleting it, still mean editing the file.
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);

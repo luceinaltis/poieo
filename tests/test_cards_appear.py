@@ -216,10 +216,11 @@ async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
             lambda: _named(daemon, "from-the-board") is not None,
             "the posted card to start running",
         )
-        # And it is a task, not just a name in a list.
+        # And it is a task, not just a name in a list. It fires on its own --
+        # a card takes `every: 1h` and runs at start -- so kicking it here
+        # would race that first firing and be refused mid-run some of the time.
         made = _named(daemon, "from-the-board")
-        assert made.run_now() is True
-        await _until(lambda: len(made.results) == 1, "its first run")
+        await _until(lambda: len(made.results) == 1, "the run it starts itself")
         assert made.results[-1].status == "completed"
 
     await _down(daemon, serving)

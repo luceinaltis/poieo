@@ -98,3 +98,62 @@ def test_a_card_with_nothing_to_do_is_refused(tmp_path):
 
     assert answer.status_code == 400, answer.text
     assert not (cards / "empty.yaml").exists()
+
+
+def test_a_folder_outside_the_project_is_refused(tmp_path):
+    """The fence that matters. A card takes the files and shell toolsets and
+    fires within seconds of being written, so without this one request starts a
+    shell-capable agent anywhere on the machine -- over a port any page in the
+    browser can reach. Pointing a task elsewhere is still done by hand."""
+    client, cards = _client(tmp_path)
+    outside = tmp_path.parent / "outside-the-project"
+    outside.mkdir(exist_ok=True)
+
+    answer = _make(client, {"name": "reach out", "folder": str(outside), "prompt": "x"})
+
+    assert answer.status_code == 400, answer.text
+    assert "outside" in answer.json()["error"]
+    assert not (cards / "reach-out.yaml").exists()
+
+
+def test_a_name_taken_by_another_spelling_is_refused(tmp_path):
+    """`load_cards` reads .yaml, .yml and .json. Writing `x.yaml` beside an
+    existing `x.yml` would leave two cards claiming one name, and the folder
+    would stop loading at all -- taking every card written after it."""
+    client, cards = _client(tmp_path)
+    (cards / "twin.yml").write_text("name: twin\nfolder: ../work\nprompt: hi\n", encoding="utf-8")
+
+    answer = _make(client, {"name": "twin", "folder": "../work", "prompt": "new"})
+
+    assert answer.status_code == 409, answer.text
+    assert not (cards / "twin.yaml").exists()
+
+
+def test_a_project_with_no_default_models_file_is_refused(tmp_path):
+    """A card written here names no binding of its own. With no default it
+    would not load, and one unloadable card in a watched folder stops every
+    later one from being noticed."""
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    (tmp_path / "work").mkdir()
+    card(tmp_path / "cards", "own", "folder: ../work\nprompt: hi\nbinding: ../b.yaml\n")
+    path = tmp_path / "poieo.yaml"
+    path.write_text("name: board\ntasks: cards\n", encoding="utf-8")
+    client = TestClient(create_app(Daemon(load_config(path), store=NullStore())))
+
+    answer = client.post("/api/projects/board/tasks", json={"name": "x", "folder": "../work", "prompt": "y"})
+
+    assert answer.status_code == 409, answer.text
+    assert not (tmp_path / "cards" / "x.yaml").exists()
+
+
+def test_a_title_that_is_not_english_still_makes_a_card(tmp_path):
+    """The slug kept only ASCII, so a reader writing Korean could never make a
+    card at all -- every title slugged to nothing and was refused as unusable."""
+    client, cards = _client(tmp_path)
+
+    answer = _make(client, {"name": "매일 정리", "folder": "../work", "prompt": "치우기"})
+
+    assert answer.status_code == 200, answer.text
+    made = cards / f"{answer.json()['task']}.yaml"
+    assert made.exists(), sorted(p.name for p in cards.iterdir())
+    assert "매일 정리" in made.read_text(encoding="utf-8")
