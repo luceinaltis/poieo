@@ -65,8 +65,8 @@ Merge only when all of these hold:
 7. `git status` is clean after the suite ran. Twice a test's output rode into a commit
    via `git add -A`; a fixture now fails the run if the suite writes into `examples/`.
 8. **A diff that touches `web-ui/src/` rebuilds the bundle in the same PR** — neither
-   suite reads it, so it drifts in silence. `.claude/rules/web-ui-bundle.md` has the
-   command and the story, and loads by itself when you open the frontend source.
+   suite reads it, so it drifts in silence. `npm run build --workspace web-ui`, then
+   commit `src/poieo/web/static/`. `docs/contribution.md` has the story.
 9. The change fits the one set of ideas the product already has — a system that omits
    a good feature to keep one design beats one carrying many uncoordinated ones, and
    DESIGN.md judges that. A PR that works and runs green is still refused if it adds
@@ -97,10 +97,11 @@ pass". The output.
 
 ## The shape of the repo
 
-- `docs/` — **one document per component**, describing how it works today, plus
-  `conventions.md`: how code here is written, and where that departs from generic
-  good taste. Read that one before your first change to `src/`. `docs/README.md` is
-  the index, and a component's document is edited in the PR that changes its shape.
+- `docs/` — **one document per component**, describing how it works today, plus two
+  that are not components: `conventions.md`, how code here is written and where that
+  departs from generic good taste, read before your first change to `src/`; and
+  `contribution.md`, the longer procedures these rules send you to. `docs/README.md`
+  is the index, and a component's document is edited in the PR that changes its shape.
 - `docs/archive/` — dated design specs features were built from. History: read it
   for intent, never for current behaviour, and never add to it. Do not start a new
   dated file anywhere; a design belongs in the component document it describes.
@@ -120,12 +121,11 @@ What belongs: the rules, and the facts about this machine an agent cannot recove
 from the code. What does not: anything git, `docs/`, or the source already says, and
 the second example of a rule the first made clear. Reasons stay, as a sentence.
 
-Overflow has two places to go that cost nothing until they are needed. A procedure
-that matters only sometimes becomes a skill in `.claude/skills/`. A rule that matters
-only under one path becomes a file in `.claude/rules/` with `paths:` frontmatter, and
-loads when Claude opens a file it matches. An `@import` is neither — it expands at
-launch, buying back nothing — which is why root `CLAUDE.md` holds exactly one line,
-`@AGENTS.md`, so Claude Code loads the page every other agent reads by its own name.
+Overflow goes to `docs/`, which costs nothing until it is opened: a procedure that
+matters only sometimes to `docs/contribution.md`, a fact about one component to that
+component's document. An `@import` is not overflow — it expands at launch, buying
+back nothing — which is why root `CLAUDE.md` holds exactly one line, `@AGENTS.md`,
+so Claude Code loads the page every other agent reads by its own name.
 
 ## Never
 
@@ -185,7 +185,7 @@ a way to be exercised by hand, exercise it.
 Branch off another branch only when the work genuinely depends on it, and say so in
 the PR body along with the base. Squash merge makes the rebase counter-intuitive —
 moving the child onto `main` the usual way replays the parent's commits into your
-diff. The **`stack-branch` skill** has the `--onto` incantation and the check for it.
+diff. **`docs/contribution.md`** has the `--onto` incantation and the check for it.
 
 ## Things that break here
 
