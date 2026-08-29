@@ -67,6 +67,15 @@ export interface NodeShape {
   branches: Arrow[]
   /** The model id this node would call; null for a router, which calls none. */
   model: string | null
+  /**
+   * The toolsets this step may use, and so whether it can reach the folder at
+   * all. Empty for a step that only answers.
+   *
+   * Always a list, never absent: a field a view can forget to read is one
+   * whose absence would draw every step as harmless, and this is the one
+   * thing on the board a reader cannot afford to guess at.
+   */
+  tools: string[]
   /** Absent -- not zeroed -- when the editor never placed this node. */
   ui?: { x: number; y: number }
 }

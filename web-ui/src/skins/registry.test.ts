@@ -21,7 +21,7 @@ const FLOWS: TaskRow[] = [
     then: [{ to: "revision", label: "changed" }],
     shape: {
       entry: "work",
-      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null }],
+      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }],
     },
   },
   {
@@ -38,7 +38,7 @@ const FLOWS: TaskRow[] = [
     then: [],
     shape: {
       entry: "draft",
-      nodes: [{ id: "draft", type: "agent", next: null, default: null, branches: [], model: null }],
+      nodes: [{ id: "draft", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }],
     },
   },
 ]

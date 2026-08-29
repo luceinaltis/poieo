@@ -298,6 +298,18 @@
   line-height: 1.3;
 }
 
+/* Which steps can reach the folder. Brighter than the model rather than
+   dimmer, and that is the whole point of the colour: the model is a detail the
+   reader goes looking for, and this is one they need to find without looking.
+   Its own line, like the model, so a pill keeps one shape however many of
+   these it carries. */
+.basic-node-hands {
+  color: #b39a6a;
+  display: block;
+  font-size: 0.9em;
+  line-height: 1.3;
+}
+
 .basic-node[data-here="true"] {
   background: #3a2f1e;
   border-color: #d8a657;

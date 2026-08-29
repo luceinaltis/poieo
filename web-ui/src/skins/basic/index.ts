@@ -197,6 +197,16 @@ function fillInside(box: Box, flowState: TaskState): void {
     if (differ && spec?.model) {
       element("span", "basic-node-model", pill).textContent = spec.model
     }
+    // Unconditional, unlike the model above: two steps on one model say it
+    // once on the header, but "this one can rewrite the project" is never
+    // answered by another step having said it. Named rather than drawn,
+    // because "hands" is the word the rest of poieo uses for this and a glyph
+    // would be a second one. Which toolsets is the detail, and hangs off it.
+    if (spec && spec.tools.length > 0) {
+      const hands = element("span", "basic-node-hands", pill)
+      hands.textContent = "hands"
+      hands.title = spec.tools.join(", ")
+    }
     return pill
   })
   box.inside.replaceChildren(...nodes)

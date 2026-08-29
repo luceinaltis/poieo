@@ -21,7 +21,7 @@ const FLOWS: TaskRow[] = [
     then: [],
     shape: {
       entry: "work",
-      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null }],
+      nodes: [{ id: "work", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }],
     },
   },
   {
@@ -207,7 +207,7 @@ function triage(models: (string | null)[]): TaskRow {
     shape: {
       entry: "classify",
       nodes: [
-        { id: "classify", type: "agent", next: "route", default: null, branches: [], model: classify },
+        { id: "classify", type: "agent", next: "route", default: null, branches: [], model: classify, tools: [] },
         {
           id: "route",
           type: "router",
@@ -215,8 +215,9 @@ function triage(models: (string | null)[]): TaskRow {
           default: "draft",
           branches: [],
           model: route,
+          tools: [],
         },
-        { id: "draft", type: "agent", next: null, default: null, branches: [], model: draft },
+        { id: "draft", type: "agent", next: null, default: null, branches: [], model: draft, tools: [] },
       ],
     },
   }
@@ -256,6 +257,36 @@ test("a router carries no model, because it calls none", () => {
 
   // The gap is information: it is why branching is free.
   expect(pill("route").querySelector(".basic-node-model")).toBeNull()
+  handle.destroy()
+})
+
+/** Two agent steps on one model, differing only in what they may touch. */
+function build(): TaskRow {
+  return {
+    ...FLOWS[0],
+    name: "chores",
+    project: "board",
+    shape: {
+      entry: "work",
+      nodes: [
+        { id: "work", type: "agent", next: "say", default: null, branches: [], model: "qwen3:8b", tools: ["files", "shell"] },
+        { id: "say", type: "agent", next: null, default: null, branches: [], model: "qwen3:8b", tools: [] },
+      ],
+    },
+  }
+}
+
+test("a step that can reach the folder says so; one that only answers does not", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([build()]))
+
+  // Same type, same model, same box: the hands are the whole difference
+  // between a step that rewrites the project and one that talks about it, and
+  // it is the last thing a reader should have to open a file to find out.
+  const hands = pill("work").querySelector(".basic-node-hands")!
+  expect(hands.textContent).toBe("hands")
+  expect(hands.getAttribute("title")).toBe("files, shell")
+  expect(pill("say").querySelector(".basic-node-hands")).toBeNull()
   handle.destroy()
 })
 

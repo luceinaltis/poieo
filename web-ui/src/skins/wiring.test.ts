@@ -9,8 +9,8 @@ import type { GraphShape } from "../types"
 const LINE: GraphShape = {
   entry: "draft",
   nodes: [
-    { id: "draft", type: "agent", next: "review", default: null, branches: [], model: null },
-    { id: "review", type: "agent", next: "gate", default: null, branches: [], model: null },
+    { id: "draft", type: "agent", next: "review", default: null, branches: [], model: null, tools: [] },
+    { id: "review", type: "agent", next: "gate", default: null, branches: [], model: null, tools: [] },
     {
       id: "gate",
       type: "router",
@@ -18,8 +18,9 @@ const LINE: GraphShape = {
       default: "revise",
       branches: [{ to: null, label: "approved" }],
       model: null,
+      tools: [],
     },
-    { id: "revise", type: "agent", next: "review", default: null, branches: [], model: null },
+    { id: "revise", type: "agent", next: "review", default: null, branches: [], model: null, tools: [] },
   ],
 }
 
@@ -98,7 +99,7 @@ test("a walk reads entry first and every node once, loop or not", () => {
 test("a node the walk cannot reach is drawn last rather than dropped", () => {
   const stray: GraphShape = {
     ...LINE,
-    nodes: [...LINE.nodes, { id: "orphan", type: "agent", next: null, default: null, branches: [], model: null }],
+    nodes: [...LINE.nodes, { id: "orphan", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }],
   }
 
   expect(walk(stray)).toContain("orphan")
@@ -113,7 +114,7 @@ test("an exit is a node the run can stop on", () => {
 test("a node with nowhere to go next is an exit", () => {
   const stops: GraphShape = {
     entry: "only",
-    nodes: [{ id: "only", type: "agent", next: null, default: null, branches: [], model: null }],
+    nodes: [{ id: "only", type: "agent", next: null, default: null, branches: [], model: null, tools: [] }],
   }
 
   expect(exits(stops)).toEqual(["only"])
@@ -142,7 +143,7 @@ test("an arrow leaves one box's right edge and enters the next one's left", () =
 const FORK: GraphShape = {
   entry: "classify",
   nodes: [
-    { id: "classify", type: "llm", next: "route", default: null, branches: [], model: null },
+    { id: "classify", type: "llm", next: "route", default: null, branches: [], model: null, tools: [] },
     {
       id: "route",
       type: "router",
@@ -150,9 +151,10 @@ const FORK: GraphShape = {
       default: "answer",
       branches: [{ to: "bug", label: "bug" }],
       model: null,
+      tools: [],
     },
-    { id: "answer", type: "llm", next: null, default: null, branches: [], model: null },
-    { id: "bug", type: "llm", next: null, default: null, branches: [], model: null },
+    { id: "answer", type: "llm", next: null, default: null, branches: [], model: null, tools: [] },
+    { id: "bug", type: "llm", next: null, default: null, branches: [], model: null, tools: [] },
   ],
 }
 
@@ -200,8 +202,8 @@ test("a loop back does not push its target into a further column", () => {
   const looping: GraphShape = {
     entry: "draft",
     nodes: [
-      { id: "draft", type: "llm", next: "revise", default: null, branches: [], model: null },
-      { id: "revise", type: "llm", next: "draft", default: null, branches: [], model: null },
+      { id: "draft", type: "llm", next: "revise", default: null, branches: [], model: null, tools: [] },
+      { id: "revise", type: "llm", next: "draft", default: null, branches: [], model: null, tools: [] },
     ],
   }
   expect(depths(looping).map((cell) => cell.column)).toEqual([0, 1])

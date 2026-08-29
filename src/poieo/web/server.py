@@ -169,6 +169,17 @@ def _shape(task: Any) -> dict[str, Any]:
                 "default": node.default,
                 "branches": _branches(node.branches),
                 "model": _model(task, node),
+                # Which of a task's steps can reach the folder. Two agent nodes
+                # are otherwise the same picture -- same type, same model, same
+                # box -- and one of them rewrites the project while the other
+                # only answers, so a board without this asks the reader to
+                # guess at the one thing they cannot afford to.
+                #
+                # A list, never absent: `None` and `[]` both mean no hands, and
+                # a field a view can forget to read is one whose absence draws
+                # every step as harmless. Toolset names come from a fixed table
+                # and are not the author's prose, unlike the prompts above.
+                "tools": list(node.tools or []),
                 # Absent rather than null when the editor never placed it: a
                 # view that lays out unplaced nodes itself needs to tell the
                 # difference between "at the origin" and "nowhere yet".
