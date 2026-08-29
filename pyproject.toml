@@ -1,5 +1,10 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77, not 68. `license = "MIT"` below is PEP 639's spelling, and a setuptools
+# older than 77 does not understand it -- the floor is what makes the licence
+# readable rather than a build error. 77 also wants `packaging>=24.2` beside
+# it, which pip's build isolation supplies; a build run with
+# `--no-build-isolation` against an older `packaging` is the one that fails.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +12,8 @@ name = "poieo"
 version = "0.1.0"
 description = "A harness that separates logical workflows from the physical models that execute them."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.40",
