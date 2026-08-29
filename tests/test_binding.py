@@ -20,6 +20,48 @@ def test_role_overrides_layer_over_default():
     assert writer.params["effort"] == "medium"
 
 
+def test_a_model_can_say_how_much_it_can_hold():
+    """How much a model can hold is a fact about the model, so it belongs on
+    the physical half of the binding rather than in a constant somewhere.
+
+    Measured, the difference is not small: `z-ai/glm-5.3-flash` holds
+    1,310,720 tokens and a local qwen3.5 holds 262,144. Anything hardcoded is
+    wrong for one of them by design.
+    """
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"p": {"type": "mock"}},
+            "default": {"provider": "p", "model": "small", "context": 32_000},
+            "roles": {"builder": {"model": "big", "context": 1_310_720}},
+        }
+    )
+
+    assert binding.resolve("builder").context == 1_310_720
+    assert binding.resolve("anything").context == 32_000
+
+
+def test_a_binding_that_says_nothing_about_size_says_nothing():
+    """None is not a number to work around -- it means "ask somewhere else",
+    and the caller decides what to do about that."""
+    binding = BindingSpec.model_validate(
+        {"providers": {"p": {"type": "mock"}}, "default": {"provider": "p", "model": "m"}}
+    )
+    assert binding.resolve("anything").context is None
+
+
+def test_context_is_not_sent_to_the_model():
+    """It describes the endpoint; it is not a generation parameter. Putting it
+    in `params` would post it in the request body, where a strict API rejects
+    what it does not recognise."""
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"p": {"type": "mock"}},
+            "default": {"provider": "p", "model": "m", "context": 200_000},
+        }
+    )
+    assert "context" not in binding.resolve("anything").params
+
+
 def test_unknown_role_falls_back_to_default():
     binding = load_binding(EXAMPLES / "models/claude.yaml")
     assert binding.resolve("anything").model == "claude-opus-5"

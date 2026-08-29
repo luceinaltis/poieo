@@ -60,6 +60,20 @@ class ModelSpec(_Spec):
     provider: str | None = None
     model: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
+    # How much this model can hold, in tokens.
+    #
+    # Beside `model` rather than inside `params`, because it describes the
+    # endpoint rather than asking it for anything: put in `params` it would be
+    # posted in the request body, where a strict API rejects what it does not
+    # recognise.
+    #
+    # `None` means "nobody has said", which is a different fact from any
+    # number and is left for the caller to answer however it can. A default
+    # here would be a guess wearing a measurement's clothes -- the models this
+    # project binds differ by a factor of five (262,144 tokens for a local
+    # qwen3.5, 1,310,720 for z-ai/glm-5.3-flash), so any single number is
+    # wrong for most of them.
+    context: int | None = Field(default=None, gt=0)
 
     def merged_with(self, base: ModelSpec) -> ModelSpec:
         """Layer this spec over ``base``; params merge key-by-key."""
@@ -67,6 +81,7 @@ class ModelSpec(_Spec):
             provider=self.provider or base.provider,
             model=self.model or base.model,
             params={**base.params, **self.params},
+            context=self.context or base.context,
         )
 
 
@@ -111,6 +126,7 @@ class BindingSpec(_Spec):
             provider=self.providers[spec.provider],
             model=spec.model,
             params=spec.params,
+            context=spec.context,
         )
 
     def undeclared(self, roles: set[str]) -> list[str]:
@@ -149,6 +165,8 @@ class ResolvedModel(_Spec):
     provider: ProviderSpec
     model: str
     params: dict[str, Any] = Field(default_factory=dict)
+    # Tokens this model can hold, if the binding said. See `ModelSpec.context`.
+    context: int | None = None
 
     @property
     def ref(self) -> str:

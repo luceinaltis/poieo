@@ -25,7 +25,7 @@ roles:
 ## Resolution
 
 `BindingSpec.resolve(role, overrides)` layers three sources and returns a
-`ResolvedModel` (`provider_name`, `provider`, `model`, `params`):
+`ResolvedModel` (`provider_name`, `provider`, `model`, `params`, `context`):
 
 ```
 node params   >   roles[role]   >   default
@@ -35,6 +35,18 @@ node params   >   roles[role]   >   default
 so a role that sets `temperature` keeps the default's `max_tokens`. A role with
 no provider or no model after merging raises `BindingError` — never a silent
 fallback, because "which model answered" must always have an answer.
+
+**`context` is how much the model can hold, in tokens.** It sits beside `model`
+rather than inside `params` because it describes the endpoint rather than asking
+it for anything: in `params` it would be posted in the request body, where a
+strict API rejects what it does not recognise.
+
+It has no default, and that is deliberate. The models this project binds differ
+by a factor of five — a local `qwen3.5` holds 262,144 tokens and
+`z-ai/glm-5.3-flash` holds 1,310,720 — so any single number would be wrong for
+most of them, and wrong while looking like a measurement. `None` means "nobody
+has said", which is a different fact from any number and is left for the caller
+to answer however it can.
 
 ### Two questions about roles, and why both exist
 
