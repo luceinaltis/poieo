@@ -138,6 +138,20 @@ test("a tool that failed is marked failed, and error is a boolean", async () => 
   expect(entry.textContent).toContain("no such file: nope.md")
 })
 
+test("a turn says how big it was", async () => {
+  // The run's own total says what the whole step cost. What a reader chasing
+  // a step that slowed down wants is which turn it happened on.
+  await show([
+    event("node_turn", {
+      data: { turn: 8, text: "thinking about it", input_tokens: 84210, output_tokens: 3120 },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="turn"]')!
+  expect(entry.textContent).toContain("84,210")
+  expect(entry.textContent).toContain("3,120")
+})
+
 test("a turn with nothing in it does not take a row", async () => {
   // A model that goes straight to a tool leaves an empty turn behind. The
   // tool call under it already says the turn happened.
