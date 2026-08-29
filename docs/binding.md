@@ -130,9 +130,23 @@ never sent to a backend. `meta` carries anything provider-specific worth keeping
 replays verbatim on the next turn so thinking blocks and their signatures
 survive a tool round trip. Other providers ignore the key.
 
-`context_for(model)` answers how many tokens that model can hold, and the base
-class answers `None` — so a backend that cannot say inherits the right answer
-and writes nothing. It is the second place the runtime looks: the binding's
+`context_for(model)` answers how many tokens that model can hold **where it is
+actually running**, and the base class answers `None` — so a backend that cannot
+say inherits the right answer and writes nothing.
+
+*Where it is actually running* is the whole difficulty. Both endpoints publish
+two numbers and only one of them is enforced:
+
+| endpoint | what the model can do | what will be allowed |
+|---|---|---|
+| OpenRouter | `context_length` 1,310,720 | `top_provider.context_length` 1,048,576 |
+| Ollama | `/api/show` → 262,144 | `/api/ps` → **4,096** |
+
+Forty of OpenRouter's models disagree with themselves like this. Ollama's gap is
+sixty-four fold, because `/api/show` describes the file on disk and the server
+loads it with whatever `num_ctx` it was told. **Nothing announces the
+difference** — an endpoint asked to hold more than it loaded simply drops the
+rest — so the smaller number is the only safe one to believe. It is the second place the runtime looks: the binding's
 `context:` is the first, because somebody who wrote the number down meant it.
 Implementations cache; a window does not change while a process runs, and this
 must not become a round trip per turn. An endpoint that will not answer is not

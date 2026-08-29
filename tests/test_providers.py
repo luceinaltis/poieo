@@ -200,15 +200,23 @@ async def test_an_openai_shaped_endpoint_is_asked_how_much_a_model_holds():
             json={
                 "data": [
                     {"id": "other/model", "context_length": 8192},
-                    {"id": "z-ai/glm-5.3-flash", "context_length": 1_310_720},
+                    {
+                        "id": "z-ai/glm-5.3-flash",
+                        # What the model can do...
+                        "context_length": 1_310_720,
+                        # ...and what the endpoint serving it will actually
+                        # allow. Forty of OpenRouter's models disagree with
+                        # themselves here, and this is one of them.
+                        "top_provider": {"context_length": 1_048_576},
+                    },
                 ]
             },
         )
 
     _mock_client(provider, handler)
-    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_310_720
+    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_048_576
     # Asked once and remembered: this cannot be a round trip per turn.
-    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_310_720
+    assert await provider.context_for("z-ai/glm-5.3-flash") == 1_048_576
     assert len(asked) == 1
     await provider.aclose()
 
@@ -232,25 +240,45 @@ async def test_an_endpoint_that_will_not_answer_is_not_a_failure():
     await provider.aclose()
 
 
-async def test_ollama_is_asked_the_way_ollama_answers():
-    """Ollama buries it under the architecture's name -- `qwen35.context_length`
-    -- so the key cannot be looked up directly."""
+async def test_ollama_is_asked_what_it_loaded_not_what_the_model_could_do():
+    """The trap that makes asking Ollama worth doing carefully.
+
+    `/api/show` reports the model's own capability -- 262,144 for a qwen3.5 --
+    while the server loads it with whatever `num_ctx` it was told, measured
+    here at **4,096**. Believing the first would have poieo clearing at
+    131,072 tokens against an endpoint that silently drops everything past
+    4,096, and nothing anywhere would say so.
+    """
     provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+    asked = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.path)
         return httpx.Response(
             200,
-            json={
-                "model_info": {
-                    "general.architecture": "qwen35",
-                    "qwen35.block_count": 48,
-                    "qwen35.context_length": 262_144,
-                }
-            },
+            json={"models": [{"name": "qwen3.5:latest", "context_length": 4_096}]},
         )
 
     _mock_client(provider, handler)
-    assert await provider.context_for("qwen3.5:latest") == 262_144
+    assert await provider.context_for("qwen3.5:latest") == 4_096
+    assert "/api/ps" in asked[0]
+    await provider.aclose()
+
+
+async def test_ollama_says_nothing_about_a_model_it_has_not_loaded():
+    """And does not remember the silence -- the model is loaded by the first
+    call to it, so the next node can get a real answer."""
+    provider = build_provider("ollama", ProviderSpec(type="ollama", base_url="http://x"))
+    tries = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        tries.append(1)
+        return httpx.Response(200, json={"models": []})
+
+    _mock_client(provider, handler)
+    assert await provider.context_for("qwen3.5:latest") is None
+    assert await provider.context_for("qwen3.5:latest") is None
+    assert len(tries) == 2
     await provider.aclose()
 
 
