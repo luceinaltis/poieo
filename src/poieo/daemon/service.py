@@ -202,6 +202,7 @@ class TaskRunner:
             else None
         )
         self._tracking = False
+        self._untracked: str | None = None
         # Where this task's tools work. Built by the daemon, because the container
         # keeper is shared across tasks and the roster is only known there.
         self.tool_context = tool_context
@@ -211,23 +212,31 @@ class TaskRunner:
         return self.task.spec.name
 
     async def _open_change(self) -> Path | None:
-        """Give the run a private copy of the project to work in."""
+        """Give the run a private copy of the project to work in.
+
+        Two ways this ends without one, and both leave the run untracked: a
+        folder that is not a repository at all, and a repository that will not
+        make a worktree. Neither stops the work -- 3am is no time to stop --
+        but neither can be quiet either, so the reason is kept for
+        `_close_change` to say once there is a run to hang it on.
+        """
         point = self.workspace
         self._tracking = False
+        self._untracked = None
         if point is None:
             return None
         try:
             if not await asyncio.to_thread(point.available):
-                log.warning(
-                    "task '%s': %s cannot be tracked -- the work will happen there "
-                    "directly, and its changes cannot be reviewed or undone",
-                    self.name,
-                    point.repo,
+                self._untracked = (
+                    f"{point.repo} is not a repository -- the work happens there "
+                    f"directly and cannot be reviewed or undone"
                 )
+                log.warning("task '%s': %s", self.name, self._untracked)
                 return point.repo
             await asyncio.to_thread(point.prepare)
         except WorkspaceError as exc:
             # A repository we cannot use is not a reason to stop working at 3am.
+            self._untracked = str(exc)
             log.error("task '%s': %s", self.name, exc)
             return point.repo
         self._tracking = True
@@ -236,6 +245,19 @@ class TaskRunner:
     async def _close_change(self, result: RunResult) -> None:
         """Land the run's work as one change, or leave the branch alone."""
         if not self._tracking or self.workspace is None:
+            if self._untracked:
+                # The same consequence as a commit that failed, so the same
+                # event: no change recorded, so every `then:` written against
+                # `run.change` stops firing, silently, while the board shows a
+                # healthy run that changed nothing. What differs is the
+                # sentence, and that is what a reader needs.
+                self.store.append(
+                    Event(
+                        run_id=result.run_id,
+                        type="run_change_failed",
+                        data={"error": self._untracked},
+                    )
+                )
             return
         try:
             change = await asyncio.to_thread(
