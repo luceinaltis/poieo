@@ -989,8 +989,12 @@ async def test_a_command_node_runs_where_the_task_works(tmp_path):
     (tmp_path / "marker.txt").write_text("x", encoding="utf-8")
     import os
 
+    from poieo.tools.shell import posix_shell
+
+    # Not "which OS is this" any more, but "was a POSIX shell found" -- which
+    # on Windows is usually yes, and used to make no difference.
     graph = _command_graph(
-        command="dir /b" if os.name == "nt" else "ls",
+        command="ls" if (os.name != "nt" or posix_shell()) else "dir /b",
         output={"as": "check"},
     )
 

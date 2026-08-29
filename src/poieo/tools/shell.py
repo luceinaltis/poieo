@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import locale
 import os
+import shutil
 import signal
 import subprocess
 from pathlib import Path
@@ -32,6 +33,57 @@ def _kill_tree(process: asyncio.subprocess.Process) -> None:
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+
+def posix_shell(windows: bool = os.name == "nt") -> str | None:
+    """A POSIX shell to run commands through, if this machine has one.
+
+    Off POSIX systems there is nothing to look for: `/bin/sh` is what
+    `create_subprocess_shell` already uses. On Windows it uses `COMSPEC`,
+    which is `cmd.exe` -- and a model writes POSIX, because that is what its
+    training and this repository's own documents are written in. A measured
+    run watched the model see `grep` and `sed` work (the binaries are on
+    PATH), conclude it was on a POSIX system, write a heredoc, and get
+    `<<은(는) 예상되지 않았습니다` back.
+
+    **`C:\\Windows\\System32\\bash.exe` is not a candidate.** That is the WSL
+    launcher: it starts a Linux distribution with its own filesystem, so the
+    `cwd` handed to it points somewhere else entirely -- and the command
+    *succeeds* there. Running quietly in the wrong directory is worse than
+    failing in the right one.
+    """
+    if not windows:
+        return None
+    found = shutil.which("bash")
+    if not found:
+        return None
+    parts = [part.lower() for part in Path(found).parts]
+    if "system32" in parts:
+        return None
+    return found
+
+
+_POSIX_SHELL = posix_shell()
+
+
+def _dialect() -> str:
+    """One sentence saying what the command will actually be read by.
+
+    Nothing used to say. In a measured run the model watched `grep` and `sed`
+    work -- the binaries are on PATH -- concluded it was on a POSIX system,
+    wrote a heredoc and got `<<은(는) 예상되지 않았습니다`. Claude Code's own
+    shell tool opens by naming its shell for exactly this reason, and this is
+    built from what was found rather than hardcoded, so it is a fact about
+    this machine rather than a hope about machines in general.
+    """
+    if os.name != "nt" or _POSIX_SHELL:
+        return "Commands are read by a POSIX shell (sh), so POSIX syntax works."
+    return (
+        "Commands are read by cmd.exe on this machine, NOT a POSIX shell: no "
+        "heredocs (`<<`), single quotes do not quote, `NUL` not `/dev/null`, "
+        "`%VAR%` not `$VAR`. Unix programs may still be on PATH, so a command "
+        "can run while the syntax around it does not."
+    )
 
 
 def _environment(extra: Any) -> dict[str, str] | None:
@@ -61,8 +113,7 @@ async def run_here(
     router reads a number, and only one of those two readings can be got wrong.
     """
     timeout = min(float(timeout), _MAX_TIMEOUT)
-    process = await asyncio.create_subprocess_shell(
-        command,
+    shared = dict(
         cwd=workdir,
         env=_environment(env),
         stdin=asyncio.subprocess.PIPE if stdin is not None else None,
@@ -70,6 +121,15 @@ async def run_here(
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=(os.name != "nt"),
     )
+    if _POSIX_SHELL:
+        # `-c` and not the shell's own parsing of a whole line: the command is
+        # one argument, so nothing between here and the shell gets a chance to
+        # reinterpret its quoting.
+        process = await asyncio.create_subprocess_exec(
+            _POSIX_SHELL, "-c", command, **shared
+        )
+    else:
+        process = await asyncio.create_subprocess_shell(command, **shared)
     try:
         stdout, _ = await asyncio.wait_for(
             process.communicate(stdin.encode() if stdin is not None else None), timeout
@@ -105,6 +165,7 @@ SHELL_TOOLS: list[Tool] = [
         ToolDef(
             name="run_command",
             description=(
+                f"{_dialect()} "
                 "Run a shell command in the working directory. Returns the exit "
                 "code and combined stdout/stderr. This is for running programs "
                 "-- tests, git, a build. To read, search or change a file, use "
