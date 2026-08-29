@@ -38,6 +38,27 @@ line is not a detail — it decides whether a step costs a turn, whether it give
 the same answer twice, and whether the log records a fact or a paraphrase of
 one.
 
+## Another node, or another card?
+
+Both sequence work, so the choice comes up on the second step of anything: a
+node's `next:` inside one graph, or a second card reached by `then:` (see
+[daemon.md](daemon.md)). One rule decides it, and it is not a matter of taste.
+
+**A run works in a private copy of the folder and lands its work as one change**
+(see [workspace.md](workspace.md)). So *steps that must share one change are one
+graph.* `examples/improving-poieo` writes the code and opens the pull request in
+a single run for exactly this reason: a separate card for "open the pull
+request" would open one against a copy that never saw the work.
+
+The boundary falls where a run's result is the thing being handed on rather than
+its files — a review reading a change that has already landed, or a decision a
+person has to take. A `confirm` node makes that boundary for you: the run ends
+there by construction, so what follows an answer is always the next card.
+
+A second card also buys what a node cannot: its own schedule, its own journal,
+and its own morning review. A second node buys the one thing a card cannot — the
+same working copy.
+
 A `command` node exists because the alternative is asking a model to read
 `exit code: 0` and say so. That is a turn spent on no judgement, and a place
 for a small model to be wrong about something the machine already knew — a
