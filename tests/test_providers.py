@@ -75,8 +75,17 @@ def test_system_prompt_is_forwarded(anthropic_provider):
 
 
 def _mock_client(provider, handler):
+    """Swap the transport, keeping everything the provider built around it.
+
+    It used to rebuild the client from the base URL alone, which quietly threw
+    away the headers and query parameters the provider had just assembled --
+    so no test could see them, and for a long time none tried.
+    """
     provider.client = httpx.AsyncClient(
-        base_url=str(provider.client.base_url), transport=httpx.MockTransport(handler)
+        base_url=str(provider.client.base_url),
+        headers=provider.client.headers,
+        params=provider.client.params,
+        transport=httpx.MockTransport(handler),
     )
     return provider
 
@@ -370,6 +379,80 @@ async def test_ollama_says_nothing_about_a_model_it_has_not_loaded():
     assert await provider.context_for("qwen3.5:latest") is None
     assert len(tries) == 2
     await provider.aclose()
+
+
+async def test_an_endpoint_that_wants_its_key_somewhere_else():
+    """Azure OpenAI speaks the OpenAI shape and none of its plumbing.
+
+    The key goes in an `api-key` header rather than `Authorization: Bearer`,
+    and the API version is a query parameter without which nothing answers at
+    all. Neither could be expressed, so the biggest OpenAI-shaped endpoint
+    there is could not be reached by the provider named after that shape.
+    """
+    provider = build_provider(
+        "azure",
+        ProviderSpec(
+            type="openai_compatible",
+            base_url="http://x/openai/deployments/gpt-4o",
+            headers={"api-key": "secret"},
+            query={"api-version": "2024-10-21"},
+        ),
+    )
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["auth"] = request.headers.get("authorization")
+        seen["api_key"] = request.headers.get("api-key")
+        seen["url"] = str(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "model": "gpt-4o",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    _mock_client(provider, handler)
+    await provider.complete(
+        LLMRequest(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
+    )
+    await provider.aclose()
+
+    assert seen["api_key"] == "secret"
+    assert seen["auth"] is None
+    assert "api-version=2024-10-21" in seen["url"]
+
+
+async def test_a_key_from_the_environment_still_goes_in_the_usual_place():
+    """Nothing changes for the endpoints that were already reachable."""
+    import os
+
+    os.environ["POIEO_TEST_KEY"] = "sk-test"
+    provider = build_provider(
+        "vllm",
+        ProviderSpec(
+            type="openai_compatible", base_url="http://x/v1", api_key_env="POIEO_TEST_KEY"
+        ),
+    )
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(
+            200,
+            json={
+                "model": "m",
+                "choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
+                "usage": {},
+            },
+        )
+
+    _mock_client(provider, handler)
+    await provider.complete(LLMRequest(model="m", messages=[{"role": "user", "content": "hi"}]))
+    await provider.aclose()
+
+    assert seen["auth"] == "Bearer sk-test"
 
 
 async def test_ollama_provider_moves_params_into_options():

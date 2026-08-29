@@ -174,7 +174,7 @@ default is the arrangement working.
 | type | talks to | notes |
 |---|---|---|
 | `anthropic` | Claude API | official SDK, always streams |
-| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
+| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI, OpenRouter, Azure, and the hosted endpoints that speak this shape | `POST {base_url}/chat/completions` |
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` fold into `options` |
 | `mock` | nothing | scripted replies for tests and dry runs |
 
@@ -184,6 +184,45 @@ rather than a closed `Literal`. That is what lets
 package while a typo in a binding file is still rejected at parse time.
 `base_url` is required for `openai_compatible` and `ollama`, and API keys are
 read from the environment by name (`api_key_env`) — never stored in the file.
+
+### Endpoints that speak the shape and none of the plumbing
+
+`headers` and `query` go on every request, for an endpoint that wants its
+credential or its version somewhere other than where OpenAI put them. Azure is
+the one that needs both:
+
+```yaml
+providers:
+  azure:
+    type: openai_compatible
+    base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
+    api_key_env: AZURE_OPENAI_KEY     # still read from the environment
+    headers: {api-key: "${AZURE_OPENAI_KEY}"}   # ...and Azure wants it here
+    query: {api-version: "2024-10-21"}
+```
+
+`headers` is laid *over* what `api_key_env` built rather than replacing it, so
+an endpoint that wants something extra need not restate the parts every
+endpoint shares. **Values are literal**, so a key does not belong in them — the
+rule the rest of this file exists to keep.
+
+### Where the OpenAI shape is not one shape
+
+OpenAI's own reasoning models (the o-series, GPT-5.x) **reject `max_tokens`**
+and want `max_completion_tokens` instead. Nothing here needs changing for that:
+`max_tokens` is only sent when a binding names it, and anything else in `params`
+is passed through. So name the one that endpoint takes, and do not set the other:
+
+```yaml
+params: {max_completion_tokens: 24000}
+```
+
+A `max_tokens` inherited from `default` will still be sent, which is the trap —
+a role on such a model has to override it away rather than merely not repeat it.
+
+**Bedrock and Vertex are out of reach**, and not by an oversight that a header
+would fix: they authenticate with SigV4 and with Google's own credentials, which
+is a protocol rather than a field.
 
 ## The provider contract
 

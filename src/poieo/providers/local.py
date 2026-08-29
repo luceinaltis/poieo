@@ -88,10 +88,15 @@ class _HttpProvider(Provider):
         key = credential_for(name, spec)
         if key:
             headers["authorization"] = f"Bearer {key}"
+        # Laid over rather than replacing, so an endpoint that wants its key
+        # somewhere else can say so without also having to restate the parts
+        # every endpoint shares.
+        headers.update(spec.headers)
         self.client = httpx.AsyncClient(
             base_url=(spec.base_url or "").rstrip("/"),
             timeout=spec.timeout,
             headers=headers,
+            params=spec.query or None,
         )
         # Asked once per model and remembered. A window does not change while
         # a process runs, and this must not become a round trip per turn.
