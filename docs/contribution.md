@@ -95,9 +95,10 @@ other condition here, it is worth exactly what the person recording it is honest
 
 *Merge condition 1.* `.github/workflows/gate.yml` runs on every PR against `main`
 and on every push to it. Four jobs: the Python suite on the lowest Python the
-project claims to support; the frontend suite, the types, and a rebuild of the
-checked-in bundle; container isolation against a real docker daemon; and the
-package as a user gets it, installed and exercised outside the checkout.
+project claims to support, on Ubuntu and on Windows; the frontend suite, the
+types, and a rebuild of the checked-in bundle; container isolation against a
+real docker daemon; and the package as a user gets it, installed and exercised
+outside the checkout.
 
 It **reports and does not block.** `main` has no required checks, so a red run
 stops nothing by itself. That is deliberate for now — a gate turned on before it
@@ -111,10 +112,23 @@ Three things are worth knowing when a run disagrees with your machine.
 CI is the standing check that the workaround stays local. If CI ever needs them,
 the problem was never local and Part 2 is wrong.
 
-**CI runs Ubuntu; you develop on Windows.** A break that only happens on Windows
-— a shell, a codepage, a path separator — is invisible here and still has to be
-caught by hand. The reverse is also true and newer: code that only ever ran on
-Windows is now exercised on Linux for the first time.
+**The Python suite runs on both OSes; nothing else does.** Development happens
+on Windows and CI was Ubuntu only, which put the one platform anybody actually
+runs this on outside every check — and the code branches on it in earnest:
+`run_command` picks a POSIX shell or `cmd.exe`, refuses `System32ash.exe`
+because that is the WSL launcher and would run in a different filesystem
+entirely, rewrites path separators, and kills a process tree through `taskkill`
+rather than a process group. `test_a_heredoc_runs` exists to catch a shell that
+rejects heredocs and passes on Linux without proving anything.
+
+So `python` is a matrix and its result differs per OS. `fail-fast` is off,
+because "one OS or both" is the whole question and cancelling the second run
+deletes the answer. Ruff runs on Ubuntu alone: it reads the same bytes either
+way.
+
+What is still uncovered: the frontend suite, the container tests, the installed
+package, and macOS in its entirety. A Windows-only break in the *daemon's*
+packaging or a mac-only break anywhere is still yours to catch by hand.
 
 **Thirty tests skip here and run in CI.** `tests/test_tools_docker.py` needs a
 docker daemon *and* `alpine:3.20` already local — the module never pulls, so no

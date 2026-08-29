@@ -4,8 +4,9 @@
 # reports, and a person still decides. What it removes is the honour system
 # under condition 1: the run is here whether or not anyone pasted it.
 #
-# Ubuntu only. Development happens on Windows, so a Windows-only break still
-# has to be caught by hand; see docs/contribution.md.
+# The Python suite runs on Ubuntu and on Windows, because development happens
+# on Windows and shipping happened on neither -- everything else here is Ubuntu
+# only, and macOS is nowhere. See docs/contribution.md for what that leaves.
 
 name: gate
 
@@ -24,8 +25,18 @@ concurrency:
 
 jobs:
   python:
-    name: python suite
-    runs-on: ubuntu-latest
+    name: python suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both results, always. Cancelling one on the other's first red is exactly
+      # backwards here: "did this break on one OS or on both" is the question
+      # the second runner was added to answer, and fail-fast deletes it.
+      fail-fast: false
+      matrix:
+        # A matrix rather than a second job, so there is one pytest invocation
+        # to change when it changes. Two copies drift, and the copy that drifts
+        # is the one nobody is looking at.
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,9 +50,15 @@ jobs:
       - run: pytest -q
       # After the suite, and in that order in Part 2 too: a step that fails ends
       # the job, and a long line must never cost the run its test result.
-      - run: ruff check .
+      #
+      # Once, not once per OS: ruff reads the same bytes and reaches the same
+      # verdict on both, so a second copy is only a second place to look. The
+      # suite is here twice because its answer can differ; this cannot.
+      - if: runner.os == 'Linux'
+        run: ruff check .
       # --check, never a rewrite: CI reports, and the author commits.
-      - run: ruff format --check .
+      - if: runner.os == 'Linux'
+        run: ruff format --check .
 
   web:
     name: frontend suite, types, and bundle
