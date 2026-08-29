@@ -95,10 +95,11 @@ the runtime stays unaware that containers, or journals, exist at all — see
 `node_finished`, `run_finished`, `run_failed`, `run_aborted`, and
 `run_change` and `run_change_failed` (both written by the daemon, not here).
 
-## The three node types
+## The four node types
 
-`nodes.py` has one class per `NodeSpec.type`, registered in `NODE_TYPES`. The two
-model-calling types share their opening and their close:
+`nodes.py` has one class per `NodeSpec.type`, registered in `NODE_TYPES` —
+`agent`, `command`, `router`, `confirm`. Only the first of them calls a model,
+and two helpers hold what that takes:
 
 - **`_prepare()`** — pick the role (`spec.role` or `graph.default_role`), resolve
   it against the binding, take the provider from the pool, render `prompt` and
@@ -108,12 +109,23 @@ model-calling types share their opening and their close:
   write `into_state` if asked, and describe the step in `meta` (role, binding,
   model, usage, stop reason).
 
-**`LLMNode`** is those two with one call between them.
+**`CommandNode`** runs one command — or one `script`, handed to its language's
+interpreter — through `make_executor()`, the same seam the model's own commands
+go through. Its output is `{exit_code, output}`, and **a non-zero exit is not a
+failed run**: the node fails only when the command could not run at all, because
+*this did not start* and *this went red* are different facts. See
+[graph.md](graph.md) for what `script:` costs a compiled language.
 
 **`RouterNode`** evaluates `branches` in order, first match wins, and falls
 through to `default`. It calls no model. Its output is the branch's `label` (or
 the condition text), which is what `node_finished` records and what a reader sees
 as the decision.
+
+**`ConfirmNode`** renders its question, hangs it on `ctx.asked`, and returns with
+no successor — which is what turns the finished walk into the `asking` status
+above. It calls no model and runs nothing. What happens after the answer is the
+card's `then:`, one level up, reading `run.answer`; see [graph.md](graph.md) for
+why the run ends here rather than suspending.
 
 **`AgentNode`** is the loop:
 
