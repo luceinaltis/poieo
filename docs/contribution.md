@@ -26,6 +26,28 @@ served the bug `main` had already fixed — with both suites green over it the
 whole time. **A green run is not evidence that the bundle is current; only the
 rebuild is.**
 
+## Photographing the board
+
+*No rule sends you here.* The pictures in `README.md` and on the site are of a
+real board, and they go stale the way the bundle does — silently, because
+nothing reads an image.
+
+```bash
+npm install --no-save playwright     # not a dependency; the gate never installs it
+python tools/shots.py                # writes site/img/
+```
+
+That builds a whole poieo project in a temporary folder — a git repository for
+the work to happen in, five cards over it, a scripted binding that spends
+nothing — runs it until there is history worth looking at, starts the daemon on
+a free port, and photographs it. Nothing inside this repository is written
+except the pictures.
+
+Nothing is arranged for the camera, which is the point and also the constraint:
+the runs happen, the model's tools run, the change in the third picture is a
+real commit on a branch in a private copy — and no picture can show a state the
+board cannot actually reach. Take them again whenever the board's layout moves.
+
 ## Stacking on unmerged work
 
 *Part 2, "Stacking on unmerged work".* Branch off another branch only when the
