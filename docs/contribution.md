@@ -152,6 +152,12 @@ rather than asking whether `index.html` is there — a pattern that matches
 today's build shape and not tomorrow's leaves the obvious files in place, and a
 check that names the obvious files stays green over it.
 
+It then **starts the daemon and reads the board back over HTTP** — the page, the
+bundle the page names, and `/api/tasks` — and checks the daemon stops when told.
+That is the half a person would notice: the server mounts the board only if the
+folder is there, so a package without it starts, answers, and serves nothing,
+with no crash and no line in the log. That shipped once and was found by hand.
+
 The command list is enumerated from the app rather than written down, because a
 list kept by hand goes stale the first time somebody adds a command and says
 nothing about it. Two guards keep the job from passing vacuously: the enumeration

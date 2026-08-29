@@ -196,3 +196,39 @@ jobs:
           # the run has to reach the log for any of this to have meant anything.
           poieo runs list | grep -q completed
           poieo tasks | grep -q hello
+
+      # The step above proves the board's files are *in* the package. This one
+      # proves the daemon *serves* them, which is the other half and the half a
+      # person would notice: `poieo daemon` mounts static only `if
+      # page.exists()`, so a package missing the board starts, answers, and
+      # serves nothing, without a crash or a line in the log.
+      - name: the daemon serves the board it shipped
+        working-directory: /tmp/smoke
+        run: |
+          # The sample card ships disabled -- the daemon has nothing to keep up
+          # without it, warns, and stops.
+          sed -i 's/^enabled: false/enabled: true/' tasks/hello.yaml
+          poieo daemon --port 8599 > daemon.log 2>&1 &
+
+          for _ in $(seq 1 30); do
+            curl -sf -o page.html http://127.0.0.1:8599/ && break
+            sleep 1
+          done
+          test -s page.html || { echo "::error::the board never answered"; cat daemon.log; exit 1; }
+
+          # Not "index.html came back": the bundle it names has to come back
+          # too, or the page is a shell with nothing behind it.
+          ASSET=$(grep -o '/assets/[^"]*\.js' page.html | head -1)
+          test -n "$ASSET" || { echo "::error::the page names no bundle"; cat page.html; exit 1; }
+          curl -sf -o /dev/null "http://127.0.0.1:8599$ASSET"
+
+          # And the API, because a page with no daemon behind it is just a file.
+          curl -sf http://127.0.0.1:8599/api/tasks | grep -q '"tasks"'
+
+          # Staying up is the default; stopping on request is not optional.
+          kill %1
+          sleep 3
+          if curl -sf -o /dev/null --max-time 3 http://127.0.0.1:8599/; then
+            echo "::error::the daemon was told to stop and kept answering"; exit 1
+          fi
+          echo "board, bundle, api, and a clean stop"
