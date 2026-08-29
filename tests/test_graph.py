@@ -192,3 +192,72 @@ def test_a_graph_that_still_says_llm_is_told_what_to_do():
 
     with pytest.raises(ValidationError, match="now 'agent' with no tools"):
         GraphSpec.model_validate(spec)
+
+
+# -- the command node: a step that calls no model ----------------------------
+
+
+def _graph(node: dict) -> dict:
+    return {"name": "g", "entry": "n", "nodes": [{"id": "n", **node}]}
+
+
+def test_a_command_node_needs_a_command():
+    with pytest.raises(ValidationError, match="requires a command"):
+        GraphSpec.model_validate(_graph({"type": "command"}))
+
+
+def test_a_command_node_refuses_the_model_keys():
+    """`role`, `system`, `prompt`, `params`, `retry`, `max_turns` and `tools`
+    are all about calling a model, and this node calls none. A key that does
+    nothing is worse than one that is missing: it reads as configured."""
+    for key, value in [
+        ("role", "writer"),
+        ("system", "be terse"),
+        ("prompt", "hello"),
+        ("params", {"temperature": 0}),
+        ("tools", ["shell"]),
+        ("max_turns", 3),
+    ]:
+        with pytest.raises(ValidationError, match="does not take"):
+            GraphSpec.model_validate(
+                _graph({"type": "command", "command": "true", key: value})
+            )
+
+
+def test_a_command_node_takes_what_it_needs():
+    graph = GraphSpec.model_validate(
+        _graph(
+            {
+                "type": "command",
+                "command": "pytest -q",
+                "workdir": "~/src/thing",
+                "timeout": 30,
+                "env": {"CI": "1"},
+                "output": {"as": "check"},
+            }
+        )
+    )
+    node = graph.node("n")
+    assert node.command == "pytest -q"
+    assert node.timeout == 30
+    assert node.env == {"CI": "1"}
+
+
+def test_a_command_node_needs_no_role():
+    """It calls no model, so it must not make the binding answer for one."""
+    graph = GraphSpec.model_validate(_graph({"type": "command", "command": "true"}))
+    assert graph.roles() == set()
+
+
+def test_an_agent_node_may_not_carry_a_command():
+    with pytest.raises(ValidationError, match="command"):
+        GraphSpec.model_validate(
+            _graph({"type": "agent", "prompt": "hi", "command": "pytest"})
+        )
+
+
+def test_a_commands_workdir_is_a_template_like_an_agents():
+    with pytest.raises(ValidationError):
+        GraphSpec.model_validate(
+            _graph({"type": "command", "command": "true", "workdir": "{{ 1 + }}"})
+        )

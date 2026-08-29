@@ -17,7 +17,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..tools import make_executor
+from ..tools import ToolError, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -521,6 +521,79 @@ class AgentNode(Node):
         )
 
 
+def _workdir_for(spec: NodeSpec, ctx: RunContext, scope: dict[str, Any]) -> Path:
+    """Where this node's commands run: its own `workdir`, else the task's.
+
+    Physical, so the logical layer may leave it open and the task supply it --
+    `preflight()` is where "nowhere to work" fails, before a token is spent.
+    """
+    workdir = (
+        Path(_rendered(spec, spec.workdir, scope)).expanduser()
+        if spec.workdir
+        else ctx.workdir
+    )
+    if workdir is None:  # preflight should have caught this
+        raise NodeError(f"node '{spec.id}': no workdir", node_id=spec.id)
+    if not workdir.is_dir():
+        raise NodeError(
+            f"node '{spec.id}': workdir does not exist: {workdir}", node_id=spec.id
+        )
+    return workdir
+
+
+class CommandNode(Node):
+    """Runs one command and reports what it did. Calls no model.
+
+    The exit code lands in scope as the **number the process returned**, so a
+    router branches on the fact rather than on a model's account of it. That is
+    the whole of it: the machine already knew, and asking a model to read a
+    hundred lines of output and say "it passed" adds a turn and a way to be
+    wrong.
+
+    A non-zero exit is **not** a failed run. A red test suite is what the graph
+    exists to react to; the run fails only when the command could not run at
+    all -- a timeout, a missing program -- because "this did not start" and
+    "this went red" are different facts.
+    """
+
+    async def run(self, ctx: RunContext) -> NodeResult:
+        spec = self.spec
+        workdir = _workdir_for(spec, ctx, ctx.scope())
+
+        # Through the seam, never a bare subprocess: a task that asked to be
+        # fenced is fenced here too.
+        async with make_executor(workdir, ["shell"], ctx.tool_context) as executor:
+            started = time.monotonic()
+            try:
+                result = await executor.run_command(
+                    _rendered(spec, spec.command or "", ctx.scope()),
+                    timeout=spec.timeout,
+                    env=spec.env or None,
+                )
+            except ToolError as exc:
+                # It never ran. That is the node failing, unlike an exit code.
+                raise NodeError(f"node '{spec.id}': {exc}", node_id=spec.id) from exc
+
+        output = {"exit_code": result.exit_code, "output": result.output}
+        if spec.output.format == "json":
+            # Only the text is a candidate for parsing; the code is already one.
+            output["output"] = shape_output(spec, result.output)
+        ctx.record_output(spec.id, output, spec.output.as_)
+        if spec.output.into_state:
+            ctx.state[spec.output.into_state] = unwrap(output)
+
+        return NodeResult(
+            node_id=spec.id,
+            next_node=spec.next,
+            output=output,
+            meta={
+                "command": spec.command,
+                "exit_code": result.exit_code,
+                "duration_ms": round((time.monotonic() - started) * 1000),
+            },
+        )
+
+
 class RouterNode(Node):
     """Picks the next node by evaluating branch conditions in order."""
 
@@ -556,6 +629,7 @@ class RouterNode(Node):
 
 NODE_TYPES: dict[str, type[Node]] = {
     "agent": AgentNode,
+    "command": CommandNode,
     "router": RouterNode,
 }
 

@@ -31,9 +31,13 @@ def mermaid_source(graph: GraphSpec) -> str:
         label = html.escape(node.id)
         if node.type == "router":
             lines.append(f'    {node.id}{{"{label}"}}')
-        else:
+        elif node.type == "agent":
             role = html.escape(node.role or graph.default_role)
             lines.append(f'    {node.id}["{label}<br/><small>{role}</small>"]')
+        else:
+            # A step that calls no model has no role to draw, and drawing the
+            # default would name one it never asks for.
+            lines.append(f'    {node.id}["{label}<br/><small>{node.type}</small>"]')
 
     for node in graph.nodes:
         if node.next:

@@ -104,7 +104,10 @@ def _model(task: Any, node: Any) -> str | None:
     An undeclared role is not an error here -- it falls back to `default`, and
     reporting what will really run is how `role: classifer` becomes visible.
     """
-    if node.type == "router":
+    if node.type != "agent":
+        # A router picks a path and a command runs one; neither calls a model.
+        # Asked by type rather than by exclusion, so a node type added later
+        # is silent here until somebody decides it should not be.
         return None
     role = node.role or task.graph.default_role
     try:

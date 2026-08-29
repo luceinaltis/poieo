@@ -397,6 +397,8 @@ def show(
         detail = (
             f"role={node.role or graph.default_role}"
             if node.type == "agent"
+            else node.command
+            if node.type == "command"
             else f"{len(node.branches)} branch(es)"
         )
         typer.echo(f" {marker} {node.id:<16} {node.type:<7} {detail}")

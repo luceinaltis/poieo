@@ -605,3 +605,28 @@ def test_a_board_with_nothing_on_it_still_says_whose_it_is(tmp_path):
     body = client.get("/api/tasks").json()
     assert body["tasks"] == []
     assert body["project"]["name"] == tmp_path.name
+
+
+async def test_the_board_names_no_model_for_a_step_that_calls_none(tmp_path):
+    """`_model` falls through to the default role for anything that is not a
+    router, so a command node would be painted as calling a model it never
+    calls -- the picture claiming one thing and the run doing another."""
+    from poieo.graph import GraphSpec
+    from poieo.web.server import _shape
+
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "check",
+            "nodes": [{"id": "check", "type": "command", "command": "pytest"}],
+        }
+    )
+    binding = BindingSpec.model_validate(
+        {"name": "b", "providers": {"m": {"type": "mock"}},
+         "default": {"provider": "m", "model": "mock-model"}}
+    )
+    task = SimpleNamespace(graph=graph, binding=binding)
+
+    shape = _shape(task)
+
+    assert shape["nodes"][0]["model"] is None
