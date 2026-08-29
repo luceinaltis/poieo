@@ -231,8 +231,10 @@ itself on a third failure is exactly the one whose `broke` branch someone wanted
 
 1. `handoff_scope(result)` builds what a branch may test. **One shape, not two**:
    whatever the condition could ask about, the run it starts reads as
-   `input.sender`. `usage` is left out — nothing branches on a token count — and
-   `change` is present-and-`None` rather than absent, because `when: "run.change"`
+   `input.sender`. It carries the same `usage` a router sees inside the run, so
+   a guard on what a chain has cost is written once and reads the same at both
+   levels — `MAX_CHAIN` bounds the hops, never what they spend. `change` is
+   present-and-`None` rather than absent, because `when: "run.change"`
    is the commonest branch there is and it has to read false rather than raise.
 2. `_chosen()` evaluates the branches router-style, first match wins. **A branch
    that will not evaluate is skipped, not fatal.** A router raises and takes the

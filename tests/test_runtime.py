@@ -1135,3 +1135,83 @@ async def test_env_values_are_templated(tmp_path):
     assert result.status == "completed"
     assert "world" in result.outputs["check"]["output"]
     assert "{{" not in result.outputs["check"]["output"]
+
+
+def _guard_graph(when: str) -> GraphSpec:
+    """One model turn, then a guard that either stops the run or lets it spend
+    again. The second turn is what a real overnight loop keeps paying for."""
+    return GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "first",
+            "nodes": [
+                {"id": "first", "type": "agent", "prompt": "go", "next": "guard"},
+                {
+                    "id": "guard",
+                    "type": "router",
+                    "branches": [{"when": when, "to": None, "label": "enough"}],
+                    "default": "again",
+                },
+                {"id": "again", "type": "agent", "prompt": "go on"},
+            ],
+        }
+    )
+
+
+async def test_a_run_can_stop_itself_on_what_it_has_spent():
+    """The guard an unattended run needs. Nothing bounds cost today: max_steps
+    counts steps, and one agent node with tools is a single step no matter how
+    many turns or tokens it spends inside it."""
+    graph = _guard_graph("run.usage.output_tokens > 3")
+
+    result = await run_graph(graph, mock_binding({}, fallback="one two three four five"))
+
+    assert result.status == "completed"
+    assert result.path == ["first", "guard"]
+    assert "again" not in result.outputs
+
+
+async def test_a_run_under_its_limit_carries_on():
+    """The same guard, not tripped -- so the threshold is read, not assumed."""
+    graph = _guard_graph("run.usage.output_tokens > 100")
+
+    result = await run_graph(graph, mock_binding({}, fallback="short"))
+
+    assert result.path == ["first", "guard", "again"]
+
+
+async def test_a_run_knows_how_long_it_has_been_going(tmp_path):
+    """Real elapsed seconds, not a constant: a run that has been going since
+    2am is the other thing worth stopping on."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "wait",
+            "nodes": [
+                {
+                    "id": "wait",
+                    "type": "command",
+                    "language": "python",
+                    "script": "import time; time.sleep(0.2)",
+                    "workdir": str(tmp_path),
+                    "next": "guard",
+                },
+                {
+                    "id": "guard",
+                    "type": "router",
+                    "branches": [
+                        {"when": "run.elapsed > 0.1", "to": None, "label": "long enough"}
+                    ],
+                    "default": "again",
+                },
+                {"id": "again", "type": "agent", "prompt": "go on"},
+            ],
+        }
+    )
+
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path)
+
+    # Both, and the status first: without `elapsed` in scope the condition
+    # raises, the run fails, and the path stops here for the wrong reason.
+    assert result.status == "completed", result.error
+    assert result.path == ["wait", "guard"]

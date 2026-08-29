@@ -473,3 +473,43 @@ def test_a_node_that_names_no_role_asks_for_the_default_on_purpose(tmp_path, cap
         load_tasks(load_config(path))
 
     assert "does not declare" not in " ".join(caplog.messages)
+
+
+async def test_a_card_can_hand_off_on_what_the_run_spent(tmp_path):
+    """The same guard one level up. A chain is bounded by MAX_CHAIN hops, which
+    says nothing about what those hops cost -- and a card that spends its way
+    through the night hands the next one a bill, not a reason to stop."""
+    block = _TO_RECEIVER.replace(
+        "run.status == 'completed'", "run.usage.output_tokens < 1000"
+    )
+    daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
+    task = await _up(daemon)
+    receiver = _named(daemon, "receiver")
+
+    assert _named(daemon, "sender").run_now() is True
+    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+
+    await _down(daemon, task)
+
+
+async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
+    """The threshold is read, not assumed.
+
+    The log matters as much as the count here: an unreadable condition is also
+    treated as no match, so "nobody was woken" on its own cannot tell a guard
+    that held from a name the scope never had.
+    """
+    block = _TO_RECEIVER.replace(
+        "run.status == 'completed'", "run.usage.output_tokens > 1000"
+    )
+    daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
+    task = await _up(daemon)
+    sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
+
+    sender.run_now()
+    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
+
+    assert len(receiver.results) == 0
+    assert "no 'usage' here" not in caplog.text
+    await _down(daemon, task)
