@@ -225,6 +225,59 @@ which is what stood here first, refused the ordinary case: every project has a
   failure is *logged*, not swallowed — a learning pass that blew up at 3am used
   to go down with the daemon without leaving a word behind
 
+## Cards that appear while it runs
+
+The tasks folder used to be read once, at startup, so a card written afterwards
+sat there until somebody restarted the daemon — the last thing a board that can
+create tasks may ask of the person using it.
+
+`Daemon._watch_cards()` is a loop beside the learning pass, not a change to the
+wait every existing runner already sits in. `serve()` gathers a fixed set of
+runner coroutines, and one built after that gather began has nowhere to be
+started from; the watcher starts those itself and waits them out on the way
+down. That is why shutdown reaches them at all, and why it has a test of its
+own: a resident process may fail many ways, but never by refusing to stop.
+
+It **looks**, every `SCAN_SECONDS`, rather than being told. A card written by
+hand has to start the same way a card written by the board does, and there is no
+run to hang the reading on the way a graph's reread hangs on the next firing.
+The cost is one directory listing.
+
+The whole config is read again rather than the one new file, because a card
+names the tasks it may tell and that roster is only known once the folder has
+been read. What comes back goes through `load_tasks`, the same door startup came
+through, so a card that would not have started here does not start now either —
+and **a folder that will not load is a warning and no more**, the rule the
+binding and the graph already follow. A card saved half-written must not take
+down the tasks that have been running all night beside it.
+
+**A task's identity is its filename**, so a card retitled at noon is the same
+task, and the watcher does not read it as a second one.
+
+**The scan runs in a thread.** `load_tasks` calls `check_isolation`, the only
+preflight that reaches outside the process, and it shells out to docker with a
+twenty-second timeout. On the event loop that would freeze the board, the timers
+and every run in flight, every `SCAN_SECONDS`, for as long as the daemon is up.
+
+**Nothing but shutdown ends the loop.** A raise anywhere in a scan is caught and
+logged, because a loop that dies takes every future card with it and says so only
+on the way down. The same complaint is logged once, not every five seconds.
+
+**Two kinds of card are refused rather than half-given**, the rule the graph
+reread follows. One asking for `isolation:` would run with no container keeper —
+`self.containers` is built from the startup task set — and rebuild a throwaway
+container per run while believing it was fenced. One taking the `notes` toolset
+would be handed a postbox whose roster is a startup snapshot, so its own prompt
+would name recipients the postbox then refuses. Both wait for a restart, and say
+so.
+
+**A daemon with nothing to run still waits**, as long as it has a folder to
+watch. It used to warn and stop, which would have left the first card the board
+ever writes with nowhere to land.
+
+Removal is not here yet: a card deleted while its run is in flight is a
+different question, and this one only had to answer *appeared*.
+
 ## The learning loop
 
 `learn: 1d` in the config starts a background loop, one per project that asked

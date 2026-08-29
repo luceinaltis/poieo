@@ -1,0 +1,51 @@
+# Publishes site/ to GitHub Pages.
+#
+# Its own workflow rather than a job in gate.yml, and that is the whole design:
+# the gate's five jobs are required to merge, and a required check that can go
+# red because a deploy failed would block honest work over a page. Nothing here
+# reports on a pull request at all.
+#
+# There is no build step. site/ is hand-written HTML and CSS -- what is in the
+# repository is what is served, so this uploads the folder and nothing else.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    # Only when the page itself moves. Every other commit on `main` would
+    # otherwise redeploy an unchanged site, and a deploy that means nothing is
+    # a notification people learn to skip.
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  # For the first deploy, and for any time the setting is turned on again.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  # Never cancel a deploy in flight: the one that would be cancelled is the one
+  # already writing, and what it leaves behind is half a site.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: publish the page
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,261 @@
+/* The page takes its colours from the board it is about: the values below are
+   the ones in web-ui/src/, not a palette invented for a landing page. If the
+   board's ground changes, this is wrong and should follow it. */
+
+:root {
+  color-scheme: dark;
+
+  --ground: #14120f;      /* the board's background */
+  --panel: #1c1915;       /* a card on it */
+  --raised: #221e18;      /* a button on it */
+  --rule: #2e2820;        /* every hairline */
+  --text: #e8e2d8;        /* body */
+  --dim: #9a9086;         /* what is beside the point but still readable */
+  --ember: #d8a657;       /* the forge, and so every accent here */
+  --live: #a9b665;        /* a task that is running */
+
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* One measure for the whole page. Sections that want the full width say so. */
+  --column: 68rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: #f0c983; }
+
+code, pre { font-family: var(--mono); font-size: 0.88em; }
+
+h1, h2, h3 { line-height: 1.15; margin: 0 0 0.5em; }
+
+/* The bar, which is the board's bar: same height, same hairline, same wordmark.
+   Somebody arriving here and then opening the daemon should recognise it. */
+.bar {
+  align-items: center;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 12px;
+  height: 46px;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.wordmark {
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.bar-sub { color: var(--dim); font-size: 0.85rem; }
+.bar nav { display: flex; gap: 18px; margin-left: auto; }
+.bar nav a { font-size: 0.9rem; text-decoration: none; }
+
+main { margin: 0 auto; max-width: var(--column); padding: 0 20px; }
+
+section { padding: 4.5rem 0; }
+section + section { border-top: 1px solid var(--rule); }
+
+h2 { font-size: 1.6rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; }
+
+/* --- hero ---------------------------------------------------------------- */
+
+.hero { padding: 5.5rem 0 3rem; text-align: center; }
+
+.hero h1 {
+  font-size: clamp(2.1rem, 6vw, 3.4rem);
+  letter-spacing: -0.02em;
+  margin-inline: auto;
+  max-width: 20ch;
+}
+
+.lead {
+  color: var(--dim);
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  margin: 0 auto 2.2rem;
+  max-width: 46ch;
+}
+
+.cta {
+  align-items: stretch;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 10px;
+  margin-bottom: 1.8rem;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 0 0 14px;
+  text-align: left;
+}
+
+.cta code {
+  align-self: center;
+  color: var(--text);
+  overflow-x: auto;
+  padding: 12px 0;
+  white-space: nowrap;
+}
+
+.cta button {
+  background: var(--raised);
+  border: 0;
+  border-left: 1px solid var(--rule);
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0 16px;
+}
+
+.cta button:hover { color: var(--ember); }
+
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 0; }
+
+.button {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--text);
+  display: inline-block;
+  font-size: 0.95rem;
+  padding: 9px 18px;
+  text-decoration: none;
+}
+
+.button:hover { border-color: var(--ember); color: var(--ember); }
+
+.button.primary {
+  background: var(--ember);
+  border-color: var(--ember);
+  color: #1a1509;
+  font-weight: 600;
+}
+
+.button.primary:hover { background: #f0c983; border-color: #f0c983; color: #1a1509; }
+
+/* --- pictures ------------------------------------------------------------ */
+
+.shot { margin: 0; }
+
+.shot img {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.shot figcaption {
+  color: var(--dim);
+  font-size: 0.9rem;
+  margin-top: 0.9rem;
+  text-align: center;
+}
+
+/* The forge lighting the page, rather than a drop shadow that could be under
+   anything. Behind the image, so it never dims it. */
+.glow { position: relative; }
+
+.glow::before {
+  background: radial-gradient(closest-side, rgba(216, 166, 87, 0.22), transparent);
+  content: "";
+  inset: -12% -6%;
+  position: absolute;
+  z-index: -1;
+}
+
+/* --- sixty seconds ------------------------------------------------------- */
+
+.steps { display: grid; gap: 2rem; grid-template-columns: repeat(3, 1fr); }
+
+.step h3 { color: var(--ember); font-size: 0.95rem; letter-spacing: 0.02em; }
+.step p { color: var(--dim); font-size: 0.95rem; }
+.step code { color: var(--text); }
+
+pre {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin: 0 0 1rem;
+  overflow-x: auto;
+  padding: 14px 16px;
+}
+
+pre .c { color: var(--dim); }
+
+/* --- three words --------------------------------------------------------- */
+
+.grid { display: grid; gap: 1.2rem; grid-template-columns: repeat(3, 1fr); }
+
+.word {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1.4rem 1.5rem;
+}
+
+.word h3 { color: var(--live); font-family: var(--mono); font-size: 1.1rem; }
+.word p { color: var(--dim); margin: 0; }
+
+.aside { color: var(--dim); font-size: 0.95rem; margin: 1.6rem 0 0; max-width: 62ch; }
+
+/* --- the morning --------------------------------------------------------- */
+
+.morning-text { max-width: 66ch; }
+/* The picture is a screenshot of a dense panel, so it gets the whole measure.
+   Beside the prose in a column it was legible as a shape and nothing else. */
+.morning .shot { margin-top: 2.5rem; }
+.morning p { color: var(--dim); }
+.morning strong { color: var(--text); font-weight: 600; }
+
+/* --- why ----------------------------------------------------------------- */
+
+.why dl { display: grid; gap: 1.6rem 2.5rem; grid-template-columns: 1fr 1fr; margin: 0; }
+.why dt { font-weight: 600; margin-bottom: 0.25rem; }
+.why dd { color: var(--dim); margin: 0; }
+
+/* --- the end ------------------------------------------------------------- */
+
+.end { text-align: center; }
+.end h2 { margin-inline: auto; max-width: 24ch; }
+.end p { color: var(--dim); margin: 0 auto 2rem; max-width: 62ch; }
+
+footer {
+  border-top: 1px solid var(--rule);
+  color: var(--dim);
+  font-size: 0.9rem;
+  padding: 2.5rem 20px 3.5rem;
+  text-align: center;
+}
+
+footer p { margin: 0.4rem 0; }
+.quiet { color: #6b6257; }
+
+/* --- one column ---------------------------------------------------------- */
+
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  section { padding: 3rem 0; }
+  .hero { padding: 3.5rem 0 2rem; }
+  .steps, .grid, .why dl { grid-template-columns: 1fr; }
+  .cta { display: flex; width: 100%; }
+  .bar-sub { display: none; }
+}

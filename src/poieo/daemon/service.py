@@ -27,7 +27,7 @@ from ..store import Event, RunStore
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
-from .config import DaemonConfig, LoadedTask, load_tasks
+from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
@@ -45,6 +45,13 @@ def _ensure_port_free(host: str, port: int) -> None:
 
 
 SHUTDOWN_GRACE = 5.0
+
+# How often the tasks folder is looked at again. A card written by hand or by
+# the board has to start without a restart, and there is no run to hang that on
+# the way a graph's reread hangs on the next firing -- so the daemon looks. The
+# cost is one directory listing; the wait is what somebody stares at after
+# pressing save, so it is seconds and not minutes.
+SCAN_SECONDS = 5.0
 
 
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
@@ -914,6 +921,139 @@ class Daemon:
             build_cache=project.config.layout().cache() / "builds",
         )
 
+    async def _watch_cards(self) -> None:
+        """Cards that appear while the daemon runs, started while it runs.
+
+        A loop beside the learning pass rather than a change to the wait every
+        existing runner already sits in: `serve` gathers a fixed set, and a
+        runner made after that gather began has nowhere to be started from.
+        This owns the ones it starts and waits them out on the way down.
+
+        A folder that will not load is a warning and no more. A card saved
+        half-written must not take down the tasks that have been running all
+        night beside it -- the same rule the binding and the graph follow.
+        """
+        started: list[asyncio.Task[Any]] = []
+        said: dict[Path, str] = {}
+        try:
+            while not self.cancel.is_set():
+                # False means shutdown asked first, which is the only way out.
+                if not await _sleep_or_cancel(SCAN_SECONDS, self.cancel):
+                    break
+                for project in self.projects:
+                    try:
+                        # A thread, because `load_tasks` runs `check_isolation`,
+                        # which shells out to docker with a 20-second timeout.
+                        # On this loop it would freeze the board, the timers and
+                        # every run in flight, every SCAN_SECONDS, forever.
+                        appeared = await asyncio.to_thread(self._appeared, project, said)
+                    except Exception as exc:
+                        # Nothing may end this loop but shutdown. A raise here
+                        # would stop every card from ever being noticed again,
+                        # and say so only on the way down.
+                        log.warning("the tasks folder could not be scanned: %s", exc)
+                        continue
+                    for runner in appeared:
+                        started.append(self._start(runner))
+        finally:
+            # Together, not one after another: the caller gives this whole loop
+            # one shutdown grace, and waiting three tasks out in series would
+            # want three of them and be cancelled partway through.
+            await asyncio.gather(*(_stopped(task, "a task added while running") for task in started))
+
+    def _start(self, runner: TaskRunner) -> "asyncio.Task[Any]":
+        """Run one appeared task, and do not let it die quietly.
+
+        The runners built at startup are gathered with `return_exceptions`, so
+        a crash in one is logged against its name. These are not in that gather,
+        and without this a crash would wait for shutdown to be mentioned.
+        """
+        task = asyncio.create_task(runner.run())
+
+        def _crashed(finished: "asyncio.Task[Any]") -> None:
+            if finished.cancelled():
+                return
+            if (exc := finished.exception()) is not None:
+                log.exception("task '%s' crashed: %s", runner.name, exc, exc_info=exc)
+
+        task.add_done_callback(_crashed)
+        return task
+
+    def _appeared(self, project: LoadedProject, said: dict[Path, str]) -> list[TaskRunner]:
+        """Every card in this project's folder that is not a task yet.
+
+        The whole config is read again rather than the one file: a card names
+        the tasks it may tell, and that roster is only known once the folder
+        has been read. Validated by `load_tasks`, which is the same door
+        startup came through, so a card that would not have started here does
+        not start now either.
+        """
+        config = project.config
+        if not config.cards:
+            return []
+        try:
+            fresh = load_config(config.source_path)
+            loaded = load_tasks(fresh)
+        except Exception as exc:
+            # Once per distinct complaint. A card left half-written over lunch
+            # would otherwise write the same line every SCAN_SECONDS until
+            # somebody came back to it.
+            if said.get(config.source_path) != (message := str(exc)):
+                said[config.source_path] = message
+                log.warning("the tasks folder could not be read, so nothing new starts: %s", message)
+            return []
+        said.pop(config.source_path, None)
+
+        # Every name the project knows, not only the ones running: a disabled
+        # card is already in `config.tasks`, and enabling it must not append a
+        # second copy of the same spec.
+        known = {task.name for task in config.tasks}
+        appeared: list[TaskRunner] = []
+        for task in loaded:
+            if task.spec.name in known:
+                continue
+            # The live config learns the card too, or the graph reread would
+            # have nothing to re-expand it from.
+            config.tasks.append(task.spec)
+            if (card := fresh.cards_by_task.get(task.spec.name)) is not None:
+                config.cards_by_task[task.spec.name] = card
+            if (graph := fresh.card_graphs.get(task.spec.name)) is not None:
+                config.card_graphs[task.spec.name] = graph
+            # Refused rather than half-given, the rule the graph reread
+            # follows. `self.containers` was built from the startup task set,
+            # so an isolated card would run with no keeper and rebuild a
+            # throwaway container every run; a card taking `notes` would be
+            # handed a postbox whose roster is a startup snapshot, and its
+            # prompt would name recipients the postbox then refuses.
+            if task.spec.isolation is not None and self.containers is None:
+                log.warning(
+                    "card '%s' asks for isolation, which needs a restart to take effect; it is not started",
+                    task.spec.name,
+                )
+                continue
+            if self._postbox_for(project, task) is not None:
+                log.warning(
+                    "card '%s' takes the notes toolset, whose roster is fixed at startup; it is not started",
+                    task.spec.name,
+                )
+                continue
+            project.tasks.append(task)
+            runner = TaskRunner(
+                task,
+                config,
+                self._pool_for(task),
+                project.store,
+                self.cancel,
+                self.on_run,
+                self._hands_for(project, task),
+                self._hand_off,
+                self.refresh,
+            )
+            self.runners.append(runner)
+            appeared.append(runner)
+            log.info("task '%s' appeared in %s and is running", runner.name, config.cards)
+        return appeared
+
     def _runners(self) -> list[TaskRunner]:
         return [
             TaskRunner(
@@ -1229,7 +1369,11 @@ class Daemon:
                 "no enabled tasks in %s",
                 ", ".join(str(project.config.source_path) for project in self.projects),
             )
-            return []
+            # Staying up with nothing to do is the point when a tasks folder is
+            # being watched: the first card the board writes has to land
+            # somewhere. With no folder to watch there is nothing to wait for.
+            if not any(project.config.cards for project in self.projects):
+                return []
         if install_signals:
             self._install_signals()
 
@@ -1270,6 +1414,7 @@ class Daemon:
             for project in self.projects
             if project.config.learn is not None
         ]
+        watcher = asyncio.create_task(self._watch_cards())
         for project in self.projects:
             if project.config.learn is not None:
                 log.info(
@@ -1283,9 +1428,16 @@ class Daemon:
             ", ".join(str(project.store.root) for project in self.projects),
         )
         try:
-            # return_exceptions: one task blowing up must not orphan the others
-            # or tear down pools they are still using.
-            outcomes = await asyncio.gather(*(runner.run() for runner in self.runners), return_exceptions=True)
+            if not self.runners:
+                # Nothing to gather, and gathering nothing returns at once --
+                # which would stop a daemon whose whole job right now is to be
+                # there when the first card is written. It waits instead.
+                await self.cancel.wait()
+                outcomes: list[Any] = []
+            else:
+                # return_exceptions: one task blowing up must not orphan the
+                # others or tear down pools they are still using.
+                outcomes = await asyncio.gather(*(runner.run() for runner in self.runners), return_exceptions=True)
             for runner, outcome in zip(self.runners, outcomes):
                 if isinstance(outcome, BaseException):
                     log.exception("task '%s' crashed: %s", runner.name, outcome, exc_info=outcome)
@@ -1293,6 +1445,7 @@ class Daemon:
             self.cancel.set()
             for learn_task in learn_tasks:
                 await _stopped(learn_task, "learning pass")
+            await _stopped(watcher, "the tasks folder watch")
             if web_task is not None:
                 server.should_exit = True
                 await _stopped(web_task, "web server")
