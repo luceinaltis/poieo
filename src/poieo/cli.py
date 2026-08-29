@@ -747,6 +747,11 @@ def daemon(
     once: bool = typer.Option(False, "--once", help="Firing each task a single time, then exit."),
     task: Optional[str] = typer.Option(None, "--task", help="Run only this task from the config."),
     port: int = typer.Option(8484, "--port", help="Web observation UI port."),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Where the board listens. Anything but localhost has no password on it.",
+    ),
     no_web: bool = typer.Option(False, "--no-web", help="Disable the web UI."),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
@@ -781,7 +786,7 @@ def daemon(
                     spec.trigger = spec.trigger.model_copy(update={"type": "loop"})
 
     try:
-        results = asyncio.run(Daemon(configs, web_port=None if no_web else port).serve())
+        results = asyncio.run(Daemon(configs, web_port=None if no_web else port, web_host=host).serve())
     except KeyboardInterrupt:  # pragma: no cover - interactive
         raise typer.Exit(code=130)
 
