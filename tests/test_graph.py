@@ -1,7 +1,7 @@
 import pytest
+from conftest import EXAMPLES
 from pydantic import ValidationError
 
-from conftest import EXAMPLES
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, load_graph
 

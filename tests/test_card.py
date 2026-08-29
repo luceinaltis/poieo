@@ -9,12 +9,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from conftest import at
 
-from conftest import card, at
-from poieo.daemon.config import TaskSpec, load_config, load_tasks
-from poieo.errors import SpecError
-from poieo.graph import GraphSpec
-from poieo.store import NullStore
 from poieo.card import (
     CardSpec,
     append_journal,
@@ -24,6 +20,10 @@ from poieo.card import (
     read_journal,
     system_block,
 )
+from poieo.daemon.config import TaskSpec, load_config, load_tasks
+from poieo.errors import SpecError
+from poieo.graph import GraphSpec
+from poieo.store import NullStore
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
@@ -654,8 +654,8 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
     """Three readers, one reading. The journal entry, the run record's summary
     and the change's commit subject all come from the last node that said
     anything -- so they can never tell a reader three stories about one run."""
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     result = _finished()
     assert closing_line(result) == "fixed the parser\nand tidied up\n"
@@ -664,8 +664,8 @@ def test_the_journal_the_record_and_the_commit_read_one_line():
 
 
 def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     silent = _finished(path=["work"], outputs={"work": "   "})
     assert closing_line(silent) == "(said nothing)"
@@ -674,8 +674,8 @@ def test_a_run_that_said_nothing_falls_back_where_each_reader_needs_to():
 
 
 def test_a_long_line_is_clipped_for_the_commit_but_not_for_the_record():
-    from poieo.daemon.service import _change_message
     from poieo.card import closing_line
+    from poieo.daemon.service import _change_message
 
     said = "went through every file and " + "x" * 200
     result = _finished(path=["work"], outputs={"work": said})

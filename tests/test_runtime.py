@@ -1,14 +1,14 @@
 import asyncio
 
 import pytest
-
 from conftest import EXAMPLES
+
 from poieo.binding import BindingSpec, load_binding
+from poieo.errors import BindingError, SpecError
 from poieo.graph import GraphSpec, load_graph
 from poieo.providers import ProviderPool
 from poieo.runtime.executor import execute, preflight
 from poieo.store import NullStore
-from poieo.errors import BindingError, SpecError
 
 
 def mock_binding(responses, fallback=""):
@@ -729,9 +729,9 @@ async def test_a_turn_that_cleared_is_expected_to_shrink(tmp_path, monkeypatch):
 async def test_a_provider_that_counts_nothing_is_not_accused(tmp_path, monkeypatch):
     """No measurement and a bad measurement are different facts. A backend
     that reports zero has not told us anything, and zero is not a fall."""
-    from poieo.runtime import nodes
     from poieo.providers.base import Usage
     from poieo.providers.mock import MockProvider
+    from poieo.runtime import nodes
 
     monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
     real = MockProvider.complete

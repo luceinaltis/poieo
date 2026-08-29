@@ -5,11 +5,10 @@ the writing side and its refusals. A refusal is a tool error the model reads
 and corrects, never an exception that ends the run.
 """
 
-import pytest
 
-from poieo.providers.base import ToolCall
 from poieo.card import append_journal, read_journal
-from poieo.tools import DEFAULT_TOOLSETS, ToolContext, LocalExecutor
+from poieo.providers.base import ToolCall
+from poieo.tools import DEFAULT_TOOLSETS, LocalExecutor, ToolContext
 from poieo.tools.notes import Postbox
 
 

@@ -297,7 +297,7 @@ async def test_the_sweep_spares_a_box_in_use(tmp_path):
     container = Container("task-sweep-keep", work, ISO)
     try:
         container_id = await container.ensure()
-        removed = await sweep(older_than=timedelta(days=7))
+        await sweep(older_than=timedelta(days=7))
         assert _container_exists(container_id)
     finally:
         await container.remove()

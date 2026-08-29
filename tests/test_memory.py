@@ -10,27 +10,26 @@ import json
 from dataclasses import replace
 
 import pytest
+from conftest import EXAMPLES, at
+from test_card import write_card
 
-from conftest import card, EXAMPLES, at
-from poieo.layout import layout_for
 from poieo.binding import BindingSpec
+from poieo.card import (
+    JOURNAL_WIDTH,
+    card_payload,
+    load_card,
+    record_run,
+    system_block,
+)
 from poieo.daemon.config import load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
+from poieo.layout import layout_for
+from poieo.memory import check_memory, load_entries
 from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
 from poieo.store import RunStore
-from poieo.memory import check_memory, load_entries
-from poieo.card import (
-    JOURNAL_WIDTH,
-    load_card,
-    record_run,
-    system_block,
-    card_payload,
-)
-
-from test_card import write_card
 
 
 def _task(tmp_path):

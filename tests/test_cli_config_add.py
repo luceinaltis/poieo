@@ -145,7 +145,7 @@ def test_the_comments_the_file_came_with_survive(tmp_path, monkeypatch):
 def test_it_says_what_the_new_engine_serves(tmp_path, monkeypatch):
     """The point of declaring one is naming a model on it, so the models it
     has belong in the same breath."""
-    path = _project(tmp_path)
+    _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     _machine_with(monkeypatch, OLLAMA, LMSTUDIO)
 

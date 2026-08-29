@@ -12,10 +12,13 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, List, NoReturn, Optional
+from typing import TYPE_CHECKING, Any, List, NoReturn, Optional
 
 import typer
 import yaml
+
+if TYPE_CHECKING:  # `_board` names httpx in an annotation; the import is deferred
+    import httpx  # because starting the CLI must not pay for the HTTP stack.
 
 # Model output is arbitrary Unicode; legacy Windows console codepages (cp949,
 # cp1252, ...) cannot encode all of it and would crash every `poieo run` that
@@ -25,20 +28,33 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(errors="replace")
 
 from . import __version__
+from . import detect as engines
 from .binding import load_binding
-from .workspace import Workspace
-from .daemon import Daemon, load_config, load_tasks
+from .card import (
+    CardSpec,
+    append_journal,
+    build_graph,
+    card_payload,
+    expand,
+    is_card_file,
+    load_card,
+    load_cards,
+    read_journal,
+    record_run,
+)
+from .daemon import Daemon, load_config
 from .daemon.config import (
     DaemonConfig,
     TaskSpec,
     check_isolation,
     config_for_tasks_folder,
 )
-from . import detect as engines
+from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion, learn as run_learning_pass
+from .learn import last_suggestion
+from .learn import learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
 from .project import (
     MARKER,
@@ -54,21 +70,9 @@ from .providers import ProviderPool
 from .rebind import declare, point_at
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
-from .tools import ToolContext, Isolation
-from .card import (
-    CardSpec,
-    append_journal,
-    build_graph,
-    expand,
-    is_card_file,
-    load_card,
-    load_cards,
-    read_journal,
-    record_run,
-    card_payload,
-)
-from .editor import render_editor
+from .tools import Isolation, ToolContext
 from .viewer import mermaid_source, render_page
+from .workspace import Workspace
 
 # The front page is grouped by what a person is trying to do, in the order
 # they will do it. A panel title is one of the user's three words -- a task, a

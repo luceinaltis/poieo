@@ -37,6 +37,9 @@ jobs:
       # workaround for a broken global plugin; a clean environment needs
       # neither, and this job is the check that they stay local.
       - run: pytest -q
+      # After the suite, and in that order in Part 2 too: a step that fails ends
+      # the job, and a long line must never cost the run its test result.
+      - run: ruff check .
 
   web:
     name: frontend suite, types, and bundle

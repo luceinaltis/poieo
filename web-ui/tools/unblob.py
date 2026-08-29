@@ -19,7 +19,6 @@ the model's longest side is cut into -- finer separates more, and separates
 his own fingers if taken too far.
 """
 
-import struct
 import sys
 from pathlib import Path
 

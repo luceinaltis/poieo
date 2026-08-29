@@ -13,8 +13,8 @@ Design: docs/daemon.md
 import asyncio
 
 import httpx
-
 from conftest import card
+
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web import create_app

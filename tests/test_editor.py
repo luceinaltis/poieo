@@ -2,6 +2,7 @@ import json
 import re
 
 from conftest import EXAMPLES
+
 from poieo.binding import load_binding
 from poieo.editor import _boot_payload, render_editor
 from poieo.graph import GraphSpec, load_graph

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field

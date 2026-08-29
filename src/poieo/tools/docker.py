@@ -14,8 +14,8 @@ writes a file it then cannot compile.
 from __future__ import annotations
 
 import asyncio
-import locale
 import hashlib
+import locale
 import logging
 import shlex
 import subprocess
@@ -25,7 +25,7 @@ from typing import Any, Sequence
 
 from ..errors import IsolationError
 from . import CommandResult, Executor, Isolation, Tool, ToolError
-from .shell import _MAX_TIMEOUT, _OUTPUT_CAP, _DEFAULT_TIMEOUT
+from .shell import _DEFAULT_TIMEOUT, _MAX_TIMEOUT, _OUTPUT_CAP
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
 # that older busybox builds reject, which would exit the container instantly and

@@ -45,8 +45,8 @@ import numpy as np
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from unprop import COMPONENT, COUNT, read, read_glb, write_glb  # noqa: E402
 import unstretch as U  # noqa: E402
+from unprop import COMPONENT, COUNT, read, read_glb, write_glb  # noqa: E402
 
 
 def segment_distance(points, a, b):

@@ -4,8 +4,8 @@ from datetime import datetime
 
 import httpx
 import pytest
+from conftest import EXAMPLES, at, card
 
-from conftest import card, EXAMPLES, at
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
@@ -133,9 +133,9 @@ def test_startup_validates_every_flow_up_front(tmp_path):
         "providers: {p: {type: mock}}\ndefault: {provider: p, model: m}\n"
     )
     (tmp_path / "g.yaml").write_text("name: g\nentry: a\nnodes: [{id: a, type: agent}]\n")
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
 
     # The graph is broken (a model node with no prompt); the daemon must refuse
     # to arm rather than discover this when the trigger first fires.
@@ -152,9 +152,9 @@ def _keyed_config(tmp_path, variable="POIEO_TEST_KEY"):
     (tmp_path / "g.yaml").write_text(
         "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
     return path
 
 
@@ -178,7 +178,7 @@ def test_a_disabled_flow_can_still_be_listed_without_its_key(tmp_path, monkeypat
     fix it is asking for."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     path = _keyed_config(tmp_path)
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\nenabled: false\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\nenabled: false\n")
     assert len(load_tasks(load_config(path), enabled_only=False)) == 1
 
 
@@ -196,9 +196,9 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
     (tmp_path / "g.yaml").write_text(
         "name: g\nentry: a\nnodes: [{id: a, type: agent, prompt: hi}]\n"
     )
-    card(tmp_path / "cards", "f", f"graph: ../g.yaml\n")
+    card(tmp_path / "cards", "f", "graph: ../g.yaml\n")
     path = tmp_path / "d.yaml"
-    path.write_text(f"binding: b.yaml\ntasks: cards\n")
+    path.write_text("binding: b.yaml\ntasks: cards\n")
 
     assert len(load_tasks(load_config(path))) == 1
 

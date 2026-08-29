@@ -561,7 +561,7 @@ async def test_executor_turns_failures_into_error_results(tmp_path):
 
 import sys
 
-from poieo.tools import ToolContext, Isolation, make_executor
+from poieo.tools import Isolation, ToolContext, make_executor
 
 
 async def test_local_executor_works_as_a_context_manager(tmp_path):
@@ -696,7 +696,6 @@ async def test_a_command_that_could_not_run_still_raises(tmp_path):
 
 def _boxed(monkeypatch, tmp_path):
     """A DockerExecutor with its docker calls recorded instead of run."""
-    from poieo.tools import Isolation
     from poieo.tools import docker as dock
 
     seen: list[tuple[str, ...]] = []
@@ -892,7 +891,6 @@ async def test_the_box_builds_inside_itself(tmp_path, monkeypatch):
 
 async def test_the_box_skips_a_build_it_already_has(tmp_path, monkeypatch):
     """`test -x` answering 0 means the binary is there, so no compiler runs."""
-    from poieo.tools import CommandResult
     from poieo.tools import docker as dock
 
     executor, seen, _fed = _boxed(monkeypatch, tmp_path)

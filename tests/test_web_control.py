@@ -5,13 +5,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
+from conftest import card
 from starlette.testclient import TestClient
 
-from conftest import card
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web.server import create_app
-
 
 # -- the routes, over a stub runner -------------------------------------------
 

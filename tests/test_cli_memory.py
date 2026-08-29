@@ -4,13 +4,12 @@ lookup machinery is automatic, so no command exists for either.
 """
 
 from conftest import at
+from test_card import write_card
 from typer.testing import CliRunner
 
+from poieo.card import load_card
 from poieo.cli import app
 from poieo.memory import read_memory
-from poieo.card import load_card
-
-from test_card import write_card
 
 runner = CliRunner()
 

@@ -10,8 +10,8 @@ Design: docs/daemon.md
 import asyncio
 
 import pytest
-
 from conftest import card
+
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.service import MAX_CHAIN
 from poieo.errors import SpecError
@@ -563,6 +563,19 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
         "run.status == 'completed'", "run.usage.output_tokens > 1000"
     )
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
+    task = await _up(daemon)
+    sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
+
+    with caplog.at_level("WARNING", logger="poieo.daemon"):
+        sender.run_now()
+        await _until(lambda: len(sender.results) == 1, "the sender's run")
+        await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
+
+    assert len(receiver.results) == 0
+    assert caplog.messages == []
+    await _down(daemon, task)
+
+
 _ASKING = """\
 name: quick
 entry: a

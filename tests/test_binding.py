@@ -1,6 +1,6 @@
 import pytest
-
 from conftest import EXAMPLES
+
 from poieo.binding import BindingSpec, load_binding
 from poieo.errors import BindingError
 

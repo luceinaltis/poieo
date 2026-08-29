@@ -16,17 +16,17 @@ everything else wants.
 Design: docs/memory.md
 """
 
-from .results import results_dir, used_in, write_result
 from .entries import (
     Entry,
     check_memory,
     keeps_memory,
-    load_entry,
     load_entries,
+    load_entry,
     read_page,
     readable_entries,
 )
 from .recall import read_memory
+from .results import results_dir, used_in, write_result
 from .upkeep import doubts, memory_report
 
 __all__ = [
