@@ -22,6 +22,10 @@ component is written to hold.
 codebase keeps that generic good taste would not predict, and the reason each one
 exists. Read it before reshaping anything under `src/`.
 
+**[contribution.md](contribution.md)** — the longer procedures the rules in
+`AGENTS.md` send you to: rebuilding the checked-in bundle, and rebasing a branch
+stacked on another branch. Read a section when you are in its situation.
+
 ## The components
 
 | doc | covers | code |
@@ -48,8 +52,9 @@ exists. Read it before reshaping anything under `src/`.
   records when and why.
 - `AGENTS.md` is the agent-facing page under the name every tool knows. Root
   `CLAUDE.md` is one `@AGENTS.md` import line so Claude Code loads it too — the
-  page is written once. `.claude/rules/` holds pointers into `docs/`, never rules
-  of its own, so nothing an agent must know is locked to one vendor's folder.
+  page is written once. Nothing an agent must know lives in a vendor's folder:
+  `AGENTS.md` carries the rules and `docs/` carries everything they point at, so
+  a tool that never heard of Claude Code still finds all of it.
 
 ## archive/
 

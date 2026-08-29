@@ -20,9 +20,10 @@ memory/cache/
 node_modules/
 web-ui/dist/
 
-# session worktrees, and per-machine permissions (.claude/rules and skills ARE shared)
-.claude/worktrees/
-.claude/settings.local.json
+# the harness's own folder: session worktrees, per-machine permissions, and whatever
+# a given tool wants there. Nothing a contributor must know lives here -- AGENTS.md
+# holds the rules and docs/ holds what they point at, so no tool owns any of it.
+.claude/
 
 # personal helper scripts
 claude-rc-loop.ps1

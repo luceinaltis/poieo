@@ -237,7 +237,9 @@ npm run dev   --workspace web-ui   # 5173, against a daemon on 8484
 npm test      --workspace web-ui   # run mode — watch mode hangs an agent
 ```
 
-`src/poieo/web/static/` **is** meant to be committed; `node_modules/` is not.
+`src/poieo/web/static/` **is** meant to be committed; `node_modules/` is not — and
+committed in the same PR as the source it was built from, since neither suite reads
+it and a green run says nothing about it. `docs/contribution.md` has the whole story.
 
 ## Not built yet
 
