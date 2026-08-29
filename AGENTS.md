@@ -50,8 +50,8 @@ true.** Delete hard enough that some of it has to come back.
 
 Merge only when all of these hold:
 
-1. Both suites are green in the checks, and you ran them here too — CI is Ubuntu
-   only, and this is the Windows machine.
+1. Both suites are green in the checks, and you ran them here too — CI runs the
+   Python suite on Windows, but nothing else there and nothing at all on macOS.
 2. You read the whole diff, an independent pass read it too, and both are in the PR.
 3. The branch is current with `main` and conflict-free.
 4. Every behaviour change has a test that fails without it. This repo is TDD —
