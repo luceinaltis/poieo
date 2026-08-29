@@ -134,6 +134,13 @@ Three types, by who does the step: the model, the machine, or nobody.
 **No `tools:` line means no tools** — the node calls the model once and reads
 the answer, and cannot touch a file. Hands are asked for, never defaulted.
 
+`script:` carries the code in the node itself, so the graph is readable on its
+own — `python`, `node` and `sh` go to the interpreter's stdin; `c`, `go` and
+`rust` are compiled once and cached by the hash of the code, so a second run
+skips the build. A compiled script is not templated — `{{` there is the
+language's, as in Go's `[][]int{{1,2}}` — so what varies goes in `env:`, which
+is templated and keeps the binary the same. See [docs/graph.md](docs/graph.md).
+
 `next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
 
 ### Hands

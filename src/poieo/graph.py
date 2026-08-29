@@ -16,7 +16,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .errors import ExpressionError, SpecError, describe_invalid
-from .expr import compile_expr, validate_template
+from .expr import compile_expr, reaches_for_run_data, validate_template
 
 
 class _Spec(BaseModel):
@@ -163,6 +163,14 @@ class NodeSpec(_Spec):
                 f"`type` to `command` for a step that runs one without a model"
             )
         if self.type == "command":
+            for name, value in self.env.items():
+                # `env` is rendered like a command and a prompt, so it is
+                # checked where they are -- and it is the one way a compiled
+                # script gets anything from the run.
+                try:
+                    validate_template(value)
+                except ExpressionError as exc:
+                    raise ValueError(f"node '{self.id}', env '{name}': {exc}") from exc
             if self.command and self.script:
                 raise ValueError(
                     f"command node '{self.id}' takes a command or a script, not "
@@ -180,17 +188,37 @@ class NodeSpec(_Spec):
                     f"command node '{self.id}' names a language but has no script"
                 )
             if self.language:
-                from .tools import LANGUAGES  # late import; tools pulls in providers
+                # late import; tools pulls in providers
+                from .tools import COMPILED, LANGUAGES, is_compiled, known_language
 
-                if self.language not in LANGUAGES:
+                if not known_language(self.language):
                     raise ValueError(
                         f"command node '{self.id}' names unknown language "
-                        f"'{self.language}'; known: {sorted(LANGUAGES)}"
+                        f"'{self.language}'; known: "
+                        f"{sorted(set(LANGUAGES) | set(COMPILED))}"
                     )
-                try:
-                    validate_template(self.script or "")
-                except ExpressionError as exc:
-                    raise ValueError(f"node '{self.id}': {exc}") from exc
+                if is_compiled(self.language):
+                    # A compiled script is not a template: it is cached by its
+                    # own text, and a template would render differently each
+                    # run, so the cache would never hit and would grow without
+                    # bound. So `{{` here means what the *language* means by
+                    # it -- `[][]int{{1,2},{3,4}}` is ordinary Go, and passes.
+                    #
+                    # What is worth catching at load is the mistake the rule
+                    # invites: reaching for run data that will never arrive.
+                    reach = reaches_for_run_data(self.script or "")
+                    if reach is not None:
+                        raise ValueError(
+                            f"command node '{self.id}': a {self.language} script is "
+                            f"compiled and cached by its own text, so {reach} is not "
+                            f"substituted. Put what varies in `env:` and read it at "
+                            f"run time"
+                        )
+                else:
+                    try:
+                        validate_template(self.script or "")
+                    except ExpressionError as exc:
+                        raise ValueError(f"node '{self.id}': {exc}") from exc
             if not self.command and not self.script:
                 raise ValueError(
                     f"command node '{self.id}' requires a command or a script"

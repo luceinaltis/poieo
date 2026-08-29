@@ -113,6 +113,15 @@ the wrong directory is worse than failing in the right one.
 Where no POSIX shell is found the old behaviour stands, and the description
 says so plainly along with what will not work.
 
+**The same choice decides how a path is spelled**, which is why `quote_path`
+lives here rather than where the path is made. On Windows with a POSIX shell a
+backslash is read as an escape and eaten, and a command that is one
+double-quoted word with no space in it loses its quotes before bash parses it —
+so a built binary at `C:\…\prog` fails as an unterminated string, and unquoted
+it fails as `C:Users82109…`. Forward slashes and POSIX quoting survive both,
+with a space or without. Without a POSIX shell the reverse holds: `cmd` wants
+backslashes and does not read single quotes as quoting at all.
+
 ## Confinement
 
 `files.resolve_path()` resolves every path against the workdir and refuses
@@ -166,17 +175,48 @@ A caller that shelled out for itself instead would work on a host and quietly
 escape the container on a task that asked to be fenced. Half a fence is worse
 than none — nobody knows which half.
 
+### `run_script` — and why languages live here
+
+`Executor.run_script(language, script, timeout, env)` runs code in a named
+language. An interpreted one (`LANGUAGES` — `python -`, `node -`, `sh -`) reads
+it from stdin and leaves nothing behind. A compiled one (`COMPILED` — `c`, `go`,
+`rust`) cannot, because a compiler wants a path, so the source is written, built
+and run under `build_paths()`, keyed by `cache_key()` — the sha256 of the
+language and the code, as `blob.py` names its keepsakes. The build is skipped
+when that hash's binary is already there.
+
+The table lives on the executor rather than on the node because **where a thing
+is built is where it has to run**: a binary made on this host will not run in a
+Linux container, and only the executor knows which of those it is. So each
+subclass answers `build_paths()`, `_is_built()`, `_put()` and `quote()` for its
+own filesystem — the local one with `Path` joins under the project's cache (or
+the OS temp folder outside a project), the Docker one with posix paths under
+`/tmp/poieo-build/` *inside* the container, written over `docker exec -i`.
+`quote()` is on that list for the same reason the rest are: only the executor
+knows which shell will read what it hands over (see above).
+
+`_put` writes tmp-then-`os.replace`, for the same reason `blob.py` does: a torn
+write must not leave a wrong body under a right name, which here would mean
+building yesterday's code and calling it today's.
+
+See [graph.md](graph.md) for the user-facing half — the `env:` rule that bounds
+the cache, and why there is no expiry to write.
+
 ## ToolContext
 
 `ToolContext` is one object carrying everything an agent node's tools need beyond a
 workdir and a toolset list:
 
 ```python
-ToolContext(isolation=…, containers=…, postbox=…)
+ToolContext(isolation=…, containers=…, postbox=…, build_cache=…)
 ```
 
 `containers` and `postbox` are typed `Any` deliberately: only the `tools` package may
-know what they are. The runtime carries `ctx.tool_context` and never opens it, which is
+know what they are. `build_cache` is the project's `memory/cache/builds/`, and
+it is *passed in* rather than worked out from the workdir — `layout_for()`
+answers with the workdir itself when it holds no `poieo.yaml`, so a cache
+derived there would land inside the user's repository, which is committed whole
+as the night's change. The runtime carries `ctx.tool_context` and never opens it, which is
 how `runtime/` stays unaware that containers or journals exist. The daemon builds
 one per task, because the container keeper is shared between them all and the
 roster is only known there.

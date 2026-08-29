@@ -1,3 +1,6 @@
+import pathlib
+import shlex
+
 import pytest
 
 from poieo.tools import ToolError
@@ -763,3 +766,170 @@ async def test_the_boxed_seam_feeds_stdin_interactively(tmp_path, monkeypatch):
     assert argv[0] == "exec"
     # ...and the code itself actually went down the pipe.
     assert fed[0] == "print(1)"
+
+
+# -- compiled scripts: the build happens once --------------------------------
+#
+# This machine has no `cc` and no `go` -- checked. So these drive the compiler
+# through a recording stub rather than really building, the same way the boxed
+# tests drive `_docker`. What is under test is the argv and the cache decision,
+# which is all this feature is.
+
+
+def _with_stub_compiler(monkeypatch, tmp_path):
+    """A LocalExecutor whose subprocesses are recorded, not run."""
+    from poieo.tools import CommandResult, LocalExecutor, ToolContext
+
+    cache = tmp_path / "cache"
+    executor = LocalExecutor(
+        tmp_path / "work", ["shell"], ToolContext(build_cache=cache)
+    )
+    (tmp_path / "work").mkdir(parents=True, exist_ok=True)
+
+    ran: list[str] = []
+
+    async def fake(command, timeout=None, env=None, stdin=None):
+        ran.append(command)
+        # A build leaves a binary behind, as a real compiler would. Read the
+        # line as a shell would rather than by hand: how a path is quoted is
+        # the shell's business, and a temp path really does contain "-of".
+        argv = shlex.split(command, posix=True)
+        if "-o" in argv:
+            target = argv[argv.index("-o") + 1]
+            pathlib.Path(target).write_text("binary", encoding="utf-8")
+        return CommandResult(exit_code=0, output="")
+
+    monkeypatch.setattr(executor, "run_command", fake)
+    return executor, ran, cache
+
+
+async def test_the_same_script_is_built_once(tmp_path, monkeypatch):
+    """The whole claim. Second run finds the binary and skips the compiler."""
+    executor, ran, _ = _with_stub_compiler(monkeypatch, tmp_path)
+    code = "int main(void){return 0;}"
+
+    await executor.run_script("c", code)
+    await executor.run_script("c", code)
+
+    builds = [c for c in ran if c.startswith("cc ")]
+    assert len(builds) == 1, ran
+    # ...and it ran both times.
+    assert len(ran) == 3
+
+
+async def test_changing_the_script_builds_again(tmp_path, monkeypatch):
+    executor, ran, _ = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("c", "int main(void){return 0;}")
+    await executor.run_script("c", "int main(void){return 1;}")
+
+    assert len([c for c in ran if c.startswith("cc ")]) == 2
+
+
+async def test_the_build_never_touches_the_workdir(tmp_path, monkeypatch):
+    """The workdir is committed whole as the night's change, so a source file
+    or a binary left there would arrive in somebody's morning diff."""
+    executor, _, cache = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    assert list((tmp_path / "work").iterdir()) == []
+    assert list(cache.rglob("main.c"))
+
+
+async def test_an_interpreted_script_still_goes_over_stdin(tmp_path, monkeypatch):
+    """No file, no cache, nothing to build -- the #175 path is untouched."""
+    executor, ran, cache = _with_stub_compiler(monkeypatch, tmp_path)
+
+    await executor.run_script("python", "print(1)")
+
+    assert ran == ["python -"]
+    assert not cache.exists()
+
+
+async def test_the_box_builds_inside_itself(tmp_path, monkeypatch):
+    """Not on a mounted host folder. A binary built in the image is for the
+    image's platform, and a cache shared with the host would eventually hand a
+    Windows executable to a Linux container."""
+    from poieo.tools import docker as dock
+
+    executor, seen, fed = _boxed(monkeypatch, tmp_path)
+
+    async def miss(*args: str, timeout: float = 0, stdin: str | None = None):
+        seen.append(args)
+        fed.append(stdin)
+        # `test -x` says no; everything else succeeds. A cache miss, in full.
+        return (1 if "test -x" in args[-1] else 0), ""
+
+    monkeypatch.setattr(dock, "_docker", miss)
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    joined = " ".join(" ".join(a) for a in seen)
+    assert "/tmp/poieo-build/" in joined
+    # The source went in over stdin, and no host path was mounted for it.
+    assert "int main(void){return 0;}" in [f for f in fed if f]
+    assert str(tmp_path) not in joined
+
+
+async def test_the_box_skips_a_build_it_already_has(tmp_path, monkeypatch):
+    """`test -x` answering 0 means the binary is there, so no compiler runs."""
+    from poieo.tools import CommandResult
+    from poieo.tools import docker as dock
+
+    executor, seen, _fed = _boxed(monkeypatch, tmp_path)
+
+    async def already_built(*args: str, timeout: float = 0, stdin: str | None = None):
+        seen.append(args)
+        return 0, ""  # every exec succeeds, including `test -x`
+
+    monkeypatch.setattr(dock, "_docker", already_built)
+    await executor.run_script("c", "int main(void){return 0;}")
+
+    joined = " ".join(" ".join(a) for a in seen)
+    assert "cc " not in joined
+
+
+async def test_a_compiled_script_reaches_the_compiler_verbatim(tmp_path, monkeypatch):
+    """`{{` belongs to the language here. A nested initializer is ordinary C,
+    and anything that rendered it would hand the compiler a different program
+    than the one written."""
+    executor, _, cache = _with_stub_compiler(monkeypatch, tmp_path)
+    code = "int m[2][2] = {{1, 0}, {0, 1}};\nint main(void){return m[0][0];}"
+
+    await executor.run_script("c", code)
+
+    written = list(cache.rglob("main.c"))
+    assert len(written) == 1
+    assert written[0].read_text(encoding="utf-8") == code
+
+
+@pytest.mark.parametrize("folder", ["cache", "cache with a space"])
+async def test_a_built_binary_is_actually_runnable(tmp_path, monkeypatch, folder):
+    """Through the real shell, which is the only thing that can say whether a
+    path was spelled right. A quoted Windows path with no space in it loses its
+    quotes before bash sees it and dies as an unterminated string; an unquoted
+    one loses its backslashes. Both build fine and fail at the last step."""
+    from poieo.tools import CommandResult, LocalExecutor, ToolContext
+
+    cache = tmp_path / folder
+    executor = LocalExecutor(tmp_path, ["shell"], ToolContext(build_cache=cache))
+
+    async def compiler(command, timeout=None, env=None, stdin=None):
+        # Stand in for `cc`: write something the shell can really execute.
+        if command.startswith("cc "):
+            # Read it as a shell would: the path may hold a space, which is
+            # the case this test exists for.
+            argv = shlex.split(command, posix=True)
+            target = pathlib.Path(argv[argv.index("-o") + 1])
+            target.write_text("#!/bin/sh\necho ran-ok\n", encoding="utf-8")
+            target.chmod(0o755)
+            return CommandResult(exit_code=0, output="")
+        return await real(command, timeout=timeout, env=env, stdin=stdin)
+
+    real = executor.run_command
+    monkeypatch.setattr(executor, "run_command", compiler)
+
+    result = await executor.run_script("c", "int main(void){return 0;}")
+
+    assert result.exit_code == 0, result.output
+    assert "ran-ok" in result.output

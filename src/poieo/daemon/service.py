@@ -671,6 +671,10 @@ class Daemon:
             isolation=task.spec.isolation,
             containers=self.containers,
             postbox=self._postbox_for(project, task),
+            # The *project's* cache, never one worked out from the workdir:
+            # a workdir with no marker answers as its own project, and the
+            # cache would land inside the repository the run commits.
+            build_cache=project.config.layout().cache() / "builds",
         )
 
     def _runners(self) -> list[TaskRunner]:

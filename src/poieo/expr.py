@@ -378,3 +378,25 @@ def validate_template(template: str) -> None:
     """Parse every placeholder in ``template`` without evaluating it."""
     for match in _PLACEHOLDER.finditer(template):
         compile_expr(match.group(1))
+
+
+# The fixed names `RunContext.scope()` puts in front of every template. A graph
+# may add output aliases on top; those are not knowable from a node alone, and
+# missing one only costs the nicer of two error messages.
+_RUN_NAMES = frozenset({"input", "state", "nodes", "run"})
+_ROOT = re.compile(r"\s*([A-Za-z_][A-Za-z_0-9]*)")
+
+
+def reaches_for_run_data(text: str) -> str | None:
+    """The first ``{{ … }}`` in ``text`` that reads the run's own data, if any.
+
+    For text that is *not* a template -- a compiled script -- and where `{{`
+    therefore means what the language says it means. `[][]int{{1,2},{3,4}}` is
+    ordinary Go and must pass; `{{ input.floor }}` is somebody expecting a
+    substitution that will not happen, and is worth catching at load.
+    """
+    for match in _PLACEHOLDER.finditer(text):
+        root = _ROOT.match(match.group(1))
+        if root and root.group(1) in _RUN_NAMES:
+            return match.group(0)
+    return None
