@@ -20,3 +20,9 @@ src/poieo/web/static/index.html text eol=lf
 # LF elsewhere, and the same commit then builds two different bundles -- which is
 # how CI first found this. Pin it, and the build is reproducible across machines.
 web-ui/index.html text eol=lf
+
+# The pictures of the board are photographs, not text. `core.autocrlf` is true
+# on this machine and git's own binary detection is a heuristic; the two
+# together have already cost this repository one afternoon over the frontend
+# bundle above. Say it outright rather than find out again.
+site/img/** -text
