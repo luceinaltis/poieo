@@ -26,7 +26,7 @@ however convenient.
             │
    ┌────────┴──────────┐
    │                   │
- task.py           daemon/config.py         what to run
+ card.py           daemon/config.py         what to run
    │  expands into       │  reads tasks
    └────────┬────────────┘
             │
@@ -34,7 +34,7 @@ however convenient.
             │
       runtime/executor.py                   the walker: one node, then the next
             │
-      runtime/nodes.py                      agent · router
+      runtime/nodes.py                      agent · router · command · confirm
             │            ╲
    providers/            tools/             who answers          what it may touch
             │
@@ -130,7 +130,7 @@ Three places are deliberately swappable, and each has exactly one chokepoint:
 |---|---|---|
 | which backend answers | `providers.register()` / `ProviderPool.get()` | anthropic, openai_compatible, ollama, mock |
 | where tools run | `tools.make_executor()` | local (path-confined), docker |
-| what a node type does | `runtime.nodes.NODE_TYPES` | agent, router |
+| what a node type does | `runtime.nodes.NODE_TYPES` | agent, router, command, confirm |
 
 Adding to any of these should be one module and one registry line. If it is
 not, the seam has leaked.
