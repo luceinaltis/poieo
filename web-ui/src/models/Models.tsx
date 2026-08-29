@@ -134,11 +134,17 @@ function EndpointBlock({
   shown: ServedModel[]
   filtered: boolean
 }) {
+  const groups = groupsOf(endpoint, shown)
   return (
     <section className="models-endpoint" data-endpoint={endpoint.name}>
       <h3>
         <span className="models-endpoint-name">{endpoint.name}</span>
-        <span className="models-kind">{endpoint.type}</span>
+        {/* The reader's own name for it first, then what it actually is.
+            `openai_compatible` is vLLM and SGLang and LM Studio and llama.cpp
+            and every hosted router at once, so the type alone said nothing
+            about who they were talking to. It stays as the fallback for an
+            address nobody wrote down. */}
+        <span className="models-kind">{endpoint.label ?? endpoint.type}</span>
         {/* What the listing *means*, not just how long it is. Ollama's is
             `ollama list` -- pulled onto this disk, ready now. A routed
             endpoint's is a catalogue of what it would run for money, with
@@ -161,17 +167,74 @@ function EndpointBlock({
           </span>
         ) : null}
       </h3>
-      {shown.length > 0 ? (
+      {shown.length === 0 ? (
+        <p className="models-note">{emptyBecause(endpoint)}</p>
+      ) : groups ? (
+        groups.map(([maker, models]) => (
+          // Open while a filter is on: a reader who typed "deepseek" is
+          // looking at the matches, not at a folder holding them.
+          <details key={maker} className="models-maker" data-maker={maker} open={filtered}>
+            <summary>
+              <span className="models-maker-name">{maker}</span>
+              <span className="models-maker-count">{models.length}</span>
+            </summary>
+            <ul className="models-list">
+              {models.map((model) => (
+                <Row
+                  key={model.id}
+                  model={model}
+                  local={endpoint.installed}
+                  // The maker is the card's own heading; repeating it on every
+                  // row inside costs the width the model's name needs.
+                  drop={`${maker}/`}
+                />
+              ))}
+            </ul>
+          </details>
+        ))
+      ) : (
         <ul className="models-list">
           {shown.map((model) => (
             <Row key={model.id} model={model} local={endpoint.installed} />
           ))}
         </ul>
-      ) : (
-        <p className="models-note">{emptyBecause(endpoint)}</p>
       )}
     </section>
   )
+}
+
+/** Below this a flat list is easier to read than folders holding one row each. */
+const WORTH_GROUPING = 12
+
+/**
+ * The models by who made them, or null when that would not help.
+ *
+ * A hosted catalogue names every model `maker/model` -- 396 of them across 58
+ * makers -- and a flat list of that is not read, it is scrolled past. What is
+ * on a machine is named the way its owner pulled it (`qwen3.5:latest`,
+ * `hf.co/user/repo`), where the leading segment is a host or nothing at all,
+ * so grouping there would invent a structure the names do not have.
+ *
+ * The test is mechanical rather than a list of endpoints that "have makers":
+ * every id carries a prefix, and there are enough of them to be worth folding.
+ * An endpoint that grows into that shape gets it without anybody deciding.
+ */
+function groupsOf(
+  endpoint: Endpoint,
+  shown: ServedModel[],
+): [string, ServedModel[]][] | null {
+  if (endpoint.models.length < WORTH_GROUPING) return null
+  if (!endpoint.models.every((m) => m.id.includes("/"))) return null
+  const by = new Map<string, ServedModel[]>()
+  for (const model of shown) {
+    const maker = model.id.slice(0, model.id.indexOf("/"))
+    const bucket = by.get(maker)
+    if (bucket) bucket.push(model)
+    else by.set(maker, [model])
+  }
+  // Biggest first, then alphabetically: the makers a reader is looking for are
+  // usually the ones with most on offer, and ties should not shuffle.
+  return [...by].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
 }
 
 /**
@@ -197,11 +260,23 @@ function countText(endpoint: Endpoint, shown: ServedModel[], filtered: boolean):
 }
 
 
-function Row({ model, local }: { model: ServedModel; local: boolean }) {
+function Row({
+  model,
+  local,
+  drop = "",
+}: {
+  model: ServedModel
+  local: boolean
+  /** A prefix the surrounding card already shows; stripped from the name. */
+  drop?: string
+}) {
+  const shown = drop && model.id.startsWith(drop) ? model.id.slice(drop.length) : model.id
   return (
     <li data-model={model.ref}>
+      {/* The whole id on the tooltip either way: it is the half of `ref` a
+          reader copies out, and a stripped name is not one they could type. */}
       <span className="models-id" title={model.id}>
-        {model.id}
+        {shown}
       </span>
       <span className="models-facts">
         {model.context ? <span data-fact="context">{compact(model.context)}</span> : null}

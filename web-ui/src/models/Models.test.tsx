@@ -36,6 +36,7 @@ const REPORT = {
     {
       name: "ollama",
       type: "ollama",
+      label: "Ollama",
       askable: true,
       installed: true,
       api_key_env: null,
@@ -45,6 +46,7 @@ const REPORT = {
     {
       name: "routed",
       type: "openai_compatible",
+      label: "OpenRouter",
       askable: true,
       installed: false,
       api_key_env: "OPENROUTER_API_KEY",
@@ -164,6 +166,7 @@ test("an endpoint with nothing to ask says that, not that it is down", async () 
       {
         name: "fake",
         type: "mock",
+        label: null,
         askable: false,
         installed: false,
         api_key_env: null,
@@ -184,6 +187,7 @@ test("an endpoint whose key is missing says so where the models would be", async
       {
         name: "claude",
         type: "anthropic",
+        label: "Claude API",
         askable: true,
         installed: false,
         api_key_env: "ANTHROPIC_API_KEY",
@@ -277,4 +281,95 @@ test("a filter that matches nothing at all says so", async () => {
   await type("nothing-is-called-this")
 
   expect(container.textContent).toContain("nothing matches")
+})
+
+test("an endpoint is named by what a person recognises, not by its protocol", async () => {
+  // `openai_compatible` is vLLM and SGLang and LM Studio and llama.cpp and
+  // every hosted router at once.
+  await render()
+
+  expect(
+    container.querySelector('[data-endpoint="routed"] .models-kind')!.textContent,
+  ).toBe("OpenRouter")
+})
+
+test("an address nobody wrote down falls back to the protocol", async () => {
+  await render({
+    ...REPORT,
+    endpoints: [{ ...REPORT.endpoints[1], label: null }],
+  })
+
+  expect(
+    container.querySelector('[data-endpoint="routed"] .models-kind')!.textContent,
+  ).toBe("openai_compatible")
+})
+
+/** A catalogue big enough to be worth folding, named the way one is. */
+const CATALOGUE = {
+  ...REPORT,
+  endpoints: [
+    {
+      ...REPORT.endpoints[1],
+      models: [
+        ...Array.from({ length: 8 }, (_, n) => ({
+          ...ROUTED,
+          id: `deepseek/v${n}`,
+          ref: `routed/deepseek/v${n}`,
+        })),
+        ...Array.from({ length: 5 }, (_, n) => ({
+          ...ROUTED,
+          id: `qwen/q${n}`,
+          ref: `routed/qwen/q${n}`,
+        })),
+      ],
+    },
+  ],
+}
+
+const makers = () =>
+  [...container.querySelectorAll("[data-maker]")].map((e) => e.getAttribute("data-maker"))
+
+test("a big catalogue folds into a card per maker, biggest first", async () => {
+  await render(CATALOGUE)
+
+  expect(makers()).toEqual(["deepseek", "qwen"])
+  expect(
+    container.querySelector('[data-maker="deepseek"] .models-maker-count')!.textContent,
+  ).toBe("8")
+})
+
+test("a card is shut until it is opened", async () => {
+  await render(CATALOGUE)
+
+  const card = container.querySelector<HTMLDetailsElement>('[data-maker="deepseek"]')!
+  expect(card.open).toBe(false)
+})
+
+test("inside a maker's card the rows drop the prefix it already says", async () => {
+  await render(CATALOGUE)
+
+  const id = container.querySelector('[data-model="routed/deepseek/v0"] .models-id')!
+  expect(id.textContent).toBe("v0")
+  // The whole id stays reachable: it is the half of `ref` a reader copies out.
+  expect(id.getAttribute("title")).toBe("deepseek/v0")
+})
+
+test("filtering opens the cards, because the matches are what was asked for", async () => {
+  await render(CATALOGUE)
+
+  await type("qwen")
+
+  expect(makers()).toEqual(["qwen"])
+  expect(
+    container.querySelector<HTMLDetailsElement>('[data-maker="qwen"]')!.open,
+  ).toBe(true)
+})
+
+test("a short listing stays flat, because folders holding one row each help nobody", async () => {
+  // What is on a machine is named the way its owner pulled it -- `qwen3.5:latest`,
+  // `hf.co/user/repo` -- where a leading segment is a host or nothing at all.
+  await render()
+
+  expect(makers()).toEqual([])
+  expect(container.querySelector('[data-model="ollama/qwen3.5:latest"]')).not.toBeNull()
 })

@@ -62,6 +62,7 @@ const REPORT = {
     {
       name: "ollama",
       type: "ollama",
+      label: "Ollama",
       askable: true,
       installed: true,
       api_key_env: null,

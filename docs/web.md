@@ -109,6 +109,18 @@ be concrete.
 binding file, so there is nothing to ask, and a panel that ran that together with
 "did not answer" would report a working endpoint as a broken one.
 
+`label` is what a person would recognise the endpoint as — "OpenRouter", "LM
+Studio". `type` alone said nothing: `openai_compatible` is vLLM and SGLang and
+LM Studio and llama.cpp and every hosted router at once. `detect.label_for()`
+reads it off the address, which is the same table `CANDIDATES` already keeps for
+detection — so the **address itself still does not cross**, only the name it
+produces. It is null for an address nobody wrote down, and the panel falls back
+to the type; a registry of every hosted endpoint would be a table that goes
+stale, and naming one wrongly is worse than not naming it. **vLLM and SGLang
+share a default port and are not told apart**, because their listings are the
+same shape — the provider's own key in the binding is the reader's way to say
+which, and that name is what the panel shows first.
+
 `installed` is the difference between two listings that look identical.
 Ollama's `/api/tags` is `ollama list` — models pulled onto *this disk*, ready
 now, and all of them. OpenRouter's is a catalogue of what it would route to for
@@ -281,6 +293,19 @@ the same width — so only one of the two is ever open, and `.shell-stage` reser
 one margin for whichever it is. Its width comes from `--rail-width` on the left
 and the drawer's constant on the right; the rail is `position: fixed`, so the
 stage has to reserve exactly that much or the board slides under it.
+
+**A big catalogue folds by maker.** A hosted listing names every model
+`maker/model` — 396 across 58 makers — and a flat list of that is not read, it
+is scrolled past. So each maker is a `<details>` card, shut until opened, with
+its count on the summary; a filter opens them, because the matches are what was
+asked for. Inside a card the rows drop the prefix the card already says, with
+the whole id still on the tooltip since that is the half of `ref` a reader
+copies out. The test for whether to fold is mechanical — every id carries a
+prefix, and there are at least `WORTH_GROUPING` of them — rather than a list of
+endpoints known to have makers, so an endpoint that grows into that shape gets
+it without anybody deciding. What is *on a machine* is named the way its owner
+pulled it (`qwen3.5:latest`, `hf.co/user/repo`), where a leading segment is a
+host or nothing at all, so those stay flat.
 
 **The panel filters rather than truncates.** A four-hundred-model catalogue is
 read by narrowing it, and the count keeps saying what it narrowed *from* — "12

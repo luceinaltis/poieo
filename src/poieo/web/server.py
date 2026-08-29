@@ -362,6 +362,14 @@ def create_app(daemon: Any) -> Starlette:
                     {
                         "name": key,
                         "type": provider.type,
+                        # What a person would recognise this as. The type is
+                        # four products in a trench coat -- vLLM, SGLang, LM
+                        # Studio, llama.cpp and every hosted router all speak
+                        # `openai_compatible` -- so the type alone told a
+                        # reader nothing about who they were talking to. Null
+                        # when the address is one nobody wrote down, and the
+                        # panel falls back to the type.
+                        "label": engines.label_for(provider.type, provider.base_url),
                         # "did not answer" and "there is nothing to ask" are
                         # different facts, and a listing that conflated them
                         # would read as a fault.

@@ -101,6 +101,9 @@ providers:
 default: {provider: local, model: "qwen3.5:latest"}
 """
 
+# The same two, with the routed one at an address that has a name.
+_ROUTED = _TWO.replace("http://x/v1", "https://openrouter.ai/api/v1")
+
 
 def test_every_declared_endpoint_is_listed_with_what_it_serves(tmp_path, monkeypatch):
     _asks(monkeypatch)
@@ -171,6 +174,26 @@ def test_a_listing_says_whether_it_is_what_is_here_or_what_is_offered(
 
     assert _endpoints(body)["local"]["installed"] is True
     assert _endpoints(body)["routed"]["installed"] is False
+
+
+def test_an_endpoint_is_named_by_something_a_person_recognises(tmp_path, monkeypatch):
+    """`openai_compatible` is vLLM and SGLang and LM Studio and llama.cpp and
+    every hosted router at once. The address says which, and it is the address
+    -- not the label it produces -- that must not cross."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_ROUTED)).json()
+
+    assert _endpoints(body)["local"]["label"] == "Ollama"
+    assert _endpoints(body)["routed"]["label"] == "OpenRouter"
+
+
+def test_an_address_nobody_wrote_down_leaves_the_label_null(tmp_path, monkeypatch):
+    """The panel falls back to the type, which is what it says today. Guessing
+    would be worse than the fallback."""
+    _asks(monkeypatch)
+    body = _models(_client(tmp_path, binding=_TWO)).json()
+
+    assert _endpoints(body)["routed"]["label"] is None
 
 
 def test_the_report_carries_no_address(tmp_path, monkeypatch):

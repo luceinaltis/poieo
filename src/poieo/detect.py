@@ -111,6 +111,7 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate("claude", "Claude API", "anthropic"),
 )
 
+
 def _number(value: Any) -> float | None:
     """A price as the wire gave it -- a string, on every endpoint that has one."""
     try:
@@ -280,6 +281,45 @@ async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]
     """Just the ids, for the callers that only ever wanted a list of names --
     `init`, `config add`, and `config use`'s check that a model is really there."""
     return tuple(model.id for model in await catalogue_for(type_, base_url))
+
+
+# Addresses whose product is worth naming, beyond the four `CANDIDATES`
+# already knows by their default ports. Deliberately short: a registry of
+# every hosted endpoint is a table that goes stale, and the cost of not
+# recognising one is a reader seeing `openai_compatible`, which is what they
+# see today. The cost of recognising one wrongly is worse.
+_BY_HOST: tuple[tuple[str, str], ...] = (("openrouter.ai", "OpenRouter"),)
+
+
+def label_for(type_: str, base_url: str | None = None) -> str | None:
+    """A name a person would recognise this endpoint by, or None.
+
+    `openai_compatible` is four products in a trench coat -- vLLM, SGLang, LM
+    Studio, llama.cpp and every hosted router speak it -- so a panel that
+    printed the type told a reader nothing about who they were talking to.
+    The address already says, and `CANDIDATES` already writes those names down
+    for detection; this is the same table read the other way.
+
+    **vLLM and SGLang share a port and are not told apart here.** Their model
+    listings are the same shape, so the honest label is the one `CANDIDATES`
+    already uses for that address. Renaming the provider in the binding is how
+    a reader says which it is -- that name is theirs and is what the panel
+    shows first.
+    """
+    if type_ == "anthropic":
+        return "Claude API"
+    if type_ == "ollama":
+        return "Ollama"
+    if not base_url:
+        return None
+    lowered = base_url.lower()
+    for host, name in _BY_HOST:
+        if host in lowered:
+            return name
+    for candidate in CANDIDATES:
+        if candidate.base_url and candidate.base_url.lower() == lowered:
+            return candidate.label
+    return None
 
 
 def lists_installed(type_: str) -> bool:

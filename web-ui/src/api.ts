@@ -51,8 +51,16 @@ export interface ServedModel {
 }
 
 export interface Endpoint {
+  /** The name the reader gave it in their own models file. */
   name: string
   type: string
+  /**
+   * What a person would recognise this as -- "OpenRouter", "LM Studio".
+   * Null when the address is one nobody wrote down, and `type` is the
+   * fallback: `openai_compatible` is vLLM and SGLang and LM Studio and
+   * llama.cpp and every hosted router at once, which tells a reader nothing.
+   */
+  label: string | null
   /** False for `mock`, which answers from the binding file rather than a port. */
   askable: boolean
   /**

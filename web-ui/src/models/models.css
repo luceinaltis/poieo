@@ -227,3 +227,59 @@
   text-align: right;
   white-space: nowrap;
 }
+
+/* One maker's models, folded. A hosted catalogue is 396 models across 58
+   makers, and the maker is the first thing a reader narrows by -- so it is the
+   fold, and the count on it is what says whether opening is worth it. */
+.models-maker {
+  border-top: 1px solid #221e18;
+}
+
+.models-maker:first-of-type {
+  border-top: 0;
+}
+
+.models-maker > summary {
+  align-items: baseline;
+  cursor: pointer;
+  display: flex;
+  font-size: 0.84em;
+  gap: 8px;
+  list-style: none;
+  padding: 4px 0;
+}
+
+/* The triangle, drawn rather than inherited: the default marker is a different
+   glyph in every browser and sits at a different baseline in each. */
+.models-maker > summary::before {
+  color: #6b6257;
+  content: "▸";
+  font-size: 0.9em;
+}
+
+.models-maker[open] > summary::before {
+  content: "▾";
+}
+
+.models-maker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.models-maker-name {
+  color: #d6ccbe;
+}
+
+.models-maker-count {
+  color: #6b6257;
+  margin-left: auto;
+}
+
+.models-maker > summary:hover .models-maker-name {
+  color: #e8dcc8;
+}
+
+/* Indented under the card that holds them, so an open maker reads as a branch
+   rather than as the list starting again. */
+.models-maker .models-list {
+  padding: 0 0 6px 14px;
+}

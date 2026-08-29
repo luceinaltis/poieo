@@ -381,3 +381,36 @@ def test_only_a_local_backend_lists_what_is_on_this_machine():
     assert detect_module.lists_installed("ollama")
     assert not detect_module.lists_installed("openai_compatible")
     assert not detect_module.lists_installed("anthropic")
+
+
+def test_an_endpoint_is_named_by_something_a_person_recognises():
+    """`openai_compatible` is four products in a trench coat. The address is
+    what tells them apart, and `CANDIDATES` already wrote the names down."""
+    assert detect_module.label_for("ollama") == "Ollama"
+    assert detect_module.label_for("anthropic") == "Claude API"
+    assert (
+        detect_module.label_for("openai_compatible", "https://openrouter.ai/api/v1")
+        == "OpenRouter"
+    )
+    assert (
+        detect_module.label_for("openai_compatible", "http://localhost:1234/v1")
+        == "LM Studio"
+    )
+
+
+def test_an_address_nobody_wrote_down_is_not_guessed_at():
+    """A registry of every hosted endpoint would go stale, and recognising one
+    wrongly is worse than not recognising it. None means the panel falls back
+    to what it says today."""
+    assert detect_module.label_for("openai_compatible", "https://unknown.example/v1") is None
+    assert detect_module.label_for("openai_compatible", None) is None
+    assert detect_module.label_for("mock") is None
+
+
+def test_vllm_and_sglang_share_one_label_because_they_share_a_port():
+    """Their listings are the same shape. Saying `vLLM` of an SGLang server
+    would be worse than saying both."""
+    assert (
+        detect_module.label_for("openai_compatible", "http://localhost:8000/v1")
+        == "vLLM / SGLang"
+    )
