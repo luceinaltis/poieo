@@ -67,3 +67,31 @@ jobs:
             git status --short -- src/poieo/web/static/
             exit 1
           fi
+
+  isolation:
+    name: container isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+
+      # The module skips itself unless the daemon answers *and* the image is
+      # already local -- it never pulls, so no test is slow for a reason that
+      # has nothing to do with isolation. The runner has the daemon; this is
+      # the image.
+      - run: docker pull alpine:3.20
+
+      # A skip here exits 0, which would be a green check that checked nothing
+      # -- the same shape of hole the bundle check had. Say so out loud.
+      - name: isolation suite
+        run: |
+          out=$(pytest -q tests/test_tools_docker.py)
+          echo "$out"
+          if echo "$out" | grep -q "skipped"; then
+            echo "::error::the isolation tests skipped rather than ran."
+            echo "A green run here would mean nothing. Check docker and the image."
+            exit 1
+          fi

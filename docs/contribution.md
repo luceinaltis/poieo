@@ -94,9 +94,9 @@ other condition here, it is worth exactly what the person recording it is honest
 ## What CI checks, and what it cannot
 
 *Merge condition 1.* `.github/workflows/gate.yml` runs on every PR against `main`
-and on every push to it. Two jobs: the Python suite on the lowest Python the
-project claims to support, and the frontend suite, the types, and a rebuild of
-the checked-in bundle.
+and on every push to it. Three jobs: the Python suite on the lowest Python the
+project claims to support; the frontend suite, the types, and a rebuild of the
+checked-in bundle; and container isolation against a real docker daemon.
 
 It **reports and does not block.** `main` has no required checks, so a red run
 stops nothing by itself. That is deliberate for now — a gate turned on before it
@@ -115,11 +115,12 @@ the problem was never local and Part 2 is wrong.
 caught by hand. The reverse is also true and newer: code that only ever ran on
 Windows is now exercised on Linux for the first time.
 
-**Thirty tests still skip.** `tests/test_tools_docker.py` needs a docker daemon
-*and* `alpine:3.20` already pulled, and CI does neither yet, so container isolation
-is as unverified in CI as it is on this machine. A green run does not cover it.
-Making those thirty run is a separate change, because they have never executed on
-Linux and the first run that includes them is likely to be red.
+**Thirty tests skip here and run in CI.** `tests/test_tools_docker.py` needs a
+docker daemon *and* `alpine:3.20` already local — the module never pulls, so no
+test is slow for a reason unrelated to isolation. On this machine the daemon is
+usually not running, so those thirty skip and container isolation goes unverified
+locally. CI has the daemon and pulls the image, and its job fails if the tests
+skip rather than run: a green check that checked nothing is worse than a red one.
 
 **The bundle check is a rebuild, not a heuristic.** vite writes straight into
 `src/poieo/web/static/`, so CI rebuilds and fails if anything changed. A failure
