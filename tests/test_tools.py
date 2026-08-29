@@ -156,6 +156,152 @@ async def test_search_says_so_when_nothing_matches(tmp_path):
     assert found == "(no matches)"
 
 
+async def test_edit_replaces_the_one_place_it_matches(tmp_path):
+    """Ten of seventy shell commands in a measured run were file surgery.
+
+    `python -c "open(...,'a').write(...)"`, a patch script written and then
+    deleted, a heredoc the Windows shell rejected outright. All of it because
+    changing three lines of a file had no tool and rewriting the whole file
+    was the only alternative.
+    """
+    (tmp_path / "m.py").write_text("a = 1\nb = 2\nc = 3\n")
+
+    said = await TOOLS["edit_file"].run(
+        tmp_path, {"path": "m.py", "old": "b = 2", "new": "b = 20"}
+    )
+
+    assert (tmp_path / "m.py").read_text() == "a = 1\nb = 20\nc = 3\n"
+    assert "m.py" in said
+
+
+async def test_edit_refuses_a_string_that_is_not_there(tmp_path):
+    (tmp_path / "m.py").write_text("a = 1\n")
+    with pytest.raises(ToolError, match="not find"):
+        await TOOLS["edit_file"].run(
+            tmp_path, {"path": "m.py", "old": "z = 9", "new": "z = 8"}
+        )
+    assert (tmp_path / "m.py").read_text() == "a = 1\n"
+
+
+async def test_edit_refuses_an_ambiguous_string_and_says_how_many(tmp_path):
+    """Ambiguity has to be an error rather than a guess.
+
+    Quietly changing the first of three is the failure nobody notices until
+    the tests do, and by then the run has moved on.
+    """
+    (tmp_path / "m.py").write_text("x = 0\nx = 0\nx = 0\n")
+    with pytest.raises(ToolError, match="3 times"):
+        await TOOLS["edit_file"].run(
+            tmp_path, {"path": "m.py", "old": "x = 0", "new": "x = 1"}
+        )
+    assert (tmp_path / "m.py").read_text() == "x = 0\nx = 0\nx = 0\n"
+
+
+async def test_edit_refuses_a_missing_file(tmp_path):
+    with pytest.raises(ToolError, match="no such file"):
+        await TOOLS["edit_file"].run(
+            tmp_path, {"path": "gone.py", "old": "a", "new": "b"}
+        )
+
+
+async def test_edit_refuses_an_edit_that_changes_nothing(tmp_path):
+    (tmp_path / "m.py").write_text("a = 1\n")
+    with pytest.raises(ToolError):
+        await TOOLS["edit_file"].run(
+            tmp_path, {"path": "m.py", "old": "a = 1", "new": "a = 1"}
+        )
+
+
+async def test_edit_forgives_the_line_numbers_read_file_puts_on(tmp_path):
+    """The reference harnesses hand this problem to the model.
+
+    Anthropic's text editor numbers the lines it shows and tells the model to
+    strip them; Claude Code's Edit says the same. A model that misses the
+    instruction gets a silent failure. The tool takes the numbers off itself,
+    because the model that needs the reminder is exactly the one that will
+    miss it.
+    """
+    (tmp_path / "m.py").write_text("a = 1\nb = 2\n")
+
+    await TOOLS["edit_file"].run(
+        tmp_path, {"path": "m.py", "old": "     2\tb = 2", "new": "b = 20"}
+    )
+
+    assert (tmp_path / "m.py").read_text() == "a = 1\nb = 20\n"
+
+
+async def test_edit_forgives_trailing_whitespace_and_line_endings(tmp_path):
+    """Where the reported 50% edit failure rate on non-native models lives."""
+    (tmp_path / "m.py").write_text("a = 1\r\nb = 2  \r\n", newline="")
+
+    await TOOLS["edit_file"].run(
+        tmp_path, {"path": "m.py", "old": "a = 1\nb = 2", "new": "a = 1\nb = 20"}
+    )
+
+    assert "b = 20" in (tmp_path / "m.py").read_text()
+
+
+async def test_edit_does_not_forgive_indentation(tmp_path):
+    """Trailing whitespace is forgiven; leading whitespace is not.
+
+    In Python indentation is meaning. A model that sends the wrong depth means
+    a different block, and a tool that shrugged would put the line somewhere
+    the model did not ask for. (Matching *inside* a line is fine and stays
+    fine -- `old` has never had to be a whole line.)
+    """
+    (tmp_path / "m.py").write_text("def f():\n    return 1\n")
+    with pytest.raises(ToolError, match="could not find"):
+        await TOOLS["edit_file"].run(
+            tmp_path,
+            {"path": "m.py", "old": "        return 1", "new": "        return 2"},
+        )
+    assert (tmp_path / "m.py").read_text() == "def f():\n    return 1\n"
+
+
+async def test_edit_refuses_to_leave_a_python_file_unparseable(tmp_path):
+    """Worth three points in SWE-agent's ablation, and free from the stdlib.
+
+    A broken file is worse than a refused edit: the model finds out one test
+    run later, and by then it is debugging its own typo instead of the task.
+    """
+    (tmp_path / "m.py").write_text("def f():\n    return 1\n")
+
+    with pytest.raises(ToolError, match="would not parse"):
+        await TOOLS["edit_file"].run(
+            tmp_path, {"path": "m.py", "old": "    return 1", "new": "    return ("}
+        )
+
+    assert (tmp_path / "m.py").read_text() == "def f():\n    return 1\n"
+
+
+async def test_edit_leaves_other_languages_to_their_own_tools(tmp_path):
+    (tmp_path / "notes.md").write_text("# hi\nunbalanced (\n")
+    await TOOLS["edit_file"].run(
+        tmp_path, {"path": "notes.md", "old": "# hi", "new": "# hello ("}
+    )
+    assert "# hello (" in (tmp_path / "notes.md").read_text()
+
+
+async def test_append_adds_to_the_end(tmp_path):
+    """Four of the five file surgeries in the run were appends, not replaces.
+
+    `cat >> file << 'EOF'` (which the Windows shell rejected), and a
+    write-a-temp-file-then-append-it-then-delete-it dance. Both are one call.
+    """
+    (tmp_path / "log.md").write_text("first\n")
+
+    await TOOLS["append_file"].run(tmp_path, {"path": "log.md", "content": "second\n"})
+
+    assert (tmp_path / "log.md").read_text() == "first\nsecond\n"
+
+
+async def test_append_refuses_a_missing_file(tmp_path):
+    # Creating a file is `write_file`'s job, and a typo in a path should not
+    # quietly become a new file nobody asked for.
+    with pytest.raises(ToolError, match="no such file"):
+        await TOOLS["append_file"].run(tmp_path, {"path": "gone.md", "content": "x"})
+
+
 from poieo.tools.shell import SHELL_TOOLS
 
 SHELL = {t.definition.name: t for t in SHELL_TOOLS}

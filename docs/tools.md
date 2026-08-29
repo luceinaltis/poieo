@@ -10,7 +10,7 @@ A node never touches the filesystem or a subprocess directly: it hands
 
 | toolset | tools | opt-in? |
 |---|---|---|
-| `files` | `read_file`, `write_file`, `list_dir`, `glob_files`, `search_files` | default |
+| `files` | `read_file`, `write_file`, `edit_file`, `append_file`, `list_dir`, `glob_files`, `search_files` | default |
 | `shell` | `run_command` | default |
 | `notes` | `tell` | yes — a card must name it |
 
@@ -21,6 +21,31 @@ factory, built per executor; the rest are shared module-level lists.
 
 A `Tool` is a `ToolDef` (name, description, JSON Schema) plus a coroutine taking
 `(workdir, arguments)`. Adding one is a function and a list entry.
+
+## Changing part of a file
+
+`edit_file` replaces `old` with `new`, and refuses unless `old` appears exactly
+once. Ambiguity is an error rather than a guess: quietly changing the first of
+three is the failure nobody notices until the tests do. `append_file` adds to
+the end, which in a measured run was **four of the five file surgeries** the
+model performed -- as `cat >> file << 'EOF'`, which the Windows shell rejected
+outright, and as a write-a-temp-file-then-append-it-then-delete-it dance.
+
+**Matching is forgiving in three steps; the safeguard is not.** Exact first;
+then with the line numbers a file viewer prints taken off, because the
+reference implementations number their output and then ask the model to
+remember to strip them, and a model that needs the reminder is one that will
+miss it; then ignoring trailing whitespace and line endings, which is where the
+reported edit failure rates on models never trained on this shape mostly live.
+**Leading whitespace is never forgiven** -- in Python indentation is meaning,
+and a different depth is a different block. Uniqueness is still required no
+matter which reading matched.
+
+**A Python file that would stop parsing is not written.** `compile()` from the
+standard library, checked before the write, and the file is left as it was.
+SWE-agent's ablation puts a linting edit command three points above one without
+it: a broken file is worse than a refused edit, because the model finds out one
+test run later and spends its next turns debugging its own typo.
 
 ## Searching is a tool, not a shell command
 
