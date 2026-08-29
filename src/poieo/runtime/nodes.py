@@ -590,6 +590,13 @@ class AgentNode(Node):
                 # `sent` and the new count must both be real. A backend that
                 # reports zero has not told us anything, and no measurement is
                 # a different fact from a bad one.
+                # What the endpoint says it charged wins; what the binding
+                # says fills the silence. The same two-tier shape as `context`
+                # and for the same reason -- a reported figure is a fact and a
+                # declared one is somebody's belief -- except that a belief
+                # beats nothing, and Anthropic's API reports no cost at all.
+                if response.usage.cost is None and bound.resolved.prices is not None:
+                    response.usage.cost = bound.resolved.prices.charge(response.usage)
                 took = response.usage.input_tokens
                 if sent and took and took <= sent and not shrank:
                     # Oldest first, as everywhere else. Only when there is

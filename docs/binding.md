@@ -121,6 +121,29 @@ that reject what they do not know.
 and it would be wrong in the direction nobody checks — the same reasoning that
 kept a table of context windows out.
 
+For an endpoint that bills and does not say so — Anthropic's API reports no cost
+at all, and it is the paid backend these examples ship for — a binding can write
+the rates down:
+
+```yaml
+default:
+  provider: claude
+  model: claude-opus-5
+  prices: {input: 5.0, output: 25.0, cache_read: 0.5, cache_write: 6.25}
+```
+
+**Per million tokens**, because that is the unit every vendor quotes in: the
+number in the binding is the number on the pricing page rather than one somebody
+converted by hand and got wrong by six zeroes.
+
+The endpoint's own figure still wins where there is one — the same two-tier shape
+as `context`, and for the same reason. What an endpoint reports is a fact; what a
+binding declares is somebody's belief; and a belief beats nothing.
+
+Cached input is charged at the cache rate and **not** also at the input one.
+`input_tokens` is the whole prompt and `cache_read_tokens` is the part of it that
+was already there, so counting both would bill the cached half twice.
+
 ### Two questions about roles, and why both exist
 
 `resolve()` falls back to `default` for **any** role at all — that is the point
