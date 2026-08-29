@@ -994,3 +994,88 @@ def test_a_folder_of_cards_is_still_a_folder_of_cards(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert "1 run(s), 0 not completed" in result.output
+
+
+def _one_command_app(raises):
+    """A one-command app whose command does nothing but fail that way."""
+    import typer
+
+    from poieo.cli import _guarded
+
+    solo = typer.Typer()
+
+    @solo.command()
+    @_guarded
+    def only():
+        raise raises
+
+    return solo
+
+
+def test_a_reader_that_stopped_reading_is_not_an_error():
+    """`poieo runs list | head` is an ordinary thing to type.
+
+    `head` closes the pipe the moment it has enough, and the next line the
+    command writes has nowhere to go. That is not poieo failing, so it must not
+    arrive looking like it: `_guarded` promises every command fails in the
+    product's voice and never with a traceback, and this went straight past it
+    into a rich traceback the reader had already stopped reading.
+    """
+    import errno
+
+    result = runner.invoke(_one_command_app(BrokenPipeError(errno.EPIPE, "gone")))
+
+    assert result.exit_code == 0
+    assert result.exception is None
+
+
+def test_an_unrelated_oserror_still_reaches_the_surface():
+    """The guard must not become "swallow OSError".
+
+    Everything a command does to the user's files can fail this way, and those
+    failures are the command's to report.
+    """
+    import errno
+
+    result = runner.invoke(_one_command_app(OSError(errno.EACCES, "denied")))
+
+    assert result.exit_code != 0
+    assert isinstance(result.exception, OSError)
+
+
+def test_windows_calls_the_same_thing_an_invalid_argument():
+    """Windows does not raise BrokenPipeError. It raises EINVAL.
+
+    A pipe whose reader has exited comes back there as `OSError: [Errno 22]
+    Invalid argument`, which is why this was found by hand on Windows rather
+    than by CI. Asked as a question about a platform rather than about *this*
+    platform, so both answers are checked wherever the suite runs -- the same
+    shape `posix_shell(windows=...)` uses next door.
+    """
+    import errno
+
+    from poieo.cli import _reader_left
+
+    broken = OSError(errno.EINVAL, "Invalid argument")
+
+    assert _reader_left(broken, windows=True)
+    # On POSIX a dead reader is EPIPE and never EINVAL, so there EINVAL is
+    # somebody else's problem and has to stay one.
+    assert not _reader_left(broken, windows=False)
+
+
+def test_an_invalid_argument_about_a_file_is_not_a_dead_reader():
+    """EINVAL is also what Windows says about a path it will not accept.
+
+    Those name the file they failed on; a write to a stream has no name to
+    give. That is the only thing separating the two, so it is what is checked
+    -- without it this guard would swallow a real error on the platform it was
+    written for.
+    """
+    import errno
+
+    from poieo.cli import _reader_left
+
+    named = OSError(errno.EINVAL, "Invalid argument", "C:\bad<name>.txt")
+
+    assert not _reader_left(named, windows=True)

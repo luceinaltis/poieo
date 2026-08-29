@@ -7,6 +7,9 @@ later can call the same functions without shelling out.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
+import io
 import json
 import logging
 import os
@@ -105,6 +108,25 @@ config_app = typer.Typer(
 app.add_typer(config_app, rich_help_panel=SETUP)
 
 
+def _reader_left(exc: BaseException, windows: bool = os.name == "nt") -> bool:
+    """Whether this is the thing reading our output having stopped reading.
+
+    `poieo runs list | head` is an ordinary thing to type, and `head` closes
+    the pipe the moment it has enough. POSIX calls that EPIPE, which Python
+    raises as BrokenPipeError. Windows calls it EINVAL on a plain OSError --
+    the same thing it says about a path it will not accept, and the only thing
+    separating the two is that a file operation names the file it failed on
+    and a write to a stream has no name to give.
+
+    Asked as a question about a platform rather than about *this* platform, so
+    a machine that is not Windows can still hold the Windows answer -- the same
+    shape `posix_shell(windows=...)` uses.
+    """
+    if isinstance(exc, BrokenPipeError):
+        return True
+    return windows and isinstance(exc, OSError) and exc.errno == errno.EINVAL and exc.filename is None
+
+
 def _guarded(fn):
     """Every command fails in the product's voice, never with a traceback.
 
@@ -118,6 +140,23 @@ def _guarded(fn):
             return fn(*args, **kwargs)
         except PoieoError as exc:
             _fail(str(exc))
+        except OSError as exc:
+            if not _reader_left(exc):
+                raise
+            # Nobody is listening, so there is nothing to report and nowhere to
+            # report it. Point the stream at nothing on the way out: the
+            # interpreter flushes it once more as it shuts down, and *that*
+            # failure prints `Exception ignored in: <_io.TextIOWrapper ...>`
+            # after the command has already returned -- which is the part a
+            # person actually sees, on their screen, after a pipeline that
+            # worked.
+            with contextlib.suppress(OSError, ValueError, io.UnsupportedOperation):
+                nowhere = os.open(os.devnull, os.O_WRONLY)
+                os.dup2(nowhere, sys.stdout.fileno())
+                os.close(nowhere)
+            # Zero, because nothing went wrong. The pipeline's own status is
+            # the reader's -- `| head` succeeded, and it is what the shell asks.
+            raise typer.Exit(code=0)
 
     return wrapper
 

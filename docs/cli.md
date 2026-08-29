@@ -94,6 +94,22 @@ registration rather than inside each function, because the daemon command once
 printed a traceback when a single site forgot its `try/except`; making the guard
 part of registration removes the category.
 
+It also catches the reader walking away. `poieo runs list | head` is an ordinary
+thing to type, and `head` closes the pipe the moment it has enough; the next
+line the command writes has nowhere to go, and that arrived as a full traceback
+— for a pipeline that did exactly what was asked. The guard now ends the command
+quietly with exit code 0, because nothing went wrong and the pipeline's own
+status belongs to the reader.
+
+Two details are load-bearing. **Windows does not raise `BrokenPipeError`;** it
+raises `OSError: [Errno 22] Invalid argument`, which is also what it says about
+a path it will not accept — those name the file they failed on, and a write to a
+stream has no name to give, so that is what separates them. And **stdout is
+pointed at nothing before returning**, because the interpreter flushes it once
+more on the way out and that second failure prints
+`Exception ignored in: <_io.TextIOWrapper ...>` after the command has already
+finished, which is the part a person actually sees.
+
 ## Discovery: the flag always wins
 
 Inside a project, commands need no flags — but **discovery only fills silence**,
