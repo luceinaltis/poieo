@@ -1,0 +1,64 @@
+# The gate from AGENTS.md Part 2, run on every pull request.
+#
+# It does not block a merge -- `main` is unprotected by choice -- so this
+# reports, and a person still decides. What it removes is the honour system
+# under condition 1: the run is here whether or not anyone pasted it.
+#
+# Ubuntu only. Development happens on Windows, so a Windows-only break still
+# has to be caught by hand; see docs/contribution.md.
+
+name: gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: python suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # The floor pyproject declares, so the floor is what gets tested.
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+      # No PYTEST_DISABLE_PLUGIN_AUTOLOAD, no -p asyncio. Those are a local
+      # workaround for a broken global plugin; a clean environment needs
+      # neither, and this job is the check that they stay local.
+      - run: pytest -q
+
+  web:
+    name: frontend suite, types, and bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test --workspace web-ui
+      - name: types
+        run: npx tsc -b
+        working-directory: web-ui
+
+      # Neither suite reads src/poieo/web/static/, so it drifts in silence.
+      # vite builds straight into it, so rebuilding and finding no change is
+      # proof the committed bundle matches the source it claims to come from.
+      - name: the checked-in bundle is current
+        run: |
+          npm run build --workspace web-ui
+          if ! git diff --quiet -- src/poieo/web/static/; then
+            echo "::error::src/poieo/web/static/ does not match web-ui/src/."
+            echo "Run: npm run build --workspace web-ui, then commit the result."
+            git status --short -- src/poieo/web/static/
+            exit 1
+          fi
