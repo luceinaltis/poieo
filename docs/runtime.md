@@ -253,7 +253,19 @@ With nothing left to drop the node fails, carrying `window_too_small`. Without
 that, a truncating endpoint would be answered forever with garbage.
 
 `max_turns` bounds the turns; hitting that bound with calls still pending is a
-`NodeError` carrying the `out_of_turns` cause. The executor is opened with
+`NodeError` carrying the `out_of_turns` cause, **and the message names what
+the turns were spent on.** The advice on that failure is "raise it, or make the
+step smaller" -- opposite actions, and for a long time nothing said which. A
+step measured here spent forty turns making ten edits and running the suite
+four times: it was working and wanted more room. Another spent forty reading
+the same four files: more room would have bought more of that. The tool counts
+are the difference, and getting them used to mean writing a script against the
+event log after the fact.
+
+**Turns are a poor unit and the counts are there because of it.** In one
+measured run a turn cost between 15 and 1,629 output tokens, and took between
+five seconds and seven minutes. Forty of them is not a budget anybody can
+reason about; forty of them spent on `edit_file` and `run_command` is. The executor is opened with
 `async with`, so an isolated environment is set up and torn down around the whole
 loop, not per call. Each turn emits `node_turn` (with the model's text and
 thinking, clipped, and what that turn cost in tokens -- a run's own record

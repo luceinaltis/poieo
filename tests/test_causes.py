@@ -68,6 +68,10 @@ def test_max_turns_reads_as_out_of_turns():
                   node_id="work")
     )
     assert cause.slug == "out_of_turns"
+    # The old advice named two opposite actions and left the reader to guess
+    # between them. The message now carries what the turns were spent on, so
+    # the advice can say to read it.
+    assert "spent" in cause.fix
 
 
 def test_being_cut_off_reads_as_out_of_room_and_names_the_budget():

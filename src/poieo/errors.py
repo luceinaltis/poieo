@@ -121,7 +121,11 @@ def explain_failure(exc: BaseException) -> Cause | None:
                 return Cause(
                     "out_of_turns",
                     "ran out of turns before finishing",
-                    "raise max_turns, or make the step smaller",
+                    "read what it spent them on, above: a step that was "
+                    "editing and running tests wanted more room, so raise "
+                    "max_turns -- one that read the same files over and over "
+                    "would only get more of that, and needs a smaller step or "
+                    "a clearer prompt instead",
                 )
             if "was cut off before it finished" in message:
                 return Cause(
