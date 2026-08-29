@@ -10,7 +10,7 @@ A node never touches the filesystem or a subprocess directly: it hands
 
 | toolset | tools | opt-in? |
 |---|---|---|
-| `files` | `read_file`, `write_file`, `list_dir`, `glob_files` | default |
+| `files` | `read_file`, `write_file`, `list_dir`, `glob_files`, `search_files` | default |
 | `shell` | `run_command` | default |
 | `notes` | `tell` | yes — a card must name it |
 
@@ -21,6 +21,21 @@ factory, built per executor; the rest are shared module-level lists.
 
 A `Tool` is a `ToolDef` (name, description, JSON Schema) plus a coroutine taking
 `(workdir, arguments)`. Adding one is a function and a list entry.
+
+## Searching is a tool, not a shell command
+
+`search_files` takes a regular expression and answers `path:line: text`. It
+exists for the same reason `run_command`'s `env` does: in a measured run,
+**twenty-three of seventy shell commands were `grep`**, and the POSIX spelling
+of one of them died on a Windows shell. A search is not about the shell, so the
+shell's dialect should not decide whether it works.
+
+**It is capped twice, in matches and in the length of any one line, and this
+matters more than it looks.** SWE-agent's own ablation measured an
+unsummarized, iterative search scoring *six points below having no search at
+all*: an answer that fills the context is worse than no answer. It also stays
+out of dot-directories -- a run's folder is a git copy, so `.git` is packs and
+objects, which are noise at best and binary at worst.
 
 ## Failure is text, not an exception
 

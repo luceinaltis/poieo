@@ -106,10 +106,13 @@ SHELL_TOOLS: list[Tool] = [
             name="run_command",
             description=(
                 "Run a shell command in the working directory. Returns the exit "
-                "code and combined stdout/stderr. Use `env` to set variables for "
-                "the command rather than writing them into it: shells disagree "
-                "about how that is spelled, and getting it wrong looks exactly "
-                "like the command running and failing."
+                "code and combined stdout/stderr. This is for running programs "
+                "-- tests, git, a build. To read, search or change a file, use "
+                "the file tools instead: they do not depend on which shell this "
+                "machine has. Use `env` to set variables for the command rather "
+                "than writing them into it: shells disagree about how that is "
+                "spelled, and getting it wrong looks exactly like the command "
+                "running and failing."
             ),
             input_schema={
                 "type": "object",
