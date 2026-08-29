@@ -53,10 +53,7 @@ class ProviderSpec(_Spec):
     @classmethod
     def _known_type(cls, value: str) -> str:
         if KNOWN_PROVIDER_TYPES and value not in KNOWN_PROVIDER_TYPES:
-            raise ValueError(
-                f"unknown provider type '{value}'; "
-                f"known types: {sorted(KNOWN_PROVIDER_TYPES)}"
-            )
+            raise ValueError(f"unknown provider type '{value}'; known types: {sorted(KNOWN_PROVIDER_TYPES)}")
         return value
 
     @model_validator(mode="after")
@@ -158,9 +155,7 @@ class BindingSpec(_Spec):
         named = [("default", self.default), *self.roles.items()]
         for role, spec in named:
             if spec.provider and spec.provider not in self.providers:
-                raise ValueError(
-                    f"role '{role}' points at undeclared provider '{spec.provider}'"
-                )
+                raise ValueError(f"role '{role}' points at undeclared provider '{spec.provider}'")
         return self
 
     def resolve(self, role: str, overrides: dict[str, Any] | None = None) -> ResolvedModel:
@@ -169,13 +164,9 @@ class BindingSpec(_Spec):
         if overrides:
             spec = ModelSpec(params=overrides).merged_with(spec)
         if not spec.provider:
-            raise BindingError(
-                f"role '{role}' has no provider, and the binding declares no default"
-            )
+            raise BindingError(f"role '{role}' has no provider, and the binding declares no default")
         if not spec.model:
-            raise BindingError(
-                f"role '{role}' has no model id, and the binding declares no default"
-            )
+            raise BindingError(f"role '{role}' has no model id, and the binding declares no default")
         return ResolvedModel(
             role=role,
             provider_name=spec.provider,
@@ -250,9 +241,6 @@ def load_binding(path: str | Path) -> BindingSpec:
     try:
         binding = BindingSpec.model_validate(data)
     except Exception as exc:
-        raise SpecError(
-            f"{path}: invalid binding: "
-            f"{describe_invalid(exc, tuple(BindingSpec.model_fields))}"
-        ) from exc
+        raise SpecError(f"{path}: invalid binding: {describe_invalid(exc, tuple(BindingSpec.model_fields))}") from exc
     binding.source_path = path
     return binding

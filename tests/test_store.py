@@ -71,7 +71,7 @@ def test_list_runs_parses_only_what_it_returns(tmp_path, monkeypatch):
     monkeypatch.setattr(store_module.json, "loads", lambda s: parsed.append(1) or real(s))
     rows = store.list_runs(limit=20)
     assert [r["run_id"] for r in rows] == [f"r{499 - i}" for i in range(20)]
-    assert len(parsed) <= 25          # the tail, not the history
+    assert len(parsed) <= 25  # the tail, not the history
 
 
 def test_a_filter_still_finds_older_matches(tmp_path):

@@ -25,15 +25,32 @@ def apply(sense):
 
 
 def restart():
-    run("powershell", "-NoProfile", "-Command",
+    run(
+        "powershell",
+        "-NoProfile",
+        "-Command",
         "Get-NetTCPConnection -LocalPort 8484 -State Listen -ErrorAction SilentlyContinue"
-        " | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }")
+        " | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }",
+    )
     subprocess.Popen(
         ["python", "main.py", "daemon", str(DEMO / "live.yaml")],
-        cwd=WEB, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=WEB,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    run("curl", "-s", "--retry", "40", "--retry-delay", "1", "--retry-connrefused",
-        "--max-time", "80", "http://127.0.0.1:8484/api/flows", shell=True)
+    run(
+        "curl",
+        "-s",
+        "--retry",
+        "40",
+        "--retry-delay",
+        "1",
+        "--retry-connrefused",
+        "--max-time",
+        "80",
+        "http://127.0.0.1:8484/api/flows",
+        shell=True,
+    )
 
 
 def film(label):

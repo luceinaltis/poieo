@@ -71,22 +71,14 @@ def _read(project_dir: Path, now: datetime) -> dict[str, float]:
     return weights
 
 
-def strengths(
-    project_dir: Path, now: datetime | None = None
-) -> dict[frozenset[str], float]:
+def strengths(project_dir: Path, now: datetime | None = None) -> dict[frozenset[str], float]:
     """Current weights, decayed as of now. Pairs naming entries that no longer
     exist are the caller's to ignore -- this file knows names, not files."""
     now = now or _now()
-    return {
-        frozenset(key.split("|", 1)): value
-        for key, value in _read(project_dir, now).items()
-        if "|" in key
-    }
+    return {frozenset(key.split("|", 1)): value for key, value in _read(project_dir, now).items() if "|" in key}
 
 
-def reinforce(
-    project_dir: Path, pairs: Iterable[tuple[str, str]], now: datetime | None = None
-) -> None:
+def reinforce(project_dir: Path, pairs: Iterable[tuple[str, str]], now: datetime | None = None) -> None:
     """Reinforce each pair by one. Decay lands first, the fan cap after,
     and nothing that goes wrong here may reach the caller."""
     now = now or _now()

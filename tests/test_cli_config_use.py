@@ -79,9 +79,7 @@ def test_use_with_a_role_binds_that_role_only(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _serving(monkeypatch, OLLAMA_HAS)
 
-    result = runner.invoke(
-        app, ["config", "use", "claude/claude-opus-5", "--role", "critic"]
-    )
+    result = runner.invoke(app, ["config", "use", "claude/claude-opus-5", "--role", "critic"])
 
     assert result.exit_code == 0, result.output
     spec = load_binding(path)

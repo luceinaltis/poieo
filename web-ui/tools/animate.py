@@ -77,9 +77,7 @@ def rigwait(minutes=15) -> None:
 def start(rig_id: str, clips: dict | None = None) -> None:
     state = {}
     for name, action in (clips or CLIPS).items():
-        result = meshy.call(
-            "/v1/animations", {"rig_task_id": rig_id, "action_id": action}
-        )
+        result = meshy.call("/v1/animations", {"rig_task_id": rig_id, "action_id": action})
         state[name] = result["result"]
         print(f"  {name}: queued")
     STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -113,8 +111,7 @@ def fetch() -> None:
             continue
         payload = task.get("result") if isinstance(task.get("result"), dict) else task
         url = next(
-            (u for k, u in payload.items()
-             if isinstance(u, str) and "glb" in k and u.startswith("http")),
+            (u for k, u in payload.items() if isinstance(u, str) and "glb" in k and u.startswith("http")),
             None,
         )
         if not url:
@@ -138,11 +135,7 @@ if __name__ == "__main__":
         # `start <rig> idle=11 calm=243` queues those instead of the usual two,
         # which is how a replacement for a clip that retargeted badly gets
         # tried four at a time rather than one afternoon at a time.
-        picked = dict(
-            (pair.split("=")[0], int(pair.split("=")[1]))
-            for pair in sys.argv[3:]
-            if "=" in pair
-        )
+        picked = dict((pair.split("=")[0], int(pair.split("=")[1])) for pair in sys.argv[3:] if "=" in pair)
         start(sys.argv[2], picked or None)
     elif what == "wait":
         wait()

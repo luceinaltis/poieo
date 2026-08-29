@@ -197,8 +197,7 @@ def _wired(
     card(
         tmp_path / "cards",
         "receiver",
-        "graph: ../t.yaml\ntrigger: {type: manual}\n"
-        + ("binding: ../slow.yaml\n" if slow else ""),
+        "graph: ../t.yaml\ntrigger: {type: manual}\n" + ("binding: ../slow.yaml\n" if slow else ""),
     )
     path = tmp_path / "poieo.yaml"
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
@@ -279,9 +278,7 @@ async def test_a_then_block_reads_an_output_by_the_name_the_graph_gave_it(tmp_pa
     down would have been given.
     """
     block = _TO_RECEIVER.replace("run.status == 'completed'", "verdict == 'done'")
-    daemon = Daemon(
-        load_config(_wired(tmp_path, block, sender_graph=_ALIASED)), store=NullStore()
-    )
+    daemon = Daemon(load_config(_wired(tmp_path, block, sender_graph=_ALIASED)), store=NullStore())
     task = await _up(daemon)
     receiver = _named(daemon, "receiver")
 
@@ -351,9 +348,7 @@ then:
 
 async def test_the_next_run_reads_what_the_last_one_did(tmp_path):
     """Waking a task without telling it why is half a feature."""
-    config = load_config(
-        _wired(tmp_path, _TO_RECEIVER, takes="came from {{ input.sender.task }}")
-    )
+    config = load_config(_wired(tmp_path, _TO_RECEIVER, takes="came from {{ input.sender.task }}"))
     daemon = Daemon(config, store=NullStore())
     task = await _up(daemon)
     receiver = _named(daemon, "receiver")
@@ -392,9 +387,7 @@ async def test_a_handoff_arriving_mid_run_waits_and_the_newest_wins(tmp_path, ca
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         for _ in range(3):
             sender.run_now()
-            await _until(
-                lambda n=len(sender.results): len(sender.results) > n, "a sender run"
-            )
+            await _until(lambda n=len(sender.results): len(sender.results) > n, "a sender run")
         # First runs, second parks, third displaces the second.
         await _until(lambda: len(receiver.results) == 2, "both handoffs", timeout=8)
         await asyncio.sleep(0.4)
@@ -426,8 +419,7 @@ async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
     path = _wired(tmp_path, _TO_RECEIVER)
     back = tmp_path / "cards" / "receiver.yaml"
     back.write_text(
-        back.read_text(encoding="utf-8")
-        + 'then:\n  - when: "True"\n    to: sender\n',
+        back.read_text(encoding="utf-8") + 'then:\n  - when: "True"\n    to: sender\n',
         encoding="utf-8",
     )
     daemon = Daemon(load_config(path), store=NullStore())
@@ -436,9 +428,7 @@ async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
-        await _until(
-            lambda: "chain" in " ".join(caplog.messages), "the chain to be cut", timeout=8
-        )
+        await _until(lambda: "chain" in " ".join(caplog.messages), "the chain to be cut", timeout=8)
         await asyncio.sleep(0.3)
 
     total = len(sender.results) + len(receiver.results)
@@ -479,10 +469,7 @@ def test_a_role_the_binding_never_heard_of_says_so_at_load(tmp_path, caplog):
     `resolve` falls back to `default` for any role at all, so a typo has always
     run -- on the big model, every night, unattended, with nothing said.
     """
-    graph = (
-        "name: quick\nentry: a\nnodes:\n"
-        "  - {id: a, type: agent, role: classifer, prompt: hi}\n"
-    )
+    graph = "name: quick\nentry: a\nnodes:\n  - {id: a, type: agent, role: classifer, prompt: hi}\n"
     binding = (
         "name: mock\nproviders:\n"
         '  fake: {type: mock, options: {responses: {"*": "done"}}}\n'
@@ -503,14 +490,13 @@ def test_a_role_the_binding_never_heard_of_says_so_at_load(tmp_path, caplog):
 
 
 def test_a_binding_that_declares_no_roles_is_not_asked(tmp_path, caplog):
-    """"One model for everything" is what every mock binding says, and every
+    """ "One model for everything" is what every mock binding says, and every
     role legitimately falls through it. Warning there would be noise on the
     one setup that is meant to answer anything at all."""
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         load_tasks(load_config(_config(tmp_path, _pair())))
 
     assert "does not declare" not in " ".join(caplog.messages)
-
 
 
 def test_a_node_that_names_no_role_asks_for_the_default_on_purpose(tmp_path, caplog):
@@ -539,9 +525,7 @@ async def test_a_card_can_hand_off_on_what_the_run_spent(tmp_path):
     """The same guard one level up. A chain is bounded by MAX_CHAIN hops, which
     says nothing about what those hops cost -- and a card that spends its way
     through the night hands the next one a bill, not a reason to stop."""
-    block = _TO_RECEIVER.replace(
-        "run.status == 'completed'", "run.usage.output_tokens < 1000"
-    )
+    block = _TO_RECEIVER.replace("run.status == 'completed'", "run.usage.output_tokens < 1000")
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
     task = await _up(daemon)
     receiver = _named(daemon, "receiver")
@@ -559,9 +543,7 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
     treated as no match, so "nobody was woken" on its own cannot tell a guard
     that held from a name the scope never had.
     """
-    block = _TO_RECEIVER.replace(
-        "run.status == 'completed'", "run.usage.output_tokens > 1000"
-    )
+    block = _TO_RECEIVER.replace("run.status == 'completed'", "run.usage.output_tokens > 1000")
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
     task = await _up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
@@ -713,8 +695,7 @@ async def test_an_answer_is_written_down(tmp_path):
     kinds = [e["type"] for e in store.events(sender.results[0].run_id)]
     assert "run_asking" in kinds
     assert "run_answered" in kinds
-    answered = next(e for e in store.events(sender.results[0].run_id)
-                    if e["type"] == "run_answered")
+    answered = next(e for e in store.events(sender.results[0].run_id) if e["type"] == "run_answered")
     assert answered["data"]["answer"] == "land"
     await _down(daemon, task)
 

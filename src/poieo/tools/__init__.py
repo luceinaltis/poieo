@@ -224,18 +224,14 @@ class Executor:
         in a Linux container, and only the executor knows which it is.
         """
         if language in LANGUAGES:
-            return await self.run_command(
-                " ".join(LANGUAGES[language]), timeout=timeout, env=env, stdin=script
-            )
+            return await self.run_command(" ".join(LANGUAGES[language]), timeout=timeout, env=env, stdin=script)
         spec = COMPILED[language]
         source, binary = self.build_paths(cache_key(language, script), spec.source)
 
         if not await self._is_built(binary):
             await self._put(source, script)
             built = await self.run_command(
-                " ".join(spec.build).format(
-                    src=self.quote(source), bin=self.quote(binary)
-                ),
+                " ".join(spec.build).format(src=self.quote(source), bin=self.quote(binary)),
                 timeout=timeout,
             )
             if built.exit_code != 0:
@@ -282,9 +278,7 @@ class LocalExecutor(Executor):
     The default, with nothing to set up or tear down.
     """
 
-    def __init__(
-        self, workdir: Path, toolsets: "Sequence[str]", tool_context: "ToolContext | None" = None
-    ):
+    def __init__(self, workdir: Path, toolsets: "Sequence[str]", tool_context: "ToolContext | None" = None):
         self.workdir = workdir
         self._cache = tool_context.build_cache if tool_context else None
         self._load(toolsets, tool_context.postbox if tool_context else None)
@@ -358,9 +352,7 @@ async def sweep_containers(days: int = 7) -> int:
     return await sweep(older_than=timedelta(days=days))
 
 
-def make_executor(
-    workdir: Path, toolsets: "Sequence[str]", tool_context: ToolContext | None = None
-) -> Executor:
+def make_executor(workdir: Path, toolsets: "Sequence[str]", tool_context: ToolContext | None = None) -> Executor:
     """The one place that decides where an agent node's tools run.
 
     Callers hand over a setting and use what comes back, so nothing upstream

@@ -1,6 +1,5 @@
 """BroadcastStore: events go to the file store and to live subscribers."""
 
-
 from poieo.store import Event, NullStore, RunStore
 from poieo.web.events import BroadcastStore
 
@@ -51,7 +50,7 @@ async def test_slow_subscriber_is_evicted_not_blocking(tmp_path):
     # the slow queue filled at 2 and was dropped; publishing never raised
     assert slow.qsize() == 2
     store.append(Event(run_id="r1", type="node_started", data={"step": 9}))
-    assert slow.qsize() == 2          # no longer receiving
+    assert slow.qsize() == 2  # no longer receiving
     assert fast.get_nowait()["data"]["step"] == 9
 
 

@@ -70,16 +70,13 @@ def mermaid_source(graph: GraphSpec) -> str:
 
 
 def _chip(label: str, value: str) -> str:
-    return (
-        f'<span class="chip"><span class="chip-k">{html.escape(label)}</span>'
-        f"{html.escape(value)}</span>"
-    )
+    return f'<span class="chip"><span class="chip-k">{html.escape(label)}</span>{html.escape(value)}</span>'
 
 
 def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) -> str:
     parts = [f'<article class="card {node.type}" id="node-{html.escape(node.id)}">']
     parts.append('<header class="card-head">')
-    parts.append(f'<h3>{html.escape(node.id)}</h3>')
+    parts.append(f"<h3>{html.escape(node.id)}</h3>")
     parts.append(f'<span class="tag tag-{node.type}">{node.type}</span>')
     if node.id == graph.entry:
         parts.append('<span class="tag tag-entry">entry</span>')
@@ -111,25 +108,19 @@ def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) ->
             parts.append(f"<pre>{html.escape(node.system.strip())}</pre></div>")
         parts.append('<div class="block"><span class="block-k">prompt</span>')
         parts.append(f"<pre>{html.escape((node.prompt or '').strip())}</pre></div>")
-        parts.append(
-            f'<p class="edge">next &rarr; <code>{html.escape(node.next or "end")}</code></p>'
-        )
+        parts.append(f'<p class="edge">next &rarr; <code>{html.escape(node.next or "end")}</code></p>')
     else:
         parts.append('<ul class="branches">')
         for branch in node.branches:
             target = branch.to or "end"
-            label = (
-                f'<span class="label">{html.escape(branch.label)}</span>'
-                if branch.label
-                else ""
-            )
+            label = f'<span class="label">{html.escape(branch.label)}</span>' if branch.label else ""
             parts.append(
                 f'<li><code class="cond">{html.escape(branch.when)}</code>{label}'
                 f'<span class="hop">&rarr;</span><code>{html.escape(target)}</code></li>'
             )
         parts.append(
             f'<li class="fallback">default<span class="hop">&rarr;</span>'
-            f'<code>{html.escape(node.default or "end")}</code></li>'
+            f"<code>{html.escape(node.default or 'end')}</code></li>"
         )
         parts.append("</ul>")
 
@@ -201,7 +192,9 @@ _TOKENS = """
 
 """
 
-_CSS = _TOKENS + """
+_CSS = (
+    _TOKENS
+    + """
 *, *::before, *::after { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -284,6 +277,7 @@ pre { background: var(--sunk); border-radius: 8px; padding: .75rem .85rem; margi
   .cards { grid-template-columns: 1fr; }
 }
 """
+)
 
 _SCRIPT = f"""
 import mermaid from "{MERMAID_CDN}";
@@ -307,9 +301,7 @@ def render_page(
 ) -> str:
     """Build the viewer page for one or more graphs."""
     graphs = list(graphs)
-    page_title = title or (
-        graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows"
-    )
+    page_title = title or (graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows")
 
     body: list[str] = ['<div class="wrap">']
     for graph in graphs:

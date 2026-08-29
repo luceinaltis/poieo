@@ -66,9 +66,7 @@ async def test_cycle_exits_when_the_critic_approves():
 
 async def test_cycle_gives_up_after_two_revisions():
     graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
-    binding = mock_binding(
-        {"writer": ["d"], "critic": ['{"approved": false, "feedback": "no"}']}
-    )
+    binding = mock_binding({"writer": ["d"], "critic": ['{"approved": false, "feedback": "no"}']})
     result = await run_graph(graph, binding, input={"brief": "b"})
 
     assert result.status == "completed"
@@ -117,9 +115,7 @@ async def test_bad_json_output_fails_the_run():
         {
             "name": "j",
             "entry": "a",
-            "nodes": [
-                {"id": "a", "type": "agent", "prompt": "go", "output": {"format": "json"}}
-            ],
+            "nodes": [{"id": "a", "type": "agent", "prompt": "go", "output": {"format": "json"}}],
         }
     )
     result = await run_graph(graph, mock_binding({"*": "not json at all"}))
@@ -129,13 +125,9 @@ async def test_bad_json_output_fails_the_run():
 
 async def test_state_carries_into_the_next_run():
     graph = load_graph(EXAMPLES / "tasks/draft-review.graph.yaml")
-    binding = mock_binding(
-        {"writer": ["d"], "critic": ['{"approved": true, "feedback": "ok"}']}
-    )
+    binding = mock_binding({"writer": ["d"], "critic": ['{"approved": true, "feedback": "ok"}']})
     first = await run_graph(graph, binding, input={"brief": "b"})
-    second = await run_graph(
-        graph, binding, input={"brief": "b"}, state=first.state, iteration=1
-    )
+    second = await run_graph(graph, binding, input={"brief": "b"}, state=first.state, iteration=1)
     assert second.iteration == 1
     assert second.status == "completed"
 
@@ -318,9 +310,7 @@ async def test_a_broken_workdir_expression_fails_in_the_nodes_voice(tmp_path):
 async def test_agent_node_stops_at_max_turns(tmp_path):
     graph = agent_graph(tmp_path, max_turns=3)
     # The script's last entry repeats forever, so the model never finishes.
-    binding = mock_binding(
-        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
-    )
+    binding = mock_binding({"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]})
     result = await run_graph(graph, binding)
     assert result.status == "failed"
     assert "max_turns" in result.error
@@ -340,10 +330,7 @@ async def test_agent_node_refuses_a_turn_the_model_was_cut_off_mid(tmp_path):
     was reading it.
     """
     graph = agent_graph(tmp_path, max_turns=3)
-    binding = mock_binding(
-        {"worker": [{"text": "Let me search with different quoting.",
-                     "stop_reason": "length"}]}
-    )
+    binding = mock_binding({"worker": [{"text": "Let me search with different quoting.", "stop_reason": "length"}]})
 
     result = await run_graph(graph, binding)
 
@@ -470,9 +457,7 @@ def sized_provider_binding(responses, window, context=None):
         default["context"] = context
     return BindingSpec.model_validate(
         {
-            "providers": {
-                "s": {"type": "sized", "options": {"responses": responses, "window": window}}
-            },
+            "providers": {"s": {"type": "sized", "options": {"responses": responses, "window": window}}},
             "default": default,
         }
     )
@@ -535,9 +520,7 @@ class _RefusesOnce:
             self.refusals -= 1
             from poieo.errors import ProviderError
 
-            raise ProviderError(
-                "maximum context length exceeded", provider="x", retryable=False
-            )
+            raise ProviderError("maximum context length exceeded", provider="x", retryable=False)
         return await self.inner.complete(request)
 
     async def context_for(self, model):
@@ -580,17 +563,12 @@ async def test_a_refused_request_goes_again_smaller(tmp_path, monkeypatch):
     monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)  # keep clearing out of it
     (tmp_path / "big.txt").write_text("x" * 4_000)
     graph = agent_graph(tmp_path)
-    script = {
-        "worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5
-        + ["done"]
-    }
+    script = {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5 + ["done"]}
     store = _CapturingStore()
 
     # Refused on the fifth call, by which point four tool results have piled
     # up and one of them is old enough to drop.
-    result = await run_graph(
-        graph, refusing_binding(script, refusals=1, refuse_from=5), store=store
-    )
+    result = await run_graph(graph, refusing_binding(script, refusals=1, refuse_from=5), store=store)
 
     assert result.status == "completed", result.error
     assert [e for e in store.events if e.type == "node_retried_smaller"]
@@ -603,10 +581,7 @@ async def test_it_only_goes_again_once(tmp_path, monkeypatch):
     monkeypatch.setattr(nodes, "_CONTEXT_CAP", 10_000_000)
     (tmp_path / "big.txt").write_text("x" * 4_000)
     graph = agent_graph(tmp_path)
-    script = {
-        "worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5
-        + ["done"]
-    }
+    script = {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}] * 5 + ["done"]}
 
     result = await run_graph(graph, refusing_binding(script, refusals=99, refuse_from=5))
 
@@ -655,7 +630,7 @@ class _QuietlyTruncates:
         response = await self.inner.complete(request)
         if self.ceiling and response.usage.input_tokens > self.ceiling:
             response.usage = Usage(
-                input_tokens=self.ceiling // 2,   # what Ollama actually does
+                input_tokens=self.ceiling // 2,  # what Ollama actually does
                 output_tokens=response.usage.output_tokens,
             )
         return response
@@ -992,9 +967,7 @@ async def test_a_step_with_no_deadline_runs_as_it_always_did(tmp_path):
     """Nothing changes for a graph that does not ask for one."""
     (tmp_path / "big.txt").write_text("x" * 100)
     graph = agent_graph(tmp_path, max_turns=3)
-    binding = mock_binding(
-        {"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}]}
-    )
+    binding = mock_binding({"worker": [{"tool_calls": [{"name": "read_file", "arguments": {"path": "big.txt"}}]}]})
 
     result = await run_graph(graph, binding)
 
@@ -1129,9 +1102,7 @@ async def test_a_conversation_under_the_second_cap_is_never_summarized(tmp_path,
     assert not any(summarizing(c) for c in provider.calls)
 
 
-async def test_an_overgrown_conversation_folds_its_older_turns_into_a_summary(
-    tmp_path, monkeypatch
-):
+async def test_an_overgrown_conversation_folds_its_older_turns_into_a_summary(tmp_path, monkeypatch):
     """Clearing empties tool results; the turns themselves still pile up.
 
     A model's own reasoning and its tool call arguments survive a clearing --
@@ -1309,9 +1280,7 @@ async def test_agent_node_aborts_when_cancelled(tmp_path):
     # every turn (both the executor's and the agent node's), so a pre-set
     # event aborts the run before the first model call ever fires.
     graph = agent_graph(tmp_path)
-    binding = mock_binding(
-        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
-    )
+    binding = mock_binding({"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]})
     cancel = asyncio.Event()
     cancel.set()
     result = await run_graph(graph, binding, cancel=cancel)
@@ -1404,9 +1373,7 @@ def writes_a_file(name="made.txt"):
 async def test_agent_node_inherits_the_run_workdir(tmp_path):
     # The graph says what the work is; the task says where it happens. A graph
     # that hardcodes a path cannot be moved to another machine.
-    result = await run_graph(
-        agent_graph_without_workdir(), writes_a_file(), workdir=tmp_path
-    )
+    result = await run_graph(agent_graph_without_workdir(), writes_a_file(), workdir=tmp_path)
 
     assert result.status == "completed"
     assert (tmp_path / "made.txt").read_text(encoding="utf-8") == "hi"
@@ -1429,9 +1396,7 @@ def test_preflight_rejects_an_agent_node_with_nowhere_to_work():
 
 
 def test_preflight_accepts_a_run_workdir_on_the_nodes_behalf(tmp_path):
-    preflight(
-        agent_graph_without_workdir(), mock_binding({"worker": "hi"}), workdir=tmp_path
-    )
+    preflight(agent_graph_without_workdir(), mock_binding({"worker": "hi"}), workdir=tmp_path)
 
 
 async def test_a_run_with_nowhere_to_work_fails_before_the_model(tmp_path):
@@ -1474,9 +1439,7 @@ async def test_the_executor_is_torn_down_even_when_the_node_fails(tmp_path, monk
     graph = agent_graph(tmp_path, max_turns=1)
     # The script repeats, so the model never stops calling tools and the node
     # hits max_turns and raises.
-    binding = mock_binding(
-        {"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]}
-    )
+    binding = mock_binding({"worker": [{"tool_calls": [{"name": "list_dir", "arguments": {}}]}]})
     result = await run_graph(graph, binding)
 
     assert result.status == "failed"
@@ -1490,8 +1453,10 @@ async def test_a_run_summary_says_what_the_run_said(tmp_path):
         {
             "name": "quiet",
             "entry": "a",
-            "nodes": [{"id": "a", "type": "agent", "prompt": "go", "next": "b"},
-                      {"id": "b", "type": "agent", "prompt": "go"}],
+            "nodes": [
+                {"id": "a", "type": "agent", "prompt": "go", "next": "b"},
+                {"id": "b", "type": "agent", "prompt": "go"},
+            ],
         }
     )
     binding = mock_binding({"*": "nothing needed doing"})
@@ -1529,8 +1494,7 @@ def _command_graph(**node) -> GraphSpec:
                 {
                     "id": "gate",
                     "type": "router",
-                    "branches": [{"when": "check.exit_code == 0", "to": None,
-                                  "label": "green"}],
+                    "branches": [{"when": "check.exit_code == 0", "to": None, "label": "green"}],
                     "default": None,
                 },
             ],
@@ -1567,8 +1531,7 @@ async def test_a_command_node_spends_no_model_turn(tmp_path):
     node reached a provider, this would raise instead."""
     graph = _command_graph(command="exit 0", output={"as": "check"}, workdir=str(tmp_path))
     binding = BindingSpec.model_validate(
-        {"name": "empty", "providers": {"none": {"type": "mock"}},
-         "default": {"provider": "none", "model": "m"}}
+        {"name": "empty", "providers": {"none": {"type": "mock"}}, "default": {"provider": "none", "model": "m"}}
     )
 
     result = await run_graph(graph, binding, workdir=tmp_path)
@@ -1584,8 +1547,14 @@ async def test_a_commands_output_is_readable_by_a_later_prompt(tmp_path):
             "name": "g",
             "entry": "check",
             "nodes": [
-                {"id": "check", "type": "command", "command": "echo boom",
-                 "output": {"as": "check"}, "workdir": str(tmp_path), "next": "fix"},
+                {
+                    "id": "check",
+                    "type": "command",
+                    "command": "echo boom",
+                    "output": {"as": "check"},
+                    "workdir": str(tmp_path),
+                    "next": "fix",
+                },
                 {"id": "fix", "type": "agent", "prompt": "Fix: {{ check.output }}"},
             ],
         }
@@ -1598,10 +1567,10 @@ async def test_a_commands_output_is_readable_by_a_later_prompt(tmp_path):
 
 
 async def test_a_command_that_never_finished_fails_the_run(tmp_path):
-    """"This did not start" and "this went red" are different facts, and the
+    """ "This did not start" and "this went red" are different facts, and the
     graph must not be able to confuse them."""
     graph = _command_graph(
-        command="python -c \"import time; time.sleep(5)\"",
+        command='python -c "import time; time.sleep(5)"',
         timeout=0.3,
         workdir=str(tmp_path),
     )
@@ -1682,9 +1651,7 @@ async def test_a_script_can_read_the_scope_it_runs_in(tmp_path):
         }
     )
 
-    result = await run_graph(
-        graph, mock_binding({}), workdir=tmp_path, input={"floor": 90}
-    )
+    result = await run_graph(graph, mock_binding({}), workdir=tmp_path, input={"floor": 90})
 
     assert "floor is 90" in result.outputs["gate"]["output"]
 
@@ -1701,9 +1668,7 @@ async def test_env_values_are_templated(tmp_path):
         workdir=str(tmp_path),
     )
 
-    result = await run_graph(
-        graph, mock_binding({}), input={"who": "world"}, workdir=tmp_path
-    )
+    result = await run_graph(graph, mock_binding({}), input={"who": "world"}, workdir=tmp_path)
 
     assert result.status == "completed"
     assert "world" in result.outputs["check"]["output"]
@@ -1791,9 +1756,7 @@ async def test_a_run_knows_how_long_it_has_been_going(tmp_path):
                 {
                     "id": "guard",
                     "type": "router",
-                    "branches": [
-                        {"when": "run.elapsed > 0.1", "to": None, "label": "long enough"}
-                    ],
+                    "branches": [{"when": "run.elapsed > 0.1", "to": None, "label": "long enough"}],
                     "default": "again",
                 },
                 {"id": "again", "type": "agent", "prompt": "go on"},
@@ -1807,6 +1770,8 @@ async def test_a_run_knows_how_long_it_has_been_going(tmp_path):
     # raises, the run fails, and the path stops here for the wrong reason.
     assert result.status == "completed", result.error
     assert result.path == ["wait", "guard"]
+
+
 async def test_a_confirm_node_ends_the_run_asking():
     """Not paused mid-walk: the run really ends. Nothing is held open, and the
     answer arrives afterwards as a fact about a finished run."""

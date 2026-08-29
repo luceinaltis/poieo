@@ -163,9 +163,7 @@ def test_config_models_marks_what_is_already_in_use(tmp_path, monkeypatch):
     result = runner.invoke(app, ["config", "models"])
 
     assert result.exit_code == 0, result.output
-    lines = {
-        line.strip().split()[0]: line for line in result.stdout.splitlines() if line.strip()
-    }
+    lines = {line.strip().split()[0]: line for line in result.stdout.splitlines() if line.strip()}
     assert "default" in lines["qwen3:32b"]
     assert "classifier" in lines["llama3.2:3b"]
     # Spoken for by nobody: exactly its own name, no trailing padding.
@@ -194,8 +192,7 @@ def test_config_models_survives_a_provider_with_nothing_to_ask(tmp_path, monkeyp
     an answer rather than a crash."""
     _project(
         tmp_path,
-        "name: m\nversion: 1\nproviders:\n  fake: {type: mock}\n"
-        'default: {provider: fake, model: "mock-model"}\n',
+        'name: m\nversion: 1\nproviders:\n  fake: {type: mock}\ndefault: {provider: fake, model: "mock-model"}\n',
     )
     monkeypatch.chdir(tmp_path)
     _serving(monkeypatch, {})
@@ -209,9 +206,7 @@ def test_config_models_survives_a_provider_with_nothing_to_ask(tmp_path, monkeyp
 def test_config_models_json_carries_the_live_lists(tmp_path, monkeypatch):
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    _serving(
-        monkeypatch, {("ollama", "http://localhost:11434"): ("qwen3:32b", "llama3.2:3b")}
-    )
+    _serving(monkeypatch, {("ollama", "http://localhost:11434"): ("qwen3:32b", "llama3.2:3b")})
 
     result = runner.invoke(app, ["config", "models", "--json"])
 

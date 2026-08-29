@@ -24,9 +24,7 @@ def credential_for(name: str, spec: ProviderSpec) -> str | None:
         return None
     key = os.environ.get(spec.api_key_env)
     if not key:
-        raise ProviderError(
-            f"provider '{name}': ${spec.api_key_env} is not set", provider=name
-        )
+        raise ProviderError(f"provider '{name}': ${spec.api_key_env} is not set", provider=name)
     return key
 
 
@@ -59,8 +57,7 @@ class Usage:
             # Two unknowns add to an unknown; a known and an unknown add to
             # what is known, because a total that silently dropped a charge
             # would be worse than one that is merely incomplete.
-            None if self.cost is None and other.cost is None
-            else (self.cost or 0.0) + (other.cost or 0.0),
+            None if self.cost is None and other.cost is None else (self.cost or 0.0) + (other.cost or 0.0),
         )
 
     def as_dict(self) -> dict[str, Any]:

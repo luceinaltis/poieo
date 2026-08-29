@@ -146,9 +146,7 @@ def unwrap(value: Any) -> Any:
 def _check(tree: ast.AST) -> None:
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED_NODES):
-            raise ExpressionError(
-                f"{type(node).__name__} is not allowed in poieo expressions"
-            )
+            raise ExpressionError(f"{type(node).__name__} is not allowed in poieo expressions")
         if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
             raise ExpressionError(f"access to private attribute '{node.attr}' is denied")
         if isinstance(node, ast.Name) and node.id.startswith("_"):
@@ -180,10 +178,7 @@ class _Evaluator(ast.NodeVisitor):
         return {self.visit(e) for e in node.elts}
 
     def visit_Dict(self, node: ast.Dict) -> Any:
-        return {
-            (self.visit(k) if k is not None else None): self.visit(v)
-            for k, v in zip(node.keys, node.values)
-        }
+        return {(self.visit(k) if k is not None else None): self.visit(v) for k, v in zip(node.keys, node.values)}
 
     # -- names and access ----------------------------------------------------
     def visit_Name(self, node: ast.Name) -> Any:
@@ -212,9 +207,7 @@ class _Evaluator(ast.NodeVisitor):
                 return getattr(target, node.attr)
             except AttributeError as exc:
                 raise ExpressionError(str(exc)) from exc
-        raise ExpressionError(
-            f"cannot read attribute '{node.attr}' from {type(target).__name__}"
-        )
+        raise ExpressionError(f"cannot read attribute '{node.attr}' from {type(target).__name__}")
 
     def visit_Subscript(self, node: ast.Subscript) -> Any:
         target = self.visit(node.value)

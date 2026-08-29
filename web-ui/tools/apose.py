@@ -56,6 +56,7 @@ def segment_distance(points, a, b):
     t = np.zeros(len(points)) if span == 0 else np.clip((points - a) @ along / span, 0, 1)
     return np.linalg.norm(points - (a + t[:, None] * along), axis=1)
 
+
 #: How thick an arm is, as a fraction of the figure. Inside this of the arm's
 #: own line a vertex is all arm; past the outer one it is not arm at all.
 INNER = 0.050
@@ -88,9 +89,7 @@ def joints(points):
     middle = np.median(points[:, 0])
 
     def width(at):
-        band = (points[:, 1] >= low[1] + tall * at) & (
-            points[:, 1] < low[1] + tall * (at + 1 / 24)
-        )
+        band = (points[:, 1] >= low[1] + tall * at) & (points[:, 1] < low[1] + tall * (at + 1 / 24))
         if band.sum() < 20:
             return 0.0
         return float(np.percentile(np.abs(points[band, 0] - middle), 99)) * 2
@@ -134,14 +133,10 @@ def apose(source: Path, target: Path, degrees: float, sheet: Path | None) -> Non
             continue
 
         def at(fraction, pick):
-            band = (outer[:, 1] >= low[1] + tall * fraction) & (
-                outer[:, 1] < low[1] + tall * (fraction + 1 / 24)
-            )
+            band = (outer[:, 1] >= low[1] + tall * fraction) & (outer[:, 1] < low[1] + tall * (fraction + 1 / 24))
             if band.sum() < 5:
                 return None
-            return np.array(
-                [pick(outer[band, 0]), float(outer[band, 1].mean()), np.median(outer[band, 2])]
-            )
+            return np.array([pick(outer[band, 0]), float(outer[band, 1].mean()), np.median(outer[band, 2])])
 
         # The joint sits just inside the outer edge of the shoulder, not at the
         # median of everything on that side -- the median is up by the neck,
@@ -181,9 +176,11 @@ def apose(source: Path, target: Path, degrees: float, sheet: Path | None) -> Non
         )
         points = about + spun
         moved = np.maximum(moved, share)
-        print(f"  {'right' if side > 0 else 'left':5}: shoulder at x{top[0]:+.3f} y{top[1]:+.3f},"
-              f" hand at x{bottom[0]:+.3f} y{bottom[1]:+.3f},"
-              f" {int((share > 0.5).sum())} vertices swung {degrees:.0f} deg")
+        print(
+            f"  {'right' if side > 0 else 'left':5}: shoulder at x{top[0]:+.3f} y{top[1]:+.3f},"
+            f" hand at x{bottom[0]:+.3f} y{bottom[1]:+.3f},"
+            f" {int((share > 0.5).sum())} vertices swung {degrees:.0f} deg"
+        )
 
     span = points[:, 0].max() - points[:, 0].min()
     print(f"  width {raw.shape and (turn @ raw.T).T[:, 0].ptp():.3f} -> {span:.3f}")

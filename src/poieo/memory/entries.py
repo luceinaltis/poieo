@@ -126,8 +126,7 @@ def load_entry(path: Path) -> Entry:
         raise SpecError(f"{path}: could not read: {exc}") from exc
     except (ValueError, yaml.YAMLError) as exc:
         raise SpecError(
-            f"{path}: invalid memory entry: "
-            f"{describe_invalid(exc, tuple(_Frontmatter.model_fields))}"
+            f"{path}: invalid memory entry: {describe_invalid(exc, tuple(_Frontmatter.model_fields))}"
         ) from exc
     body = body.strip()
     mentions = list(dict.fromkeys(m.strip() for m in re.findall(r"\[\[([^\[\]]+)\]\]", body)))
@@ -175,22 +174,18 @@ def check_memory(project_dir: Path) -> None:
         # true. A genuine typo names something that exists nowhere and fails.
         known |= {path.stem for path in attic.glob("*.md")}
     for entry in entries:
-        claims = [
-            ("depends_on", target) for target in entry.matter.links.depends_on
-        ] + [("contradicts", target) for target in entry.matter.links.contradicts]
+        claims = [("depends_on", target) for target in entry.matter.links.depends_on] + [
+            ("contradicts", target) for target in entry.matter.links.contradicts
+        ]
         if entry.matter.superseded_by is not None:
             claims.append(("superseded_by", entry.matter.superseded_by))
         for kind, target in claims:
             if target not in known:
-                raise SpecError(
-                    f"{entry.path}: {kind} names '{target}', and no such entry exists"
-                )
+                raise SpecError(f"{entry.path}: {kind} names '{target}', and no such entry exists")
         anchored = {anchor.split("::", 1)[0] for anchor in entry.matter.anchors}
         for path in entry.matter.sealed:
             if path not in anchored:
-                raise SpecError(
-                    f"{entry.path}: sealed names '{path}', which is not an anchor here"
-                )
+                raise SpecError(f"{entry.path}: sealed names '{path}', which is not an anchor here")
 
 
 def read_page(project_dir: Path) -> str | None:

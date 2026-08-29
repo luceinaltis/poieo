@@ -12,7 +12,7 @@ def test_each_terminal_branch_gets_its_own_end_node():
     # Two different exit conditions must not collapse into one drawn node.
     ends = {line.split("(")[0].strip() for line in source.splitlines() if '(["end"])' in line}
     assert len(ends) == 2
-    assert "gate -->|\"approved\"|" in source
+    assert 'gate -->|"approved"|' in source
     assert source.count('(["end"])') == 2
 
 
@@ -44,8 +44,8 @@ def test_page_embeds_prompts_and_binding_targets():
 
     assert "<!doctype html>" in page
     assert "<title>support-triage</title>" in page
-    assert "llama3.2:3b" in page          # the classifier's physical model
-    assert "claude-opus-5" in page        # the writer's
+    assert "llama3.2:3b" in page  # the classifier's physical model
+    assert "claude-opus-5" in page  # the writer's
     assert "Classify the support message" in page
 
 

@@ -50,9 +50,7 @@ def _binding(script):
     return BindingSpec.model_validate(
         {
             "name": "test",
-            "providers": {
-                "fake": {"type": "mock", "options": {"responses": {"learner": script}}}
-            },
+            "providers": {"fake": {"type": "mock", "options": {"responses": {"learner": script}}}},
             "default": {"provider": "fake", "model": "mock-model"},
         }
     )
@@ -96,9 +94,7 @@ async def test_a_forged_from_is_cut_to_the_records_actually_shown(tmp_path):
 
     await _learn(
         project,
-        _proposal(
-            entries=[{"slug": "cap", "body": "Caps hold.", "from": ["20990101T000000-ffffffff"]}]
-        ),
+        _proposal(entries=[{"slug": "cap", "body": "Caps hold.", "from": ["20990101T000000-ffffffff"]}]),
     )
 
     text = (at(project).facts() / "cap.md").read_text(encoding="utf-8")
@@ -115,9 +111,7 @@ async def test_a_failed_pass_rereads_and_a_passed_one_does_not(tmp_path):
     assert failed.error is not None
     assert _facts(project) == []
 
-    passed = await _learn(
-        project, [_proposal(entries=[{"slug": "cap", "body": "Caps hold.", "from": [one]}])]
-    )
+    passed = await _learn(project, [_proposal(entries=[{"slug": "cap", "body": "Caps hold.", "from": [one]}])])
     assert passed.error is None and passed.read == 1
 
     again = await _learn(project, ["never called"])
@@ -163,9 +157,7 @@ async def test_a_colliding_slug_never_overwrites(tmp_path):
     _entry(project, "batch-cap", "What a person wrote.")
     _episode(project, "20260824T010000-aaaaaaaa")
 
-    result = await _learn(
-        project, _proposal(entries=[{"slug": "batch-cap", "body": "Machine text."}])
-    )
+    result = await _learn(project, _proposal(entries=[{"slug": "batch-cap", "body": "Machine text."}]))
 
     assert result.kept == []
     text = (at(project).facts() / "batch-cap.md").read_text(encoding="utf-8")
@@ -197,9 +189,7 @@ async def test_a_set_aside_changes_one_line_and_keeps_the_body(tmp_path):
     _entry(project, "new-cap", "Caps sit at 50 now.")
     _episode(project, "20260824T010000-aaaaaaaa")
 
-    result = await _learn(
-        project, _proposal(set_aside=[{"entry": "old-cap", "because": "new-cap"}])
-    )
+    result = await _learn(project, _proposal(set_aside=[{"entry": "old-cap", "because": "new-cap"}]))
 
     assert result.set_aside == ["old-cap"]
     text = (at(project).facts() / "old-cap.md").read_text(encoding="utf-8")
@@ -358,8 +348,7 @@ async def test_a_disagreeing_pair_never_wears_in(tmp_path):
     _entry(
         project,
         "batch-cap",
-        "---\nlinks:\n  contradicts: [retry-window]\n---\n"
-        "The importer caps batches at fifty exactly.",
+        "---\nlinks:\n  contradicts: [retry-window]\n---\nThe importer caps batches at fifty exactly.",
     )
     _entry(project, "retry-window", "Retry refused batches after the window passes.")
     _episode(
@@ -453,19 +442,14 @@ async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
 
     result = await _learn(
         project,
-        json.dumps(
-            {"entries": [], "set_aside": [], "page": "Require ISO dates in the notebook."}
-        ),
+        json.dumps({"entries": [], "set_aside": [], "page": "Require ISO dates in the notebook."}),
     )
 
     assert result.page == "Require ISO dates in the notebook."
     record = at(project).learning_log().read_text(encoding="utf-8")
     assert "Require ISO dates" in record
     assert sorted(str(p) for p in at(project).longterm().rglob("*")) == before
-    assert (
-        at(project).constitution().read_text(encoding="utf-8")
-        == "Never push to main."
-    )
+    assert at(project).constitution().read_text(encoding="utf-8") == "Never push to main."
 
 
 # -- the attic ---------------------------------------------------------------
@@ -587,11 +571,7 @@ async def test_a_directory_anchor_is_not_sealed_and_the_entry_lands(tmp_path):
 
     result = await _learn(
         project,
-        _proposal(
-            entries=[
-                {"slug": "place-note", "body": "Work lands here.", "anchors": ["notebook"]}
-            ]
-        ),
+        _proposal(entries=[{"slug": "place-note", "body": "Work lands here.", "anchors": ["notebook"]}]),
     )
 
     assert result.kept == ["place-note"]
@@ -611,11 +591,7 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
 
     result = await _learn(
         project,
-        _proposal(
-            entries=[
-                {"slug": "fat-note", "body": "The big file matters.", "anchors": ["notebook/fat.bin"]}
-            ]
-        ),
+        _proposal(entries=[{"slug": "fat-note", "body": "The big file matters.", "anchors": ["notebook/fat.bin"]}]),
     )
 
     assert result.kept == ["fat-note"]

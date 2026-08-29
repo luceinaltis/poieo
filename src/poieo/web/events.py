@@ -127,8 +127,7 @@ class MergedStore(RunStore):
         rows: list[dict[str, Any]] = []
         for store in self._stores:
             rows.extend(store.list_runs(limit=limit, task=task, project=project))
-        rows.sort(key=lambda row: str(row.get("finished_at") or row.get("started_at") or ""),
-                  reverse=True)
+        rows.sort(key=lambda row: str(row.get("finished_at") or row.get("started_at") or ""), reverse=True)
         return rows[:limit]
 
     def summary(self, run_id: str) -> dict[str, Any] | None:

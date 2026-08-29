@@ -159,18 +159,13 @@ class NodeSpec(_Spec):
     def _refuse_model_keys(self, keep: str = "") -> None:
         """``keep`` names the one key this type does use for something else --
         a confirm node's ``prompt`` is read by a person, not sent anywhere."""
-        named = [
-            key for key in self._MODEL_KEYS if key != keep and getattr(self, key)
-        ]
+        named = [key for key in self._MODEL_KEYS if key != keep and getattr(self, key)]
         if self.max_turns != type(self).model_fields["max_turns"].default:
             named.append("max_turns")
         if self.retry != RetrySpec():
             named.append("retry")
         if named:
-            raise ValueError(
-                f"{self.type} node '{self.id}' does not take "
-                f"{'/'.join(named)}: it calls no model"
-            )
+            raise ValueError(f"{self.type} node '{self.id}' does not take {'/'.join(named)}: it calls no model")
 
     @model_validator(mode="after")
     def _check_shape(self) -> NodeSpec:
@@ -201,9 +196,7 @@ class NodeSpec(_Spec):
                     f"wrong runs the wrong interpreter over it"
                 )
             if self.language and not self.script:
-                raise ValueError(
-                    f"command node '{self.id}' names a language but has no script"
-                )
+                raise ValueError(f"command node '{self.id}' names a language but has no script")
             if self.language:
                 # late import; tools pulls in providers
                 from .tools import COMPILED, LANGUAGES, is_compiled, known_language
@@ -237,9 +230,7 @@ class NodeSpec(_Spec):
                     except ExpressionError as exc:
                         raise ValueError(f"node '{self.id}': {exc}") from exc
             if not self.command and not self.script:
-                raise ValueError(
-                    f"command node '{self.id}' requires a command or a script"
-                )
+                raise ValueError(f"command node '{self.id}' requires a command or a script")
             # `command: |` is the readable way to write a long one, and it
             # adds a trailing newline. That is a spelling, not a second line.
             if self.command:
@@ -292,24 +283,17 @@ class NodeSpec(_Spec):
             for name in self.tools or []:
                 if name not in TOOLSETS:
                     raise ValueError(
-                        f"agent node '{self.id}' names unknown toolset '{name}'; "
-                        f"known: {sorted(TOOLSETS)}"
+                        f"agent node '{self.id}' names unknown toolset '{name}'; known: {sorted(TOOLSETS)}"
                     )
         if self.type == "router":
             if self.workdir or self.tools:
-                raise ValueError(
-                    f"router node '{self.id}' does not take workdir/tools"
-                )
+                raise ValueError(f"router node '{self.id}' does not take workdir/tools")
             if not self.branches:
                 raise ValueError(f"router node '{self.id}' requires at least one branch")
             if self.prompt or self.role:
-                raise ValueError(
-                    f"router node '{self.id}' does not call a model; drop prompt/role"
-                )
+                raise ValueError(f"router node '{self.id}' does not call a model; drop prompt/role")
             if self.next:
-                raise ValueError(
-                    f"router node '{self.id}' routes via branches/default, not next"
-                )
+                raise ValueError(f"router node '{self.id}' routes via branches/default, not next")
         if self.type != "confirm" and self.choices:
             raise ValueError(
                 f"{self.type} node '{self.id}' does not offer choices. Change "
@@ -320,9 +304,7 @@ class NodeSpec(_Spec):
             # person and the run ends there.
             self._refuse_model_keys(keep="prompt")
             if not self.prompt:
-                raise ValueError(
-                    f"confirm node '{self.id}' has nothing to ask; give it a prompt"
-                )
+                raise ValueError(f"confirm node '{self.id}' has nothing to ask; give it a prompt")
             if self.branches or self.default:
                 raise ValueError(
                     f"confirm node '{self.id}' does not branch: a person answers "
@@ -335,13 +317,10 @@ class NodeSpec(_Spec):
                 )
             if len(self.choices) < 2:
                 raise ValueError(
-                    f"confirm node '{self.id}' needs two choices or more: one is "
-                    f"not a decision, and none is free text"
+                    f"confirm node '{self.id}' needs two choices or more: one is not a decision, and none is free text"
                 )
             if len(set(self.choices)) != len(self.choices):
-                raise ValueError(
-                    f"confirm node '{self.id}' offers the same choice twice"
-                )
+                raise ValueError(f"confirm node '{self.id}' offers the same choice twice")
             try:
                 validate_template(self.prompt)
             except ExpressionError as exc:
@@ -382,9 +361,7 @@ class GraphSpec(_Spec):
             targets += [(f"branch[{i}].to", b.to) for i, b in enumerate(node.branches)]
             for label, target in targets:
                 if target is not None and target not in known:
-                    raise ValueError(
-                        f"node '{node.id}' {label} points at unknown node '{target}'"
-                    )
+                    raise ValueError(f"node '{node.id}' {label} points at unknown node '{target}'")
 
         unreachable = known - self._reachable()
         if unreachable:
@@ -414,11 +391,7 @@ class GraphSpec(_Spec):
 
     def roles(self) -> set[str]:
         """Every logical role this graph needs a binding for."""
-        return {
-            n.role or self.default_role
-            for n in self.nodes
-            if n.type == "agent"
-        }
+        return {n.role or self.default_role for n in self.nodes if n.type == "agent"}
 
 
 def load_document(path: str | Path) -> dict[str, Any]:
