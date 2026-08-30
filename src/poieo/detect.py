@@ -549,14 +549,23 @@ def unaskable(base_url: str) -> str | None:
     """
     trimmed = base_url.strip().rstrip("/")
     if not trimmed:
-        return "an empty address"
+        return f"{base_url.strip() or 'that'} is not an address"
+    try:
+        url = httpx.URL(trimmed)
+    except httpx.InvalidURL as exc:
+        # httpx names the part it choked on -- "Invalid port: 'notaport'" --
+        # which is the half of this worth passing through.
+        return f"{trimmed} is not an address that can be asked ({exc})"
     try:
         # `.host` and not `.raw_host`: the second hands back the bytes, and it
         # is decoding them that finds out whether the name can be a name at all
         # -- `xn--a.com` parses perfectly and is not one.
-        httpx.URL(trimmed).host
-    except (httpx.InvalidURL, UnicodeError) as exc:
-        return f"{trimmed} is not an address that can be asked ({exc})"
+        url.host
+    except UnicodeError:
+        # idna's own words are about a codepoint at a position in a string it
+        # decoded, and name nothing the reader typed. The host does.
+        host = url.raw_host.decode("ascii", "replace")
+        return f"{trimmed} is not an address that can be asked -- '{host}' cannot be a hostname"
     return None
 
 

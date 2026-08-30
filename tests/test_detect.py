@@ -38,7 +38,9 @@ def _serves(monkeypatch, answers: dict[str, object]):
     monkeypatch.setattr(
         detect_module,
         "httpx",
-        types.SimpleNamespace(AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL),
+        types.SimpleNamespace(
+            AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL, URL=httpx.URL
+        ),
     )
 
 
@@ -67,7 +69,9 @@ def _guarded(monkeypatch, answers: dict[str, object], key: str):
     monkeypatch.setattr(
         detect_module,
         "httpx",
-        types.SimpleNamespace(AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL),
+        types.SimpleNamespace(
+            AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL, URL=httpx.URL
+        ),
     )
     return seen
 
@@ -709,3 +713,20 @@ def test_an_address_that_is_merely_unreachable_is_not_refused_here():
     a check that guessed would refuse the office box on a night it was off."""
     for fine in ("http://gpu-box:8001/v1", "http://localhost:11434", "http://[::1]:8000", "http://사무실:8001"):
         assert detect_module.unaskable(fine) is None, fine
+
+
+def test_what_is_wrong_is_said_in_the_reader_s_own_words(monkeypatch):
+    """idna's are about a codepoint at a position in a string it decoded, and
+    name nothing that was typed. `poieo config add http://xn--gpu-box.local`
+    was told about `U+1C7E at position 3 of 'gp?u'`."""
+    said = detect_module.unaskable("http://xn--gpu-box.local:8001")
+
+    assert said is not None
+    assert "xn--gpu-box.local" in said
+    assert "Codepoint" not in said and "position" not in said
+
+
+def test_an_address_that_is_only_a_slash_is_still_quoted_back(monkeypatch):
+    """Every other refusal here names what was typed; this one used to be the
+    bare fragment "an empty address"."""
+    assert detect_module.unaskable("/") == "/ is not an address"

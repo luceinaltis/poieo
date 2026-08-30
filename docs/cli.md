@@ -287,10 +287,10 @@ It is only named when the address also answered nothing, because then it is the
 likelier of the two explanations.
 
 An address that is not one — a port that is not a number, a hostname that cannot
-be encoded — is refused before any of that, naming the part that is wrong. It
-used to raise past `_guarded` as a traceback, and "nothing usable answered"
-would have been the wrong sentence anyway: it has the reader checking whether
-their server is up over a typo in what they typed.
+be encoded — is refused before any of that, quoting back what was typed and the
+part of it that cannot be read. It used to raise past `_guarded` as a traceback,
+and "nothing usable answered" would have been the wrong sentence anyway: it has
+the reader checking whether their server is up over a typo in what they typed.
 
 **The board can do this too.** `POST …/models/add` is `config add` from a
 browser, through the same `rebind.declare`, and the board finds the engine

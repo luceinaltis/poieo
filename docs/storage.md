@@ -244,7 +244,10 @@ and a typed address has typos in it. `httpx` refuses a malformed one by raising
 hostname it cannot encode — and neither is a `RequestError`, so both went
 straight past the clause that was catching. `_listed` catches all three now,
 because "every outcome is a return value" is this module's rule and a caller
-being shown a list has no use for a traceback.
+being shown a list has no use for a traceback. (This is detection's promise and
+not the whole product's: a *declared* endpoint with a malformed `base_url` still
+raises out of `providers.local` when something goes to run it, and `poieo check`
+is where that surfaces.)
 
 Silence is the right answer *inside* detection and the wrong one at the surface:
 "nothing usable answered at `http://box:80O1`" is true, and has the reader
