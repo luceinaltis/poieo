@@ -211,7 +211,7 @@ def _as_declared(engine: "Engine") -> "ProviderSpec":
     return ProviderSpec(type=engine.type, base_url=engine.base_url, api_key_env=engine.api_key_env or None)
 
 
-def already(path: Path, engine: "Engine") -> str | None:
+def already(path: Path, engine: "Engine", called: str | None = None) -> str | None:
     """Why this binding already reaches that endpoint, in words, or None.
 
     Read from the **file**, not from a spec somebody is holding: a daemon's
@@ -220,20 +220,32 @@ def already(path: Path, engine: "Engine") -> str | None:
     terminal accepted it. `declare` reads the file too, so this is the same
     question asked one moment earlier, in order to say something better than
     "nothing new" about it.
+
+    ``called`` is how to name the file in the sentence; the path by default,
+    which is what somebody in a terminal wants. **Which** of the three ways it
+    was already there decides the sentence, because only one of them has advice
+    attached: a name is fixed by another name, and a server is not fixed by
+    anything short of editing the file.
     """
     from .binding import load_binding
-    from .detect import declared_as
+    from .detect import declared_as, one_machine
 
     providers = load_binding(path).providers
     name = declared_as(providers, engine.key, engine.type, engine.base_url)
     if name is None:
         return None
-    if name == engine.key:
+    file = called or str(path)
+    declared = providers[name]
+    if engine.base_url and one_machine(declared.base_url) == one_machine(engine.base_url):
         return (
-            f"{path} already declares '{name}' -- give this one another name, "
-            f"since one already there is never overwritten"
+            f"{file} already reaches that server, as '{name}' -- one endpoint per "
+            f"server, so a second name for it is a hand edit rather than this"
         )
-    return f"{path} already reaches that endpoint, as '{name}'"
+    if not engine.base_url and not declared.base_url:
+        return f"{file} already reaches that endpoint, as '{name}'"
+    return (
+        f"{file} already declares '{name}' -- give this one another name, since one already there is never overwritten"
+    )
 
 
 def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:

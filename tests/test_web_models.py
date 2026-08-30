@@ -1429,7 +1429,10 @@ def test_a_name_the_file_no_longer_has_is_not_refused(tmp_path, monkeypatch):
         "default:",
         "  office:\n    type: openai_compatible\n    base_url: http://elsewhere:9000/v1\ndefault:",
     )
-    client = _client(tmp_path, binding=with_office, tasks=False)
+    # `tasks=True` is the whole test: with no card holding the binding,
+    # `_models_of` falls back to re-reading the file and there is no stale spec
+    # to be wrong from.
+    client = _client(tmp_path, binding=with_office, tasks=True)
     # Somebody removes it from the file by hand; the daemon has not reread.
     (tmp_path / "b.yaml").write_text(_BLOCK, encoding="utf-8")
 
@@ -1437,3 +1440,39 @@ def test_a_name_the_file_no_longer_has_is_not_refused(tmp_path, monkeypatch):
 
     assert reply.status_code == 200, reply.text
     assert "office:" in (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+
+def test_a_binding_a_terminal_has_broken_is_refused_rather_than_a_500(tmp_path, monkeypatch):
+    """Reading the file is where a binding somebody has since edited badly is
+    found out, and this route has no exception handler behind it. `declare`'s
+    own refusal was already inside a `try`; the question asked before it was
+    not.
+
+    With a card holding the binding, so the spec in memory is the good one and
+    this is the *file* read that finds out. (A project with no tasks re-reads
+    the file at the top of the route and raises there instead -- one route, one
+    line, and not this change's.)
+    """
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    client = _client(tmp_path, binding=_BLOCK, tasks=True)
+    (tmp_path / "b.yaml").write_text("providers: [not, a, mapping]\n", encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:8001/v1")
+
+    assert reply.status_code == 409
+    assert "b.yaml" in reply.json()["error"]
+
+
+def test_a_name_and_an_address_that_both_collide_says_the_one_with_no_way_out(tmp_path, monkeypatch):
+    """ "Give this one another name" is advice, and it was given for a collision
+    another name does not fix -- obeying it produced the second message."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, detect_module.Engine("local", "local", "ollama", ("m",), "http://localhost:11434"))
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://localhost:11434", name="local")
+
+    assert reply.status_code == 409
+    assert "already reaches that server" in reply.json()["error"]
+    assert "another name" not in reply.json()["error"]

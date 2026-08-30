@@ -490,7 +490,9 @@ def declared_as(providers: Any, key: str, type_: str, base_url: str | None) -> s
        detection would have picked writes one server into one file twice.
     3. **The type**, for an endpoint with no address at all -- Claude's SDK
        resolves its own, so there is nothing to compare and the type is the
-       whole identity.
+       whole identity. Only against a declared endpoint that also has none: a
+       `type: anthropic` pointed at a proxy is an address, and reached by the
+       rule above rather than by this one.
 
     ``providers`` is a binding's `providers:` mapping; anything with `.type` and
     `.base_url` on its values will do. It lives here rather than beside either
