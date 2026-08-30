@@ -8,8 +8,10 @@
 #   claude auth status     # expect loggedIn, and your plan
 #   codex login status     # a Codex login goes stale after about a week idle
 #
-# Today these answer; they do not touch files. A step with `tools:` is refused
-# by name -- bind that one to an endpoint with a key. See docs/binding.md.
+# A step with `tools:` works either way, but not identically: Claude Code is
+# handed poieo's own tools, so the workdir and any `isolation:` still hold;
+# Codex works in its own sandbox and refuses a task that asked for `isolation:`
+# rather than pretend to honour it. See docs/binding.md.
 name: subscription
 version: 1
 

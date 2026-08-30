@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -90,6 +91,43 @@ class ToolCall:
 
 
 @dataclass(slots=True)
+class Hands:
+    """How to *use* the tools a call was offered, for a backend that must.
+
+    ``tools`` says what exists; this says how to run one, where, for how long,
+    and whether poieo is holding a fence around it. Every endpoint-shaped
+    provider ignores this and returns tool calls for the node to execute --
+    the node owns the loop, which is where `max_turns`, the deadline and the
+    run log live.
+
+    A **harness** cannot work that way. Claude Code and Codex run their own
+    loop by construction, so a node that hands one its tools has to hand over
+    the means to run them too, or the harness has nothing to reach for.
+
+    ``run`` answers ``(text, failed)`` rather than the executor's own result
+    type on purpose: ``tools`` imports ``providers``, so this module may not
+    import ``tools`` back. A pair of primitives owes nobody an import.
+    """
+
+    run: "Callable[[ToolCall], Awaitable[tuple[str, bool]]]"
+    # Where the tools work. The node's `workdir`, already resolved.
+    workdir: str | None = None
+    # The node's own bound on how many model calls one step may spend. A
+    # harness that loops for itself must be told, or an unattended run has no
+    # ceiling at all -- which is the thing `max_turns` exists to prevent.
+    max_turns: int = 20
+    # The toolsets the node asked for, by name. A harness that decides its own
+    # tool surface can only honour some combinations, and has to refuse the
+    # rest rather than quietly hand over more than was asked for.
+    toolsets: tuple[str, ...] = ()
+    # **poieo is holding a fence this call must not escape.** True when the
+    # task asked to be boxed, and the tools would otherwise run in a container.
+    # A provider that cannot honour it refuses: half a fence is worse than
+    # none, because nobody knows which half.
+    boxed: bool = False
+
+
+@dataclass(slots=True)
 class LLMRequest:
     """A provider-neutral completion request built by a model node."""
 
@@ -102,6 +140,8 @@ class LLMRequest:
     role: str | None = None
     # Tools offered for this call; empty means a plain completion.
     tools: list[ToolDef] = field(default_factory=list)
+    # Present only for a backend that runs its own tool loop; see `Hands`.
+    hands: Hands | None = None
 
 
 @dataclass(slots=True)
