@@ -3,8 +3,8 @@
   <img src="site/img/lockup-light.svg" alt="poieo" width="380">
 </picture>
 
-**Write down the work you want done. The models on your own machine keep it
-running, and you read what they did in the morning.**
+**Write down the work you want done. The models you choose keep it running
+around the clock, and you read what they did in the morning.**
 
 [![gate](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml/badge.svg)](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
