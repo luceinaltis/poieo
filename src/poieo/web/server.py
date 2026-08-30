@@ -1037,18 +1037,31 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
         # Without this the panel would go on offering what it just wrote, and
         # the board would keep drawing the endpoints of a file that has moved.
+        refused = ""
         try:
             await asyncio.to_thread(daemon.reread, str(path))
-        except PoieoError:
-            # The write landed and `declare` verified it reloads; a daemon that
-            # will not adopt it is the next run's problem to report.
-            pass
+        except PoieoError as exc:
+            # The write landed -- `declare` verified the file reloads -- but the
+            # daemon validates what start-up validates, over the *whole* file.
+            # A binding that already names an unset key variable refuses every
+            # write to it, including one about another endpoint entirely.
+            #
+            # This used to pass in silence, and the silence was a lie the same
+            # size as the one `models/use` was fixed for: the panel reads the
+            # in-memory spec, so it goes on offering what was just written, and
+            # pressing the offer again answers "this project already reaches
+            # it". Told it worked, watched nothing change, then told it was
+            # already there.
+            refused = str(exc)
 
         return JSONResponse(
             {
                 "status": "added",
                 "engine": answered[0].key,
                 "models": list(answered[0].models),
+                # Whether the running daemon took it, and not just the file.
+                "adopted": not refused,
+                **({"why": refused} if refused else {}),
             }
         )
 

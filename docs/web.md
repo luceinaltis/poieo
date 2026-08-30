@@ -383,6 +383,15 @@ choosing one are different decisions, and the second is `models/use`. An endpoin
 already declared is left exactly as it is, since somebody may have pointed it at
 another port.
 
+**And it answers `adopted`, exactly as `models/use` does.** `declare` verifies
+the file reloads, but the daemon validates what start-up validates over the
+*whole* file, and may keep the last good spec — a binding a terminal has edited
+since the daemon read it refuses every write to it, not only the one that caused
+the problem. Swallowed, that was a lie the same size: the panel reads the same
+in-memory spec, so it goes on offering what was just written, and pressing the
+offer again answers "this project already reaches it". Told it worked, watched
+nothing change, then told it was already there.
+
 | code | when | carries |
 |---|---|---|
 | **404** | no such project | the names that do answer |

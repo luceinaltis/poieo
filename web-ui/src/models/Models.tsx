@@ -185,10 +185,21 @@ export function Models({
           explanation. This is that explanation. */}
       {notTaken ? (
         <p className="models-not-taken" data-do="use-not-taken" role="alert">
-          {report?.binding ? shortPath(report.binding.path) : "The models file"} now
-          says <code>{notTaken.ref}</code>, but the daemon has not taken it —{" "}
-          {notTaken.why} It is still running the previous model, and will not
-          start from this file until that is fixed.
+          {report?.binding ? shortPath(report.binding.path) : "The models file"} now{" "}
+          {notTaken.status === "added" ? (
+            <>
+              declares <code>{notTaken.engine}</code>
+            </>
+          ) : (
+            <>
+              says <code>{notTaken.ref}</code>
+            </>
+          )}
+          , but the daemon has not taken it — {notTaken.why} It is still running{" "}
+          {notTaken.status === "added"
+            ? "what it had, and this project"
+            : "the previous model, and"}{" "}
+          will not start from this file until that is fixed.
         </p>
       ) : null}
       {refused ? (

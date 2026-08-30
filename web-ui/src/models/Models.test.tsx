@@ -750,6 +750,31 @@ test("a change the daemon would not take is said, with its reason", async () => 
   expect(note.textContent).toContain("models/default.yaml")
 })
 
+test("an endpoint the daemon would not take is said, with its reason", async () => {
+  // The same shape on the other write. `add` swallowed the refusal entirely:
+  // the file gained the endpoint, the panel went on offering it, and pressing
+  // the offer again answered "this project already reaches it".
+  addEngine.mockResolvedValue({
+    ok: true,
+    status: "added",
+    engine: "lmstudio",
+    models: ["qwen3-4b"],
+    adopted: false,
+    why: "task 'chores': provider 'routed': $OPENROUTER_API_KEY is not set",
+  })
+  await render(REPORT, LMSTUDIO)
+
+  await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
+
+  const note = container.querySelector("[data-do='use-not-taken']")!
+  expect(note.textContent).toContain("OPENROUTER_API_KEY")
+  expect(note.textContent).toContain("lmstudio")
+  expect(note.textContent).toContain("models/default.yaml")
+  // Not the sentence written for `use`: nothing was pointed anywhere, and
+  // there is no previous model to still be running.
+  expect(note.textContent).not.toContain("previous model")
+})
+
 test("an ordinary change says nothing extra", async () => {
   await render()
 
