@@ -21,6 +21,7 @@ import { useState } from "react"
 
 import { createTask } from "../api"
 import type { MadeTask } from "../api"
+import { slugOf } from "./slug"
 import { useAct } from "../useAct"
 import "./make.css"
 
@@ -29,6 +30,7 @@ export function MakeTask({
   keepsCopies,
   onClose,
   seed,
+  taken = [],
 }: {
   project: string
   /**
@@ -47,6 +49,14 @@ export function MakeTask({
    * fresh seed is a fresh form, and everything stays editable.
    */
   seed?: { name: string; folder: string; prompt: string }
+  /**
+   * The filenames this project's tasks already answer to.
+   *
+   * The daemon would refuse a collision with a 409 after save; the board
+   * already holds the list, so the sentence comes while the name is still
+   * being typed. Advisory only -- the daemon's refusal stays the authority.
+   */
+  taken?: string[]
 }) {
   const [name, setName] = useState(seed?.name ?? "")
   const [folder, setFolder] = useState(seed?.folder ?? "")
@@ -54,7 +64,10 @@ export function MakeTask({
   const [made, setMade] = useState<string | null>(null)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
-  const ready = Boolean(name.trim() && folder.trim() && prompt.trim())
+  // In the daemon's own spelling of the filename, so "Chores!" collides with
+  // "chores" exactly as it would on disk.
+  const collides = taken.includes(slugOf(name))
+  const ready = Boolean(name.trim() && folder.trim() && prompt.trim()) && !collides
 
   const send = () =>
     void act(async () => {
@@ -98,6 +111,12 @@ export function MakeTask({
           onChange={(event) => setName(event.target.value)}
         />
       </label>
+
+      {collides ? (
+        <p className="make-refusal" role="alert">
+          this project already has a task called ‘{slugOf(name)}’
+        </p>
+      ) : null}
 
       <label className="make-field">
         folder

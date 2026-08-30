@@ -144,3 +144,43 @@ test("picking a task on the board takes the margin back", async () => {
   expect(panel("New task")).toBeNull()
   expect(container.querySelector(".drawer")).not.toBeNull()
 })
+
+test("a name already taken says so while it is being typed", async () => {
+  // The server would refuse this with a 409 after save; the panel knows the
+  // project's tasks already, so the sentence comes while the name is still
+  // being typed -- and in the daemon's own spelling of the filename, so
+  // "Chores!" collides with "chores" exactly as it would on disk.
+  await open()
+  await act(async () => button("open-make")!.click())
+
+  const name = container.querySelector<HTMLInputElement>('input[name="name"]')!
+  const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+  await act(async () => {
+    write.call(name, "Chores!")
+    name.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+
+  expect(container.textContent).toContain("already has a task called")
+  // Saving is refused here, not by the daemon later: the folder and prompt
+  // could be perfect and the save would still bounce.
+  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
+  const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+  await act(async () => {
+    write.call(folder, "../work")
+    folder.dispatchEvent(new Event("input", { bubbles: true }))
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+      prompt,
+      "x",
+    )
+    prompt.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(container.querySelector<HTMLButtonElement>('[data-do="make-task"]')!.disabled).toBe(true)
+
+  // A free name lifts both.
+  await act(async () => {
+    write.call(name, "evening sweep")
+    name.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(container.textContent).not.toContain("already has a task called")
+  expect(container.querySelector<HTMLButtonElement>('[data-do="make-task"]')!.disabled).toBe(false)
+})
