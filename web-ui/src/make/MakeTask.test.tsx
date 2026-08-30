@@ -41,7 +41,11 @@ afterEach(() => {
 function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
   act(() => {
     root.render(
-      <MakeTask project="board" onClose={props.onClose ?? (() => {})} />,
+      <MakeTask
+        project="board"
+        keepsCopies={props.keepsCopies ?? true}
+        onClose={props.onClose ?? (() => {})}
+      />,
     )
   })
 }
@@ -84,6 +88,28 @@ test("it says whose files are about to change before the button is pressed", () 
   // reader's own files are about to change does not.
   expect(host.textContent).toContain("../work")
   expect(host.textContent?.toLowerCase()).toContain("files")
+})
+
+test("it says the work can be thrown away, where that is true", () => {
+  show({ keepsCopies: true })
+  type("folder", "../work")
+
+  // The reassuring half, and it is not decoration: it is what makes the
+  // other half legible as the exception it is.
+  expect(host.textContent).toContain("private copy")
+  expect(host.textContent).not.toContain("no undo")
+})
+
+test("it says there is nothing to undo, before the button that starts it", () => {
+  show({ keepsCopies: false })
+  type("folder", "../work")
+
+  // The board says this too, on the card -- but by then the task exists and
+  // has been running. This is the moment the reader chooses, and until now
+  // the only place to find out was afterwards.
+  expect(host.textContent).toContain("no undo")
+  expect(host.textContent).toContain("not a git repository")
+  expect(host.textContent).not.toContain("private copy")
 })
 
 test("a saved card is sent as the three things, and says so in place", async () => {

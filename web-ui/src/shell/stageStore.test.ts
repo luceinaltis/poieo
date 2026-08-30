@@ -24,7 +24,7 @@ const CHORES: TaskRow = {
 /** The envelope `/api/tasks` answers. Only the tasks matter to most of these,
  *  so the project is a constant rather than an argument. */
 function listing(tasks: TaskRow[]): Listing {
-  return { projects: [{ name: "board", root: "/home/k/chores" }], tasks }
+  return { projects: [{ name: "board", root: "/home/k/chores", keeps_copies: true }], tasks }
 }
 
 function harness(overrides: Partial<StageApi> = {}) {

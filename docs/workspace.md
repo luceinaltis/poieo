@@ -90,6 +90,14 @@ per-task review states concurrently for the same reason.
 repository that cannot be used is logged and the run happens in the folder
 directly, with a warning that its changes cannot be reviewed or undone.
 
+`usable(folder)` is that condition on its own — git on PATH, and the folder
+actually inside a work tree — as a function and not only as
+`Workspace.available()`, because the board asks it of a **project** that owns
+no task yet. That is what lets the make panel say whether a night could be
+thrown away *before* the button that starts one; see [web.md](web.md). Anything
+git could not answer is False, which is the direction to be wrong in: a folder
+nobody can prove is protected is one somebody should look at.
+
 **Commits carry poieo's own identity** (`-c user.name=poieo -c
 user.email=poieo@localhost`), because automated commits must work on a machine
 with no global git config.

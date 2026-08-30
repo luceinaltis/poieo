@@ -64,6 +64,28 @@ stopped being what this paragraph describes.
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.
 
+### `keeps_copies`, on the project rather than the task
+
+Whether a night made in this project could be **thrown away in the morning**.
+It is one more git subprocess per project, on the same threads and in the same
+`gather` as the per-task review states.
+
+It rides with the **project** because that is what decides it. A card written
+from the board works inside the project — the create route refuses anything
+outside it — and a folder inside a work tree is in that work tree, so the
+answer is the same for every folder a reader could type. And it has to be on
+the project because the panel that needs it is the *make* panel, opened when
+there may be no task at all to read it off: a project with nothing on it yet is
+exactly when somebody is about to make one.
+
+False is [workspace.md](workspace.md)'s other path — no repository, so no copy
+to make, so the run edits the folder itself and the morning has nothing to hand
+back. Anything git could not answer is False, which is the direction to be
+wrong in: a folder nobody can prove is protected is one somebody should look
+at. The make panel says so *before the button that starts the task*, and the
+board says it again on the card afterwards; until this field the second was the
+only one, and by then the task existed and had run.
+
 ### `GET /api/projects/{p}/models`
 
 **Every model this project can reach**, endpoint by endpoint, with whatever each

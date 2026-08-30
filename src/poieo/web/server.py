@@ -41,6 +41,7 @@ from ..binding import load_binding, split_ref
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
 from ..rebind import declare, point_at
+from ..workspace import usable as git_keeps_copies
 from .events import BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -209,6 +210,24 @@ def _review_state(runner: Any) -> dict[str, Any]:
         return {"pending": 0, "into": None}
 
 
+def _keeps_copies(project: Any) -> bool:
+    """Whether a night's work in this project can be thrown away in the morning.
+
+    A card written from the board works **inside this project** -- the create
+    route refuses anything outside it -- and a folder inside a work tree is in
+    that work tree. So this is decided by the project and not by whichever
+    subfolder gets typed, which is what lets the make panel say it before a
+    path has been saved rather than after.
+
+    False means [workspace.md](../../docs/workspace.md)'s other path: no copy
+    to make, so the run edits the folder itself and the morning has nothing to
+    hand back. Anything git could not answer is False for the same reason the
+    board's own warning errs that way -- a folder nobody can prove is
+    protected is one somebody should look at.
+    """
+    return git_keeps_copies(Path(project.config.base_dir))
+
+
 def _branches(branches: Any) -> list[dict[str, Any]]:
     """How an arrow is drawn: where it goes, and the word on it.
 
@@ -293,7 +312,15 @@ def create_app(daemon: Any) -> Starlette:
     async def tasks(request: Request) -> JSONResponse:
         # Each review state is two git subprocesses; asked one runner at a
         # time, the board's first paint waits for all of them in single file.
-        states = await asyncio.gather(*(asyncio.to_thread(_review_state, runner) for runner in daemon.runners))
+        # One more git subprocess per project, on the same threads and in the
+        # same gather: it is the only way the make panel can say whether a
+        # night here could be thrown away, and a project with no tasks yet --
+        # which is exactly when somebody is about to make one -- has no runner
+        # to read it off.
+        states, keeps = await asyncio.gather(
+            asyncio.gather(*(asyncio.to_thread(_review_state, runner) for runner in daemon.runners)),
+            asyncio.gather(*(asyncio.to_thread(_keeps_copies, project) for project in daemon.projects)),
+        )
         rows = []
         for runner, state in zip(daemon.runners, states):
             last = runner.last_result
@@ -330,8 +357,13 @@ def create_app(daemon: Any) -> Starlette:
                     {
                         "name": project.config.display_name,
                         "root": str(project.config.base_dir),
+                        # Whether a night made here could be thrown away. It
+                        # rides with the project because that is what decides
+                        # it, and because the panel that needs it is opened
+                        # before there is a task to hang it on.
+                        "keeps_copies": keeping,
                     }
-                    for project in daemon.projects
+                    for project, keeping in zip(daemon.projects, keeps)
                 ],
                 "tasks": rows,
             }

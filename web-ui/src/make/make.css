@@ -85,6 +85,14 @@
   color: #e8dcc8;
 }
 
+/* The half of that sentence the morning cannot fix. Marked up as `strong`
+   rather than only coloured, so it is still the emphasised clause to a reader
+   who takes this panel through a screen reader or cannot tell it from the
+   amber rule beside it -- the words carry the whole meaning either way. */
+.make-undo {
+  color: #e8a08c;
+}
+
 .make-note {
   color: #7a6e60;
   font-size: 0.82em;

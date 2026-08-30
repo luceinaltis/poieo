@@ -669,7 +669,32 @@ def test_the_board_says_which_project_it_is_showing(tmp_path):
     client = TestClient(create_app(daemon))
 
     body = client.get("/api/tasks").json()
-    assert body["projects"] == [{"name": "night shift", "root": str(tmp_path)}]
+    # A bare tmp_path is not a repository, so nothing made here could be undone.
+    assert body["projects"] == [{"name": "night shift", "root": str(tmp_path), "keeps_copies": False}]
+
+
+def test_a_project_outside_a_repository_says_it_keeps_no_copies(tmp_path):
+    """The one thing a person making a task here cannot find out afterwards.
+
+    A card made from the board works inside this project, so whether a night
+    can be thrown away is decided by the project and not by the folder that
+    gets typed -- which is why it is answered once, here, rather than per
+    keystroke against a path that has not been saved yet.
+    """
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/tasks").json()["projects"][0]["keeps_copies"] is False
+
+
+def test_a_project_inside_a_repository_keeps_copies(tmp_path):
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/tasks").json()["projects"][0]["keeps_copies"] is True
 
 
 def test_a_board_with_nothing_on_it_still_says_whose_it_is(tmp_path):

@@ -26,9 +26,18 @@ import "./make.css"
 
 export function MakeTask({
   project,
+  keepsCopies,
   onClose,
 }: {
   project: string
+  /**
+   * Whether a night made here could be thrown away in the morning.
+   *
+   * A property of the project, not of the folder being typed: a card made
+   * here works inside the project, and a folder inside a work tree is in that
+   * work tree. So it is answered before there is a path to answer about.
+   */
+  keepsCopies: boolean
   onClose(): void
 }) {
   const [name, setName] = useState("")
@@ -108,7 +117,13 @@ export function MakeTask({
 
       {/* The one thing this panel says out loud. Everything else about a run
           is machinery and stays hidden; this is not, because it is the reader's
-          own files. */}
+          own files.
+
+          Two sentences, and the second is the one that was missing. Whose
+          files change was already here; what becomes of the changes was not,
+          and it is the half a reader cannot find out afterwards without
+          having already started the task. The board carries the same fact on
+          the card, but a card exists because somebody pressed this button. */}
       {folder.trim() ? (
         <p className="make-warning">
           Saving starts this task. It will read and change files in{" "}
@@ -119,7 +134,18 @@ export function MakeTask({
             // change has to say which `work` it means.
             <>, read from this project’s tasks folder</>
           )}
-          .
+          .{" "}
+          {keepsCopies ? (
+            // Said even though it is the good news: without it the other
+            // wording reads as boilerplate about files rather than as the one
+            // project where the morning cannot help.
+            <>Its work is kept in a private copy for you to accept or throw away.</>
+          ) : (
+            <strong className="make-undo">
+              This project is not a git repository, so there is no copy — it changes your files
+              directly, and there is no undo.
+            </strong>
+          )}
         </p>
       ) : (
         <p className="make-note">
