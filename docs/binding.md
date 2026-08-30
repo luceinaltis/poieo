@@ -176,10 +176,67 @@ default is the arrangement working.
 | `anthropic` | Claude, direct or through AWS Bedrock / Google Vertex | official SDK, always streams |
 | `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI, OpenRouter, Azure, and the hosted endpoints that speak this shape | `POST {base_url}/chat/completions` |
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` fold into `options` |
+| `claude_code` | Claude Code, on a Claude plan | the Agent SDK; **no key** |
+| `codex` | Codex, on a ChatGPT plan | `codex exec`; **no key** |
 | `mock` | nothing | scripted replies for tests and dry runs |
 
 Each preset is registered as a type of its own, so a typo in one is a parse
 error rather than a connection failure at three in the morning.
+
+### The two that spend a plan instead of tokens
+
+`subscription.py`. Every other type here buys tokens; these two rent a coding
+harness that is **already logged in** and let it answer on a plan the user pays
+for anyway. They declare no `api_key_env`, because there is no key.
+
+**A key in the environment is refused, not worked around.** Both harnesses
+prefer a key over the login, and neither can be told to ignore one: each
+inherits the environment it is started in and merges anything the caller adds
+*on top*, so a variable can be overwritten but never removed — and an empty
+value still holds its slot and authenticates as empty. That leaves refusing, or
+quietly billing an API account for work somebody thought their plan covered.
+The second is discovered at the end of the month, which is the reason the
+`anthropic` provider refuses a `through:` it does not recognise. So a set
+`ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) fails the call and names the variable
+and the fix. Checked per call, because a daemon outlives the shell that started
+it.
+
+**Today they answer; they do not touch files.** A step carrying `tools:` is
+refused *by name* — a graph has several steps and only some carry tools, so
+which one is the whole of what a reader needs. Note that a task made from the
+board defaults to `files` + `shell`, so the commonest task on the board is one
+of the refused ones for now.
+
+Nothing of the reader's own machine reaches a step: `setting_sources: []` and
+`strict_mcp_config` on the Claude side, `--ignore-user-config --ignore-rules`
+on Codex. A graph is meant to answer the same on two machines, and a `CLAUDE.md`
+sitting above the folder the daemon happened to start in is not part of it.
+
+**Cost is `0.0`, and the harness's own figure goes to `meta.would_have_cost`.**
+A subscription charges nothing per call — which is what `Usage.cost` means by
+zero, "a local model that really costs nothing". Reporting the notional dollars
+would arm [runtime.md](runtime.md)'s spend limits against money nobody is
+billed, while the figure is still worth keeping: it answers *what did this save
+me*.
+
+The two are not symmetrical, and should not be forced to be. Claude Code lends
+a Python library that lets a host **turn every built-in tool off and supply its
+own, in-process** — so poieo can keep its own tools, its executor seam and its
+container. Codex is the other way round by design: its non-interactive mode
+cannot approve someone else's tool calls at all, and the only flag that gets
+past that switches off the sandbox with it, so its vendor's own answer is to
+call Codex *as* a tool and hand it a sandbox mode. Each is the supported way
+in.
+
+The Claude side needs only `pip install 'poieo[claude-code]'` — the SDK
+carries its own copy of the CLI, so the one on `PATH` is not a second
+requirement. It is imported late all the same, so `poieo check` can load a
+binding that names it and report what is missing. Codex needs
+`npm i -g @openai/codex`, and is resolved through `shutil.which`: on Windows the
+thing on `PATH` is `codex.CMD` and exec does not add the extension for you.
+**A Codex login goes stale after about a week idle** — for a daemon that runs
+unattended that is a Tuesday, not an edge case, so `health()` says "not logged
+in; run `codex login`" rather than letting a run report a model failure.
 
 `ProviderSpec.type` is a plain `str` validated against `KNOWN_PROVIDER_TYPES`
 rather than a closed `Literal`. That is what lets

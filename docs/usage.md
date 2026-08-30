@@ -258,7 +258,16 @@ win over both. Four bindings ship as examples: `mock`, `local`, `claude`, `hybri
 | `anthropic` | Claude API | official SDK, always streams; credentials from `ANTHROPIC_API_KEY` or an `ant auth login` profile |
 | `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
 | `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` are folded into `options` |
+| `claude_code` | Claude Code, on a Claude plan | no key — the plan's own login. `pip install 'poieo[claude-code]'` |
+| `codex` | Codex, on a ChatGPT plan | no key — `codex login`. `npm i -g @openai/codex` |
 | `mock` | nothing | scripted replies for tests and dry runs |
+
+The last two spend a **subscription** rather than tokens, and there is no key to
+name. A key in the environment is refused rather than worked around — both
+harnesses prefer one over the login, so the run would go on the API bill
+instead. Today they answer but cannot touch files; a step with `tools:` is
+refused by name. `examples/models/subscription.yaml` is one, and
+`docs/binding.md` says why the two behave differently.
 
 The Anthropic provider is capability-aware: `thinking: auto` becomes adaptive thinking on
 models that support it and is omitted on ones that do not, `effort` is dropped where it is
