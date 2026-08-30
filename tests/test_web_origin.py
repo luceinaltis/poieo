@@ -71,6 +71,7 @@ WRITES = [
     "/api/projects/board/models/use",
     "/api/projects/board/models/add",
     "/api/projects/board/tasks",
+    "/api/projects/board/tasks/f",
 ]
 
 

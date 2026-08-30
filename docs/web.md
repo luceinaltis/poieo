@@ -25,7 +25,9 @@ to be true to add a sixth.
 | `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
 | `GET /api/events` | every event, live (SSE; `?task=` filters) |
+| `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
+| `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
 | `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
@@ -847,6 +849,16 @@ filename here rather than taken as one, and a name that reads like a path is
 refused rather than quietly rewritten. It takes the three things DESIGN.md says
 a task cannot do without and no fourth, and the folder is required because it is
 the one thing the model's hands will touch.
+
+The same kind has a second verb: **rewriting a card that exists**, `PUT` on the
+task's own path, inside the same fence — the filename never changes, because it
+is the task's identity, and the folder refusals run again on every rewrite
+because the old card passing them says nothing about the new. `GET` beside it
+hands back the file and its three fields. The answer's `live` says whether the
+daemon's next run reads the edit or whether it waits for a restart: the daemon
+refuses to half-adopt a card whose spec changed — `_reread_graph` owns that
+judgement — and this route makes the same comparison so the board can warn
+instead of letting a person believe an ignored edit took.
 
 The rail item that calls it is `make/MakeTask.tsx`, beside `models/` because
 making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
