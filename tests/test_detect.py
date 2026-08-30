@@ -38,7 +38,9 @@ def _serves(monkeypatch, answers: dict[str, object]):
     monkeypatch.setattr(
         detect_module,
         "httpx",
-        types.SimpleNamespace(AsyncClient=fake, RequestError=httpx.RequestError),
+        types.SimpleNamespace(
+            AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL, URL=httpx.URL
+        ),
     )
 
 
@@ -67,7 +69,9 @@ def _guarded(monkeypatch, answers: dict[str, object], key: str):
     monkeypatch.setattr(
         detect_module,
         "httpx",
-        types.SimpleNamespace(AsyncClient=fake, RequestError=httpx.RequestError),
+        types.SimpleNamespace(
+            AsyncClient=fake, RequestError=httpx.RequestError, InvalidURL=httpx.InvalidURL, URL=httpx.URL
+        ),
     )
     return seen
 
@@ -661,3 +665,68 @@ async def test_an_ollama_behind_a_key_is_asked_with_it_too(monkeypatch):
 
     assert engine is not None
     assert (engine.type, engine.models) == ("ollama", ("qwen3:32b",))
+
+
+# -- an address that is not one ----------------------------------------------
+#
+# `ask` is the first caller to hand detection a string somebody typed, and a
+# typed address has typos in it. `httpx` refuses a malformed one by raising --
+# `InvalidURL` for a port that is not a number, and idna's own `UnicodeError`
+# for a hostname it cannot encode -- and neither is a `RequestError`, so both
+# went straight past the one clause that was catching. Nothing downstream
+# catches them either: the route is on a bare Starlette with no exception
+# handlers, so a typo was a 500, and `_guarded` in the CLI catches PoieoError
+# and OSError, so it was a traceback against a decorator whose docstring
+# promises never to print one.
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("typo", ["http://box:80O1", "http://box:notaport", "http://xn--a.com:8001"])
+async def test_an_address_that_cannot_be_asked_is_an_answer_and_not_a_crash(monkeypatch, typo):
+    """The rule this module opens with: every outcome is a return value."""
+    _serves(monkeypatch, {})
+
+    assert await detect_module.ask(typo) is None
+    assert await detect_module.catalogue_for("openai_compatible", typo) == detect_module.Catalogue()
+
+
+@pytest.mark.parametrize(
+    "typo,names",
+    [
+        ("http://box:80O1", "port"),
+        ("http://box:notaport", "port"),
+        ("http://xn--a.com:8001", "xn--a.com"),
+    ],
+)
+def test_why_an_address_cannot_be_asked_is_something_the_caller_can_say(typo, names):
+    """Silence is the right answer *inside* detection and the wrong one at the
+    surface: "nothing usable answered at http://box:80O1" is true, and has the
+    reader checking whether their server is up. The two callers that take a
+    typed address ask this first and say what is wrong with it."""
+    said = detect_module.unaskable(typo)
+
+    assert said is not None and names in said
+
+
+def test_an_address_that_is_merely_unreachable_is_not_refused_here():
+    """Only the shape. Whether anything is listening is what asking is for, and
+    a check that guessed would refuse the office box on a night it was off."""
+    for fine in ("http://gpu-box:8001/v1", "http://localhost:11434", "http://[::1]:8000", "http://사무실:8001"):
+        assert detect_module.unaskable(fine) is None, fine
+
+
+def test_what_is_wrong_is_said_in_the_reader_s_own_words(monkeypatch):
+    """idna's are about a codepoint at a position in a string it decoded, and
+    name nothing that was typed. `poieo config add http://xn--gpu-box.local`
+    was told about `U+1C7E at position 3 of 'gp?u'`."""
+    said = detect_module.unaskable("http://xn--gpu-box.local:8001")
+
+    assert said is not None
+    assert "xn--gpu-box.local" in said
+    assert "Codepoint" not in said and "position" not in said
+
+
+def test_an_address_that_is_only_a_slash_is_still_quoted_back(monkeypatch):
+    """Every other refusal here names what was typed; this one used to be the
+    bare fragment "an empty address"."""
+    assert detect_module.unaskable("/") == "/ is not an address"

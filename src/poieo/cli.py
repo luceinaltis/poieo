@@ -1052,6 +1052,9 @@ def config_add(
         # keyed endpoint they had not.
         _fail("--key-env names the key for one address; pass the address too")
     if url:
+        # An address with a typo in it is not an address that answered nothing.
+        if (unaskable := engines.unaskable(url)) is not None:
+            _fail(unaskable)
         engine = asyncio.run(engines.ask(url, key_env or None))
         if engine is None:
             # Only on the way out, and never as a precondition. The key may

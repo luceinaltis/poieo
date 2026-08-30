@@ -414,3 +414,20 @@ def test_looking_at_this_machine_still_takes_no_argument(tmp_path, monkeypatch):
 
     assert runner.invoke(app, ["config", "add"]).exit_code == 0
     assert "lmstudio" in load_binding(path).providers
+
+
+def test_an_address_with_a_typo_in_it_says_which_typo(tmp_path, monkeypatch):
+    """It used to raise past `_guarded`, whose docstring promises a message and
+    never a traceback: `httpx` refuses a port that is not a number by raising,
+    and that is not a `RequestError`, so nothing was catching it."""
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:80O1"])
+
+    assert result.exit_code != 0
+    assert result.exception is None or isinstance(result.exception, SystemExit), result.exception
+    assert "80O1" in result.output and "port" in result.output
+    # Not the sentence for a server that is switched off. That one has the
+    # reader checking their machine over a typo in what they typed.
+    assert "nothing usable answered" not in result.output

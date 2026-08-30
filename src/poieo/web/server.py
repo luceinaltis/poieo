@@ -939,6 +939,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             )
 
         if url:
+            # An address with a typo in it is not an address that answered
+            # nothing, and used to be a 500: detection raised for a port that is
+            # not a number, and this route is on a bare Starlette with no
+            # exception handlers behind it.
+            if (unaskable := engines.unaskable(url)) is not None:
+                return JSONResponse({"error": unaskable}, status_code=400)
             # An address nobody detected. `CANDIDATES` knows four ports on this
             # machine, and an inference server is routinely somewhere else --
             # so the reader types where it is and this asks what is there,
