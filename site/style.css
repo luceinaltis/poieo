@@ -79,21 +79,39 @@ h3 { font-size: 1.05rem; }
 
 /* --- hero ---------------------------------------------------------------- */
 
-.hero { padding: 5.5rem 0 3rem; text-align: center; }
+.hero { padding: 5rem 0 4.5rem; position: relative; }
+
+/* The tree, painted into the ground: masked so its edges dissolve into the
+   page and it reads as one picture with the section, not an image in it. */
+.hero-art {
+  height: auto;
+  -webkit-mask-image: radial-gradient(68% 74% at 62% 40%, #000 40%, transparent 68%);
+  mask-image: radial-gradient(68% 74% at 62% 40%, #000 40%, transparent 68%);
+  pointer-events: none;
+  position: absolute;
+  right: -10%;
+  top: 46%;
+  transform: translateY(-52%);
+  width: min(60vw, 840px);
+  z-index: -1;
+}
+
+.hero-copy { max-width: 34rem; position: relative; }
 
 .hero h1 {
-  font-size: clamp(2.1rem, 6vw, 3.4rem);
+  font-size: clamp(2.1rem, 5vw, 3.2rem);
   letter-spacing: -0.02em;
-  margin-inline: auto;
-  max-width: 20ch;
+  max-width: 18ch;
 }
 
 .lead {
   color: var(--dim);
-  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
-  margin: 0 auto 2.2rem;
-  max-width: 46ch;
+  font-size: clamp(1.05rem, 2vw, 1.2rem);
+  margin: 0 0 2.2rem;
+  max-width: 44ch;
 }
+
+.hero-note { color: #7a6e60; font-size: 0.9rem; margin: 1.4rem 0 0; }
 
 .cta {
   align-items: stretch;
@@ -130,7 +148,8 @@ h3 { font-size: 1.05rem; }
 
 .cta button:hover { color: var(--ember); }
 
-.buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 0; }
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
+.end .buttons { justify-content: center; }
 
 .button {
   border: 1px solid var(--rule);
@@ -257,7 +276,33 @@ footer p { margin: 0.4rem 0; }
   body { font-size: 16px; }
   section { padding: 3rem 0; }
   .hero { padding: 3.5rem 0 2rem; }
+  /* On a phone the tree becomes weather behind the words rather than a
+     neighbour beside them. */
+  .hero-art {
+    -webkit-mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
+    mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
+    opacity: 0.3;
+    right: -30%;
+    width: 130vw;
+  }
   .steps, .grid, .why dl { grid-template-columns: 1fr; }
   .cta { display: flex; width: 100%; }
   .bar-sub { display: none; }
 }
+
+
+/* --- docs page ----------------------------------------------------------- */
+
+.docs-hero { padding-bottom: 1.5rem; }
+.docs-hero h1 { max-width: 22ch; }
+
+a.doc { display: block; text-decoration: none; transition: border-color 0.15s; }
+a.doc:hover { border-color: var(--ember); }
+a.doc h3 { color: var(--ember); }
+a.doc p { color: var(--dim); font-size: 0.95rem; }
+a.doc code { color: var(--text); }
+
+.doc-table { border-collapse: collapse; margin-top: 1.2rem; width: 100%; }
+.doc-table td { border-top: 1px solid var(--rule); padding: 10px 18px 10px 0; vertical-align: top; }
+.doc-table td:first-child { font-family: var(--mono); font-size: 0.9rem; white-space: nowrap; width: 8rem; }
+.doc-table td:last-child { color: var(--dim); font-size: 0.95rem; }
