@@ -182,17 +182,17 @@ test("one rendering means no picker, and the board carries the tasks", async () 
   expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
 })
 
-test("hours is a place on the rail: there when you go, gone when you leave", async () => {
+test("runs is a place on the rail: there when you go, gone when you leave", async () => {
   await render(initialStage(FLOWS))
 
   // The rail carries it beside board, models and new task.
-  const go = container.querySelector<HTMLElement>('[data-do="open-hours"]')!
+  const go = container.querySelector<HTMLElement>('[data-do="open-runs"]')!
   expect(go).not.toBeNull()
   await act(async () => go.click())
 
   // The stage now answers "what has it been doing" -- and the rendering
   // picker is gone, because it renders the *board*, which is not on screen.
-  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelector(".runs")).not.toBeNull()
   expect(container.querySelector(".basic")).toBeNull()
   expect(go.getAttribute("aria-current")).toBe("page")
   expect(container.querySelector(".shell-skin")).toBeNull()
@@ -200,53 +200,53 @@ test("hours is a place on the rail: there when you go, gone when you leave", asy
   // Board brings back the rendering that was left, not a hard-coded one.
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-board"]')!.click())
   expect(container.querySelector(".basic")).not.toBeNull()
-  expect(container.querySelector(".hours")).toBeNull()
+  expect(container.querySelector(".runs")).toBeNull()
   expect(
     container.querySelector('[data-do="open-board"]')!.getAttribute("aria-current"),
   ).toBe("page")
 })
 
-test("a panel opens over hours without knocking it off the stage", async () => {
+test("a panel opens over runs without knocking it off the stage", async () => {
   await render(initialStage(FLOWS))
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
 
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
 
-  // The panel holds the margin; the place behind it is still hours. One item
+  // The panel holds the margin; the place behind it is still runs. One item
   // says where you are, and it is the panel's.
-  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelector(".runs")).not.toBeNull()
   expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
   expect(
     container.querySelector('[data-do="open-models"]')!.getAttribute("aria-current"),
   ).toBe("page")
 
-  // Closing it lands back on hours, not on the board.
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+  // Closing it lands back on runs, not on the board.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
   expect(
-    container.querySelector('[data-do="open-hours"]')!.getAttribute("aria-current"),
+    container.querySelector('[data-do="open-runs"]')!.getAttribute("aria-current"),
   ).toBe("page")
 })
 
-test("a task picked off an hours lane opens the drawer with hours still on stage", async () => {
+test("a task picked off a runs lane opens the drawer with runs still on stage", async () => {
   await render(replay(initialStage(FLOWS), AGENT_RUN))
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
 
   await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="board/chores"] .hours-head')!.click()
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .runs-head')!.click()
   })
 
   expect(container.querySelector(".drawer")).not.toBeNull()
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
-  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelector(".runs")).not.toBeNull()
 })
 
-test("a reader who left on hours comes back to hours", async () => {
-  localStorage.setItem("poieo.skin", "hours")
+test("a reader who left on runs comes back to runs", async () => {
+  localStorage.setItem("poieo.skin", "runs")
   await render(initialStage(FLOWS))
 
-  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelector(".runs")).not.toBeNull()
   expect(
-    container.querySelector('[data-do="open-hours"]')!.getAttribute("aria-current"),
+    container.querySelector('[data-do="open-runs"]')!.getAttribute("aria-current"),
   ).toBe("page")
 })
 

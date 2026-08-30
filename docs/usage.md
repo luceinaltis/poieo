@@ -546,7 +546,7 @@ change it, `--no-web` to turn it off). It ships built, so there is nothing to
 install: open it to watch tasks move, click one to read what it did turn by
 turn, and take or throw away what it left you. The board draws the work as a
 graph — the tasks, their nodes, and the model each one calls — and the rail
-down the left also holds `hours`, the same tasks against one clock with a mark
+down the left also holds `runs`, the same tasks against one clock with a mark
 per run, which is where "what happened overnight" is answered.
 
 `--host` moves where it listens, and the default is this machine on

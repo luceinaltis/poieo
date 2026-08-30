@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-import { hours } from "./index"
+import { runs } from "./index"
 import { DAY, HOUR } from "./span"
 import { initialStage, reduce, setRuns } from "../../state/stage"
 import type { StageState } from "../../state/stage"
@@ -77,7 +77,7 @@ afterEach(() => {
 })
 
 test("mount/update/destroy leaves the element empty", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("a", HOUR)]))
   expect(el.childElementCount).toBeGreaterThan(0)
 
@@ -86,13 +86,13 @@ test("mount/update/destroy leaves the element empty", () => {
 })
 
 test("one lane per task, under its own name and trigger", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([]))
 
-  expect(el.querySelectorAll(".hours-lane")).toHaveLength(2)
+  expect(el.querySelectorAll(".runs-lane")).toHaveLength(2)
   const lane = el.querySelector('[data-task="board/chores"]')!
-  expect(lane.querySelector(".hours-name")!.textContent).toBe("chores")
-  expect(lane.querySelector(".hours-trigger")!.textContent).toBe("every 15m")
+  expect(lane.querySelector(".runs-name")!.textContent).toBe("chores")
+  expect(lane.querySelector(".runs-trigger")!.textContent).toBe("every 15m")
 
   handle.destroy()
 })
@@ -101,10 +101,10 @@ test("lanes are in the same order whichever order the tasks arrived in", () => {
   // A board that reorders itself while it is being read is what the graph view
   // went to some trouble to stop doing, and a shared clock makes it worse:
   // comparing two lanes means finding them in the same place twice.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([]))
   const names = () =>
-    [...el.querySelectorAll(".hours-name")].map((node) => node.textContent)
+    [...el.querySelectorAll(".runs-name")].map((node) => node.textContent)
   expect(names()).toEqual(["chores", "revision"])
 
   handle.update(reduce(board([]), {
@@ -118,10 +118,10 @@ test("lanes are in the same order whichever order the tasks arrived in", () => {
 })
 
 test("a run that changed something is a different mark from a quiet one", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("quiet", HOUR), run("did", 2 * HOUR, { change: CHANGE })]))
 
-  const marks = [...el.querySelectorAll('[data-task="board/chores"] .hours-mark')]
+  const marks = [...el.querySelectorAll('[data-task="board/chores"] .runs-mark')]
   expect(marks.map((mark) => mark.getAttribute("data-outcome")).sort()).toEqual([
     "nothing",
     "succeeded",
@@ -131,21 +131,21 @@ test("a run that changed something is a different mark from a quiet one", () => 
 })
 
 test("a failed run keeps its own mark", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("bad", HOUR, { status: "failed", error: "boom" })]))
 
   expect(
-    el.querySelector('[data-task="board/chores"] .hours-mark')!.getAttribute("data-outcome"),
+    el.querySelector('[data-task="board/chores"] .runs-mark')!.getAttribute("data-outcome"),
   ).toBe("failed")
 
   handle.destroy()
 })
 
 test("runs land left to right in the order they happened", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("new", HOUR), run("old", 6 * HOUR)]))
 
-  const at = [...el.querySelectorAll<HTMLElement>('[data-task="board/chores"] .hours-mark')].map(
+  const at = [...el.querySelectorAll<HTMLElement>('[data-task="board/chores"] .runs-mark')].map(
     (mark) => Number.parseFloat(mark.style.left),
   )
   expect(at).toHaveLength(2)
@@ -163,14 +163,14 @@ test("a task whose last run was days ago still shows it", () => {
   // The window is a day by default. Left at that, a board that stopped on
   // Tuesday would open blank -- which reads exactly like a board that has
   // never run, and the difference is the whole reason to come here.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("ancient", 3 * DAY)]))
 
-  expect(el.querySelectorAll('[data-task="board/chores"] .hours-mark')).toHaveLength(1)
+  expect(el.querySelectorAll('[data-task="board/chores"] .runs-mark')).toHaveLength(1)
   // Four: the run is three days back, and the window reaches a day past it
   // so the board's last living day is on screen rather than on the edge.
-  expect(el.querySelector(".hours-caption")!.textContent).toContain("4 days")
-  const mark = el.querySelector<HTMLElement>('[data-task="board/chores"] .hours-mark')!
+  expect(el.querySelector(".runs-caption")!.textContent).toContain("4 days")
+  const mark = el.querySelector<HTMLElement>('[data-task="board/chores"] .runs-mark')!
   const at = Number.parseFloat(mark.style.left)
   expect(at).toBeGreaterThan(5)
   expect(at).toBeLessThan(50)
@@ -181,15 +181,15 @@ test("a task whose last run was days ago still shows it", () => {
 test("runs the clock opened after are counted rather than dropped", () => {
   // The lane has nowhere to draw them, but leaving them out entirely makes a
   // task with months behind it read as one that started this morning.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("today", HOUR), run("tuesday", 3 * DAY), run("monday", 4 * DAY)]))
 
   const lane = el.querySelector('[data-task="board/chores"]')!
-  expect(lane.querySelectorAll(".hours-mark")).toHaveLength(1)
-  expect(lane.querySelector(".hours-earlier")!.textContent).toContain("+2")
+  expect(lane.querySelectorAll(".runs-mark")).toHaveLength(1)
+  expect(lane.querySelector(".runs-earlier")!.textContent).toContain("+2")
   // ...and in the spoken summary too: a sighted reader gets the badge, so a
   // screen reader gets the same sentence rather than a shorter one.
-  expect(lane.querySelector(".hours-track")!.getAttribute("aria-label")).toContain(
+  expect(lane.querySelector(".runs-track")!.getAttribute("aria-label")).toContain(
     "2 more before that",
   )
 
@@ -197,7 +197,7 @@ test("runs the clock opened after are counted rather than dropped", () => {
 })
 
 test("a running task is marked at now; a waiting one is not", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   const running = reduce(board([run("a", HOUR)]), {
     run_id: "rr",
     type: "run_started",
@@ -205,9 +205,9 @@ test("a running task is marked at now; a waiting one is not", () => {
   })
   handle.update(running)
 
-  expect(el.querySelector('[data-task="board/chores"] .hours-live')).not.toBeNull()
-  expect(el.querySelector('[data-task="board/revision"] .hours-live')).toBeNull()
-  expect(el.querySelector('[data-task="board/chores"] .hours-last')!.textContent).toBe(
+  expect(el.querySelector('[data-task="board/chores"] .runs-live')).not.toBeNull()
+  expect(el.querySelector('[data-task="board/revision"] .runs-live')).toBeNull()
+  expect(el.querySelector('[data-task="board/chores"] .runs-last')!.textContent).toBe(
     "running now",
   )
 
@@ -217,19 +217,19 @@ test("a running task is marked at now; a waiting one is not", () => {
 test("the hour rules are drawn once for the board, not once per lane", () => {
   // They are what makes two lanes comparable; a copy inside each lane would be
   // free to drift from the one above it.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([run("a", HOUR)]))
 
-  expect(el.querySelectorAll(".hours-rules")).toHaveLength(1)
-  expect(el.querySelectorAll(".hours-edge")).toHaveLength(1)
+  expect(el.querySelectorAll(".runs-rules")).toHaveLength(1)
+  expect(el.querySelectorAll(".runs-edge")).toHaveLength(1)
   // Each rule knows whether its label is a date, so a midnight's rule can be
   // drawn heavier -- on a three-day board the days read as rooms.
-  for (const rule of el.querySelectorAll<HTMLElement>(".hours-rule")) {
+  for (const rule of el.querySelectorAll<HTMLElement>(".runs-rule")) {
     expect(["time", "date"]).toContain(rule.dataset.kind)
   }
   // One rule under every label, or the grid stops meaning what the axis says.
-  const rules = el.querySelectorAll<HTMLElement>(".hours-rule")
-  const labels = el.querySelectorAll<HTMLElement>(".hours-tick")
+  const rules = el.querySelectorAll<HTMLElement>(".runs-rule")
+  const labels = el.querySelectorAll<HTMLElement>(".runs-tick")
   expect(rules.length).toBe(labels.length)
   expect(rules.length).toBeGreaterThanOrEqual(2)
   expect([...rules].map((one) => one.style.left)).toEqual(
@@ -241,20 +241,20 @@ test("the hour rules are drawn once for the board, not once per lane", () => {
 
 test("clicking a lane selects that task", () => {
   const picked: string[] = []
-  const handle = hours.mount(el, { onSelectTask: (task) => picked.push(task) })
+  const handle = runs.mount(el, { onSelectTask: (task) => picked.push(task) })
   handle.update(board([]))
 
-  el.querySelector<HTMLElement>('[data-task="board/revision"] .hours-head')!.click()
+  el.querySelector<HTMLElement>('[data-task="board/revision"] .runs-head')!.click()
   expect(picked).toEqual(["board/revision"])
 
   handle.destroy()
 })
 
 test("a frame for one task does not rebuild the other lane", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   const stage = board([run("a", HOUR)])
   handle.update(stage)
-  const mark = el.querySelector('[data-task="board/chores"] .hours-mark')
+  const mark = el.querySelector('[data-task="board/chores"] .runs-mark')
 
   handle.update(
     reduce(stage, {
@@ -264,7 +264,7 @@ test("a frame for one task does not rebuild the other lane", () => {
     }),
   )
 
-  expect(el.querySelector('[data-task="board/chores"] .hours-mark')).toBe(mark)
+  expect(el.querySelector('[data-task="board/chores"] .runs-mark')).toBe(mark)
   expect(el.querySelector('[data-task="board/revision"]')!.getAttribute("data-status")).toBe(
     "running",
   )
@@ -273,12 +273,12 @@ test("a frame for one task does not rebuild the other lane", () => {
 })
 
 test("a task that leaves the board takes its lane with it", () => {
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([]))
-  expect(el.querySelectorAll(".hours-lane")).toHaveLength(2)
+  expect(el.querySelectorAll(".runs-lane")).toHaveLength(2)
 
   handle.update(initialStage([CHORES]))
-  expect(el.querySelectorAll(".hours-lane")).toHaveLength(1)
+  expect(el.querySelectorAll(".runs-lane")).toHaveLength(1)
   expect(el.querySelector('[data-task="board/revision"]')).toBeNull()
 
   handle.destroy()
@@ -290,7 +290,7 @@ test("the clock is given up when the view is", () => {
   vi.useFakeTimers()
   try {
     const before = vi.getTimerCount()
-    const handle = hours.mount(el, { onSelectTask: vi.fn() })
+    const handle = runs.mount(el, { onSelectTask: vi.fn() })
     handle.update(board([run("a", HOUR)]))
     expect(vi.getTimerCount()).toBe(before + 1)
 
@@ -305,7 +305,7 @@ test("the lane says in words what it draws in marks, for a reader who cannot see
   // The counts are deliberately not on screen -- the marks are the counts, and
   // printing them beside the picture would say one thing twice. Without a
   // picture there is nothing else, so the label is where they go.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(
     board([
       run("a", HOUR, { change: CHANGE }),
@@ -314,16 +314,16 @@ test("the lane says in words what it draws in marks, for a reader who cannot see
     ]),
   )
 
-  const track = el.querySelector('[data-task="board/chores"] .hours-track')!
+  const track = el.querySelector('[data-task="board/chores"] .runs-track')!
   expect(track.getAttribute("aria-label")).toBe(
     "3 runs in the last day, 1 changed something, 1 failed",
   )
   expect(
-    el.querySelector('[data-task="board/revision"] .hours-track')!.getAttribute("aria-label"),
+    el.querySelector('[data-task="board/revision"] .runs-track')!.getAttribute("aria-label"),
   ).toBe("nothing ran in the last day")
   handle.update(board([run("only", HOUR)]))
   expect(
-    el.querySelector('[data-task="board/chores"] .hours-track')!.getAttribute("aria-label"),
+    el.querySelector('[data-task="board/chores"] .runs-track')!.getAttribute("aria-label"),
   ).toBe("1 run in the last day")
 
   handle.destroy()
@@ -333,12 +333,12 @@ test("a lane too narrow for its runs folds neighbours instead of fusing them", (
   // jsdom cannot measure, so the width is stubbed: fifty 15-minute runs in a
   // lane 120 pixels wide is a phone, and drawn one per run they overlap into
   // a solid bar that reads as one long run.
-  const handle = hours.mount(el, { onSelectTask: vi.fn() })
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
   const crowded = Array.from({ length: 50 }, (_, n) => run(`r${n}`, HOUR + n * 15 * 60_000))
-  const track = () => el.querySelector<HTMLElement>('[data-task="board/chores"] .hours-track')!
+  const track = () => el.querySelector<HTMLElement>('[data-task="board/chores"] .runs-track')!
 
   handle.update(board(crowded))
-  const before = track().querySelectorAll(".hours-mark").length
+  const before = track().querySelectorAll(".runs-mark").length
   expect(before).toBe(50)
 
   Object.defineProperty(track(), "clientWidth", { value: 120, configurable: true })
@@ -350,7 +350,7 @@ test("a lane too narrow for its runs folds neighbours instead of fusing them", (
       data: { task: "chores", project: "board" },
     }),
   )
-  const after = track().querySelectorAll(".hours-mark").length
+  const after = track().querySelectorAll(".runs-mark").length
   expect(after).toBeLessThan(before)
   expect(after).toBeGreaterThan(0)
 
