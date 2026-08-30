@@ -184,10 +184,12 @@ export default function App({ store }: { store?: StageStore }) {
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
         </span>
-        {/* Renderings of the board, so it has nothing to say while the stage
-            is showing a place instead -- a control that does not apply must
-            not sit there looking like it does. */}
-        {standing ? null : (
+        {/* Renderings of the board. One is a fact and not a choice, so the
+            picker only exists when there are two -- the furniture rule the
+            project name follows -- and it leaves the bar while the stage is
+            showing a place instead, because a control that does not apply
+            must not sit there looking like it does. */}
+        {standing || SKINS.filter((skin) => !skin.standalone).length < 2 ? null : (
           <label className="shell-pick">
             view
             <select
@@ -228,7 +230,8 @@ export default function App({ store }: { store?: StageStore }) {
         </button>
         {/* The skins that are places rather than renderings. The rail is the
             list of what this page is for, and "what has it been doing" is a
-            thing to come for -- where basic against atelier is a taste. */}
+            thing to come for -- where one drawing of the board against
+            another would be a taste. */}
         {SKINS.filter((skin) => skin.standalone).map((skin) => (
           <button
             key={skin.id}

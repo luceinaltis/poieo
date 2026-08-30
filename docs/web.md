@@ -484,7 +484,7 @@ web-ui/src/
   api.ts            everything that talks to the daemon
   shell/stageStore  fetch history, open the stream, hold the model
   state/stage.ts    the one place run events are interpreted
-  skins/            how that model is drawn — atelier, basic, hours
+  skins/            how that model is drawn — basic, hours
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
   skins/hours/span  where a run falls on the shared clock; pure, and tested alone
   detail/           the drawer: one task, turn by turn, plus control
@@ -611,9 +611,10 @@ its own beyond what it needs to draw. If a skin needs to know something,
 knows React. Adding a skin is a module and a line in `skins/registry.ts`.
 
 `mount()` is synchronous on purpose: a skin whose renderer has to be loaded
-(atelier's three.js stays behind a dynamic import) returns its handle at once and
-swaps the renderer in later. Making it a promise would push waiting onto the
-shell and onto every future skin to serve one skin's private problem.
+returns its handle at once and swaps the renderer in later, as the removed 3D
+workshop did with its dynamically imported three.js. Making it a promise would
+push waiting onto the shell and onto every future skin to serve one skin's
+private problem.
 
 The chosen skin lives in `localStorage`. `basic` is the default, and is also
 where a stale or unknown id lands rather than blanking the page -- so a reader
@@ -621,18 +622,21 @@ with nothing stored and a reader with something unreadable stored get the same
 page.
 
 **Each skin answers one question, and a new one has to bring its own.** `basic`
-answers what this project does and where it is right now; `atelier` answers
-whether it is working; `hours` answers what it has been doing, and when. A
-fourth skin that answers a question one of those already answers is a second way
-of saying an existing thing, which DESIGN.md refuses.
+answers what this project does and where it is right now; `hours` answers what
+it has been doing, and when. A third skin that answers a question one of those
+already answers is a second way of saying an existing thing, which DESIGN.md
+refuses. (The 3D workshop, `atelier`, answered "is it working" and was removed
+whole -- its id still lands on `basic` via the fallback.)
 
-Answering a *different* question also decides where a skin is offered. The bar's
-picker holds renderings of the board -- `basic` against `atelier` is a taste --
-while `hours` is marked `standalone` in its module and surfaces as a rail item
-instead: the rail lists what a reader comes to the page *for*, and "what has it
-been doing" is a thing to come for, not a way to draw the thing already on
-screen. The picker leaves the bar while a rail place holds the stage, and the
-board item brings back whichever rendering the board was left in.
+Answering a *different* question also decides where a skin is offered. The
+bar's picker holds renderings of the board, so with one rendering it does not
+exist at all -- the furniture rule the project name follows -- while `hours`
+is marked `standalone` in its module and surfaces as a rail item instead: the
+rail lists what a reader comes to the page *for*, and "what has it been doing"
+is a thing to come for, not a way to draw the thing already on screen. Should
+a second rendering land, the picker comes back, leaves the bar while a rail
+place holds the stage, and the board item brings back whichever rendering the
+board was left in.
 `basic` draws the work as a graph — the tasks, their nodes, the arrows between
 them, the model each node calls, and which of them can reach the folder. That
 last one is marked on every node that can, rather than only when the nodes

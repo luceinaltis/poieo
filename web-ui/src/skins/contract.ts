@@ -7,9 +7,9 @@
  * if it does not, the reducer is wrong, not the skin.
  *
  * `mount` is synchronous on purpose. A skin whose renderer has to be loaded
- * (see atelier) returns its handle at once and swaps the renderer in later;
- * making this a promise would push waiting onto the shell and onto every
- * future skin to serve one skin's private problem.
+ * returns its handle at once and swaps the renderer in later -- the removed
+ * 3D workshop worked this way; making this a promise would push waiting onto
+ * the shell and onto every future skin to serve one skin's private problem.
  */
 
 import type { StageState } from "../state/stage"

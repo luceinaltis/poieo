@@ -169,19 +169,16 @@ test("no tasks renders the invitation, not an error", async () => {
   expect(container.textContent).toContain("Nothing is running yet")
 })
 
-test("the picker lists the registered skins and the board carries the tasks", async () => {
+test("one rendering means no picker, and the board carries the tasks", async () => {
   await render(initialStage(FLOWS))
 
-  const picker = container.querySelector("select")!
-  // Against the registry rather than a list written out here: which skins
-  // exist is `registry.test.ts`'s question, and this one is only whether the
-  // picker offers all of them. Only the board's renderings belong on it -- a
-  // skin that is a place of its own is reached from the rail instead, and
-  // listing it twice would be two ways to say one thing.
-  expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual(
-    SKINS.filter((skin) => !skin.standalone).map((skin) => skin.id).sort(),
-  )
-  expect(picker.value).toBe("basic")
+  // One rendering of the board exists, so there is no picker at all -- the
+  // same furniture rule the project name follows: a control with one option
+  // is not a control. If a second rendering ever lands in the registry, this
+  // flips and the picker has to come back.
+  const renderings = SKINS.filter((skin) => !skin.standalone)
+  expect(renderings.map((skin) => skin.id)).toEqual(["basic"])
+  expect(container.querySelector(".shell-skin")).toBeNull()
   expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
 })
 
@@ -254,11 +251,12 @@ test("a reader who left on hours comes back to hours", async () => {
 })
 
 test("a stale stored skin id still renders a board", async () => {
-  localStorage.setItem("poieo.skin", "kitchen")
+  // "atelier" is the id every reader who tried the workshop has stored.
+  localStorage.setItem("poieo.skin", "atelier")
   await render(initialStage(FLOWS))
 
   // The registry falls back rather than blanking the page.
-  expect(container.querySelector("select")!.value).toBe("basic")
+  expect(container.querySelector(".basic")).not.toBeNull()
   expect(container.querySelectorAll("[data-task]").length).toBeGreaterThan(0)
 })
 

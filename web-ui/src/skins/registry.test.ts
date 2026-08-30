@@ -119,23 +119,5 @@ test("clicking a task's name selects it; the chevron is for opening", () => {
   handle.destroy()
 })
 
-test("no skin imports three.js statically", () => {
-  // A static import folds three.js back into the entry chunk without a word of
-  // warning; only `await import("three")` keeps it in its own file.
-  const sources = import.meta.glob("./**/*.{ts,tsx}", {
-    query: "?raw",
-    import: "default",
-    eager: true,
-  }) as Record<string, string>
-
-  const offenders = Object.entries(sources)
-    // Tests are never bundled, and checking the swing against the real three.js
-    // maths is worth more than a rule they cannot break.
-    .filter(([path]) => !path.endsWith(".test.ts"))
-    .filter(([, source]) => /^\s*import[^\n]*["']three["']/m.test(source))
-    .map(([path]) => path)
-
-  expect(offenders).toEqual([])
-})
 
 

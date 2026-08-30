@@ -65,8 +65,7 @@ async function shot(browser, { skin, file, settle, size, then }) {
 
   // finally, or a click that finds nothing leaves a browser running with
   // nobody holding its handle -- and the next run of this tool inherits it.
-  // (The atelier workshop is deliberately not photographed: brand/README.md
-  // retired forge imagery from every brand surface.)
+  // (The atelier workshop is not just unphotographed now, it is removed.)
   try {
     // The board once the seeded runs have finished. The long settle is the
     // wait for the runs the orchestrator set going to end.

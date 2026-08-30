@@ -1,10 +1,10 @@
 /**
  * The hours view: what the board has been doing, and when.
  *
- * The graph answers what a project does and where it is right now; the atelier
- * answers whether it is working. Neither can answer the question a person
- * actually opens this page with in the morning -- *what happened overnight* --
- * because neither puts time on the screen at all.
+ * The graph answers what a project does and where it is right now. It cannot
+ * answer the question a person actually opens this page with in the morning
+ * -- *what happened overnight* -- because it does not put time on the screen
+ * at all.
  *
  * So: one clock across the top, one lane per task, one mark per run, and every
  * lane read against the same clock. That last part is the whole reason this
