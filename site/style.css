@@ -11,7 +11,7 @@
   --rule: #2e2820;        /* every hairline */
   --text: #e8e2d8;        /* body */
   --dim: #9a9086;         /* what is beside the point but still readable */
-  --ember: #d8a657;       /* the forge, and so every accent here */
+  --ember: #d8a657;       /* the one amber bud, and so every accent here */
   --live: #a9b665;        /* a task that is running */
 
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -172,7 +172,7 @@ h3 { font-size: 1.05rem; }
   text-align: center;
 }
 
-/* The forge lighting the page, rather than a drop shadow that could be under
+/* Ember light behind the tree, rather than a drop shadow that could be under
    anything. Behind the image, so it never dims it. */
 .glow { position: relative; }
 

@@ -9,9 +9,7 @@
  * playwright is not a dependency of anything here and is not installed by the
  * gate -- this is a tool that makes pictures by hand, run perhaps twice a
  * year. `npm install --no-save playwright` before it, as web-ui/tools/shot.js
- * has always expected. One of the pictures is of a WebGL scene, which a
- * headless browser will not draw on its own: the launch flags below hand it a
- * software renderer instead of a GPU it does not have.
+ * has always expected.
  */
 
 const { chromium } = require("playwright")
@@ -27,10 +25,8 @@ if (!open) {
 }
 
 // One frame per picture, because the board is answering a different question
-// in each: the workshop wants room for five forges, the cards want a column
-// rather than a column in a field, and the drawer needs width or it clips its
-// own diff.
-const WORKSHOP = { width: 1280, height: 800 }
+// in each: the cards want a column rather than a column in a field, and the
+// drawer needs width or it clips its own diff.
 const CARDS = { width: 820, height: 900 }
 const OPENED = { width: 1440, height: 900 }
 
@@ -52,10 +48,8 @@ async function shot(browser, { skin, file, settle, size, then }) {
   await page.goto(base + "/", { waitUntil: "networkidle" })
   await page.waitForTimeout(settle)
   if (then) await then(page)
-  // JPEG for the workshop, PNG for everything else. The scene is a rendered
-  // photograph and compresses like one -- 1.2 MB of PNG becomes a fifth of
-  // that with nothing an eye can find -- while a board of small text goes
-  // fuzzy at any quality worth the saving.
+  // PNG for boards of small text, JPEG for anything photographic, decided by
+  // the extension the caller asked for.
   const jpeg = file.endsWith(".jpg")
   await page.screenshot({ path: `${out}/${file}`, ...(jpeg ? { type: "jpeg", quality: 88 } : {}) })
   await page.close()
@@ -65,24 +59,17 @@ async function shot(browser, { skin, file, settle, size, then }) {
 }
 
 ;(async () => {
-  const browser = await chromium.launch({
-    args: ["--use-gl=angle", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
-  })
+  const browser = await chromium.launch()
 
   const problems = []
 
   // finally, or a click that finds nothing leaves a browser running with
   // nobody holding its handle -- and the next run of this tool inherits it.
+  // (The atelier workshop is deliberately not photographed: brand/README.md
+  // retired forge imagery from every brand surface.)
   try {
-    // The workshop, mid-swing. The settle is the scene loading its models; the
-    // runs are already in flight when this starts.
-    problems.push(
-      ...(await shot(browser, { skin: "atelier", file: "board-atelier.jpg", size: WORKSHOP, settle: 4500 })),
-    )
-
-    // The same board once the workshop has stopped for the night, as the skin
-    // that answers "what does this project do" rather than "is it working".
-    // The long settle is the wait for the runs in the picture above to end.
+    // The board once the seeded runs have finished. The long settle is the
+    // wait for the runs the orchestrator set going to end.
     problems.push(...(await shot(browser, { skin: "basic", file: "board.png", size: CARDS, settle: 16000 })))
 
     // One task, opened: its runs, what it said, and the change waiting.

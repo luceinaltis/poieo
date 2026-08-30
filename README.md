@@ -10,10 +10,10 @@ running, and you read what they did in the morning.**
 [![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
 [![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-d6ccbe.svg)](pyproject.toml)
 
-![Five workshops on the board, a smith working at each anvil](site/img/board-atelier.jpg)
+![The board: five task cards, their schedules, and one change waiting to be read](site/img/board.png)
 
-Five tasks at work. Each one is a card you wrote — a name, a folder, and a
-sentence saying what to do — and a daemon on your own machine keeps them
+Five tasks on the board. Each one is a card you wrote — a name, a folder, and
+a sentence saying what to do — and a daemon on your own machine keeps them
 running against a local model, around the clock, for nothing per token.
 
 ## Sixty seconds
@@ -60,11 +60,6 @@ You learn three, and there is no fourth.
 | **change** | what a run did to your files — which you accept, or throw away. |
 
 Everything underneath is machinery, and machinery stays out of the way.
-
-![The same board without the workshop: five cards, their schedules, and one with a change waiting](site/img/board.png)
-
-The board comes with two views, and a picker in the corner: `basic` draws the
-cards, `atelier` draws the workshop above. Same board, same five tasks.
 
 ## A night, end to end
 
