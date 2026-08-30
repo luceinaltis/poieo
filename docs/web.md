@@ -634,10 +634,33 @@ been doing" is a thing to come for, not a way to draw the thing already on
 screen. The picker leaves the bar while a rail place holds the stage, and the
 board item brings back whichever rendering the board was left in.
 `basic` draws the work as a graph — the tasks, their nodes, the arrows between
-them, the model each node calls, and which of them have **hands**. That last one
-is marked with the word rather than a glyph, and on every node that has them
-rather than only when the nodes disagree, because unlike the model it is never
-answered by some other step having said it. `skins/wiring.ts` is the part of that with
+them, the model each node calls, and which of them can reach the folder. That
+last one is marked on every node that can, rather than only when the nodes
+disagree, because unlike the model it is never answered by some other step
+having said it. It says **`edits files`**, not "hands": the word the rest of
+these documents use is a word for people who have read them, and nobody meeting
+the board has. A glyph would be one more thing to learn for the same reason.
+
+**A task of one step draws no graph inside it.** The board's own `new task` is
+three fields and expands to exactly one node, called `work` — so the commonest
+border on the board opened onto a single pill named after nothing the reader
+chose. The border already is that step.
+
+That leaves the fact the graph was carrying for those tasks with nowhere to be,
+and it is the one worth keeping: **a task that can edit files and keeps no
+private copy says so on the shut border** — `edits your files directly — no
+undo`. Neither half is worth a word alone. A step that edits files is the whole
+promise of the thing when the night arrives as a change to accept or discard;
+what makes it worth stopping for is [workspace.md](workspace.md)'s other path,
+where the folder is not a repository, there is no copy to make, and the run
+edits the folder itself. A copy the daemon could not read reaches the view as
+no copy at all, so a broken git is warned about too — which is the direction to
+be wrong in, since that folder really is unprotected until somebody looks. The
+line carries its meaning in words and takes the colour a failed run already
+uses only as emphasis, so it survives being read by someone who cannot tell
+that colour from the amber beside it.
+
+Of everything `basic` draws, `skins/wiring.ts` is the part with
 an answer capable of being wrong (where containers go, in what order nodes are read),
 so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it
