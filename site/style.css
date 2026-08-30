@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: dark;
+  overflow-x: clip;
 
   --ground: #14120f;      /* the board's background */
   --panel: #1c1915;       /* a card on it */
@@ -25,6 +26,7 @@
 
 body {
   background: var(--ground);
+  overflow-x: clip;
   color: var(--text);
   font-family: var(--sans);
   font-size: 17px;
@@ -96,12 +98,14 @@ h3 { font-size: 1.05rem; }
   z-index: -1;
 }
 
-.hero-copy { max-width: 34rem; position: relative; }
+.hero-copy { max-width: 35rem; position: relative; }
 
+/* The break in the markup owns the line count: two lines, never three, so
+   the width stays open and the size is what yields. */
 .hero h1 {
-  font-size: clamp(2.1rem, 5vw, 3.2rem);
+  font-size: clamp(1.55rem, 4.4vw, 2.85rem);
   letter-spacing: -0.02em;
-  max-width: 18ch;
+  white-space: nowrap;
 }
 
 .lead {
