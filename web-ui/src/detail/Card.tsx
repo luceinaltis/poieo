@@ -19,16 +19,28 @@
 
 import { useState } from "react"
 
-import { fetchCard, rewriteCard } from "../api"
-import type { RewrittenCard } from "../api"
+import { fetchCard, rewriteCard, setAside } from "../api"
+import type { RewrittenCard, SetAside } from "../api"
 import { useAct } from "../useAct"
 
-export function Card({ project, task }: { project: string; task: string }) {
+export function Card({
+  project,
+  task,
+  onSetAside,
+}: {
+  project: string
+  task: string
+  /** The board's chance to refresh: the task it lists just stopped scheduling. */
+  onSetAside?(): void
+}) {
   const [was, setWas] = useState<string | null>(null)
   const [text, setText] = useState("")
   const [gone, setGone] = useState(false)
   const [saved, setSaved] = useState<RewrittenCard | null>(null)
   const [opened, setOpened] = useState(false)
+  /** Two-step: the first press arms, the second acts, an edit stands it down. */
+  const [armed, setArmed] = useState(false)
+  const [rested, setRested] = useState<SetAside | null>(null)
   const { busy, refused, act } = useAct<RewrittenCard>(() => {})
 
   const open = async () => {
@@ -42,6 +54,17 @@ export function Card({ project, task }: { project: string; task: string }) {
     setWas(card.text)
     setText(card.text)
   }
+
+  const putAside = () =>
+    void act(async () => {
+      const answer = (await setAside(project, task)) as RewrittenCard & SetAside
+      setArmed(false)
+      if (answer.ok) {
+        setRested(answer)
+        onSetAside?.()
+      }
+      return answer
+    })
 
   const save = () =>
     void act(async () => {
@@ -74,6 +97,8 @@ export function Card({ project, task }: { project: string; task: string }) {
             onChange={(event) => {
               setText(event.target.value)
               setSaved(null)
+              // Reaching for the words is deciding to keep the task.
+              setArmed(false)
             }}
           />
 
@@ -94,15 +119,39 @@ export function Card({ project, task }: { project: string; task: string }) {
             )
           ) : null}
 
-          <button
-            type="button"
-            className="card-save"
-            data-do="save-card"
-            disabled={busy || text === was}
-            onClick={save}
-          >
-            {busy ? "saving…" : "save"}
-          </button>
+          {rested ? (
+            <p className="card-saved card-waits">
+              Set aside — the file is kept at <code>{rested.kept}</code>. The
+              schedule has stopped; the task leaves the board when the daemon
+              restarts, and putting the file back is putting the task back.
+            </p>
+          ) : null}
+
+          <div className="card-acts">
+            <button
+              type="button"
+              className="card-save"
+              data-do="save-card"
+              disabled={busy || text === was || rested !== null}
+              onClick={save}
+            >
+              {busy ? "saving…" : "save"}
+            </button>
+
+            {/* Two presses on purpose: the first only changes this button's
+                word, so nothing destructive rides on a stray click. An edit
+                in the textarea stands it down again. */}
+            <button
+              type="button"
+              className="card-aside"
+              data-do="set-aside"
+              data-armed={String(armed)}
+              disabled={busy || rested !== null}
+              onClick={() => (armed ? putAside() : setArmed(true))}
+            >
+              {armed ? "sure? set it aside" : "set aside"}
+            </button>
+          </div>
         </>
       )}
     </details>

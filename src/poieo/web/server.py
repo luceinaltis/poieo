@@ -847,6 +847,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
             try:
                 text, fresh = await asyncio.to_thread(_read)
+            except FileNotFoundError:
+                # Set aside, or moved by a hand: the board still lists the
+                # task until a restart, so this is an answer, not a 500.
+                return JSONResponse(
+                    {"error": f"task '{spec.slug}' was set aside; its card is no longer here"},
+                    status_code=409,
+                )
             except PoieoError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=409)
             return JSONResponse(
@@ -963,6 +970,19 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # the repair. Written, and honestly not promised as live.
                     live = False
 
+                # `os.replace` creates its destination, so an unguarded save
+                # after a set-aside would quietly resurrect the card. Putting
+                # the file back is a decision made at the file, not a side
+                # effect of a stale editor.
+                if not path.exists():
+                    return (
+                        JSONResponse(
+                            {"error": (f"task '{spec.slug}' was set aside; put the file back to bring it back")},
+                            status_code=409,
+                        ),
+                        False,
+                    )
+
                 # One move, so the watched folder never holds a half-written
                 # card even for the daemon's unluckiest read.
                 try:
@@ -983,6 +1003,63 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         if refused is not None:
             return refused
         return JSONResponse({"ok": True, "task": spec.slug, "live": live})
+
+    async def project_task_set_aside(request: Request) -> JSONResponse:
+        """Set a task aside: the fifth kind's third verb, and not a delete.
+
+        The card moves to `.set-aside/` inside the tasks folder -- a dotted
+        name the loader skips -- so the file survives whole and putting it
+        back is putting the task back. Nothing is ever overwritten there: a
+        task set aside, remade and set aside again is two files.
+
+        Two halves with two lifetimes, said plainly in the answer: the move
+        outlives a restart (the daemon will not load the card again), and the
+        schedule stops now, with the same hold the pause button takes --
+        without it the task would keep firing all night against a file that
+        is no longer there. Until a restart the task stays on the board,
+        paused; the restart is what takes it off.
+        """
+        project, spec, missing = _asked_card(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        path = spec.source_path
+        rest = config.resolve_path(config.cards) / ".set-aside"
+
+        def _move() -> Path | None:
+            rest.mkdir(exist_ok=True)
+            kept = rest / path.name
+            # A numbered sibling rather than a silent overwrite: recoverable
+            # means every copy survives.
+            n = 2
+            while kept.exists():
+                kept = rest / f"{path.stem}.{n}{path.suffix}"
+                n += 1
+            try:
+                os.replace(path, kept)
+            except OSError:
+                return None
+            return kept
+
+        kept = await asyncio.to_thread(_move)
+        if kept is None:
+            return JSONResponse(
+                {"error": "the card could not be moved; it may already be gone"},
+                status_code=409,
+            )
+
+        # The runtime half. A daemon that never started this task (or a test
+        # over a bare app) simply has no schedule to stop.
+        runner = _runner_for(daemon, project.config.display_name, spec.slug)
+        if runner is not None:
+            runner.pause()
+
+        return JSONResponse({"ok": True, "task": spec.slug, "kept": str(kept)})
+
+    async def _card_verbs(request: Request) -> JSONResponse:
+        if request.method == "DELETE":
+            return await project_task_set_aside(request)
+        return await project_task_card(request)
 
     async def project_models_use(request: Request) -> JSONResponse:
         """Point a role at another model, and repaint what that changed.
@@ -1462,8 +1539,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # If you are adding a third of these, stop.
         Route(
             "/api/projects/{project}/tasks/{task}",
-            project_task_card,
-            methods=["GET", "PUT"],
+            _card_verbs,
+            methods=["GET", "PUT", "DELETE"],
         ),
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),

@@ -28,6 +28,7 @@ to be true to add a sixth.
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
+| `DELETE /api/projects/{p}/tasks/{f}` | **make** — set the task aside: the card moves to `.set-aside/`, whole |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
 | `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
@@ -861,6 +862,14 @@ refuses to half-adopt a card whose spec changed — `_reread_graph` owns that
 judgement — and this route makes the same comparison so the board can warn
 instead of letting a person believe an ignored edit took.
 
+The third verb is **set aside**, and it is not a delete: the card moves to
+`.set-aside/` inside the tasks folder — a dotted name the loader skips — whole
+and never overwritten (a task set aside, remade and set aside again is two
+files), so putting the file back is putting the task back. Two halves with two
+lifetimes: the move outlives a restart, and the schedule stops now with the
+same hold the pause button takes. Until a restart the task stays on the board,
+paused; the restart is what takes it off.
+
 The rail item that calls it is `make/MakeTask.tsx`, beside `models/` because
 making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
 above the button — the card starts running when it is saved, and that sentence
@@ -888,9 +897,10 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Removing a card.** Making one is live, and so is editing it — the drawer's
-  `card` fold rewrites the file through the same fence — but renaming a task
-  (the filename is its identity) and deleting one still mean touching the file.
+- **Renaming a task.** Making a card is live, editing it is live, and setting
+  it aside is live — the drawer's `card` fold does all three — but the filename
+  is the task's identity, so a rename still means touching the file (or setting
+  aside and remaking).
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.

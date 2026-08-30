@@ -300,7 +300,7 @@ export const Drawer = memo(function Drawer({
         {/* Under the controls, above the nights: the definition, openable.
             What the task *is* sits between what you can do to it now and
             what it has done. */}
-        <Card project={project} task={task} />
+        <Card project={project} task={task} onSetAside={decided} />
 
         <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />
 

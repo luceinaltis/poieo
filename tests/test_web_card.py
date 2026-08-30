@@ -204,3 +204,83 @@ def test_two_saves_in_a_row_both_land_and_the_last_one_wins(tmp_path):
     assert sorted(p.name for p in cards.iterdir()) == ["already.yaml", "steps.yaml"] or sorted(
         p.name for p in cards.iterdir()
     ) == ["already.yaml"]
+
+
+def test_set_aside_moves_the_card_out_of_the_watched_folder(tmp_path):
+    """The third verb of the fifth kind, and it is not a delete: the file is
+    kept, in a dotted folder the loader skips -- putting it back is putting
+    the task back."""
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+    answer = client.delete("/api/projects/board/tasks/already")
+
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["ok"] is True and body["task"] == "already"
+    assert not (cards / "already.yaml").exists()
+    kept = cards / ".set-aside" / "already.yaml"
+    assert kept.exists()
+    # Byte for byte: set aside is a move, never a rewrite.
+    assert kept.read_text(encoding="utf-8") == before
+    assert str(kept) == body["kept"]
+
+
+def test_set_aside_twice_keeps_both_files(tmp_path):
+    """Recoverable means every copy survives: a task set aside, remade, and
+    set aside again is two files, not the second over the first."""
+    client, cards = _client(tmp_path)
+    client.delete("/api/projects/board/tasks/already")
+    # The task is made again from the board, and set aside again.
+    made = client.post(
+        "/api/projects/board/tasks",
+        json={"name": "already", "folder": "../work", "prompt": "second life"},
+    )
+    assert made.status_code == 200, made.text
+    again = client.delete("/api/projects/board/tasks/already")
+
+    assert again.status_code == 200, again.text
+    rested = {p.name for p in (cards / ".set-aside").iterdir()}
+    assert rested == {"already.yaml", "already.2.yaml"}
+
+
+def test_a_set_aside_task_stops_scheduling_now(tmp_path, monkeypatch):
+    """The file half outlives a restart; this is the half that must not wait
+    for one -- the same hold the pause button takes."""
+    from types import SimpleNamespace
+
+    import poieo.web.server as server
+
+    held = []
+    runner = SimpleNamespace(name="already", pause=lambda: held.append(True) or "paused")
+    monkeypatch.setattr(server, "_runner_for", lambda daemon, project, task: runner)
+
+    client, cards = _client(tmp_path)
+    answer = client.delete("/api/projects/board/tasks/already")
+
+    assert answer.status_code == 200, answer.text
+    assert held == [True]
+
+
+def test_a_set_aside_task_answers_cleanly_not_with_a_500(tmp_path):
+    """Until a restart the board still lists the task, so its card can still
+    be asked for -- and the file is deliberately gone. That is an answer, not
+    an exception."""
+    client, cards = _client(tmp_path)
+    client.delete("/api/projects/board/tasks/already")
+
+    read = _get(client)
+    assert read.status_code == 409, read.text
+    assert "set aside" in read.json()["error"]
+
+
+def test_a_rewrite_cannot_resurrect_a_set_aside_card(tmp_path):
+    """os.replace creates its destination, so an unguarded save after a
+    set-aside would quietly undo it. Putting the file back is a decision made
+    at the file, not a side effect of a stale editor."""
+    client, cards = _client(tmp_path)
+    client.delete("/api/projects/board/tasks/already")
+
+    answer = _put(client, _CARD)
+    assert answer.status_code == 409, answer.text
+    assert not (cards / "already.yaml").exists()
+    assert sorted(p.name for p in cards.iterdir() if p.is_file()) == []

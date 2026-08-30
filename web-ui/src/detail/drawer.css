@@ -251,3 +251,20 @@
 .card-save {
   margin-top: 8px;
 }
+
+.card-acts {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.card-acts .card-save {
+  margin-top: 0;
+}
+
+/* Quiet until armed: the first press only changes the word on the button. */
+.card-aside[data-armed="true"] {
+  border-color: #d16d5a;
+  color: #d16d5a;
+}

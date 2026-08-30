@@ -466,6 +466,30 @@ export function rewriteCard(project: string, task: string, text: string): Promis
   )
 }
 
+/**
+ * Setting the task aside: the card moves to `.set-aside/` in the tasks
+ * folder, whole -- putting it back is putting the task back. The schedule
+ * stops now; the board forgets the task on the daemon's next start.
+ */
+export interface SetAside extends Answer {
+  task?: string
+  /** Where the file went, so the sentence on screen can say it. */
+  kept?: string
+}
+
+export async function setAside(project: string, task: string): Promise<SetAside> {
+  try {
+    const response = await fetch(
+      `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
+      { method: "DELETE" },
+    )
+    const payload = await response.json().catch(() => ({}))
+    return { ok: response.ok, ...payload } as SetAside
+  } catch {
+    return { ok: false, error: "the daemon did not answer" }
+  }
+}
+
 export type FeedStatus = "connecting" | "live" | "lost"
 
 export interface FeedHandlers {
