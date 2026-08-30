@@ -373,10 +373,24 @@ async def catalogue_for(
     return await _listed(type_, base_url, limit, api_key_env)
 
 
-async def models_for(type_: str, base_url: str | None = None, api_key_env: str | None = None) -> tuple[str, ...]:
-    """Just the ids, for the callers that only ever wanted a list of names --
-    `init`, `config add`, and `config use`'s check that a model is really there."""
-    return tuple(model.id for model in (await catalogue_for(type_, base_url, api_key_env=api_key_env)).models)
+async def models_for(
+    type_: str,
+    base_url: str | None = None,
+    api_key_env: str | None = None,
+    limit: int | None = MODEL_CAP,
+) -> tuple[str, ...]:
+    """Just the ids, for the callers that only ever wanted a list of names.
+
+    ``limit`` defaults to the listing's cap, because that is what these feed:
+    a list a person reads. **A check that a name is real passes `None`.**
+    "Is this model there" asked against the first `MODEL_CAP` of a hosted
+    router's several hundred answers no for every one past the cap, and the
+    refusal then prints those forty as though they were the whole catalogue.
+    `poieo config use` and the board's `models/use` both ask uncapped, and
+    they disagreed about this until they did.
+    """
+    catalogue = await catalogue_for(type_, base_url, limit=limit, api_key_env=api_key_env)
+    return tuple(model.id for model in catalogue.models)
 
 
 # Addresses whose product is worth naming, beyond the four `CANDIDATES`

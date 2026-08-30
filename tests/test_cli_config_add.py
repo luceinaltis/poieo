@@ -176,11 +176,11 @@ def test_added_engines_show_up_in_config_and_are_usable(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _machine_with(monkeypatch, OLLAMA, LMSTUDIO)
 
-    async def models_for(type_, base_url=None, api_key_env=None):
+    async def models_for(type_, base_url=None, api_key_env=None, limit=detect_module.MODEL_CAP):
         return {
             ("ollama", "http://localhost:11434"): ("qwen3:32b",),
             ("openai_compatible", "http://localhost:1234/v1"): ("qwen2.5-coder-7b",),
-        }.get((type_, base_url), ())
+        }.get((type_, base_url), ())[:limit]
 
     assert runner.invoke(app, ["config", "add"]).exit_code == 0
     monkeypatch.setattr(detect_module, "models_for", models_for)

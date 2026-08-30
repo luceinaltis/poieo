@@ -1106,11 +1106,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # Best effort, and only when the endpoint answers: a laptop with its
         # server switched off still gets to edit its own config, exactly as
         # `poieo config use` allows. But a model named from memory is the typo
-        # this exists to prevent, so an answer is believed.
-        answered = await engines.catalogue_for(
-            declared.type, declared.base_url, limit=None, api_key_env=declared.api_key_env
-        )
-        served = [one.id for one in answered.models]
+        # this exists to prevent, so an answer is believed -- and asked
+        # uncapped, by the same call the terminal makes, because this is a
+        # membership check and not a listing.
+        served = list(await engines.models_for(declared.type, declared.base_url, declared.api_key_env, limit=None))
         if served and model not in served:
             return JSONResponse(
                 {

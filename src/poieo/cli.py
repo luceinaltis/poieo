@@ -1110,6 +1110,12 @@ def config_add(
     typer.echo(f"to use one:  poieo config use {first.key}/{first.models[0]} --role <name>")
 
 
+# How many names a refusal offers back. The check behind it is uncapped, and a
+# hosted router serves several hundred -- printed whole, the one useful line of
+# a refusal scrolls off the top of the terminal.
+MODEL_LIST = 12
+
+
 @config_app.command("use")
 @_guarded
 def config_use(
@@ -1143,9 +1149,16 @@ def config_use(
         # named from memory is the typo this whole pair exists to prevent, so
         # when there *is* an answer it is believed.
         declared = spec.providers[provider]
-        served = asyncio.run(engines.models_for(declared.type, declared.base_url, declared.api_key_env))
+        # Uncapped: this is a membership check, not a listing. Asked with the
+        # listing's cap it refuses everything a hosted router serves past the
+        # first forty, and then prints those forty as the whole catalogue.
+        served = asyncio.run(engines.models_for(declared.type, declared.base_url, declared.api_key_env, limit=None))
         if served and model not in served:
-            _fail(f"'{provider}' does not serve '{model}'. It has: {', '.join(served)}")
+            # Says it is a sample when it is one. Printing a truncated list as
+            # though it were the catalogue is what the capped check did.
+            rest = len(served) - MODEL_LIST
+            more = f", and {rest} more" if rest > 0 else ""
+            _fail(f"'{provider}' does not serve '{model}'. It has: {', '.join(served[:MODEL_LIST])}{more}")
 
     point_at(path, role, provider, model)
 
