@@ -1,4 +1,7 @@
-# poieo
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/img/lockup.svg">
+  <img src="site/img/lockup-light.svg" alt="poieo" width="380">
+</picture>
 
 **Write down the work you want done. The models on your own machine keep it
 running, and you read what they did in the morning.**

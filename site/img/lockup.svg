@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 420" role="img" aria-label="poieo">
+  <!-- The lockup: the cube mark beside the wordmark, sized so the cube stands
+       a little taller than the x-height, the way an initial would. -->
+  <g transform="translate(180,205) scale(1.32)">
+    <circle r="86" fill="#d8a657"/>
+    <g stroke="#e8e2d8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 0 -130 L 112.58 -65 L 112.58 65 L 0 130 L -112.58 65 L -112.58 -65 Z"/>
+      <path d="M 0 0 L 0 -130 M 0 0 L 112.58 65 M 0 0 L -112.58 65"/>
+    </g>
+  </g>
+  <g transform="translate(450,0)">
+    <g stroke="#e8e2d8" stroke-width="52" stroke-linecap="round" fill="none">
+      <line x1="0" y1="100" x2="0" y2="380"/>
+      <circle cx="100" cy="200" r="74"/>
+      <circle cx="340" cy="200" r="74"/>
+      <line x1="506" y1="100" x2="506" y2="300"/>
+      <path d="M 746 200 A 74 74 0 1 0 724.6 252.3"/>
+      <line x1="598" y1="200" x2="746" y2="200"/>
+      <line x1="672" y1="126" x2="912" y2="126"/>
+      <circle cx="912" cy="200" r="74"/>
+    </g>
+    <circle cx="506" cy="38" r="30" fill="#d8a657"/>
+  </g>
+</svg>
