@@ -108,7 +108,7 @@ function fakeStore(
   stage: StageState,
   // Named for the project FLOWS' rows belong to: the board shows one
   // project's tasks, so a fake naming another would filter them all away.
-  project: ProjectRow | ProjectRow[] | null = { name: "board", root: "/home/k/chores" },
+  project: ProjectRow | ProjectRow[] | null = { name: "board", root: "/home/k/chores", keeps_copies: true },
 ): StageStore & { push(next: StageState): void } {
   let current = stage
   // One array, not a fresh one per call: useSyncExternalStore compares
@@ -352,7 +352,7 @@ test("the drawer opens on the run that changed something", async () => {
 
 
 test("the bar names the project, so two boards are not the same board", async () => {
-  await render(initialStage([]), { name: "night shift", root: "/home/k/chores" })
+  await render(initialStage([]), { name: "night shift", root: "/home/k/chores", keeps_copies: true })
 
   const named = container.querySelector(".shell-project")!
   expect(named.textContent).toBe("night shift")
@@ -363,7 +363,7 @@ test("the bar names the project, so two boards are not the same board", async ()
 
 
 test("the tab says it too, because that is what two open boards show", async () => {
-  await render(initialStage([]), { name: "night shift", root: "/home/k/chores" })
+  await render(initialStage([]), { name: "night shift", root: "/home/k/chores", keeps_copies: true })
   expect(document.title).toContain("night shift")
 })
 
@@ -376,8 +376,8 @@ test("a board that has not heard yet says nothing rather than guessing", async (
 // -- picking a project --------------------------------------------------------
 
 const TWO: ProjectRow[] = [
-  { name: "night shift", root: "/home/k/a" },
-  { name: "day job", root: "/home/k/b" },
+  { name: "night shift", root: "/home/k/a", keeps_copies: true },
+  { name: "day job", root: "/home/k/b", keeps_copies: true },
 ]
 
 const MIXED: TaskRow[] = [
@@ -389,7 +389,7 @@ const picker = () => container.querySelector<HTMLSelectElement>(".shell-project-
 
 
 test("one project is a name, not a thing to choose between", async () => {
-  await render(initialStage(FLOWS), { name: "night shift", root: "/home/k/a" })
+  await render(initialStage(FLOWS), { name: "night shift", root: "/home/k/a", keeps_copies: true })
 
   expect(picker()).toBeNull()
   expect(container.querySelector(".shell-project")!.textContent).toBe("night shift")

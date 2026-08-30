@@ -33,8 +33,8 @@ const row = (name: string, project: string): TaskRow => ({
 })
 
 const PROJECTS = [
-  { name: "night shift", root: "/home/k/a" },
-  { name: "day job", root: "/home/k/b" },
+  { name: "night shift", root: "/home/k/a", keeps_copies: true },
+  { name: "day job", root: "/home/k/b", keeps_copies: true },
 ]
 
 function api(): StageApi {

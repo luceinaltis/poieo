@@ -99,6 +99,25 @@ def _parse_numstat(raw: str) -> tuple[list[str], int, int]:
     return files, insertions, deletions
 
 
+def usable(folder: Path) -> bool:
+    """Whether git could keep a private copy of ``folder``.
+
+    git on PATH, and the folder actually inside a work tree. A free function
+    and not only a method, because the question is asked about folders no task
+    owns: the board asks it of a project so the make panel can say, before a
+    task exists, whether the night it starts could be thrown away.
+
+    Anything git could not answer is False. A folder nobody can prove is
+    protected is one somebody should look at.
+    """
+    if shutil.which("git") is None:
+        return False
+    try:
+        return _git(folder, "rev-parse", "--is-inside-work-tree").strip() == "true"
+    except WorkspaceError:
+        return False
+
+
 class Workspace:
     """A task's private copy of one repository, and the change it is building."""
 
@@ -123,12 +142,7 @@ class Workspace:
 
     def available(self) -> bool:
         """git on PATH, and the workdir actually inside a repository."""
-        if shutil.which("git") is None:
-            return False
-        try:
-            return _git(self.repo, "rev-parse", "--is-inside-work-tree").strip() == "true"
-        except WorkspaceError:
-            return False
+        return usable(self.repo)
 
     def into(self) -> str:
         """What accepting would add to -- the branch the user is standing on."""

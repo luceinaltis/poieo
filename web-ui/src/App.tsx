@@ -283,7 +283,15 @@ export default function App({ store }: { store?: StageStore }) {
         // Keyed on the project: a half-typed folder is read against *that*
         // project's tasks folder, so carrying the form across a switch would
         // post it somewhere it means something else.
-        <MakeTask key={project.name} project={project.name} onClose={closeMake} />
+        <MakeTask
+          key={project.name}
+          project={project.name}
+          // A daemon too old to say is taken at its most careful: the panel
+          // then promises no copy it cannot prove, which is the direction to
+          // be wrong in when the sentence is about somebody's own files.
+          keepsCopies={project.keeps_copies ?? false}
+          onClose={closeMake}
+        />
       ) : null}
 
       {selected ? (

@@ -56,7 +56,7 @@ const row = (name: string, project: string): TaskRow => ({
 function api(): StageApi {
   return {
     fetchTasks: vi.fn(async () => ({
-      projects: [{ name: "night shift", root: "/home/k/a" }],
+      projects: [{ name: "night shift", root: "/home/k/a", keeps_copies: true }],
       tasks: [row("chores", "night shift")],
     })),
     fetchRunEvents: vi.fn(async () => []),

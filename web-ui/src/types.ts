@@ -97,6 +97,18 @@ export interface ProjectRow {
   name: string
   /** The folder the project is, which is what tells two same-named ones apart. */
   root: string
+  /**
+   * Whether a night made here could be thrown away in the morning.
+   *
+   * A property of the project rather than of any one task: a card made from
+   * the board works inside the project, and a folder inside a work tree is in
+   * that work tree. False is `workspace.md`'s other path -- no copy, so a run
+   * edits the folder itself and there is nothing to hand back.
+   *
+   * It rides with the project because the panel that needs it is opened
+   * before there is a task to read it off.
+   */
+  keeps_copies: boolean
 }
 
 /** What `GET /api/tasks` answers: the board, and whose board it is.
