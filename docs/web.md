@@ -282,6 +282,13 @@ value belongs in the environment the daemon reads; this file is one people
 commit. That is the same fence the rest of this route has held since it was one
 screen, at the one place a hosted endpoint makes it tempting to break.
 
+It is also what the address is **asked with**. An endpoint that wants a key
+answers 401 to a listing, which detection reads as nothing being there — so the
+endpoints this field exists for were the ones it could not add. And because the
+daemon's environment is not the reader's shell, a variable the daemon cannot
+read is a **409 naming it**, before anything is probed: "nothing usable answered
+at …" would have the reader retyping an address that was right.
+
 **Only adds.** Nothing about what a role uses moves — declaring a model and
 choosing one are different decisions, and the second is `models/use`. An endpoint
 already declared is left exactly as it is, since somebody may have pointed it at
@@ -293,6 +300,7 @@ another port.
 | **409** | this project names no models file | — |
 | **400** | neither an engine nor an address | — |
 | **400** | not an engine detection looks for | the keys it does |
+| **409** | the named key variable is not set where the daemon runs | its name |
 | **409** | nothing usable answered at that address | — |
 | **409** | that name is already in the file | — |
 | **409** | this project already reaches it | — |

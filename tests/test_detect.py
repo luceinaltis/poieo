@@ -42,12 +42,42 @@ def _serves(monkeypatch, answers: dict[str, object]):
     )
 
 
+def _guarded(monkeypatch, answers: dict[str, object], key: str):
+    """Endpoints that answer only when the request carries ``key``.
+
+    What every hosted endpoint does, and what a vLLM started with `--api-key`
+    does: 401 to an unauthenticated listing. An endpoint like this is exactly
+    the one somebody reaches for `--key-env` to add.
+    """
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("authorization"))
+        if request.headers.get("authorization") != f"Bearer {key}":
+            return httpx.Response(401, json={"error": "missing or invalid api key"})
+        answer = answers.get(str(request.url))
+        if answer is None:
+            raise httpx.ConnectError("nothing listening", request=request)
+        return httpx.Response(200, json=answer)
+
+    def fake(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return httpx.AsyncClient(*args, **kwargs)
+
+    monkeypatch.setattr(
+        detect_module,
+        "httpx",
+        types.SimpleNamespace(AsyncClient=fake, RequestError=httpx.RequestError),
+    )
+    return seen
+
+
 def _no_claude(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(detect_module, "_claude_models", _nothing)
 
 
-async def _nothing():
+async def _nothing(api_key_env=None):
     return ()
 
 
@@ -150,7 +180,7 @@ def test_one_dead_port_does_not_hide_a_live_one(monkeypatch):
 def test_claude_is_found_through_the_sdk_and_named_by_it(monkeypatch):
     _serves(monkeypatch, {})
 
-    async def _found():
+    async def _found(api_key_env=None):
         return ("claude-opus-5", "claude-sonnet-5")
 
     monkeypatch.setattr(detect_module, "_claude_models", _found)
@@ -242,7 +272,7 @@ def test_a_local_engine_is_preferred_over_the_metered_one(monkeypatch):
     """
     _serves(monkeypatch, {"http://localhost:11434/api/tags": OLLAMA_TAGS})
 
-    async def _found():
+    async def _found(api_key_env=None):
         return ("claude-opus-5",)
 
     monkeypatch.setattr(detect_module, "_claude_models", _found)
@@ -552,3 +582,82 @@ async def test_an_address_is_named_after_its_host_when_it_says_nothing(monkeypat
 
     assert engine is not None
     assert engine.key == "gpu-box"
+
+
+# -- the key the caller named -------------------------------------------------
+#
+# An endpoint that wants a key answers 401 to an unauthenticated listing, and
+# `Catalogue()` is what detection returns for a 401 -- which reads, all the way
+# up, as "nothing usable answered". Every hosted endpoint is one of these, and
+# so is a vLLM started with `--api-key`; they are the whole reason `--key-env`
+# and the board's key field exist, and asking without the key made them the one
+# thing neither could add.
+
+
+@pytest.mark.asyncio
+async def test_an_endpoint_that_wants_a_key_is_asked_with_it(monkeypatch):
+    monkeypatch.setenv("OFFICE_API_KEY", "sk-real")
+    _guarded(monkeypatch, {"http://gpu-box:8001/v1/models": {"data": [{"id": "qwen3-32b"}]}}, "sk-real")
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://gpu-box:8001/v1", api_key_env="OFFICE_API_KEY"
+    )
+
+    assert [m.id for m in answered.models] == ["qwen3-32b"]
+
+
+@pytest.mark.asyncio
+async def test_the_same_endpoint_asked_without_one_still_answers_nothing(monkeypatch):
+    """The half that was already true, kept: silence is what a 401 means to a
+    caller that named no variable, and detection still never raises."""
+    monkeypatch.setenv("OFFICE_API_KEY", "sk-real")
+    _guarded(monkeypatch, {"http://gpu-box:8001/v1/models": {"data": [{"id": "qwen3-32b"}]}}, "sk-real")
+
+    answered = await detect_module.catalogue_for("openai_compatible", "http://gpu-box:8001/v1")
+
+    assert answered.models == ()
+
+
+@pytest.mark.asyncio
+async def test_a_variable_that_is_not_set_sends_no_header_and_does_not_raise(monkeypatch):
+    """Detection asks and never decides. A name with nothing behind it is a
+    question for whoever typed it, not an exception out of a probe -- and
+    `credential_for` is deliberately not used here for that reason."""
+    monkeypatch.delenv("OFFICE_API_KEY", raising=False)
+    seen = _guarded(monkeypatch, {"http://gpu-box:8001/v1/models": {"data": [{"id": "m"}]}}, "sk-real")
+
+    answered = await detect_module.catalogue_for(
+        "openai_compatible", "http://gpu-box:8001/v1", api_key_env="OFFICE_API_KEY"
+    )
+
+    assert answered.models == ()
+    assert seen == [None]
+
+
+@pytest.mark.asyncio
+async def test_ask_carries_the_key_through_every_attempt_and_writes_it_down(monkeypatch):
+    """`ask` tries three addresses. The key belongs to all of them, and the
+    engine it returns has to carry the variable's name -- otherwise the caller
+    has to graft it back on afterwards and the two can disagree."""
+    monkeypatch.setenv("OFFICE_API_KEY", "sk-real")
+    _guarded(monkeypatch, {"http://gpu-box:8001/v1/models": {"data": [{"id": "qwen3-32b"}]}}, "sk-real")
+
+    engine = await detect_module.ask("http://gpu-box:8001", key_env="OFFICE_API_KEY")
+
+    assert engine is not None
+    assert engine.models == ("qwen3-32b",)
+    assert engine.base_url == "http://gpu-box:8001/v1"
+    assert engine.api_key_env == "OFFICE_API_KEY"
+
+
+@pytest.mark.asyncio
+async def test_an_ollama_behind_a_key_is_asked_with_it_too(monkeypatch):
+    """The rule is the endpoint's, not the shape's. An Ollama behind a proxy
+    that wants a key lists like any other."""
+    monkeypatch.setenv("OFFICE_API_KEY", "sk-real")
+    _guarded(monkeypatch, {"http://box:11434/api/tags": {"models": [{"name": "qwen3:32b"}]}}, "sk-real")
+
+    engine = await detect_module.ask("http://box:11434", key_env="OFFICE_API_KEY")
+
+    assert engine is not None
+    assert (engine.type, engine.models) == ("ollama", ("qwen3:32b",))

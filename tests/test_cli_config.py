@@ -56,7 +56,7 @@ def _serving(monkeypatch, answers: "dict[tuple[str, str | None], tuple[str, ...]
     `poieo config models` has to work with the laptop's Ollama switched off.
     """
 
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         return answers.get((type_, base_url), ())
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
@@ -226,7 +226,7 @@ def test_config_models_asks_every_provider_at_once(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     in_flight, overlapped = 0, False
 
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         nonlocal in_flight, overlapped
         in_flight += 1
         overlapped = overlapped or in_flight > 1

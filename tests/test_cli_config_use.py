@@ -49,7 +49,7 @@ def _project(tmp_path, binding: str = BINDING):
 
 
 def _serving(monkeypatch, answers):
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         return answers.get((type_, base_url), ())
 
     monkeypatch.setattr(detect_module, "models_for", models_for)

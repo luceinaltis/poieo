@@ -259,6 +259,14 @@ kind, `--key-env` for the endpoint that wants a key — the **name** of the
 variable, never the key, since this file is one people commit. The
 no-argument form is unchanged and still looks at this machine.
 
+`--key-env` is what the endpoint is **asked with**, not just what gets written
+down afterwards: a hosted endpoint answers 401 to an unauthenticated listing,
+so without this the endpoints the flag exists for were the ones it could not
+add. Two refusals come before the probe, because detection has no way to tell
+either of them from an address with nothing on it — `--key-env` without an
+address (there is no saying which of this machine's four ports it was meant
+for), and a variable that is not set in this shell.
+
 Both of those are **names, and are checked as names before anything is
 written.** `rebind` composes the block it adds line by line, and YAML reads a
 newline as the end of a line — so a `--key-env` carrying one is not a bad name,

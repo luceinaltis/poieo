@@ -10,6 +10,7 @@ Design: docs/web.md
 """
 
 import asyncio
+from dataclasses import replace
 
 import httpx
 from conftest import card
@@ -59,7 +60,7 @@ CATALOGUE = {
 def _asks(monkeypatch, catalogue=None):
     served = CATALOGUE if catalogue is None else catalogue
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         # The route lifts the cap; a stub that refused the argument would let
         # that go untested.
         assert limit is None, "the catalogue panel must not be capped"
@@ -293,7 +294,7 @@ def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
     peak = 0
     asked: list[str] = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
@@ -436,7 +437,7 @@ def test_an_endpoint_that_did_not_answer_does_not_block_the_edit_and_says_so(tmp
     exactly as `poieo config use` allows -- silence is not agreement, so the
     reply says the name could not be checked rather than implying it was."""
 
-    async def silent(type_, base_url=None, limit=None):
+    async def silent(type_, base_url=None, limit=None, api_key_env=None):
         return Catalogue()
 
     monkeypatch.setattr(detect_module, "catalogue_for", silent)
@@ -577,7 +578,7 @@ def _machine(monkeypatch, at):
     the wrong reason.
     """
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         return at.get(base_url, Catalogue())
 
     monkeypatch.setattr(detect_module, "catalogue_for", fake)
@@ -615,7 +616,7 @@ def test_the_catalogue_does_not_go_looking_for_engines(tmp_path, monkeypatch):
     and a half to draw a list it already had every answer for."""
     asked = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         asked.append(base_url)
         return Catalogue()
 
@@ -698,7 +699,7 @@ def test_a_project_that_names_no_binding_is_not_asked_about_engines(tmp_path, mo
     worth a round trip."""
     asked: list[str | None] = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         asked.append(base_url)
         return Catalogue()
 
@@ -881,7 +882,7 @@ def test_an_offer_says_which_product_answered_not_the_pair_that_share_a_port(tmp
     monkeypatch.setattr(
         detect_module,
         "catalogue_for",
-        lambda type_, base_url=None, limit=None: _answers(
+        lambda type_, base_url=None, limit=None, api_key_env=None: _answers(
             Catalogue((Served(id="qwen3-32b"),), "SGLang") if base_url == _VLLM else Catalogue()
         ),
     )
@@ -1042,9 +1043,18 @@ def test_a_warning_about_a_key_never_carries_the_key(tmp_path, monkeypatch):
 # command, through the same `detect.ask` and the same `rebind.declare`.
 
 
-def _found(monkeypatch, engine):
-    async def fake(base_url):
-        return engine if engine and base_url == engine.base_url else None
+def _found(monkeypatch, engine, wants: str | None = None):
+    """`detect.ask`, stood in for.
+
+    ``wants`` is the key variable this endpoint refuses to list without -- what
+    every hosted endpoint does. Asked without it, the address answers as though
+    nothing were there, which is what a 401 means to detection.
+    """
+
+    async def fake(base_url, key_env=None):
+        if not engine or base_url != engine.base_url or key_env != wants:
+            return None
+        return replace(engine, api_key_env=key_env or None)
 
     monkeypatch.setattr(detect_module, "ask", fake)
 
@@ -1104,9 +1114,15 @@ def test_an_address_may_be_given_the_name_the_reader_wants(tmp_path, monkeypatch
 def test_an_address_takes_the_name_of_a_variable_and_never_a_key(tmp_path, monkeypatch):
     """The fence, at the one place a hosted endpoint makes it tempting. A
     variable's name is not a secret and belongs in the file; the value is one
-    and never crosses."""
+    and never crosses.
+
+    The endpoint here lists nothing until the request carries the key, which is
+    what every hosted one does -- so this also says the key is asked *with* and
+    not merely written down afterwards.
+    """
     _machine(monkeypatch, {})
-    _found(monkeypatch, _OFFICE)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    _found(monkeypatch, _OFFICE, wants="OFFICE_TOKEN")
     client = _client(tmp_path, binding=_BLOCK, tasks=False)
 
     reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN", api_key="sk-nope")
@@ -1116,6 +1132,23 @@ def test_an_address_takes_the_name_of_a_variable_and_never_a_key(tmp_path, monke
     assert "api_key_env: OFFICE_TOKEN" in written
     assert "sk-nope" not in written
     assert "sk-nope" not in reply.text
+
+
+def test_a_variable_the_daemon_cannot_read_is_said_out_loud(tmp_path, monkeypatch):
+    """Left to detection this came back as "nothing usable answered at ..." --
+    true, and about the wrong problem. The daemon's environment is not the
+    reader's shell, so which one it is missing from matters."""
+    _machine(monkeypatch, {})
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _found(monkeypatch, _OFFICE, wants="OFFICE_TOKEN")
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN")
+
+    assert reply.status_code == 409
+    assert "OFFICE_TOKEN" in reply.json()["error"] and "not set" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
 
 
 def test_a_name_already_in_the_file_is_refused_rather_than_overwritten(tmp_path, monkeypatch):
