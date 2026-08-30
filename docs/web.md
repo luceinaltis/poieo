@@ -609,10 +609,19 @@ closing is not — the rail always says where you are, in one item marked
 `aria-current="page"`.
 
 The panel itself is the drawer's twin — the same fixed aside on the same edge at
-the same width — so only one of the two is ever open, and `.shell-stage` reserves
+the same width — so only one of them is ever open, and `.shell-stage` reserves
 one margin for whichever it is. Its width comes from `--rail-width` on the left
-and the drawer's constant on the right; the rail is `position: fixed`, so the
+and the panel's constant on the right; the rail is `position: fixed`, so the
 stage has to reserve exactly that much or the board slides under it.
+
+**There are three of these asides and one geometry.** The drawer, the models
+panel and the make form share `.panel` in `index.css` — background, border,
+padding, the pinned edges and `box-sizing`; each keeps only what it does
+*inside* that box. They used to be three copies, and the copies drifted: only
+one of them counted its own padding against its width, so on a phone the other
+two laid `min(440px, 100vw)` plus 32px of padding across the screen, hung the
+overflow off the *left* edge, and silently chopped their own headings. A panel
+added here takes the class rather than the file.
 
 **A big catalogue folds by maker.** A hosted listing names every model
 `maker/model` — 396 across 58 makers — and a flat list of that is not read, it

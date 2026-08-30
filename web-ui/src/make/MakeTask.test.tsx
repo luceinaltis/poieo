@@ -65,6 +65,15 @@ function type(name: string, value: string) {
   })
 }
 
+test("it is one of the panels on the right edge, not a third geometry", () => {
+  show()
+  // Three panels share that edge and only one is ever open, so their width,
+  // padding and box model have to agree. They were copied instead, and the
+  // copies drifted -- one of them learned to count its own padding and the
+  // other two did not, which chopped their contents on a narrow window.
+  expect(host.querySelector("aside")?.classList.contains("panel")).toBe(true)
+})
+
 test("it asks for a name, a folder and a prompt, and nothing else", () => {
   show()
   const named = [...host.querySelectorAll("[name]")].map((node) => node.getAttribute("name"))

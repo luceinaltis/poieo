@@ -98,6 +98,11 @@ const row = (ref: string) => container.querySelector<HTMLElement>(`[data-model="
 const fact = (ref: string, kind: string) =>
   row(ref)!.querySelector(`[data-fact="${kind}"]`)?.textContent
 
+test("it is one of the panels on the right edge, not a third geometry", async () => {
+  await render()
+  expect(container.querySelector("aside")?.classList.contains("panel")).toBe(true)
+})
+
 test("it asks the project on screen, and names the file the endpoints came from", async () => {
   await render()
 

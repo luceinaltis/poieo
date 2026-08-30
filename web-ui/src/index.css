@@ -10,6 +10,10 @@
   /* What it takes across the top instead, on a screen too narrow to give it a
      quarter of the width. Same reason to name it: the stage reserves it. */
   --rail-lying-down: 38px;
+  /* How wide the aside on the right edge is. Named for the same reason as the
+     two above: `.shell-stage` reserves exactly this much margin, so the panel
+     and the space kept for it are one number or the board slides under it. */
+  --panel-width: min(440px, 100vw);
 }
 
 /* Every small bordered button on the page -- close, pause, run now, accept,
@@ -30,6 +34,30 @@ button {
 button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* The aside on the right edge: the run drawer, the models panel, the new-task
+   form. Only ever one of them is open and `.shell-stage` reserves one margin
+   for whichever it is, so their width and box model have to agree.
+
+   They were copied rather than shared, and the copies drifted. `width` here is
+   what the panel may take of the screen, not what is left after its own
+   padding: without `box-sizing`, `min(440px, 100vw)` on a 393px phone became
+   393 + 32 of padding = 425, and because the panel is pinned right the extra
+   32px hung off the *left* edge -- headings, filter box and field labels all
+   silently chopped. One panel learned that; the other two were the same file
+   with the fix missing. What each panel puts *inside* this box -- grid or
+   column, scrolling or clipped -- is still its own. */
+.panel {
+  background: #191612;
+  border-left: 1px solid #2e2820;
+  bottom: 0;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  position: fixed;
+  right: 0;
+  top: var(--bar-height);
+  width: var(--panel-width);
 }
 
 body {
