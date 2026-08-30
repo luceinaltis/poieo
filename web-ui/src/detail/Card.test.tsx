@@ -37,10 +37,14 @@ afterEach(() => {
 })
 
 const onSetAside = vi.fn()
+const onAlike = vi.fn()
 
 async function render() {
+  onAlike.mockReset()
   await act(async () => {
-    root.render(<Card project="board" task="chores" onSetAside={onSetAside} />)
+    root.render(
+      <Card project="board" task="chores" onSetAside={onSetAside} onAlike={onAlike} />,
+    )
   })
 }
 
@@ -186,4 +190,19 @@ test("a refused set-aside says why and does not claim the file moved", async () 
 
   expect(container.querySelector('[role="alert"]')!.textContent).toContain("could not be moved")
   expect(container.textContent).not.toContain("restart")
+})
+
+test("make one like it hands the three fields up, not the yaml", async () => {
+  // The make panel asks for name, folder and prompt; handing it raw YAML
+  // would mean parsing it twice. The fields came parsed from the daemon.
+  await open()
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="make-alike"]')!.click()
+  })
+
+  expect(onAlike).toHaveBeenCalledWith({
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+  })
 })

@@ -56,6 +56,15 @@ vi.mock("./api", () => ({
   accept: vi.fn(async () => ({ ok: true, accepted: 0 })),
   discard: vi.fn(async () => ({ ok: true, discarded: 0 })),
   openFeed: vi.fn(() => () => {}),
+  fetchCard: vi.fn(async () => ({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+  })),
+  rewriteCard: vi.fn(async () => ({ ok: true, task: "chores", live: true })),
+  setAside: vi.fn(async () => ({ ok: true, task: "chores" })),
   fetchModels: vi.fn(async () => ({
     binding: { name: "mock", path: "x.yaml" },
     roles: ["default"],
@@ -460,4 +469,65 @@ test("switching projects puts away a drawer opened in the last one", async () =>
   })
 
   expect(container.querySelector(".drawer")).toBeNull()
+})
+
+test("make one like it opens the make panel already filled in", async () => {
+  // Most new tasks are not blank pages: they are "like that one, but". The
+  // drawer's card fold hands the three fields to the make panel, and the
+  // person edits from there rather than from nothing.
+  await render(replay(initialStage(FLOWS), AGENT_RUN))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>(".card-open")!.click()
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="make-alike"]')!.click()
+  })
+
+  // The drawer gave up the margin to the panel, prefilled.
+  expect(container.querySelector(".drawer")).toBeNull()
+  expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("Chores")
+  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("../work")
+  expect(container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!.value).toBe(
+    "tidy",
+  )
+
+  // `new task` from the rail afterwards is a blank page again: the seed
+  // belongs to the press that asked for it, not to the panel.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-make"]')!.click())
+  expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("")
+})
+
+test("switching projects puts a seeded make panel away with its seed", async () => {
+  // A seed's folder means something in the project it came from. Carried
+  // across a switch it would offer that path against another project's tasks
+  // folder -- the exact mistake the panel's own key comment promises against.
+  await render(replay(initialStage(FLOWS), AGENT_RUN), [
+    { name: "board", root: "/home/k/chores", keeps_copies: true },
+    { name: "other", root: "/home/k/other", keeps_copies: true },
+  ])
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+  await act(async () => container.querySelector<HTMLElement>(".card-open")!.click())
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="make-alike"]')!.click()
+  })
+  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("../work")
+
+  const picker = container.querySelector<HTMLSelectElement>(".shell-project-pick")!
+  await act(async () => {
+    picker.value = "other"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+
+  // The panel is gone, and so is the seed: opening `new task` in the other
+  // project starts from a blank page, not from board's folder.
+  expect(container.querySelector('input[name="folder"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-make"]')!.click())
+  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("")
 })

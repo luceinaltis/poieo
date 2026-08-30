@@ -58,6 +58,10 @@ export default function App({ store }: { store?: StageStore }) {
   // thing you open to answer a question, not a way you like the board to sit.
   const [showModels, setShowModels] = useState(false)
   const [showMake, setShowMake] = useState(false)
+  // What "make one like it" hands over: three fields for the panel to open
+  // on. Cleared when the panel closes, so `new task` from the rail is a
+  // blank page again -- the seed belongs to the press that asked for it.
+  const [seed, setSeed] = useState<{ name: string; folder: string; prompt: string } | null>(null)
 
   useEffect(() => {
     void theStore.start()
@@ -107,6 +111,11 @@ export default function App({ store }: { store?: StageStore }) {
     remember(PROJECT_KEY, name)
     // The drawer belongs to a task on the board that was there a moment ago.
     setSelected(null)
+    // ...and so does a seeded make panel. A seed's folder means something in
+    // the project it came from; carried across, it would be offered against
+    // another project's tasks folder.
+    setShowMake(false)
+    setSeed(null)
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
@@ -141,11 +150,24 @@ export default function App({ store }: { store?: StageStore }) {
   }, [])
   const closeModels = useCallback(() => setShowModels(false), [])
   const openMake = useCallback(() => {
+    setSeed(null)
     setShowMake(true)
     setShowModels(false)
     setSelected(null)
   }, [])
-  const closeMake = useCallback(() => setShowMake(false), [])
+  const closeMake = useCallback(() => {
+    setShowMake(false)
+    setSeed(null)
+  }, [])
+  const makeAlike = useCallback(
+    (fields: { name: string; folder: string; prompt: string }) => {
+      setSeed(fields)
+      setShowMake(true)
+      setShowModels(false)
+      setSelected(null)
+    },
+    [],
+  )
 
   const empty = Object.keys(shown.tasks).length === 0
   // `selected` is the board's key -- the project and the task -- because a
@@ -297,8 +319,11 @@ export default function App({ store }: { store?: StageStore }) {
         // project's tasks folder, so carrying the form across a switch would
         // post it somewhere it means something else.
         <MakeTask
-          key={project.name}
+          // ...and on the seed: a panel already open must take a fresh seed,
+          // and a keyed remount is how a form starts over.
+          key={`${project.name}:${seed ? seed.name : ""}`}
           project={project.name}
+          seed={seed ?? undefined}
           // A daemon too old to say is taken at its most careful: the panel
           // then promises no copy it cannot prove, which is the direction to
           // be wrong in when the sentence is about somebody's own files.
@@ -320,6 +345,7 @@ export default function App({ store }: { store?: StageStore }) {
           asking={openRow?.asking ?? null}
           onClose={closeDrawer}
           onDecided={decided}
+          onAlike={makeAlike}
         />
       ) : null}
     </>
