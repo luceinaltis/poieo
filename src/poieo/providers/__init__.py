@@ -9,12 +9,17 @@ from .base import LLMRequest, LLMResponse, Provider, Usage, credential_for
 from .local import OllamaProvider, OpenAICompatibleProvider
 from .mock import MockProvider
 from .presets import PRESETS
+from .subscription import ClaudeCodeProvider, CodexProvider
 
 _REGISTRY: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
     "openai_compatible": OpenAICompatibleProvider,
     "ollama": OllamaProvider,
     "mock": MockProvider,
+    # The two that spend a plan rather than a key. Named after the harness they
+    # drive, because that is what a person logs into and what a failure names.
+    "claude_code": ClaudeCodeProvider,
+    "codex": CodexProvider,
 }
 
 # Every preset is the OpenAI wire format with its address filled in, so each

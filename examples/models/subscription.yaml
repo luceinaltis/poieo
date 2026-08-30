@@ -1,0 +1,37 @@
+# Physical layer: a plan you already pay for, rather than tokens you buy.
+#
+# Both endpoints drive a coding harness that is already logged in, so there is
+# no key here and none in the environment either -- **a key would win over the
+# login and quietly move the bill**, which is why a set `ANTHROPIC_API_KEY` or
+# `OPENAI_API_KEY` is refused rather than worked around.
+#
+#   claude auth status     # expect loggedIn, and your plan
+#   codex login status     # a Codex login goes stale after about a week idle
+#
+# Today these answer; they do not touch files. A step with `tools:` is refused
+# by name -- bind that one to an endpoint with a key. See docs/binding.md.
+name: subscription
+version: 1
+
+providers:
+  claude-code:
+    type: claude_code
+    # Needs `pip install 'poieo[claude-code]'`; it carries its own CLI.
+    timeout: 600
+  codex:
+    type: codex
+    # Needs the Codex CLI: npm i -g @openai/codex
+    timeout: 600
+
+default:
+  provider: claude-code
+  model: claude-opus-5
+  params:
+    effort: high                  # low | medium | high | xhigh | max
+
+roles:
+  # A second opinion is worth more when it comes from another house, and this
+  # is the binding where that costs nothing extra.
+  critic:
+    provider: codex
+    model: gpt-5.3-codex
