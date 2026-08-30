@@ -11,6 +11,39 @@ of the feature — not even an empty header in a prompt. A signal that switches
 itself on is not consent, which is why journals live *beside* that folder rather
 than inside it: they arrive on their own the first time a card runs.
 
+## The words
+
+One name per thing. Each is fixed by two answers — **when it reaches a prompt**,
+and **who may write it** — and every difference between them is one of those two.
+
+| word | is | reaches a prompt | written by |
+|---|---|---|---|
+| **journal** | one card's running account of its own work | every run of that card; the oldest lines age out | the harness, every run |
+| **page** | the one constitution a project runs under | every run of every card, whole and first | a person only |
+| **entry** | one durable statement a run earned | only when `recall()` picks it for this card | the pass proposes, the harness writes |
+| **attic** | entries at rest | never, until a person moves the file back | a person, or the pass setting one aside |
+| **record** | the full account of one run | never a card's; it is what the pass *reads* | the harness, once per run |
+| **strength** | how much a connection has actually helped | never; it only reorders entries | reinforcement, from records |
+| **blob** | the bytes an entry was written against | never | the harness, when an entry is anchored |
+
+`facts/` is the folder on disk; the things in it are **entries** everywhere else.
+
+**Only two questions are settled by the words an entry shares**, and both weigh
+the entry's *body* alone: which entries a card is shown (`recall()`), and whether
+an entry did real work in a run (`used_in()`). Scope and anchors match names and
+paths exactly; the page is never matched at all, because it is never chosen.
+
+The machinery names stay in this package and on this page. `poieo memory` says
+different words on purpose, and neither list is the other's mistake:
+
+| machinery | what a person is told |
+|---|---|
+| `recall()` | lookup |
+| entries | learned |
+| `doubts()` | second look |
+| accounting | kept in mind |
+| the page | *What this project always requires* |
+
 ## The files
 
 ```
@@ -121,7 +154,7 @@ you chose needs what it leans on, not the reverse), and `contradicts` is a
 **veto** — "this disputes [[x]]" is an ordinary way to write a disagreement, and
 the mention inside it must not smuggle the disputed entry into a prompt.
 
-### Wear
+### Strength
 
 `strength.py` holds *how often a connection actually helped* — runtime emphasis,
 never meaning. What connects to what stays a judgment in markdown.
