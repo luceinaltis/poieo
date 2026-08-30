@@ -8,6 +8,8 @@
  * check that against anyway.
  */
 
+import { scaleTime } from "d3-scale"
+
 import { outcomeOf } from "../../review/rollup"
 import type { Outcome } from "../../review/rollup"
 import type { RunSummary } from "../../types"
@@ -86,46 +88,53 @@ export function lane(runs: RunSummary[], tracked: boolean, span: Span): Lane {
 export interface Tick {
   at: number
   x: number
-  /** A clock time reads as one thing a day; past that it has to say which day. */
+  /**
+   * How this one label is worded: a midnight names its day, everything else
+   * names its hour. Per tick, not per axis -- on a four-day window the hours
+   * repeat, and the dated midnights between them are what tell the fourth
+   * 06:00 from the first.
+   */
   kind: "time" | "date"
 }
-
-/** How far apart the labels may be. Nothing finer than an hour is legible. */
-const STEPS = [HOUR, 2 * HOUR, 3 * HOUR, 6 * HOUR, 12 * HOUR, DAY, 2 * DAY, 7 * DAY]
 
 /** Past this many the axis is texture rather than a scale. */
 const MOST = 8
 
-function midnight(at: number): number {
-  const day = new Date(at)
-  day.setHours(0, 0, 0, 0)
-  return day.getTime()
-}
-
 /**
- * The labelled hours, counted from local midnight rather than from the left
- * edge -- so they land on 06:00 and 12:00, which a reader already knows where
- * to find, instead of on 05:47 because that is when the window happened to
- * open.
+ * The labelled hours, picked by d3 rather than counted here -- so they land
+ * on 06:00 and 12:00, which a reader already knows where to find, and stay on
+ * the round local hour across a daylight-saving change, which a ladder of
+ * fixed millisecond steps walked straight through. Choosing round times on a
+ * civil calendar is the most re-solved problem in charting; this is the one
+ * piece of the view where a library knows things this file would get wrong.
  *
  * `most` is how many the caller has room for. A phone gets four labels rather
  * than eight overlapping ones -- and the answer has to come from the caller,
  * because how wide a lane is is not a fact about the clock. Asking for more
  * than the axis can carry is refused rather than honoured: past eight, hour
- * labels are texture rather than a scale at any width.
+ * labels are texture rather than a scale at any width. The labels' wording
+ * stays ours: d3's formats are twelve-hour and English, and the axis is
+ * neither.
  */
 export function ticks(span: Span, most: number = MOST): Tick[] {
   const width = Math.max(1, span.to - span.from)
   const room = Math.max(1, Math.min(most, MOST))
-  const step = STEPS.find((one) => width / one <= room) ?? STEPS[STEPS.length - 1]
-  const origin = midnight(span.from)
-  const first = origin + Math.ceil((span.from - origin) / step) * step
-
-  const marks: Tick[] = []
-  for (let at = first; at <= span.to; at += step) {
-    marks.push({ at, x: (at - span.from) / width, kind: step >= DAY ? "date" : "time" })
+  const scale = scaleTime().domain([span.from, span.to])
+  // d3's count is a hint, not a bound: a width that lands between two of its
+  // intervals comes back with eleven labels for a cap of eight. Asking for
+  // fewer walks it down its own ladder of round intervals, which keeps the
+  // labels on hours a reader knows -- thinning the list here would not. One
+  // step at a time, because the ladder is coarse: halving jumped from nine
+  // labels to four when eight was the ask and five was on offer.
+  let dates = scale.ticks(room)
+  for (let ask = room - 1; dates.length > room && ask >= 1; ask -= 1) {
+    dates = scale.ticks(ask)
   }
-  return marks
+  return dates.map((day) => ({
+    at: +day,
+    x: (+day - span.from) / width,
+    kind: day.getHours() === 0 && day.getMinutes() === 0 ? "date" : "time",
+  }))
 }
 
 /** One mark standing for several runs the lane had no room to draw apart. */
