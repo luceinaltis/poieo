@@ -167,7 +167,13 @@ test("a task whose last run was days ago still shows it", () => {
   handle.update(board([run("ancient", 3 * DAY)]))
 
   expect(el.querySelectorAll('[data-task="board/chores"] .hours-mark')).toHaveLength(1)
-  expect(el.querySelector(".hours-caption")!.textContent).toContain("3 days")
+  // Four: the run is three days back, and the window reaches a day past it
+  // so the board's last living day is on screen rather than on the edge.
+  expect(el.querySelector(".hours-caption")!.textContent).toContain("4 days")
+  const mark = el.querySelector<HTMLElement>('[data-task="board/chores"] .hours-mark')!
+  const at = Number.parseFloat(mark.style.left)
+  expect(at).toBeGreaterThan(5)
+  expect(at).toBeLessThan(50)
 
   handle.destroy()
 })
