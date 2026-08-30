@@ -1,3 +1,32 @@
+/* The brand faces, shipped with the page. The site used to lean on the
+   visitor's system stack, which made the typography a lottery -- one custom
+   browser default and the whole page changed voice. Three small latin woff2
+   files (checked in, no external request) end the lottery; the system stack
+   stays behind them for every other script. OFL; see fonts/LICENSE.txt. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/hanken-grotesk-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/dm-mono-latin-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/dm-mono-latin-500.woff2") format("woff2");
+}
+
 /* The page takes its colours from the board it is about: the values below are
    the ones in web-ui/src/, not a palette invented for a landing page. If the
    board's ground changes, this is wrong and should follow it. */
@@ -15,8 +44,8 @@
   --ember: #d8a657;       /* the one amber bud, and so every accent here */
   --live: #a9b665;        /* a task that is running */
 
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* One measure for the whole page. Sections that want the full width say so. */
   --column: 68rem;
