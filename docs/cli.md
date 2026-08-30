@@ -168,9 +168,17 @@ because "what am I bound to" is the question people arrive with and making them
 find a subcommand to ask it is a tax. The subcommands are for changing the answer.
 
 **The board asks the same question**, at `GET /api/projects/{p}/models` — see
-[web.md](web.md). Both go through `BindingSpec.target()` and `spoken_for()`,
-which is where `provider/model` used to be spelled twice; the browser sees less
-of the answer than the terminal does, and that difference is argued there.
+[web.md](web.md). Both go through `BindingSpec.target()`, `spoken_for()` and
+`roles_by_target()`, which is where `provider/model` used to be spelled twice;
+the browser sees less of the answer than the terminal does, and that difference
+is argued there.
+
+`roles_by_target()` is the last of those and the newest, and it is a list per
+model rather than a role: pointing `classifier` and `writer` at one small model
+is the ordinary reason to name roles at all. Both listings used to invert
+`spoken_for()` themselves, one into a list and one into a single role, so the
+terminal named whichever role sorted last and dropped the others without
+saying — and rebinding one of two roles sharing a model looked safe.
 
 **And makes the same edit.** `POST …/models/use` is `config use` from a browser:
 same `binding.split_ref` reading the reference back, same `rebind.point_at`

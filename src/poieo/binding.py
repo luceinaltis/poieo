@@ -224,6 +224,21 @@ class BindingSpec(_Spec):
         named.update({role: self.target(role) for role in self.roles})
         return {role: target for role, target in named.items() if target}
 
+    def roles_by_target(self) -> dict[str, list[str]]:
+        """`spoken_for` read the other way: every role each model answers for.
+
+        A list, because the mapping is many-to-one -- pointing `classifier` and
+        `writer` at one small model is the ordinary reason to name roles at
+        all. The two listings inverted it themselves and disagreed about that:
+        the board gathered a list, and the terminal's dict comprehension kept
+        whichever role came last and dropped the rest without saying. It is one
+        function now, so a reader gets the same answer whichever they asked.
+        """
+        found: dict[str, list[str]] = {}
+        for role, target in self.spoken_for().items():
+            found.setdefault(target, []).append(role)
+        return found
+
 
 class ResolvedModel(_Spec):
     """What a node is actually going to call."""

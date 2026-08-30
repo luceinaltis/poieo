@@ -977,7 +977,7 @@ def config_models(
         )
 
     served = dict(zip(names, asyncio.run(_go())))
-    in_use = {target: role for role, target in spec.spoken_for().items()}
+    in_use = spec.roles_by_target()
 
     report = {
         name: {
@@ -1005,12 +1005,14 @@ def config_models(
             detail = "no answer"
         typer.secho(f"{name:<12}{detail}".rstrip(), bold=True)
         for model in models:
-            role = in_use.get(f"{name}/{model}")
+            # Every role it answers for, not one of them: a model two roles
+            # point at is the ordinary reason to name roles at all.
+            roles = ", ".join(in_use.get(f"{name}/{model}", ()))
             # Padded only when there is something to line up against, so an
             # unspoken-for model is exactly its own name. The trailing gap is
             # unconditional: an id longer than the column still needs air
             # before its role, and real Ollama tags run past 44 easily.
-            typer.echo(f"  {model:<44}  {role}" if role else f"  {model}")
+            typer.echo(f"  {model:<44}  {roles}" if roles else f"  {model}")
         typer.echo("")
 
 

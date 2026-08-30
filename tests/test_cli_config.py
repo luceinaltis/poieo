@@ -191,6 +191,48 @@ def test_config_models_marks_what_is_already_in_use(tmp_path, monkeypatch):
     assert long_default in result.stdout
 
 
+SHARED = """\
+name: default
+version: 1
+
+providers:
+  ollama:
+    type: ollama
+    base_url: http://localhost:11434
+
+default:
+  provider: ollama
+  model: "qwen3:32b"
+
+roles:
+  classifier:
+    provider: ollama
+    model: "llama3.2:3b"
+  writer:
+    provider: ollama
+    model: "llama3.2:3b"
+"""
+
+
+def test_config_models_names_every_role_a_shared_model_answers_for(tmp_path, monkeypatch):
+    """One model may be pointed at by several roles, and the list has to say so.
+
+    Inverting role -> model one-to-one keeps whichever role sorted last and
+    drops the rest, so a reader looking for `classifier` was told the model it
+    is on belongs to `writer` -- and rebinding one of them looked safe.
+    """
+    _project(tmp_path, SHARED)
+    monkeypatch.chdir(tmp_path)
+    _serving(monkeypatch, {("ollama", "http://localhost:11434"): ("qwen3:32b", "llama3.2:3b")})
+
+    result = runner.invoke(app, ["config", "models"])
+
+    assert result.exit_code == 0, result.output
+    shared = next(line for line in result.stdout.splitlines() if "llama3.2:3b" in line)
+    assert "classifier" in shared
+    assert "writer" in shared
+
+
 def test_config_models_reports_an_endpoint_it_cannot_reach(tmp_path, monkeypatch):
     """A laptop with Ollama switched off is the normal case, not a failure."""
     _project(tmp_path)
