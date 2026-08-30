@@ -569,6 +569,50 @@ def test_a_broken_marker_still_fails_wherever_it_is_consulted(tmp_path):
         find_project(tmp_path)
 
 
+def test_a_path_in_the_marker_understands_a_home_tilde(tmp_path):
+    """`~/somewhere` means the same thing in every file poieo reads.
+
+    A card already expands it and so does the route that writes one, so the
+    marker was the odd one out: `store: ~/runs` made a directory *called* `~`
+    inside the project and put the run history in it, which is a folder nobody
+    goes looking for and a home directory that stays empty.
+    """
+    from poieo.project import load_project
+
+    _project_with_cards(tmp_path)
+    spec = load_project(tmp_path / "poieo.yaml")
+
+    assert spec.resolve_path("~/runs") == Path.home() / "runs"
+    # Everything else is unmoved: still relative to the marker, not the cwd.
+    assert spec.resolve_path("runs") == tmp_path / "runs"
+
+
+def test_a_home_that_cannot_be_found_is_a_literal_path_not_a_traceback(tmp_path, monkeypatch):
+    """`Path.expanduser` raises where `os.path.expanduser` hands the path back.
+
+    Two real cases reach it: `~someone` naming nobody -- on Linux the lookup
+    fails and the path comes back with the `~` still on it -- and a container
+    with no `$HOME` and no passwd entry for the running uid, where even a plain
+    `~/runs` cannot be resolved. A `RuntimeError` out of a config load is not
+    one of this project's failures and nothing catches it, so it would reach
+    the reader as a traceback where a wrong folder is the honest answer.
+    """
+    from poieo.project import load_project
+
+    _project_with_cards(tmp_path)
+    spec = load_project(tmp_path / "poieo.yaml")
+
+    def no_home(_):
+        raise RuntimeError("Could not determine home directory.")
+
+    monkeypatch.setattr(Path, "expanduser", no_home)
+
+    assert spec.resolve_path("~/runs") == tmp_path / "~" / "runs"
+    assert spec.resolve_path("~nobody/runs") == tmp_path / "~nobody" / "runs"
+    # A path with no `~` never reaches the expansion at all.
+    assert spec.resolve_path("runs") == tmp_path / "runs"
+
+
 def test_the_daemon_config_is_a_project_and_reads_the_same_keys(tmp_path):
     """One schema, extended -- so `store` cannot mean one thing to `poieo run`
     and another to `poieo daemon`."""
