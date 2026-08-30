@@ -584,6 +584,8 @@ would leave the reader running an old page with no way to find out.
 ```
 web-ui/src/
   api.ts            everything that talks to the daemon
+  useAct.ts         the one way a surface asks the daemon to change something
+  Refusal.tsx       the one way a refusal is shown when it says no
   shell/stageStore  fetch history, open the stream, hold the model
   state/stage.ts    the one place run events are interpreted
   skins/            how that model is drawn — basic, runs
@@ -595,6 +597,17 @@ web-ui/src/
   review/           last night's work: the list, the diff, accept and discard
   models/           which models this project runs on
 ```
+
+**A refusal is a value, and it is shown the same way everywhere.** `useAct`
+holds the last one; `Refusal` draws it. The pair matters because the API may
+legitimately refuse *without a sentence* — `post` builds its answer as
+`{ok: response.ok, ...payload}` over a body that may not have parsed — so there
+is a fallback, and it lives in one place. It used to be written once per
+surface, and two of the six had no fallback at all: they tested `refused.error`
+rather than `refused` and showed a disabled button with nothing beside it. The
+second of those was written while the first was being fixed, which is the
+argument for the component rather than for another careful copy. Where the line
+sits is still each surface's own CSS; what it says is not.
 
 **`Models` is reached from the rail, not from a card.** A project's models are
 the project's, and putting them in the drawer would repeat one answer on every

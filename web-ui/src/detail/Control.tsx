@@ -9,6 +9,7 @@
 
 import { pause, resume, runNow } from "../api"
 import type { ControlAnswer } from "../api"
+import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 
 export function Control({
@@ -48,9 +49,7 @@ export function Control({
         {running ? "running…" : "run now"}
       </button>
 
-      {refused ? (
-        <p className="control-refusal">{refused.error || "That didn't work."}</p>
-      ) : null}
+      {refused ? <Refusal answer={refused} /> : null}
     </div>
   )
 }

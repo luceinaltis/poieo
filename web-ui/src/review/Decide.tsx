@@ -10,29 +10,37 @@ import { useState } from "react"
 
 import { accept, discard } from "../api"
 import type { Decision } from "../api"
+import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 import "./review.css"
 
-function Refusal({ decision }: { decision: Decision }) {
+/**
+ * The two refusals this surface can say better than the daemon can.
+ *
+ * Both are about the reader's own checkout rather than the run, so both name
+ * the files and say that nothing moved. Anything else falls through to the
+ * daemon's sentence.
+ */
+function WhyRefused({ decision }: { decision: Decision }) {
   if (decision.dirty?.length) {
     return (
-      <p className="decide-refusal">
+      <Refusal>
         You have uncommitted changes in {decision.dirty.join(", ")}. Commit or
         stash them first — accepting would have to touch the same files.
-      </p>
+      </Refusal>
     )
   }
   if (decision.conflict?.length) {
     // No resolve button on purpose: sorting this out belongs in the reader's
     // own editor, with their own history in front of them.
     return (
-      <p className="decide-refusal">
+      <Refusal>
         You changed {decision.conflict.join(", ")} too, so this run can't be
         taken as it is. Nothing was moved.
-      </p>
+      </Refusal>
     )
   }
-  return <p className="decide-refusal">{decision.error || "That didn't work."}</p>
+  return <Refusal answer={decision} />
 }
 
 export function Decide({
@@ -108,7 +116,7 @@ export function Decide({
         </p>
       ) : null}
 
-      {refused ? <Refusal decision={refused} /> : null}
+      {refused ? <WhyRefused decision={refused} /> : null}
     </div>
   )
 }

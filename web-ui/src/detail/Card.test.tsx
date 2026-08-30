@@ -127,6 +127,19 @@ test("a refusal is shown and the text stays for a second try", async () => {
   expect(container.textContent).not.toContain("Saved")
 })
 
+test("a refusal with nothing to say still says something", async () => {
+  // `ok: false` and no sentence is a shape `post` produces from a body that
+  // did not parse. Guarded on `refused.error`, this surface showed a disabled
+  // button and no reason -- the same defect the make form had, written again
+  // in a new file while that one was being fixed.
+  rewriteCard.mockResolvedValue({ ok: false })
+  await open()
+  await type("name: Chores\nfolder: ../work\nprompt: tidy the hallway\n")
+  await save()
+
+  expect(container.querySelector('[role="alert"]')!.textContent).toContain("didn't work")
+})
+
 test("closing and reopening does not fetch the card again over an edit", async () => {
   await open()
   await type("name: Chores\nfolder: ../work\nprompt: half-finished thought")

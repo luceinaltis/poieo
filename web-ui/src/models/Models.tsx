@@ -25,6 +25,7 @@ import type {
   ServedModel,
   UndeclaredEngine,
 } from "../api"
+import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 import "./models.css"
 
@@ -235,15 +236,14 @@ export function Models({
         </p>
       ) : null}
       {refused ? (
-        <p className="models-refusal" role="alert">
-          {refused.error || "That didn't work."}
+        <Refusal answer={refused}>
           {refused.providers?.length
             ? ` This project declares: ${refused.providers.join(", ")}.`
             : ""}
           {refused.models?.length
             ? ` It has: ${refused.models.slice(0, 6).join(", ")}.`
             : ""}
-        </p>
+        </Refusal>
       ) : null}
       <div className="models-body">
         {/* Above the lists, not under them. It is the one piece of news here,

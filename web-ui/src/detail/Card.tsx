@@ -21,6 +21,7 @@ import { useState } from "react"
 
 import { fetchCard, rewriteCard, setAside } from "../api"
 import type { Card as CardFields, RewrittenCard, SetAside } from "../api"
+import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 
 export function Card({
@@ -90,7 +91,7 @@ export function Card({
       </summary>
 
       {gone ? (
-        <p className="card-refusal">The card could not be read. It may have moved on disk.</p>
+        <Refusal>The card could not be read. It may have moved on disk.</Refusal>
       ) : was === null ? null : (
         <>
           <textarea
@@ -107,11 +108,7 @@ export function Card({
             }}
           />
 
-          {refused?.error ? (
-            <p className="card-refusal" role="alert">
-              {refused.error}
-            </p>
-          ) : null}
+          {refused ? <Refusal answer={refused} /> : null}
 
           {saved ? (
             saved.live ? (
