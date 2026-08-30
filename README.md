@@ -13,12 +13,6 @@ until you accept it.
 [![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
 [![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-d6ccbe.svg)](pyproject.toml)
 
-![The board: five task cards, their schedules, and one change waiting to be read](site/img/board.png)
-
-Five tasks on the board. Each one is a card you wrote — a name, a folder, a
-sentence — and a daemon on your machine keeps them running: free local models
-for the night shift, a costly one only where it pays.
-
 ## Get started in sixty seconds
 
 ```bash
