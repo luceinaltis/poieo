@@ -285,7 +285,7 @@ footer p { margin: 0.4rem 0; }
     right: -30%;
     width: 130vw;
   }
-  .steps, .grid, .why dl { grid-template-columns: 1fr; }
+  .steps, .grid, .why dl, .proof { grid-template-columns: 1fr; }
   .cta { display: flex; width: 100%; }
   .bar-sub { display: none; }
 }
@@ -408,3 +408,30 @@ footer p { margin: 0.4rem 0; }
     padding: 12px 16px;
   }
 }
+
+
+/* --- proof: real cards beside the real board --------------------------- */
+
+.proof { align-items: center; display: grid; gap: 3.5rem; grid-template-columns: 6fr 5fr; }
+
+.proof-label {
+  color: var(--live);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  margin: 0 0 1rem;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0 0 1.4rem; padding: 0; }
+
+.chips li {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 7px 14px;
+}
+
+.proof-shot { max-width: 400px; justify-self: center; }
