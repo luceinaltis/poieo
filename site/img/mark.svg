@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-160 -160 320 320" role="img" aria-label="poieo">
+  <!-- The mark: an isometric cube holding an amber sphere — the engine held in
+       a frame, which is the one thing poieo does. The cube is the hexagonal
+       silhouette every isometric cube has; the three spokes are its visible
+       edges, and they pass in front of the sphere so the sphere reads as held
+       rather than pasted. Colours are the board's own (web-ui/src). -->
+  <circle r="86" fill="#d8a657"/>
+  <g stroke="#e8e2d8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 0 -130 L 112.58 -65 L 112.58 65 L 0 130 L -112.58 65 L -112.58 -65 Z"/>
+    <path d="M 0 0 L 0 -130 M 0 0 L 112.58 65 M 0 0 L -112.58 65"/>
+  </g>
+</svg>

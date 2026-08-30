@@ -57,11 +57,13 @@ h1, h2, h3 { line-height: 1.15; margin: 0 0 0.5em; }
 }
 
 .wordmark {
-  color: var(--text);
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  align-items: center;
+  display: flex;
+  gap: 10px;
   text-decoration: none;
 }
+
+.wordmark img { display: block; }
 
 .bar-sub { color: var(--dim); font-size: 0.85rem; }
 .bar nav { display: flex; gap: 18px; margin-left: auto; }
