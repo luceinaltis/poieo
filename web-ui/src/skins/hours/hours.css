@@ -184,10 +184,12 @@
 
 /* Three silhouettes, so the shape of a night survives being printed, dimmed, or
    read by somebody who does not separate amber from red -- which is the pair
-   this view would otherwise rest on. A quiet run is a low tick from the
-   baseline, a run that changed something is a full post from the baseline, and
-   a failure hangs from the rail instead. Colour agrees with all three and
-   carries none of them alone. */
+   this view would otherwise rest on. All three stand on the baseline and are
+   told apart by height alone: a quiet run is a low tick, a run that changed
+   something is a post, and a failure runs the full height of the lane.
+   (Failures used to hang from the rail above instead -- distinct, but a mark
+   pointing the other way read as a glitch before it read as a failure.)
+   Colour agrees with all three and carries none of them alone. */
 .hours-mark {
   border-radius: 1px;
   bottom: 0;
@@ -210,15 +212,9 @@
   height: 26px;
 }
 
-/* Hung from the top rather than stood on the baseline: amber and red are the
-   same value to a red-green reader and these two are the same height, so
-   without this the one distinction the view most needs to make is the one it
-   cannot. Upside down also reads as wrong before it is read as anything. */
 .hours-mark[data-outcome="failed"] {
   background: var(--hours-failed);
-  bottom: auto;
-  height: 26px;
-  top: 0;
+  height: 38px;
 }
 
 /* Runs the window opened after: on the baseline with the marks and pointing
