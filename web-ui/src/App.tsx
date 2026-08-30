@@ -276,7 +276,20 @@ export default function App({ store }: { store?: StageStore }) {
       </div>
 
       {showModels && project ? (
-        <Models project={project.name} onClose={closeModels} />
+        // Keyed on the project, for the reason `MakeTask` below is. Everything
+        // this panel holds is about one project's binding file -- the report,
+        // a half-typed address, the name and key variable beside it, the role
+        // a click moves, and the warning that the daemon would not take the
+        // last write. Carried across a switch, that warning is redrawn with
+        // every clause about a project the reader has left, captioned with the
+        // *new* project's binding path, which was never edited at all.
+        //
+        // The filter box goes with them, and that one is a choice rather than
+        // a consequence: a model name reads the same in both projects, so it
+        // could have been carried. An empty list under a filter the reader had
+        // forgotten typing reads as "this project has nothing", which is the
+        // worse of the two ways to be wrong.
+        <Models key={project.name} project={project.name} onClose={closeModels} />
       ) : null}
 
       {showMake && project ? (
