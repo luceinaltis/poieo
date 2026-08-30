@@ -14,11 +14,17 @@
  * costs a reader nothing.
  *
  * A mark carries its run's outcome in silhouette, not only in colour: a quiet
- * run is a low tick, a run that changed something is a post, and a failure
- * runs the full height of the lane. A night of a healthy task is a picket
- * fence with a few tall posts in it, and that shape is legible before any of
- * the words are -- and to a reader for whom amber and red are one colour,
- * which they are for a great many people.
+ * run is a low tick, a run that did its work is a post, and a failure runs the
+ * full height of the lane. A night of a healthy task is a picket fence with a
+ * few tall posts in it, and that shape is legible before any of the words are
+ * -- and to a reader for whom amber and red are one colour, which they are for
+ * a great many people.
+ *
+ * "Did its work" and not "changed something", because the low tick is only
+ * available to a task that keeps a private copy: without one there is nothing
+ * to have changed, every completed run is a post, and there is no quiet night
+ * for one of these to be told apart from. `summarise` says the same thing in
+ * words, which is where getting it wrong was visible.
  */
 
 import { changedTasks } from "../changed"
@@ -135,13 +141,25 @@ function buildRow(task: string, callbacks: SkinCallbacks): Row {
  * saying one thing. There is no picture here, so this is the only way of
  * saying it.
  */
-function summarise(marks: Mark[], earlier: number, span: Span): string {
+function summarise(marks: Mark[], earlier: number, span: Span, tracked: boolean): string {
   const before = earlier > 0 ? `, ${earlier} more before that` : ""
   if (marks.length === 0) return `nothing ran in ${describeSpan(span)}${before}`
   const changed = marks.filter((mark) => mark.outcome === "succeeded").length
+  const quiet = marks.filter((mark) => mark.outcome === "nothing").length
   const failed = marks.filter((mark) => mark.outcome === "failed").length
   const parts = [`${marks.length} run${marks.length === 1 ? "" : "s"} in ${describeSpan(span)}`]
-  if (changed > 0) parts.push(`${changed} changed something`)
+  // One clause per silhouette, so this says what the lane draws.
+  //
+  // The `tracked` guard is the point of the pair. A task keeping no private
+  // copy has nothing to compare against, so `outcomeOf` calls every completed
+  // run of one `succeeded` -- read out as "changed something" that told a
+  // reader who cannot see the lane that the task had changed a thing it cannot
+  // change. But dropping the clause and stopping there would have left an
+  // untracked lane reading exactly like a tracked one whose runs all found
+  // nothing, which are two different pictures. So the quiet runs are counted
+  // too, and only a tracked task can have any.
+  if (changed > 0 && tracked) parts.push(`${changed} changed something`)
+  if (quiet > 0) parts.push(`${quiet} found nothing to do`)
   if (failed > 0) parts.push(`${failed} failed`)
   return parts.join(", ") + before
 }
@@ -195,7 +213,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
     marks.push(live)
   }
 
-  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span)
+  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span, flowState.tracked)
   row.track.replaceChildren(...marks)
 }
 

@@ -784,7 +784,7 @@ worst of them, so a dense night is a fence of folds rather than a fused bar,
 and a failure is never averaged away by the quiet runs around it.
 
 A mark carries its run's outcome in **silhouette**, not only colour — a quiet run
-is a low tick, a run that changed something is a post, and a failure runs the
+is a low tick, a run that did its work is a post, and a failure runs the
 full height of the lane. Colour agrees with all three and carries none of them
 alone, which matters most for the pair the view rests on: amber and red are one
 colour to a red-green reader. The
@@ -802,6 +802,19 @@ twelve-hour and English, and the axis is neither.
 `outcomeOf` is imported rather than reimplemented: the tally under a card on the
 graph view and a mark's height here are the same judgement, and two views
 disagreeing about whether a night was quiet is worth an import to avoid.
+
+Importing the judgement is not importing what to **call** it. A task that keeps
+no private copy has nothing to compare against, so `outcomeOf` calls every
+completed run of one `succeeded` — and read out as "changed something", the
+lane's label told a reader who cannot see it that a task had changed a thing it
+cannot change. Both views ask `tracked` before wording it: the graph says `runs`
+where it would have said `changes`, and the lane leaves the clause out.
+
+Leaving it out is only half, because it would then read exactly like a *tracked*
+lane whose runs all found nothing — and those are two different pictures, posts
+against low ticks. So the label carries **one clause per silhouette**: changed,
+found nothing to do, failed. Only a tracked task can have a quiet run at all,
+which is what keeps the two apart in words as they are on screen.
 
 **Making a card is the fifth kind of write**, and the first that creates a file
 that did not exist. Its fence is one card in the project's tasks folder: no

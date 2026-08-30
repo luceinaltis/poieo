@@ -316,15 +316,15 @@ test("the lane says in words what it draws in marks, for a reader who cannot see
 
   const track = el.querySelector('[data-task="board/chores"] .runs-track')!
   expect(track.getAttribute("aria-label")).toBe(
-    "3 runs in the last day, 1 changed something, 1 failed",
+    "3 runs in the last day, 1 changed something, 1 found nothing to do, 1 failed",
   )
   expect(
     el.querySelector('[data-task="board/revision"] .runs-track')!.getAttribute("aria-label"),
   ).toBe("nothing ran in the last day")
-  handle.update(board([run("only", HOUR)]))
+  handle.update(board([run("only", HOUR, { change: CHANGE })]))
   expect(
     el.querySelector('[data-task="board/chores"] .runs-track')!.getAttribute("aria-label"),
-  ).toBe("1 run in the last day")
+  ).toBe("1 run in the last day, 1 changed something")
 
   handle.destroy()
 })
@@ -353,6 +353,38 @@ test("a lane too narrow for its runs folds neighbours instead of fusing them", (
   const after = track().querySelectorAll(".runs-mark").length
   expect(after).toBeLessThan(before)
   expect(after).toBeGreaterThan(0)
+
+  handle.destroy()
+})
+
+test("a task with nothing to change says its runs ran, not that they changed something", () => {
+  // `outcomeOf` calls every completed run of an untracked task `succeeded` --
+  // there is nothing to compare against, so a run that ran is the whole of
+  // what there is to say. Read as "changed something" the lane told a reader
+  // who cannot see it that a task had changed a thing it cannot change. The
+  // graph view has guarded this since it was written; this one had not.
+  const untracked = FLOWS.map((flow) =>
+    flow.name === "chores" ? { ...flow, into: null } : flow,
+  )
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
+  handle.update(setRuns(initialStage(untracked), "board/chores", [run("a", HOUR), run("b", 2 * HOUR)]))
+
+  const label = el.querySelector('[data-task="board/chores"] .runs-track')!.getAttribute("aria-label")
+  expect(label).toBe("2 runs in the last day")
+
+  handle.destroy()
+})
+
+test("a tracked lane that found nothing does not read like an untracked one", () => {
+  // Two different pictures -- low ticks against posts -- and dropping the
+  // "changed" clause alone would have given them one label. Only a task with a
+  // private copy can have a quiet run at all, which is what tells them apart.
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
+  handle.update(board([run("a", HOUR), run("b", 2 * HOUR)]))
+
+  expect(el.querySelector('[data-task="board/chores"] .runs-track')!.getAttribute("aria-label")).toBe(
+    "2 runs in the last day, 2 found nothing to do",
+  )
 
   handle.destroy()
 })
