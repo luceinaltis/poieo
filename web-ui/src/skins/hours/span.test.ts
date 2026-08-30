@@ -96,10 +96,14 @@ test("the labelled hours land on the hour and inside the clock", () => {
   // Opened at seventeen past, so a label counted from the left edge rather
   // than from midnight would read 17:17 and every reader would have to do
   // arithmetic to find six o'clock.
-  const marks = ticks({ from: NOW - DAY + 17 * 60 * 1000, to: NOW })
+  const from = NOW - DAY + 17 * 60 * 1000
+  const marks = ticks({ from, to: NOW })
   expect(marks.length).toBeGreaterThanOrEqual(3)
   for (const mark of marks) {
     expect(new Date(mark.at).getMinutes()).toBe(0)
+    // Where a label sits is where its own time falls -- a label at the right
+    // hour in the wrong place is worse than no label.
+    expect(mark.x).toBeCloseTo((mark.at - from) / (NOW - from), 5)
     expect(mark.x).toBeGreaterThanOrEqual(0)
     expect(mark.x).toBeLessThanOrEqual(1)
   }
@@ -110,13 +114,38 @@ test("a wider clock counts by more than an hour rather than growing a label per 
   expect(week.length).toBeLessThanOrEqual(8)
   // ...and says so in days, because a bare clock time repeats seven times.
   expect(week.every((mark) => mark.kind === "date")).toBe(true)
-  expect(ticks({ from: NOW - 6 * HOUR, to: NOW }).every((mark) => mark.kind === "time")).toBe(true)
+})
+
+test("the cap holds at awkward widths, not only the round ones", () => {
+  // d3's tick count is a hint, not a bound: a window ~1.3 days wide -- a
+  // board that went quiet overnight -- lands between two of its intervals
+  // and comes back with eleven labels for a cap of eight.
+  for (const days of [1, 1.35, 2, 3, 4.5, 5.66, 7]) {
+    const marks = ticks({ from: NOW - days * DAY, to: NOW })
+    expect(marks.length, `${days} days`).toBeLessThanOrEqual(8)
+    expect(marks.length, `${days} days`).toBeGreaterThanOrEqual(2)
+  }
+})
+
+test("a clock time that would repeat across days is anchored by dated midnights", () => {
+  // A four-day window labels sub-day hours, so 06:00 appears four times. The
+  // midnight between each pair wears the date instead, which is what tells
+  // the fourth 06:00 from the first. One kind per axis could not say this.
+  const spread = ticks({ from: NOW - 4 * DAY, to: NOW })
+  expect(spread.some((mark) => mark.kind === "date")).toBe(true)
+  for (const mark of spread) {
+    const at = new Date(mark.at)
+    const midnight = at.getHours() === 0 && at.getMinutes() === 0
+    expect(mark.kind, at.toISOString()).toBe(midnight ? "date" : "time")
+  }
 })
 
 test("a caller with room for fewer labels counts by more", () => {
   // A phone's lane is a third of a laptop's, and eight labels there overlap
-  // into one unreadable word.
-  const span = { from: NOW - DAY, to: NOW }
+  // into one unreadable word. The window opens off the round hour on purpose:
+  // opened exactly on one, d3's coarse ladder can offer the same count to
+  // both callers, and then there is nothing here to see.
+  const span = { from: NOW - DAY + 17 * 60 * 1000, to: NOW }
   const roomy = ticks(span)
   const cramped = ticks(span, 4)
   expect(cramped.length).toBeLessThan(roomy.length)

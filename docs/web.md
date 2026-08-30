@@ -641,7 +641,11 @@ counts. They are on the lane's `aria-label`, which is the one place there
 is no picture to read them off. `skins/hours/span.ts` is the part capable of
 being wrong — how wide the window is, which runs fall inside it, where each one
 lands, how many hour labels the width can carry — so it is pure and tested alone,
-exactly as `wiring.ts` is for the graph.
+exactly as `wiring.ts` is for the graph. The one piece it does not decide itself
+is which round hours to label: that comes from `d3-scale`, because landing on
+the civil hour across a daylight-saving change is a solved problem this file
+was quietly getting wrong. The labels' wording stays ours — d3's formats are
+twelve-hour and English, and the axis is neither.
 
 `outcomeOf` is imported rather than reimplemented: the tally under a card on the
 graph view and a mark's height here are the same judgement, and two views
