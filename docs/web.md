@@ -684,6 +684,11 @@ a project the reader has left, captioned with the *new* project's binding path,
 which was never edited at all. Blanking one field by hand covered the list and
 nothing else.
 
+The filter box goes with them, and that one is a choice rather than a
+consequence — a model name reads the same in both projects, so it could have
+been carried. An empty list under a filter the reader had forgotten typing reads
+as "this project has nothing", which is the worse of the two ways to be wrong.
+
 **An offer sits above the lists, and only when there is one.** The panel makes a
 second request for it, so the catalogue never waits; when it comes back with
 something, a line appears saying an engine is answering here with models this

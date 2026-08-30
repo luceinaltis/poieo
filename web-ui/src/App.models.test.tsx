@@ -111,6 +111,7 @@ beforeEach(() => {
   localStorage.clear()
   localStorage.setItem("poieo.skin", "basic")
   fetchModels.mockReset()
+  pickModel.mockReset()
   fetchModels.mockResolvedValue(REPORT)
   container = document.createElement("div")
   document.body.append(container)
@@ -232,4 +233,8 @@ test("a warning about one project is not redrawn over the next", async () => {
   await act(async () => {})
 
   expect(container.querySelector("[data-do='not-taken']")).toBeNull()
+  // Gone because the panel started over, not because it closed: this is a
+  // switch of subject, and the reader is still looking at models.
+  expect(container.querySelector(".models")).not.toBeNull()
+  expect(fetchModels).toHaveBeenCalledWith("day job")
 })
