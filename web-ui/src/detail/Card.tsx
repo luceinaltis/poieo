@@ -20,20 +20,24 @@
 import { useState } from "react"
 
 import { fetchCard, rewriteCard, setAside } from "../api"
-import type { RewrittenCard, SetAside } from "../api"
+import type { Card as CardFields, RewrittenCard, SetAside } from "../api"
 import { useAct } from "../useAct"
 
 export function Card({
   project,
   task,
   onSetAside,
+  onAlike,
 }: {
   project: string
   task: string
   /** The board's chance to refresh: the task it lists just stopped scheduling. */
   onSetAside?(): void
+  /** "Make one like it": the three fields, parsed, for the make panel to open on. */
+  onAlike?(seed: { name: string; folder: string; prompt: string }): void
 }) {
   const [was, setWas] = useState<string | null>(null)
+  const [fields, setFields] = useState<CardFields | null>(null)
   const [text, setText] = useState("")
   const [gone, setGone] = useState(false)
   const [saved, setSaved] = useState<RewrittenCard | null>(null)
@@ -53,6 +57,7 @@ export function Card({
     }
     setWas(card.text)
     setText(card.text)
+    setFields(card)
   }
 
   const putAside = () =>
@@ -137,6 +142,24 @@ export function Card({
             >
               {busy ? "saving…" : "save"}
             </button>
+
+            {onAlike && fields ? (
+              <button
+                type="button"
+                className="card-alike"
+                data-do="make-alike"
+                disabled={busy}
+                onClick={() =>
+                  onAlike({
+                    name: fields.name,
+                    folder: fields.folder ?? "",
+                    prompt: fields.prompt ?? "",
+                  })
+                }
+              >
+                make one like it
+              </button>
+            ) : null}
 
             {/* Two presses on purpose: the first only changes this button's
                 word, so nothing destructive rides on a stray click. An edit

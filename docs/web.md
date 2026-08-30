@@ -876,6 +876,12 @@ above the button — the card starts running when it is saved, and that sentence
 is principle 7's one exception to hiding the machinery. One panel holds the
 stage's single margin, so opening it closes the other.
 
+Most new tasks are not blank pages: they are "like that one, but". The card
+fold's **make one like it** opens this panel with the three fields of an
+existing card already in it — a starting point and nothing more, everything
+editable. The seed belongs to the press that asked for it: `new task` from the
+rail is a blank page again.
+
 There is **no reload call behind it**. The daemon watches that folder, so the
 route's whole job is the file; one door rather than two that must agree.
 

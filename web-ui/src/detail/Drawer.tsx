@@ -209,6 +209,7 @@ export const Drawer = memo(function Drawer({
   asking = null,
   onClose,
   onDecided,
+  onAlike,
 }: {
   project: string
   task: string
@@ -218,6 +219,8 @@ export const Drawer = memo(function Drawer({
   asking?: Asked | null
   onClose(): void
   onDecided?(): void
+  /** "Make one like it", passed through to the card fold. */
+  onAlike?(seed: { name: string; folder: string; prompt: string }): void
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [picked, setPicked] = useState<string | null>(null)
@@ -300,7 +303,7 @@ export const Drawer = memo(function Drawer({
         {/* Under the controls, above the nights: the definition, openable.
             What the task *is* sits between what you can do to it now and
             what it has done. */}
-        <Card project={project} task={task} onSetAside={decided} />
+        <Card project={project} task={task} onSetAside={decided} onAlike={onAlike} />
 
         <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />
 

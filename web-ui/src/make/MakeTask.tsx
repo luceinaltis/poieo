@@ -28,6 +28,7 @@ export function MakeTask({
   project,
   keepsCopies,
   onClose,
+  seed,
 }: {
   project: string
   /**
@@ -39,10 +40,17 @@ export function MakeTask({
    */
   keepsCopies: boolean
   onClose(): void
+  /**
+   * "Make one like it": the fields of an existing card, to start from.
+   *
+   * A starting point and nothing more -- the panel is keyed on it, so a
+   * fresh seed is a fresh form, and everything stays editable.
+   */
+  seed?: { name: string; folder: string; prompt: string }
 }) {
-  const [name, setName] = useState("")
-  const [folder, setFolder] = useState("")
-  const [prompt, setPrompt] = useState("")
+  const [name, setName] = useState(seed?.name ?? "")
+  const [folder, setFolder] = useState(seed?.folder ?? "")
+  const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [made, setMade] = useState<string | null>(null)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
