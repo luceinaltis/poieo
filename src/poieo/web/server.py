@@ -1054,9 +1054,88 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
         return JSONResponse({"ok": True, "task": spec.slug, "kept": str(kept)})
 
+    async def project_task_rename(request: Request) -> JSONResponse:
+        """Rename a task: the fifth kind's fourth verb, and only the filename.
+
+        The filename *is* the task's identity -- the `name:` inside the card is
+        a title the rewrite already owns -- so this moves the file and touches
+        nothing in it. The body arrives byte for byte, exactly as set aside
+        moves a card whole.
+
+        The fence is make's, for make's reason: the new name is turned into a
+        filename here rather than taken as one, so a name that reads like a
+        path is refused rather than quietly rewritten, and a name the folder
+        already uses is answered rather than settled by overwriting somebody's
+        card.
+
+        The schedule stops now, with the same hold set aside takes. The old
+        name's runner is still armed against a file that has moved, and the
+        watched folder now holds the new one -- without the hold the same work
+        would fire twice until a restart.
+        """
+        project, spec, missing = _asked_card(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        path = spec.source_path
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        title = str((body or {}).get("name") or "").strip()
+
+        if "/" in title or chr(92) in title or title.strip(".") == "":
+            return JSONResponse({"error": "a task's name is not a path"}, status_code=400)
+        slug = _slug(title)
+        if not slug:
+            return JSONResponse({"error": "a task needs a name that can be a filename"}, status_code=400)
+        if slug.split(".")[0].upper() in _RESERVED:
+            return JSONResponse({"error": f"'{slug}' is not a usable filename"}, status_code=400)
+
+        cards = config.resolve_path(config.cards)
+        # The suffix rides along: a rename is not a change of format.
+        moved = cards / f"{slug}{path.suffix}"
+
+        def _move() -> JSONResponse | None:
+            # Every suffix load_cards reads, not only this card's: a .yml of the
+            # new name would load beside the move, and the folder would then stop
+            # loading at all. Checked here rather than before the thread hop so
+            # the scan and the move are one act, as set aside's is.
+            taken = [
+                other.name for other in cards.iterdir() if other.stem == slug and other.suffix.lower() in _CARD_SUFFIXES
+            ]
+            if taken:
+                return JSONResponse(
+                    {"error": f"this project already has a task called '{slug}' ({taken[0]})"},
+                    status_code=409,
+                )
+            try:
+                os.replace(path, moved)
+            except OSError:
+                # Set aside, or moved by a hand: the board lists the task until
+                # a restart, so the file being gone is an answer, not a 500.
+                return JSONResponse(
+                    {"error": f"the card could not be moved; task '{spec.slug}' may already be gone"},
+                    status_code=409,
+                )
+            return None
+
+        refused = await asyncio.to_thread(_move)
+        if refused is not None:
+            return refused
+
+        runner = _runner_for(daemon, project.config.display_name, spec.slug)
+        if runner is not None:
+            runner.pause()
+
+        return JSONResponse({"ok": True, "task": slug, "path": str(moved)})
+
     async def _card_verbs(request: Request) -> JSONResponse:
         if request.method == "DELETE":
             return await project_task_set_aside(request)
+        if request.method == "PATCH":
+            return await project_task_rename(request)
         return await project_task_card(request)
 
     async def project_models_use(request: Request) -> JSONResponse:
@@ -1537,7 +1616,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route(
             "/api/projects/{project}/tasks/{task}",
             _card_verbs,
-            methods=["GET", "PUT", "DELETE"],
+            methods=["GET", "PUT", "PATCH", "DELETE"],
         ),
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),

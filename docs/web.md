@@ -28,6 +28,7 @@ to be true to add a sixth.
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
+| `PATCH /api/projects/{p}/tasks/{f}` | **make** — rename that card's file, body untouched |
 | `DELETE /api/projects/{p}/tasks/{f}` | **make** — set the task aside: the card moves to `.set-aside/`, whole |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
@@ -870,7 +871,18 @@ lifetimes: the move outlives a restart, and the schedule stops now with the
 same hold the pause button takes. Until a restart the task stays on the board,
 paused; the restart is what takes it off.
 
-The rail item that calls it is `make/MakeTask.tsx`, beside `models/` because
+The fourth verb is **rename**, `PATCH` with a name and nothing else. The
+filename is the task's identity, so changing it is a move of the file and no
+edit inside it — the body arrives byte for byte, and the `name:` line stays
+whatever the rewrite left there. Make's fence holds: the new name is turned
+into a filename rather than taken as one, so one that reads like a path is
+refused, and one the folder already uses (in any suffix `load_cards` reads) is
+answered rather than settled by overwriting somebody's card. The schedule stops
+with the same hold set aside takes — the old name's runner is armed against a
+file that has moved, and the watched folder now holds the new one, so without
+the hold the same work fires twice until a restart.
+
+The rail item that calls **make** is `make/MakeTask.tsx`, beside `models/` because
 making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
 above the button — the card starts running when it is saved, and that sentence
 is principle 7's one exception to hiding the machinery. One panel holds the
