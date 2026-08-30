@@ -567,9 +567,9 @@ web-ui/src/
   api.ts            everything that talks to the daemon
   shell/stageStore  fetch history, open the stream, hold the model
   state/stage.ts    the one place run events are interpreted
-  skins/            how that model is drawn — basic, hours
+  skins/            how that model is drawn — basic, runs
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
-  skins/hours/span  where a run falls on the shared clock; pure, and tested alone
+  skins/runs/span   where a run falls on the shared clock; pure, and tested alone
   detail/           the drawer: one task, turn by turn, plus control
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
@@ -582,7 +582,7 @@ task.
 
 The **rail** is the nav down the left: what the page is *for*, where the bar's
 controls are a fixed handful about the board already on screen. It holds
-`board`, `hours`, `models` and `new task` today and is where the next view
+`board`, `runs`, `models` and `new task` today and is where the next view
 lands. `board` is a rail item
 rather than a close box, because "no panel over it" is a place you can be and
 closing is not — the rail always says where you are, in one item marked
@@ -705,7 +705,7 @@ with nothing stored and a reader with something unreadable stored get the same
 page.
 
 **Each skin answers one question, and a new one has to bring its own.** `basic`
-answers what this project does and where it is right now; `hours` answers what
+answers what this project does and where it is right now; `runs` answers what
 it has been doing, and when. A third skin that answers a question one of those
 already answers is a second way of saying an existing thing, which DESIGN.md
 refuses. (The 3D workshop, `atelier`, answered "is it working" and was removed
@@ -713,7 +713,7 @@ whole -- its id still lands on `basic` via the fallback.)
 
 Answering a *different* question also decides where a skin is offered. The
 bar's picker holds renderings of the board, so with one rendering it does not
-exist at all -- the furniture rule the project name follows -- while `hours`
+exist at all -- the furniture rule the project name follows -- while `runs`
 is marked `standalone` in its module and surfaces as a rail item instead: the
 rail lists what a reader comes to the page *for*, and "what has it been doing"
 is a thing to come for, not a way to draw the thing already on screen. Should
@@ -753,15 +753,17 @@ so it is pure and tested on its own; measuring containers and running an arrow
 between two of them is arrangement, and jsdom has no geometry to check it
 against anyway.
 
-`hours` draws the same board against time: one clock across the top, one lane per
-task, one mark per run, and the hour rules carried down through every lane. The
+`runs` draws the same board against time, and is named for the noun it
+draws: one clock across the top, one lane per task, one mark per run, and
+the hour rules carried down through every lane. The
 rules are the reason it exists — a tally says three tasks failed, and only a
 shared clock says they all failed at 04:12, which is one problem rather than
 three. The window is the last day, and when the newest run on the board is
 older than that it stretches to a day *past* that run — so a board that
 stopped on Tuesday opens on its last living day followed by the silence
-since, rather than on an empty grid that looks like a board that never ran. Runs the window opened
-after are counted at the left edge rather than dropped, and marks too close to
+since, rather than on an empty grid that looks like a board that never ran.
+What the window opened after is counted at the left edge rather than
+dropped, and marks too close to
 tell apart — a 15-minute task on a phone — are folded into one carrying the
 worst of them, so a dense night is a fence of folds rather than a fused bar,
 and a failure is never averaged away by the quiet runs around it.
@@ -773,7 +775,7 @@ alone, which matters most for the pair the view rests on: amber and red are one
 colour to a red-green reader. The
 counts are deliberately **not** written beside the lane: the marks are the
 counts. They are on the lane's `aria-label`, which is the one place there
-is no picture to read them off. `skins/hours/span.ts` is the part capable of
+is no picture to read them off. `skins/runs/span.ts` is the part capable of
 being wrong — how wide the window is, which runs fall inside it, where each one
 lands, how many hour labels the width can carry — so it is pure and tested alone,
 exactly as `wiring.ts` is for the graph. The one piece it does not decide itself

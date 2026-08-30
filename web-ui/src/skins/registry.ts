@@ -4,12 +4,12 @@
 
 import type { Skin } from "./contract"
 import { basic } from "./basic"
-import { hours } from "./hours"
+import { runs } from "./runs"
 
-export const SKINS: Skin[] = [basic, hours]
+export const SKINS: Skin[] = [basic, runs]
 
 // The graph is what answers "what does this project do, and where is it right
-// now" -- which is the question a reader opens the page with. hours answers
+// now" -- which is the question a reader opens the page with. runs answers
 // the other one, "what has it been doing, and when" -- which the graph cannot
 // reach, because it does not put time on the screen.
 // basic is also what an unknown or unreadable choice lands on -- including

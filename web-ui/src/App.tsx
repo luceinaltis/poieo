@@ -28,7 +28,7 @@ import "./app.css"
 const PROJECT_KEY = "poieo.project"
 // The rendering the *board* was last drawn with, apart from `poieo.skin`
 // (which may name a standalone place): it is what the board rail item comes
-// back to after a visit to hours.
+// back to after a visit to runs.
 const BOARD_SKIN_KEY = "poieo.skin.board"
 
 const STATUS_LABEL: Record<string, string> = {
@@ -118,7 +118,7 @@ export default function App({ store }: { store?: StageStore }) {
   }
 
   // Standing somewhere other than the board -- a rail place drawn on the
-  // stage, like hours -- rather than a rendering of it.
+  // stage, like runs -- rather than a rendering of it.
   const standing = skinById(skinId).standalone ? skinById(skinId).id : null
 
   const goPlace = useCallback((id: string) => {

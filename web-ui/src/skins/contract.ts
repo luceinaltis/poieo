@@ -31,7 +31,7 @@ export interface Skin {
    *
    * The picker on the bar answers "how should the board be drawn"; the rail
    * answers "what did you come to this page for". A skin that answers a
-   * different question from the board -- hours answers *when*, the board
+   * different question from the board -- runs answers *when*, the board
    * answers *what and where* -- is the second kind, and listing it among the
    * renderings made a place look like a font choice.
    */

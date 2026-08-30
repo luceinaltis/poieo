@@ -1,7 +1,7 @@
 /**
  * The clock every lane shares, and where a run sits on it.
  *
- * This is the part of the hours view capable of being wrong -- how wide the
+ * This is the part of the runs view capable of being wrong -- how wide the
  * window is, which runs fall inside it, where each one lands -- so it is pure
  * and tested on its own, the way `skins/wiring.ts` is for the graph. Drawing a
  * tick at a fraction of a lane is arrangement, and jsdom has no geometry to

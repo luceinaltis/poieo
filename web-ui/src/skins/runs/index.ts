@@ -1,5 +1,5 @@
 /**
- * The hours view: what the board has been doing, and when.
+ * The runs view: what the board has been doing, and when.
  *
  * The graph answers what a project does and where it is right now. It cannot
  * answer the question a person actually opens this page with in the morning
@@ -26,7 +26,7 @@ import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import type { StageState, TaskState } from "../../state/stage"
 import { DAY, crowd, lane, ticks, windowOf } from "./span"
 import type { Mark, Span } from "./span"
-import "./hours.css"
+import "./runs.css"
 
 /**
  * How often the clock is allowed to move.
@@ -111,19 +111,19 @@ function labelled(node: HTMLElement): HTMLElement {
 
 function buildRow(task: string, callbacks: SkinCallbacks): Row {
   const root = document.createElement("div")
-  root.className = "hours-lane"
+  root.className = "runs-lane"
   root.dataset.task = task
 
-  const head = element("button", "hours-head", root)
+  const head = element("button", "runs-head", root)
   ;(head as HTMLButtonElement).type = "button"
   head.addEventListener("click", () => callbacks.onSelectTask(task))
 
   return {
     root,
-    name: element("span", "hours-name", head),
-    trigger: element("span", "hours-trigger", head),
-    track: labelled(element("div", "hours-track", root)),
-    last: element("span", "hours-last", root),
+    name: element("span", "runs-name", head),
+    trigger: element("span", "runs-trigger", head),
+    track: labelled(element("div", "runs-track", root)),
+    last: element("span", "runs-last", root),
   }
 }
 
@@ -160,7 +160,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
   // of history would read as one that started this morning.
   if (drawn.earlier > 0) {
     const before = document.createElement("span")
-    before.className = "hours-earlier"
+    before.className = "runs-earlier"
     before.textContent = `‹ +${drawn.earlier}`
     before.title = `${drawn.earlier} more before this window`
     marks.push(before)
@@ -176,7 +176,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
 
   for (const fold of folds) {
     const tick = document.createElement("span")
-    tick.className = "hours-mark"
+    tick.className = "runs-mark"
     tick.dataset.outcome = fold.outcome
     tick.style.left = `${fold.x * 100}%`
     tick.title =
@@ -190,7 +190,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
   // the right edge, and the only mark that moves on its own.
   if (flowState.status === "running") {
     const live = document.createElement("span")
-    live.className = "hours-live"
+    live.className = "runs-live"
     live.title = "running now"
     marks.push(live)
   }
@@ -199,21 +199,21 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
   row.track.replaceChildren(...marks)
 }
 
-export const hours: Skin = {
-  id: "hours",
-  label: "Hours",
+export const runs: Skin = {
+  id: "runs",
+  label: "Runs",
   // A place, not a rendering: the rail carries it, the picker does not.
   standalone: true,
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
-    const root = element("div", "hours", el)
-    const axis = element("div", "hours-axis", root)
-    const caption = element("span", "hours-caption", axis)
-    const scale = element("div", "hours-scale", axis)
-    const body = element("div", "hours-body", root)
+    const root = element("div", "runs", el)
+    const axis = element("div", "runs-axis", root)
+    const caption = element("span", "runs-caption", axis)
+    const scale = element("div", "runs-scale", axis)
+    const body = element("div", "runs-body", root)
     // Behind every lane rather than inside each one: the hour rules are what
     // make two lanes comparable, so there is one set of them for the board.
-    const rules = element("div", "hours-rules", body)
+    const rules = element("div", "runs-rules", body)
 
     const rows = new Map<string, Row>()
     const painted = new Map<string, TaskState>()
@@ -232,7 +232,7 @@ export const hours: Skin = {
       for (const mark of ticks(span, room())) {
         const at = new Date(mark.at)
         const label = document.createElement("span")
-        label.className = "hours-tick"
+        label.className = "runs-tick"
         label.style.left = `${mark.x * 100}%`
         label.textContent =
           mark.kind === "date"
@@ -241,7 +241,7 @@ export const hours: Skin = {
         labels.push(label)
 
         const rule = document.createElement("span")
-        rule.className = "hours-rule"
+        rule.className = "runs-rule"
         rule.dataset.kind = mark.kind
         rule.style.left = `${mark.x * 100}%`
         lines.push(rule)
@@ -251,7 +251,7 @@ export const hours: Skin = {
       // The present, down the right edge of every lane, so a mark against it
       // reads as still going rather than as merely the last one.
       const edge = document.createElement("span")
-      edge.className = "hours-edge"
+      edge.className = "runs-edge"
       rules.replaceChildren(...lines, edge)
     }
 
