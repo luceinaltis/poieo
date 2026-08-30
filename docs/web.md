@@ -803,6 +803,13 @@ twelve-hour and English, and the axis is neither.
 graph view and a mark's height here are the same judgement, and two views
 disagreeing about whether a night was quiet is worth an import to avoid.
 
+Importing the judgement is not importing what to **call** it. A task that keeps
+no private copy has nothing to compare against, so `outcomeOf` calls every
+completed run of one `succeeded` — and read out as "changed something", the
+lane's label told a reader who cannot see it that a task had changed a thing it
+cannot change. Both views ask `tracked` before wording it: the graph says
+`runs` where it would have said `changes`, and the lane leaves the clause out.
+
 **Making a card is the fifth kind of write**, and the first that creates a file
 that did not exist. Its fence is one card in the project's tasks folder: no
 graph, no binding, and no path out of that folder — the name is turned into a

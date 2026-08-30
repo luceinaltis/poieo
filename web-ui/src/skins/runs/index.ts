@@ -135,13 +135,18 @@ function buildRow(task: string, callbacks: SkinCallbacks): Row {
  * saying one thing. There is no picture here, so this is the only way of
  * saying it.
  */
-function summarise(marks: Mark[], earlier: number, span: Span): string {
+function summarise(marks: Mark[], earlier: number, span: Span, tracked: boolean): string {
   const before = earlier > 0 ? `, ${earlier} more before that` : ""
   if (marks.length === 0) return `nothing ran in ${describeSpan(span)}${before}`
   const changed = marks.filter((mark) => mark.outcome === "succeeded").length
   const failed = marks.filter((mark) => mark.outcome === "failed").length
   const parts = [`${marks.length} run${marks.length === 1 ? "" : "s"} in ${describeSpan(span)}`]
-  if (changed > 0) parts.push(`${changed} changed something`)
+  // Only where there is something to have changed. A task keeping no private
+  // copy has nothing to compare against, so `outcomeOf` calls every completed
+  // run of one `succeeded` -- and read out as "changed something" that told a
+  // reader who cannot see the lane that the task had changed a thing it cannot
+  // change. The graph view has said "runs" for these since it was written.
+  if (changed > 0 && tracked) parts.push(`${changed} changed something`)
   if (failed > 0) parts.push(`${failed} failed`)
   return parts.join(", ") + before
 }
@@ -195,7 +200,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
     marks.push(live)
   }
 
-  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span)
+  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span, flowState.tracked)
   row.track.replaceChildren(...marks)
 }
 

@@ -356,3 +356,21 @@ test("a lane too narrow for its runs folds neighbours instead of fusing them", (
 
   handle.destroy()
 })
+
+test("a task with nothing to change says its runs ran, not that they changed something", () => {
+  // `outcomeOf` calls every completed run of an untracked task `succeeded` --
+  // there is nothing to compare against, so a run that ran is the whole of
+  // what there is to say. Read as "changed something" the lane told a reader
+  // who cannot see it that a task had changed a thing it cannot change. The
+  // graph view has guarded this since it was written; this one had not.
+  const untracked = FLOWS.map((flow) =>
+    flow.name === "chores" ? { ...flow, into: null } : flow,
+  )
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
+  handle.update(setRuns(initialStage(untracked), "board/chores", [run("a", HOUR), run("b", 2 * HOUR)]))
+
+  const label = el.querySelector('[data-task="board/chores"] .runs-track')!.getAttribute("aria-label")
+  expect(label).toBe("2 runs in the last day")
+
+  handle.destroy()
+})
