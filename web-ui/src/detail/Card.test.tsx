@@ -5,8 +5,9 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const fetchCard = vi.hoisted(() => vi.fn())
 const rewriteCard = vi.hoisted(() => vi.fn())
+const setAside = vi.hoisted(() => vi.fn())
 
-vi.mock("../api", () => ({ fetchCard, rewriteCard }))
+vi.mock("../api", () => ({ fetchCard, rewriteCard, setAside }))
 
 import { Card } from "./Card"
 
@@ -16,6 +17,8 @@ let root: Root
 beforeEach(() => {
   fetchCard.mockReset()
   rewriteCard.mockReset()
+  setAside.mockReset()
+  onSetAside.mockReset()
   fetchCard.mockResolvedValue({
     task: "chores",
     text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
@@ -33,9 +36,11 @@ afterEach(() => {
   container.remove()
 })
 
+const onSetAside = vi.fn()
+
 async function render() {
   await act(async () => {
-    root.render(<Card project="board" task="chores" />)
+    root.render(<Card project="board" task="chores" onSetAside={onSetAside} />)
   })
 }
 
@@ -142,4 +147,43 @@ test("a card the daemon cannot hand back says so rather than an empty editor", a
   await open()
   expect(container.textContent).toContain("could not be read")
   expect(container.querySelector(".card-text")).toBeNull()
+})
+
+test("set aside asks twice, and the second press is the one that acts", async () => {
+  setAside.mockResolvedValue({ ok: true, task: "chores", kept: "cards/.set-aside/chores.yaml" })
+  await open()
+
+  const button = () => container.querySelector<HTMLElement>('[data-do="set-aside"]')!
+  await act(async () => button().click())
+  // First press arms it; nothing has left the machine.
+  expect(setAside).not.toHaveBeenCalled()
+  expect(button().textContent).toContain("sure")
+
+  await act(async () => button().click())
+  expect(setAside).toHaveBeenCalledWith("board", "chores")
+  // The sentence says where the file went and what a restart does.
+  expect(container.textContent).toContain(".set-aside")
+  expect(container.textContent).toContain("restart")
+  expect(onSetAside).toHaveBeenCalled()
+})
+
+test("an armed set-aside stands down if the person edits instead", async () => {
+  await open()
+  const button = () => container.querySelector<HTMLElement>('[data-do="set-aside"]')!
+  await act(async () => button().click())
+  await type("name: Chores\nfolder: ../work\nprompt: second thoughts")
+
+  expect(button().textContent).not.toContain("sure")
+  expect(setAside).not.toHaveBeenCalled()
+})
+
+test("a refused set-aside says why and does not claim the file moved", async () => {
+  setAside.mockResolvedValue({ ok: false, error: "the card could not be moved" })
+  await open()
+  const button = () => container.querySelector<HTMLElement>('[data-do="set-aside"]')!
+  await act(async () => button().click())
+  await act(async () => button().click())
+
+  expect(container.querySelector('[role="alert"]')!.textContent).toContain("could not be moved")
+  expect(container.textContent).not.toContain("restart")
 })
