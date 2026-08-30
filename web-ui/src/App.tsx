@@ -276,7 +276,14 @@ export default function App({ store }: { store?: StageStore }) {
       </div>
 
       {showModels && project ? (
-        <Models project={project.name} onClose={closeModels} />
+        // Keyed on the project, for the reason `MakeTask` below is. Everything
+        // this panel holds is about one project's binding file -- the report,
+        // a half-typed address, the name and key variable beside it, and the
+        // warning that the daemon would not take the last write. Carried
+        // across a switch, that warning is redrawn with every clause about a
+        // project the reader has left, captioned with the *new* project's
+        // binding path, which was never edited at all.
+        <Models key={project.name} project={project.name} onClose={closeModels} />
       ) : null}
 
       {showMake && project ? (

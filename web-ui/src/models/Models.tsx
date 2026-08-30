@@ -63,7 +63,11 @@ export function Models({
   // Blanking belongs to a change of subject, not to a re-ask. Every refresh
   // and every write asks again, and a panel that flashed to "asking…" each
   // time would take away the list the reader is comparing against.
-  useEffect(() => setReport(undefined), [project])
+  //
+  // The change of subject is handled a level up, by `App` keying this on the
+  // project: one field reset by hand covered the list and left the address
+  // half-typed for another project and the "daemon has not taken it" warning
+  // behind, redrawn under the new project's name.
 
   useEffect(() => {
     let live = true

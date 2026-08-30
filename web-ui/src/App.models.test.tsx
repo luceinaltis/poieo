@@ -22,12 +22,15 @@ const fetchRunEvents = vi.hoisted(() => vi.fn(async () => []))
 // The panel's second read, for engines this project cannot reach. Same reason
 // as the drawer's above: unmocked it reaches jsdom's fetch with a relative URL.
 const fetchUndeclared = vi.hoisted(() => vi.fn(async () => []))
+// The write below, so a warning it raises can be carried across a project switch.
+const pickModel = vi.hoisted(() => vi.fn())
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   fetchModels,
   fetchRuns,
   fetchRunEvents,
   fetchUndeclared,
+  pickModel,
 }))
 
 import App from "./App"
@@ -200,4 +203,33 @@ test("closing the panel puts the board back", async () => {
   })
 
   expect(container.querySelector(".models")).toBeNull()
+})
+
+test("a warning about one project is not redrawn over the next", async () => {
+  // The worst shape a stale panel can have. The warning names the file, the
+  // ref and the daemon's reason, so carried across a switch every clause is
+  // about a project the reader is no longer looking at -- and it is captioned
+  // with the *new* project's binding path, which was never edited at all.
+  pickModel.mockResolvedValue({
+    ok: true,
+    status: "using",
+    ref: "ollama/qwen3:32b",
+    adopted: false,
+    why: "task 'chores': provider 'routed': $OPENROUTER_API_KEY is not set",
+  })
+  await open()
+  await act(async () => button("open-models")!.click())
+  await act(async () => {
+    container.querySelector<HTMLElement>("[data-do='use']")!.click()
+  })
+  expect(container.querySelector("[data-do='not-taken']")).not.toBeNull()
+
+  await act(async () => {
+    const pick = container.querySelector<HTMLSelectElement>(".shell-project-pick")!
+    pick.value = "day job"
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  await act(async () => {})
+
+  expect(container.querySelector("[data-do='not-taken']")).toBeNull()
 })
