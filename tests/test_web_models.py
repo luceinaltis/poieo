@@ -1381,3 +1381,59 @@ def test_an_endpoint_the_daemon_takes_says_that_too(tmp_path, monkeypatch):
 
     assert body["adopted"] is True
     assert "why" not in body
+
+
+# -- one server is one endpoint, however it is spelled ------------------------
+
+
+def test_an_address_this_project_already_reaches_is_refused_under_any_name(tmp_path, monkeypatch):
+    """The `{engine}` branch has always compared addresses -- that is what the
+    offer is drawn from. The `{url}` branch guarded the *name* only, so typing
+    in the address of a server already declared wrote it into one file twice,
+    under two names, pointing at one port."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, detect_module.Engine("localhost", "localhost", "ollama", ("m",), "http://localhost:11434"))
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://localhost:11434")
+
+    assert reply.status_code == 409
+    # Named, because "already reaches it" over an endpoint called something
+    # else is a sentence the reader cannot act on.
+    assert "local" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_every_spelling_of_one_machine_is_one_endpoint(tmp_path, monkeypatch):
+    """`127.0.0.1` and `localhost` are one server, and `detect.one_machine` is
+    what says so -- the same rule the offer above the box is drawn from."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, detect_module.Engine("127-0-0-1", "127.0.0.1", "ollama", ("m",), "http://127.0.0.1:11434"))
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://127.0.0.1:11434")
+
+    assert reply.status_code == 409
+    assert "local" in reply.json()["error"]
+
+
+def test_a_name_the_file_no_longer_has_is_not_refused(tmp_path, monkeypatch):
+    """The spec in memory can be a step behind the file, which this route
+    already says fifty lines down. Asking it whether a name is taken answered
+    409 over an endpoint the file does not have -- while `poieo config add`,
+    which reads the file, accepted the same one."""
+    _machine(monkeypatch, {})
+    _found(monkeypatch, _OFFICE)
+    with_office = _BLOCK.replace(
+        "default:",
+        "  office:\n    type: openai_compatible\n    base_url: http://elsewhere:9000/v1\ndefault:",
+    )
+    client = _client(tmp_path, binding=with_office, tasks=False)
+    # Somebody removes it from the file by hand; the daemon has not reread.
+    (tmp_path / "b.yaml").write_text(_BLOCK, encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", name="office")
+
+    assert reply.status_code == 200, reply.text
+    assert "office:" in (tmp_path / "b.yaml").read_text(encoding="utf-8")

@@ -211,6 +211,31 @@ def _as_declared(engine: "Engine") -> "ProviderSpec":
     return ProviderSpec(type=engine.type, base_url=engine.base_url, api_key_env=engine.api_key_env or None)
 
 
+def already(path: Path, engine: "Engine") -> str | None:
+    """Why this binding already reaches that endpoint, in words, or None.
+
+    Read from the **file**, not from a spec somebody is holding: a daemon's
+    in-memory copy can be a step behind a terminal edit, and answering from it
+    refused an endpoint the file does not have -- while the same command in the
+    terminal accepted it. `declare` reads the file too, so this is the same
+    question asked one moment earlier, in order to say something better than
+    "nothing new" about it.
+    """
+    from .binding import load_binding
+    from .detect import declared_as
+
+    providers = load_binding(path).providers
+    name = declared_as(providers, engine.key, engine.type, engine.base_url)
+    if name is None:
+        return None
+    if name == engine.key:
+        return (
+            f"{path} already declares '{name}' -- give this one another name, "
+            f"since one already there is never overwritten"
+        )
+    return f"{path} already reaches that endpoint, as '{name}'"
+
+
 def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     """Add each engine to ``providers:`` that is not already there.
 
@@ -221,12 +246,19 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     choosing is what `config use` is for.
     """
     from .binding import load_binding
+    from .detect import declared_as
 
     path = Path(path)
     original = path.read_text(encoding="utf-8")
     was = load_binding(path)
 
-    fresh = [engine for engine in engines if engine.key not in was.providers]
+    # By address as well as by key. Filtering on the key alone wrote one server
+    # into one file twice: an Ollama declared as `fast` is one this project
+    # reaches, and adding it again under the name detection would have picked
+    # is not adding an endpoint, it is adding a second word for one.
+    fresh = [
+        engine for engine in engines if declared_as(was.providers, engine.key, engine.type, engine.base_url) is None
+    ]
     if not fresh:
         return []
 

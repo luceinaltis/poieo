@@ -431,3 +431,35 @@ def test_an_address_with_a_typo_in_it_says_which_typo(tmp_path, monkeypatch):
     # Not the sentence for a server that is switched off. That one has the
     # reader checking their machine over a typo in what they typed.
     assert "nothing usable answered" not in result.output
+
+
+def test_an_address_this_project_already_reaches_is_refused_under_any_name(tmp_path, monkeypatch):
+    """`declare` filtered on the key alone, so an Ollama already declared as
+    `ollama` was written in again as `localhost` -- one server, one file, two
+    names, and a picker offering the same models twice."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    _at(monkeypatch, Engine("localhost", "localhost", "ollama", ("qwen3:32b",), "http://localhost:11434"))
+
+    result = runner.invoke(app, ["config", "add", "http://localhost:11434"])
+
+    assert result.exit_code != 0
+    assert "ollama" in result.output
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_looking_at_this_machine_does_not_declare_one_server_twice(tmp_path, monkeypatch):
+    """The no-address form, which passes everything detection found straight to
+    `declare`. A machine's Ollama declared under a name somebody chose is one
+    this project reaches, and finding it again is not news."""
+    path = _project(tmp_path, BINDING.replace("  ollama:", "  fast:").replace("provider: ollama", "provider: fast"))
+    monkeypatch.chdir(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    _machine_with(monkeypatch, OLLAMA)
+
+    result = runner.invoke(app, ["config", "add"])
+
+    assert result.exit_code == 0, result.output
+    assert "nothing new" in result.output.lower()
+    assert path.read_text(encoding="utf-8") == before

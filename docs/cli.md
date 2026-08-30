@@ -243,6 +243,21 @@ It **only adds**, and the boundary is the point:
 An engine with no address is declared without one — Claude's SDK knows where it
 lives, and a guessed `base_url` is worse than none.
 
+**Already declared means already reached, by address and not by name.**
+`detect.declared_as` is the rule: the key, then the address through
+`one_machine` — so `localhost:11434` and `127.0.0.1:11434` are one server — and
+for an endpoint with no address at all, the type, since Claude's SDK resolves
+its own and there is nothing to compare. Filtering on the key alone wrote one
+server into one file twice, under two names, pointing at one port; and the
+board's offer had been comparing addresses all along, so the offer it withheld
+was one this command would happily have written in.
+
+The same rule decides the refusal, from `rebind.already`, **read off the file**.
+The board used to ask the spec it was holding, which a terminal edit can leave a
+step behind — so it answered "already declares 'office'" over an endpoint the
+file does not have, while this command accepted the same one. Two hand-copied
+spellings of one question, including the sentence, written out twice.
+
 The key leads each block it prints, because that is what `config use` takes
 back — but **what the thing is** is printed beside it, from `Engine.known_as`.
 `vllm` is the name detection picks for a port vLLM and SGLang share, and only
