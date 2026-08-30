@@ -105,14 +105,30 @@ export function Models({
   // from asking it, not from a field asking them to classify their own server.
   const addAt = () => {
     if (!at.trim()) return
-    void act(() =>
-      addEngine(project, {
+    void act(async () => {
+      const answer = await addEngine(project, {
         url: at.trim(),
         ...(atName.trim() ? { name: atName.trim() } : {}),
         ...(atKeyEnv.trim() ? { key_env: atKeyEnv.trim() } : {}),
-      }),
-    ).then((sent) => {
-      if (sent) setAt("")
+      })
+      // Emptied here and not off `act`'s answer, which is *whether the request
+      // went out* -- a refused address counts, and clearing on it left the
+      // reader with "nothing usable answered at ..." beside an empty box and a
+      // dead button, having to retype the address to find the typo in it.
+      //
+      // All three together, as one thing typed. `name` and `key_env` were
+      // never cleared at all, so a name meant for one endpoint rode along to
+      // the next address and was refused as a duplicate of the one just added.
+      // `ok` alone is not enough, for the reason `MakeTask` gives beside its
+      // own: a 2xx whose body did not parse arrives as `{ok: true}` with
+      // nothing in it, and emptying the form over an endpoint that may not
+      // have been declared is the same loss under a friendlier status.
+      if (answer.ok && answer.engine) {
+        setAt("")
+        setAtName("")
+        setAtKeyEnv("")
+      }
+      return answer
     })
   }
 
@@ -273,6 +289,7 @@ export function Models({
               aria-label="Address of an engine"
               placeholder="http://gpu-box:8001"
               value={at}
+              disabled={busy}
               onChange={(event) => setAt(event.target.value)}
             />
             <div className="models-at-more">
@@ -281,6 +298,7 @@ export function Models({
                 aria-label="What to call it"
                 placeholder="name it (optional)"
                 value={atName}
+                disabled={busy}
                 onChange={(event) => setAtName(event.target.value)}
               />
               <input
@@ -288,6 +306,7 @@ export function Models({
                 aria-label="Variable its key is read from"
                 placeholder="key variable (optional)"
                 value={atKeyEnv}
+                disabled={busy}
                 onChange={(event) => setAtKeyEnv(event.target.value)}
               />
             </div>
