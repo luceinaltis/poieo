@@ -13,7 +13,7 @@ import pytest
 from poieo.binding import ProviderSpec
 from poieo.errors import ProviderError
 from poieo.providers import build_provider
-from poieo.providers.base import LLMRequest, ToolDef
+from poieo.providers.base import Hands, LLMRequest, ToolDef
 
 
 def _request(**kwargs) -> LLMRequest:
@@ -252,3 +252,96 @@ def test_a_model_id_that_could_not_be_an_argument_is_refused(monkeypatch):
         provider.plan(_request(model='gpt-5 & echo "oops"'))
 
     assert "model" in str(raised.value)
+
+
+# -- hands: each harness fenced the way its vendor supports ---------------------
+
+
+async def _ran(call):  # pragma: no cover - a stand-in, never reached in these tests
+    return "done", False
+
+
+def _lent(**kwargs) -> Hands:
+    fields = {"run": _ran, "workdir": "/work", "max_turns": 12, "toolsets": ("files", "shell")}
+    fields.update(kwargs)
+    return Hands(**fields)
+
+
+def test_claude_code_hands_its_own_tools_over_and_keeps_the_built_ins_off(monkeypatch):
+    """poieo's fence does not move: the harness gets poieo's tools and only
+    those, so every call still goes through the executor -- and through the
+    container, when the task asked for one."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="claude_code"))
+
+    options = provider.plan(_request(tools=[HANDS], hands=_lent()))
+
+    # Still empty. A built-in Write would reach the disk without passing the
+    # seam, which is the whole thing this arrangement exists to prevent.
+    assert options["tools"] == []
+    assert options["allowed_tools"] == ["mcp__poieo__write_file"]
+    assert options["cwd"] == "/work"
+    # The node's own ceiling, or an unattended harness has none at all.
+    assert options["max_turns"] == 12
+
+
+def test_claude_code_runs_a_boxed_step_because_the_box_is_still_poieos(monkeypatch):
+    """The container is around the *executor*, and the executor is what the
+    harness is calling. Nothing about that changes when the caller is Claude."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="claude_code"))
+
+    options = provider.plan(_request(tools=[HANDS], hands=_lent(boxed=True)))
+
+    assert options["allowed_tools"] == ["mcp__poieo__write_file"]
+
+
+def test_codex_refuses_a_step_that_asked_for_a_container(monkeypatch):
+    """Codex brings its own fence and cannot be put inside poieo's. A fence
+    that is asked for and not honoured is worse than one that was never
+    offered, because nobody knows which half is holding."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="codex"))
+
+    with pytest.raises(ProviderError) as raised:
+        provider.plan(_request(tools=[HANDS], hands=_lent(boxed=True), role="builder"))
+
+    message = str(raised.value)
+    # Names the key a person would edit, which is `isolation:` -- not the
+    # word this code happens to use for the idea.
+    assert "isolation" in message
+    assert "builder" in message
+
+
+def test_codex_refuses_a_toolset_it_would_have_to_widen(monkeypatch):
+    """`tools: [files]` means read and write but no shell. Codex decides its
+    own tool surface, so it cannot offer that -- and handing over more than was
+    asked for is the one thing a toolset list exists to stop."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="codex"))
+
+    with pytest.raises(ProviderError) as raised:
+        provider.plan(_request(tools=[HANDS], hands=_lent(toolsets=("files",))))
+
+    assert "files" in str(raised.value)
+
+
+def test_codex_works_in_the_nodes_folder_and_may_write_there(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="codex"))
+
+    argv, _ = provider.plan(_request(tools=[HANDS], hands=_lent()))
+
+    assert argv[argv.index("--sandbox") + 1] == "workspace-write"
+    assert argv[argv.index("--cd") + 1] == "/work"
+
+
+def test_a_step_with_tools_and_no_way_to_run_them_is_still_refused(monkeypatch):
+    """A provider that never learned to lend its hands would otherwise send a
+    harness a list of tools it cannot reach, and get an answer about them."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="claude_code"))
+
+    with pytest.raises(ProviderError):
+        provider.plan(_request(tools=[HANDS], role="builder"))
