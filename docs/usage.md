@@ -544,9 +544,10 @@ poieo daemon examples/poieo.yaml --once --task triage
 While the daemon runs it serves a page on `http://127.0.0.1:8484` (`--port` to
 change it, `--no-web` to turn it off). It ships built, so there is nothing to
 install: open it to watch tasks move, click one to read what it did turn by
-turn, and take or throw away what it left you. The picker in the corner switches
-skins; `atelier`, the workshop, is the default, and `basic` draws the work as a
-graph — the tasks, their nodes, and the model each one calls.
+turn, and take or throw away what it left you. The board draws the work as a
+graph — the tasks, their nodes, and the model each one calls — and the rail
+down the left also holds `hours`, the same tasks against one clock with a mark
+per run, which is where "what happened overnight" is answered.
 
 `--host` moves where it listens, and the default is this machine on
 purpose: there is no password on the board, and one of its buttons makes a
