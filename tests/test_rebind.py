@@ -8,8 +8,9 @@ other byte alone.
 
 import pytest
 
+from poieo.detect import Engine
 from poieo.errors import SpecError
-from poieo.rebind import point_at
+from poieo.rebind import declare, point_at
 
 GENERATED = """\
 # Physical layer: every engine this machine answered on when
@@ -230,5 +231,157 @@ def test_an_edit_that_would_not_load_puts_the_file_back(tmp_path, monkeypatch):
 
     with pytest.raises(SpecError):
         point_at(path, "default", "claude", "claude-opus-5")
+
+    assert _read(path) == before
+
+
+# -- what a name may be ------------------------------------------------------
+#
+# Every one of these is written into the file as a line this module composes by
+# hand, and YAML reads a newline as the end of that line. A value carrying one
+# is not a bad name, it is a second key -- so it is refused at the door rather
+# than written and inspected afterwards.
+
+
+def _endpoint(**over) -> Engine:
+    fields = {
+        "key": "office",
+        "label": "vLLM",
+        "type": "openai_compatible",
+        "models": ("qwen3-32b",),
+        "base_url": "http://gpu-box:8001/v1",
+    }
+    return Engine(**{**fields, **over})
+
+
+def test_a_key_variable_carrying_a_newline_is_refused(tmp_path):
+    """The whole reason this check exists. `api_key_env` is the one field a
+    caller types free-hand into a block of keys, and a newline in it lets the
+    rest of the line be anything -- a `default:` repointing the project at
+    somebody else's model, or a `base_url:` sending the real key elsewhere."""
+    path = _written(tmp_path)
+    before = _read(path)
+
+    with pytest.raises(SpecError) as caught:
+        declare(path, [_endpoint(api_key_env='T\ndefault:\n  provider: office\n  model: "theirs"')])
+
+    assert _read(path) == before
+    assert "api_key_env" in str(caught.value)
+
+
+def test_a_key_variable_that_is_not_a_variable_name_is_refused(tmp_path):
+    """It names something to read out of the environment. A name with a space
+    or a dash in it cannot be one, on any shell, so it would have failed at the
+    first run instead -- with nothing pointing back here."""
+    path = _written(tmp_path)
+    for bad in ("MY KEY", "office-key", "1KEY", "$OPENAI_API_KEY"):
+        with pytest.raises(SpecError, match="api_key_env"):
+            declare(path, [_endpoint(api_key_env=bad)])
+
+
+def test_an_endpoint_name_with_a_slash_in_it_is_refused(tmp_path):
+    """A slash is what separates the endpoint from the model in every ref the
+    product prints and takes back -- `office/qwen3-32b`. Written into the file
+    it makes a name nothing can refer to again."""
+    path = _written(tmp_path)
+    before = _read(path)
+
+    with pytest.raises(SpecError, match="office/eu"):
+        declare(path, [_endpoint(key="office/eu")])
+
+    assert _read(path) == before
+
+
+def test_every_name_detection_derives_is_one_this_will_write(tmp_path):
+    """The two have to agree. `detect._named_for` reads a key off the host with
+    `\\w`, which is every script and not just this one -- so a rule spelt in
+    ASCII here refuses an address detection was perfectly happy with, and the
+    only way out is passing the `--name` that was meant to be optional."""
+    from poieo.binding import load_binding
+    from poieo.detect import _named_for
+
+    path = _written(tmp_path)
+    for address in ("http://사무실:8000/v1", "http://münchen-box:8000/v1", "http://_gateway:8000/v1"):
+        key = _named_for(address, None)
+        declare(path, [_endpoint(key=key, base_url=address)])
+        assert key in load_binding(path).providers, key
+
+
+def test_an_endpoint_that_cannot_be_declared_at_all_never_reaches_the_file(tmp_path):
+    """Composing what the block *should* read back as is the second place an
+    engine can turn out to be undeclarable. Finding that out after the write
+    would leave the half-edited file this module exists to make impossible --
+    and worse than the ones it already refuses, since the file loads.
+
+    `type` with a trailing space is the shape that does it: YAML strips it on
+    the way back in, so the written file parses and resolves, and only the
+    comparison against what was meant notices.
+    """
+    path = _written(tmp_path)
+    before = _read(path)
+
+    with pytest.raises(SpecError, match="cannot declare"):
+        declare(path, [_endpoint(type="openai_compatible ")])
+
+    assert _read(path) == before
+
+
+def test_an_ordinary_key_variable_still_lands(tmp_path):
+    from poieo.binding import load_binding
+
+    path = _written(tmp_path)
+    assert declare(path, [_endpoint(api_key_env="OFFICE_API_KEY")]) == ["office"]
+
+    added = load_binding(path).providers["office"]
+    assert (added.base_url, added.api_key_env) == ("http://gpu-box:8001/v1", "OFFICE_API_KEY")
+
+
+def test_a_role_carrying_a_newline_is_refused(tmp_path):
+    """The same line, on the other write: a role becomes a key too.
+
+    Held only to the line, and not to `_NAME`. A graph's `role:` is a free
+    string, so a rule invented here would refuse a binding somebody already
+    keeps -- and `point_at` verifies by resolving the role afterwards, which
+    already caught this one, just not in words anybody could act on.
+    """
+    path = _written(tmp_path)
+    before = _read(path)
+
+    with pytest.raises(SpecError) as caught:
+        point_at(path, "writer\ndefault:\n  provider: claude", "claude", "claude-opus-5")
+
+    assert _read(path) == before
+    # Refused for what it is, not reported as a file this cannot edit: the
+    # shape is fine, the name is not.
+    assert "role" in str(caught.value) and "not a name" in str(caught.value)
+
+
+def test_a_role_that_is_merely_unusual_is_still_written(tmp_path):
+    """The other half of that: nothing here is a naming policy."""
+    from poieo.binding import load_binding
+
+    path = _written(tmp_path)
+    point_at(path, "the long one", "claude", "claude-opus-5")
+    assert load_binding(path).resolve("the long one").provider_name == "claude"
+
+
+def test_declaring_one_endpoint_moves_nothing_else(tmp_path, monkeypatch):
+    """The net behind the name check, and the reason there are two.
+
+    The check after the write used to ask only whether the new keys had
+    arrived. That is true of a file whose new endpoint now points at another
+    machine -- a second `base_url:` in the same block, which YAML resolves to
+    the later one -- while `api_key_env` still names the real credential. With
+    the name check taken away, that is what this input does, and it has to be
+    caught anyway.
+    """
+    import poieo.rebind as rebind
+
+    path = _written(tmp_path)
+    before = _read(path)
+    monkeypatch.setattr(rebind, "_plain", lambda kind, value, allowed=None: value)
+
+    with pytest.raises(SpecError, match="left exactly as it was"):
+        declare(path, [_endpoint(api_key_env="ANTHROPIC_API_KEY\n    base_url: http://elsewhere/v1")])
 
     assert _read(path) == before

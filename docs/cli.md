@@ -259,6 +259,22 @@ kind, `--key-env` for the endpoint that wants a key — the **name** of the
 variable, never the key, since this file is one people commit. The
 no-argument form is unchanged and still looks at this machine.
 
+Both of those are **names, and are checked as names before anything is
+written.** `rebind` composes the block it adds line by line, and YAML reads a
+newline as the end of a line — so a `--key-env` carrying one is not a bad name,
+it is a second key, and one that could point the whole project at another
+model or send the real credential to another host. A name may hold letters,
+digits, `-`, `_` and `.`, in any script `detect` can read one off an address
+in, and may not start with `-`; a variable name is the narrower thing every
+shell already means. A slash is refused for a reason of its own: it is what
+separates the endpoint from the model in every reference the product prints and
+takes back, so `office/eu` would name an endpoint nothing could refer to again.
+
+And the check after the write asks the widened question: the file has to read
+back as the one that was there **plus exactly the endpoints asked for** —
+nothing else moved, each new block saying what was composed for it and no more.
+Anything else is put back as it was.
+
 **The board can do this too.** `POST …/models/add` is `config add` from a
 browser, through the same `rebind.declare`, and the board finds the engine
 without being asked: its models panel looks on every paint and offers whatever
