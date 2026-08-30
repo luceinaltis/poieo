@@ -123,6 +123,40 @@ def test_a_memory_from_a_newer_poieo_is_refused_not_guessed(tmp_path):
         entry_named(project, "anything")
 
 
+def test_a_memory_of_the_older_shape_is_moved_forward_not_rebuilt(tmp_path):
+    """The first real migration, and the promise the whole file rests on: a
+    database written before pieces carried their shape keeps every word it had,
+    gains the new column filled in, and answers the same questions afterwards."""
+    project = _project(tmp_path)
+    write_entry(project, "cap", "Refusing feeds are noted, never retried.")
+
+    # Wind it back to the shape before this change: no `shape`, a lookup built
+    # on the words themselves, and the older version stamped in.
+    con = sqlite3.connect(at(project).longterm())
+    con.executescript(
+        "DROP TRIGGER pieces_after_insert; DROP TRIGGER pieces_after_delete;"
+        "DROP TRIGGER pieces_after_update; DROP TABLE pieces_fts;"
+        "CREATE TABLE old(id INTEGER PRIMARY KEY, slug TEXT, ord INTEGER, text TEXT, UNIQUE(slug, ord));"
+        "INSERT INTO old SELECT id, slug, ord, text FROM pieces;"
+        "DROP TABLE pieces; ALTER TABLE old RENAME TO pieces;"
+        "UPDATE meta SET value = '1' WHERE key = 'schema_version';"
+    )
+    con.commit()
+    con.close()
+
+    # Opening it migrates, and nothing was thrown away to do it.
+    entry = entry_named(project, "cap")
+    assert entry.body == "Refusing feeds are noted, never retried."
+    assert history_of(project, "cap")[0]["after"] == {"body": entry.body}
+
+    con = sqlite3.connect(at(project).longterm())
+    shape = con.execute("SELECT shape FROM pieces WHERE slug = 'cap'").fetchone()[0]
+    version = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
+    con.close()
+    assert "feed" in shape.split()  # the entry said "feeds"; the shape is what it matches by
+    assert version == "2"
+
+
 def test_an_entry_is_one_piece_today(tmp_path):
     """Retrieval matches pieces, not entries. One each for now -- the seam is
     what lets a long entry become several without moving the schema."""

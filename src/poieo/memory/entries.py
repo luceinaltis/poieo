@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..errors import SpecError, describe_invalid
 from ..layout import layout_for
+from .index import drop_lookup as _drop_lookup
 from .index import ensure_lookup
 
 log = logging.getLogger("poieo.memory")
@@ -34,7 +35,9 @@ log = logging.getLogger("poieo.memory")
 # Bumped whenever the shape changes. The database is the only copy now, so a
 # change means *move the rows forward* -- never "throw it away and rebuild",
 # which is what the old derived index could afford.
-SCHEMA_VERSION = 1
+#   2: pieces carry the shape they are matched by, so the lookup and the
+#      scoring after it agree about what a word is.
+SCHEMA_VERSION = 2
 
 # Advisory budget (~3k tokens) for the always-present page: the page is the
 # user's to trim, and refusing to run over it would make the memory a way to
@@ -52,10 +55,56 @@ _GLUE = frozenset(
 WRITERS = ("person", "pass")
 
 
+def _shape(word: str) -> str:
+    """One word, reduced to the form it shares with its close relatives.
+
+    Plurals, and nothing else. That is the failure this was written for -- a
+    card saying "feeds" against an entry saying "feed" -- and every rule here
+    earns its place by joining a real pair. Verb endings were tried and taken
+    back out: stripping "ed" and "ing" pairs "refused" with "refusing" but not
+    with "refuse", because the base keeps a silent "e", so half the family
+    still misses and the rest of the vocabulary grows shapes like "runn" that
+    match nothing. A real stemmer solves that by cutting to the root --
+    "generalization" to "gener" -- which pays off over thousands of documents
+    and costs precision over tens, where one wrong match is a whole wrong
+    entry in a prompt.
+
+    Both sides of every comparison come through here, so a shape only has to be
+    *consistent*, never linguistically right: "series" becoming "sery" costs
+    nothing, because the word it is compared against becomes "sery" too. Only
+    two outcomes actually harm anything, and both are refused below -- a stem so
+    short it collides with unrelated words, and a stem that lands on a word the
+    glue list throws away, which would delete the word rather than widen it.
+    """
+    if len(word) < 5 or not word.isalpha():
+        return word
+    for suffix, keep in (
+        ("sses", "ss"),  # classes -> class, and never address -> addres
+        ("ies", "y"),  # retries -> retry
+        ("ches", "ch"),  # batches -> batch
+        ("shes", "sh"),
+        ("xes", "x"),
+        ("zes", "z"),
+        ("s", ""),  # feeds -> feed, notes -> note, sizes -> size
+    ):
+        if not word.endswith(suffix) or word.endswith("ss") or word.endswith("us"):
+            continue
+        stem = word[: -len(suffix)] + keep
+        # Four letters is where a stem stops being a word and starts being a
+        # prefix that anything could share.
+        if len(stem) >= 4 and stem not in _GLUE:
+            return stem
+    return word
+
+
 def words(text: str) -> set[str]:
-    """An entry's distinctive words. The vocabulary both recall and the
-    accounting judge by, so they cannot disagree about what an entry says."""
-    return set(re.findall(r"[a-z0-9_]+", text.lower())) - _GLUE
+    """An entry's distinctive words, each reduced to its shape.
+
+    The vocabulary both recall and the accounting judge by, so they cannot
+    disagree about what an entry says -- which is why the shaping happens here,
+    once, rather than on either side of that pair.
+    """
+    return {_shape(word) for word in re.findall(r"[a-z0-9_]+", text.lower())} - _GLUE
 
 
 class _Links(BaseModel):
@@ -142,12 +191,15 @@ CREATE TABLE entries(
 );
 
 -- What retrieval matches on. One per entry today; the column is here so a
--- long entry can be several later without the schema moving.
+-- long entry can be several later without the schema moving. `shape` is the
+-- same words reduced by `words()` -- derived, and the only thing the lookup
+-- ever reads, so it cannot disagree with the scoring that follows it.
 CREATE TABLE pieces(
     id    INTEGER PRIMARY KEY,
     slug  TEXT NOT NULL REFERENCES entries(slug) ON DELETE CASCADE,
     ord   INTEGER NOT NULL,
     text  TEXT NOT NULL,
+    shape TEXT NOT NULL,
     UNIQUE(slug, ord)
 );
 
@@ -243,7 +295,15 @@ def _migrate(con: sqlite3.Connection, path: Path) -> None:
         )
     if was == 0:
         con.executescript(_SCHEMA)
-    # Steps for later versions land here, in order, each guarded by `was < n`.
+    # Steps land here in order, each guarded by the version it moves past.
+    if 0 < was < 2:
+        # The lookup used to read an entry's own words; it reads their shapes
+        # now. The words are still there -- only what is matched on changed --
+        # so this fills the new column and drops the table built on the old one.
+        con.execute("ALTER TABLE pieces ADD COLUMN shape TEXT NOT NULL DEFAULT ''")
+        for piece_id, text in con.execute("SELECT id, text FROM pieces").fetchall():
+            con.execute("UPDATE pieces SET shape = ? WHERE id = ?", (_shaped(text), piece_id))
+        _drop_lookup(con)
     con.execute(
         "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -374,6 +434,11 @@ def _record(con: sqlite3.Connection, writer: str, did: str, slug: str | None, be
     )
 
 
+def _shaped(text: str) -> str:
+    """A piece as the lookup sees it: its words, each reduced to its shape."""
+    return " ".join(sorted(words(text)))
+
+
 def _pieces_of(body: str) -> list[str]:
     """How an entry is cut for retrieval. One piece today -- an entry is one
     durable statement, and cutting it would be inventing a rule before there
@@ -430,8 +495,8 @@ def write_entry(
         )
         con.execute("DELETE FROM pieces WHERE slug = ?", (slug,))
         con.executemany(
-            "INSERT INTO pieces(slug, ord, text) VALUES(?,?,?)",
-            [(slug, i, text) for i, text in enumerate(_pieces_of(body))],
+            "INSERT INTO pieces(slug, ord, text, shape) VALUES(?,?,?,?)",
+            [(slug, i, text, _shaped(text)) for i, text in enumerate(_pieces_of(body))],
         )
         con.execute("DELETE FROM links WHERE slug = ?", (slug,))
         con.executemany(
