@@ -9,6 +9,7 @@
 import { memo, useEffect, useMemo, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
+import { Card } from "./Card"
 import { Control } from "./Control"
 import { Question } from "./Question"
 import { Decide } from "../review/Decide"
@@ -295,6 +296,11 @@ export const Drawer = memo(function Drawer({
         <Question project={project} task={task} asking={asking} onAnswered={decided} />
 
         <Control project={project} task={task} status={status} onActed={decided} />
+
+        {/* Under the controls, above the nights: the definition, openable.
+            What the task *is* sits between what you can do to it now and
+            what it has done. */}
+        <Card project={project} task={task} />
 
         <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />
 

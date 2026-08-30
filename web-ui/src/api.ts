@@ -209,6 +209,20 @@ export interface Answer {
   error?: string
 }
 
+async function put<T extends Answer>(path: string, body: unknown): Promise<T> {
+  try {
+    const response = await fetch(path, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    const payload = await response.json().catch(() => ({}))
+    return { ok: response.ok, ...payload } as T
+  } catch {
+    return { ok: false, error: "the daemon did not answer" } as T
+  }
+}
+
 async function post<T extends Answer>(path: string, body?: unknown): Promise<T> {
   try {
     // No body, no content-type: the control verbs take their whole argument
@@ -405,6 +419,51 @@ export function createTask(
     folder,
     prompt,
   })
+}
+
+/**
+ * One task's card, as the file and as its three fields.
+ *
+ * The text is what the editor holds; the fields are what "make one like it"
+ * prefills. Both come from the daemon because parsing YAML here would be a
+ * second parser to keep honest against the one that runs the card.
+ */
+export interface Card {
+  task: string
+  text: string
+  name: string
+  folder: string | null
+  prompt: string | null
+}
+
+export async function fetchCard(project: string, task: string): Promise<Card | null> {
+  try {
+    const response = await fetch(
+      `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
+    )
+    if (!response.ok) return null
+    return (await response.json()) as Card
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Rewriting that card in place -- the same fence making one built.
+ *
+ * `live` is the daemon's own truth about the edit: whether the next run reads
+ * it, or whether it waits for a restart because more than the prompt changed.
+ */
+export interface RewrittenCard extends Answer {
+  task?: string
+  live?: boolean
+}
+
+export function rewriteCard(project: string, task: string, text: string): Promise<RewrittenCard> {
+  return put(
+    `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
+    { text },
+  )
 }
 
 export type FeedStatus = "connecting" | "live" | "lost"
