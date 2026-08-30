@@ -532,9 +532,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         )
         # Which model each role is on, so a reader can see what they are using
         # among what they could. A model may serve several roles.
-        in_use: dict[str, list[str]] = {}
-        for role, ref in spec.spoken_for().items():
-            in_use.setdefault(ref, []).append(role)
+        in_use = spec.roles_by_target()
 
         return JSONResponse(
             {
