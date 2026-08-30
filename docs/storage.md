@@ -50,7 +50,16 @@ the caller needs.
 
 Paths inside `poieo.yaml` resolve against the config file, never the cwd
 (`resolve_path()`), so standing somewhere else cannot change where a run's
-history lands.
+history lands. **`~` expands first**, as it does in a card and in the route
+that writes one — this file was the one place it did not, so `store: ~/runs`
+built a directory literally called `~` inside the project and filed the
+history there.
+
+A home that cannot be found leaves the path alone. `Path.expanduser` raises
+where `os.path`'s version hands the string back: `~someone` naming nobody, and
+a container with no `$HOME` and no passwd entry for the uid it runs as, where
+even `~/runs` has nothing to expand against. A folder with a `~` in its name is
+the wrong answer, but a traceback out of a config load is not an answer at all.
 
 ## Layout — one answer to "what lives where"
 

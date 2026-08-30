@@ -114,8 +114,28 @@ class ProjectSpec(BaseModel):
         return self.source_path.parent if self.source_path else Path.cwd()
 
     def resolve_path(self, relative: str) -> Path:
-        """Resolve a path relative to the config file, not the cwd."""
+        """Resolve a path relative to the config file, not the cwd.
+
+        `~` expands first, as it does in a card (`CardSpec.resolve`) and in the
+        route that writes one. This file was the one that did not, so
+        `store: ~/runs` made a directory *called* `~` inside the project and
+        filed the run history in it -- somewhere nobody looks, with the home
+        folder they named left empty.
+
+        **A home that cannot be found leaves the path alone.**
+        `Path.expanduser` raises `RuntimeError` exactly where `os.path`'s
+        version hands the string back untouched: `~someone` naming nobody, and
+        a container with no `$HOME` and no passwd entry for the uid it runs as,
+        where even `~/runs` has nothing to expand against. Nothing catches a
+        `RuntimeError` on the way out of a config load -- `_guarded` answers for
+        `PoieoError` -- so it would reach the reader as a traceback. A folder
+        with a `~` in its name is the wrong answer; a traceback is not an answer.
+        """
         path = Path(relative)
+        try:
+            path = path.expanduser()
+        except RuntimeError:
+            pass
         return path if path.is_absolute() else (self.base_dir / path)
 
     def store_path(self) -> Path:
