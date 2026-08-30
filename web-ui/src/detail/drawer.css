@@ -197,3 +197,57 @@
 .drawer-said[open] > summary {
   color: #6b6257;
 }
+
+/* The card, openable. Same quiet register as the drawer's other folds. */
+.drawer-card {
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.drawer-card summary {
+  color: #9a9086;
+  cursor: pointer;
+  font-size: 0.85em;
+  user-select: none;
+}
+
+/* The file as it is, in the file's own face. */
+.card-text {
+  background: #14120f;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #e8e2d8;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin-top: 8px;
+  padding: 8px;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+  width: 100%;
+}
+
+.card-refusal {
+  color: #d16d5a;
+  font-size: 0.85em;
+  margin: 8px 0 0;
+}
+
+.card-saved {
+  color: #a9b665;
+  font-size: 0.85em;
+  margin: 8px 0 0;
+}
+
+/* True, but not good news: the save landed and the daemon will not read
+   half of it until a restart. */
+.card-waits {
+  color: #d8a657;
+}
+
+.card-save {
+  margin-top: 8px;
+}

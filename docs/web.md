@@ -589,6 +589,7 @@ web-ui/src/
   skins/wiring.ts   where a work graph's containers go; pure, and tested alone
   skins/runs/span   where a run falls on the shared clock; pure, and tested alone
   detail/           the drawer: one task, turn by turn, plus control
+  detail/Card       the card behind it, openable and rewritable in place
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
   models/           which models this project runs on
@@ -887,9 +888,9 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Editing and removing a card.** Making one is live — the rail's `new task`
-  writes a card and the daemon finds it — but changing a card's name or folder,
-  and deleting it, still mean editing the file.
+- **Removing a card.** Making one is live, and so is editing it — the drawer's
+  `card` fold rewrites the file through the same fence — but renaming a task
+  (the filename is its identity) and deleting one still mean touching the file.
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.
