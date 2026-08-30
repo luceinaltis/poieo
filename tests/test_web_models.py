@@ -128,6 +128,28 @@ roles:
 """
 
 
+# `_BLOCK` after somebody has pointed the reader at a keyed endpoint from a
+# terminal. It loads and resolves perfectly; it is only the *daemon* that will
+# not take it, because the variable is not set where the daemon is running.
+_EDITED_SINCE = """name: block
+providers:
+  local:
+    type: ollama
+    base_url: http://localhost:11434
+  routed:
+    type: openai_compatible
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: POIEO_ABSENT_KEY
+default:
+  provider: local
+  model: "qwen3.5:latest"
+roles:
+  reader:
+    provider: routed
+    model: "qwen/flash"
+"""
+
+
 def test_every_declared_endpoint_is_listed_with_what_it_serves(tmp_path, monkeypatch):
     _asks(monkeypatch)
     body = _models(_client(tmp_path, binding=_TWO)).json()
@@ -778,7 +800,7 @@ def test_adding_an_engine_writes_it_into_the_binding(tmp_path, monkeypatch):
     reply = _add(client, "lmstudio")
 
     assert reply.status_code == 200
-    assert reply.json() == {"status": "added", "engine": "lmstudio", "models": ["qwen3-4b"]}
+    assert reply.json() == {"status": "added", "engine": "lmstudio", "models": ["qwen3-4b"], "adopted": True}
     written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
     assert "lmstudio:" in written
     assert "type: openai_compatible" in written
@@ -1129,6 +1151,7 @@ def test_an_address_is_asked_and_what_it_is_comes_back(tmp_path, monkeypatch):
         "status": "added",
         "engine": "gpu-box",
         "models": ["qwen3-32b"],
+        "adopted": True,
     }
     written = (tmp_path / "b.yaml").read_text(encoding="utf-8")
     assert "  gpu-box:\n    type: openai_compatible\n" in written
@@ -1319,3 +1342,42 @@ def test_an_address_with_a_typo_in_it_is_a_refusal_and_not_a_crash(tmp_path, mon
     assert reply.status_code == 400
     assert "80O1" in reply.json()["error"]
     assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_an_endpoint_the_daemon_will_not_take_says_so_and_says_why(tmp_path, monkeypatch):
+    """The same answer `models/use` gives, on the other write.
+
+    `reread` validates what start-up validates, over the whole file -- so a
+    binding a terminal has edited since the daemon read it can refuse a write
+    that had nothing to do with the edit. The file gains the new endpoint, the
+    in-memory spec does not, and the panel goes on offering what was just
+    written. Pressing the offer again then answers "this project already reaches
+    it": told it worked, watched nothing change, then told it was already there.
+    """
+    monkeypatch.delenv("POIEO_ABSENT_KEY", raising=False)
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=True)
+    # Somebody points the reader at a keyed endpoint from a terminal, after the
+    # daemon read the file. `server.py` already admits this can happen.
+    (tmp_path / "b.yaml").write_text(_EDITED_SINCE, encoding="utf-8")
+
+    reply = client.post("/api/projects/board/models/add", json={"engine": "lmstudio"})
+    body = reply.json()
+
+    assert reply.status_code == 200
+    assert body["status"] == "added"
+    # The file really did change -- this is not a refusal.
+    assert "lmstudio:" in (tmp_path / "b.yaml").read_text(encoding="utf-8")
+    assert body["adopted"] is False
+    assert "POIEO_ABSENT_KEY" in body["why"]
+
+
+def test_an_endpoint_the_daemon_takes_says_that_too(tmp_path, monkeypatch):
+    """The ordinary case, said out loud rather than implied by silence."""
+    _machine(monkeypatch, {_LMSTUDIO: Catalogue((Served(id="qwen3-4b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=True)
+
+    body = client.post("/api/projects/board/models/add", json={"engine": "lmstudio"}).json()
+
+    assert body["adopted"] is True
+    assert "why" not in body

@@ -276,7 +276,7 @@ the daemon looks up where it lives in `CANDIDATES` — the one place that knows.
 
 `{target, role}` — a `provider/model` reference and the role to point at it,
 `default` when the body names none. It answers `{status: "using", role, ref,
-checked}`.
+checked, adopted}`, and `why` when `adopted` is false.
 
 **Every refusal is decided before `rebind` opens the file**, so a request that
 will be refused never touches it — and `rebind` itself refuses before writing on
@@ -340,7 +340,8 @@ sits beside it, and only when nothing identified the endpoint does the key lead.
 
 Either `{engine}` — one of the keys the read report offered under `undeclared`
 — or `{url}`, an address nobody detected. It answers
-`{status: "added", engine, models}`, and is the browser form of
+`{status: "added", engine, models, adopted}` — plus `why` when `adopted` is
+false — and is the browser form of
 `poieo config add`, through the same `rebind.declare`, so there is not a second
 set of rules about what may be written.
 
@@ -382,6 +383,15 @@ an address that was right.
 choosing one are different decisions, and the second is `models/use`. An endpoint
 already declared is left exactly as it is, since somebody may have pointed it at
 another port.
+
+**And it answers `adopted`, exactly as `models/use` does.** `declare` verifies
+the file reloads, but the daemon validates what start-up validates over the
+*whole* file, and may keep the last good spec — a binding a terminal has edited
+since the daemon read it refuses every write to it, not only the one that caused
+the problem. Swallowed, that was a lie the same size: the panel reads the same
+in-memory spec, so it goes on offering what was just written, and pressing the
+offer again answers "this project already reaches it". Told it worked, watched
+nothing change, then told it was already there.
 
 | code | when | carries |
 |---|---|---|

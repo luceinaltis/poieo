@@ -318,14 +318,20 @@ export interface ModelsAnswer extends Answer {
   ref?: string
   /** False when the endpoint stayed silent: the name could not be checked. */
   checked?: boolean
+  /** From `addEngine`: the key the endpoint was declared under. */
+  engine?: string
   /**
    * Whether the **running daemon** took the edit, not just the file.
    *
-   * `point_at` verifies the file reloads, but the daemon validates what
-   * start-up validates and may keep the last good spec -- a role pointed at an
-   * endpoint whose key is unset is the case that happens. It went unsaid, and
-   * the panel then redrew the *old* model off that same kept spec, so a reader
-   * told "using" watched nothing change.
+   * `rebind` verifies the file reloads, but the daemon validates what start-up
+   * validates and may keep the last good spec -- a role pointed at an endpoint
+   * whose key is unset is the case that happens, and it refuses *every* write
+   * to that file, not only the one that caused it. It went unsaid, and the
+   * panel then redrew off that same kept spec: a reader told "using" watched
+   * nothing change, and a reader told "added" watched the panel go on offering
+   * what had just been written.
+   *
+   * Both writes answer it, so the warning below reads either.
    */
   adopted?: boolean
   /** Why it was not taken, in the daemon's words. Absent when it was. */
