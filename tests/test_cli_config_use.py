@@ -49,8 +49,10 @@ def _project(tmp_path, binding: str = BINDING):
 
 
 def _serving(monkeypatch, answers):
-    async def models_for(type_, base_url=None, api_key_env=None):
-        return answers.get((type_, base_url), ())
+    # `limit` is honoured rather than ignored: `use` asks uncapped on purpose,
+    # and a stub that swallowed the argument could not tell if it stopped.
+    async def models_for(type_, base_url=None, api_key_env=None, limit=detect_module.MODEL_CAP):
+        return answers.get((type_, base_url), ())[:limit]
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
 
@@ -59,6 +61,29 @@ OLLAMA_HAS = {
     ("ollama", "http://localhost:11434"): ("qwen3:32b", "llama3.2:3b"),
     ("anthropic", None): ("claude-opus-5",),
 }
+
+
+def test_use_checks_a_name_against_the_whole_catalogue(tmp_path, monkeypatch):
+    """Whether a name is real is a membership question, and must not be capped.
+
+    `models_for` stops at `MODEL_CAP` because it feeds lists a person reads.
+    Asked that way the check answers "does not serve it" for everything past
+    the cap -- and a hosted router serves hundreds, so a correct model was
+    refused in the terminal while the board, which asks uncapped, took it.
+    """
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    served = tuple(f"m{n}" for n in range(60))
+
+    async def catalogue_for(type_, base_url=None, limit=detect_module.MODEL_CAP, api_key_env=None):
+        return detect_module.Catalogue(tuple(detect_module.Served(id=one) for one in served[:limit]))
+
+    monkeypatch.setattr(detect_module, "catalogue_for", catalogue_for)
+
+    result = runner.invoke(app, ["config", "use", "ollama/m50"])
+
+    assert result.exit_code == 0, result.output
+    assert load_binding(path).target("default") == "ollama/m50"
 
 
 def test_use_moves_the_default(tmp_path, monkeypatch):
@@ -189,8 +214,8 @@ def _keyed(monkeypatch, wants: str, answers):
     detection reads as an endpoint serving nothing at all.
     """
 
-    async def models_for(type_, base_url=None, api_key_env=None):
-        return answers.get((type_, base_url), ()) if api_key_env == wants else ()
+    async def models_for(type_, base_url=None, api_key_env=None, limit=detect_module.MODEL_CAP):
+        return answers.get((type_, base_url), ())[:limit] if api_key_env == wants else ()
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
 

@@ -234,6 +234,14 @@ from memory does not fail here, it fails at 3am in a run. It is **best effort**:
 an endpoint that does not answer is not a verdict, so the edit proceeds and the
 command says it could not check.
 
+**That check asks uncapped**, `models_for(..., limit=None)`, and so does the
+board's `models/use`. `MODEL_CAP` bounds a list a person reads; asking "is this
+name real" with it answers no for everything a hosted router serves past the
+fortieth, and the refusal then prints those forty as though they were the
+catalogue. A correct name was refused in the terminal and taken by the board
+until both asked the same way. The refusal still offers only `MODEL_LIST` of
+them back, and says how many more there are rather than implying none.
+
 ## `config add`, and the line between declaring and choosing
 
 Detection otherwise runs **once**, at `init`. Install Ollama next week and the
