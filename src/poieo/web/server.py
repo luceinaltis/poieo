@@ -20,6 +20,7 @@ import asyncio
 import json
 import os
 import re
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -869,8 +870,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         cards = config.resolve_path(config.cards)
         # A dotfile, which `load_cards` skips: the loader must be the judge of
         # the new text, and judging needs a file -- but the daemon watches this
-        # folder, and anything visible here becomes a task.
-        scratch = cards / f".{spec.slug}.rewrite.tmp"
+        # folder, and anything visible here becomes a task. Unique per request,
+        # because two saves racing on one name would each judge the other's
+        # text and the second replace would find its source already gone.
+        scratch = cards / f".{spec.slug}.rewrite.{uuid.uuid4().hex}.tmp"
         roster = [c.slug for c in config.cards_by_task.values()]
 
         def _judge() -> tuple[JSONResponse | None, bool]:
@@ -887,6 +890,36 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         ),
                         False,
                     )
+
+                # A graph-naming card has no folder, which is the shape the
+                # folder fence below cannot see -- and the graph is a path
+                # exactly as capable of leaving the project. Same refusals,
+                # resolved the way the card itself will resolve it.
+                if fresh.graph:
+                    graph_asked = Path(os.path.expanduser(fresh.graph))
+                    graph_at = (graph_asked if graph_asked.is_absolute() else cards / graph_asked).resolve()
+                    root = Path(config.base_dir).resolve()
+                    if not graph_at.is_file():
+                        return (
+                            JSONResponse(
+                                {"error": f"the graph it would run is not there: {graph_at}"},
+                                status_code=400,
+                            ),
+                            False,
+                        )
+                    if root != graph_at and root not in graph_at.parents:
+                        return (
+                            JSONResponse(
+                                {
+                                    "error": (
+                                        f"a task edited here runs a graph inside this "
+                                        f"project; {graph_at} is outside {root}"
+                                    )
+                                },
+                                status_code=400,
+                            ),
+                            False,
+                        )
 
                 # The folder fence, identical to make's and re-checked on every
                 # rewrite: the old card passing it says nothing about the new.
@@ -912,12 +945,19 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         )
 
                 # `live`: would the daemon adopt this without a restart? The
-                # same comparison `_reread_graph` makes, on the same expansion.
+                # same comparison `_reread_graph` makes -- against the spec the
+                # daemon is actually running, not against the file. After a
+                # structural edit the file is already ahead of the daemon, and
+                # a prompt tweak on top of that is not live either.
                 live = False
                 try:
-                    old_spec, _ = expand(load_card(path), roster=roster)
+                    loaded = next((t for t in project.tasks if t.spec.name == spec.slug), None)
                     new_spec, _ = expand(fresh.model_copy(update={"source_path": path}), roster=roster)
-                    live = old_spec == new_spec
+                    if loaded is not None:
+                        live = loaded.spec == new_spec
+                    else:
+                        old_spec, _ = expand(load_card(path), roster=roster)
+                        live = old_spec == new_spec
                 except PoieoError:
                     # The card on disk no longer expands -- this rewrite may be
                     # the repair. Written, and honestly not promised as live.
@@ -925,7 +965,16 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
                 # One move, so the watched folder never holds a half-written
                 # card even for the daemon's unluckiest read.
-                os.replace(scratch, path)
+                try:
+                    os.replace(scratch, path)
+                except OSError as exc:
+                    return (
+                        JSONResponse(
+                            {"error": f"the card could not be replaced: {exc}"},
+                            status_code=409,
+                        ),
+                        False,
+                    )
                 return None, live
             finally:
                 scratch.unlink(missing_ok=True)

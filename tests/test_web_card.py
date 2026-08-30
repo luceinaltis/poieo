@@ -154,3 +154,53 @@ def test_the_rewrite_cannot_rename_the_task(tmp_path):
     assert answer.status_code == 200, answer.text
     assert answer.json()["task"] == "already"
     assert sorted(p.name for p in cards.iterdir()) == ["already.yaml"]
+
+
+def test_a_graph_naming_rewrite_is_fenced_exactly_like_a_folder(tmp_path):
+    """The fence forgot one shape: a card may name a graph instead of a
+    prompt, and a graph needs no folder -- so a rewrite that flipped the shape
+    walked out of the project with nothing checking it. The graph's path takes
+    the same refusals the folder does: inside this project, and it has to be
+    there."""
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+
+    outside = tmp_path.parent / "evil.yaml"
+    outside.write_text("nodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8")
+    for graph in (str(outside), "../../evil.yaml", "../gone.yaml"):
+        answer = _put(client, f"name: Already\ngraph: {graph}\n")
+        assert answer.status_code == 400, (graph, answer.text)
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == before
+
+    # ...and one inside the project is not caught in the same net.
+    (cards / "steps.yaml").write_text("name: steps\nnodes:\n  - {id: a, type: agent, prompt: hi}\n", encoding="utf-8")
+    answer = _put(client, "name: Already\ngraph: steps.yaml\n")
+    assert answer.status_code == 200, answer.text
+
+
+def test_live_is_measured_against_what_the_daemon_runs_not_the_file(tmp_path):
+    """After a structural edit the file is ahead of the daemon, which adopts
+    nothing until a restart. A prompt tweak on top of that must not say
+    `live` -- the daemon compares against its own memory, and so does this."""
+    client, cards = _client(tmp_path)
+    (tmp_path / "work2").mkdir()
+
+    first = _put(client, "name: Already\nfolder: ../work2\nprompt: keep things tidy\n")
+    assert first.json()["live"] is False
+
+    second = _put(client, "name: Already\nfolder: ../work2\nprompt: sharper words\n")
+    assert second.status_code == 200, second.text
+    # The file only differs from the file by a prompt, but the daemon is
+    # still running ../work -- nothing here is live until a restart.
+    assert second.json()["live"] is False
+
+
+def test_two_saves_in_a_row_both_land_and_the_last_one_wins(tmp_path):
+    client, cards = _client(tmp_path)
+    a = _put(client, "name: Already\nfolder: ../work\nprompt: first\n")
+    b = _put(client, "name: Already\nfolder: ../work\nprompt: second\n")
+    assert a.status_code == 200 and b.status_code == 200
+    assert "second" in (cards / "already.yaml").read_text(encoding="utf-8")
+    assert sorted(p.name for p in cards.iterdir()) == ["already.yaml", "steps.yaml"] or sorted(
+        p.name for p in cards.iterdir()
+    ) == ["already.yaml"]
