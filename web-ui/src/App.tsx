@@ -21,11 +21,15 @@ import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
-import { SKINS, skinById } from "./skins/registry"
+import { DEFAULT_SKIN_ID, SKINS, skinById } from "./skins/registry"
 import { keyOfTask, onlyProject } from "./state/stage"
 import "./app.css"
 
 const PROJECT_KEY = "poieo.project"
+// The rendering the *board* was last drawn with, apart from `poieo.skin`
+// (which may name a standalone place): it is what the board rail item comes
+// back to after a visit to hours.
+const BOARD_SKIN_KEY = "poieo.skin.board"
 
 const STATUS_LABEL: Record<string, string> = {
   connecting: "connecting",
@@ -105,10 +109,24 @@ export default function App({ store }: { store?: StageStore }) {
     setSelected(null)
   }, [])
 
+  // From the picker: a rendering of the board, so it is also what the board
+  // rail item will come back to.
   const chooseSkin = (id: string) => {
     setSkinId(id)
     writeSkinPreference(id)
+    remember(BOARD_SKIN_KEY, id)
   }
+
+  // Standing somewhere other than the board -- a rail place drawn on the
+  // stage, like hours -- rather than a rendering of it.
+  const standing = skinById(skinId).standalone ? skinById(skinId).id : null
+
+  const goPlace = useCallback((id: string) => {
+    setSkinId(id)
+    writeSkinPreference(id)
+    setShowModels(false)
+    setShowMake(false)
+  }, [])
 
   // Stable, so the memoized drawer sees the same props while frames stream by.
   const closeDrawer = useCallback(() => setSelected(null), [])
@@ -166,21 +184,26 @@ export default function App({ store }: { store?: StageStore }) {
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
         </span>
-        <label className="shell-pick">
-          view
-          <select
-            className="shell-skin"
-            aria-label="View"
-            value={skinById(skinId).id}
-            onChange={(event) => chooseSkin(event.target.value)}
-          >
-            {SKINS.map((skin) => (
-              <option key={skin.id} value={skin.id}>
-                {skin.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Renderings of the board, so it has nothing to say while the stage
+            is showing a place instead -- a control that does not apply must
+            not sit there looking like it does. */}
+        {standing ? null : (
+          <label className="shell-pick">
+            view
+            <select
+              className="shell-skin"
+              aria-label="View"
+              value={skinById(skinId).id}
+              onChange={(event) => chooseSkin(event.target.value)}
+            >
+              {SKINS.filter((skin) => !skin.standalone).map((skin) => (
+                <option key={skin.id} value={skin.id}>
+                  {skin.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </header>
 
       {/* What the page is for, rather than what one task is doing -- so it is
@@ -192,14 +215,31 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={showModels || showMake ? undefined : "page"}
+          aria-current={showModels || showMake || standing ? undefined : "page"}
           onClick={() => {
             closeModels()
             closeMake()
+            // Coming back from a place, the board wears the rendering it was
+            // left in, not a hard-coded one.
+            if (standing) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
           }}
         >
           board
         </button>
+        {/* The skins that are places rather than renderings. The rail is the
+            list of what this page is for, and "what has it been doing" is a
+            thing to come for -- where basic against atelier is a taste. */}
+        {SKINS.filter((skin) => skin.standalone).map((skin) => (
+          <button
+            key={skin.id}
+            type="button"
+            data-do={`open-${skin.id}`}
+            aria-current={!showModels && !showMake && standing === skin.id ? "page" : undefined}
+            onClick={() => goPlace(skin.id)}
+          >
+            {skin.id}
+          </button>
+        ))}
         <button
           type="button"
           data-do="open-models"
