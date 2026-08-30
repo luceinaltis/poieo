@@ -143,7 +143,7 @@ test("an arrow leaves one box's right edge and enters the next one's left", () =
 const FORK: GraphShape = {
   entry: "classify",
   nodes: [
-    { id: "classify", type: "llm", next: "route", default: null, branches: [], model: null, tools: [] },
+    { id: "classify", type: "agent", next: "route", default: null, branches: [], model: null, tools: [] },
     {
       id: "route",
       type: "router",
@@ -153,8 +153,8 @@ const FORK: GraphShape = {
       model: null,
       tools: [],
     },
-    { id: "answer", type: "llm", next: null, default: null, branches: [], model: null, tools: [] },
-    { id: "bug", type: "llm", next: null, default: null, branches: [], model: null, tools: [] },
+    { id: "answer", type: "agent", next: null, default: null, branches: [], model: null, tools: [] },
+    { id: "bug", type: "agent", next: null, default: null, branches: [], model: null, tools: [] },
   ],
 }
 
@@ -202,8 +202,8 @@ test("a loop back does not push its target into a further column", () => {
   const looping: GraphShape = {
     entry: "draft",
     nodes: [
-      { id: "draft", type: "llm", next: "revise", default: null, branches: [], model: null, tools: [] },
-      { id: "revise", type: "llm", next: "draft", default: null, branches: [], model: null, tools: [] },
+      { id: "draft", type: "agent", next: "revise", default: null, branches: [], model: null, tools: [] },
+      { id: "revise", type: "agent", next: "draft", default: null, branches: [], model: null, tools: [] },
     ],
   }
   expect(depths(looping).map((cell) => cell.column)).toEqual([0, 1])

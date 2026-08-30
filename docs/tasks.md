@@ -124,7 +124,7 @@ and repeating a note is recoverable where losing one is not.
 ### Writing: the contract
 
 `record_run(task, result)` is the other half, and **every runner of a card must
-land there** — the daemon's `FlowRunner._remember()` and `poieo run`'s one-shot
+land there** — the daemon's `TaskRunner._remember()` and `poieo run`'s one-shot
 both do. A run that never writes a line leaves every note marked new forever and
 its own work forgotten.
 

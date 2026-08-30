@@ -24,7 +24,6 @@ function flowState(over: Partial<TaskState> = {}): TaskState {
     project: "board",
     status: "waiting",
     currentNode: null,
-    nodeType: null,
     step: 0,
     turn: 0,
     lastText: "",

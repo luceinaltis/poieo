@@ -174,7 +174,7 @@ export const LLM_RUN: PoieoEvent[] = [
     "at": "2026-08-22T07:28:05.857+00:00",
     "node_id": "draft",
     "data": {
-      "type": "llm",
+      "type": "agent",
       "step": 1
     }
   },
@@ -205,7 +205,7 @@ export const LLM_RUN: PoieoEvent[] = [
     "at": "2026-08-22T07:28:05.858+00:00",
     "node_id": "review",
     "data": {
-      "type": "llm",
+      "type": "agent",
       "step": 2
     }
   },
@@ -262,7 +262,7 @@ export const LLM_RUN: PoieoEvent[] = [
     "at": "2026-08-22T07:28:05.861+00:00",
     "node_id": "revise",
     "data": {
-      "type": "llm",
+      "type": "agent",
       "step": 4
     }
   },
@@ -293,7 +293,7 @@ export const LLM_RUN: PoieoEvent[] = [
     "at": "2026-08-22T07:28:05.862+00:00",
     "node_id": "review",
     "data": {
-      "type": "llm",
+      "type": "agent",
       "step": 5
     }
   },

@@ -32,7 +32,6 @@ export interface TaskState {
   project: string
   status: "waiting" | "running" | "error"
   currentNode: string | null
-  nodeType: string | null
   step: number
   turn: number
   lastText: string
@@ -131,7 +130,6 @@ function blankFlow(): TaskState {
     name: "",
     project: "",
     currentNode: null,
-    nodeType: null,
     step: 0,
     turn: 0,
     lastText: "",
@@ -231,7 +229,6 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
       return {
         status: "running",
         currentNode: null,
-        nodeType: null,
         step: 0,
         turn: 0,
         lastText: "",
@@ -242,7 +239,6 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
     case "node_started":
       return {
         currentNode: event.node_id ?? null,
-        nodeType: asString(data.type, "") || null,
         step: asNumber(data.step),
         turn: 0,
       }

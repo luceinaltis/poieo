@@ -99,7 +99,7 @@ timing test measures the **whole run**, which starvation can only lengthen.
 `cron.py` implements the standard 5 fields with `*/n`, ranges, lists, `mon-fri`
 names, and the day-of-month **or** day-of-week rule.
 
-## FlowRunner
+## TaskRunner
 
 One per task. Its loop is `trigger → run → carry state → repeat`, and everything
 interesting is in what surrounds the run.

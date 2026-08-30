@@ -79,8 +79,7 @@
   margin: 0;
 }
 
-.drawer-summary,
-.drawer-empty {
+.drawer-summary {
   color: #9a9086;
   font-size: 0.85em;
   margin: 0;
