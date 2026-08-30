@@ -140,6 +140,25 @@ def test_config_models_lists_what_each_provider_serves_now(tmp_path, monkeypatch
         assert model in result.stdout, model
 
 
+def test_config_models_asks_a_keyed_endpoint_with_the_variable_it_names(tmp_path, monkeypatch):
+    """A hosted endpoint answers 401 to an unauthenticated listing, and 401 is
+    silence to detection -- so this printed "no answer" beside an endpoint that
+    was working perfectly, and the reader had nothing to choose from."""
+    _project(tmp_path, BINDING.replace("    type: anthropic", "    type: anthropic\n    api_key_env: OFFICE_TOKEN"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+
+    async def models_for(type_, base_url=None, api_key_env=None):
+        return ("claude-opus-5",) if (type_, api_key_env) == ("anthropic", "OFFICE_TOKEN") else ()
+
+    monkeypatch.setattr(detect_module, "models_for", models_for)
+
+    result = runner.invoke(app, ["config", "models"])
+
+    assert result.exit_code == 0, result.output
+    assert "claude-opus-5" in result.stdout
+
+
 def test_config_models_marks_what_is_already_in_use(tmp_path, monkeypatch):
     """The list exists to be chosen from, so it has to say what is spoken for
     -- otherwise the next question is always "which one am I on?"."""

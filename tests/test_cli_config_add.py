@@ -5,6 +5,7 @@ never heard of it, with no way to say so short of writing the block by hand.
 This is that way, and it is the same detection `init` used.
 """
 
+import os
 from dataclasses import replace
 
 from typer.testing import CliRunner
@@ -248,14 +249,18 @@ def test_a_server_that_named_itself_is_called_that_when_there_is_nothing_new(tmp
 def _at(monkeypatch, engine, wants: str | None = None):
     """`detect.ask`, stood in for.
 
-    ``wants`` is the key variable this endpoint refuses to list without -- what
+    ``wants`` names the variable this endpoint refuses to list without -- what
     every hosted endpoint does, and what a vLLM started with `--api-key` does.
-    Asked without it, the address answers as though nothing were there, which
-    is what a 401 means to detection.
+    It has to be both named *and* set, since that is when the real `ask` has a
+    key to send; without one the address answers as though nothing were there,
+    which is what a 401 means to detection. ``None`` is an endpoint that lists
+    for anyone.
     """
 
     async def fake(base_url, key_env=None):
-        if base_url != engine.base_url or key_env != wants:
+        if base_url != engine.base_url:
+            return None
+        if wants is not None and not (key_env == wants and os.environ.get(wants)):
             return None
         return replace(engine, api_key_env=key_env or None)
 
@@ -342,7 +347,7 @@ def test_the_same_endpoint_without_the_key_is_the_address_that_answered_nothing(
     assert "nothing usable answered" in result.output
 
 
-def test_naming_a_variable_that_is_not_set_says_so(tmp_path, monkeypatch):
+def test_an_address_that_answered_nothing_says_the_variable_was_empty_too(tmp_path, monkeypatch):
     """Left to detection this came back as "nothing usable answered at ..." --
     a true sentence about the wrong problem, and one that has the reader
     retyping an address that was right all along."""
@@ -355,6 +360,22 @@ def test_naming_a_variable_that_is_not_set_says_so(tmp_path, monkeypatch):
 
     assert result.exit_code != 0
     assert "OFFICE_TOKEN" in result.output and "not set" in result.output
+
+
+def test_an_endpoint_that_lists_without_a_key_is_declared_with_the_name_anyway(tmp_path, monkeypatch):
+    """An unset variable is not a precondition, and must not be one. The key
+    routinely lives in the environment the daemon runs under rather than this
+    shell, and writing its name into a file somebody commits is a whole reason
+    to run this from here."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _at(monkeypatch, OFFICE)  # lists for anyone
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--key-env", "OFFICE_TOKEN"])
+
+    assert result.exit_code == 0, result.output
+    assert load_binding(path).providers["gpu-box"].api_key_env == "OFFICE_TOKEN"
 
 
 def test_naming_a_variable_with_no_address_says_which_is_missing(tmp_path, monkeypatch):

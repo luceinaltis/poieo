@@ -284,10 +284,17 @@ screen, at the one place a hosted endpoint makes it tempting to break.
 
 It is also what the address is **asked with**. An endpoint that wants a key
 answers 401 to a listing, which detection reads as nothing being there — so the
-endpoints this field exists for were the ones it could not add. And because the
-daemon's environment is not the reader's shell, a variable the daemon cannot
-read is a **409 naming it**, before anything is probed: "nothing usable answered
-at …" would have the reader retyping an address that was right.
+endpoints this field exists for were the ones it could not add. Sent without an
+address it is a **400**: this machine's four ports are not endpoints a key
+opens, and dropping it in silence left a caller believing they had declared a
+keyed endpoint they had not.
+
+A variable the daemon cannot read is **not** a refusal on its own — the key
+often lives in the environment a wrapper starts the daemon under, and an
+endpoint that lists for anyone still declares. It is named in the 409 when the
+address also answered nothing, because then it is the likelier of the two
+explanations and "nothing usable answered at …" would have the reader retyping
+an address that was right.
 
 **Only adds.** Nothing about what a role uses moves — declaring a model and
 choosing one are different decisions, and the second is `models/use`. An endpoint
@@ -300,8 +307,8 @@ another port.
 | **409** | this project names no models file | — |
 | **400** | neither an engine nor an address | — |
 | **400** | not an engine detection looks for | the keys it does |
-| **409** | the named key variable is not set where the daemon runs | its name |
-| **409** | nothing usable answered at that address | — |
+| **400** | a key variable with no address to use it on | — |
+| **409** | nothing usable answered at that address | the key variable, when it was also unset |
 | **409** | that name is already in the file | — |
 | **409** | this project already reaches it | — |
 | **409** | it is not answering on this machine | — |

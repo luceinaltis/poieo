@@ -1051,14 +1051,24 @@ def config_add(
         # for. Silently ignoring it left somebody believing they had declared a
         # keyed endpoint they had not.
         _fail("--key-env names the key for one address; pass the address too")
-    if key_env and not os.environ.get(key_env):
-        # Said here, not swallowed by detection: an endpoint that wants a key
-        # answers 401 to a listing, which reads as "nothing usable answered" --
-        # a true sentence about the wrong problem.
-        _fail(f"${key_env} is not set in this environment, so there is no key to ask {url} with")
     if url:
         engine = asyncio.run(engines.ask(url, key_env or None))
         if engine is None:
+            # Only on the way out, and never as a precondition. The key may
+            # well live in the environment the daemon or a wrapper runs under
+            # rather than this shell, and recording its name in a file somebody
+            # commits is a perfectly good reason to run this here -- so an
+            # endpoint that lists without one still declares.
+            #
+            # But an endpoint that wants a key answers 401 to a listing, which
+            # detection reads as silence. "Nothing usable answered" alone is a
+            # true sentence about the wrong problem, and has the reader retyping
+            # an address that was right.
+            if key_env and not os.environ.get(key_env):
+                _fail(
+                    f"nothing usable answered at {url}, and ${key_env} is not set here -- "
+                    f"if that endpoint wants a key, it was asked without one"
+                )
             _fail(f"nothing usable answered at {url} -- no listing, or one with no models on it")
         if name:
             engine = replace(engine, key=name)
