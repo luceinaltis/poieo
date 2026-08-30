@@ -10,6 +10,8 @@ Design: docs/web.md
 """
 
 import asyncio
+import os
+from dataclasses import replace
 
 import httpx
 from conftest import card
@@ -59,7 +61,7 @@ CATALOGUE = {
 def _asks(monkeypatch, catalogue=None):
     served = CATALOGUE if catalogue is None else catalogue
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         # The route lifts the cap; a stub that refused the argument would let
         # that go untested.
         assert limit is None, "the catalogue panel must not be capped"
@@ -254,6 +256,32 @@ def test_the_report_names_the_variable_and_never_its_value(tmp_path, monkeypatch
     assert "sk-planted-by-this-test" not in response.text
 
 
+def _keyed(monkeypatch, wants: str, served: Catalogue):
+    """A catalogue that answers only when asked with the right key variable.
+
+    What a hosted endpoint does: an unauthenticated listing is a 401, which
+    detection reads as an endpoint serving nothing at all.
+    """
+
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
+        return served if api_key_env == wants else Catalogue()
+
+    monkeypatch.setattr(detect_module, "catalogue_for", fake)
+
+
+def test_a_keyed_endpoint_is_asked_with_the_variable_the_binding_names(tmp_path, monkeypatch):
+    """The panel is the first place a hosted endpoint shows up, and it asked
+    without the key -- so an endpoint that was working perfectly reported an
+    empty list, next to a green `api_key_set`."""
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-real")
+    _keyed(monkeypatch, "POIEO_TEST_KEY", Catalogue((Served(id="m1"), Served(id="m2"))))
+    binding = _MOCK.replace("fake: {type: mock,", "fake: {type: mock, api_key_env: POIEO_TEST_KEY,")
+
+    body = _models(_client(tmp_path, binding=binding)).json()
+
+    assert [m["id"] for m in _endpoints(body)["fake"]["models"]] == ["m1", "m2"]
+
+
 def test_an_endpoint_that_names_no_variable_says_null_rather_than_unset(tmp_path, monkeypatch):
     """`null`, not `false`: "its SDK resolves its own" is a different fact from
     "the key is missing", and a panel warning about the first would cry wolf on
@@ -293,7 +321,7 @@ def test_every_endpoint_is_asked_at_once(tmp_path, monkeypatch):
     peak = 0
     asked: list[str] = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
@@ -377,6 +405,24 @@ def test_using_a_model_points_the_default_at_it(tmp_path, monkeypatch):
     assert "base_url: http://localhost:11434" in text
 
 
+def test_a_keyed_endpoint_is_asked_with_its_key_before_a_model_is_believed(tmp_path, monkeypatch):
+    """The typo check on this route is only as good as the listing behind it.
+    Asked without the key, a hosted endpoint answers nothing, `served` is empty
+    and the check is skipped -- so a model that does not exist got written into
+    the file, which is the one thing this route exists to prevent."""
+    monkeypatch.setenv("POIEO_TEST_KEY", "sk-real")
+    _keyed(monkeypatch, "POIEO_TEST_KEY", Catalogue((Served(id="qwen3.5:latest"),)))
+    binding = _BLOCK.replace("base_url: http://localhost:11434", "base_url: http://x\n    api_key_env: POIEO_TEST_KEY")
+    client = _client(tmp_path, binding=binding, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _use(client, "local/a-model-nobody-serves")
+
+    assert reply.status_code == 409
+    assert "does not serve" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
 def test_using_a_model_for_one_role_leaves_the_default_alone(tmp_path, monkeypatch):
     _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
     client = _client(tmp_path, binding=_BLOCK, tasks=False)
@@ -436,7 +482,7 @@ def test_an_endpoint_that_did_not_answer_does_not_block_the_edit_and_says_so(tmp
     exactly as `poieo config use` allows -- silence is not agreement, so the
     reply says the name could not be checked rather than implying it was."""
 
-    async def silent(type_, base_url=None, limit=None):
+    async def silent(type_, base_url=None, limit=None, api_key_env=None):
         return Catalogue()
 
     monkeypatch.setattr(detect_module, "catalogue_for", silent)
@@ -577,7 +623,7 @@ def _machine(monkeypatch, at):
     the wrong reason.
     """
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         return at.get(base_url, Catalogue())
 
     monkeypatch.setattr(detect_module, "catalogue_for", fake)
@@ -615,7 +661,7 @@ def test_the_catalogue_does_not_go_looking_for_engines(tmp_path, monkeypatch):
     and a half to draw a list it already had every answer for."""
     asked = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         asked.append(base_url)
         return Catalogue()
 
@@ -698,7 +744,7 @@ def test_a_project_that_names_no_binding_is_not_asked_about_engines(tmp_path, mo
     worth a round trip."""
     asked: list[str | None] = []
 
-    async def fake(type_, base_url=None, limit=None):
+    async def fake(type_, base_url=None, limit=None, api_key_env=None):
         asked.append(base_url)
         return Catalogue()
 
@@ -881,7 +927,7 @@ def test_an_offer_says_which_product_answered_not_the_pair_that_share_a_port(tmp
     monkeypatch.setattr(
         detect_module,
         "catalogue_for",
-        lambda type_, base_url=None, limit=None: _answers(
+        lambda type_, base_url=None, limit=None, api_key_env=None: _answers(
             Catalogue((Served(id="qwen3-32b"),), "SGLang") if base_url == _VLLM else Catalogue()
         ),
     )
@@ -1042,9 +1088,22 @@ def test_a_warning_about_a_key_never_carries_the_key(tmp_path, monkeypatch):
 # command, through the same `detect.ask` and the same `rebind.declare`.
 
 
-def _found(monkeypatch, engine):
-    async def fake(base_url):
-        return engine if engine and base_url == engine.base_url else None
+def _found(monkeypatch, engine, wants: str | None = None):
+    """`detect.ask`, stood in for.
+
+    ``wants`` names the variable this endpoint refuses to list without -- what
+    every hosted endpoint does. It has to be both named *and* set, since that is
+    when the real `ask` has a key to send; without one the address answers as
+    though nothing were there, which is what a 401 means to detection. ``None``
+    is an endpoint that lists for anyone.
+    """
+
+    async def fake(base_url, key_env=None):
+        if not engine or base_url != engine.base_url:
+            return None
+        if wants is not None and not (key_env == wants and os.environ.get(wants)):
+            return None
+        return replace(engine, api_key_env=key_env or None)
 
     monkeypatch.setattr(detect_module, "ask", fake)
 
@@ -1104,9 +1163,15 @@ def test_an_address_may_be_given_the_name_the_reader_wants(tmp_path, monkeypatch
 def test_an_address_takes_the_name_of_a_variable_and_never_a_key(tmp_path, monkeypatch):
     """The fence, at the one place a hosted endpoint makes it tempting. A
     variable's name is not a secret and belongs in the file; the value is one
-    and never crosses."""
+    and never crosses.
+
+    The endpoint here lists nothing until the request carries the key, which is
+    what every hosted one does -- so this also says the key is asked *with* and
+    not merely written down afterwards.
+    """
     _machine(monkeypatch, {})
-    _found(monkeypatch, _OFFICE)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    _found(monkeypatch, _OFFICE, wants="OFFICE_TOKEN")
     client = _client(tmp_path, binding=_BLOCK, tasks=False)
 
     reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN", api_key="sk-nope")
@@ -1116,6 +1181,55 @@ def test_an_address_takes_the_name_of_a_variable_and_never_a_key(tmp_path, monke
     assert "api_key_env: OFFICE_TOKEN" in written
     assert "sk-nope" not in written
     assert "sk-nope" not in reply.text
+
+
+def test_a_variable_the_daemon_cannot_read_is_said_out_loud(tmp_path, monkeypatch):
+    """Left to detection this came back as "nothing usable answered at ..." --
+    true, and about the wrong problem. The daemon's environment is not the
+    reader's shell, so which one it is missing from matters."""
+    _machine(monkeypatch, {})
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _found(monkeypatch, _OFFICE, wants="OFFICE_TOKEN")
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN")
+
+    assert reply.status_code == 409
+    assert "OFFICE_TOKEN" in reply.json()["error"] and "not set" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
+
+
+def test_an_endpoint_that_lists_without_a_key_still_takes_the_name(tmp_path, monkeypatch):
+    """An unset variable is not a precondition, and must not be one. The key
+    routinely lives in the environment a wrapper starts the daemon under, and
+    writing its name into a file people commit is a whole reason to do this."""
+    _machine(monkeypatch, {})
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _found(monkeypatch, _OFFICE)  # lists for anyone
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+
+    reply = _add_at(client, "http://gpu-box:8001/v1", key_env="OFFICE_TOKEN")
+
+    assert reply.status_code == 200, reply.text
+    assert "api_key_env: OFFICE_TOKEN" in (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+
+def test_a_key_variable_with_no_address_is_refused_rather_than_dropped(tmp_path, monkeypatch):
+    """The four ports on this machine are not endpoints a key opens, and there
+    is no saying which of them it was meant for. Read only inside the address
+    branch, it went nowhere and answered 200 -- leaving a caller believing they
+    had declared a keyed endpoint they had not."""
+    _machine(monkeypatch, {_OLLAMA: Catalogue((Served(id="qwen3:32b"),))})
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = client.post("/api/projects/board/models/add", json={"engine": "ollama", "key_env": "OFFICE_TOKEN"})
+
+    assert reply.status_code == 400
+    assert "address" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before
 
 
 def test_a_name_already_in_the_file_is_refused_rather_than_overwritten(tmp_path, monkeypatch):

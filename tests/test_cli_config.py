@@ -56,7 +56,7 @@ def _serving(monkeypatch, answers: "dict[tuple[str, str | None], tuple[str, ...]
     `poieo config models` has to work with the laptop's Ollama switched off.
     """
 
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         return answers.get((type_, base_url), ())
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
@@ -138,6 +138,25 @@ def test_config_models_lists_what_each_provider_serves_now(tmp_path, monkeypatch
     assert result.exit_code == 0, result.output
     for model in ("qwen3:32b", "llama3.2:3b", "claude-opus-5"):
         assert model in result.stdout, model
+
+
+def test_config_models_asks_a_keyed_endpoint_with_the_variable_it_names(tmp_path, monkeypatch):
+    """A hosted endpoint answers 401 to an unauthenticated listing, and 401 is
+    silence to detection -- so this printed "no answer" beside an endpoint that
+    was working perfectly, and the reader had nothing to choose from."""
+    _project(tmp_path, BINDING.replace("    type: anthropic", "    type: anthropic\n    api_key_env: OFFICE_TOKEN"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+
+    async def models_for(type_, base_url=None, api_key_env=None):
+        return ("claude-opus-5",) if (type_, api_key_env) == ("anthropic", "OFFICE_TOKEN") else ()
+
+    monkeypatch.setattr(detect_module, "models_for", models_for)
+
+    result = runner.invoke(app, ["config", "models"])
+
+    assert result.exit_code == 0, result.output
+    assert "claude-opus-5" in result.stdout
 
 
 def test_config_models_marks_what_is_already_in_use(tmp_path, monkeypatch):
@@ -226,7 +245,7 @@ def test_config_models_asks_every_provider_at_once(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     in_flight, overlapped = 0, False
 
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         nonlocal in_flight, overlapped
         in_flight += 1
         overlapped = overlapped or in_flight > 1

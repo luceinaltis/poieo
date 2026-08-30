@@ -394,7 +394,7 @@ def create_app(daemon: Any) -> Starlette:
             *(
                 # No cap: this panel *is* the catalogue, and forty of three
                 # hundred shown without a word reads as all of them.
-                engines.catalogue_for(provider.type, provider.base_url, limit=None)
+                engines.catalogue_for(provider.type, provider.base_url, limit=None, api_key_env=provider.api_key_env)
                 for _, provider in declared
             )
         )
@@ -710,7 +710,9 @@ def create_app(daemon: Any) -> Starlette:
         # server switched off still gets to edit its own config, exactly as
         # `poieo config use` allows. But a model named from memory is the typo
         # this exists to prevent, so an answer is believed.
-        answered = await engines.catalogue_for(declared.type, declared.base_url, limit=None)
+        answered = await engines.catalogue_for(
+            declared.type, declared.base_url, limit=None, api_key_env=declared.api_key_env
+        )
         served = [one.id for one in answered.models]
         if served and model not in served:
             return JSONResponse(
@@ -792,25 +794,50 @@ def create_app(daemon: Any) -> Starlette:
         url = str(body.get("url", "")).strip()
         wanted = str(body.get("engine", ""))
 
+        # A **name**, never a key. The variable is not a secret and belongs in
+        # the file; the value belongs in the environment, and this route would
+        # not know what to do with one if it were sent.
+        key_env = str(body.get("key_env") or "")
+        if key_env and not url:
+            # The four ports detection looks at on this machine are not
+            # endpoints a key opens, and there would be no saying which of them
+            # it was meant for. Dropped in silence it left a caller believing
+            # they had declared a keyed endpoint they had not.
+            return JSONResponse(
+                {"error": "a key variable names the key for one address; send the address too"},
+                status_code=400,
+            )
+
         if url:
             # An address nobody detected. `CANDIDATES` knows four ports on this
             # machine, and an inference server is routinely somewhere else --
             # so the reader types where it is and this asks what is there,
             # rather than a form asking them to classify their own server.
-            found = await engines.ask(url)
+            #
+            # Asked *with* the key: an endpoint that wants one answers 401 to a
+            # listing, so the endpoints this field exists for were the ones it
+            # could not add.
+            found = await engines.ask(url, key_env or None)
             if found is None:
+                if key_env and not os.environ.get(key_env):
+                    # Only on the way out, never as a precondition: the key may
+                    # live in the environment a wrapper starts the daemon under
+                    # rather than this one, and an endpoint that lists without a
+                    # key still declares. But a 401 reads to detection as
+                    # silence, and "nothing usable answered" alone is a true
+                    # sentence about the wrong problem.
+                    return JSONResponse(
+                        {
+                            "error": f"nothing usable answered at {url}, and ${key_env} is not set where the "
+                            f"daemon is running -- if that endpoint wants a key, it was asked without one"
+                        },
+                        status_code=409,
+                    )
                 return JSONResponse(
                     {"error": f"nothing usable answered at {url} -- no listing, or one with no models on it"},
                     status_code=409,
                 )
-            # A **name**, never a key. The variable is not a secret and belongs
-            # in the file; the value belongs in the environment, and this route
-            # would not know what to do with one if it were sent.
-            found = replace(
-                found,
-                key=str(body.get("name") or found.key),
-                api_key_env=str(body.get("key_env") or "") or None,
-            )
+            found = replace(found, key=str(body.get("name") or found.key))
             if found.key in spec.providers:
                 return JSONResponse(
                     {

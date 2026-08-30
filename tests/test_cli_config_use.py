@@ -49,7 +49,7 @@ def _project(tmp_path, binding: str = BINDING):
 
 
 def _serving(monkeypatch, answers):
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         return answers.get((type_, base_url), ())
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
@@ -177,3 +177,40 @@ def test_what_config_prints_is_what_use_takes_back(tmp_path, monkeypatch):
     assert runner.invoke(app, ["config", "use", shown]).exit_code == 0
 
     assert load_binding(path).resolve("default").model == "qwen3:32b"
+
+
+# -- an endpoint that lists nothing until it is asked with a key ---------------
+
+
+def _keyed(monkeypatch, wants: str, answers):
+    """`models_for`, answering only when asked with the right key variable.
+
+    What a hosted endpoint does: an unauthenticated listing is a 401, which
+    detection reads as an endpoint serving nothing at all.
+    """
+
+    async def models_for(type_, base_url=None, api_key_env=None):
+        return answers.get((type_, base_url), ()) if api_key_env == wants else ()
+
+    monkeypatch.setattr(detect_module, "models_for", models_for)
+
+
+def test_a_keyed_endpoint_is_asked_with_its_key_before_a_model_is_believed(tmp_path, monkeypatch):
+    """The typo check is only as good as the listing behind it. Asked without
+    the key, a hosted endpoint answers nothing, `served` is empty and the check
+    is skipped -- so a model that does not exist gets written into the file,
+    which is the one thing this pair exists to prevent."""
+    path = _project(
+        tmp_path,
+        BINDING.replace("    type: anthropic", "    type: anthropic\n    api_key_env: OFFICE_TOKEN"),
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    before = path.read_text(encoding="utf-8")
+    _keyed(monkeypatch, "OFFICE_TOKEN", {("anthropic", None): ("claude-opus-5",)})
+
+    result = runner.invoke(app, ["config", "use", "claude/claude-opus-4"])
+
+    assert result.exit_code != 0
+    assert "does not serve" in result.output
+    assert path.read_text(encoding="utf-8") == before

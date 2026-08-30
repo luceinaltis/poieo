@@ -970,7 +970,11 @@ def config_models(
     async def _go() -> list[tuple[str, ...]]:
         # All at once: two endpoints asked in single file is two timeouts on a
         # laptop where neither is running.
-        return list(await asyncio.gather(*(engines.models_for(p.type, p.base_url) for p in spec.providers.values())))
+        return list(
+            await asyncio.gather(
+                *(engines.models_for(p.type, p.base_url, p.api_key_env) for p in spec.providers.values())
+            )
+        )
 
     served = dict(zip(names, asyncio.run(_go())))
     in_use = {target: role for role, target in spec.spoken_for().items()}
@@ -1041,14 +1045,33 @@ def config_add(
     because declaring a model and choosing one are different decisions.
     """
     path, _ = _configured()
+    if key_env and not url:
+        # The four ports detection looks at on this machine are not endpoints a
+        # key opens, and there would be no saying which of them it was meant
+        # for. Silently ignoring it left somebody believing they had declared a
+        # keyed endpoint they had not.
+        _fail("--key-env names the key for one address; pass the address too")
     if url:
-        engine = asyncio.run(engines.ask(url))
+        engine = asyncio.run(engines.ask(url, key_env or None))
         if engine is None:
+            # Only on the way out, and never as a precondition. The key may
+            # well live in the environment the daemon or a wrapper runs under
+            # rather than this shell, and recording its name in a file somebody
+            # commits is a perfectly good reason to run this here -- so an
+            # endpoint that lists without one still declares.
+            #
+            # But an endpoint that wants a key answers 401 to a listing, which
+            # detection reads as silence. "Nothing usable answered" alone is a
+            # true sentence about the wrong problem, and has the reader retyping
+            # an address that was right.
+            if key_env and not os.environ.get(key_env):
+                _fail(
+                    f"nothing usable answered at {url}, and ${key_env} is not set here -- "
+                    f"if that endpoint wants a key, it was asked without one"
+                )
             _fail(f"nothing usable answered at {url} -- no listing, or one with no models on it")
         if name:
             engine = replace(engine, key=name)
-        if key_env:
-            engine = replace(engine, api_key_env=key_env)
         if engine.key in load_binding(path).providers:
             _fail(
                 f"'{engine.key}' is already declared in {path}. Pass --name to "
@@ -1117,7 +1140,7 @@ def config_use(
         # named from memory is the typo this whole pair exists to prevent, so
         # when there *is* an answer it is believed.
         declared = spec.providers[provider]
-        served = asyncio.run(engines.models_for(declared.type, declared.base_url))
+        served = asyncio.run(engines.models_for(declared.type, declared.base_url, declared.api_key_env))
         if served and model not in served:
             _fail(f"'{provider}' does not serve '{model}'. It has: {', '.join(served)}")
 

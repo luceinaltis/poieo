@@ -244,9 +244,43 @@ recognise; `openai_compatible` would tell them nothing, being five products at
 once. Nothing answering is None, and so is an empty listing — the rule
 :func:`probe` holds, for the same reason.
 
-`Engine.api_key_env` carries the **name** of a variable, filled in by the
-caller, and `rebind.declare` writes it. Never a value: detection has no business
-holding a credential, and the file this ends up in is one people commit.
+`Engine.api_key_env` carries the **name** of a variable, and `rebind.declare`
+writes it. Never a value: detection has no business holding a credential, and
+the file this ends up in is one people commit.
+
+### The endpoints that answer nothing until asked properly
+
+An endpoint that wants a key answers **401 to a listing**, and a 401 is a
+`Catalogue()` — which reads, all the way up, as "nothing usable answered". That
+is a vLLM or SGLang started with `--api-key`, and every hosted endpoint reached
+the way `config add <url>` reaches one: as `openai_compatible` with its address
+written down. Asking without the key made those the one kind a key could not
+add.
+
+(The 14 named preset types in `providers/presets.py` — `openai`, `groq`,
+`together` — are a separate gap and not this one. `askable()` does not know
+them, so `catalogue_for` returns empty before it reaches a socket, and a binding
+declaring one still reads as "nothing to ask". Adding a key changes nothing
+there.)
+
+So `catalogue_for` takes `api_key_env` and sends `Authorization: Bearer` when
+that variable is set, and every caller holding a `ProviderSpec` passes
+`spec.api_key_env` — `poieo config models`, `config use`'s check that a model is
+really there, and both of the board's model routes. `ask(url, key_env)` carries
+it through all three of its attempts and writes it onto the `Engine` it returns,
+so a caller cannot end up having probed one endpoint and declared another.
+
+Read straight from the environment, **not** through `providers.credential_for`,
+which raises when the variable is unset. Detection asks and never decides: a
+name with nothing behind it is a question for whoever typed it, and it is the
+callers that took the name — `poieo config add` and `POST …/models/add` — that
+say so. On the way *out* and never as a precondition: an endpoint that lists
+for anyone still declares, because the key routinely lives in the environment a
+wrapper starts the daemon under rather than the shell running the command, and
+writing its name into a file people commit is a whole reason to be there. But
+when the address answered nothing and the variable was empty, both are said,
+since "nothing usable answered at …" alone is a true sentence about the wrong
+problem.
 
 ### Who is actually answering
 

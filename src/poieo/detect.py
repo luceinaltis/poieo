@@ -23,6 +23,7 @@ Design: docs/storage.md
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -232,17 +233,36 @@ def _server_named(entry: dict[str, Any]) -> str | None:
     return _SAYS_ITS_NAME.get(owner) if isinstance(owner, str) else None
 
 
-async def _listed(type_: str, base_url: str, limit: int | None) -> Catalogue:
+def _bearer(api_key_env: str | None) -> dict[str, str]:
+    """The `Authorization` header for a listing, or nothing at all.
+
+    Read straight from the environment rather than through
+    `providers.credential_for`, which raises when the variable is unset.
+    Detection asks and never decides: a name with nothing behind it is a
+    question for whoever typed it, not an exception out of a probe. The caller
+    that took the name is the one that can say so, and both of them do.
+    """
+    key = os.environ.get(api_key_env or "")
+    return {"authorization": f"Bearer {key}"} if key else {}
+
+
+async def _listed(type_: str, base_url: str, limit: int | None, api_key_env: str | None = None) -> Catalogue:
     """Ask one HTTP address what it has, and who it says it is.
 
     Every outcome is a return value, never an exception -- including a 200
     that is not JSON, which is what a proxy or a captive portal answers with,
     and including an entry shaped in a way its own reader chokes on.
+
+    **Including a 401, which is why the key is here.** Every hosted endpoint
+    answers one to an unauthenticated listing, and so does a vLLM started with
+    `--api-key`. Asked without the key, all of them read as "nothing usable
+    answered" -- so the endpoints a key exists for were the ones a key could
+    not add.
     """
     path, listing, read = _READERS[type_]
     identifier = _IDENTIFIES[type_]
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, headers=_bearer(api_key_env)) as client:
             response = await client.get(f"{base_url}{path}")
     except httpx.RequestError:
         return Catalogue()
@@ -274,19 +294,24 @@ async def _listed(type_: str, base_url: str, limit: int | None) -> Catalogue:
     return Catalogue(tuple(out), server)
 
 
-async def _claude_models() -> tuple[str, ...]:
+async def _claude_models(api_key_env: str | None = None) -> tuple[str, ...]:
     """What Claude serves, if this machine holds a credential the SDK accepts.
 
     Asked through the SDK rather than a URL, because it resolves an
     ``ANTHROPIC_API_KEY``, an auth token, or an ``ant auth login`` profile on
     its own -- and with none of them it refuses before any network I/O, which
     is what keeps init instant on a machine that has never seen a key.
+
+    A binding that names its own variable is taken at its word, the same way
+    `anthropic_provider` takes it: the SDK's own resolution is the fallback for
+    a binding that named none, not an override of one that did.
     """
     import anthropic
 
+    named = os.environ.get(api_key_env or "")
     client = None
     try:
-        client = anthropic.AsyncAnthropic(timeout=HTTP_TIMEOUT, max_retries=0)
+        client = anthropic.AsyncAnthropic(timeout=HTTP_TIMEOUT, max_retries=0, **({"api_key": named} if named else {}))
         listed = await client.models.list(limit=MODEL_CAP)
         return tuple(str(model.id) for model in listed.data)
     except Exception:
@@ -309,7 +334,12 @@ def askable(type_: str) -> bool:
     return type_ == "anthropic" or type_ in _READERS
 
 
-async def catalogue_for(type_: str, base_url: str | None = None, limit: int | None = MODEL_CAP) -> Catalogue:
+async def catalogue_for(
+    type_: str,
+    base_url: str | None = None,
+    limit: int | None = MODEL_CAP,
+    api_key_env: str | None = None,
+) -> Catalogue:
     """What an endpoint of this type, at this address, serves **right now**,
     with whatever else it said about each model.
 
@@ -319,24 +349,30 @@ async def catalogue_for(type_: str, base_url: str | None = None, limit: int | No
     board can never disagree about where to look -- which is why the richer
     answer lives here and `models_for` is a view of it rather than a second
     request with its own idea of where to send it.
+
+    ``api_key_env`` names the variable this endpoint's key is read from, and is
+    the same field a binding declares. A caller holding a `ProviderSpec` passes
+    `spec.api_key_env`; without it a hosted endpoint answers 401 and reads as
+    serving nothing, which is a panel showing an empty list beside a provider
+    that is working perfectly.
     """
     if type_ == "anthropic":
         # The SDK's listing promises an id and nothing this cares about, and
         # asks for `MODEL_CAP` of them -- Anthropic serves far fewer than that,
         # so a caller wanting everything already has it.
-        named = await _claude_models()
+        named = await _claude_models(api_key_env)
         return Catalogue(tuple(Served(id=name) for name in named[:limit]))
     if type_ not in _READERS or base_url is None:
         # A type with nothing to ask -- `mock` answers from its own file, and
         # an unknown backend registered by a caller has no listing convention.
         return Catalogue()
-    return await _listed(type_, base_url, limit)
+    return await _listed(type_, base_url, limit, api_key_env)
 
 
-async def models_for(type_: str, base_url: str | None = None) -> tuple[str, ...]:
+async def models_for(type_: str, base_url: str | None = None, api_key_env: str | None = None) -> tuple[str, ...]:
     """Just the ids, for the callers that only ever wanted a list of names --
     `init`, `config add`, and `config use`'s check that a model is really there."""
-    return tuple(model.id for model in (await catalogue_for(type_, base_url)).models)
+    return tuple(model.id for model in (await catalogue_for(type_, base_url, api_key_env=api_key_env)).models)
 
 
 # Addresses whose product is worth naming, beyond the four `CANDIDATES`
@@ -493,7 +529,7 @@ def _named_for(base_url: str, said: str | None) -> str:
     return re.sub(r"[^\w-]+", "-", host).strip("-").lower() or "endpoint"
 
 
-async def ask(base_url: str) -> Engine | None:
+async def ask(base_url: str, key_env: str | None = None) -> Engine | None:
     """What is at this address, or None if nothing usable answers.
 
     `CANDIDATES` knows four ports on *this* machine. An inference server is
@@ -511,6 +547,12 @@ async def ask(base_url: str) -> Engine | None:
     Nothing answering is None, and so is answering with an empty listing --
     the rule :func:`probe` holds, for the same reason: naming an endpoint that
     serves nothing writes a binding that fails on the project's first run.
+
+    ``key_env`` is asked *with*, and then written down. Every attempt carries
+    it, because which of the three answers is exactly what is not known yet;
+    and the engine returned already names the variable, so a caller does not
+    graft it on afterwards and cannot end up having probed one endpoint and
+    declared another.
     """
     trimmed = base_url.strip().rstrip("/")
     if not trimmed:
@@ -525,7 +567,7 @@ async def ask(base_url: str) -> Engine | None:
     for type_, url in attempts:
         if url.endswith("/v1/v1"):
             continue
-        answered = await _listed(type_, url, MODEL_CAP)
+        answered = await _listed(type_, url, MODEL_CAP, key_env)
         if not answered.models:
             continue
         return Engine(
@@ -535,6 +577,7 @@ async def ask(base_url: str) -> Engine | None:
             models=tuple(model.id for model in answered.models),
             base_url=url,
             said=answered.server,
+            api_key_env=key_env or None,
         )
     return None
 

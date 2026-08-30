@@ -259,8 +259,8 @@ kind, `--key-env` for the endpoint that wants a key — the **name** of the
 variable, never the key, since this file is one people commit. The
 no-argument form is unchanged and still looks at this machine.
 
-Both of those are **names, and are checked as names before anything is
-written.** `rebind` composes the block it adds line by line, and YAML reads a
+`--name` and `--key-env` are **names, and are checked as names before anything
+is written.** `rebind` composes the block it adds line by line, and YAML reads a
 newline as the end of a line — so a `--key-env` carrying one is not a bad name,
 it is a second key, and one that could point the whole project at another
 model or send the real credential to another host. A name may hold letters,
@@ -274,6 +274,17 @@ And the check after the write asks the widened question: the file has to read
 back as the one that was there **plus exactly the endpoints asked for** —
 nothing else moved, each new block saying what was composed for it and no more.
 Anything else is put back as it was.
+
+`--key-env` is also what the endpoint is **asked with**, not just what gets
+written down afterwards: a hosted endpoint answers 401 to an unauthenticated
+listing, and 401 is silence to detection — so without this the endpoints the
+flag exists for were the ones it could not add. Passing it with no address at
+all is refused outright, since this machine's four ports are not endpoints a key
+opens and there would be no saying which one it was meant for. A variable that
+is **not set** is not refused, though: the key often lives where the daemon runs
+rather than in this shell, and an endpoint that lists for anyone still declares.
+It is only named when the address also answered nothing, because then it is the
+likelier of the two explanations.
 
 **The board can do this too.** `POST …/models/add` is `config add` from a
 browser, through the same `rebind.declare`, and the board finds the engine

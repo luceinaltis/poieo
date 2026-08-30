@@ -5,6 +5,9 @@ never heard of it, with no way to say so short of writing the block by hand.
 This is that way, and it is the same detection `init` used.
 """
 
+import os
+from dataclasses import replace
+
 from typer.testing import CliRunner
 
 from poieo import detect as detect_module
@@ -173,7 +176,7 @@ def test_added_engines_show_up_in_config_and_are_usable(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _machine_with(monkeypatch, OLLAMA, LMSTUDIO)
 
-    async def models_for(type_, base_url=None):
+    async def models_for(type_, base_url=None, api_key_env=None):
         return {
             ("ollama", "http://localhost:11434"): ("qwen3:32b",),
             ("openai_compatible", "http://localhost:1234/v1"): ("qwen2.5-coder-7b",),
@@ -243,9 +246,23 @@ def test_a_server_that_named_itself_is_called_that_when_there_is_nothing_new(tmp
 # command's no-argument form is untouched: that one still looks at this machine.
 
 
-def _at(monkeypatch, engine):
-    async def fake(base_url):
-        return engine if base_url == engine.base_url else None
+def _at(monkeypatch, engine, wants: str | None = None):
+    """`detect.ask`, stood in for.
+
+    ``wants`` names the variable this endpoint refuses to list without -- what
+    every hosted endpoint does, and what a vLLM started with `--api-key` does.
+    It has to be both named *and* set, since that is when the real `ask` has a
+    key to send; without one the address answers as though nothing were there,
+    which is what a 401 means to detection. ``None`` is an endpoint that lists
+    for anyone.
+    """
+
+    async def fake(base_url, key_env=None):
+        if base_url != engine.base_url:
+            return None
+        if wants is not None and not (key_env == wants and os.environ.get(wants)):
+            return None
+        return replace(engine, api_key_env=key_env or None)
 
     monkeypatch.setattr(detect_module, "ask", fake)
 
@@ -299,15 +316,81 @@ def test_an_address_may_be_given_the_name_the_reader_wants(tmp_path, monkeypatch
 
 def test_an_address_may_name_the_variable_its_key_comes_from(tmp_path, monkeypatch):
     """A hosted endpoint wants one. The **name** of the variable is not a
-    secret and belongs in the file; the key itself never goes near it."""
+    secret and belongs in the file; the key itself never goes near it.
+
+    And the endpoint here is the real shape of one: it lists nothing at all
+    until the request carries the key. That is what OpenAI, Groq, Together and
+    a vLLM behind `--api-key` all do, and asking without the key made them the
+    one kind of endpoint `--key-env` could not add.
+    """
     path = _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    _at(monkeypatch, OFFICE)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    _at(monkeypatch, OFFICE, wants="OFFICE_TOKEN")
 
     result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--key-env", "OFFICE_TOKEN"])
 
     assert result.exit_code == 0, result.output
     assert load_binding(path).providers["gpu-box"].api_key_env == "OFFICE_TOKEN"
+
+
+def test_the_same_endpoint_without_the_key_is_the_address_that_answered_nothing(tmp_path, monkeypatch):
+    """The other half, and the reason the one above is not circular."""
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    _at(monkeypatch, OFFICE, wants="OFFICE_TOKEN")
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1"])
+
+    assert result.exit_code != 0
+    assert "nothing usable answered" in result.output
+
+
+def test_an_address_that_answered_nothing_says_the_variable_was_empty_too(tmp_path, monkeypatch):
+    """Left to detection this came back as "nothing usable answered at ..." --
+    a true sentence about the wrong problem, and one that has the reader
+    retyping an address that was right all along."""
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _at(monkeypatch, OFFICE, wants="OFFICE_TOKEN")
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--key-env", "OFFICE_TOKEN"])
+
+    assert result.exit_code != 0
+    assert "OFFICE_TOKEN" in result.output and "not set" in result.output
+
+
+def test_an_endpoint_that_lists_without_a_key_is_declared_with_the_name_anyway(tmp_path, monkeypatch):
+    """An unset variable is not a precondition, and must not be one. The key
+    routinely lives in the environment the daemon runs under rather than this
+    shell, and writing its name into a file somebody commits is a whole reason
+    to run this from here."""
+    path = _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OFFICE_TOKEN", raising=False)
+    _at(monkeypatch, OFFICE)  # lists for anyone
+
+    result = runner.invoke(app, ["config", "add", "http://gpu-box:8001/v1", "--key-env", "OFFICE_TOKEN"])
+
+    assert result.exit_code == 0, result.output
+    assert load_binding(path).providers["gpu-box"].api_key_env == "OFFICE_TOKEN"
+
+
+def test_naming_a_variable_with_no_address_says_which_is_missing(tmp_path, monkeypatch):
+    """The four ports detection looks at on this machine are not endpoints a
+    key opens, and there would be no saying which of them it was meant for. It
+    used to be read only inside the `if url:` branch and dropped in silence."""
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OFFICE_TOKEN", "sk-real")
+    _machine_with(monkeypatch, OLLAMA)
+
+    result = runner.invoke(app, ["config", "add", "--key-env", "OFFICE_TOKEN"])
+
+    assert result.exit_code != 0
+    assert "address" in result.output
 
 
 def test_a_name_already_in_the_file_is_refused_rather_than_overwritten(tmp_path, monkeypatch):
