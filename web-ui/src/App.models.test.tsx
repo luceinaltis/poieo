@@ -139,7 +139,7 @@ test("the rail lists what there is to look at, board first", async () => {
   // `board` is the page with no panel over it, which is why it is a rail item
   // rather than a close box. The two after it are the panels that take the
   // margin, in the order they arrived.
-  expect(railed()).toEqual(["board", "models", "new task"])
+  expect(railed()).toEqual(["board", "hours", "models", "new task"])
 })
 
 test("the rail opens the panel for the project on screen", async () => {

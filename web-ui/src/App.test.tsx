@@ -56,6 +56,12 @@ vi.mock("./api", () => ({
   accept: vi.fn(async () => ({ ok: true, accepted: 0 })),
   discard: vi.fn(async () => ({ ok: true, discarded: 0 })),
   openFeed: vi.fn(() => () => {}),
+  fetchModels: vi.fn(async () => ({
+    binding: { name: "mock", path: "x.yaml" },
+    roles: ["default"],
+    endpoints: [],
+  })),
+  fetchUndeclared: vi.fn(async () => []),
 }))
 
 import App from "./App"
@@ -169,13 +175,82 @@ test("the picker lists the registered skins and the board carries the tasks", as
   const picker = container.querySelector("select")!
   // Against the registry rather than a list written out here: which skins
   // exist is `registry.test.ts`'s question, and this one is only whether the
-  // picker offers all of them. Spelled out, it failed every time a skin was
-  // added and said nothing about the picker either way.
+  // picker offers all of them. Only the board's renderings belong on it -- a
+  // skin that is a place of its own is reached from the rail instead, and
+  // listing it twice would be two ways to say one thing.
   expect(Array.from(picker.options).map((o) => o.value).sort()).toEqual(
-    SKINS.map((skin) => skin.id).sort(),
+    SKINS.filter((skin) => !skin.standalone).map((skin) => skin.id).sort(),
   )
   expect(picker.value).toBe("basic")
   expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
+})
+
+test("hours is a place on the rail: there when you go, gone when you leave", async () => {
+  await render(initialStage(FLOWS))
+
+  // The rail carries it beside board, models and new task.
+  const go = container.querySelector<HTMLElement>('[data-do="open-hours"]')!
+  expect(go).not.toBeNull()
+  await act(async () => go.click())
+
+  // The stage now answers "what has it been doing" -- and the rendering
+  // picker is gone, because it renders the *board*, which is not on screen.
+  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelector(".basic")).toBeNull()
+  expect(go.getAttribute("aria-current")).toBe("page")
+  expect(container.querySelector(".shell-skin")).toBeNull()
+
+  // Board brings back the rendering that was left, not a hard-coded one.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-board"]')!.click())
+  expect(container.querySelector(".basic")).not.toBeNull()
+  expect(container.querySelector(".hours")).toBeNull()
+  expect(
+    container.querySelector('[data-do="open-board"]')!.getAttribute("aria-current"),
+  ).toBe("page")
+})
+
+test("a panel opens over hours without knocking it off the stage", async () => {
+  await render(initialStage(FLOWS))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
+
+  // The panel holds the margin; the place behind it is still hours. One item
+  // says where you are, and it is the panel's.
+  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+  expect(
+    container.querySelector('[data-do="open-models"]')!.getAttribute("aria-current"),
+  ).toBe("page")
+
+  // Closing it lands back on hours, not on the board.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+  expect(
+    container.querySelector('[data-do="open-hours"]')!.getAttribute("aria-current"),
+  ).toBe("page")
+})
+
+test("a task picked off an hours lane opens the drawer with hours still on stage", async () => {
+  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-hours"]')!.click())
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .hours-head')!.click()
+  })
+
+  expect(container.querySelector(".drawer")).not.toBeNull()
+  expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
+  expect(container.querySelector(".hours")).not.toBeNull()
+})
+
+test("a reader who left on hours comes back to hours", async () => {
+  localStorage.setItem("poieo.skin", "hours")
+  await render(initialStage(FLOWS))
+
+  expect(container.querySelector(".hours")).not.toBeNull()
+  expect(
+    container.querySelector('[data-do="open-hours"]')!.getAttribute("aria-current"),
+  ).toBe("page")
 })
 
 test("a stale stored skin id still renders a board", async () => {

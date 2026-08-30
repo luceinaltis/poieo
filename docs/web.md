@@ -483,8 +483,9 @@ the project's, and putting them in the drawer would repeat one answer on every
 task.
 
 The **rail** is the nav down the left: what the page is *for*, where the bar's
-controls are a fixed handful about the board already on screen. It holds `board`
-and `models` today and is where the next view lands. `board` is a rail item
+controls are a fixed handful about the board already on screen. It holds
+`board`, `hours`, `models` and `new task` today and is where the next view
+lands. `board` is a rail item
 rather than a close box, because "no panel over it" is a place you can be and
 closing is not — the rail always says where you are, in one item marked
 `aria-current="page"`.
@@ -602,13 +603,21 @@ shell and onto every future skin to serve one skin's private problem.
 The chosen skin lives in `localStorage`. `basic` is the default, and is also
 where a stale or unknown id lands rather than blanking the page -- so a reader
 with nothing stored and a reader with something unreadable stored get the same
-page. `hours` and `atelier` are a click away.
+page.
 
 **Each skin answers one question, and a new one has to bring its own.** `basic`
 answers what this project does and where it is right now; `atelier` answers
 whether it is working; `hours` answers what it has been doing, and when. A
 fourth skin that answers a question one of those already answers is a second way
 of saying an existing thing, which DESIGN.md refuses.
+
+Answering a *different* question also decides where a skin is offered. The bar's
+picker holds renderings of the board -- `basic` against `atelier` is a taste --
+while `hours` is marked `standalone` in its module and surfaces as a rail item
+instead: the rail lists what a reader comes to the page *for*, and "what has it
+been doing" is a thing to come for, not a way to draw the thing already on
+screen. The picker leaves the bar while a rail place holds the stage, and the
+board item brings back whichever rendering the board was left in.
 `basic` draws the work as a graph — the tasks, their nodes, the arrows between
 them, the model each node calls, and which of them have **hands**. That last one
 is marked with the word rather than a glyph, and on every node that has them
@@ -660,9 +669,8 @@ refused rather than quietly rewritten. It takes the three things DESIGN.md says
 a task cannot do without and no fourth, and the folder is required because it is
 the one thing the model's hands will touch.
 
-The rail's third item is the page that calls it: `make/MakeTask.tsx`, beside
-`models/` because making a task is what the board is *for* rather than something
-one task does. It asks for the three fields and names the folder in a sentence
+The rail item that calls it is `make/MakeTask.tsx`, beside `models/` because
+making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
 above the button — the card starts running when it is saved, and that sentence
 is principle 7's one exception to hiding the machinery. One panel holds the
 stage's single margin, so opening it closes the other.

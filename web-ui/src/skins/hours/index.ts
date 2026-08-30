@@ -202,6 +202,8 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
 export const hours: Skin = {
   id: "hours",
   label: "Hours",
+  // A place, not a rendering: the rail carries it, the picker does not.
+  standalone: true,
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
     const root = element("div", "hours", el)

@@ -96,7 +96,7 @@ const panel = (label: string) => container.querySelector(`[aria-label="${label}"
 test("the rail offers making one, beside looking at things", async () => {
   await open()
   const railed = [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
-  expect(railed).toEqual(["board", "models", "new task"])
+  expect(railed).toEqual(["board", "hours", "models", "new task"])
 })
 
 test("it opens the form for the project on screen", async () => {
