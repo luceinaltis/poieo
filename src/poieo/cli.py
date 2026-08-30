@@ -72,7 +72,7 @@ from .project import (
     nothing_found,
 )
 from .providers import ProviderPool
-from .rebind import declare, point_at
+from .rebind import already, declare, point_at
 from .runtime.executor import execute, needs_a_workdir, preflight
 from .store import NullStore, RunStore
 from .tools import Isolation, ToolContext
@@ -1075,12 +1075,10 @@ def config_add(
             _fail(f"nothing usable answered at {url} -- no listing, or one with no models on it")
         if name:
             engine = replace(engine, key=name)
-        if engine.key in load_binding(path).providers:
-            _fail(
-                f"'{engine.key}' is already declared in {path}. Pass --name to "
-                f"call this one something else; an endpoint already there is "
-                f"never overwritten."
-            )
+        # By name *and* by address, through the one rule the board asks too --
+        # so the same press cannot be refused in the browser and accepted here.
+        if (why := already(path, engine)) is not None:
+            _fail(why)
         found = [engine]
     else:
         found = engines.detect()

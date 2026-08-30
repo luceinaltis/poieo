@@ -248,9 +248,13 @@ holds the split.
 a slow paint: its usual answer is "nothing new", and a control whose usual answer
 is nothing is one people learn to ignore. Two requests cost nobody anything.
 
-`_unclaimed` decides *cannot reach* **by address, not by key**: somebody who
-declared the vLLM on this machine as `fast` has it, and offering it again under
-the name detection would have picked writes one server into one file twice.
+`_unclaimed` decides *cannot reach* **by address as well as by key**: somebody
+who declared the vLLM on this machine as `fast` has it, and offering it again
+under the name detection would have picked writes one server into one file
+twice. That is `detect.declared_as`, which `rebind.declare` asks too — they were
+two answers once, this comparing addresses and `declare` comparing keys, so the
+offer this route withheld was one `poieo config add` would happily have written
+in as a second name for one server.
 
 What "the same address" means is `detect.one_machine` — **`host:port`, because a
 port is a server**. Two of them cannot share one, so which listing path a server
@@ -261,8 +265,9 @@ than here; this module briefly had its own weaker copy and was wrong for
 answering at its root — so adding a vLLM by address made the panel immediately
 offer to add it again. It goes no further than a string comparison: resolving a
 hostname would turn a question about a config into a DNS lookup. A candidate with no
-address (`claude`, asked through its own SDK) is claimed by any endpoint of its
-type instead.
+address (`claude`, asked through its own SDK) is claimed by an endpoint of its
+type **that also has none** — a `type: anthropic` pointed at a proxy is an
+address, and is reached by the address like anything else.
 
 `label` is `Engine.known_as` — **what the server said it was**, not the label of
 the address it was found at, which for the port vLLM and SGLang share is the
@@ -402,7 +407,7 @@ nothing change, then told it was already there.
 | **400** | a key variable with no address to use it on | — |
 | **400** | an address that cannot be asked anything at all | why not |
 | **409** | nothing usable answered at that address | the key variable, when it was also unset |
-| **409** | that name is already in the file | — |
+| **409** | that name, or that server, is already in the file | the name it is under |
 | **409** | this project already reaches it | — |
 | **409** | it is not answering on this machine | — |
 | **409** | `rebind` could not add to that file | its own sentence, naming the file |

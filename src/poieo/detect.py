@@ -479,6 +479,40 @@ def one_machine(base_url: str | None) -> str | None:
     return f"{here}:{port}" if port else here
 
 
+def declared_as(providers: Any, key: str, type_: str, base_url: str | None) -> str | None:
+    """The name a binding already reaches this endpoint under, or None.
+
+    Three ways one endpoint is already there, and only the first is a name:
+
+    1. **The key**, which is what a caller passing `--name` collides with.
+    2. **The address**, by :func:`one_machine`. Somebody who declared the vLLM
+       on this machine as `fast` has it, and adding it again under the name
+       detection would have picked writes one server into one file twice.
+    3. **The type**, for an endpoint with no address at all -- Claude's SDK
+       resolves its own, so there is nothing to compare and the type is the
+       whole identity. Only against a declared endpoint that also has none: a
+       `type: anthropic` pointed at a proxy is an address, and reached by the
+       rule above rather than by this one.
+
+    ``providers`` is a binding's `providers:` mapping; anything with `.type` and
+    `.base_url` on its values will do. It lives here rather than beside either
+    caller because this is the module that already knows how to read an address,
+    and the board and `rebind` had drifted into two answers -- one comparing
+    addresses and one comparing keys, so the same press was refused in the
+    browser and accepted in the terminal.
+    """
+    if key in providers:
+        return key
+    here = one_machine(base_url)
+    for name, declared in providers.items():
+        if here is not None:
+            if one_machine(declared.base_url) == here:
+                return name
+        elif declared.type == type_ and not declared.base_url:
+            return name
+    return None
+
+
 def is_here(base_url: str | None) -> bool | None:
     """Whether that address is *this* machine, or None if it is not an address.
 

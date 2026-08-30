@@ -43,7 +43,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
-from ..rebind import declare, point_at
+from ..rebind import already, declare, point_at
 from ..workspace import usable as git_keeps_copies
 from .events import BroadcastStore
 
@@ -254,20 +254,20 @@ def _unclaimed(spec: Any) -> list[engines.Candidate]:
     `http://localhost:8000` -- which `detect.ask` writes itself.
 
     A candidate with no address -- `claude`, which is asked through its own SDK
-    -- is claimed by any endpoint of its type instead, for the same reason
-    under a different spelling.
+    -- is claimed by an endpoint of its type that also has none, for the same
+    reason under a different spelling. One pointed at a proxy has an address,
+    and is reached by the address.
+
+    All three of those are `detect.declared_as`, which `rebind.declare` asks
+    too. They were two answers once: this offered by address and `declare`
+    filtered by key, so the offer this route withheld was one `poieo config
+    add` would happily write in as a second name for the same server.
     """
-    taken = {engines.one_machine(p.base_url) for p in spec.providers.values() if p.base_url}
-    types = {p.type for p in spec.providers.values()}
-
-    def reached(candidate: engines.Candidate) -> bool:
-        if candidate.key in spec.providers:
-            return True
-        if candidate.base_url:
-            return engines.one_machine(candidate.base_url) in taken
-        return candidate.type in types
-
-    return [candidate for candidate in engines.CANDIDATES if not reached(candidate)]
+    return [
+        candidate
+        for candidate in engines.CANDIDATES
+        if engines.declared_as(spec.providers, candidate.key, candidate.type, candidate.base_url) is None
+    ]
 
 
 def _key_state(name: str, provider: Any) -> bool | None:
@@ -974,14 +974,21 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     status_code=409,
                 )
             found = replace(found, key=str(body.get("name") or found.key))
-            if found.key in spec.providers:
-                return JSONResponse(
-                    {
-                        "error": f"this project already declares '{found.key}' -- "
-                        f"give this one another name, since one already there is never overwritten"
-                    },
-                    status_code=409,
-                )
+            # By address as well as by name, and read from the **file**: the
+            # spec in memory can be a step behind a terminal edit, and answering
+            # from it refused an endpoint the file does not have while `poieo
+            # config add` accepted the same one. The same callee the terminal
+            # asks, so there is one answer -- said about "this project", since
+            # that is what the rest of this route calls the file.
+            try:
+                why = await asyncio.to_thread(already, project.config.default_binding_path(), found, "this project")
+            except PoieoError as exc:
+                # Reading the file is where a binding a terminal has since
+                # broken is found out, and this route has no exception handler
+                # behind it. Its words, as the write below would have given.
+                return JSONResponse({"error": str(exc)}, status_code=409)
+            if why is not None:
+                return JSONResponse({"error": why}, status_code=409)
             answered = [found]
         elif wanted:
             candidate = next((one for one in _unclaimed(spec) if one.key == wanted), None)

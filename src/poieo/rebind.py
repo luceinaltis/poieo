@@ -211,6 +211,43 @@ def _as_declared(engine: "Engine") -> "ProviderSpec":
     return ProviderSpec(type=engine.type, base_url=engine.base_url, api_key_env=engine.api_key_env or None)
 
 
+def already(path: Path, engine: "Engine", called: str | None = None) -> str | None:
+    """Why this binding already reaches that endpoint, in words, or None.
+
+    Read from the **file**, not from a spec somebody is holding: a daemon's
+    in-memory copy can be a step behind a terminal edit, and answering from it
+    refused an endpoint the file does not have -- while the same command in the
+    terminal accepted it. `declare` reads the file too, so this is the same
+    question asked one moment earlier, in order to say something better than
+    "nothing new" about it.
+
+    ``called`` is how to name the file in the sentence; the path by default,
+    which is what somebody in a terminal wants. **Which** of the three ways it
+    was already there decides the sentence, because only one of them has advice
+    attached: a name is fixed by another name, and a server is not fixed by
+    anything short of editing the file.
+    """
+    from .binding import load_binding
+    from .detect import declared_as, one_machine
+
+    providers = load_binding(path).providers
+    name = declared_as(providers, engine.key, engine.type, engine.base_url)
+    if name is None:
+        return None
+    file = called or str(path)
+    declared = providers[name]
+    if engine.base_url and one_machine(declared.base_url) == one_machine(engine.base_url):
+        return (
+            f"{file} already reaches that server, as '{name}' -- one endpoint per "
+            f"server, so a second name for it is a hand edit rather than this"
+        )
+    if not engine.base_url and not declared.base_url:
+        return f"{file} already reaches that endpoint, as '{name}'"
+    return (
+        f"{file} already declares '{name}' -- give this one another name, since one already there is never overwritten"
+    )
+
+
 def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     """Add each engine to ``providers:`` that is not already there.
 
@@ -221,12 +258,19 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     choosing is what `config use` is for.
     """
     from .binding import load_binding
+    from .detect import declared_as
 
     path = Path(path)
     original = path.read_text(encoding="utf-8")
     was = load_binding(path)
 
-    fresh = [engine for engine in engines if engine.key not in was.providers]
+    # By address as well as by key. Filtering on the key alone wrote one server
+    # into one file twice: an Ollama declared as `fast` is one this project
+    # reaches, and adding it again under the name detection would have picked
+    # is not adding an endpoint, it is adding a second word for one.
+    fresh = [
+        engine for engine in engines if declared_as(was.providers, engine.key, engine.type, engine.base_url) is None
+    ]
     if not fresh:
         return []
 
