@@ -30,7 +30,12 @@ import os
 from typing import Any
 
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Provider, Usage
+from .base import Hands, LLMRequest, LLMResponse, Provider, ToolCall, Usage
+
+# The name poieo's own tools are offered under. A harness spells an MCP tool
+# `mcp__{server}__{tool}`, so the prefix is what an allow-list has to match.
+_POIEO_SERVER = "poieo"
+_POIEO_TOOL_PREFIX = f"mcp__{_POIEO_SERVER}__"
 
 
 class _Subscription(Provider):
@@ -65,20 +70,36 @@ class _Subscription(Provider):
                 provider=self.name,
             )
 
-    def _refuse_hands(self, request: LLMRequest) -> None:
-        """This slice answers; it does not touch files.
+    def _check_hands(self, request: LLMRequest) -> None:
+        """Whether this harness can serve the step's tools, and say so if not.
 
         Named after the step rather than the provider: a graph has several and
-        only some of them carry tools, and "which one" is the whole of what the
+        only some of them carry tools, so "which one" is the whole of what the
         reader needs to act.
+
+        A node with tools always arrives with `Hands` -- the runtime lends
+        them whenever it built an executor -- so a request that has tools and
+        none is a caller that has not been taught to, and answering it would
+        mean telling a harness about tools it cannot reach.
         """
-        if request.tools:
-            step = request.role or "this step"
+        if not request.tools:
+            return
+        step = request.role or "this step"
+        if request.hands is None:
             raise ProviderError(
-                f"'{step}' asks for tools, and provider '{self.name}' can only answer. "
-                f"Bind a step that has tools to an endpoint with a key, or drop its `tools:`",
+                f"'{step}' asks for tools, but nothing was lent to run them, so provider "
+                f"'{self.name}' has only their names. This is a caller that has not been "
+                f"taught to lend its hands, not a graph that is wrong",
                 provider=self.name,
             )
+        self._check_fence(step, request.hands)
+
+    def _check_fence(self, step: str, hands: Hands) -> None:
+        """Whether the fence the task asked for is one this harness can hold.
+
+        Nothing by default: a harness that runs poieo's own tools inherits
+        poieo's fence and has nothing to check.
+        """
 
     def _refuse_unusable(self, leftover: dict[str, Any]) -> None:
         """Generation settings a harness does not take are refused, not dropped.
@@ -167,7 +188,7 @@ class ClaudeCodeProvider(_Subscription):
         ``_build_kwargs``.
         """
         self._refuse_a_key()
-        self._refuse_hands(request)
+        self._check_hands(request)
         params = dict(request.params)
         options: dict[str, Any] = {
             # **No built-in tools at all.** Not a restriction on an agent: it
@@ -175,7 +196,10 @@ class ClaudeCodeProvider(_Subscription):
             # context of them, so there is nothing for it to reach for.
             "tools": [],
             "model": request.model,
-            "max_turns": 1,
+            # One call when there is nothing to reach for; the node's own
+            # ceiling when there is. An unattended harness looping without a
+            # bound is exactly what `max_turns` exists to prevent.
+            "max_turns": request.hands.max_turns if request.hands else 1,
             # Nothing of the reader's own checkout may decide what a poieo step
             # answers -- not their settings, not their MCP servers, not a
             # CLAUDE.md that happens to be above the folder the daemon started
@@ -184,6 +208,17 @@ class ClaudeCodeProvider(_Subscription):
             "strict_mcp_config": True,
             "mcp_servers": {},
         }
+        if request.tools and request.hands is not None:
+            # **poieo's tools, and only poieo's.** Every call goes back through
+            # the executor the node built -- so the workdir confinement holds,
+            # and a task that asked to be boxed is still working inside its
+            # container. The built-ins stay off above for the same reason: a
+            # built-in `Write` would reach the disk without passing the seam.
+            #
+            # Named without a prompt to approve them, because there is nobody
+            # at the keyboard at 3am and the fence is already the executor's.
+            options["allowed_tools"] = [f"{_POIEO_TOOL_PREFIX}{tool.name}" for tool in request.tools]
+            options["cwd"] = request.hands.workdir
         if request.system:
             options["system_prompt"] = request.system
         if "effort" in params:
@@ -196,6 +231,12 @@ class ClaudeCodeProvider(_Subscription):
     async def complete(self, request: LLMRequest) -> LLMResponse:
         options = self.plan(request)
         sdk = _agent_sdk(self.name)
+        if request.tools and request.hands is not None:
+            # The one part of the options that cannot be worked out without the
+            # SDK on the machine, and so the one part `plan()` leaves out: the
+            # server object itself. What it *contains* -- which tools, under
+            # which names -- is decided up there, where a test can read it.
+            options["mcp_servers"] = {_POIEO_SERVER: _lend(sdk, request.tools, request.hands)}
         result: dict[str, Any] = {}
         try:
             async for message in sdk.query(
@@ -259,6 +300,35 @@ class CodexProvider(_Subscription):
     key_variable = "OPENAI_API_KEY"
     login_command = "codex login"
 
+    #: What `--sandbox workspace-write` amounts to in poieo's own words: read
+    #: and write inside the folder, and run commands there.
+    _SERVES = frozenset({"files", "shell"})
+
+    def _check_fence(self, step: str, hands: Hands) -> None:
+        """Codex brings its own fence, so poieo's has to be one it can hold.
+
+        Both refusals here are the same rule: **a fence that was asked for and
+        is not held is worse than one that was never offered**, because nobody
+        knows which half is holding.
+        """
+        if hands.boxed:
+            raise ProviderError(
+                f"'{step}' asked to be fenced, and provider '{self.name}' cannot be put inside "
+                f"poieo's container -- it runs its own sandbox on this machine instead. Drop "
+                f"`isolation:` from this task, or bind this step to an endpoint with a key",
+                provider=self.name,
+            )
+        asked = set(hands.toolsets)
+        if asked != self._SERVES:
+            wanted = ", ".join(sorted(asked)) or "none"
+            raise ProviderError(
+                f"'{step}' asks for {wanted}, and provider '{self.name}' decides its own tool "
+                f"surface: it can serve exactly {', '.join(sorted(self._SERVES))} and cannot "
+                f"narrow to less. Handing over more than a step asked for is what a toolset "
+                f"list exists to prevent, so this is refused rather than widened",
+                provider=self.name,
+            )
+
     def plan(self, request: LLMRequest) -> tuple[list[str], str]:
         """The arguments and the standard input this call would run with.
 
@@ -268,17 +338,19 @@ class CodexProvider(_Subscription):
         hands a `script:` to an interpreter's stdin to avoid.
         """
         self._refuse_a_key()
-        self._refuse_hands(request)
+        self._check_hands(request)
         # `codex exec` takes no generation settings at all, so anything the
         # binding sent would go nowhere. Said rather than dropped.
         self._refuse_unusable(dict(request.params))
+        working = request.hands.workdir if request.hands else None
         argv = [
             "exec",
             "--json",
             # A step with no tools has nothing to write, whatever the model
-            # would like to do about that.
+            # would like to do about that. A step with them gets Codex's own
+            # fence: its sandbox, held to the folder the node works in.
             "--sandbox",
-            "read-only",
+            "workspace-write" if request.tools else "read-only",
             # Codex's spelling of the rule Claude's empty `setting_sources`
             # keeps: a poieo step reads none of the reader's own setup.
             "--ignore-user-config",
@@ -293,6 +365,11 @@ class CodexProvider(_Subscription):
             "--model",
             _plain(request.model, "model", self.name),
         ]
+        if working:
+            # Where the work happens. The node's workdir is a private copy of
+            # the user's folder, so what Codex writes still arrives as one
+            # change to accept or discard in the morning.
+            argv += ["--cd", working]
         return argv, _last_user_message(request)
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
@@ -479,3 +556,38 @@ def _codex_result(events: list[dict[str, Any]], model: str) -> dict[str, Any]:
     if failed and not text:
         raise ProviderError(f"codex: {failed}", retryable=True)
     return {"result": text, "usage": usage, "model": model}
+
+
+def _lend(sdk: Any, tools: list[Any], hands: Hands) -> Any:
+    """poieo's own tools, offered to Claude Code as an in-process MCP server.
+
+    **This is what keeps the fence where it was.** The harness never gets a
+    built-in file or shell tool -- `plan()` empties them -- and every call it
+    makes lands in `hands.run`, which is the node's executor. So the workdir
+    confinement holds, a task that asked to be boxed is still working inside
+    its container, and every call is still counted and written to the run log.
+
+    In-process, so there is no second process to start, no port, and nothing
+    to leave behind if the run dies. The server object cannot be built without
+    the SDK, which is the only reason this is not decided in `plan()` with
+    everything else.
+    """
+
+    def _bridge(spec: Any) -> Any:
+        async def handler(arguments: dict[str, Any]) -> dict[str, Any]:
+            text, failed = await hands.run(ToolCall(id="", name=spec.name, arguments=arguments))
+            # `is_error` rather than a raised exception, because a tool that
+            # failed is something the model should read and work around --
+            # which is the rule the node's own loop already follows.
+            return {"content": [{"type": "text", "text": text}], "is_error": failed}
+
+        # The schema poieo already wrote for this tool, handed over as it is.
+        # Rewriting it into the decorator's shorthand would be a second
+        # description of one thing, and the two would drift.
+        return sdk.tool(spec.name, spec.description, spec.input_schema)(handler)
+
+    return sdk.create_sdk_mcp_server(
+        name=_POIEO_SERVER,
+        version="1.0.0",
+        tools=[_bridge(spec) for spec in tools],
+    )

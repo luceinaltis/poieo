@@ -265,9 +265,12 @@ win over both. Four bindings ship as examples: `mock`, `local`, `claude`, `hybri
 The last two spend a **subscription** rather than tokens, and there is no key to
 name. A key in the environment is refused rather than worked around — both
 harnesses prefer one over the login, so the run would go on the API bill
-instead. Today they answer but cannot touch files; a step with `tools:` is
-refused by name. `examples/models/subscription.yaml` is one, and
-`docs/binding.md` says why the two behave differently.
+instead. A step with `tools:` is served differently by each: Claude Code
+is handed **poieo's own tools**, so the workdir and any `isolation:` still hold
+and the run log still records every call; Codex works in **its own sandbox**
+instead, and refuses a task that asked for `isolation:` rather than pretend to
+honour it. `examples/models/subscription.yaml` is one, and `docs/binding.md`
+says why the two differ.
 
 The Anthropic provider is capability-aware: `thinking: auto` becomes adaptive thinking on
 models that support it and is omitted on ones that do not, `effort` is dropped where it is

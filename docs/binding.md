@@ -201,11 +201,33 @@ The second is discovered at the end of the month, which is the reason the
 and the fix. Checked per call, because a daemon outlives the shell that started
 it.
 
-**Today they answer; they do not touch files.** A step carrying `tools:` is
-refused *by name* — a graph has several steps and only some carry tools, so
-which one is the whole of what a reader needs. Note that a task made from the
-board defaults to `files` + `shell`, so the commonest task on the board is one
-of the refused ones for now.
+**A step with tools is served the way its harness allows, and refused where it
+cannot be.** Every refusal names the step, because a graph has several and only
+some carry tools.
+
+*Claude Code keeps poieo's fence.* Its built-ins stay off, and poieo's own
+toolsets are handed over as an **in-process MCP server** whose every call lands
+back in the node's executor. So the workdir confinement holds, the run log still
+gets a `node_tool_call` for each one, and a task that asked for `isolation:` is
+**still working inside its container** — measured: the same step answered
+`MINGW64_NT-10.0-19045` on the host and `Linux 6.18.33.2-microsoft-standard-WSL2`
+boxed. No safety boundary moves.
+
+*Codex brings its own.* It cannot approve someone else's tool calls
+non-interactively, so it works in its own sandbox (`--sandbox workspace-write`,
+`--cd` the node's workdir) with its own tools. Two things follow, and both are
+refusals rather than quiet widenings:
+
+- **a task that asked for `isolation:` is refused** — Codex's sandbox is real,
+  but it is not poieo's container and cannot be put inside one
+- **a toolset it would have to widen is refused** — `tools: [files]` means write
+  but no shell, and a harness that decides its own surface cannot narrow to
+  that. Handing over more than a step asked for is the one thing a toolset list
+  exists to prevent
+
+A Codex step's tool calls are therefore Codex's, not poieo's, and do not reach
+the run log as `node_tool_call` events. That is the honest cost of its half, and
+the reason the two are documented apart rather than as one feature.
 
 Nothing of the reader's own machine reaches a step: `setting_sources: []` and
 `strict_mcp_config` on the Claude side, `--ignore-user-config --ignore-rules`
@@ -353,10 +375,24 @@ is a protocol rather than a field.
 provider-neutral:
 
 ```
-LLMRequest    model, messages, system, params, role, tools[]
+LLMRequest    model, messages, system, params, role, tools[], hands?
 LLMResponse   text, model, usage, stop_reason, meta, tool_calls[]
+Hands         run(call) → (text, failed)  ·  workdir · max_turns · toolsets · boxed
 Provider      complete()  ·  health()  ·  aclose()  ·  context_for()
 ```
+
+**`tools` says what exists; `hands` says how to run one.** Almost every backend
+reads only the first: it returns `tool_calls` and the node executes them, which
+is where `max_turns`, the deadline and the run log live. A **harness** cannot
+work that way — Claude Code and Codex run their own loop by construction — so a
+node with tools lends the means to run them as well as their names, and the
+harness's calls land back in the node's own executor.
+
+`Hands.run` answers `(text, failed)` rather than the executor's own result type
+because `tools` imports `providers`, so this module may not import it back; a
+pair of primitives owes nobody an import. `boxed` says poieo is holding a fence
+this call must not escape, and a provider that cannot honour it **refuses** —
+half a fence is worse than none, because nobody knows which half.
 
 `role` travels on the request for logging and for the mock's scripting, and is
 never sent to a backend. `meta` carries anything provider-specific worth keeping

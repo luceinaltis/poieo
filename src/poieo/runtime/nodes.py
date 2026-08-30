@@ -17,6 +17,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
+from ..providers.base import Hands, ToolCall
 from ..tools import ToolError, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
@@ -488,6 +489,46 @@ class AgentNode(Node):
             # spent them reading the same four files would only have got more
             # of that, and the counts are what tell them apart.
             reached_for: dict[str, int] = {}
+
+            async def _reach(call: ToolCall) -> tuple[str, bool]:
+                """One tool call, run and recorded, for a backend that loops.
+
+                The same three things this node does inline for a backend that
+                does not: execute through the seam, count it, and put it in
+                the run log. Written once and lent out, so a harness running
+                its own loop cannot leave the board's tool row empty for the
+                whole night while it works.
+                """
+                started = time.monotonic()
+                result = await executor.execute(call)  # type: ignore[union-attr]
+                nonlocal tool_call_count
+                tool_call_count += 1
+                reached_for[call.name] = reached_for.get(call.name, 0) + 1
+                ctx.emit(
+                    "node_tool_call",
+                    node_id=spec.id,
+                    turn=turns,
+                    name=call.name,
+                    arguments=_clip(call.arguments),
+                    result=_clip(result.text),
+                    error=result.error,
+                    duration_ms=round((time.monotonic() - started) * 1000),
+                )
+                return result.text, result.error
+
+            # Only a provider that runs its own tool loop reads this, and only
+            # a node with tools has anything to lend.
+            lent = (
+                Hands(
+                    run=_reach,
+                    workdir=str(workdir) if workdir else None,
+                    max_turns=spec.max_turns,
+                    toolsets=tuple(toolsets),
+                    boxed=bool(ctx.tool_context and ctx.tool_context.isolation),
+                )
+                if executor is not None
+                else None
+            )
             # What the endpoint counted the last request at. Zero until one
             # has been answered, which is why nothing is cleared on turn one --
             # there is nothing there yet to clear.
@@ -552,7 +593,7 @@ class AgentNode(Node):
                     before_fold = len(messages)
                     messages = await _compact(spec, ctx, bound, messages)
                     shrank = shrank or len(messages) != before_fold
-                request = bound.request(list(messages), tools=offered)
+                request = bound.request(list(messages), tools=offered, hands=lent)
                 try:
                     response = await call_with_retry(spec, bound.provider, request, ctx)
                 except NodeError:
@@ -580,7 +621,7 @@ class AgentNode(Node):
                         freed=freed,
                         kept=_KEEP_RESULTS,
                     )
-                    request = bound.request(list(messages), tools=offered)
+                    request = bound.request(list(messages), tools=offered, hands=lent)
                     response = await call_with_retry(spec, bound.provider, request, ctx)
                 # The conversation only grows, so the count the endpoint
                 # reports for it must grow too. When it does not, the endpoint
