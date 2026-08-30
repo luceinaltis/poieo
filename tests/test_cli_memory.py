@@ -3,27 +3,23 @@ touching anything. Authoring stays with the editor and git; rebuilding the
 lookup machinery is automatic, so no command exists for either.
 """
 
-from conftest import at
+from conftest import at, remember
 from test_card import write_card
 from typer.testing import CliRunner
 
 from poieo.card import load_card
 from poieo.cli import app
-from poieo.memory import read_memory
+from poieo.memory import entry_named, read_memory, write_page
 
 runner = CliRunner()
 
 
 def _project(tmp_path):
     path = write_card(tmp_path, "importer", "name: mind the importer\nprompt: review the api batches\n")
-    memory = at(tmp_path / "tasks")
-    memory.facts().mkdir(parents=True)
-    memory.constitution().write_text("Never push to main.", encoding="utf-8")
-    (memory.facts() / "batch-cap.md").write_text("The api rejects batches over 50.\n", encoding="utf-8")
-    (memory.facts() / "old-cap.md").write_text(
-        "---\nsuperseded_by: batch-cap\n---\nThe api rejects batches over 10.\n",
-        encoding="utf-8",
-    )
+    project = tmp_path / "tasks"
+    write_page(project, "Never push to main.")
+    remember(project, "batch-cap", "The api rejects batches over 50.")
+    remember(project, "old-cap", "---\nsuperseded_by: batch-cap\n---\nThe api rejects batches over 10.")
     return path, tmp_path / "tasks"
 
 
@@ -69,7 +65,7 @@ def test_a_project_without_memory_says_so_plainly_and_exits_zero(tmp_path):
 
 
 def _entry(project, slug, text):
-    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
+    remember(project, slug, text)
 
 
 def test_memory_lists_a_disagreement_once(tmp_path):
@@ -145,7 +141,7 @@ def test_learn_runs_one_pass_and_says_what_it_kept(tmp_path):
     result = runner.invoke(app, ["learn", str(project), "-b", str(binding)])
     assert result.exit_code == 0
     assert "kept" in result.stdout and "feed-cap" in result.stdout
-    assert (at(project).facts() / "feed-cap.md").is_file()
+    assert entry_named(project, "feed-cap") is not None
 
 
 def test_learn_says_when_there_is_nothing_to_read(tmp_path):
@@ -175,11 +171,27 @@ def test_learn_without_memory_says_how_to_start_and_exits_zero(tmp_path):
 
 
 def _aged(path, seconds_ago):
+    """Anchored files are still files, so they still age by their mtime."""
     import os
     import time
 
     stamp = time.time() - seconds_ago
     os.utime(path, (stamp, stamp))
+
+
+def _backdate(project, seconds_ago, slug=None):
+    """Move an entry, or the page, back in time the way waiting would."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+
+    when = (datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)).isoformat(timespec="seconds")
+    con = sqlite3.connect(at(project).longterm())
+    if slug is None:
+        con.execute("UPDATE page SET updated_at = ? WHERE only = 1", (when,))
+    else:
+        con.execute("UPDATE entries SET updated_at = ? WHERE slug = ?", (when, slug))
+    con.commit()
+    con.close()
 
 
 def test_a_gone_anchor_earns_a_second_look(tmp_path):
@@ -205,7 +217,7 @@ def test_a_target_changed_after_the_entry_earns_a_second_look(tmp_path):
         "feeds-note",
         "---\nanchors: ['notebook/feeds.md']\n---\nFeeds land in one file.",
     )
-    _aged(at(project).facts() / "feeds-note.md", 3600)
+    _backdate(project, 3600, "feeds-note")
 
     result = runner.invoke(app, ["memory", str(project)])
     assert "feeds-note" in result.stdout and "changed after" in result.stdout
@@ -279,7 +291,7 @@ def _sealed_entry(tmp_path):
         "---\nanchors: ['notebook/feeds.md']\n"
         f'sealed: {{"notebook/feeds.md": "{name}"}}\n---\nFeeds land in one file.',
     )
-    _aged(at(project).facts() / "feeds-note.md", 3600)
+    _backdate(project, 3600, "feeds-note")
     return project, target, name
 
 
@@ -423,11 +435,11 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
         encoding="utf-8",
     )
     # The page is untouched since long before the pass: the suggestion shows.
-    _aged(at(project).constitution(), 30 * 86400)
+    _backdate(project, 30 * 86400)
     shown = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." in shown.stdout
 
     # The person edits the page (fresh mtime): they have seen it -- clears.
-    at(project).constitution().write_text("Never push to main.\nDates are ISO.", encoding="utf-8")
+    write_page(project, "Never push to main.\nDates are ISO.")
     result = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." not in result.stdout

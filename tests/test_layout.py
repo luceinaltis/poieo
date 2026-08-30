@@ -40,9 +40,7 @@ def test_the_memory_a_person_keeps_hangs_off_the_root(tmp_path):
     root = tmp_path.resolve()
     assert layout.memory() == root / "memory"
     assert layout.shortterm() == root / "memory" / "shortterm"
-    assert layout.longterm() == root / "memory" / "longterm"
-    assert layout.constitution() == root / "memory" / "longterm" / "constitution.md"
-    assert layout.facts() == root / "memory" / "longterm" / "facts"
+    assert layout.longterm() == root / "memory" / "longterm.sqlite3"
 
 
 def test_a_journal_is_named_for_its_task(tmp_path):
@@ -58,7 +56,6 @@ def test_what_the_machine_derives_sits_under_cache(tmp_path):
     cache = tmp_path.resolve() / "memory" / "cache"
     assert layout.cache() == cache
     assert layout.blobs() == cache / "blobs"
-    assert layout.index() == cache / "index.sqlite3"
     assert layout.strength() == cache / "strength.json"
     assert layout.learning_log() == cache / "learning.jsonl"
 
@@ -123,4 +120,4 @@ def test_a_store_the_document_never_names_still_lands_under_the_root(tmp_path):
 def test_a_layout_can_be_built_without_looking_at_the_disk(tmp_path):
     layout = Layout(root=tmp_path)
     assert layout.runs() == tmp_path / "runs"
-    assert layout.facts() == tmp_path / "memory" / "longterm" / "facts"
+    assert layout.longterm() == tmp_path / "memory" / "longterm.sqlite3"

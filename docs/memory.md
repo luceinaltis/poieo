@@ -3,13 +3,25 @@
 `src/poieo/memory/`, `src/poieo/learn.py`, `src/poieo/strength.py`, `src/poieo/blob.py`
 
 A card's journal is short-term on purpose — old lines age out of the prompt. The
-memory is the long-term half: a page every run reads, and a folder of entries a
-run may earn.
+memory is the long-term half: a page every run reads, and the entries a run may
+earn.
 
-**The whole opt-in is the existence of `memory/longterm/`.** No folder, no trace
-of the feature — not even an empty header in a prompt. A signal that switches
-itself on is not consent, which is why journals live *beside* that folder rather
-than inside it: they arrive on their own the first time a card runs.
+**One database per project, and it *is* the memory.** `memory/longterm.sqlite3`
+holds the page, every entry, and the history of every change to either. Nothing
+holds a second copy, so nothing can drift out of step with it — and nothing may
+be lost by throwing it away, which is why a shape change here means *migrate*,
+never *rebuild*. Two projects on one machine never see each other's memory: the
+file lives inside the project, and the nearest `poieo.yaml` says which project
+that is.
+
+**The whole opt-in is the existence of that file.** No file, no trace of the
+feature — not even an empty header in a prompt. A signal that switches itself on
+is not consent, which is why journals live *beside* it: they arrive on their own
+the first time a card runs.
+
+What a person loses by this, git used to give for free — an editor, `git log`, a
+reviewable diff, `grep`. The history table answers the second; `poieo memory`
+answers the rest.
 
 ## The words
 
@@ -20,14 +32,20 @@ and **who may write it** — and every difference between them is one of those t
 |---|---|---|---|
 | **journal** | one card's running account of its own work | every run of that card; the oldest lines age out | the harness, every run |
 | **page** | the one constitution a project runs under | every run of every card, whole and first | a person only |
-| **entry** | one durable statement a run earned | only when `recall()` picks it for this card | the pass proposes, the harness writes |
+| **entry** | one durable statement a run earned | only when `recall()` picks it for this card | a person, or the pass proposing and the harness writing |
+| **piece** | the part of an entry retrieval matches on | never on its own; it is how its entry is found | with the entry, always |
 | **record** | the full account of one run | never a card's; it is what the pass *reads* | the harness, once per run |
 | **strength** | how much a connection has actually helped | never; it only reorders entries | reinforcement, from records |
 | **blob** | the bytes an entry was written against | never | the harness, when an entry is anchored |
 
-`facts/` is the folder on disk; the things in it are **entries** everywhere else.
-**Set aside** is the verb and `superseded_by:` is the line it writes — one act,
-and the frontmatter key is the record of it, not a second thing.
+An entry has exactly **one** piece today. The split is not speculation about a
+feature: an entry too long to fit the budget can never be shown whole, and when
+one exists, cutting it is the only way it reaches a prompt at all. Putting the
+seam in now costs a column; putting it in later costs the schema.
+
+**Set aside** is the verb and `superseded_by` is what it writes — one act, and
+the column is the record of it, not a second thing. Two writers, named in every
+line of history: a **person**, and the **pass**. A third would cost a reason.
 
 **Only two questions are settled by the words an entry shares**, and both weigh
 the entry's *body* alone: which entries a card is shown (`recall()`), and whether
@@ -50,11 +68,14 @@ different words on purpose, and neither list is the other's mistake:
 ```
 memory/
   shortterm/<slug>.md       one journal per card            → tasks.md
-  longterm/                 ← the opt-in
-    constitution.md         one page, in front of every run
-    facts/<slug>.md         one file per learned entry
+  longterm.sqlite3          ← the opt-in, and the memory itself
+    entries                 what this project has learned
+    pieces                  what retrieval matches on
+    links                   who names whom, so a neighbour is fetched not found
+    page                    the one page in front of every run
+    history                 every write, and who wrote it
+    pieces_fts              derived; dropped and rebuilt without being asked
   cache/                    derived; delete it freely
-    index.sqlite3           the lookup
     strength.json           how strong each connection is
     blobs/                  copies of what entries were written against
     learning.jsonl          what every pass did
@@ -62,15 +83,19 @@ runs/results/<run_id>.json  the full record of one run
 runs/asking/<card>.json     a question that run left for you, until it is answered
 ```
 
-Truth is markdown under git. Everything under `cache/` is derived and rebuilt
-without being asked; nothing is ever true because the cache says so.
+Truth is `longterm.sqlite3`, and only what is *inside* it is truth: `pieces_fts`
+is rebuilt without being asked, and everything under `cache/` may be deleted
+outright. Nothing is ever true because something derived says so.
+
+Losing that one file loses the memory, which is the price of not keeping two.
+`poieo memory` reads it back out; export is what makes a copy worth having.
 
 ## The modules
 
 | module | is |
 |---|---|
-| `entries.py` | the files: parsing, frontmatter, the page, load-time checks |
-| `index.py` | a derived sqlite/FTS lookup over them |
+| `entries.py` | where the memory is kept: schema, the one write door, history, the page, load-time checks |
+| `index.py` | a derived lookup over the pieces, dropped and rebuilt without being asked |
 | `recall.py` | choosing what a card is shown, and assembling the block |
 | `results.py` | the full record every run leaves behind |
 | `upkeep.py` | what the memory would like a person to look at |
@@ -84,29 +109,45 @@ reaching past `read_memory()`, which is the answer everything else wants.
 
 ## An entry
 
-```markdown
----
-scope: ["global"]                  # global, a card slug, or a path prefix
-anchors: ["src/poieo/card.py::read_journal"]   # path, or path::symbol — never line numbers
-source: ["20260824T031400-a1b2c3d4"]           # the runs that taught it
-valid_from: 2026-08-24
-superseded_by: null                # set this instead of deleting
-links:
-  depends_on: [batch-cap]          # what this needs to stay true
-  contradicts: [old-batch-cap]     # a standing question for a person
-sealed: {"src/poieo/card.py": "<sha256>"}
----
-One durable statement, mentioning [[another-entry]] freely.
+```python
+write_entry(
+    project, "batch-cap",
+    "One durable statement, mentioning [[another-entry]] freely.",
+    frontmatter({
+        "scope": ["global"],           # global, a card slug, or a path prefix
+        "anchors": ["src/poieo/card.py::read_journal"],  # path, or path::symbol — never line numbers
+        "source": ["20260824T031400-a1b2c3d4"],          # the runs that taught it
+        "valid_from": "2026-08-24",
+        "superseded_by": None,         # set this instead of deleting
+        "links": {
+            "depends_on": ["batch-cap"],       # what this needs to stay true
+            "contradicts": ["old-batch-cap"],  # a standing question for a person
+        },
+        "sealed": {"src/poieo/card.py": "<sha256>"},
+    }),
+    writer="person",
+)
 ```
 
-The slug is the filename. `extra="forbid"` on the frontmatter means an
-unrecognised key is a typo, not a silently ignored line.
+`write_entry` is the only door, and everything goes through it — a person, and
+the pass. It refuses a slug that is not `^[a-z0-9][a-z0-9-]*$`, which is the
+fence a slug that could escape a folder never got past; `extra="forbid"` on the
+frontmatter means an unrecognised key is a typo rather than a silently ignored
+line; and it writes the line of history that says who did this and what changed.
+`examples/remembering/seed.py` is a whole memory written this way.
 
 `check_memory()` runs at daemon load and validates typed claims across the whole
-folder — a `depends_on`, `contradicts` or `superseded_by` naming nothing that
-exists is a startup error. Attic entries count as existing, or "move the file
-back" would not be true. **Prose `[[mentions]]` are deliberately not checked**: a
-mention of an entry that does not exist yet marks something worth writing.
+memory — a `depends_on`, `contradicts` or `superseded_by` naming nothing that
+exists is a startup error. **Prose `[[mentions]]` are deliberately not checked**:
+a mention of an entry that does not exist yet marks something worth writing.
+
+## The shape, and moving it
+
+`SCHEMA_VERSION` is stored in the database. Opening one written by an older poieo
+migrates the rows forward, in order, before anything reads them; opening one from
+a *newer* poieo refuses rather than guessing, because a wrong guess here is the
+only copy. There is no "delete it and rebuild" — that was the old derived index's
+privilege, and it went when the file became the truth.
 
 Mid-residency the rule flips: `readable_entries()` skips a malformed entry with a
 warning, because a run with less in mind beats no run at all.
@@ -117,7 +158,7 @@ warning, because a run with less in mind beats no run at all.
 
 ```
 What this project always requires:      the page, whole, first, always
-<constitution.md, comments stripped>
+<the page, comments stripped>
 
 What earlier work here has learned:     the entries this card earned
 <entry bodies, best first, cut on whole-entry boundaries>
@@ -126,8 +167,8 @@ What earlier work here has learned:     the entries this card earned
 The page comes first and whole so the stable part of the prompt stays stable, and
 it never competes with entries for room — `ENTRIES_BUDGET` (4 000 characters)
 bounds only what follows it. Markdown comments are stripped from the page before
-any prompt sees it, which is what lets `poieo init` write an empty
-`constitution.md` that costs a project nothing.
+any prompt sees it, which is what lets `poieo init` start a memory whose page
+is all comments and costs a project nothing.
 
 ### Ranking
 
@@ -241,9 +282,9 @@ inform; people and passes decide.
 The same doubts are shown to the next learning pass, which is free to retire an
 entry with its ordinary set-aside.
 
-A set-aside entry stays in `facts/`. It is out of every prompt, and nothing
-here ever moves or deletes it: the folder changes when a person changes it, and
-git keeps what they take out. **Nothing sweeps.**
+A set-aside entry stays where it is. It is out of every prompt, and nothing
+here moves or deletes it — the memory changes when a person changes it, and
+the history says what it was before. **Nothing sweeps.**
 
 ## Keepsakes
 

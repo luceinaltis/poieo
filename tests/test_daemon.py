@@ -4,13 +4,14 @@ from datetime import datetime
 
 import httpx
 import pytest
-from conftest import EXAMPLES, at, card
+from conftest import EXAMPLES, card
 
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
 from poieo.daemon.triggers import TriggerSpec, _next_tick, parse_duration
 from poieo.errors import SpecError
+from poieo.memory import start_memory
 from poieo.store import Event, NullStore
 from poieo.web.events import BroadcastStore
 
@@ -477,7 +478,7 @@ def _learning_config(tmp_path, learn="learn: 1h\n", memory=True):
         encoding="utf-8",
     )
     if memory:
-        at(tmp_path).longterm().mkdir(parents=True, exist_ok=True)
+        start_memory(tmp_path)
     config = tmp_path / "poieo.yaml"
     config.write_text(
         f"binding: {(EXAMPLES / 'models/mock.yaml').as_posix()}\n"

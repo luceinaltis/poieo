@@ -6,25 +6,24 @@ entries, or the fallback is a different feature wearing the same name.
 """
 
 import pytest
-from conftest import at
+from conftest import at, remember
 from test_card import write_card
 
 import poieo.memory.index as memory_index
 import poieo.memory.recall as memory_recall
 from poieo.card import load_card
-from poieo.memory import read_memory
+from poieo.memory import read_memory, start_memory, write_page
 
 
 def _project(tmp_path, prompt="review the api batch sizes in the importer"):
     """A card, its folder, and a memory folder beside it."""
     path = write_card(tmp_path, "importer", f"name: mind the importer\nprompt: {prompt}\n")
-    at(tmp_path / "tasks").facts().mkdir(parents=True)
+    start_memory(tmp_path / "tasks")
     return load_card(path), tmp_path / "tasks"
 
 
 def _fact(project, slug, body, matter=""):
-    text = f"---\n{matter}\n---\n{body}\n" if matter else f"{body}\n"
-    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
+    remember(project, slug, f"---\n{matter}\n---\n{body}" if matter else body)
 
 
 def test_a_relevant_entry_reaches_the_block(tmp_path):
@@ -102,7 +101,7 @@ def test_an_anchored_entry_arrives_even_without_a_shared_word(tmp_path, monkeypa
 def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch):
     task, project = _project(tmp_path)
     page = "Never push to main.\n" + "x" * 300
-    at(project).constitution().write_text(page, encoding="utf-8")
+    write_page(project, page)
     _fact(project, "one", "The api batch importer note number one.")
     _fact(project, "two", "The api batch importer note number two.")
 
@@ -115,19 +114,35 @@ def test_the_budget_cuts_whole_entries_and_spares_the_page(tmp_path, monkeypatch
     assert "number one." in block or "number two." in block
 
 
-def test_a_deleted_index_is_rebuilt_silently(tmp_path):
+def test_one_oversized_entry_loses_only_its_own_place(tmp_path, monkeypatch):
+    """Nothing caps how long an entry may be, so one too big for the budget is
+    a thing that happens. It must cost itself its place and nobody else theirs
+    -- stopping at it hid every entry ranked below it, silently."""
+    task, project = _project(tmp_path)
+    _fact(project, "aaa-huge", "The api batch importer " + "x" * 5000)
+    _fact(project, "bbb-small", "The api batch importer note that still fits.")
+
+    block = read_memory(project, task)
+    assert "note that still fits." in block
+
+
+def test_a_dropped_lookup_is_rebuilt_silently(tmp_path):
+    """The lookup is derived, still: drop the table and the next read builds
+    it again, having lost nothing but the time to do so."""
+    import sqlite3
+
     if not memory_index.fts_available():
-        pytest.skip("this Python build has no FTS5, so there is no index file")
+        pytest.skip("this Python build has no FTS5, so there is no lookup table")
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
-
     first = read_memory(project, task)
-    index = at(project).index()
-    assert index.is_file()
 
-    index.unlink()
+    con = sqlite3.connect(at(project).longterm())
+    con.executescript("DROP TABLE pieces_fts; DROP TRIGGER pieces_after_insert;")
+    con.commit()
+    con.close()
+
     assert read_memory(project, task) == first
-    assert index.is_file()
 
 
 # -- following what entries name ---------------------------------------------

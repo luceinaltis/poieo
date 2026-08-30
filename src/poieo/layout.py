@@ -41,21 +41,14 @@ class Layout:
         return self.shortterm() / f"{slug}.md"
 
     def longterm(self) -> Path:
-        """The folder whose existence means "this project keeps a long memory".
+        """The file whose existence means "this project keeps a long memory".
 
-        It must be something a person made on purpose, which is why the
-        journals sit beside it rather than inside it -- those arrive on their
-        own, the first time a task runs.
+        One database per project, inside that project -- two projects on one
+        machine never see each other's memory. It must be something a person
+        made on purpose, which is why the journals sit beside it rather than
+        inside it: those arrive on their own, the first time a task runs.
         """
-        return self.memory() / "longterm"
-
-    def constitution(self) -> Path:
-        return self.longterm() / "constitution.md"
-
-    def facts(self) -> Path:
-        # Named for the folder on disk, which stays `facts/`; the things in it
-        # are Entries everywhere else.
-        return self.longterm() / "facts"
+        return self.memory() / "longterm.sqlite3"
 
     # -- the memory only the machine reads (derived) -------------------------
     def cache(self) -> Path:
@@ -63,9 +56,6 @@ class Layout:
 
     def blobs(self) -> Path:
         return self.cache() / "blobs"
-
-    def index(self) -> Path:
-        return self.cache() / "index.sqlite3"
 
     def strength(self) -> Path:
         return self.cache() / "strength.json"

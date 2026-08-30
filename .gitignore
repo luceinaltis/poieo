@@ -11,6 +11,9 @@ venv/
 runs/
 worktrees/
 memory/cache/
+# the example's memory, built by its own seed.py -- a database is not a
+# thing a reader can review in a diff, so the writing is what ships.
+examples/remembering/memory/
 
 # what measuring coverage leaves behind. Condition 7 asks for a clean tree after
 # the suite has run, and `--cov` writes these wherever it is invoked from.

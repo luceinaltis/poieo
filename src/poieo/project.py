@@ -235,10 +235,10 @@ _CONSTITUTION = """\
 This page is read whole by every run of every task in this project. Before
 adding a line, ask: does it apply to every task? is violating it expensive?
 would lookup fail to bring it up when needed? is it invisible in the code?
-Four yeses earn the page; anything less belongs in memory/longterm/facts/.
+Four yeses earn the page; anything less belongs in a learned entry.
 
-Delete this file, and its folder, if the project keeps no long memory. The
-folder is the whole opt-in -- nothing else turns the feature on.
+Delete memory/longterm.sqlite3 if the project keeps no long memory. That
+file is the whole opt-in -- nothing else turns the feature on.
 -->
 """
 
@@ -275,9 +275,10 @@ answers one question.
 - `memory/` -- **what the project remembers**.
   - `shortterm/<card>.md` -- that task's journal. Append a line to leave it
     a note; never rewrite its history.
-  - `longterm/constitution.md` -- read whole before every run of every task.
-  - `longterm/facts/*.md` -- one file per thing learned. This folder
+  - `longterm.sqlite3` -- the page every run reads, everything the project
+    has learned, and the history of every change to either. This file
     existing is what makes the project keep a long memory at all.
+    `poieo memory` reads it; the board searches and edits it.
   - `cache/` -- rebuilt from the above. Delete it and lose nothing.
 - `runs/` -- **what happened**. `events/<id>.jsonl` as it happened,
   `results/<id>.json` when it was over. Read freely, never edit.
@@ -462,10 +463,6 @@ def init_project(root: Path, default_body: str, name: str | None = None) -> list
         # the wiring gets exercised without spending a token.
         ("models/mock.yaml", MOCK_BINDING),
         ("tasks/hello.yaml", _HELLO_CARD),
-        # An empty page, so the memory is a folder you can see rather than a
-        # feature you have to be told about. Nothing switches on: it is all
-        # comments, and those are stripped before any prompt.
-        ("memory/longterm/constitution.md", _CONSTITUTION),
         ("AGENTS.md", _AGENTS_MD),
         ("CLAUDE.md", _CLAUDE_MD),
     ]
@@ -478,6 +475,17 @@ def init_project(root: Path, default_body: str, name: str | None = None) -> list
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(body, encoding="utf-8")
         report.append(("wrote", relative))
+
+    # An empty page, so the memory is something you can open rather than a
+    # feature you have to be told about. Nothing switches on: the page is all
+    # comments, and those are stripped before any prompt sees it.
+    from .layout import layout_for
+    from .memory import keeps_memory, write_page
+
+    kept_memory = keeps_memory(root)
+    if not kept_memory:
+        write_page(root, _CONSTITUTION)
+    report.append(("kept" if kept_memory else "wrote", str(layout_for(root).longterm().relative_to(root))))
 
     gitignore = root / ".gitignore"
     existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""

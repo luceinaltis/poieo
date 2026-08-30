@@ -330,10 +330,10 @@ different question, and this one only had to answer *appeared*.
 for it, running a pass while **nothing else is running** — `_ready_to_learn()`
 requires every runner to be `waiting`. Every runner anywhere, not just that
 project's: learning would rather be late than contend, and another project's run
-contends just as well as this one's. It is a double opt-in: the config key *and* the `memory/longterm/`
-folder. Half an opt-in is how a feature dies quietly, so a config that says
-`learn:` over a project with no memory folder logs a warning naming both. See
-[memory.md](memory.md).
+contends just as well as this one's. It is a double opt-in: the config key *and*
+`memory/longterm.sqlite3`. Half an opt-in is how a feature dies quietly, so a
+config that says `learn:` over a project with no memory logs a warning naming
+both. See [memory.md](memory.md).
 
 ## A change that could not be recorded
 

@@ -1,23 +1,35 @@
-"""The derived index over the entry files.
+"""The derived lookup over the pieces.
 
-Never the truth: built from the entry files, checked against them by
-fingerprint, rebuilt without being asked when missing, stale, or corrupt.
-Deleting it loses nothing. Any trouble here degrades to reading the files,
-never to a failed run.
+Never the truth: built from the ``pieces`` table beside it, maintained by
+triggers, and safe to drop and rebuild at any moment. Trouble here degrades to
+reading every piece, never to a failed run -- which is also what happens on a
+Python whose SQLite was compiled without FTS5.
+
+Design: docs/memory.md
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import sqlite3
 from functools import lru_cache
-from pathlib import Path
-
-from ..layout import layout_for
-from .entries import Entry
 
 log = logging.getLogger("poieo.memory")
+
+_LOOKUP = """
+CREATE VIRTUAL TABLE pieces_fts USING fts5(text, content='pieces', content_rowid='id');
+INSERT INTO pieces_fts(rowid, text) SELECT id, text FROM pieces;
+CREATE TRIGGER pieces_after_insert AFTER INSERT ON pieces BEGIN
+    INSERT INTO pieces_fts(rowid, text) VALUES (new.id, new.text);
+END;
+CREATE TRIGGER pieces_after_delete AFTER DELETE ON pieces BEGIN
+    INSERT INTO pieces_fts(pieces_fts, rowid, text) VALUES('delete', old.id, old.text);
+END;
+CREATE TRIGGER pieces_after_update AFTER UPDATE ON pieces BEGIN
+    INSERT INTO pieces_fts(pieces_fts, rowid, text) VALUES('delete', old.id, old.text);
+    INSERT INTO pieces_fts(rowid, text) VALUES (new.id, new.text);
+END;
+"""
 
 
 @lru_cache(maxsize=None)
@@ -30,69 +42,45 @@ def fts_available() -> bool:
             con.close()
         return True
     except sqlite3.Error:
-        log.info("this Python build has no FTS5; memory lookup reads the files instead")
+        log.info("this Python build has no FTS5; memory lookup reads every piece instead")
         return False
 
 
-def candidates(project_dir: Path, entries: list[Entry], seed: set[str]) -> list[Entry]:
-    """Who is worth scoring. The index narrows when it can; the final ranking
-    is the same plain arithmetic either way, which is what makes the slower
-    path the same feature."""
-    if not seed or not fts_available():
-        return entries
+def ensure_lookup(con: sqlite3.Connection) -> bool:
+    """Build the lookup if this build can and it is not there yet.
+
+    Called on every open, which is what lets a database made on a Python
+    without FTS5 gain the lookup the first time it is opened on one with it.
+    """
+    if not fts_available():
+        return False
     try:
-        con = _open_index(project_dir, entries)
-        try:
-            rows = con.execute(
-                "SELECT slug FROM facts_fts WHERE facts_fts MATCH ?",
-                (" OR ".join(sorted(seed)),),
-            ).fetchall()
-        finally:
-            con.close()
-        hits = {row[0] for row in rows}
-        return [entry for entry in entries if entry.slug in hits]
-    except (sqlite3.Error, OSError) as exc:
-        log.warning("memory index unavailable (%s); reading the files instead", exc)
-        return entries
+        have = con.execute("SELECT 1 FROM sqlite_master WHERE name = 'pieces_fts'").fetchone()
+        if have is None:
+            con.executescript(_LOOKUP)
+            con.commit()
+        return True
+    except sqlite3.Error as exc:
+        log.warning("could not build the memory lookup (%s); reading every piece instead", exc)
+        return False
 
 
-def _fingerprint(entries: list[Entry]) -> str:
-    parts = sorted(f"{entry.path.name}:{entry.path.stat().st_mtime_ns}" for entry in entries)
-    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+def narrow(con: sqlite3.Connection, seed: set[str]) -> set[str] | None:
+    """Slugs worth scoring, or None when everything is.
 
-
-def _open_index(project_dir: Path, entries: list[Entry]) -> sqlite3.Connection:
-    path = layout_for(project_dir).index()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    stamp = _fingerprint(entries)
-    con = sqlite3.connect(path, timeout=5)
+    None is not an error -- it is the honest answer when there is no lookup to
+    ask, and the caller then scores every piece by the same arithmetic. The
+    ranking is the same either way, which is what keeps the slower path the
+    same feature rather than a second one.
+    """
+    if not seed or not ensure_lookup(con):
+        return None
     try:
-        row = con.execute("SELECT value FROM meta WHERE key = 'fingerprint'").fetchone()
-        if row and row[0] == stamp:
-            return con
-    except sqlite3.Error:
-        pass  # missing tables, or not even a database: rebuild below
-    try:
-        _rebuild(con, entries, stamp)
-        return con
-    except sqlite3.Error:
-        con.close()
-        path.unlink(missing_ok=True)
-        con = sqlite3.connect(path, timeout=5)
-        _rebuild(con, entries, stamp)
-        return con
-
-
-def _rebuild(con: sqlite3.Connection, entries: list[Entry], stamp: str) -> None:
-    con.executescript(
-        "DROP TABLE IF EXISTS facts_fts;"
-        "DROP TABLE IF EXISTS meta;"
-        "CREATE VIRTUAL TABLE facts_fts USING fts5(slug UNINDEXED, body);"
-        "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
-    )
-    con.executemany(
-        "INSERT INTO facts_fts(slug, body) VALUES(?, ?)",
-        [(entry.slug, entry.body) for entry in entries],
-    )
-    con.execute("INSERT INTO meta VALUES('fingerprint', ?)", (stamp,))
-    con.commit()
+        rows = con.execute(
+            "SELECT DISTINCT p.slug FROM pieces_fts f JOIN pieces p ON p.id = f.rowid WHERE pieces_fts MATCH ?",
+            (" OR ".join(sorted(seed)),),
+        ).fetchall()
+    except sqlite3.Error as exc:
+        log.warning("memory lookup unavailable (%s); reading every piece instead", exc)
+        return None
+    return {row[0] for row in rows}

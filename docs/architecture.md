@@ -95,9 +95,11 @@ user-facing `Cause`, and the next trigger starts fresh. Only spec and binding
 problems raise. A task that fails the same way three times in a row pauses
 itself rather than failing all night.
 
-**Files are the only source of truth.** Graphs, bindings, cards, journals and
-memory entries are YAML and markdown under git. `memory/cache/` is derived and
-safe to delete at any moment; there is no database of record.
+**One source of truth for each thing, and no second copy.** Graphs, bindings,
+cards and journals are YAML and markdown under git. The long memory is the one
+exception and it is the same rule: `memory/longterm.sqlite3` is the memory,
+not a cache of it, so a change to its shape migrates rather than rebuilds.
+`memory/cache/` is derived and safe to delete at any moment.
 
 **Everything unbounded has a ceiling.** `max_steps` for a graph, `max_turns` for
 an agent node, a timeout for a command, `MAX_CHAIN` for a chain of handoffs,

@@ -41,7 +41,7 @@ poieo.yaml                       store · default binding · tasks folder
 models/default.yaml              every engine found, ready for a role to name
 models/mock.yaml                 always; answers from a script, spends nothing
 tasks/hello.yaml                 a sample card, disabled; run it by hand
-memory/longterm/constitution.md  an empty page, with the rule for filling it
+memory/longterm.sqlite3          an empty page, with the rule for filling it
 .gitignore                       gains memory/cache/, runs/, worktrees/
 ```
 
@@ -357,27 +357,33 @@ screen ships.
 ### What a project remembers
 
 The journal is short-term on purpose -- old lines age out of the prompt. Both
-halves live under `memory/`, and `longterm/` existing is the whole opt-in:
+halves live under `memory/`, and `longterm.sqlite3` existing is the whole
+opt-in:
 
 ```
 memory/
   shortterm/keep-improving.md     one journal per card, named for it
-  longterm/
-    constitution.md               one page, in front of every run of every task
-    facts/batch-cap.md            one file per learned entry
+  longterm.sqlite3                the page, every entry, and every change to either
   cache/                          rebuilt from the above; delete it freely
 ```
 
-`poieo init` writes an empty `constitution.md` -- comments only, which are
-stripped before any prompt sees it, so a project that leaves it alone runs
-exactly as one with no memory at all. Delete the folder if you want none.
+One database per project, kept inside it, so two projects on this machine
+never see each other's memory. `poieo init` starts one with an empty page --
+comments only, which are stripped before any prompt sees it, so a project
+that leaves it alone runs exactly as one with no memory at all. Delete the
+file if you want none.
+
+It is a database rather than a folder of files because there is then exactly
+one copy of what the project knows, and because every change to it is kept:
+`poieo memory` shows what an entry said before, and who changed it.
 
 The page is read whole, every run, first -- put the rules there that every
-task must hold and that nothing would think to look up. The entries under
-`facts/` are chosen per task: by a scope in their frontmatter (`global`, a
+task must hold and that nothing would think to look up. The entries are
+chosen per task: by a scope in their frontmatter (`global`, a
 task's name, or a path), by the words they share with what the task is about,
 and above all by naming the code the task is working on. A wrong entry is not
-deleted; set `superseded_by:` and it steps aside, file and history intact.
+deleted; set it aside and it steps out of every prompt, its words and its
+history intact.
 
 Every run also leaves a full record under `runs/results/`, beside the event
 stream the same run wrote to `runs/events/` -- unclipped where

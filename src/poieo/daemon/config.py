@@ -210,10 +210,9 @@ def _load_cards(config: DaemonConfig) -> None:
     check_memory(config.base_dir)
     if config.learn is not None and not keeps_memory(config.base_dir):
         # Half an opt-in is how this feature dies quietly. A warning, not a
-        # failure -- the folder is still the opt-in.
+        # failure -- the file is still the opt-in.
         log.warning(
-            "%s says `learn: %s`, but %s does not exist, so nothing will be "
-            "learned. Make that folder to keep a long memory.",
+            "%s says `learn: %s`, but %s does not exist, so nothing will be learned. `poieo init` here starts one.",
             config.source_path,
             config.learn,
             config.layout().longterm(),

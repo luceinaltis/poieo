@@ -1,7 +1,7 @@
 """What the memory would like a person to look at.
 
-Computed from the files at read time -- no queue, no stored counter, nothing
-written. **Nothing anywhere acts on any of it.**
+Computed at read time -- no queue, no stored counter, nothing written.
+**Nothing anywhere acts on any of it.**
 
 Design: docs/memory.md
 """
@@ -9,6 +9,7 @@ Design: docs/memory.md
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +46,7 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
         "page_budget": PAGE_BUDGET,
         "kept": len(standing),
         "set_aside": len(entries) - len(standing),
-        "lookup": "fast" if fts_available() else "file-by-file",
+        "lookup": "fast" if fts_available() else "one piece at a time",
         "disagreements": disagreements,
         "second_look": [reason for _, reason in doubts(project_dir, entries)],
         "accounting": accounting(project_dir, entries),
@@ -97,6 +98,14 @@ def accounting(project_dir: Path, entries: list[Entry]) -> dict[str, Any] | None
     return {"runs_shown": runs_shown, "runs_used": runs_used, "unused": unused}
 
 
+def _changed_since(named: Path, entry: Entry) -> bool:
+    """Did the anchored file move after the entry itself last did?
+
+    The entry's own timestamp took the place of its file's mtime, which is
+    what still makes "edit the entry after looking" clear the flag."""
+    return datetime.fromtimestamp(named.stat().st_mtime, timezone.utc) > entry.updated_at
+
+
 def doubts(project_dir: Path, entries: list[Entry] | None = None) -> list[tuple[str, str]]:
     """Every kept entry worth a second look, with the sentence saying why.
 
@@ -125,14 +134,14 @@ def doubts(project_dir: Path, entries: list[Entry] | None = None) -> list[tuple[
                     # Sealed: doubt by content, not clocks, so a touched-but-
                     # identical file raises nothing. The mtime check stays
                     # so revising the entry still clears the flag.
-                    if digest(named) != seal and named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns:
+                    if digest(named) != seal and _changed_since(named, entry):
                         out.append(
                             (
                                 entry.slug,
                                 f"{entry.slug} names {anchor}, which no longer matches what it was written against",
                             )
                         )
-                elif named.stat().st_mtime_ns > entry.path.stat().st_mtime_ns:
+                elif _changed_since(named, entry):
                     out.append(
                         (
                             entry.slug,
