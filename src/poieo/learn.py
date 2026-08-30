@@ -388,7 +388,7 @@ def _set_aside(path: Path, because: str) -> None:
 def _strengthen(project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]) -> None:
     """Three factors or nothing: both entries cited in the run's own output,
     the run completed, and a declared connection between them. Co-presence
-    alone earns nothing -- reinforcing what retrieval already picks is how
+    alone earns nothing -- reinforcing what recall already picks is how
     a memory talks itself into a rut."""
     from .strength import reinforce
 
@@ -410,7 +410,7 @@ def _strengthen(project_dir: Path, entries: list[Entry], records: list[dict[str,
 
 
 def _followable(one: Entry, other: Entry) -> bool:
-    """A connection retrieval would walk: mentions either way, leans-on
+    """A connection recall would walk: mentions either way, leans-on
     either side. Never disagrees -- and a disagreement is a veto, not one
     vote among the connections, or "this disputes [[x]]" would strengthen the
     disputed pair in through its own mention."""

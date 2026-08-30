@@ -36,7 +36,7 @@ _GLUE = frozenset(
 
 
 def words(text: str) -> set[str]:
-    """An entry's distinctive words. The vocabulary both retrieval and the
+    """An entry's distinctive words. The vocabulary both recall and the
     accounting judge by, so they cannot disagree about what an entry says."""
     return set(re.findall(r"[a-z0-9_]+", text.lower())) - _GLUE
 
@@ -47,7 +47,7 @@ class _Links(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # What this entry needs to stay true. Followed forward at retrieval;
+    # What this entry needs to stay true. Followed forward at recall;
     # a lean on a set-aside entry earns a second-look line in the report.
     depends_on: list[str] = Field(default_factory=list)
     # A standing question for a person. Listed in the report, never followed.
@@ -68,7 +68,7 @@ class _Frontmatter(BaseModel):
     source: list[str] = Field(default_factory=list)
     # Event time only; git already records when every line was written.
     valid_from: date | None = None
-    # Set this instead of deleting: the file stays, retrieval moves on.
+    # Set this instead of deleting: the file stays, recall moves on.
     superseded_by: str | None = None
     links: _Links = Field(default_factory=_Links)
     # Anchor path -> digest of the content the entry was written against.

@@ -22,8 +22,8 @@ ENTRIES_BUDGET = 4_000
 # An entry anchored where the task works beats any merely-similar one.
 _ANCHOR_BOOST = 1_000
 
-# Interface words only past this point: the machinery names (tiers, entries,
-# retrieval) stay in this package and the spec.
+# Interface words only past this point: the machinery names (entries, recall)
+# stay in this package and the spec. docs/memory.md pairs the two lists.
 PAGE_HEADER = "What this project always requires:"
 LEARNED_HEADER = "What earlier work here has learned:"
 
