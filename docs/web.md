@@ -623,9 +623,10 @@ against anyway.
 task, one mark per run, and the hour rules carried down through every lane. The
 rules are the reason it exists — a tally says three tasks failed, and only a
 shared clock says they all failed at 04:12, which is one problem rather than
-three. The window is the last day, and stretches back further only when the
-newest run on the board is older than that, so a board that stopped on Tuesday
-does not open looking like a board that has never run. Runs the window opened
+three. The window is the last day, and when the newest run on the board is
+older than that it stretches to a day *past* that run — so a board that
+stopped on Tuesday opens on its last living day followed by the silence
+since, rather than on an empty grid that looks like a board that never ran. Runs the window opened
 after are counted at the left edge rather than dropped, and marks too close to
 tell apart — a 15-minute task on a phone — are folded into one carrying the
 worst of them, so a dense night is a fence of folds rather than a fused bar,

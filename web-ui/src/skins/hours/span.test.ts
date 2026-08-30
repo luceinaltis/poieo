@@ -33,13 +33,24 @@ test("the clock is the last day when anything ran inside it", () => {
   expect(span.from).toBe(NOW - DAY)
 })
 
-test("the clock stretches back to reach the newest run when everything is stale", () => {
+test("the clock stretches a day past the newest run when everything is stale", () => {
   // A board whose last run was three days ago must not open on an empty day.
-  // Nothing else tells a reader the difference between "quiet" and "stopped
-  // three days ago", which is the one thing they came here to find out.
+  // And stretching back exactly to that run put it on the left edge with all
+  // its history folded into a badge -- every lane read as an identical blank
+  // grid, and "stopped Tuesday" was indistinguishable from "never ran". A
+  // day past it puts the board's last living day on screen, and the silence
+  // after it is the width of the rest.
   const stale = NOW - 3 * DAY
   const span = windowOf(stale, NOW)
-  expect(span.from).toBe(stale)
+  expect(span.from).toBe(stale - DAY)
+})
+
+test("a fresh board is not widened by the stale rule", () => {
+  // The newest run being recent must leave the window at exactly a day --
+  // subtracting a day from the newest run unconditionally would widen every
+  // living board's window by however fresh its last run is.
+  const fresh = NOW - 20 * 60 * 1000
+  expect(windowOf(fresh, NOW)).toEqual({ from: NOW - DAY, to: NOW })
 })
 
 test("the clock is a day wide when nothing has ever run", () => {

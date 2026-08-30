@@ -28,12 +28,18 @@ export interface Span {
  * A fixed day is what makes two lanes comparable, and it is the span a person
  * opening this page in the morning is asking about. But a board whose last run
  * was Tuesday would then open on an empty day, which reads exactly like a
- * board that has never run -- so the window stretches back far enough to show
- * the last thing that happened. It never shrinks below a day: a single run
- * five minutes ago must not be drawn as five minutes of history.
+ * board that has never run -- so the window stretches back to a day *past*
+ * the newest run. Not merely to it: that put the run on the left edge with
+ * everything before it folded into a badge, and every stopped lane read as
+ * the same blank grid. A day past it, the board's last living day is on
+ * screen, and the silence since is the width of the rest -- which is the
+ * difference between "stopped Tuesday" and "never ran", drawn rather than
+ * inferred. It never shrinks below a day: a single run five minutes ago must
+ * not be drawn as five minutes of history.
  */
 export function windowOf(newest: number | null, now: number): Span {
-  return { from: newest === null ? now - DAY : Math.min(now - DAY, newest), to: now }
+  if (newest === null || newest >= now - DAY) return { from: now - DAY, to: now }
+  return { from: newest - DAY, to: now }
 }
 
 export interface Mark {
