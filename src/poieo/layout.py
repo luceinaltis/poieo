@@ -57,9 +57,6 @@ class Layout:
         # are Entries everywhere else.
         return self.longterm() / "facts"
 
-    def attic(self) -> Path:
-        return self.longterm() / "attic"
-
     # -- the memory only the machine reads (derived) -------------------------
     def cache(self) -> Path:
         return self.memory() / "cache"

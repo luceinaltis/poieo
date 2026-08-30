@@ -43,7 +43,6 @@ def test_the_memory_a_person_keeps_hangs_off_the_root(tmp_path):
     assert layout.longterm() == root / "memory" / "longterm"
     assert layout.constitution() == root / "memory" / "longterm" / "constitution.md"
     assert layout.facts() == root / "memory" / "longterm" / "facts"
-    assert layout.attic() == root / "memory" / "longterm" / "attic"
 
 
 def test_a_journal_is_named_for_its_task(tmp_path):
