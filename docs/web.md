@@ -276,7 +276,7 @@ the daemon looks up where it lives in `CANDIDATES` — the one place that knows.
 
 `{target, role}` — a `provider/model` reference and the role to point at it,
 `default` when the body names none. It answers `{status: "using", role, ref,
-checked}`.
+checked, adopted}`, and `why` when `adopted` is false.
 
 **Every refusal is decided before `rebind` opens the file**, so a request that
 will be refused never touches it — and `rebind` itself refuses before writing on
@@ -340,7 +340,8 @@ sits beside it, and only when nothing identified the endpoint does the key lead.
 
 Either `{engine}` — one of the keys the read report offered under `undeclared`
 — or `{url}`, an address nobody detected. It answers
-`{status: "added", engine, models}`, and is the browser form of
+`{status: "added", engine, models, adopted}` — plus `why` when `adopted` is
+false — and is the browser form of
 `poieo config add`, through the same `rebind.declare`, so there is not a second
 set of rules about what may be written.
 

@@ -745,7 +745,7 @@ test("a change the daemon would not take is said, with its reason", async () => 
 
   await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
 
-  const note = container.querySelector("[data-do='use-not-taken']")!
+  const note = container.querySelector("[data-do='not-taken']")!
   expect(note.textContent).toContain("OPENROUTER_API_KEY")
   expect(note.textContent).toContain("models/default.yaml")
 })
@@ -766,13 +766,16 @@ test("an endpoint the daemon would not take is said, with its reason", async () 
 
   await act(async () => offer("lmstudio")!.querySelector<HTMLElement>("[data-do='add']")!.click())
 
-  const note = container.querySelector("[data-do='use-not-taken']")!
+  const note = container.querySelector("[data-do='not-taken']")!
   expect(note.textContent).toContain("OPENROUTER_API_KEY")
   expect(note.textContent).toContain("lmstudio")
   expect(note.textContent).toContain("models/default.yaml")
-  // Not the sentence written for `use`: nothing was pointed anywhere, and
-  // there is no previous model to still be running.
+  // The consequence, which is not `use`'s: nothing was pointed anywhere and
+  // there is no previous model, but the panel will go on offering this.
+  expect(note.textContent).toContain("go on offering")
   expect(note.textContent).not.toContain("previous model")
+  // And the daemon's message is ended, so the sentence after it starts.
+  expect(note.textContent).toContain("is not set. ")
 })
 
 test("an ordinary change says nothing extra", async () => {
@@ -780,7 +783,7 @@ test("an ordinary change says nothing extra", async () => {
 
   await act(async () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!.click())
 
-  expect(container.querySelector("[data-do='use-not-taken']")).toBeNull()
+  expect(container.querySelector("[data-do='not-taken']")).toBeNull()
 })
 
 // -- an engine at an address the board was not told about --------------------

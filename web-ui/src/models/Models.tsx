@@ -47,9 +47,10 @@ export function Models({
   // whole timeout -- so the catalogue would have waited a second and a half
   // for its own footnote. This lands under it whenever it arrives.
   const [offers, setOffers] = useState<UndeclaredEngine[]>([])
-  // An edit can land in the file and still be refused by the running daemon,
+  // A write can land in the file and still be refused by the running daemon,
   // which keeps the last good spec -- and the panel reads that same spec, so it
-  // would redraw the old model with nothing said. Kept until the next write.
+  // would redraw off the old one with nothing said. Kept until the next write,
+  // and it holds either write: `use` and `add` both answer `adopted`.
   const [notTaken, setNotTaken] = useState<ModelsAnswer | null>(null)
   const [at, setAt] = useState("")
   const [atName, setAtName] = useState("")
@@ -181,10 +182,10 @@ export function Models({
       ) : null}
       {/* Not a refusal: the file really did change. What did not happen is the
           running daemon taking it -- and since the panel draws from what the
-          daemon kept, the reader is about to see the old model with no
+          daemon kept, the reader is about to see the screen they had, with no
           explanation. This is that explanation. */}
       {notTaken ? (
-        <p className="models-not-taken" data-do="use-not-taken" role="alert">
+        <p className="models-not-taken" data-do="not-taken" role="alert">
           {report?.binding ? shortPath(report.binding.path) : "The models file"} now{" "}
           {notTaken.status === "added" ? (
             <>
@@ -195,11 +196,22 @@ export function Models({
               says <code>{notTaken.ref}</code>
             </>
           )}
-          , but the daemon has not taken it — {notTaken.why} It is still running{" "}
-          {notTaken.status === "added"
-            ? "what it had, and this project"
-            : "the previous model, and"}{" "}
-          will not start from this file until that is fixed.
+          , but the daemon has not taken it — {sentence(notTaken.why)}{" "}
+          {/* What the reader is about to see, which is not the same for each
+              write. `use` redraws the model that was there before; `add` goes
+              on offering the endpoint just declared, and pressing that offer
+              again answers "this project already reaches it". */}
+          {notTaken.status === "added" ? (
+            <>
+              The list below is what the daemon has, so it will go on offering{" "}
+              <code>{notTaken.engine}</code> until that is fixed.
+            </>
+          ) : (
+            <>
+              It is still running the previous model, and will not start from
+              this file until that is fixed.
+            </>
+          )}
         </p>
       ) : null}
       {refused ? (
@@ -632,6 +644,18 @@ function compact(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
   return String(tokens)
+}
+
+/**
+ * The daemon's own words, ended so a sentence can follow them.
+ *
+ * `why` is a message written to be logged, so it stops without punctuation --
+ * and the paragraph it lands in has another sentence after it, which ran
+ * straight on: "…is not set It is still running the previous model".
+ */
+function sentence(said: string | undefined): string {
+  const said_ = (said ?? "").trim()
+  return !said_ || /[.!?]$/.test(said_) ? said_ : `${said_}.`
 }
 
 /** The tail of a path: enough to recognise, short enough for a header. */
