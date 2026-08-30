@@ -44,6 +44,7 @@ interface Box {
   said: HTMLElement
   tools: HTMLElement
   tally: HTMLElement
+  warn: HTMLElement
 }
 
 function element(tag: string, className: string, parent: Element): HTMLElement {
@@ -136,6 +137,10 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     root,
     toggle,
     when: element("div", "basic-when", root),
+    // Under the schedule, because it is the same kind of fact -- what this
+    // task is, rather than what it is doing this minute -- and above `now`,
+    // because it is true whether or not anything is running.
+    warn: element("div", "basic-warn", root),
     // Shut, this is the whole of what a task says about right now. It sits
     // above the graph because it is the answer to the question a person came
     // to the board with, and the graph is the answer to the next one.
@@ -168,8 +173,44 @@ function describeNow(flowState: TaskState): string {
 }
 
 
-/** The graph inside a border, drawn once: it moves only when a file does. */
+/**
+ * What this task can do that the morning cannot take back.
+ *
+ * A run works in a private copy and lands the night as one change to accept
+ * or discard, and that is what makes a step that edits files unremarkable --
+ * it is the whole promise of the thing. When the folder is not a repository
+ * there is no copy to make: the run edits the folder itself, and the morning
+ * has nothing to hand back. Neither half of that is worth a word on its own,
+ * and together they are the one fact on a board of healthy-looking cards a
+ * reader must not have to open anything to find.
+ *
+ * Said in plain words rather than the design documents' "hands": a person
+ * meeting this board has read neither, and a screen is not a glossary.
+ *
+ * A copy the daemon could not read arrives here as no copy at all, so a task
+ * whose git has broken is warned about too. That is the direction to be wrong
+ * in -- it names a folder that really is unprotected until somebody looks.
+ */
+function describeRisk(flowState: TaskState): string {
+  if (flowState.tracked) return ""
+  if (!flowState.shape.nodes.some((node) => node.tools.length > 0)) return ""
+  return "edits your files directly — no undo"
+}
+
+/**
+ * The graph inside a border, drawn once: it moves only when a file does.
+ *
+ * A task of one step draws nothing. The board's own `new task` writes one --
+ * three fields, and the step it expands to is called `work` -- so the
+ * commonest border on the board opened onto a single pill named after
+ * nothing the reader chose. The border already is that step, and a picture of
+ * one node is the node.
+ */
 function fillInside(box: Box, flowState: TaskState): void {
+  if (flowState.shape.nodes.length < 2) {
+    box.inside.replaceChildren()
+    return
+  }
   const leaves = new Set(exits(flowState.shape))
   // Which nodes something to their left points at. Hung on the arriving
   // node, so a router draws an arrow into every arm rather than one.
@@ -199,12 +240,14 @@ function fillInside(box: Box, flowState: TaskState): void {
     }
     // Unconditional, unlike the model above: two steps on one model say it
     // once on the header, but "this one can rewrite the project" is never
-    // answered by another step having said it. Named rather than drawn,
-    // because "hands" is the word the rest of poieo uses for this and a glyph
-    // would be a second one. Which toolsets is the detail, and hangs off it.
+    // answered by another step having said it. Named rather than drawn: a
+    // glyph would be one more thing to learn, and this is read by people who
+    // have learned nothing yet. Said as what happens rather than as "hands",
+    // which is the word the design documents use among themselves. Which
+    // toolsets is the detail, and hangs off it.
     if (spec && spec.tools.length > 0) {
       const hands = element("span", "basic-node-hands", pill)
-      hands.textContent = "hands"
+      hands.textContent = "edits files"
       hands.title = spec.tools.join(", ")
     }
     return pill
@@ -222,6 +265,7 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(flowState)
+  box.warn.textContent = describeRisk(flowState)
   box.now.textContent = describeNow(flowState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {

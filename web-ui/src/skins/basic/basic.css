@@ -210,6 +210,29 @@
   color: #d16d5a;
 }
 
+/* What the morning cannot take back. Kept with the border shut, because a
+   shut border is what ten tasks look like and this is the one thing among
+   them a reader must not miss.
+
+   The colour a failed run and a failed tool call already use: this is not an
+   error -- it is a standing property of the task -- but it is the same
+   instruction, which is stop and look. Nothing else on a healthy card is this
+   colour, so it cannot be lost among them; and the words carry the whole
+   meaning, so a reader who cannot tell this from the amber beside it has lost
+   nothing. */
+.basic-warn {
+  color: #d16d5a;
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nothing to warn about, so no room taken -- the same rule as `now`. */
+.basic-warn:empty {
+  display: none;
+}
+
 /* A running task, from across the room. The dot carries the exact state;
    this carries the one bit somebody scanning the board actually wants. */
 .basic-task[data-status="running"] {

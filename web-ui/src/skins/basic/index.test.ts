@@ -53,7 +53,9 @@ afterEach(() => {
 
 test("a frame for one task does not rebuild the other tasks' boxes", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  const stage = replay(initialStage(FLOWS), AGENT_RUN)
+  // A task of two steps, so there are nodes inside to survive at all: one
+  // step draws no graph, the border being that step already.
+  const stage = replay(initialStage([build(), FLOWS[1]]), AGENT_RUN)
   handle.update(stage)
 
   // chores is drawn with its graph's nodes inside it.
@@ -280,13 +282,78 @@ test("a step that can reach the folder says so; one that only answers does not",
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([build()]))
 
-  // Same type, same model, same box: the hands are the whole difference
-  // between a step that rewrites the project and one that talks about it, and
-  // it is the last thing a reader should have to open a file to find out.
+  // Same type, same model, same box: what they may touch is the whole
+  // difference between a step that rewrites the project and one that talks
+  // about it, and it is the last thing a reader should have to open a file
+  // to find out. Said in words a reader who has read nothing else can read --
+  // "hands" is the word the design documents use, and a screen is not one.
   const hands = pill("work").querySelector(".basic-node-hands")!
-  expect(hands.textContent).toBe("hands")
+  expect(hands.textContent).toBe("edits files")
   expect(hands.getAttribute("title")).toBe("files, shell")
   expect(pill("say").querySelector(".basic-node-hands")).toBeNull()
+  handle.destroy()
+})
+
+/** One step, which is what the board's own `new task` writes. */
+function oneStep(): TaskRow {
+  return {
+    ...FLOWS[0],
+    shape: {
+      entry: "work",
+      nodes: [
+        {
+          id: "work",
+          type: "agent",
+          next: null,
+          default: null,
+          branches: [],
+          model: "qwen3:8b",
+          tools: ["files", "shell"],
+        },
+      ],
+    },
+  }
+}
+
+test("a task of one step draws no graph inside it", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([oneStep()]))
+
+  // The border already is that step. Drawing it again inside itself says the
+  // same thing twice, under a name -- `work` -- the reader never chose.
+  expect(el.querySelectorAll('[data-task="board/chores"] .basic-node')).toHaveLength(0)
+  handle.destroy()
+})
+
+const warning = () => el.querySelector('[data-task="board/chores"] .basic-warn')!.textContent
+
+test("a task that edits the folder itself says so, with the border shut", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([oneStep()]))
+
+  // A run normally works in a private copy and lands the night as a change to
+  // accept or discard, which is what makes a step that edits files ordinary.
+  // With no copy there is nothing to discard: the run edits the folder, and
+  // the morning cannot take it back. That is the one thing on a board of
+  // healthy-looking cards a reader must not have to open anything to find.
+  expect(warning()).toBe("edits your files directly — no undo")
+  handle.destroy()
+})
+
+test("a task with a private copy is not warned about: the morning covers it", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([{ ...oneStep(), into: "main" }]))
+
+  expect(warning()).toBe("")
+  handle.destroy()
+})
+
+test("a task with no copy that only answers is not warned about either", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([triage(["qwen3:8b", null, "qwen3:8b"])]))
+
+  // Nothing in it can reach a file, so there is nothing a copy would protect.
+  expect(warning()).toBe("")
   handle.destroy()
 })
 
