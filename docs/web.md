@@ -61,6 +61,40 @@ returns a credential.** A key is a variable *name* here and a value nowhere. If
 a route in this group ever needs to take one, that is the signal this kind has
 stopped being what this paragraph describes.
 
+### The one fence every write shares
+
+Each kind above carries its own fence, and there is one under all of them:
+**a write is refused when it carries an `Origin` that is not this daemon's own.**
+
+There is no login here and there should not be — [DESIGN.md](../DESIGN.md) says
+poieo is one person's machine, and a password on your own laptop is theatre.
+That reasoning holds for reads. It does not hold for a request **the browser
+sends on somebody else's behalf**: any page a reader happens to have open can
+post to `http://127.0.0.1:8484` without them knowing, no login is missing
+because there was never one to miss, and the machine that delivers it is
+theirs. Loopback stops a socket, not a tab.
+
+`SameOrigin` compares the request's `Origin` against its own `Host`, which is
+the whole rule and needs nothing configured. A browser sends both, and they
+agree exactly when the page came from here — so `--host`, `localhost`,
+`127.0.0.1`, `[::1]` and the dev server's proxy on 5173 are all right for free,
+where a list of allowed addresses would go stale the first time somebody moved
+the port. (That last one is why `vite.config.ts` pins `changeOrigin: false`: a
+proxy that rewrote the Host would make every write from `npm run dev` look like
+another site.)
+
+A caller that sends **no** `Origin` is a program — `curl`, `poieo answer`, a
+script — and is let through. A browser is never in that group; it attaches one
+to every cross-site write there is. `Origin: null`, which a sandboxed frame
+sends, is not this daemon and is refused with the rest.
+
+Reads are left alone. Nothing behind them changes anything, and no CORS header
+is sent, so another site can post a `GET` but cannot read what comes back.
+
+It is one middleware rather than a line in each handler, because the thing being
+defended is *a browser was made to write* — a property of the request, not of
+any route. Per-handler, it is a check the next route added would be missing.
+
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.
 

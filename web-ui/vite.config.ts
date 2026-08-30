@@ -12,8 +12,13 @@ export default defineConfig({
   },
   // Dev runs on 5173 while the daemon owns 8484; the proxy keeps the client
   // talking to same-origin /api either way.
+  //
+  // `changeOrigin: false` is the default and is written out because the daemon
+  // now depends on it: a write is refused when its `Origin` and its `Host`
+  // disagree, and rewriting the Host to the target would make every write from
+  // `npm run dev` look like another site. See `SameOrigin` in web/server.py.
   server: {
-    proxy: { "/api": "http://127.0.0.1:8484" },
+    proxy: { "/api": { target: "http://127.0.0.1:8484", changeOrigin: false } },
   },
   test: {
     environment: "jsdom",

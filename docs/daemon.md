@@ -252,6 +252,15 @@ Opening it is a real thing to want — a phone is not this machine — and the f
 exists so that wanting it is written down rather than patched around. What it
 is not is a default.
 
+**Loopback is not by itself a fence, and the writes take one of their own.**
+"Nothing outside can reach it" is true of a socket and false of a browser: any
+page the reader has open can post to `http://127.0.0.1:8484` without them
+knowing, and it is their own machine that delivers it. So a request that changes
+something is refused when it carries an `Origin` that is not this daemon — see
+`SameOrigin` in [web.md](web.md). That is a fence against the *browser* being
+used as the way in; it is not auth, and it does not make `--host 0.0.0.0` any
+less of what the paragraph above says it is.
+
 ## Cards that appear while it runs
 
 The tasks folder used to be read once, at startup, so a card written afterwards

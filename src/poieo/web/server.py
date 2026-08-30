@@ -23,9 +23,12 @@ import re
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, AsyncIterator
+from urllib.parse import urlsplit
 
 import yaml
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Mount, Route
@@ -71,6 +74,56 @@ class ImmutableFiles(StaticFiles):
         response = super().file_response(*args, **kwargs)
         response.headers["cache-control"] = "public, max-age=31536000, immutable"
         return response
+
+
+# Methods with no effect. Nothing behind them changes anything, and without CORS
+# headers another site cannot read what they answer -- so fencing them would
+# break somebody's dashboard and buy nothing.
+_READS = {"GET", "HEAD", "OPTIONS"}
+
+
+class SameOrigin:
+    """A write may come from a program, or from this daemon's own page.
+
+    There is no login here, and there should not be: the person at the keyboard
+    owns the machine, and a password on your own laptop is theatre. That
+    reasoning holds for reads. It does not hold for a request **the browser
+    sends on somebody else's behalf** -- any page a reader happens to have open
+    can post to `http://127.0.0.1:8484` without them knowing, and every route in
+    the four writing kinds would have obeyed: pausing a task, accepting work
+    into a branch, writing an endpoint into a binding file.
+
+    So one fence, on all of them at once, and it is the whole rule: **an
+    `Origin`, when the caller sent one, has to be this daemon's own.** Compared
+    against the request's own `Host` rather than anything configured -- a
+    browser sends both, and they agree exactly when the page came from here.
+    That gets `--host`, `localhost`, `127.0.0.1` and `[::1]` right for free,
+    where a list of allowed addresses would go stale the first time somebody
+    moved the port.
+
+    A caller that sends no `Origin` at all is a program: `curl`, `poieo answer`,
+    a script. A browser is never in that group -- it attaches one to every
+    cross-site write there is. `Origin: null`, which a sandboxed frame sends, is
+    not this daemon and is refused with the rest.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] not in _READS:
+            headers = Headers(scope=scope)
+            origin = headers.get("origin")
+            if origin is not None and urlsplit(origin).netloc != headers.get("host"):
+                # Not echoed back: the answer is about this daemon, and a page
+                # that gets its own address quoted at it learns which of several
+                # it managed to reach.
+                await JSONResponse(
+                    {"error": "this write did not come from the board this daemon serves"},
+                    status_code=403,
+                )(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 def _project_of(runner: Any) -> str:
@@ -1127,4 +1180,8 @@ def create_app(daemon: Any) -> Starlette:
     if assets.is_dir():
         # Asset names carry a content hash, so they can never go stale.
         routes.append(Mount("/assets", ImmutableFiles(directory=assets), name="assets"))
-    return Starlette(routes=routes)
+    # One fence over every route at once, rather than a line in each handler:
+    # the thing being defended is "a browser was made to write", which is a
+    # property of the request and not of any one route, and a per-handler check
+    # is a check the next route added will be missing.
+    return Starlette(routes=routes, middleware=[Middleware(SameOrigin)])
