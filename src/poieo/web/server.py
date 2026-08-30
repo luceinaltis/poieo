@@ -20,6 +20,7 @@ import asyncio
 import json
 import os
 import re
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -41,6 +42,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 
 from .. import detect as engines
 from ..binding import load_binding, split_ref
+from ..card import expand, load_card
 from ..errors import BindingError, PoieoError
 from ..providers import credential_for
 from ..rebind import already, declare, point_at
@@ -792,6 +794,196 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # same way it finds one written by a hand. One door, not two.
         return JSONResponse({"ok": True, "task": slug, "path": str(path)})
 
+    def _asked_card(request: Request) -> tuple[Any, Any, JSONResponse | None]:
+        """The card behind a task, or the 404 saying there is none.
+
+        Keyed by the filename, because that is a task's identity -- the
+        `name:` inside is a title the reader may rewrite freely.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return None, None, missing
+        slug = request.path_params["task"]
+        spec = project.config.cards_by_task.get(slug)
+        if spec is None or spec.source_path is None:
+            return None, None, JSONResponse({"error": f"no task '{slug}' in this project"}, status_code=404)
+        return project, spec, None
+
+    async def project_task_card(request: Request) -> JSONResponse:
+        """One task's card: the file read back, or rewritten in place.
+
+        Not a sixth kind of write -- the **fifth kind growing a second verb**.
+        The fence is the one `make` built: one card, in this project's tasks
+        folder, and nothing else. Rewriting a card that exists sits inside it
+        exactly as making one did, with the same folder refusals for the same
+        reason: a card fires within seconds, and one request must not point a
+        shell-capable task anywhere on the machine.
+
+        GET answers with the file *and* its three fields: the text is what an
+        editor opens, the fields are what "make one like it" prefills, and
+        parsing YAML in the page would be a second parser to keep honest
+        against this one.
+
+        The rewrite answers `live`: whether the daemon's next run will read
+        this edit, or whether it waits for a restart. The daemon already
+        refuses to half-adopt a card whose spec changed -- `_reread_graph`
+        owns that judgement -- so this route makes the same comparison and
+        says the truth instead of letting the board believe an ignored edit
+        took.
+        """
+        project, spec, missing = _asked_card(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        path = spec.source_path
+
+        if request.method == "GET":
+
+            def _read() -> tuple[str, Any]:
+                text = path.read_text(encoding="utf-8")
+                # Freshly parsed rather than the startup copy: a hand edit
+                # since then is exactly what an editor must open with.
+                return text, load_card(path)
+
+            try:
+                text, fresh = await asyncio.to_thread(_read)
+            except PoieoError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=409)
+            return JSONResponse(
+                {
+                    "task": fresh.slug,
+                    "text": text,
+                    "name": fresh.name,
+                    "folder": fresh.folder,
+                    "prompt": fresh.prompt,
+                }
+            )
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        text = str((body or {}).get("text") or "")
+        if not text.strip():
+            return JSONResponse({"error": "a card cannot be empty"}, status_code=400)
+
+        cards = config.resolve_path(config.cards)
+        # A dotfile, which `load_cards` skips: the loader must be the judge of
+        # the new text, and judging needs a file -- but the daemon watches this
+        # folder, and anything visible here becomes a task. Unique per request,
+        # because two saves racing on one name would each judge the other's
+        # text and the second replace would find its source already gone.
+        scratch = cards / f".{spec.slug}.rewrite.{uuid.uuid4().hex}.tmp"
+        roster = [c.slug for c in config.cards_by_task.values()]
+
+        def _judge() -> tuple[JSONResponse | None, bool]:
+            try:
+                scratch.write_text(text, encoding="utf-8")
+                try:
+                    fresh = load_card(scratch)
+                except PoieoError as exc:
+                    # The loader's own words, minus the scratch name it read.
+                    return (
+                        JSONResponse(
+                            {"error": str(exc).replace(str(scratch), f"'{spec.slug}'")},
+                            status_code=400,
+                        ),
+                        False,
+                    )
+
+                # A graph-naming card has no folder, which is the shape the
+                # folder fence below cannot see -- and the graph is a path
+                # exactly as capable of leaving the project. Same refusals,
+                # resolved the way the card itself will resolve it.
+                if fresh.graph:
+                    graph_asked = Path(os.path.expanduser(fresh.graph))
+                    graph_at = (graph_asked if graph_asked.is_absolute() else cards / graph_asked).resolve()
+                    root = Path(config.base_dir).resolve()
+                    if not graph_at.is_file():
+                        return (
+                            JSONResponse(
+                                {"error": f"the graph it would run is not there: {graph_at}"},
+                                status_code=400,
+                            ),
+                            False,
+                        )
+                    if root != graph_at and root not in graph_at.parents:
+                        return (
+                            JSONResponse(
+                                {
+                                    "error": (
+                                        f"a task edited here runs a graph inside this "
+                                        f"project; {graph_at} is outside {root}"
+                                    )
+                                },
+                                status_code=400,
+                            ),
+                            False,
+                        )
+
+                # The folder fence, identical to make's and re-checked on every
+                # rewrite: the old card passing it says nothing about the new.
+                if fresh.folder:
+                    asked = Path(os.path.expanduser(fresh.folder))
+                    where = (asked if asked.is_absolute() else cards / asked).resolve()
+                    if not where.is_dir():
+                        return (
+                            JSONResponse(
+                                {"error": f"the folder it would work in is not there: {where}"},
+                                status_code=400,
+                            ),
+                            False,
+                        )
+                    root = Path(config.base_dir).resolve()
+                    if root != where and root not in where.parents:
+                        return (
+                            JSONResponse(
+                                {"error": (f"a task edited here works inside this project; {where} is outside {root}")},
+                                status_code=400,
+                            ),
+                            False,
+                        )
+
+                # `live`: would the daemon adopt this without a restart? The
+                # same comparison `_reread_graph` makes -- against the spec the
+                # daemon is actually running, not against the file. After a
+                # structural edit the file is already ahead of the daemon, and
+                # a prompt tweak on top of that is not live either.
+                live = False
+                try:
+                    loaded = next((t for t in project.tasks if t.spec.name == spec.slug), None)
+                    new_spec, _ = expand(fresh.model_copy(update={"source_path": path}), roster=roster)
+                    if loaded is not None:
+                        live = loaded.spec == new_spec
+                    else:
+                        old_spec, _ = expand(load_card(path), roster=roster)
+                        live = old_spec == new_spec
+                except PoieoError:
+                    # The card on disk no longer expands -- this rewrite may be
+                    # the repair. Written, and honestly not promised as live.
+                    live = False
+
+                # One move, so the watched folder never holds a half-written
+                # card even for the daemon's unluckiest read.
+                try:
+                    os.replace(scratch, path)
+                except OSError as exc:
+                    return (
+                        JSONResponse(
+                            {"error": f"the card could not be replaced: {exc}"},
+                            status_code=409,
+                        ),
+                        False,
+                    )
+                return None, live
+            finally:
+                scratch.unlink(missing_ok=True)
+
+        refused, live = await asyncio.to_thread(_judge)
+        if refused is not None:
+            return refused
+        return JSONResponse({"ok": True, "task": spec.slug, "live": live})
+
     async def project_models_use(request: Request) -> JSONResponse:
         """Point a role at another model, and repaint what that changed.
 
@@ -1268,6 +1460,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # If you are adding a third of these, stop.
+        Route(
+            "/api/projects/{project}/tasks/{task}",
+            project_task_card,
+            methods=["GET", "PUT"],
+        ),
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
