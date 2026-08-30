@@ -1443,7 +1443,11 @@ class Daemon:
             _ensure_port_free(self.web_host, self.web_port)
             server = uvicorn.Server(
                 uvicorn.Config(
-                    create_app(self),
+                    # Loopback is what lets `SameOrigin` refuse a `Host` that is
+                    # not this machine, which is what stops DNS rebinding. A
+                    # board bound elsewhere is reached by an address this cannot
+                    # know, and its reader has already been warned above.
+                    create_app(self, loopback_only=_is_loopback(self.web_host)),
                     host=self.web_host,
                     port=self.web_port,
                     log_level="warning",
