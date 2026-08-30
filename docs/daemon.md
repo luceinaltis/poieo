@@ -87,6 +87,15 @@ queued. It always advances by at least one tick: a timer that woke a hair early
 (Windows' clock is coarse) would otherwise land back on the tick just fired and
 turn one period into two.
 
+Both of those live in `_next_tick(tick, elapsed, every)`, a function rather than
+two lines inside the loop **because that is where they can be asked about**. The
+test that used to guard them timed the gaps between fires, and gaps cannot
+answer this on a loaded machine: a starved loop records one timestamp late and
+the next on time, so the gap between them shrinks whatever the timer did. It
+failed CI at 16ms against a 30ms floor with the trigger behaving perfectly. The
+invariant is arithmetic and is now asked as arithmetic; what remains of the
+timing test measures the **whole run**, which starvation can only lengthen.
+
 `cron.py` implements the standard 5 fields with `*/n`, ranges, lists, `mon-fri`
 names, and the day-of-month **or** day-of-week rule.
 

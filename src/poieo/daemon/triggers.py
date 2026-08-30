@@ -164,6 +164,30 @@ class ManualTrigger(Trigger):
         yield  # pragma: no cover
 
 
+def _next_tick(tick: int, elapsed: float, every: float) -> int:
+    """Which tick to aim at next, having just fired ``tick``.
+
+    Anchored to a grid rather than to when the last run ended, so a run that
+    overran does not shift every later tick -- the ticks it ate are skipped
+    rather than queued, which is why a card that took an hour does not then
+    fire sixty times in a row.
+
+    **Always at least one later.** A timer that woke a hair early leaves
+    ``elapsed`` still inside the period just fired, so ``elapsed // every``
+    names that same tick again -- and the delay to a tick already past is
+    zero, which fires immediately and turns one period into two. Windows'
+    clock is coarse enough to do this routinely.
+
+    A function rather than two lines in the loop because that invariant is
+    arithmetic, and the test that used to guard it measured wall-clock gaps
+    instead: on a loaded runner a starved loop records one timestamp late and
+    the next on time, so the gap between them shrinks whatever the timer did.
+    It cannot tell a correct trigger from a broken one, and it failed CI
+    saying so.
+    """
+    return max(tick + 1, int(elapsed // every) + 1)
+
+
 class IntervalTrigger(Trigger):
     """Fires every N seconds on an absolute grid, skipping ticks a slow run ate."""
 
@@ -200,12 +224,7 @@ class IntervalTrigger(Trigger):
             if self._exhausted(iteration + 1):
                 return  # nothing left to fire; do not sit out the period
 
-            # Anchored to the grid, so a run that overran does not shift every
-            # later tick and elapsed ticks are skipped rather than queued.
-            # Always advance by at least one: a timer that woke a hair early
-            # (Windows' clock is coarse) would otherwise refire the same tick.
-            elapsed = loop.time() - origin
-            tick = max(tick + 1, int(elapsed // self.every) + 1)
+            tick = _next_tick(tick, loop.time() - origin, self.every)
             delay = origin + tick * self.every - loop.time()
             if self.jitter:
                 delay += random.uniform(0, self.jitter)

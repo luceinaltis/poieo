@@ -9,7 +9,7 @@ from conftest import EXAMPLES, at, card
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
-from poieo.daemon.triggers import TriggerSpec, parse_duration
+from poieo.daemon.triggers import TriggerSpec, _next_tick, parse_duration
 from poieo.errors import SpecError
 from poieo.store import Event, NullStore
 from poieo.web.events import BroadcastStore
@@ -81,11 +81,18 @@ async def test_interval_trigger_fires_immediately_then_periodically():
     assert 0.08 <= elapsed < 0.5
 
 
-async def test_interval_trigger_never_fires_twice_inside_one_period():
-    """A timer that wakes early must not turn one tick into two.
+async def test_interval_trigger_takes_the_time_its_periods_come_to():
+    """Twenty fires on a 50ms grid occupy about a second, and a trigger that
+    fired twice inside a period would not.
 
-    The grid is derived from elapsed time, so a wake-up a hair before the tick
-    it was aimed at used to select that same tick again and fire immediately.
+    **Measured over the whole run, not gap by gap.** The gaps cannot answer
+    this on a loaded machine: a starved loop records one timestamp late and the
+    next on time, and the difference between them shrinks whatever the timer
+    did. That is what failed CI here -- 16ms against a 30ms floor, with the
+    trigger behaving perfectly. Starvation can only make the whole run *longer*,
+    so a floor over the whole run is a thing slowness cannot trip.
+
+    The invariant itself is arithmetic and is asked as arithmetic, above.
     """
     trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=20).build()
     loop = asyncio.get_running_loop()
@@ -95,11 +102,11 @@ async def test_interval_trigger_never_fires_twice_inside_one_period():
     async for _ in trigger.fires(cancel):
         stamps.append(loop.time())
 
-    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
     assert len(stamps) == 20
-    # One period is 50ms; the floor allows for a wake-up up to 20ms early,
-    # which a coarse Windows timer really does produce.
-    assert min(gaps) >= 0.03, gaps
+    # First fire is immediate, so nineteen periods separate first from last.
+    # Two thirds of that is well clear of jitter and nowhere near the collapse
+    # a refiring trigger produces, which is toward zero.
+    assert stamps[-1] - stamps[0] >= 19 * 0.05 * 0.66, stamps
 
 
 async def test_manual_trigger_never_fires_on_its_own():
@@ -865,3 +872,47 @@ async def test_the_run_started_event_says_the_project(tmp_path):
         if event["type"] == "run_started"
     ]
     assert started and all(e["data"]["project"] == "chores" for e in started)
+
+
+# -- which tick comes next, without a clock ----------------------------------
+#
+# `test_interval_trigger_never_fires_twice_inside_one_period` below measures
+# this through wall time, and on a loaded runner it cannot: a starved loop
+# records one stamp late and the next on time, so the gap between them shrinks
+# whatever the timer did. It failed CI at 16ms against a 30ms floor with the
+# trigger behaving correctly.
+#
+# The thing that must hold is arithmetic, so it is asked as arithmetic.
+
+
+def test_the_next_tick_is_always_later_than_the_one_just_fired():
+    """The bug this guards.
+
+    Tick 3 is at 0.15s. Woken a whisker early at 0.149, `elapsed // every` is
+    still 2, so the grid on its own answers **3** -- the tick just fired. The
+    delay to a tick already past is zero, so it would fire again immediately
+    and turn one period into two.
+    """
+    assert _next_tick(3, elapsed=0.149, every=0.05) == 4
+    # And on time, where the grid and the counter agree anyway.
+    assert _next_tick(3, elapsed=0.152, every=0.05) == 4
+
+
+def test_ticks_a_slow_run_ate_are_skipped_not_queued():
+    """The other half: a run that overran does not owe the ticks it missed, or
+    a task that took an hour would fire sixty times in a row on a 1m card.
+
+    Fired tick 3 and came back at 0.68s, most of the way to tick 14 at 0.70 --
+    ticks 4 through 13 are gone, not queued.
+    """
+    assert _next_tick(3, elapsed=0.68, every=0.05) == 14
+
+
+def test_the_next_tick_never_stalls_however_late_the_clock_reads():
+    """Whatever a coarse clock says, the sequence strictly increases -- which
+    is the whole invariant, and the one thing wall-time gaps cannot show."""
+    tick = 0
+    for elapsed in (0.0, 0.0, 0.049, 0.05, 0.049, 3.0, 3.0):
+        nxt = _next_tick(tick, elapsed=elapsed, every=0.05)
+        assert nxt > tick, (tick, elapsed, nxt)
+        tick = nxt
