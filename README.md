@@ -129,8 +129,8 @@ somebody that.
 
 The graph, the models, the daemon, the model's hands, the private copy and the
 undo, container isolation, the memory a project keeps, and the board you watch
-it all on are built and in use. Making a card from the browser is not — that
-is still a file you write. `DESIGN.md` has the roadmap.
+it all on are built and in use — including making a card from the browser;
+editing one still means the file. `DESIGN.md` has the roadmap.
 
 poieo is one person's machine running one person's work: no accounts, no
 server, no team features, and no plan to have them.
