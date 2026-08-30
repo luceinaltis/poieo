@@ -876,6 +876,12 @@ above the button — the card starts running when it is saved, and that sentence
 is principle 7's one exception to hiding the machinery. One panel holds the
 stage's single margin, so opening it closes the other.
 
+A name the project already uses is said **while it is being typed** — the
+board holds the task list, so there is no reason to learn about a collision
+from the 409 after save. The warning speaks in the daemon's own spelling of
+the filename (`make/slug.ts` mirrors `_slug`, pinned case for case by its
+test), and it is advisory: the daemon's refusal stays the authority.
+
 Most new tasks are not blank pages: they are "like that one, but". The card
 fold's **make one like it** opens this panel with the three fields of an
 existing card already in it — a starting point and nothing more, everything

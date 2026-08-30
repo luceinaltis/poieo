@@ -487,9 +487,13 @@ test("make one like it opens the make panel already filled in", async () => {
     container.querySelector<HTMLElement>('[data-do="make-alike"]')!.click()
   })
 
-  // The drawer gave up the margin to the panel, prefilled.
+  // The drawer gave up the margin to the panel, prefilled -- and already
+  // saying the one thing that must change: the seeded title is the original
+  // task's, so the collision warning is up and save is held until a rename.
   expect(container.querySelector(".drawer")).toBeNull()
   expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("Chores")
+  expect(container.textContent).toContain("already has a task called")
+  expect(container.querySelector<HTMLButtonElement>('[data-do="make-task"]')!.disabled).toBe(true)
   expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("../work")
   expect(container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!.value).toBe(
     "tidy",

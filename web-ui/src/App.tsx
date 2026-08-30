@@ -328,6 +328,9 @@ export default function App({ store }: { store?: StageStore }) {
           // then promises no copy it cannot prove, which is the direction to
           // be wrong in when the sentence is about somebody's own files.
           keepsCopies={project.keeps_copies ?? false}
+          // The names this project's tasks are filed under -- TaskRow.name is
+          // already the filename, which is what a collision is about.
+          taken={tasks.filter((one) => one.project === project.name).map((one) => one.name)}
           onClose={closeMake}
         />
       ) : null}
