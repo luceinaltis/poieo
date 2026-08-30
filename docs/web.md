@@ -545,6 +545,12 @@ unplaced nodes itself can tell "at the origin" from "nowhere yet".
 - a successful `run` answers `"starting"`, not `"running"`: the runner picks the
   fire up on the next turn of the shared event loop, after the response is gone
 
+And on the page, a refusal is information the reader needs **beside what they
+typed**. `useAct`'s `act` resolves to *whether the request went out*, which a
+refused one did — so a form that empties itself on it takes away the thing the
+refusal is about. Everything typed is cleared on `answer.ok` and nothing else,
+which is the shape `MakeTask` already had.
+
 ### Off the loop
 
 The daemon, the web server and every task share one asyncio loop, so anything

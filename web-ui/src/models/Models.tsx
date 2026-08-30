@@ -105,14 +105,26 @@ export function Models({
   // from asking it, not from a field asking them to classify their own server.
   const addAt = () => {
     if (!at.trim()) return
-    void act(() =>
-      addEngine(project, {
+    void act(async () => {
+      const answer = await addEngine(project, {
         url: at.trim(),
         ...(atName.trim() ? { name: atName.trim() } : {}),
         ...(atKeyEnv.trim() ? { key_env: atKeyEnv.trim() } : {}),
-      }),
-    ).then((sent) => {
-      if (sent) setAt("")
+      })
+      // Emptied here and not off `act`'s answer, which is *whether the request
+      // went out* -- a refused address counts, and clearing on it left the
+      // reader with "nothing usable answered at ..." beside an empty box and a
+      // dead button, having to retype the address to find the typo in it.
+      //
+      // All three together, as one thing typed. `name` and `key_env` were
+      // never cleared at all, so a name meant for one endpoint rode along to
+      // the next address and was refused as a duplicate of the one just added.
+      if (answer.ok) {
+        setAt("")
+        setAtName("")
+        setAtKeyEnv("")
+      }
+      return answer
     })
   }
 

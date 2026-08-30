@@ -850,3 +850,41 @@ test("a refusal from an address is shown where it was typed", async () => {
 
   expect(container.textContent).toContain("nothing usable answered")
 })
+
+test("a refused address stays in the box the reader has to correct", async () => {
+  // The whole point of showing the refusal is that the reader fixes what they
+  // typed. Cleared, they are left with "nothing usable answered at
+  // http://nowere:8001" beside an empty box and a disabled button, and have to
+  // retype the address to find out what the typo was.
+  addEngine.mockResolvedValue({ ok: false, error: "nothing usable answered at http://nowere:8001" })
+  await render()
+
+  await act(async () => {
+    value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://nowere:8001")
+    value(container.querySelector<HTMLInputElement>("[data-do='url-name']")!, "office")
+  })
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(container.querySelector<HTMLInputElement>("[data-do='url']")!.value).toBe("http://nowere:8001")
+  expect(container.querySelector<HTMLInputElement>("[data-do='url-name']")!.value).toBe("office")
+  // ...and the button it is corrected with is still live.
+  expect(container.querySelector<HTMLButtonElement>("[data-do='add-at']")!.disabled).toBe(false)
+})
+
+test("everything typed beside an address is cleared with it", async () => {
+  // The inverse. `name` and `key_env` were never cleared at all, so a name
+  // typed for one endpoint rode along to the next address and was refused as
+  // a duplicate of the endpoint just added.
+  await render()
+
+  await act(async () => {
+    value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://gpu-box:8001")
+    value(container.querySelector<HTMLInputElement>("[data-do='url-name']")!, "office")
+    value(container.querySelector<HTMLInputElement>("[data-do='url-key-env']")!, "OFFICE_TOKEN")
+  })
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(container.querySelector<HTMLInputElement>("[data-do='url']")!.value).toBe("")
+  expect(container.querySelector<HTMLInputElement>("[data-do='url-name']")!.value).toBe("")
+  expect(container.querySelector<HTMLInputElement>("[data-do='url-key-env']")!.value).toBe("")
+})
