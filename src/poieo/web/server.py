@@ -810,9 +810,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         return project, spec, None
 
     async def project_task_card(request: Request) -> JSONResponse:
-        """One task's card: the file read back, or rewritten in place.
+        """One task's card: the file read back, rewritten in place, or removed.
 
-        Not a sixth kind of write -- the **fifth kind growing a second verb**.
+        Not a sixth kind of write -- the **fifth kind growing its verbs**.
         The fence is the one `make` built: one card, in this project's tasks
         folder, and nothing else. Rewriting a card that exists sits inside it
         exactly as making one did, with the same folder refusals for the same
@@ -830,6 +830,16 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         owns that judgement -- so this route makes the same comparison and
         says the truth instead of letting the board believe an ignored edit
         took.
+
+        DELETE removes that one file and nothing beside it -- no journal, no
+        run, no workspace. It needs no path fence of its own for the reason
+        the rewrite needs none: the card is found by looking a filename up
+        among the ones the loader already accepted from this project's tasks
+        folder, so a name that reads like a path finds nothing to remove. It
+        answers 404 when the file has already gone, which is the one absence
+        that lookup cannot see -- the daemon holds the card it read at
+        startup, and a task it is already running keeps running until a
+        restart.
         """
         project, spec, missing = _asked_card(request)
         if missing is not None:
@@ -858,6 +868,24 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "prompt": fresh.prompt,
                 }
             )
+
+        if request.method == "DELETE":
+
+            def _remove() -> bool:
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    return False
+                return True
+
+            if not await asyncio.to_thread(_remove):
+                return JSONResponse(
+                    {"error": f"no task '{spec.slug}' in this project"},
+                    status_code=404,
+                )
+            # No reload here either: the daemon watches this folder, and the
+            # route's whole job is the file. One door, not two.
+            return JSONResponse({"ok": True, "task": spec.slug})
 
         try:
             body = await request.json()
@@ -1463,7 +1491,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route(
             "/api/projects/{project}/tasks/{task}",
             project_task_card,
-            methods=["GET", "PUT"],
+            methods=["GET", "PUT", "DELETE"],
         ),
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),

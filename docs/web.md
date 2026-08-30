@@ -28,6 +28,7 @@ to be true to add a sixth.
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
+| `DELETE /api/projects/{p}/tasks/{f}` | **make** — remove that card; 404 once the file is gone |
 | `POST /api/tasks/{p}/{f}/accept` | **review** — put the work in the user's own branch |
 | `POST /api/tasks/{p}/{f}/discard` | **review** — throw it away, recoverably |
 | `POST /api/tasks/{p}/{f}/pause` | **control** — hold the schedule |
@@ -851,15 +852,24 @@ refused rather than quietly rewritten. It takes the three things DESIGN.md says
 a task cannot do without and no fourth, and the folder is required because it is
 the one thing the model's hands will touch.
 
-The same kind has a second verb: **rewriting a card that exists**, `PUT` on the
-task's own path, inside the same fence — the filename never changes, because it
-is the task's identity, and the folder refusals run again on every rewrite
-because the old card passing them says nothing about the new. `GET` beside it
-hands back the file and its three fields. The answer's `live` says whether the
+The same kind grows verbs on the task's own path rather than kinds. **Rewriting a
+card that exists** is `PUT` there, inside the same fence — the filename never
+changes, because it is the task's identity, and the folder refusals run again on
+every rewrite because the old card passing them says nothing about the new. `GET`
+beside it hands back the file and its three fields. The answer's `live` says whether the
 daemon's next run reads the edit or whether it waits for a restart: the daemon
 refuses to half-adopt a card whose spec changed — `_reread_graph` owns that
 judgement — and this route makes the same comparison so the board can warn
 instead of letting a person believe an ignored edit took.
+
+**Removing one** is `DELETE` on that same path, and it removes exactly the file —
+no journal, no run, no workspace. It needs no path fence of its own for the
+reason the rewrite needs none: the card is found by looking a filename up among
+the ones the loader already accepted from this project's tasks folder, so a name
+that reads like a path finds nothing to remove. It answers **404** once the file
+has gone, which is the one absence that lookup cannot see — the daemon holds the
+card it read at startup, and a task it is already running keeps running until a
+restart.
 
 The rail item that calls it is `make/MakeTask.tsx`, beside `models/` because
 making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
@@ -888,9 +898,9 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Removing a card.** Making one is live, and so is editing it — the drawer's
-  `card` fold rewrites the file through the same fence — but renaming a task
-  (the filename is its identity) and deleting one still mean touching the file.
+- **Removing a card from the board.** The route is there (`DELETE` on the task's
+  path) but nothing on screen calls it yet, so deleting one still means touching
+  the file — as renaming does, the filename being a task's identity.
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.

@@ -1,10 +1,10 @@
-"""Reading a task's card back, and rewriting it, from the board.
+"""Reading a task's card back, rewriting it, and removing it, from the board.
 
-The rewrite is the fifth kind of write growing a second verb, not a sixth
+The rewrite is the fifth kind of write growing another verb, not a sixth
 kind: the fence is the one `make` built -- one card, in this project's tasks
 folder, and nothing else -- and rewriting a card that exists sits inside it
-exactly as making one did. The GET beside it is what an editor opens with,
-and what "make one like it" prefills from.
+exactly as making one did, as removing one does. The GET beside it is what an
+editor opens with, and what "make one like it" prefills from.
 
 The daemon's own re-read rules stay the judge of what an edit means: a new
 prompt is picked up by the next run, while a change to the folder, the
@@ -48,6 +48,10 @@ def _get(client, task="already", project="board"):
 
 def _put(client, text, task="already", project="board"):
     return client.put(f"/api/projects/{project}/tasks/{task}", json={"text": text})
+
+
+def _delete(client, task="already", project="board"):
+    return client.delete(f"/api/projects/{project}/tasks/{task}")
 
 
 def test_the_card_reads_back_as_the_file_and_as_its_three_fields(tmp_path):
@@ -204,3 +208,25 @@ def test_two_saves_in_a_row_both_land_and_the_last_one_wins(tmp_path):
     assert sorted(p.name for p in cards.iterdir()) == ["already.yaml", "steps.yaml"] or sorted(
         p.name for p in cards.iterdir()
     ) == ["already.yaml"]
+
+
+def test_deleting_a_card_removes_the_file_and_saying_it_twice_is_a_404(tmp_path):
+    """The third verb of the same kind: the card the fence let this route write
+    is the card it may remove, and nothing else. The second call has no file to
+    remove -- the daemon still remembers the task until it restarts, so absence
+    on disk is what makes it a 404 rather than a silent second `ok`."""
+    client, cards = _client(tmp_path)
+    answer = _delete(client)
+
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"ok": True, "task": "already"}
+    assert not (cards / "already.yaml").exists()
+
+    again = _delete(client)
+    assert again.status_code == 404, again.text
+
+
+def test_deleting_a_task_the_daemon_does_not_know_is_a_404_and_touches_nothing(tmp_path):
+    client, cards = _client(tmp_path)
+    assert _delete(client, task="ghost").status_code == 404
+    assert sorted(p.name for p in cards.iterdir()) == ["already.yaml"]
