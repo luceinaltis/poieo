@@ -222,6 +222,11 @@ test("the hour rules are drawn once for the board, not once per lane", () => {
 
   expect(el.querySelectorAll(".hours-rules")).toHaveLength(1)
   expect(el.querySelectorAll(".hours-edge")).toHaveLength(1)
+  // Each rule knows whether its label is a date, so a midnight's rule can be
+  // drawn heavier -- on a three-day board the days read as rooms.
+  for (const rule of el.querySelectorAll<HTMLElement>(".hours-rule")) {
+    expect(["time", "date"]).toContain(rule.dataset.kind)
+  }
   // One rule under every label, or the grid stops meaning what the axis says.
   const rules = el.querySelectorAll<HTMLElement>(".hours-rule")
   const labels = el.querySelectorAll<HTMLElement>(".hours-tick")

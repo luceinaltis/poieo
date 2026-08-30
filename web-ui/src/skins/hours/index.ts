@@ -172,7 +172,7 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
   // instead of a solid bar on one. Unmeasurable (jsdom, a lane not yet laid
   // out) comes back 0, and a zero gap folds nothing.
   const width = row.track.clientWidth
-  const folds = crowd(drawn.marks, width > 0 ? 4 / width : 0)
+  const folds = crowd(drawn.marks, width > 0 ? 5 / width : 0)
 
   for (const fold of folds) {
     const tick = document.createElement("span")
@@ -240,6 +240,7 @@ export const hours: Skin = {
 
         const rule = document.createElement("span")
         rule.className = "hours-rule"
+        rule.dataset.kind = mark.kind
         rule.style.left = `${mark.x * 100}%`
         lines.push(rule)
       }

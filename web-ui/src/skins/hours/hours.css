@@ -15,7 +15,11 @@
      already uses for something happening, red for something broken. A quiet
      run gets the colour of a hairline, because most runs are quiet and a wall
      of bright ticks would say every night was eventful. */
-  --hours-quiet: #7d6f57;
+  --hours-quiet: #8b7c62;
+  /* One height for "the whole lane": the track, a failure, the live mark.
+     Three numbers that had to agree is how a failure ends up not quite
+     reaching the rail it is supposed to touch. */
+  --hours-track: 44px;
   --hours-changed: #d8a657;
   --hours-failed: #d16d5a;
   --hours-now: #a9b665;
@@ -48,7 +52,7 @@
 .hours-tick {
   color: #9a9086;
   font-family: var(--hours-register);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -58,7 +62,7 @@
 }
 
 .hours-scale {
-  height: 12px;
+  height: 14px;
   position: relative;
 }
 
@@ -84,11 +88,17 @@
 }
 
 .hours-rule {
-  background: #2e2820;
+  background: #3a332a;
   bottom: 0;
   position: absolute;
   top: 0;
   width: 1px;
+}
+
+/* A midnight's rule is heavier than an hour's: on a board days wide, the
+   days read as rooms and the hours as marks on their walls. */
+.hours-rule[data-kind="date"] {
+  background: #4f4536;
 }
 
 /* Now. Every lane ends here, so a mark against it is still going rather than
@@ -153,7 +163,7 @@
 .hours-trigger {
   color: #9a9086;
   font-family: var(--hours-register);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -164,7 +174,7 @@
 .hours-last {
   color: #9a9086;
   font-family: var(--hours-register);
-  font-size: 10px;
+  font-size: 11px;
   grid-column: 2;
   grid-row: 2;
   justify-self: end;
@@ -174,7 +184,7 @@
 .hours-track {
   grid-column: 2;
   grid-row: 1;
-  height: 38px;
+  height: var(--hours-track);
   position: relative;
 }
 
@@ -190,12 +200,15 @@
    (Failures used to hang from the rail above instead -- distinct, but a mark
    pointing the other way read as a glitch before it read as a failure.)
    Colour agrees with all three and carries none of them alone. */
+/* Wide enough to be seen across a room. Three pixels was legible on a
+   laptop and a sliver on a monitor; the fold threshold stays a pixel ahead
+   of this width, so marks never touch. */
 .hours-mark {
   border-radius: 1px;
   bottom: 0;
-  margin-left: -1.5px;
+  margin-left: -2px;
   position: absolute;
-  width: 3px;
+  width: 4px;
 }
 
 /* Tall enough to be a rhythm rather than a smudge. Most runs are quiet, so
@@ -204,17 +217,17 @@
    board already has. */
 .hours-mark[data-outcome="nothing"] {
   background: var(--hours-quiet);
-  height: 9px;
+  height: 12px;
 }
 
 .hours-mark[data-outcome="succeeded"] {
   background: var(--hours-changed);
-  height: 26px;
+  height: 30px;
 }
 
 .hours-mark[data-outcome="failed"] {
   background: var(--hours-failed);
-  height: 38px;
+  height: var(--hours-track);
 }
 
 /* Runs the window opened after: on the baseline with the marks and pointing
@@ -226,7 +239,7 @@
   bottom: 0;
   color: #9a9086;
   font-family: var(--hours-register);
-  font-size: 9px;
+  font-size: 10px;
   left: 0;
   padding-right: 5px;
   position: absolute;
@@ -238,10 +251,10 @@
   background: var(--hours-now);
   border-radius: 1px;
   bottom: 0;
-  height: 38px;
+  height: var(--hours-track);
   position: absolute;
   right: 0;
-  width: 3px;
+  width: 4px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -262,6 +275,7 @@
 @media (max-width: 720px) {
   .hours {
     --hours-gutter: 108px;
+    --hours-track: 38px;
     padding: 14px 14px 24px 12px;
   }
 
