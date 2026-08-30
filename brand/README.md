@@ -52,10 +52,10 @@ running software are one thing:
    ambers make it decoration.
 3. **Flat vector.** No gradients, no texture, no shadows.
 4. **On light grounds**, parchment becomes ink; the amber stays.
-5. **No forge imagery.** The blacksmith-workshop register (the atelier skin's
-   smiths, anvils, fires) is retired from every brand surface — README, site,
-   cards, screenshots. The atelier skin remains a product feature; it is just
-   not the brand's face.
+5. **No forge imagery.** The blacksmith-workshop register (smiths, anvils,
+   fires) is retired from every brand surface — README, site, cards,
+   screenshots. The atelier skin that carried it has since been removed from
+   the product as well; nothing renders a forge anywhere now.
 
 ## Registers — reference images
 

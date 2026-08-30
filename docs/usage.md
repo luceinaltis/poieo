@@ -670,13 +670,15 @@ shaped that way. Start at [architecture.md](architecture.md).
 
 ## Not built yet
 
-* Task cards from the page. Observing, reviewing and controlling a task all work
-  in the browser; creating or editing a card still means editing the file.
+* Editing and removing a card from the page. Making one is live — the rail's
+  `new task` writes a card and the daemon finds it — but changing a card's
+  name or folder, and deleting it, still mean editing the file.
 * The editor folded into the board. `poieo edit` is a canvas over the graph schema
   today, and `poieo show --mermaid` draws one; the board draws the work but does
   not let you edit it.
-* Node types beyond `agent` and `router` (deterministic work, map/fan-out).
-  `runtime/nodes.py` has a `NODE_TYPES` registry to add them to.
+* Fan-out / map steps — one node that runs its body over a list. The four node
+  types that exist are in `runtime/nodes.py`'s `NODE_TYPES` registry, which is
+  where a new one goes.
 
 ## Tests
 

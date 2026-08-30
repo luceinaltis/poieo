@@ -203,12 +203,11 @@ What is not built yet. Everything marked done in the table above is, and how
 each of those works *today* is in its component document — a roadmap that also
 described finished work would be a second, staler account of it.
 
-- **The board writes, not only reads.** Creating and editing a card from the
-  browser, and folding the existing canvas editor into the detail view. The
-  daemon now notices a card that appears while it runs, and a prompt edited at
-  noon is what the next run uses; removing one at runtime, and the browser side
-  of all of it, are what is left. Observing, reviewing and controlling already
-  work end to end; making a task is still a file you write by hand.
+- **The board writes, not only reads.** Creating a card from the browser is
+  live — the rail's `new task` writes the file and the daemon finds it — and a
+  prompt edited at noon is what the next run uses. What is left: editing and
+  removing a card from the page, and folding the existing canvas editor into
+  the detail view.
 - **Beyond, as candidates.** Delegating a step to an external agent CLI;
   fan-out steps; deciding what happens to run logs as they age; stronger
   isolation backends behind the seam the current one already sits on.
