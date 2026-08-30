@@ -3,8 +3,11 @@
   <img src="site/img/lockup-light.svg" alt="poieo" width="380">
 </picture>
 
-**Write down the work you want done. The models you choose keep it running
-around the clock, and you read what they did in the morning.**
+**Stop doing your tasks. Start conducting them.**
+
+poieo is an autonomous task board: point it at any AI model — local or cloud —
+and it runs your recurring tasks around the clock. Nothing touches your files
+until you accept it.
 
 [![gate](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml/badge.svg)](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
@@ -12,18 +15,18 @@ around the clock, and you read what they did in the morning.**
 
 ![The board: five task cards, their schedules, and one change waiting to be read](site/img/board.png)
 
-Five tasks on the board. Each one is a card you wrote — a name, a folder, and
-a sentence saying what to do — and a daemon on your own machine keeps them
-running against a local model, around the clock, for nothing per token.
+Five tasks on the board. Each one is a card you wrote — a name, a folder, a
+sentence — and a daemon on your machine keeps them running: free local models
+for the night shift, a costly one only where it pays.
 
-## Sixty seconds
+## Get started in sixty seconds
 
 ```bash
 git clone https://github.com/luceinaltis/poieo && cd poieo && pip install .
 
 mkdir ~/board && cd ~/board
-poieo init          # looks at this machine once: Ollama, LM Studio, vLLM,
-                    # llama.cpp, a Claude key -- and writes down what answered
+poieo init          # finds every model server on this machine -- and any
+                    # cloud key -- and writes what answered to plain files
 ```
 
 Then write a card. This is the whole file:
@@ -41,17 +44,11 @@ poieo daemon        # every card in tasks/ runs from now on,
                     # and the board is at http://127.0.0.1:8484
 ```
 
-That is the entire setup. Everything else — which model serves the card, how
-often it fires, where the output goes — has a default, and is a line you add
-only when you want it different.
+That is the entire setup — everything else has a default. No model yet?
+`poieo init --mock` gives you a scripted stand-in, so the wiring can be tried
+offline.
 
-No model on the machine yet? `poieo init --mock` lays the same project out with
-a stand-in that answers from a script, so the wiring can be tried offline and a
-real model bound later.
-
-## Three words
-
-You learn three, and there is no fourth.
+## How it works: task, run, change
 
 | | |
 |---|---|
@@ -59,23 +56,20 @@ You learn three, and there is no fourth.
 | **run** | one pass through a task. It succeeded, it failed, or it found nothing to do. |
 | **change** | what a run did to your files — which you accept, or throw away. |
 
-Everything underneath is machinery, and machinery stays out of the way.
+You learn these three and no fourth — everything underneath is machinery,
+and machinery stays out of the way.
 
 ## A night, end to end
 
-The task above fires while you are asleep. It does **not** work in your
-project: it works in a private copy of it, so the checkout you left open is
-exactly as you left it in the morning. Each run leaves at most one change, with
-the model's own sentence about what it did. (That copy is a git worktree, so a
-folder git does not track has nothing to copy and nothing to undo — `poieo
-tasks` says so up front rather than at 3am.)
+The task above fires while you are asleep — in a **private copy**, never in
+your checkout. Each run leaves at most one change, with the model's own
+sentence about what it did.
 
 ![A task opened on the board: its runs, what it said, and the change waiting](site/img/task.png)
 
-Four runs. Three found nothing worth doing and left nothing behind. One edited
-a file, and that one is waiting: read the diff, then **accept this run** — which
-is the only moment poieo ever writes to your own branch — or **discard** it,
-recoverably.
+Four runs. Three found nothing and left nothing behind. One is waiting: read
+the diff and **accept** it — the only moment poieo writes to your branch — or
+**discard** it; nothing is thrown away for good.
 
 Each task also keeps a journal it reads before every run, so tonight starts
 where last night stopped, and you can put a line in it yourself:
@@ -84,26 +78,25 @@ where last night stopped, and you can put a line in it yourself:
 poieo note tasks/keep-green.yaml "leave the prose alone, spend the night on tests"
 ```
 
-## Why it runs on your machine
+## What conducting buys you
 
-- **Local models first.** A resident that costs nothing per token can be left
-  running. Cloud models plug into the same mechanism as an option, never as a
-  requirement.
-- **Files, not a database.** Tasks, models, journals and run logs are YAML,
-  Markdown and JSONL you can read, diff and commit. Nothing is true because an
-  index says so.
-- **Nothing touches your files until you accept it.** Autonomy without undo is
-  a different, scarier product.
-- **Every run is auditable.** Which model answered, which branch it took, which
-  files it touched, which commands it ran, what it cost — one log file answers
-  "what did this thing do last night?".
+- **Cheaper than doing it one prompt at a time.** Each step names a role, and
+  you pick the model that serves it — free ones for the night shift, a costly
+  one only where it pays.
+- **The whole flow on one board.** One graph shows every task and its wiring;
+  any run replays what it did, turn by turn.
+- **One memory, shared by every task.** A lesson one task learns lands in
+  shared memory, and every task reads it before working.
+- **Everything is a file.** Tasks, models, journals and run logs are YAML,
+  Markdown and JSONL you can read, diff and commit — one log answers "what did
+  this thing do last night?".
 
 ## When one line is not enough
 
 A card is sugar. Underneath, the work is a **graph** — steps, branching,
 loops, state carried between runs — that names *roles* rather than models, and
 a **binding** maps those roles onto real endpoints. Moving a workflow from a
-laptop model to Claude Opus is a flag, not an edit.
+laptop model to a frontier one is a flag, not an edit.
 
 ```yaml
 nodes:
