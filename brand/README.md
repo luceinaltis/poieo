@@ -1,10 +1,11 @@
 # The poieo brand
 
-**A tree in a harness.** Something alive and a little wilful — branches that
-grow where they decide to, each twig carrying a round bud — held by a frame
-that lets it work safely. The tree is the work growing overnight; the one
-amber bud is the task running right now; the harness is poieo. Every brand
-decision answers to that sentence.
+**The work grows like a tree; you conduct it.** The brand runs on two
+metaphors with separate jobs and no third. The **tree** is the picture:
+something alive and a little wilful, branches growing where they decide to,
+a bud on every twig, one amber where something ripened. **Conducting** is the
+voice: the reader stops doing tasks and starts directing them. Every visual
+decision answers to the tree; every sentence answers to the conductor.
 
 The look began with a photographed kinetic sculpture (a sphere sprouting
 crooked ball-tipped stalks) and was distilled through tree studies into the
@@ -24,6 +25,7 @@ it. To change a mark: generate, get it approved, trace, replace.
 | `site/img/lockup.svg` / `lockup-light.svg` | mark + wordmark, for dark and light grounds |
 | `site/img/social.png` | the 1280×640 share card; its source page is `site/social.html` |
 | `mark-source.jpg` (here) | the generation the mark's SVG is traced from |
+| `wordmark-source.png` (here) | the generation the wordmark's SVG is traced from |
 
 ## Colour
 
@@ -34,22 +36,25 @@ running software are one thing:
 |---|---|---|
 | Ground | `#14120f` | the warm near-black everything sits on |
 | Parchment | `#e8e2d8` | shapes and body text on dark |
-| Ember | `#d8a657` | the one amber bud; every accent |
-| Live | `#a9b665` | something running right now |
+| Ember | `#d8a657` | the one ripe bud; every accent |
+| Live | `#a9b665` | the product's own "running right now" — the board owns this word, not the mark |
 | Ink | `#221e18` | what parchment becomes on light grounds |
 
 ## Type
 
 - **Wordmark**: the traced custom lettering only — never set the name in a font.
-- **Sentences**: Hanken Grotesk (OFL).
-- **Labels, figures, code**: DM Mono (OFL).
+- **On the site**: the system stack, deliberately — the page downloads no
+  fonts, matching its no-dependency build.
+- **In set graphics** (cards, decks, sheets — anything shipped as an image):
+  Hanken Grotesk for sentences, DM Mono for labels and figures (both OFL).
 
 ## Rules
 
 1. **Crooked stays crooked.** Do not straighten the branches, and do not
    redraw them by hand — trace.
-2. **One amber, never more.** The accent means "the one running now"; two
-   ambers make it decoration.
+2. **One amber, never more.** The amber bud is the ripe one — the fruit
+   worth the reader's attention — not a status lamp: on the board, "running"
+   is Live green. Two ambers make it decoration.
 3. **Flat vector.** No gradients, no texture, no shadows.
 4. **On light grounds**, parchment becomes ink; the amber stays.
 5. **No forge imagery.** The blacksmith-workshop register (smiths, anvils,
