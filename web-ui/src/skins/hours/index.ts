@@ -14,11 +14,11 @@
  * costs a reader nothing.
  *
  * A mark carries its run's outcome in silhouette, not only in colour: a quiet
- * run is a low tick on the baseline, a run that changed something is a full
- * post, and a failure hangs from the rail above. A night of a healthy task is a
- * picket fence with a few tall posts in it, and that shape is legible before
- * any of the words are -- and to a reader for whom amber and red are one
- * colour, which they are for a great many people.
+ * run is a low tick, a run that changed something is a post, and a failure
+ * runs the full height of the lane. A night of a healthy task is a picket
+ * fence with a few tall posts in it, and that shape is legible before any of
+ * the words are -- and to a reader for whom amber and red are one colour,
+ * which they are for a great many people.
  */
 
 import { changedTasks } from "../changed"

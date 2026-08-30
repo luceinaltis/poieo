@@ -626,10 +626,10 @@ worst of them, so a dense night is a fence of folds rather than a fused bar,
 and a failure is never averaged away by the quiet runs around it.
 
 A mark carries its run's outcome in **silhouette**, not only colour — a quiet run
-is a low tick on the baseline, a run that changed something is a full post, and a
-failure hangs from the rail above. Colour agrees with all three and carries none
-of them alone, which matters most for the pair the view rests on: amber and red
-are one colour to a red-green reader, and those two are the same height. The
+is a low tick, a run that changed something is a post, and a failure runs the
+full height of the lane. Colour agrees with all three and carries none of them
+alone, which matters most for the pair the view rests on: amber and red are one
+colour to a red-green reader. The
 counts are deliberately **not** written beside the lane: the marks are the
 counts. They are on the lane's `aria-label`, which is the one place there
 is no picture to read them off. `skins/hours/span.ts` is the part capable of
