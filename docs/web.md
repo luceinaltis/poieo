@@ -11,8 +11,10 @@ a user to install.
 ## The API
 
 Almost everything answers *what is happening / what happened*. The routes that
-change anything come in exactly **two kinds**, one fence each, and both the
-server and the client keep them together so they stay easy to count.
+change anything come in **five kinds**, one fence each and one fence under all
+of them, and both the server and the client keep them together so they stay easy
+to count. Five is already too many; the paragraph on each says what would have
+to be true to add a sixth.
 
 | route | does |
 |---|---|
@@ -61,10 +63,10 @@ returns a credential.** A key is a variable *name* here and a value nowhere. If
 a route in this group ever needs to take one, that is the signal this kind has
 stopped being what this paragraph describes.
 
-### The one fence every write shares
+### The one fence under all five
 
-Each kind above carries its own fence, and there is one under all of them:
-**a write is refused when it carries an `Origin` that is not this daemon's own.**
+**A write is refused when it carries an `Origin` that is not this page's own,
+or a `Host` that is not this machine.**
 
 There is no login here and there should not be — [DESIGN.md](../DESIGN.md) says
 poieo is one person's machine, and a password on your own laptop is theatre.
@@ -74,19 +76,37 @@ post to `http://127.0.0.1:8484` without them knowing, no login is missing
 because there was never one to miss, and the machine that delivers it is
 theirs. Loopback stops a socket, not a tab.
 
-`SameOrigin` compares the request's `Origin` against its own `Host`, which is
-the whole rule and needs nothing configured. A browser sends both, and they
-agree exactly when the page came from here — so `--host`, `localhost`,
-`127.0.0.1`, `[::1]` and the dev server's proxy on 5173 are all right for free,
-where a list of allowed addresses would go stale the first time somebody moved
-the port. (That last one is why `vite.config.ts` pins `changeOrigin: false`: a
-proxy that rewrote the Host would make every write from `npm run dev` look like
-another site.)
+So `SameOrigin` asks two questions, and the second is not decoration:
+
+1. **The `Origin` is this page's own**, compared against the request's `Host`,
+   which a browser sends beside it. Nothing to configure, and every spelling is
+   right for free: `localhost`, `127.0.0.1`, `[::1]`, a moved `--port`, and the
+   dev server's proxy on 5173 — where a list of allowed addresses would go stale
+   the first time somebody moved the port. (That last one is why
+   `vite.config.ts` spells out `changeOrigin: false`. Vite's string shorthand
+   expands to `true`, which rewrites the Host to the target while the browser's
+   Origin stays `localhost:5173`, and every write from `npm run dev` would 403.)
+2. **And that `Host` is this machine.** Without it the first question is one an
+   attacker can answer: serve a page from `board.evil.tld:8484`, drop the TTL,
+   repoint the A record at `127.0.0.1`, and the loaded page's `Origin` and
+   `Host` agree with each other perfectly while naming somebody else's domain.
+   DNS rebinding is *the* attack on a daemon like this one, and it costs about
+   what the attack the first question stops costs.
+
+The second question is **off when the daemon was told to bind somewhere else**.
+`--host 0.0.0.0` is reached by a LAN address or a machine name this cannot know,
+and the reader who passed it has already spent the assumption it rests on —
+[daemon.md](daemon.md) says so at warning level before the port is bound. The
+same is true behind a reverse proxy, which must forward the browser's Host
+(`proxy_set_header Host $host;` in nginx) or the board loses every write.
 
 A caller that sends **no** `Origin` is a program — `curl`, `poieo answer`, a
 script — and is let through. A browser is never in that group; it attaches one
 to every cross-site write there is. `Origin: null`, which a sandboxed frame
-sends, is not this daemon and is refused with the rest.
+sends, is not this daemon and is refused with the rest. The scheme is
+deliberately not compared: behind a TLS terminator the browser says `https` and
+this process only ever sees `http`, and an `https` origin still has to name a
+loopback host to get here at all.
 
 Reads are left alone. Nothing behind them changes anything, and no CORS header
 is sent, so another site can post a `GET` but cannot read what comes back.
@@ -94,6 +114,12 @@ is sent, so another site can post a `GET` but cannot read what comes back.
 It is one middleware rather than a line in each handler, because the thing being
 defended is *a browser was made to write* — a property of the request, not of
 any route. Per-handler, it is a check the next route added would be missing.
+
+**And the page refuses to be framed** — `frame-ancestors 'none'`, with
+`X-Frame-Options` for an older browser. A fence that stops another site
+*sending* a write does nothing about one that loads the board in an invisible
+frame over a decoy button: there the click is the reader's own, and every write
+it makes is honestly same-origin.
 
 `GET /api/tasks` carries `asking` — `{run_id, question, choices}`, or null. The
 route needs it: without it the answer route is a button with no label on it.

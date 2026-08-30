@@ -81,6 +81,13 @@ class ImmutableFiles(StaticFiles):
 # break somebody's dashboard and buy nothing.
 _READS = {"GET", "HEAD", "OPTIONS"}
 
+# The other half of `SameOrigin`, on the page rather than the request. The fence
+# stops another site *sending* a write; this stops another site loading the board
+# in an invisible frame over a decoy button, where the click is the reader's own
+# and every write it makes is honestly same-origin. `frame-ancestors` is the
+# current rule and `X-Frame-Options` is what an older browser reads.
+_UNFRAMED = {"content-security-policy": "frame-ancestors 'none'", "x-frame-options": "DENY"}
+
 
 class SameOrigin:
     """A write may come from a program, or from this daemon's own page.
@@ -90,31 +97,61 @@ class SameOrigin:
     reasoning holds for reads. It does not hold for a request **the browser
     sends on somebody else's behalf** -- any page a reader happens to have open
     can post to `http://127.0.0.1:8484` without them knowing, and every route in
-    the four writing kinds would have obeyed: pausing a task, accepting work
-    into a branch, writing an endpoint into a binding file.
+    the five writing kinds would have obeyed: pausing a task, accepting work
+    into a branch, writing an endpoint into a binding file, creating a card that
+    runs shell commands.
 
-    So one fence, on all of them at once, and it is the whole rule: **an
-    `Origin`, when the caller sent one, has to be this daemon's own.** Compared
-    against the request's own `Host` rather than anything configured -- a
-    browser sends both, and they agree exactly when the page came from here.
-    That gets `--host`, `localhost`, `127.0.0.1` and `[::1]` right for free,
-    where a list of allowed addresses would go stale the first time somebody
-    moved the port.
+    So one fence, on all of them at once, and it is **two questions about the
+    same request**:
+
+    1. **The `Origin`, when the caller sent one, is this page's own** --
+       compared against the request's `Host`, which a browser sends beside it.
+       That gets every spelling right without anything to configure:
+       `localhost`, `127.0.0.1`, `[::1]`, a moved `--port`, and the dev server's
+       proxy on 5173.
+    2. **And that `Host` is this machine.** Without this the first question is
+       answerable by an attacker: serve a page from `board.evil.tld:8484`, drop
+       the TTL, repoint the A record at `127.0.0.1`, and the loaded page's
+       `Origin` and `Host` agree with each other perfectly while naming somebody
+       else's domain. DNS rebinding is *the* attack on a daemon like this one,
+       and it costs about what the attack this fence stops costs.
+
+    ``loopback_only`` is the second question, and it is off when the daemon was
+    told to bind somewhere else. `--host 0.0.0.0` is reached by a LAN address or
+    a machine name that this cannot know, and the reader who passed it has
+    already spent the assumption the check rests on -- `daemon.md` says so at
+    warning level before the port is bound.
 
     A caller that sends no `Origin` at all is a program: `curl`, `poieo answer`,
     a script. A browser is never in that group -- it attaches one to every
     cross-site write there is. `Origin: null`, which a sandboxed frame sends, is
     not this daemon and is refused with the rest.
+
+    The scheme is deliberately **not** compared. Behind a TLS terminator the
+    browser says `https` and this process only ever sees `http`, so comparing
+    them would refuse a proxied board for no gain: an `https` origin still has
+    to name a loopback host to get here at all.
     """
 
-    def __init__(self, app: Any) -> None:
+    def __init__(self, app: Any, loopback_only: bool = True) -> None:
         self.app = app
+        self.loopback_only = loopback_only
+
+    def _refused(self, headers: Headers) -> bool:
+        origin = headers.get("origin")
+        if origin is None:
+            return False
+        host = headers.get("host", "")
+        if urlsplit(origin).netloc != host:
+            return True
+        # `detect` already knows how to read an address for `here` and `host`,
+        # and a second set of string rules beside it is how this module was
+        # wrong about `localhost` before -- see `_unclaimed`.
+        return self.loopback_only and engines.is_here(host) is not True
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        if scope["type"] == "http" and scope["method"] not in _READS:
-            headers = Headers(scope=scope)
-            origin = headers.get("origin")
-            if origin is not None and urlsplit(origin).netloc != headers.get("host"):
+        if scope["type"] == "http" and scope["method"].upper() not in _READS:
+            if self._refused(Headers(scope=scope)):
                 # Not echoed back: the answer is about this daemon, and a page
                 # that gets its own address quoted at it learns which of several
                 # it managed to reach.
@@ -340,8 +377,16 @@ def _shape(task: Any) -> dict[str, Any]:
     }
 
 
-def create_app(daemon: Any) -> Starlette:
-    """Build the app over a daemon-shaped object (.runners, .store)."""
+def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
+    """Build the app over a daemon-shaped object (.runners, .store).
+
+    ``loopback_only`` says whether this board is only reachable from this
+    machine, which is what :class:`SameOrigin` needs to know and what
+    `daemon.web_exposure` already decides. Defaulting to the truth about the
+    default address rather than reading it off ``daemon``: a caller that serves
+    this somewhere else has to say so, and one that forgets gets the tighter
+    answer rather than the looser one.
+    """
 
     async def tasks(request: Request) -> JSONResponse:
         # Each review state is two git subprocesses; asked one runner at a
@@ -1127,8 +1172,8 @@ def create_app(daemon: Any) -> Starlette:
         if page.exists():
             # This document names the build. Let a browser cache it and the
             # reader keeps running an old page with no way to find out.
-            return FileResponse(page, headers={"cache-control": "no-cache"})
-        return PlainTextResponse("poieo web UI is not built yet. The API is live: /api/tasks")
+            return FileResponse(page, headers={"cache-control": "no-cache", **_UNFRAMED})
+        return PlainTextResponse("poieo web UI is not built yet. The API is live: /api/tasks", headers=_UNFRAMED)
 
     routes = [
         Route("/api/tasks", tasks),
@@ -1184,4 +1229,4 @@ def create_app(daemon: Any) -> Starlette:
     # the thing being defended is "a browser was made to write", which is a
     # property of the request and not of any one route, and a per-handler check
     # is a check the next route added will be missing.
-    return Starlette(routes=routes, middleware=[Middleware(SameOrigin)])
+    return Starlette(routes=routes, middleware=[Middleware(SameOrigin, loopback_only=loopback_only)])

@@ -256,10 +256,20 @@ is not is a default.
 "Nothing outside can reach it" is true of a socket and false of a browser: any
 page the reader has open can post to `http://127.0.0.1:8484` without them
 knowing, and it is their own machine that delivers it. So a request that changes
-something is refused when it carries an `Origin` that is not this daemon — see
-`SameOrigin` in [web.md](web.md). That is a fence against the *browser* being
-used as the way in; it is not auth, and it does not make `--host 0.0.0.0` any
-less of what the paragraph above says it is.
+something is refused when its `Origin` is not this page's own, or its `Host` is
+not this machine — `SameOrigin`, argued in [web.md](web.md).
+
+`_is_loopback` decides the second half, which is why it is here rather than
+there: the daemon is what knows where it bound. On a **non-loopback `--host`
+that half is off**, because a board reached by a LAN address or a machine name
+cannot be told from a domain pointed at this one — the reader who passed the
+flag has already spent that assumption, and the warning above is where it is
+spent. A reverse proxy in front is the same shape and must forward the browser's
+`Host` (`proxy_set_header Host $host;`), or the board loses every write.
+
+None of this is auth, and it does not make `--host 0.0.0.0` any less of what the
+paragraph above says it is. It is a fence against *the browser* being the way
+in, which is the one thing loopback never covered.
 
 ## Cards that appear while it runs
 
