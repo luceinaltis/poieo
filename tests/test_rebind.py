@@ -292,6 +292,40 @@ def test_an_endpoint_name_with_a_slash_in_it_is_refused(tmp_path):
     assert _read(path) == before
 
 
+def test_every_name_detection_derives_is_one_this_will_write(tmp_path):
+    """The two have to agree. `detect._named_for` reads a key off the host with
+    `\\w`, which is every script and not just this one -- so a rule spelt in
+    ASCII here refuses an address detection was perfectly happy with, and the
+    only way out is passing the `--name` that was meant to be optional."""
+    from poieo.binding import load_binding
+    from poieo.detect import _named_for
+
+    path = _written(tmp_path)
+    for address in ("http://사무실:8000/v1", "http://münchen-box:8000/v1", "http://_gateway:8000/v1"):
+        key = _named_for(address, None)
+        declare(path, [_endpoint(key=key, base_url=address)])
+        assert key in load_binding(path).providers, key
+
+
+def test_an_endpoint_that_cannot_be_declared_at_all_never_reaches_the_file(tmp_path):
+    """Composing what the block *should* read back as is the second place an
+    engine can turn out to be undeclarable. Finding that out after the write
+    would leave the half-edited file this module exists to make impossible --
+    and worse than the ones it already refuses, since the file loads.
+
+    `type` with a trailing space is the shape that does it: YAML strips it on
+    the way back in, so the written file parses and resolves, and only the
+    comparison against what was meant notices.
+    """
+    path = _written(tmp_path)
+    before = _read(path)
+
+    with pytest.raises(SpecError, match="cannot declare"):
+        declare(path, [_endpoint(type="openai_compatible ")])
+
+    assert _read(path) == before
+
+
 def test_an_ordinary_key_variable_still_lands(tmp_path):
     from poieo.binding import load_binding
 

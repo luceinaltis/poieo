@@ -49,9 +49,15 @@ INDENT = "  "
 # No slash either, and that one is not about YAML: a slash is what separates the
 # endpoint from the model in every reference the product prints and takes back,
 # so `office/eu` names an endpoint nothing can ever refer to again.
+#
+# `\w` and not `[A-Za-z0-9_]`, because `detect._named_for` derives a name with
+# `\w` and this has to accept everything that writes. Spelt in ASCII it refused
+# `http://사무실:8000` and `http://münchen-box:8000` -- addresses detection reads
+# a perfectly good key off -- and two modules disagreeing about what a name is
+# is how a product ends up with an option that cannot be used without another.
 _NAME = (
-    re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z"),
-    "letters, digits, `-`, `_` or `.`, starting with a letter or digit",
+    re.compile(r"[\w.][\w.-]*\Z"),
+    "letters, digits, `-`, `_` or `.`, and may not start with `-`",
 )
 
 # An environment variable's name, as every shell defines one. Narrower than
@@ -229,6 +235,16 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
         if engine.api_key_env:
             _plain("api_key_env", engine.api_key_env, _VARIABLE)
 
+    # Before the write, not after it: this is what the file will be checked
+    # against once it has been read back, and building it is the second place
+    # an engine can turn out to be undeclarable at all. Finding that out with a
+    # half-edited file on disk would leave the one state this module exists to
+    # make impossible.
+    try:
+        wanted = {engine.key: _as_declared(engine) for engine in fresh}
+    except ValueError as exc:
+        raise SpecError(f"cannot declare {', '.join(e.key for e in fresh)} in {path}: {exc}") from exc
+
     lines = original.splitlines()
     span = _top_level(lines, "providers")
     if span is None:
@@ -273,7 +289,6 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     # two would pass that. So the whole binding has to read back as the old one
     # plus exactly the endpoints asked for: nothing else moved, and each new
     # endpoint saying what this composed for it and no more.
-    wanted = {engine.key: _as_declared(engine) for engine in fresh}
     kept = {key: spec for key, spec in now.providers.items() if key not in wanted}
     mine = {key: spec for key, spec in now.providers.items() if key in wanted}
     if (kept, mine, now.default, now.roles) != (was.providers, wanted, was.default, was.roles):
