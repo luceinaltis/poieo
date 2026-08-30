@@ -8,20 +8,23 @@ success, and one bad proposal never wastes the night's good entries.
 
 import json
 import os
+import sqlite3
 
-from conftest import at
+from conftest import at, remember
 
 import poieo.learn as learning
 from poieo.binding import BindingSpec
 from poieo.learn import learn
+from poieo.memory import entry_named, read_page, readable_entries, start_memory, write_page
 from poieo.providers import ProviderPool
 
 
 def _project(tmp_path, page="Never push to main."):
     project = tmp_path / "tasks"
-    at(project).facts().mkdir(parents=True)
+    project.mkdir(parents=True, exist_ok=True)
+    start_memory(project)
     if page is not None:
-        at(project).constitution().write_text(page, encoding="utf-8")
+        write_page(project, page)
     return project
 
 
@@ -43,7 +46,7 @@ def _episode(
 
 
 def _entry(project, slug, text):
-    (at(project).facts() / f"{slug}.md").write_text(text, encoding="utf-8")
+    remember(project, slug, text)
 
 
 def _binding(script):
@@ -67,7 +70,7 @@ async def _learn(project, script):
 
 
 def _facts(project):
-    return sorted(p.name for p in at(project).facts().glob("*.md"))
+    return sorted(entry.slug for entry in readable_entries(project))
 
 
 async def test_an_entry_learned_carries_the_runs_that_taught_it(tmp_path):
@@ -81,10 +84,9 @@ async def test_an_entry_learned_carries_the_runs_that_taught_it(tmp_path):
     )
 
     assert result.kept == ["batch-cap"]
-    text = (at(project).facts() / "batch-cap.md").read_text(encoding="utf-8")
-    assert one in text
-    assert "bbbbbbbb" not in text
-    assert "Batches cap at 50." in text
+    kept = entry_named(project, "batch-cap")
+    assert kept.matter.source == [one]
+    assert kept.body == "Batches cap at 50."
 
 
 async def test_a_forged_from_is_cut_to_the_records_actually_shown(tmp_path):
@@ -97,10 +99,8 @@ async def test_a_forged_from_is_cut_to_the_records_actually_shown(tmp_path):
         _proposal(entries=[{"slug": "cap", "body": "Caps hold.", "from": ["20990101T000000-ffffffff"]}]),
     )
 
-    text = (at(project).facts() / "cap.md").read_text(encoding="utf-8")
     # Nothing it named was shown, so the whole night is the source.
-    assert one in text and two in text
-    assert "ffffffff" not in text
+    assert sorted(entry_named(project, "cap").matter.source) == sorted([one, two])
 
 
 async def test_a_failed_pass_rereads_and_a_passed_one_does_not(tmp_path):
@@ -149,7 +149,7 @@ async def test_a_bad_slug_is_dropped_and_the_rest_still_land(tmp_path):
 
     assert result.kept == ["fine-entry"]
     assert result.dropped and "../evil" in result.dropped[0]
-    assert _facts(project) == ["fine-entry.md"]
+    assert _facts(project) == ["fine-entry"]
 
 
 async def test_a_colliding_slug_never_overwrites(tmp_path):
@@ -160,8 +160,7 @@ async def test_a_colliding_slug_never_overwrites(tmp_path):
     result = await _learn(project, _proposal(entries=[{"slug": "batch-cap", "body": "Machine text."}]))
 
     assert result.kept == []
-    text = (at(project).facts() / "batch-cap.md").read_text(encoding="utf-8")
-    assert text == "What a person wrote."
+    assert entry_named(project, "batch-cap").body == "What a person wrote."
 
 
 async def test_a_dangling_link_in_a_proposal_is_dropped(tmp_path):
@@ -192,10 +191,10 @@ async def test_a_set_aside_changes_one_line_and_keeps_the_body(tmp_path):
     result = await _learn(project, _proposal(set_aside=[{"entry": "old-cap", "because": "new-cap"}]))
 
     assert result.set_aside == ["old-cap"]
-    text = (at(project).facts() / "old-cap.md").read_text(encoding="utf-8")
-    assert "superseded_by: new-cap" in text
-    assert text.endswith(body)
-    assert "scope: [importer]" in text
+    aside = entry_named(project, "old-cap")
+    assert aside.matter.superseded_by == "new-cap"
+    assert aside.body == body
+    assert aside.matter.scope == ["importer"]
 
 
 async def test_a_set_aside_may_point_at_an_entry_kept_this_pass(tmp_path):
@@ -250,8 +249,7 @@ async def test_the_page_is_never_written(tmp_path):
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal(entries=[{"slug": "cap", "body": "Caps hold."}]))
-    page = at(project).constitution().read_text(encoding="utf-8")
-    assert page == "Never push to main."
+    assert read_page(project) == "Never push to main."
 
 
 async def test_a_memoryless_project_never_gains_a_folder(tmp_path):
@@ -449,24 +447,36 @@ async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
     record = at(project).learning_log().read_text(encoding="utf-8")
     assert "Require ISO dates" in record
     assert sorted(str(p) for p in at(project).longterm().rglob("*")) == before
-    assert at(project).constitution().read_text(encoding="utf-8") == "Never push to main."
+    assert read_page(project) == "Never push to main."
 
 
 # -- set aside ---------------------------------------------------------------
 
 
-def _aged(path, days):
-    import os
+def _aged_file(path, days):
+    """Blobs are still bytes on disk, so they still age by their mtime."""
     import time
 
     stamp = time.time() - days * 86400
     os.utime(path, (stamp, stamp))
 
 
+def _aged(project, slug, days):
+    """Backdate an entry the way time would have."""
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+
+    when = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    con = sqlite3.connect(at(project).longterm())
+    con.execute("UPDATE entries SET updated_at = ? WHERE slug = ?", (when, slug))
+    con.commit()
+    con.close()
+
+
 def _old_aside(project, slug="old-cap", because="new-cap", days=120):
     _entry(project, because, "Caps sit at 50 now.")
     _entry(project, slug, f"---\nsuperseded_by: {because}\n---\nCaps sat at 10 once.")
-    _aged(at(project).facts() / f"{slug}.md", days)
+    _aged(project, slug, days)
 
 
 async def test_a_set_aside_entry_stays_where_a_person_left_it(tmp_path):
@@ -479,22 +489,22 @@ async def test_a_set_aside_entry_stays_where_a_person_left_it(tmp_path):
 
     await _learn(project, _proposal())
 
-    kept = at(project).facts() / "old-cap.md"
-    assert kept.read_text(encoding="utf-8") == "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once."
-    assert not (at(project).longterm() / "attic").exists()
+    kept = entry_named(project, "old-cap")
+    assert kept.body == "Caps sat at 10 once."
+    assert kept.matter.superseded_by == "new-cap"
 
 
 async def test_a_set_aside_entry_is_still_loaded_and_counted(tmp_path):
     """Out of every prompt -- `recall()` sees to that -- but never out of the
     folder, the load, or the count a person reads."""
-    from poieo.memory import load_entries, memory_report
+    from poieo.memory import memory_report
 
     project = _project(tmp_path)
     _old_aside(project)
     _episode(project, "20260824T010000-aaaaaaaa")
     await _learn(project, _proposal())
 
-    assert "old-cap" in {entry.slug for entry in load_entries(project)}
+    assert "old-cap" in {entry.slug for entry in readable_entries(project)}
     assert memory_report(project)["set_aside"] == 1
 
 
@@ -523,9 +533,9 @@ async def test_a_file_anchor_is_sealed_when_the_pass_writes(tmp_path):
         ),
     )
 
-    text = (at(project).facts() / "feeds-note.md").read_text(encoding="utf-8")
+    sealed = entry_named(project, "feeds-note").matter.sealed
     name = digest(notebook / "feeds.md")
-    assert f'"notebook/feeds.md": "{name}"' in text
+    assert sealed == {"notebook/feeds.md": name}
     assert path_for(project, name).read_text(encoding="utf-8") == "# feeds\n- a\n- b\n"
 
 
@@ -540,8 +550,7 @@ async def test_a_directory_anchor_is_not_sealed_and_the_entry_lands(tmp_path):
     )
 
     assert result.kept == ["place-note"]
-    text = (at(project).facts() / "place-note.md").read_text(encoding="utf-8")
-    assert "sealed" not in text
+    assert entry_named(project, "place-note").matter.sealed == {}
 
 
 async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
@@ -560,8 +569,7 @@ async def test_an_over_cap_anchor_is_skipped_and_noted(tmp_path, monkeypatch):
     )
 
     assert result.kept == ["fat-note"]
-    text = (at(project).facts() / "fat-note.md").read_text(encoding="utf-8")
-    assert "sealed" not in text
+    assert entry_named(project, "fat-note").matter.sealed == {}
     assert any("fat.bin" in note for note in result.dropped)
 
 
@@ -575,7 +583,7 @@ def _stale_blob(project, content=b"old bytes"):
     store.mkdir(parents=True, exist_ok=True)
     name = hashlib.sha256(content).hexdigest()
     (store / name).write_bytes(content)
-    _aged(store / name, 120)
+    _aged_file(store / name, 120)
     return name
 
 
@@ -640,8 +648,10 @@ async def test_a_damaged_pass_log_stops_neither_reader(tmp_path):
     # The page was written by the fixture a moment before the pass ran, and a
     # suggestion is withheld once the page is newer than it. Backdate the page
     # so this test is about the damaged log and nothing else.
-    page = at(project).constitution()
-    os.utime(page, (0, 0))
+    con = sqlite3.connect(at(project).longterm())
+    con.execute("UPDATE page SET updated_at = '1970-01-01T00:00:00+00:00' WHERE only = 1")
+    con.commit()
+    con.close()
 
     log = at(project).learning_log()
     with log.open("a", encoding="utf-8") as handle:
@@ -688,8 +698,8 @@ async def test_the_same_entry_cannot_be_set_aside_twice_in_one_answer(tmp_path):
     )
 
     assert result.set_aside == ["old-cap"]
-    text = (at(project).facts() / "old-cap.md").read_text(encoding="utf-8")
-    assert "superseded_by: new-cap" in text and "other-cap" not in text
+    aside = entry_named(project, "old-cap")
+    assert aside.matter.superseded_by == "new-cap"
     assert any("already set aside" in line for line in result.dropped)
 
 
@@ -711,8 +721,8 @@ async def test_two_entries_cannot_set_each_other_aside(tmp_path):
 
     # The first aside stands; the second would lean the memory on nothing.
     assert result.set_aside == ["cap-a"]
-    text = (at(project).facts() / "cap-b.md").read_text(encoding="utf-8")
-    assert "superseded_by" not in text
+    aside = entry_named(project, "cap-b")
+    assert aside.matter.superseded_by is None
 
 
 async def test_a_mention_does_not_wear_in_a_disputed_pair(tmp_path):

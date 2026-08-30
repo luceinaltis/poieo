@@ -1369,7 +1369,7 @@ def memory(
 
     report = memory_report(project)
     if report is None:
-        typer.echo(f"no memory here yet. Start one with {layout_for(project).constitution()}")
+        typer.echo(f"no memory here yet. `poieo init` here starts one at {layout_for(project).longterm()}")
         return
 
     typer.echo(f"page       {report['page_chars']} characters (budget {report['page_budget']})")
@@ -1413,7 +1413,7 @@ def learn(
     spec = load_binding(binding)
 
     if not keeps_memory(project):
-        typer.echo(f"no memory here yet. Start one with {layout_for(project).constitution()}")
+        typer.echo(f"no memory here yet. `poieo init` here starts one at {layout_for(project).longterm()}")
         return
 
     async def _go():

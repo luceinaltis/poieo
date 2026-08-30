@@ -27,12 +27,16 @@ from .layout import layout_for
 from .memory import (
     Entry,
     doubts,
+    frontmatter,
     keeps_memory,
-    load_entry,
+    open_memory,
+    page_written_at,
     read_page,
     readable_entries,
     results_dir,
+    set_aside,
     used_in,
+    write_entry,
 )
 from .providers import ProviderPool
 from .providers.base import LLMRequest
@@ -281,7 +285,7 @@ def _apply(
         elif because not in final or because == entry or because in asided:
             result.dropped.append(f"set aside '{entry}': '{because}' cannot replace it")
         else:
-            _set_aside(by_slug[entry].path, because)
+            set_aside(project_dir, entry, because, writer="pass")
             asided.add(entry)
             result.set_aside.append(entry)
 
@@ -344,43 +348,16 @@ def _write_entry(project_dir: Path, raw: dict[str, Any], shown: list[str], resul
         else:
             result.dropped.append(f"'{raw['slug']}': did not keep {part}")
 
-    lines = [
-        "---",
-        f"scope: {json.dumps(raw.get('scope') or ['global'])}",
-        f"anchors: {json.dumps(raw.get('anchors') or [])}",
-        f"source: {json.dumps(source)}",
-    ]
-    if sealed:
-        lines.append(f"sealed: {json.dumps(sealed)}")
-    links = raw.get("links") or {}
-    for kind in ("depends_on", "contradicts"):
-        if links.get(kind):
-            if "links:" not in lines:
-                lines.append("links:")
-            lines.append(f"  {kind}: {json.dumps(links[kind])}")
-    lines += ["---", raw["body"].strip(), ""]
-    path = layout_for(project_dir).facts() / f"{raw['slug']}.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
-
-
-def _set_aside(path: Path, because: str) -> None:
-    """One frontmatter line; the body stays byte for byte what its author
-    wrote. Setting aside is the strongest thing a pass may do to an
-    existing entry, and it is reversible in an editor or by git."""
-    lines = path.read_text(encoding="utf-8-sig").splitlines()
-    closed = None
-    if lines and lines[0].strip() == "---":
-        for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
-                closed = i
-                break
-    if closed is None:
-        new = ["---", f"superseded_by: {because}", "---", *lines]
-    else:
-        head = [l for l in lines[1:closed] if not l.strip().startswith("superseded_by:")]
-        new = ["---", *head, f"superseded_by: {because}", "---", *lines[closed + 1 :]]
-    path.write_text("\n".join(new), encoding="utf-8")
+    matter = frontmatter(
+        {
+            "scope": raw.get("scope") or ["global"],
+            "anchors": raw.get("anchors") or [],
+            "source": source,
+            "sealed": sealed,
+            "links": {kind: value for kind, value in (raw.get("links") or {}).items() if value},
+        }
+    )
+    write_entry(project_dir, raw["slug"], raw["body"], matter, writer="pass")
 
 
 def _strengthen(project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]) -> None:
@@ -429,24 +406,26 @@ KEEPSAKE_GRACE_DAYS = 90.0
 
 def _let_go(project_dir: Path) -> list[str]:
     """The one true deletion, legal because a keepsake is a copy: bytes named
-    by no entry in facts/, past the grace. Nothing else here removes an entry,
-    so bytes fall unnamed only when a person took the entry out -- and the
-    grace is long enough for that person to change their mind."""
-    layout = layout_for(project_dir)
-    store = layout.blobs()
+    by no entry, past the grace. Nothing else here removes an entry, so bytes
+    fall unnamed only when a person took the entry out -- and the grace is long
+    enough for that person to change their mind."""
+    store = layout_for(project_dir).blobs()
     if not store.is_dir():
         return []
 
+    # Read the names first, and collect nothing if that read fails. An empty
+    # answer here is indistinguishable from "every keepsake is unreferenced",
+    # and this is the one function that deletes -- so trouble must stop it
+    # rather than arm it.
+    try:
+        with open_memory(project_dir) as con:
+            rows = con.execute("SELECT sealed FROM entries").fetchall()
+    except Exception as exc:
+        log.warning("could not read what the entries name (%s); letting go of nothing", exc)
+        return []
     referenced: set[str] = set()
-    facts = layout.facts()
-    if facts.is_dir():
-        for path in sorted(facts.glob("*.md")):
-            try:
-                referenced |= set(load_entry(path).matter.sealed.values())
-            except Exception:
-                # An unreadable entry protects nothing it does not name --
-                # but collection must not fail over it either.
-                continue
+    for row in rows:
+        referenced |= set(json.loads(row["sealed"]).values())
 
     now = datetime.now(timezone.utc).timestamp()
     gone: list[str] = []
@@ -474,12 +453,10 @@ def last_suggestion(project_dir: Path) -> str | None:
     suggestion = latest.get("page")
     if not isinstance(suggestion, str) or not suggestion:
         return None
-    page_path = layout_for(project_dir).constitution()
     try:
-        if page_path.is_file():
-            edited = datetime.fromtimestamp(page_path.stat().st_mtime, timezone.utc)
-            if edited > datetime.fromisoformat(str(latest.get("at", ""))):
-                return None
+        edited = page_written_at(project_dir)
+        if edited is not None and edited > datetime.fromisoformat(str(latest.get("at", ""))):
+            return None
     except (OSError, ValueError):
         pass  # an unreadable clock keeps the suggestion; showing beats hiding
     return suggestion

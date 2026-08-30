@@ -1,20 +1,25 @@
 """Choosing what a task is shown, and assembling the block it reads.
 
 The page comes first and whole, so the stable part of the prompt stays stable;
-the entries the task earned follow it, best first, cut on whole-entry
-boundaries. The page never competes with them for room.
+the entries the task earned follow it, best first, on whole-entry boundaries.
+The page never competes with them for room.
+
+**The lookup is asked before anything is read.** Candidates are narrowed first
+and only the winners are fetched -- reading every entry to choose forty is the
+one thing this file must not do.
 
 Design: docs/memory.md
 """
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from ..layout import layout_for
-from .entries import Entry, read_page, readable_entries, words
-from .index import candidates
+from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
+from .index import narrow
 
 # Budget for the learned entries that follow the page. Cut on whole-entry
 # boundaries, best first -- half a lesson is worse than none.
@@ -49,10 +54,10 @@ def _in_scope(entry: Entry, task: Any, project_dir: Path) -> bool:
     """A filter over one store, never a wall: the word that means everyone,
     the task's own name, or a path that covers where it works."""
     folder = task.folder_path()  # None for a task that works on no folder
-    for entry in entry.matter.scope:
-        if entry in ("global", task.slug):
+    for named in entry.matter.scope:
+        if named in ("global", task.slug):
             return True
-        base = (layout_for(project_dir).root / entry).resolve()
+        base = (layout_for(project_dir).root / named).resolve()
         if folder is not None and (folder == base or folder.is_relative_to(base)):
             return True
     return False
@@ -60,7 +65,7 @@ def _in_scope(entry: Entry, task: Any, project_dir: Path) -> bool:
 
 def _anchored(entry: Entry, task: Any, project_dir: Path) -> bool:
     """Anchor paths are written relative to the project -- the folder the
-    `poieo.yaml` sits in, which is also where `memory/` does."""
+    `poieo.yaml` sits in, which is also where the memory does."""
     folder = task.folder_path()
     for anchor in entry.matter.anchors:
         target = (layout_for(project_dir).root / anchor.split("::", 1)[0]).resolve()
@@ -71,57 +76,108 @@ def _anchored(entry: Entry, task: Any, project_dir: Path) -> bool:
     return False
 
 
+def _fetch(con: sqlite3.Connection, slugs: list[str]) -> list[Entry]:
+    if not slugs:
+        return []
+    holes = ",".join("?" * len(slugs))
+    rows = con.execute(f"SELECT * FROM entries WHERE slug IN ({holes})", slugs).fetchall()
+    return [entry_of(row) for row in rows]
+
+
+def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool) -> list[Entry]:
+    """The entries worth scoring, fetched and no more.
+
+    An anchored entry is relevant by where it points, not by the words it
+    shares, so it must not depend on the lookup finding a shared word -- it is
+    asked for by the one thing the row already knows, that it has anchors.
+    """
+    hits = narrow(con, seed) if use_index else None
+    if hits is None:
+        return [entry_of(row) for row in con.execute("SELECT * FROM entries").fetchall()]
+    names = sorted(hits)
+    if not names:
+        rows = con.execute("SELECT * FROM entries WHERE anchors != '[]'").fetchall()
+    else:
+        holes = ",".join("?" * len(names))
+        rows = con.execute(f"SELECT * FROM entries WHERE slug IN ({holes}) OR anchors != '[]'", names).fetchall()
+    return [entry_of(row) for row in rows]
+
+
+def _neighbours(con: sqlite3.Connection, slugs: set[str]) -> list[Entry]:
+    """Entries one link away from any of these, in either direction.
+
+    Fetched by name through the link table rather than found by reading every
+    entry -- association is why the memory is a graph, and it must not be the
+    reason the whole graph is loaded.
+    """
+    if not slugs:
+        return []
+    holes = ",".join("?" * len(slugs))
+    names = sorted(slugs)
+    rows = con.execute(
+        f"SELECT target AS other FROM links WHERE slug IN ({holes})"
+        "   AND kind IN ('mentions', 'depends_on')"
+        f" UNION SELECT slug AS other FROM links WHERE target IN ({holes})"
+        "   AND kind = 'mentions'",
+        names + names,
+    ).fetchall()
+    return _fetch(con, sorted({row["other"] for row in rows} - slugs))
+
+
 def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
     """The entries this task earned, ranked, in budget. Never the page's room."""
-    entries = [
-        entry
-        for entry in readable_entries(project_dir)
-        if entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
-    ]
-    if not entries:
+    if not keeps_memory(project_dir):
         return []
     seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
 
-    # An anchored entry is relevant by where it points, not by the words it
-    # shares, so it must not depend on the index finding a shared word.
-    narrowed = candidates(project_dir, entries, seed) if use_index else entries
-    pool = {entry.slug: entry for entry in narrowed}
-    for entry in entries:
-        if _anchored(entry, task, project_dir):
-            pool.setdefault(entry.slug, entry)
+    def allowed(entries: list[Entry]) -> list[Entry]:
+        return [
+            entry for entry in entries if entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
+        ]
 
-    scored = []
-    for entry in pool.values():
-        score = len(seed & words(entry.body))
-        if _anchored(entry, task, project_dir):
-            score += _ANCHOR_BOOST
-        if score > 0:
-            scored.append((score, entry))
-    scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
-
-    # Association after evidence: a neighbour's claim is its seed's, divided by
-    # rank and scaled by how strong the connection is. Drawn from the already
-    # filtered pool, so scope and set-aside hold through connections; a second
-    # hop needs a strong connection, so with nothing reinforced one hop means
-    # one hop.
     from ..strength import STRONG_FLOOR, strengths
 
     strength = strengths(project_dir)
-    sequence = [entry for _, entry in scored]
-    taken = {entry.slug for entry in sequence}
 
-    carry: dict[str, float] = {}
-    for rank, (_, entry) in enumerate(scored):
-        for neighbor in connected(entry, entries):
-            if neighbor.slug in taken:
-                continue
-            weight = strength.get(frozenset((entry.slug, neighbor.slug)), 0.0)
-            carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + weight) / (1 + rank)
+    with open_memory(project_dir) as con:
+        candidates = allowed(_pool(con, seed, use_index))
+        if not candidates:
+            return []
 
-    by_slug = {entry.slug: entry for entry in entries}
+        scored = []
+        for entry in candidates:
+            score = len(seed & words(entry.body))
+            if _anchored(entry, task, project_dir):
+                score += _ANCHOR_BOOST
+            if score > 0:
+                scored.append((score, entry))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
+
+        # Association after evidence: a neighbour's claim is its seed's,
+        # divided by rank and scaled by how strong the connection is. Scope and
+        # set-aside hold through connections; a second hop needs a strong
+        # connection, so with nothing reinforced one hop means one hop.
+        sequence = [entry for _, entry in scored]
+        taken = {entry.slug for entry in sequence}
+        by_slug = {entry.slug: entry for entry in sequence}
+
+        first = allowed(_neighbours(con, taken))
+        by_slug |= {entry.slug: entry for entry in first}
+
+        carry: dict[str, float] = {}
+        for rank, (_, entry) in enumerate(scored):
+            for neighbor in connected(entry, first):
+                if neighbor.slug in taken:
+                    continue
+                weight = strength.get(frozenset((entry.slug, neighbor.slug)), 0.0)
+                carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + weight) / (1 + rank)
+
+        second = allowed(_neighbours(con, set(carry)))
+        by_slug |= {entry.slug: entry for entry in second}
+
     further: dict[str, float] = {}
     for slug, reached in carry.items():
-        for neighbor in connected(by_slug[slug], entries):
+        for neighbor in connected(by_slug[slug], second):
             if neighbor.slug in taken or neighbor.slug in carry:
                 continue
             weight = strength.get(frozenset((slug, neighbor.slug)), 0.0)
@@ -134,11 +190,13 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         key=lambda entry: (-carry[entry.slug], entry.slug),
     )
 
+    # One entry too big for the budget loses its own place, not everybody
+    # else's: the room it could not use goes to whoever ranks below it.
     chosen: list[Entry] = []
     spent = 0
     for entry in sequence:
         if spent + len(entry.body) > ENTRIES_BUDGET:
-            break
+            continue
         chosen.append(entry)
         spent += len(entry.body)
     return chosen

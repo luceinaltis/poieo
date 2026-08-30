@@ -96,6 +96,30 @@ def at(root) -> Layout:
     return Layout(root=Path(root))
 
 
+def remember(project, slug: str, text: str, writer: str = "person"):
+    """One learned entry, said the way a person would say it.
+
+    A test writes what an entry *is* -- optional frontmatter, then a body --
+    and this is the single place that shape becomes the row the memory keeps.
+    Six files used to hand-write the file the memory was made of; now the
+    shape lives here and only here, so moving it again moves one function.
+    """
+    import yaml
+
+    from poieo.memory import frontmatter, write_entry
+
+    matter: dict = {}
+    body = text
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                matter = yaml.safe_load("\n".join(lines[1:i])) or {}
+                body = "\n".join(lines[i + 1 :])
+                break
+    return write_entry(project, slug, body, frontmatter(matter), writer=writer)
+
+
 def card(folder, name: str, body: str = "") -> Path:
     """One job, as its own file.
 

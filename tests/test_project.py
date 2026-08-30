@@ -464,7 +464,7 @@ def test_init_writes_the_agents_manual(tmp_path, monkeypatch):
     assert "poieo run" in manual
     # The layout, so an agent looks in the right folders.
     assert "models/" in manual
-    assert "longterm/constitution.md" in manual
+    assert "longterm.sqlite3" in manual
     assert "runs/" in manual and "memory/cache/" in manual
     # Claude Code loads the same page through its own file.
     assert "@AGENTS.md" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")

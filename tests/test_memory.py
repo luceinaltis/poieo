@@ -10,7 +10,7 @@ import json
 from dataclasses import replace
 
 import pytest
-from conftest import EXAMPLES, at
+from conftest import EXAMPLES, at, remember
 from test_card import write_card
 
 from poieo.binding import BindingSpec
@@ -25,7 +25,7 @@ from poieo.daemon.config import load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
 from poieo.layout import layout_for
-from poieo.memory import check_memory, load_entries
+from poieo.memory import check_memory, readable_entries, write_page
 from poieo.providers import ProviderPool
 from poieo.runtime.context import RunResult
 from poieo.runtime.executor import execute
@@ -178,10 +178,8 @@ def _mark(tmp_path):
 
 def _remember(tmp_path, text="Never push to main."):
     _mark(tmp_path)
-    memory = at(tmp_path)
-    memory.longterm().mkdir(parents=True, exist_ok=True)
-    memory.constitution().write_text(text, encoding="utf-8")
-    return memory
+    write_page(tmp_path, text)
+    return tmp_path
 
 
 def _daemon_flow(tmp_path):
@@ -206,7 +204,7 @@ def test_the_memory_hangs_off_the_marker_not_the_tasks_folder(tmp_path):
     task = _task(tmp_path)
     _remember(tmp_path)
 
-    assert (tmp_path / "memory" / "longterm" / "constitution.md").is_file()
+    assert (tmp_path / "memory" / "longterm.sqlite3").is_file()
     assert not (tmp_path / "tasks" / "memory").exists()
     assert "Never push to main." in card_payload(task)["memory"]
 
@@ -215,9 +213,7 @@ def test_without_a_marker_the_tasks_folder_still_stands_in(tmp_path):
     """`poieo daemon tasks/` on a bare folder keeps working exactly as it
     did: no marker, so that folder is the project and its memory is its own."""
     task = _task(tmp_path)
-    memory = at(tmp_path / "tasks")
-    memory.longterm().mkdir(parents=True)
-    memory.constitution().write_text("Keep it tidy.", encoding="utf-8")
+    write_page(tmp_path / "tasks", "Keep it tidy.")
 
     assert "Keep it tidy." in card_payload(task)["memory"]
 
@@ -258,24 +254,23 @@ def test_both_runners_hand_a_card_the_same_input(tmp_path):
 
 def test_an_edit_takes_effect_next_run_without_reload(tmp_path):
     _task(tmp_path)
-    memory = _remember(tmp_path)
+    _remember(tmp_path)
     task, config = _daemon_flow(tmp_path)
     assert "Never push to main." in task.read_input(config)["memory"]
 
-    memory.constitution().write_text("Ship one change at a time.", encoding="utf-8")
+    write_page(tmp_path, "Ship one change at a time.")
     assert "Ship one change at a time." in task.read_input(config)["memory"]
 
 
-def test_a_malformed_fact_fails_at_load_naming_the_file(tmp_path):
+def test_an_unrecognised_field_is_refused_when_it_is_written(tmp_path):
+    """A malformed entry cannot sit in the memory waiting for 3am: the shape
+    is checked at the door, so a typo never becomes a row at all."""
+    from poieo.memory import frontmatter
+
     _task(tmp_path)
-    entries = _remember(tmp_path).facts()
-    entries.mkdir()
-    (entries / "batch-sizes.md").write_text(
-        "---\nscope: [global]\nseverity: high\n---\nThe API caps batches at 50.\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(SpecError, match="batch-sizes.md"):
-        _daemon_flow(tmp_path)
+    _remember(tmp_path)
+    with pytest.raises(SpecError, match="severity"):
+        frontmatter({"scope": ["global"], "severity": "high"})
 
 
 def test_an_oversized_page_warns_and_still_loads_whole(tmp_path, caplog):
@@ -313,7 +308,7 @@ def test_a_journal_alone_does_not_turn_the_long_memory_on(tmp_path):
     """The one hazard in moving the journals under `memory/`: the folder now
     arrives by itself, the first time any task runs. So the opt-in cannot be
     `memory/` -- a signal that switches itself on is not consent. It is
-    `memory/longterm/`, which only a person makes.
+    `memory/longterm.sqlite3`, which only a person makes.
     """
     from poieo.memory import keeps_memory
 
@@ -391,16 +386,14 @@ def test_a_shown_recording_failure_never_fails_the_run(tmp_path, monkeypatch):
 
 def _learn(tmp_path, slug, text):
     _mark(tmp_path)
-    entries = at(tmp_path).facts()
-    entries.mkdir(parents=True, exist_ok=True)
-    (entries / f"{slug}.md").write_text(text, encoding="utf-8")
+    remember(tmp_path, slug, text)
     return tmp_path
 
 
 def test_a_mention_in_the_body_is_read(tmp_path):
     project = _learn(tmp_path, "retry", "Retry once, after the window. See [[rate-limits]].")
 
-    (entry,) = load_entries(project)
+    (entry,) = readable_entries(project)
     assert entry.mentions == ["rate-limits"]
 
 
@@ -413,22 +406,26 @@ def test_typed_links_in_frontmatter_are_read(tmp_path):
         "---\nlinks:\n  depends_on: [batch-cap]\n  contradicts: [old-advice]\n---\nRetry once.",
     )
 
-    entry = next(f for f in load_entries(project) if f.slug == "retry")
+    entry = next(f for f in readable_entries(project) if f.slug == "retry")
     assert entry.matter.links.depends_on == ["batch-cap"]
     assert entry.matter.links.contradicts == ["old-advice"]
 
 
-def test_an_unknown_link_kind_fails_at_load_naming_the_file(tmp_path):
-    project = _learn(tmp_path, "retry", "---\nlinks:\n  caused_by: [something]\n---\nRetry once.")
-    with pytest.raises(SpecError, match="retry.md"):
-        load_entries(project)
+def test_an_unknown_link_kind_is_refused_at_the_door(tmp_path):
+    """A kind of connection exists only while a mechanism consumes it, so an
+    unrecognised one is a typo -- caught where it is written, since it can no
+    longer sit in a file waiting to be read at 3am."""
+    from poieo.memory import frontmatter
+
+    with pytest.raises(SpecError, match="caused_by"):
+        frontmatter({"links": {"caused_by": ["something"]}})
 
 
 def test_a_typed_link_to_nothing_fails_at_load_naming_both(tmp_path):
     project = _learn(tmp_path, "retry", "---\nlinks:\n  depends_on: [ghost]\n---\nRetry once.")
     with pytest.raises(SpecError, match="ghost") as caught:
         check_memory(project)
-    assert "retry.md" in str(caught.value)
+    assert "retry" in str(caught.value)
 
 
 def test_a_dangling_superseded_by_now_fails_at_load(tmp_path):
@@ -441,22 +438,8 @@ def test_a_body_mention_of_nothing_is_legal(tmp_path):
     project = _learn(tmp_path, "retry", "Retry once. [[worth-writing-someday]]")
 
     check_memory(project)
-    (entry,) = load_entries(project)
+    (entry,) = readable_entries(project)
     assert entry.mentions == ["worth-writing-someday"]
-
-
-def test_an_entry_saved_with_a_bom_keeps_its_frontmatter(tmp_path):
-    # Notepad and PowerShell's utf8 both write a BOM; the frontmatter must
-    # not silently become body text because of an invisible first character.
-    _learn(tmp_path, "other", "Something to point at.")
-    project = _learn(
-        tmp_path,
-        "retry",
-        "﻿---\nlinks:\n  depends_on: [other]\n---\nRetry once.",
-    )
-    entry = next(f for f in load_entries(project) if f.slug == "retry")
-    assert entry.matter.links.depends_on == ["other"]
-    assert "---" not in entry.body
 
 
 def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
@@ -465,7 +448,7 @@ def test_sealed_naming_a_missing_anchor_fails_at_load(tmp_path):
         "feeds-note",
         '---\nanchors: []\nsealed: {"notebook/feeds.md": "' + "0" * 64 + '"}\n---\nFeeds land in one file.',
     )
-    with pytest.raises(SpecError, match="feeds-note.md"):
+    with pytest.raises(SpecError, match="feeds-note"):
         check_memory(project)
 
 

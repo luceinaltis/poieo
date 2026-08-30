@@ -60,7 +60,8 @@ drifted. Three answers to one question is two too many.
 
 ```
 <root>/
-  memory/shortterm/   memory/longterm/   what a person reads and edits (git)
+  memory/shortterm/                      one journal per card (git)
+  memory/longterm.sqlite3                the long memory itself — one per project
   memory/cache/                          derived; delete and lose nothing
   runs/                                  what happened — `store:` moves this
     index.jsonl · events/ · results/ · asking/
@@ -149,11 +150,11 @@ rather than none.
 ## `poieo init`
 
 Writes a working project into ordinary files: `poieo.yaml`,
-`models/default.yaml` and `models/mock.yaml`, a sample card, an empty
-`constitution.md`, `AGENTS.md`/`CLAUDE.md` for whoever works in the project,
+`models/default.yaml` and `models/mock.yaml`, a sample card, a memory whose
+page is empty, `AGENTS.md`/`CLAUDE.md` for whoever works in the project,
 and `.gitignore` entries for `memory/cache/`, `runs/` and `worktrees/`.
 
-The empty page is written so the memory is a folder you can see rather than a
+The empty page is written so the memory is something you can open rather than a
 feature you have to be told about — and nothing switches on, since the page is
 comments and comments are stripped before any prompt.
 

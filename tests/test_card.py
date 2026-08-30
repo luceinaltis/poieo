@@ -24,6 +24,7 @@ from poieo.card import (
 from poieo.daemon.config import TaskSpec, load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
+from poieo.memory import write_page
 from poieo.store import NullStore
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -375,9 +376,7 @@ def test_the_generated_prompt_carries_the_journal(tmp_path):
 
 def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
     path = write_card(tmp_path, "t", "name: t\nprompt: go\n")
-    memory = at(tmp_path / "tasks")
-    memory.longterm().mkdir(parents=True)
-    memory.constitution().write_text("Never push to main.", encoding="utf-8")
+    write_page(tmp_path / "tasks", "Never push to main.")
 
     _, graph = expand(load_card(path))
     system = graph.nodes[0].system
