@@ -390,6 +390,7 @@ another port.
 | **400** | neither an engine nor an address | — |
 | **400** | not an engine detection looks for | the keys it does |
 | **400** | a key variable with no address to use it on | — |
+| **400** | an address that cannot be asked anything at all | why not |
 | **409** | nothing usable answered at that address | the key variable, when it was also unset |
 | **409** | that name is already in the file | — |
 | **409** | this project already reaches it | — |

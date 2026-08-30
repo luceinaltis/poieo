@@ -1304,3 +1304,18 @@ def test_the_same_port_on_another_machine_is_another_server(tmp_path, monkeypatc
 
 def test_another_port_on_this_machine_is_another_server(tmp_path, monkeypatch):
     assert _offers_vllm(tmp_path, monkeypatch, "http://localhost:8001/v1")
+
+
+def test_an_address_with_a_typo_in_it_is_a_refusal_and_not_a_crash(tmp_path, monkeypatch):
+    """This route is on a bare Starlette with no exception handlers, so an
+    address detection raised on was a 500 over a request that never touched a
+    file. A port that is not a number is the ordinary way to get one."""
+    _machine(monkeypatch, {})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_text(encoding="utf-8")
+
+    reply = _add_at(client, "http://gpu-box:80O1")
+
+    assert reply.status_code == 400
+    assert "80O1" in reply.json()["error"]
+    assert (tmp_path / "b.yaml").read_text(encoding="utf-8") == before

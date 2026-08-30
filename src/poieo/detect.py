@@ -264,7 +264,11 @@ async def _listed(type_: str, base_url: str, limit: int | None, api_key_env: str
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, headers=_bearer(api_key_env)) as client:
             response = await client.get(f"{base_url}{path}")
-    except httpx.RequestError:
+    except (httpx.RequestError, httpx.InvalidURL, UnicodeError):
+        # Three ways an address fails, and only the first was being caught.
+        # `InvalidURL` is a port that is not a number; the `UnicodeError` is
+        # idna's, for a hostname it cannot encode. Neither is a `RequestError`,
+        # and `ask` is the first caller to hand this a string somebody typed.
         return Catalogue()
     if response.status_code >= 400:
         return Catalogue()
@@ -527,6 +531,33 @@ def _named_for(base_url: str, said: str | None) -> str:
     host = _authority(base_url)[0]
     # `providers:` keys are plain names; an address is not one.
     return re.sub(r"[^\w-]+", "-", host).strip("-").lower() or "endpoint"
+
+
+def unaskable(base_url: str) -> str | None:
+    """Why this address cannot be asked anything, or None when it can be.
+
+    **Its shape and nothing else.** Whether anything is listening is what asking
+    is for, and a check that guessed at reachability would refuse the office box
+    on a night it happened to be off.
+
+    :func:`ask` answers silence for one of these, which is the right answer
+    inside a module whose rule is that every outcome is a return value -- and
+    the wrong one at the surface. "Nothing usable answered at `http://box:80O1`"
+    is true, and has the reader checking whether their server is up. So the two
+    callers that take a *typed* address ask this first, and say what is actually
+    wrong with what they were handed.
+    """
+    trimmed = base_url.strip().rstrip("/")
+    if not trimmed:
+        return "an empty address"
+    try:
+        # `.host` and not `.raw_host`: the second hands back the bytes, and it
+        # is decoding them that finds out whether the name can be a name at all
+        # -- `xn--a.com` parses perfectly and is not one.
+        httpx.URL(trimmed).host
+    except (httpx.InvalidURL, UnicodeError) as exc:
+        return f"{trimmed} is not an address that can be asked ({exc})"
+    return None
 
 
 async def ask(base_url: str, key_env: str | None = None) -> Engine | None:

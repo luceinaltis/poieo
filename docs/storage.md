@@ -238,6 +238,23 @@ a terminal, the OpenAI shape lives one segment further down, and refusing the
 address they have would be making them debug a URL to answer a question this can
 answer itself.
 
+`ask` is also the first place detection is handed a string somebody **typed**,
+and a typed address has typos in it. `httpx` refuses a malformed one by raising
+— `InvalidURL` for a port that is not a number, idna's own `UnicodeError` for a
+hostname it cannot encode — and neither is a `RequestError`, so both went
+straight past the clause that was catching. `_listed` catches all three now,
+because "every outcome is a return value" is this module's rule and a caller
+being shown a list has no use for a traceback.
+
+Silence is the right answer *inside* detection and the wrong one at the surface:
+"nothing usable answered at `http://box:80O1`" is true, and has the reader
+checking whether their server is up. So `unaskable(address)` says why an address
+cannot be asked anything, and the two callers that take a typed one —
+`poieo config add <url>` and `POST …/models/add` — ask it before they probe.
+**Its shape and nothing else**: whether anything is listening is what asking is
+for, and a check that guessed at reachability would refuse the office box on a
+night it happened to be off.
+
 The name comes from what the server said it was, and from the **host** when it
 said nothing. `gpu-box` is something the person who typed the address will
 recognise; `openai_compatible` would tell them nothing, being five products at
