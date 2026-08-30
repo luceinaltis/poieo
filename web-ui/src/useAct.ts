@@ -1,11 +1,17 @@
 /**
  * The one way this page asks the daemon to change something.
  *
- * Both writing surfaces -- the review's accept/discard and the control
- * strip's pause/resume/run -- need the same three things: refuse to fire
- * twice, keep the last refusal to show, and tell the caller when something
- * really happened. `busy` is what drives `disabled`, which is what actually
- * prevents the second click; the guard inside is a second belt.
+ * Every writing surface -- the review's accept/discard, the control strip's
+ * pause/resume/run, a question's answer, making a card, and both of the models
+ * panel's writes -- needs the same three things: refuse to fire twice, keep the
+ * last refusal to show, and say whether the request went out at all. `busy` is
+ * what drives `disabled`, which is what actually prevents the second click; the
+ * guard inside is a second belt.
+ *
+ * **"Went out" is not "worked."** A refused request went out, and a caller that
+ * reads the boolean as success empties its form over the refusal it is about to
+ * show. Anything that turns on the *answer* reads the answer, inside the send:
+ * `MakeTask` and the models panel's address form both do.
  */
 
 import { useState } from "react"

@@ -545,11 +545,6 @@ unplaced nodes itself can tell "at the origin" from "nowhere yet".
 - a successful `run` answers `"starting"`, not `"running"`: the runner picks the
   fire up on the next turn of the shared event loop, after the response is gone
 
-And on the page, a refusal is information the reader needs **beside what they
-typed**. `useAct`'s `act` resolves to *whether the request went out*, which a
-refused one did — so a form that empties itself on it takes away the thing the
-refusal is about. Everything typed is cleared on `answer.ok` and nothing else,
-which is the shape `MakeTask` already had.
 
 ### Off the loop
 
@@ -670,6 +665,15 @@ expensive one to be wrong about.
 reaches for when nothing above it was what they were looking for. One field
 that matters and two that are usually left alone. No key field anywhere on the
 page.
+
+A refusal is information the reader needs **beside what they typed**, so nothing
+is emptied until the answer says the endpoint was declared. `useAct`'s `act`
+resolves to *whether the request went out* — which a refused one did — and
+reading that as success left "nothing usable answered at …" over an empty box
+and a button disabled on `!at.trim()`, with retyping the address the only way
+back to the message's subject. The address, the name and the key variable are
+one thing typed and are cleared together, which is the shape `MakeTask` beside
+it already had, payload guard included.
 
 **An offer sits above the lists, and only when there is one.** The panel makes a
 second request for it, so the catalogue never waits; when it comes back with

@@ -875,6 +875,10 @@ test("everything typed beside an address is cleared with it", async () => {
   // The inverse. `name` and `key_env` were never cleared at all, so a name
   // typed for one endpoint rode along to the next address and was refused as
   // a duplicate of the endpoint just added.
+  //
+  // The answer carries the endpoint it declared, because `ok` alone does not:
+  // a 2xx whose body did not parse arrives as `{ok: true}` with nothing in it.
+  addEngine.mockResolvedValue({ ok: true, status: "added", engine: "office", models: ["m"] })
   await render()
 
   await act(async () => {
@@ -887,4 +891,17 @@ test("everything typed beside an address is cleared with it", async () => {
   expect(container.querySelector<HTMLInputElement>("[data-do='url']")!.value).toBe("")
   expect(container.querySelector<HTMLInputElement>("[data-do='url-name']")!.value).toBe("")
   expect(container.querySelector<HTMLInputElement>("[data-do='url-key-env']")!.value).toBe("")
+})
+
+test("a 200 that carried no endpoint does not empty the form", async () => {
+  // `ok` is not the whole answer: a 2xx whose body did not parse arrives as
+  // `{ok: true}` with nothing in it, and clearing over an endpoint that may
+  // not have been declared loses what would have to be retyped to try again.
+  addEngine.mockResolvedValue({ ok: true })
+  await render()
+
+  await act(async () => value(container.querySelector<HTMLInputElement>("[data-do='url']")!, "http://gpu-box:8001"))
+  await act(async () => container.querySelector<HTMLElement>("[data-do='add-at']")!.click())
+
+  expect(container.querySelector<HTMLInputElement>("[data-do='url']")!.value).toBe("http://gpu-box:8001")
 })
