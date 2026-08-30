@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Docs — poieo</title>
-<meta name="description" content="How to use poieo, how each part works, and how to contribute. The documents live with the code; this page is the map.">
+<meta name="description" content="poieo's documentation, served straight from the main branch: the manual, one page per component, and how to contribute.">
 <link rel="canonical" href="https://luceinaltis.github.io/poieo/docs.html">
 <meta name="theme-color" content="#14120f">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
@@ -24,88 +24,19 @@
   </nav>
 </header>
 
-<main>
-
-<!-- The documents live with the code and are edited in the PRs that change
-     the code, so this page carries pointers rather than copies -- a copy here
-     would be the stale one within a week. One line per document is the most
-     duplication it allows itself. -->
-<section class="hero docs-hero">
-  <div>
-    <h1>The docs live with the code.</h1>
-    <p class="lead">
-      Every document below is versioned in the repository and edited in the
-      same pull request that changes what it describes. This page is the map.
-    </p>
-  </div>
-</section>
-
-<section>
-  <h2>Start here</h2>
-  <div class="grid">
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/docs/usage.md">
-      <h3>The manual</h3>
-      <p>Every command, every key a task file takes, and the worked examples —
-      from <code>poieo init</code> to memory, isolation, and the daemon.</p>
-    </a>
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/DESIGN.md">
-      <h3>What poieo promises</h3>
-      <p>The vision and its seven principles — local first, everything is a
-      file, three words and no fourth — and the roadmap.</p>
-    </a>
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/docs/architecture.md">
-      <h3>The whole system, one page</h3>
-      <p>The layers, one run end to end, which module owns what, and the
-      invariants every component is written to hold.</p>
-    </a>
-  </div>
-</section>
-
-<section>
-  <h2>How each part works</h2>
-  <p class="aside">One document per component, describing the code as it is
-  today. If a document and the code disagree, the code wins and the document
-  is a bug.</p>
-  <table class="doc-table">
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/tasks.md">tasks</a></td><td>the short form: one card, its journal, notes between cards</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/graph.md">graph</a></td><td>the logical layer: what work happens, in what order</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/binding.md">binding</a></td><td>the physical layer: which model actually answers</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/runtime.md">runtime</a></td><td>executing one run: the walker, the scope, the nodes</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/tools.md">tools</a></td><td>the hands: toolsets, the executor seam, isolation</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/daemon.md">daemon</a></td><td>residency: config, triggers, the runner, the control seam</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/workspace.md">workspace</a></td><td>the private copy, and last night's work as a change</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/memory.md">memory</a></td><td>what a project keeps, and how a run is shown it</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/storage.md">storage</a></td><td>where every file lives, the run log, and what init finds</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/web.md">web</a></td><td>the HTTP/SSE API and the board it serves</td></tr>
-    <tr><td><a href="https://github.com/luceinaltis/poieo/blob/main/docs/cli.md">cli</a></td><td>the command line, and the rules it uses to fill silence</td></tr>
-  </table>
-</section>
-
-<section>
-  <h2>Contributing</h2>
-  <div class="grid">
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/AGENTS.md">
-      <h3>The working agreements</h3>
-      <p>How big a change should be, the merge gate every PR must pass, and
-      the short list of things that need a human — written for agents and
-      people alike, since both work on this.</p>
-    </a>
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/docs/contribution.md">
-      <h3>The longer procedures</h3>
-      <p>Rebuilding the checked-in bundle, stacking branches past a squash
-      merge, getting a review that is not your own, and what CI checks for
-      you.</p>
-    </a>
-    <a class="word doc" href="https://github.com/luceinaltis/poieo/blob/main/docs/conventions.md">
-      <h3>How the code is written</h3>
-      <p>The habits this codebase keeps that generic good taste would not
-      predict, and the reason each one exists. Read before your first change
-      to <code>src/</code>.</p>
-    </a>
-  </div>
-</section>
-
-</main>
+<!-- No copies: the sidebar picks a document and docs.js fetches it from the
+     main branch, so what merges is what this page shows. -->
+<div class="docs-layout">
+  <details class="doc-nav-fold">
+    <summary>All documents</summary>
+  </details>
+  <aside id="doc-nav" class="doc-nav" aria-label="documents"></aside>
+  <article id="doc" class="doc-body">
+    <noscript><p class="doc-state">This viewer fetches each document from the
+      repository, which needs JavaScript — or read them straight
+      <a href="https://github.com/luceinaltis/poieo/tree/main/docs">on GitHub</a>.</p></noscript>
+  </article>
+</div>
 
 <footer>
   <p>
@@ -116,5 +47,6 @@
   <p class="quiet">poieo is Greek <i lang="el">ποιέω</i>, “to make”.</p>
 </footer>
 
+<script src="docs.js"></script>
 </body>
 </html>

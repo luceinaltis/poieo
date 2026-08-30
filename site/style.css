@@ -291,18 +291,120 @@ footer p { margin: 0.4rem 0; }
 }
 
 
-/* --- docs page ----------------------------------------------------------- */
+/* --- docs viewer --------------------------------------------------------- */
 
-.docs-hero { padding-bottom: 1.5rem; }
-.docs-hero h1 { max-width: 22ch; }
+.docs-layout {
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: 220px minmax(0, 1fr);
+  margin: 0 auto;
+  max-width: var(--column);
+  padding: 2.5rem 20px 4rem;
+}
 
-a.doc { display: block; text-decoration: none; transition: border-color 0.15s; }
-a.doc:hover { border-color: var(--ember); }
-a.doc h3 { color: var(--ember); }
-a.doc p { color: var(--dim); font-size: 0.95rem; }
-a.doc code { color: var(--text); }
+.doc-nav { align-self: start; position: sticky; top: 66px; }
+.doc-nav-fold { display: none; }
 
-.doc-table { border-collapse: collapse; margin-top: 1.2rem; width: 100%; }
-.doc-table td { border-top: 1px solid var(--rule); padding: 10px 18px 10px 0; vertical-align: top; }
-.doc-table td:first-child { font-family: var(--mono); font-size: 0.9rem; white-space: nowrap; width: 8rem; }
-.doc-table td:last-child { color: var(--dim); font-size: 0.95rem; }
+.nav-group { margin-bottom: 1.6rem; }
+
+.nav-title {
+  color: #6b6257;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.doc-nav a {
+  border-left: 2px solid transparent;
+  color: var(--ash);
+  display: block;
+  font-size: 0.92rem;
+  padding: 4px 0 4px 12px;
+  text-decoration: none;
+}
+
+.doc-nav a:hover { color: var(--text); }
+.doc-nav a.active { border-left-color: var(--ember); color: var(--text); }
+
+/* the document itself */
+.doc-body { max-width: 72ch; min-height: 60vh; }
+.doc-meta { color: #6b6257; font-size: 0.85rem; margin: 0 0 1.8rem; }
+.doc-state { color: var(--dim); }
+
+.doc-body h1 { font-size: 1.9rem; letter-spacing: -0.01em; margin: 0 0 1rem; }
+.doc-body h2 {
+  border-top: 1px solid var(--rule);
+  font-size: 1.3rem;
+  margin: 2.4rem 0 0.8rem;
+  padding-top: 1.6rem;
+}
+.doc-body h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
+.doc-body h4 { font-size: 0.95rem; margin: 1.4rem 0 0.5rem; }
+.doc-body p, .doc-body li { color: #c8beb0; line-height: 1.7; }
+.doc-body li { margin: 0.25rem 0; }
+.doc-body hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
+
+.doc-body pre {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  line-height: 1.55;
+  margin: 1rem 0;
+  overflow-x: auto;
+  padding: 13px 16px;
+  position: relative;
+}
+
+.doc-body pre[data-lang]::after {
+  color: #6b6257;
+  content: attr(data-lang);
+  font-family: var(--mono);
+  font-size: 10px;
+  position: absolute;
+  right: 10px;
+  top: 7px;
+}
+
+.doc-body code { color: var(--parchment, #e8e2d8); }
+.doc-body p code, .doc-body li code, .doc-body td code {
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.doc-body blockquote {
+  border-left: 2px solid var(--ember);
+  margin: 1rem 0;
+  padding: 0 0 0 16px;
+}
+
+.md-table { border-collapse: collapse; display: block; margin: 1.2rem 0; overflow-x: auto; width: 100%; }
+.md-table th { color: var(--text); font-size: 0.85rem; text-align: left; }
+.md-table th, .md-table td { border-top: 1px solid var(--rule); padding: 8px 18px 8px 0; vertical-align: top; }
+.md-table td { color: var(--dim); font-size: 0.92rem; line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .docs-layout { display: block; }
+  .doc-nav { display: none; position: static; }
+  .doc-nav-fold {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    display: block;
+    margin-bottom: 1rem;
+    padding: 10px 14px;
+  }
+  .doc-nav-fold summary { color: var(--text); cursor: pointer; }
+  .doc-nav-fold[open] { margin-bottom: 0; }
+  .doc-nav-fold[open] ~ .doc-nav {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 0 0 8px 8px;
+    border-top: 0;
+    display: block;
+    margin-bottom: 1rem;
+    padding: 12px 16px;
+  }
+}
