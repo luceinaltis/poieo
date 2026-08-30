@@ -25,11 +25,54 @@ from typing import TYPE_CHECKING, Sequence
 from .errors import BindingError, SpecError
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .binding import ProviderSpec
     from .detect import Engine
 
 # Two spaces, as everything poieo writes uses and as good as every hand-kept
 # YAML file does. Only used for blocks this module creates.
 INDENT = "  "
+
+# What a name written into this file may be. Every one of them is composed into
+# a line by hand -- `f"{INDENT}{key}:"` -- and YAML reads a newline as the end of
+# that line, so a name carrying one is not a bad name, it is a second key. That
+# is how a typed-in `api_key_env` came to be able to add a `default:` block
+# pointing the whole project at somebody else's model, or a `base_url:` sending
+# a real credential to another host.
+#
+# Checked at the door rather than caught afterwards, because the check
+# afterwards reloads the file and asks whether it still means what was asked
+# for -- and an *added* key means the file says more, not something else.
+#
+# `\Z` and not `$`, which also matches before a trailing newline and would have
+# let the first line of an injected block through as long as it ended the value.
+#
+# No slash either, and that one is not about YAML: a slash is what separates the
+# endpoint from the model in every reference the product prints and takes back,
+# so `office/eu` names an endpoint nothing can ever refer to again.
+_NAME = (
+    re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\Z"),
+    "letters, digits, `-`, `_` or `.`, starting with a letter or digit",
+)
+
+# An environment variable's name, as every shell defines one. Narrower than
+# `_NAME` on purpose: a value that cannot name a variable would have failed at
+# the project's first run instead, with nothing pointing back at the line that
+# wrote it.
+_VARIABLE = (re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z"), "letters, digits and `_`, starting with a letter or `_`")
+
+# A role is held to the line and no further. Nothing in this product spells one
+# with a space in it, but a graph's `role:` is a free string and a rule invented
+# here would refuse a binding somebody already keeps -- so this refuses only what
+# genuinely cannot be written down: a value that would not stay on its own line.
+_ONE_LINE = (re.compile(r"[^\r\n]+\Z"), "any one line -- a name split over two is two keys, not one")
+
+
+def _plain(kind: str, value: str, allowed: tuple[re.Pattern[str], str] = _NAME) -> str:
+    """``value``, if it is a name this may write down. Raises if it is not."""
+    pattern, described = allowed
+    if not pattern.match(value):
+        raise SpecError(f"{kind} {value!r} is not a name -- it may hold {described}")
+    return value
 
 
 def _top_level(lines: list[str], key: str) -> tuple[int, int] | None:
@@ -150,6 +193,18 @@ def _repoint(text: str, role: str, provider: str, model: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _as_declared(engine: "Engine") -> "ProviderSpec":
+    """What :func:`declare`'s block for this engine is supposed to read back as.
+
+    Everything else on a `ProviderSpec` -- headers, a timeout, a retry count --
+    stays at its default, because this writes three lines and nothing that
+    writes three lines should be able to produce a fourth.
+    """
+    from .binding import ProviderSpec
+
+    return ProviderSpec(type=engine.type, base_url=engine.base_url, api_key_env=engine.api_key_env or None)
+
+
 def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
     """Add each engine to ``providers:`` that is not already there.
 
@@ -163,11 +218,16 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
 
     path = Path(path)
     original = path.read_text(encoding="utf-8")
-    known = set(load_binding(path).providers)
+    was = load_binding(path)
 
-    fresh = [engine for engine in engines if engine.key not in known]
+    fresh = [engine for engine in engines if engine.key not in was.providers]
     if not fresh:
         return []
+
+    for engine in fresh:
+        _plain("endpoint name", engine.key)
+        if engine.api_key_env:
+            _plain("api_key_env", engine.api_key_env, _VARIABLE)
 
     lines = original.splitlines()
     span = _top_level(lines, "providers")
@@ -198,15 +258,30 @@ def declare(path: Path, engines: "Sequence[Engine]") -> list[str]:
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:
-        declared = set(load_binding(path).providers)
+        now = load_binding(path)
     except SpecError as exc:
         path.write_text(original, encoding="utf-8")
         raise SpecError(f"adding to {path} would have broken it ({exc}); it has been left exactly as it was") from exc
 
     added = [engine.key for engine in fresh]
-    if not set(added) <= declared:
+    if not set(added) <= set(now.providers):
         path.write_text(original, encoding="utf-8")
         raise SpecError(f"{path} did not take {added} as expected; it is unchanged")
+
+    # Adding is adding. Asking only whether the new keys arrived says nothing
+    # about what else the file now means -- a written line that ended up being
+    # two would pass that. So the whole binding has to read back as the old one
+    # plus exactly the endpoints asked for: nothing else moved, and each new
+    # endpoint saying what this composed for it and no more.
+    wanted = {engine.key: _as_declared(engine) for engine in fresh}
+    kept = {key: spec for key, spec in now.providers.items() if key not in wanted}
+    mine = {key: spec for key, spec in now.providers.items() if key in wanted}
+    if (kept, mine, now.default, now.roles) != (was.providers, wanted, was.default, was.roles):
+        path.write_text(original, encoding="utf-8")
+        raise SpecError(
+            f"adding {', '.join(added)} to {path} would have changed more of it than that; "
+            f"it has been left exactly as it was"
+        )
     return added
 
 
@@ -220,6 +295,7 @@ def point_at(path: Path, role: str, provider: str, model: str) -> None:
     from .binding import load_binding
 
     path = Path(path)
+    _plain("role", role, _ONE_LINE)
     original = path.read_text(encoding="utf-8")
 
     declared = load_binding(path).providers
