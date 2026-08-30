@@ -452,7 +452,7 @@ async def test_a_page_suggestion_is_recorded_never_written(tmp_path):
     assert at(project).constitution().read_text(encoding="utf-8") == "Never push to main."
 
 
-# -- the attic ---------------------------------------------------------------
+# -- set aside ---------------------------------------------------------------
 
 
 def _aged(path, days):
@@ -469,68 +469,33 @@ def _old_aside(project, slug="old-cap", because="new-cap", days=120):
     _aged(at(project).facts() / f"{slug}.md", days)
 
 
-async def test_an_old_unreferenced_set_aside_moves_to_the_attic_whole(tmp_path):
+async def test_a_set_aside_entry_stays_where_a_person_left_it(tmp_path):
+    """Nothing a pass does moves a file out of `facts/`: not age, not being
+    named by nobody. Git already keeps what a person deletes, and a folder
+    that empties itself is one nobody can read back."""
     project = _project(tmp_path)
     _old_aside(project)
     _episode(project, "20260824T010000-aaaaaaaa")
 
     await _learn(project, _proposal())
-    assert not (at(project).facts() / "old-cap.md").exists()
-    moved = (at(project).attic() / "old-cap.md").read_text(encoding="utf-8")
-    assert moved == "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once."
+
+    kept = at(project).facts() / "old-cap.md"
+    assert kept.read_text(encoding="utf-8") == "---\nsuperseded_by: new-cap\n---\nCaps sat at 10 once."
+    assert not (at(project).longterm() / "attic").exists()
 
 
-async def test_a_referenced_set_aside_stays_however_old(tmp_path):
-    project = _project(tmp_path)
-    _old_aside(project)
-    _entry(
-        project,
-        "leaner",
-        "---\nlinks:\n  depends_on: [old-cap]\n---\nStill leans on the old cap.",
-    )
-    _episode(project, "20260824T010000-aaaaaaaa")
-
-    await _learn(project, _proposal())
-    assert (at(project).facts() / "old-cap.md").exists()
-
-
-async def test_a_fresh_set_aside_stays(tmp_path):
-    project = _project(tmp_path)
-    _old_aside(project, days=5)
-    _episode(project, "20260824T010000-aaaaaaaa")
-
-    await _learn(project, _proposal())
-    assert (at(project).facts() / "old-cap.md").exists()
-
-
-async def test_attic_entries_reach_no_load_no_report_no_prompt(tmp_path):
-    from poieo.memory import load_entries, memory_report, read_memory
+async def test_a_set_aside_entry_is_still_loaded_and_counted(tmp_path):
+    """Out of every prompt -- `recall()` sees to that -- but never out of the
+    folder, the load, or the count a person reads."""
+    from poieo.memory import load_entries, memory_report
 
     project = _project(tmp_path)
     _old_aside(project)
     _episode(project, "20260824T010000-aaaaaaaa")
     await _learn(project, _proposal())
 
-    assert "old-cap" not in {entry.slug for entry in load_entries(project)}
-    assert memory_report(project)["set_aside"] == 0
-    block = read_memory(project) or ""
-    assert "sat at 10" not in block
-
-
-async def test_an_attic_collision_is_skipped_and_said(tmp_path, caplog):
-    project = _project(tmp_path)
-    _old_aside(project)
-    attic = at(project).attic()
-    attic.mkdir()
-    (attic / "old-cap.md").write_text("already here", encoding="utf-8")
-    _episode(project, "20260824T010000-aaaaaaaa")
-
-    with caplog.at_level("WARNING", logger="poieo.learn"):
-        await _learn(project, _proposal())
-
-    assert (at(project).facts() / "old-cap.md").exists()
-    assert (attic / "old-cap.md").read_text(encoding="utf-8") == "already here"
-    assert any("attic" in message for message in caplog.messages)
+    assert "old-cap" in {entry.slug for entry in load_entries(project)}
+    assert memory_report(project)["set_aside"] == 1
 
 
 # -- sealing -----------------------------------------------------------------
@@ -624,15 +589,15 @@ async def test_an_old_unreferenced_keepsake_is_let_go_and_listed(tmp_path):
     assert not (at(project).blobs() / name).exists()
 
 
-async def test_a_keepsake_referenced_from_the_attic_survives(tmp_path):
+async def test_a_keepsake_referenced_from_a_set_aside_entry_survives(tmp_path):
     project = _project(tmp_path)
     name = _stale_blob(project)
-    attic = at(project).attic()
-    attic.mkdir()
-    (attic / "old-note.md").write_text(
-        "---\nanchors: ['notebook/feeds.md']\nsuperseded_by: old-note\n"
+    _entry(project, "new-note", "True now.")
+    _entry(
+        project,
+        "old-note",
+        "---\nanchors: ['notebook/feeds.md']\nsuperseded_by: new-note\n"
         f'sealed: {{"notebook/feeds.md": "{name}"}}\n---\nOnce true.',
-        encoding="utf-8",
     )
     _episode(project, "20260824T010000-aaaaaaaa")
 

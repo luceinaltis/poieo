@@ -62,7 +62,6 @@ class PassResult:
     # One line the pass may suggest for the page. Recorded, shown, and
     # never applied by anything but a person's editor.
     page: str | None = None
-    to_attic: list[str] = field(default_factory=list)
     let_go: list[str] = field(default_factory=list)
 
 
@@ -118,7 +117,6 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     # Strengthening rides the same success that moves the bookmark, so a
     # failed pass earns nothing and the reread earns exactly once.
     _strengthen(project_dir, entries, records)
-    result.to_attic = _to_attic(project_dir, entries)
     result.let_go = _let_go(project_dir)
     _record(project_dir, result)
     return result
@@ -424,59 +422,25 @@ def _followable(one: Entry, other: Entry) -> bool:
     )
 
 
-# Set aside this long, and named by nothing typed, an entry steps out of
-# the way. The clock is the file's mtime -- the set-aside edit wound it.
-ATTIC_AFTER_DAYS = 90.0
-
-
-def _to_attic(project_dir: Path, entries: list[Entry]) -> list[str]:
-    """The gentlest verb the pass has: a whole-file move to memory/attic/,
-    content untouched, reversible by moving it back. Typed references hold
-    an entry in place however old -- moving a named entry would break the
-    load-time cross-check -- and the attic never overwrites either."""
-    referenced: set[str] = set()
-    for entry in entries:
-        referenced |= set(entry.matter.links.depends_on)
-        referenced |= set(entry.matter.links.contradicts)
-        if entry.matter.superseded_by is not None:
-            referenced.add(entry.matter.superseded_by)
-
-    now = datetime.now(timezone.utc).timestamp()
-    moved: list[str] = []
-    for entry in entries:
-        if entry.matter.superseded_by is None or entry.slug in referenced:
-            continue
-        try:
-            if (now - entry.path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
-                continue
-            attic = layout_for(project_dir).attic()
-            attic.mkdir(exist_ok=True)
-            target = attic / entry.path.name
-            if target.exists():
-                log.warning("the attic already holds %s; leaving it in place", entry.path.name)
-                continue
-            entry.path.rename(target)
-            moved.append(entry.slug)
-        except OSError as exc:
-            log.warning("could not move %s to the attic: %s", entry.path.name, exc)
-    return moved
+# A keepsake outlives the entry that named it by this long, so bytes are
+# still there for a person who restores an entry from git after a pass ran.
+KEEPSAKE_GRACE_DAYS = 90.0
 
 
 def _let_go(project_dir: Path) -> list[str]:
     """The one true deletion, legal because a keepsake is a copy: bytes named
-    by nothing in facts/ or the attic, past the grace. Whatever a keepsake
-    backed is either still named or moved to the attic with its name intact,
-    so an unnamed keepsake backs nothing."""
+    by no entry in facts/, past the grace. Nothing else here removes an entry,
+    so bytes fall unnamed only when a person took the entry out -- and the
+    grace is long enough for that person to change their mind."""
     layout = layout_for(project_dir)
     store = layout.blobs()
     if not store.is_dir():
         return []
 
     referenced: set[str] = set()
-    for root in (layout.facts(), layout.attic()):
-        if not root.is_dir():
-            continue
-        for path in sorted(root.glob("*.md")):
+    facts = layout.facts()
+    if facts.is_dir():
+        for path in sorted(facts.glob("*.md")):
             try:
                 referenced |= set(load_entry(path).matter.sealed.values())
             except Exception:
@@ -490,7 +454,7 @@ def _let_go(project_dir: Path) -> list[str]:
         if len(path.name) != 64 or path.name in referenced:
             continue
         try:
-            if (now - path.stat().st_mtime) / 86400 < ATTIC_AFTER_DAYS:
+            if (now - path.stat().st_mtime) / 86400 < KEEPSAKE_GRACE_DAYS:
                 continue
             path.unlink()
             gone.append(path.name)

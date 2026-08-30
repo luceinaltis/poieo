@@ -168,11 +168,6 @@ def check_memory(project_dir: Path) -> None:
     """
     entries = load_entries(project_dir)
     known = {entry.slug for entry in entries}
-    attic = layout_for(project_dir).attic()
-    if attic.is_dir():
-        # Resting entries still exist, or "move the file back" would not be
-        # true. A genuine typo names something that exists nowhere and fails.
-        known |= {path.stem for path in attic.glob("*.md")}
     for entry in entries:
         claims = [("depends_on", target) for target in entry.matter.links.depends_on] + [
             ("contradicts", target) for target in entry.matter.links.contradicts

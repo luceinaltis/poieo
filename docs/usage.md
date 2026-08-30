@@ -433,10 +433,10 @@ And the memory keeps itself honest. `poieo memory` flags what deserves a
 second look -- an entry leaning on one that was set aside, an entry naming
 code that is gone or that changed after the entry was written (edit the
 entry after looking, and the flag clears) -- and the next pass is shown the
-same doubts, free to retire an entry with its ordinary set-aside. Entries
-set aside long enough, and named by nothing, move whole to `memory/attic/`:
-out of every prompt and every count, restored by moving the file back,
-deleted never. A pass may also *suggest* one line for the constitution;
+same doubts, free to retire an entry with its ordinary set-aside. A
+set-aside entry drops out of every prompt but stays in its folder: nothing
+here moves or deletes what you can read, and git keeps whatever you take
+out yourself. A pass may also *suggest* one line for the constitution;
 poieo records and shows it, and only you ever edit that page.
 
 Entries the project learns are sealed to the files they were written
@@ -444,8 +444,9 @@ about: the pass keeps the exact bytes under `memory/cache/blobs/`, so a doubt
 means the content really differs -- a merely-touched file raises nothing --
 and the original an entry was written against is always there to open.
 Keepsakes are copies, never meaning: one that nothing references anymore
-is let go after the same grace the attic uses, and losing one costs a
-precise comparison, not a word of what was learned.
+is let go after a grace long enough for you to restore the entry that named
+it, and losing one costs a precise comparison, not a word of what was
+learned.
 
 Finally, the memory answers for itself. `poieo memory` reads the recent
 run records and says how many runs actually used what they were shown, and

@@ -21,12 +21,13 @@ and **who may write it** — and every difference between them is one of those t
 | **journal** | one card's running account of its own work | every run of that card; the oldest lines age out | the harness, every run |
 | **page** | the one constitution a project runs under | every run of every card, whole and first | a person only |
 | **entry** | one durable statement a run earned | only when `recall()` picks it for this card | the pass proposes, the harness writes |
-| **attic** | entries at rest | never, until a person moves the file back | a person, or the pass setting one aside |
 | **record** | the full account of one run | never a card's; it is what the pass *reads* | the harness, once per run |
 | **strength** | how much a connection has actually helped | never; it only reorders entries | reinforcement, from records |
 | **blob** | the bytes an entry was written against | never | the harness, when an entry is anchored |
 
 `facts/` is the folder on disk; the things in it are **entries** everywhere else.
+**Set aside** is the verb and `superseded_by:` is the line it writes — one act,
+and the frontmatter key is the record of it, not a second thing.
 
 **Only two questions are settled by the words an entry shares**, and both weigh
 the entry's *body* alone: which entries a card is shown (`recall()`), and whether
@@ -52,7 +53,6 @@ memory/
   longterm/                 ← the opt-in
     constitution.md         one page, in front of every run
     facts/<slug>.md         one file per learned entry
-    attic/                  entries at rest
   cache/                    derived; delete it freely
     index.sqlite3           the lookup
     strength.json           how strong each connection is
@@ -241,9 +241,9 @@ inform; people and passes decide.
 The same doubts are shown to the next learning pass, which is free to retire an
 entry with its ordinary set-aside.
 
-Entries set aside long enough, and named by nothing, move **whole** to
-`memory/attic/`: out of every prompt and every count, restored by moving the file
-back, deleted never.
+A set-aside entry stays in `facts/`. It is out of every prompt, and nothing
+here ever moves or deletes it: the folder changes when a person changes it, and
+git keeps what they take out. **Nothing sweeps.**
 
 ## Keepsakes
 
@@ -256,5 +256,5 @@ That is what makes a doubt mean *the content really differs* — a merely-touche
 file raises nothing — and it keeps the original openable. Files over 8 MB are not
 kept: hoarding is an anti-goal, and so is a night's work failing over a fat file.
 A keepsake is a copy, never a meaning, so failing to keep one never blocks the
-entry, and one that nothing references any more is let go after the attic's
-grace.
+entry, and one that nothing references any more is let go after a grace long
+enough for a person to restore the entry that named it.
