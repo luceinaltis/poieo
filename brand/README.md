@@ -43,10 +43,10 @@ running software are one thing:
 ## Type
 
 - **Wordmark**: the traced custom lettering only — never set the name in a font.
-- **On the site**: the system stack, deliberately — the page downloads no
-  fonts, matching its no-dependency build.
-- **In set graphics** (cards, decks, sheets — anything shipped as an image):
-  Hanken Grotesk for sentences, DM Mono for labels and figures (both OFL).
+- **Sentences**: Hanken Grotesk. **Labels, figures, code**: DM Mono. Both
+  OFL, and the site ships them itself (`site/fonts/`, latin subsets, no
+  external request) — leaning on visitors' system stacks made the typography
+  a lottery, and one custom browser default changed the page's whole voice.
 
 ## Rules
 
