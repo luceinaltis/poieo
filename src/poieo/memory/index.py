@@ -16,20 +16,33 @@ from functools import lru_cache
 
 log = logging.getLogger("poieo.memory")
 
+# Built over `pieces.shape`, never `pieces.text`: the words a task asks with
+# are shaped before they get here, and matching shapes against raw words would
+# find an entry in one direction and not the other.
 _LOOKUP = """
-CREATE VIRTUAL TABLE pieces_fts USING fts5(text, content='pieces', content_rowid='id');
-INSERT INTO pieces_fts(rowid, text) SELECT id, text FROM pieces;
+CREATE VIRTUAL TABLE pieces_fts USING fts5(shape, content='pieces', content_rowid='id');
+INSERT INTO pieces_fts(rowid, shape) SELECT id, shape FROM pieces;
 CREATE TRIGGER pieces_after_insert AFTER INSERT ON pieces BEGIN
-    INSERT INTO pieces_fts(rowid, text) VALUES (new.id, new.text);
+    INSERT INTO pieces_fts(rowid, shape) VALUES (new.id, new.shape);
 END;
 CREATE TRIGGER pieces_after_delete AFTER DELETE ON pieces BEGIN
-    INSERT INTO pieces_fts(pieces_fts, rowid, text) VALUES('delete', old.id, old.text);
+    INSERT INTO pieces_fts(pieces_fts, rowid, shape) VALUES('delete', old.id, old.shape);
 END;
 CREATE TRIGGER pieces_after_update AFTER UPDATE ON pieces BEGIN
-    INSERT INTO pieces_fts(pieces_fts, rowid, text) VALUES('delete', old.id, old.text);
-    INSERT INTO pieces_fts(rowid, text) VALUES (new.id, new.text);
+    INSERT INTO pieces_fts(pieces_fts, rowid, shape) VALUES('delete', old.id, old.shape);
+    INSERT INTO pieces_fts(rowid, shape) VALUES (new.id, new.shape);
 END;
 """
+
+_TRIGGERS = ("pieces_after_insert", "pieces_after_delete", "pieces_after_update")
+
+
+def drop_lookup(con: sqlite3.Connection) -> None:
+    """Take the lookup away so the next open rebuilds it. Safe at any time:
+    it is derived, and a memory with no lookup reads every piece instead."""
+    for trigger in _TRIGGERS:
+        con.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+    con.execute("DROP TABLE IF EXISTS pieces_fts")
 
 
 @lru_cache(maxsize=None)

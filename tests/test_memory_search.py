@@ -22,8 +22,13 @@ def _project(tmp_path, prompt="review the api batch sizes in the importer"):
     return load_card(path), tmp_path / "tasks"
 
 
+def _entry_for(tmp_path):
+    _, project = _project(tmp_path)
+    return _fact(project, "refusals", "A refused feed is noted, never retried.")
+
+
 def _fact(project, slug, body, matter=""):
-    remember(project, slug, f"---\n{matter}\n---\n{body}" if matter else body)
+    return remember(project, slug, f"---\n{matter}\n---\n{body}" if matter else body)
 
 
 def test_a_relevant_entry_reaches_the_block(tmp_path):
@@ -46,6 +51,45 @@ def test_the_fallback_returns_the_same_entries_as_fts(tmp_path, monkeypatch):
     preferred = read_memory(project, task)
     monkeypatch.setattr(memory_index, "fts_available", lambda: False)
     assert read_memory(project, task) == preferred
+
+
+def test_a_plural_and_its_singular_are_the_same_word(tmp_path):
+    """The failure this was written for, reproduced against a real model: a card
+    whose prompt says "feeds" never saw an entry that says "feed". Matching the
+    letters exactly is what buried it, and the damage doubled -- an entry never
+    shown is then counted as one that was shown and never used."""
+    task, project = _project(tmp_path, prompt="pull the feeds into the notebook")
+    _fact(project, "one-at-a-time", "The mock feed answers everything; batches of one are wasted turns.")
+
+    block = read_memory(project, task)
+    assert "batches of one are wasted turns" in block
+
+
+def test_a_word_shape_counts_the_same_for_both_judges(tmp_path):
+    """`words()` is shared on purpose -- what a card is shown and whether an
+    entry did real work must not disagree about what an entry says. Loosening
+    one side alone would be how they start to."""
+    from poieo.memory import used_in
+    from poieo.memory.entries import words
+
+    assert words("the feeds were refused") == words("a feed was refused")
+    entry = _entry_for(tmp_path)
+    assert used_in(entry, {"summary": "a refused feed, noted", "outputs": {}})
+
+
+def test_the_shape_holds_whichever_side_is_plural(tmp_path, monkeypatch):
+    """Shaping the words a card asks with, but storing the words an entry was
+    written with, would only match in one direction -- and would make the
+    lookup disagree with the scoring that follows it, which is the one thing
+    the two paths must never do."""
+    task, project = _project(tmp_path, prompt="pull the feed into the notebook")
+    _fact(project, "many", "Refusing feeds are noted, never retried.")
+
+    block = read_memory(project, task)
+    assert "Refusing feeds are noted" in block
+    # And with no lookup to narrow with, the same entry and no other.
+    monkeypatch.setattr(memory_index, "fts_available", lambda: False)
+    assert read_memory(project, task) == block
 
 
 def test_a_superseded_entry_never_surfaces(tmp_path):

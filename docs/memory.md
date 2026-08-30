@@ -52,6 +52,34 @@ the entry's *body* alone: which entries a card is shown (`recall()`), and whethe
 an entry did real work in a run (`used_in()`). Scope and anchors match names and
 paths exactly; the page is never matched at all, because it is never chosen.
 
+### What counts as one word
+
+`words()` reduces each word to its **shape** before either question is asked, so
+`feeds` and `feed` are one word. That is not a nicety: a card whose prompt said
+"feeds" was measured missing an entry that said "feed", and the cost doubled —
+an entry never shown is then counted as one shown and never used, which is the
+report's cue to retire it.
+
+The shaping is **plurals and nothing else**, by suffix, not a stemmer. Verb
+endings were tried and taken back out: stripping `ed` and `ing` joins `refused`
+to `refusing` but not to `refuse`, whose silent `e` survives, so half the family
+still misses while the vocabulary fills with shapes like `runn` that match
+nothing. A real stemmer answers that by cutting to the root (`generalization` →
+`gener`), which earns its keep over thousands of documents and loses precision
+over tens, where one wrong match is a whole wrong entry in a prompt.
+
+Both sides of a comparison are shaped by the same function, so a shape has only
+to be *consistent*, never right: `series` → `sery` costs nothing. Two outcomes
+would cost something and are refused — a stem under four letters, which stops
+being a word and starts being a prefix, and a stem landing on a glue word, which
+would delete the word instead of widening it.
+
+It happens in **one** place, and both judges read it from there. And `pieces`
+stores the shape beside the text: the lookup matches shapes against shapes, or
+it would find an entry when the card was plural and miss it when the entry
+was — a disagreement between narrowing and scoring, which is exactly the failure
+the two paths are built to make impossible.
+
 The machinery names stay in this package and on this page. `poieo memory` says
 different words on purpose, and neither list is the other's mistake:
 
@@ -176,18 +204,19 @@ is all comments and costs a project nothing.
 
 1. **filter** — entries not set aside, whose `scope` covers this card (the word
    `global`, the card's slug, or a path that contains its folder)
-2. **narrow** — the sqlite index proposes candidates for the seed words (the
-   card's name, prompt and folder)
+2. **narrow** — the lookup proposes candidates for the seed shapes (the card's
+   name, prompt and folder, shaped the same way the pieces were)
 3. **score** — shared distinctive words, plus `_ANCHOR_BOOST` (1 000) if the
    entry *anchors* where the card works. An anchored entry is relevant by where
    it points, not by the words it shares, so it is added to the pool directly
-   rather than depending on the index finding a shared word
+   rather than depending on the lookup finding a shared word
 4. **associate** — a neighbour of a chosen entry has no score of its own to argue
    with; its claim is its seed's, divided by the seed's rank and multiplied by
    how strong that connection is. A **second** hop is taken only across a strong
    connection, so with nothing reinforced one hop means one hop
 5. **cut** — best first, on whole-entry boundaries. Half a lesson is worse than
-   none
+   none, and an entry too big for the budget loses only its own place: skipping
+   it leaves the room to whoever ranks below, where stopping at it hid them all
 
 `connected()` decides who arrives beside an entry: `[[mentions]]` count in
 **either** direction (nearness is symmetric), `depends_on` **forward only** (what
