@@ -1146,3 +1146,47 @@ def test_an_address_the_project_can_reach_is_listed_without_a_restart(tmp_path, 
     assert _add_at(client, "http://gpu-box:8001/v1").status_code == 200
 
     assert [e["name"] for e in _models(client).json()["endpoints"]] == ["local", "gpu-box"]
+
+
+# -- one address, spelled however the file spells it --------------------------
+#
+# The offer decides "this project cannot reach that" by comparing addresses,
+# and did it with its own string rules while `detect` grew a second set for
+# `here`. The weaker one was wrong three ways, and the worst of them was
+# self-inflicted: `detect.ask` writes `http://localhost:8000` for a server that
+# answers at its root, and the panel then offered to add that same server again.
+
+
+def _offers_vllm(tmp_path, monkeypatch, declared_at):
+    binding = f"""name: n
+providers:
+  mine: {{type: openai_compatible, base_url: "{declared_at}"}}
+default: {{provider: mine, model: m}}
+"""
+    _machine(monkeypatch, {_VLLM: Catalogue((Served(id="qwen3-32b"),))})
+    body = _look(_client(tmp_path, binding=binding, tasks=False)).json()
+    return "vllm" in _offered(body)
+
+
+def test_a_server_already_declared_is_not_offered_however_its_address_is_written(tmp_path, monkeypatch):
+    """One port is one server. Which path it hangs its listing on, and which of
+    the four spellings of this machine the file used, are not second servers."""
+    for spelling in (
+        "http://localhost:8000/v1",
+        # What `detect.ask` itself writes for a server answering at its root.
+        "http://localhost:8000",
+        "http://127.0.0.1:8000/v1",
+        "http://[::1]:8000/v1",
+        "http://127.0.0.2:8000",
+        "http://LOCALHOST:8000/v1",
+    ):
+        assert not _offers_vllm(tmp_path, monkeypatch, spelling), spelling
+
+
+def test_the_same_port_on_another_machine_is_another_server(tmp_path, monkeypatch):
+    """The comparison must not go so far that a real second endpoint vanishes."""
+    assert _offers_vllm(tmp_path, monkeypatch, "http://192.168.1.50:8000/v1")
+
+
+def test_another_port_on_this_machine_is_another_server(tmp_path, monkeypatch):
+    assert _offers_vllm(tmp_path, monkeypatch, "http://localhost:8001/v1")
