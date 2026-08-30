@@ -169,10 +169,16 @@ is nothing is one people learn to ignore. Two requests cost nobody anything.
 `_unclaimed` decides *cannot reach* **by address, not by key**: somebody who
 declared the vLLM on this machine as `fast` has it, and offering it again under
 the name detection would have picked writes one server into one file twice.
-`127.0.0.1` and `localhost` are one machine and a config may say either; a
-trailing slash is nobody's second endpoint. It goes no further than that —
-resolving a hostname would turn a comparison into a DNS lookup, and being wrong
-here only ever costs an offer that should not have been made. A candidate with no
+
+What "the same address" means is `detect.one_machine` — **`host:port`, because a
+port is a server**. Two of them cannot share one, so which listing path a server
+hangs off and which of the four spellings of this machine a config used are not
+second endpoints. That rule lives beside `here` and `host` in `detect` rather
+than here; this module briefly had its own weaker copy and was wrong for
+`http://localhost:8000`, which is what `detect.ask` writes for a server
+answering at its root — so adding a vLLM by address made the panel immediately
+offer to add it again. It goes no further than a string comparison: resolving a
+hostname would turn a question about a config into a DNS lookup. A candidate with no
 address (`claude`, asked through its own SDK) is claimed by any endpoint of its
 type instead.
 
