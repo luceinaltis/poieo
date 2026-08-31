@@ -152,10 +152,9 @@ which is how a one-word verdict comes back empty.
 
 **The conversation is bounded, because nothing else bounds it.** Every tool
 result is appended and resent on every turn after it, so a step that reads
-twenty files pays for all twenty on every remaining turn -- one run measured
-here spent 160,360 input tokens to produce 6,578 of output before it was cut
-off mid-turn. Past half of what the model can hold the older tool results are replaced by
-a short note, and `node_context_cleared` says how much that freed.
+twenty files pays for all twenty on every remaining turn. Past half of what
+the model can hold, the older tool results are replaced by a short note, and
+`node_context_cleared` says how much that freed.
 **Only the result goes, never the request:** the assistant turn that asked for
 the file stays, so the model still knows it has read it, and the tools are
 offered again every turn, so it can read it again. The worst case is one
@@ -183,14 +182,9 @@ the step over -- the history is left whole, `node_compact_failed` records it,
 and the run carries on to fail honestly on room if it is going to.
 
 **And a fold that would not shrink the conversation is not taken.** The model
-is asked to be brief rather than made to be, so whether it was is checked
-rather than assumed. Watched in another harness: a compression pass took a
-conversation from 64,186 tokens to 71,173 -- fourteen messages in, fourteen
-out, seven thousand tokens larger -- and reported it as done. Rebuilding is not
-shrinking. The same `node_compact_failed` carries it, because the outcome is
-the same: nothing was folded, the history is whole, and the next turn can fail
-honestly on room. What differs is the sentence, and that is what a reader
-needs.
+is asked to be brief rather than made to be, so the result is checked rather
+than assumed — a summary larger than what it replaced is refused, recorded by
+the same `node_compact_failed`, and the history stays whole.
 
 Clearing before folding, and not the other way around, because clearing costs
 nothing and is one repeated tool call away from being undone, while a fold
@@ -206,11 +200,8 @@ is a measurement the endpoint already sends rather than an estimate from
 characters. It lags by one turn, which is what a threshold on a measurement
 costs and what the server-side version costs too.
 
-Where the binding says nothing, the character caps above are what this loop had
-before anyone could say. They are wrong for every model these examples bind --
-`_CONTEXT_CAP` is 2.3% of what `z-ai/glm-5.3-flash` holds and 11.4% of a local
-qwen3.5 -- which is why the binding is the better answer and the constant is
-only the fallback.
+Where the binding says nothing, the character caps are the fallback — wrong
+for nearly every real model, which is why the binding is the better answer.
 
 **A refusal is a measurement nobody could have taken.** An endpoint that
 rejects a request for its size knows something the loop does not: the caps
@@ -227,10 +218,8 @@ sending it again would buy the same answer twice. `node_retried_smaller` says
 when it happened and what it freed.
 
 **Not every endpoint refuses. Some just keep less.** Ollama past `num_ctx`
-truncates the prompt and answers anyway, so the model replies from a
-conversation with its beginning missing and nothing says a word. Measured
-against a real one at 4,096: sending 45,000 characters after 18,000 made the
-reported count **fall from 4,010 to 2,050**.
+truncates the prompt and answers anyway — the model replies from a
+conversation with its beginning missing, and nothing says a word.
 
 The invariant that catches it needs no estimate. **A conversation only grows,
 so the count the endpoint reports for it must grow too.** When it does not, and
@@ -245,38 +234,29 @@ step is the case clearing cannot reach: a single file larger than the window
 survives every clearing and every retry. It is only safe *after* the endpoint
 has shown it did not fit; doing it beforehand would make the tool call
 pointless and have the model read the same file forever. And it is replaced
-with what to do rather than only that something is gone -- `read_file` has
-taken `offset` and `limit` since the windows arrived, and a step measured here
-used them zero times out of thirty-six.
+with what to do rather than only that something is gone — the note points at
+`read_file`'s `offset` and `limit`.
 
 With nothing left to drop the node fails, carrying `window_too_small`. Without
 that, a truncating endpoint would be answered forever with garbage.
 
-`max_turns` bounds the turns; hitting that bound with calls still pending is a
-`NodeError` carrying the `out_of_turns` cause, **and the message names what
-the turns were spent on.** The advice on that failure is "raise it, or make the
-step smaller" -- opposite actions, and for a long time nothing said which. A
-step measured here spent forty turns making ten edits and running the suite
-four times: it was working and wanted more room. Another spent forty reading
-the same four files: more room would have bought more of that. The tool counts
-are the difference, and getting them used to mean writing a script against the
-event log after the fact.
+`max_turns` bounds the turns; hitting the bound with calls still pending is a
+`NodeError` carrying `out_of_turns`, **and the message names what the turns
+were spent on** — because the advice ("raise it, or make the step smaller") is
+two opposite actions, and the tool counts are what says which applies.
 
-**`deadline` is the bound that matches the harm.** Seconds, like the `timeout`
-beside it, and `None` for a node that does not ask. What an unbounded step
-actually costs is not money -- forty turns measured here came to two and a half
-cents -- it is that the step outlives its own schedule and blocks whatever was
-queued behind it. "This fires hourly, so it must not take an hour" is a
-sentence somebody can mean; "forty turns" is not.
+**`deadline` is the bound that matches the harm.** Seconds, `None` when not
+asked. What an unbounded step costs is rarely money — it is outliving its own
+schedule and blocking what was queued behind it. "This fires hourly, so it
+must not take an hour" is a sentence somebody can mean; "forty turns" is not.
 
 Checked at the top of a turn rather than raced against the model call. A
 request already sent is paid for whether or not the answer is kept, so
 cancelling one mid-flight would waste the tokens the deadline was set to save.
 
-**Turns are a poor unit and the counts are there because of it.** In one
-measured run a turn cost between 15 and 1,629 output tokens, and took between
-five seconds and seven minutes. Forty of them is not a budget anybody can
-reason about; forty of them spent on `edit_file` and `run_command` is. The executor is opened with
+**Turns are a poor unit and the counts are there because of it.** A turn can
+cost a hundred times another; forty turns is not a budget anybody can reason
+about, but forty spent on `edit_file` and `run_command` is. The executor is opened with
 `async with`, so an isolated environment is set up and torn down around the whole
 loop, not per call. Each turn emits `node_turn` (with the model's text and
 thinking, clipped, and what that turn cost in tokens -- a run's own record

@@ -24,24 +24,13 @@ tasks: tasks/            # where the jobs are; one file each
 learn: 1d
 ```
 
-`name:` is the one key that says nothing about where anything is, and it is
-optional because the folder name answers for it nearly always -- `display_name`
-falls back to the folder, and to the folder again if the key is blank. It earns
-its place in the one case the folder cannot cover: a worktree is a second folder
-with the *same* name as the first, so two daemons on two ports serve two boards
-that are otherwise indistinguishable.
+`name:` is optional — `display_name` falls back to the folder name. It earns
+its place where the folder cannot answer: a worktree shares its name with the
+first checkout, and two boards need telling apart. `poieo init` writes it
+filled with the folder's name (`--name` overrides).
 
-`poieo init` writes the key, filled in with the folder's name, and `--name`
-sets it instead. The folder is a good guess and a bad default: written into the
-file it is a starting point a reader can see and change, where left as a
-fallback it is a rule they have to be told about. The fallback stays for the
-markers people write by hand, which are most of them.
-
-There is no list of jobs here. `flows:` was one, and a marker that still carries
-it is refused by name rather than by "not a setting here" -- a list in a shared
-file is the worse of the two for a board that creates jobs, for a diff that
-should be about the job that changed, and for a reader who had to learn two
-spellings of every key.
+There is no list of jobs here — a job is one file in `tasks/`. A marker still
+carrying the retired `flows:` list is refused by name.
 
 `ProjectSpec` is what commands read to fill flags the user left silent; the
 **flag always wins, and discovery only fills silence**. `DaemonConfig` extends it
@@ -49,23 +38,14 @@ when something actually intends to run the tasks. One schema, read to the depth
 the caller needs.
 
 Paths inside `poieo.yaml` resolve against the config file, never the cwd
-(`resolve_path()`), so standing somewhere else cannot change where a run's
-history lands. **`~` expands first**, as it does in a card and in the route
-that writes one — this file was the one place it did not, so `store: ~/runs`
-built a directory literally called `~` inside the project and filed the
-history there.
-
-A home that cannot be found leaves the path alone. `Path.expanduser` raises
-where `os.path`'s version hands the string back: `~someone` naming nobody, and
-a container with no `$HOME` and no passwd entry for the uid it runs as, where
-even `~/runs` has nothing to expand against. A folder with a `~` in its name is
-the wrong answer, but a traceback out of a config load is not an answer at all.
+(`resolve_path()`), and **`~` expands first** — as in a card. A home that
+cannot be found leaves the path alone: a folder named `~` is the wrong answer,
+but a traceback out of a config load is not an answer at all.
 
 ## Layout — one answer to "what lives where"
 
-`layout.py` exists because `.poieo` used to appear as a literal in seven modules,
-each assembling its own idea of where a project begins — and they had already
-drifted. Three answers to one question is two too many.
+`layout.py` is the one answer to "what lives where" — paths assembled in many
+modules had already drifted apart once.
 
 ```
 <root>/
@@ -190,11 +170,9 @@ Detection does run again in one place, and the boundary is worth stating: the
 board's models panel asks on every paint, to notice an engine installed since
 `init` that the project's binding has never heard of (see [web.md](web.md)). It
 still only asks. Nothing is written until somebody presses the offer, and no run
-is ever routed by what a port said tonight. `probe(candidates)` takes the subset
-to look at, so the panel skips the addresses the project already declares — and
-it is a request of its own, because a candidate nothing is listening on costs a
-whole `HTTP_TIMEOUT` rather than refusing fast, which was measured after being
-assumed the other way.
+is ever routed by what a port said tonight. `probe(candidates)` takes the subset to look at, so the panel skips the
+addresses the project already declares — a candidate nothing listens on costs
+a whole `HTTP_TIMEOUT`.
 
 The order in `CANDIDATES` is the order a picker shows, and the order an
 unattended `init` takes its answer from. **Local servers lead**, for
@@ -248,16 +226,11 @@ a terminal, the OpenAI shape lives one segment further down, and refusing the
 address they have would be making them debug a URL to answer a question this can
 answer itself.
 
-`ask` is also the first place detection is handed a string somebody **typed**,
-and a typed address has typos in it. `httpx` refuses a malformed one by raising
-— `InvalidURL` for a port that is not a number, idna's own `UnicodeError` for a
-hostname it cannot encode — and neither is a `RequestError`, so both went
-straight past the clause that was catching. `_listed` catches all three now,
-because "every outcome is a return value" is this module's rule and a caller
-being shown a list has no use for a traceback. (This is detection's promise and
-not the whole product's: a *declared* endpoint with a malformed `base_url` still
-raises out of `providers.local` when something goes to run it, and `poieo check`
-is where that surfaces.)
+`ask` is the first place detection meets a string somebody **typed**, so
+`_listed` catches `httpx`'s malformed-URL exceptions alongside its request
+errors — "every outcome is a return value" is this module's rule. (A
+*declared* endpoint with a malformed `base_url` still raises where something
+goes to run it; `poieo check` surfaces that.)
 
 Silence is the right answer *inside* detection and the wrong one at the surface:
 "nothing usable answered at `http://box:80O1`" is true, and has the reader
@@ -351,9 +324,7 @@ answered first and the author's key second (see [web.md](web.md)).
 `Engine.known_as` is `label_for` applied to it, falling back to the candidate's
 own label. **Everything that puts a detected engine on a screen goes through
 that one property** — `init`, `config add`, and the board's offer — so the
-terminal and the browser cannot name one server two different things. Without
-it they printed `vLLM / SGLang`, the pair the address can name, after having
-just been told which of the two it was.
+terminal and the browser cannot name one server two different things. Without it, two surfaces named one server two different things.
 
 **Every engine found is declared**, not only the one that ends up serving
 `default:`. A role exists so a graph can send its cheap step somewhere cheap,

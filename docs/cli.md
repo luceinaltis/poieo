@@ -52,21 +52,10 @@ than a connection error.
 
 ## The front page speaks the user's three words
 
-[DESIGN.md](../DESIGN.md) principle 7: the vocabulary is a **task**, a **run**,
-a **change**. Worktrees, bindings, providers and schedulers are machinery, and
-machinery does not appear in the interface — least of all on the first screen
-somebody ever sees. The help used to read:
-
-```
-daemon    Start the resident scheduler and keep flows running.
-check     Probe every provider declared in a binding.
-validate  Parse a graph or task (and optionally a binding) and report problems.
-```
-
-Three lines, six machinery words, and a newcomer none the wiser. A test asserts
-that `scheduler`, `provider`, `binding` and `worktree` appear nowhere in
-`poieo --help`, and that `task` — the word that replaced them — is there. The
-panel titles and short help are written against it.
+[DESIGN.md](../DESIGN.md) principle 7: the vocabulary is a **task**, a
+**run**, a **change** — machinery words do not appear in the interface. A test
+asserts that `scheduler`, `provider`, `binding` and `worktree` appear nowhere
+in `poieo --help`, and that `task` is there.
 
 ## `poieo daemon` takes as many projects as you name
 
@@ -173,12 +162,9 @@ find a subcommand to ask it is a tax. The subcommands are for changing the answe
 the browser sees less of the answer than the terminal does, and that difference
 is argued there.
 
-`roles_by_target()` is the last of those and the newest, and it is a list per
-model rather than a role: pointing `classifier` and `writer` at one small model
-is the ordinary reason to name roles at all. Both listings used to invert
-`spoken_for()` themselves, one into a list and one into a single role, so the
-terminal named whichever role sorted last and dropped the others without
-saying — and rebinding one of two roles sharing a model looked safe.
+`roles_by_target()` answers a **list** of roles per model, because pointing
+two roles at one small model is the ordinary case — a single-role answer made
+rebinding one of two look safe.
 
 **And makes the same edit.** `POST …/models/use` is `config use` from a browser:
 same `binding.split_ref` reading the reference back, same `rebind.point_at`
@@ -205,10 +191,8 @@ Models are written `provider/model`, splitting once, so an id full of slashes
 a reader copies out has to be a thing they can type in, and a test asserts the
 round trip.
 
-`ResolvedModel.ref` is the **one** place that spelling is built. Four sites used
-to assemble it themselves and one of them used a colon, so the roster and
-`poieo validate` disagreed with `poieo config` about what a model is called.
-`describe()` is now `f"{role} -> {ref}"`.
+`ResolvedModel.ref` is the **one** place that spelling is built; hand-assembled
+copies once disagreed about what a model is called.
 
 ## `config use` edits, and undoes itself if it was wrong
 
@@ -234,13 +218,10 @@ from memory does not fail here, it fails at 3am in a run. It is **best effort**:
 an endpoint that does not answer is not a verdict, so the edit proceeds and the
 command says it could not check.
 
-**That check asks uncapped**, `models_for(..., limit=None)`, and so does the
-board's `models/use`. `MODEL_CAP` bounds a list a person reads; asking "is this
-name real" with it answers no for everything a hosted router serves past the
-fortieth, and the refusal then prints those forty as though they were the
-catalogue. A correct name was refused in the terminal and taken by the board
-until both asked the same way. The refusal still offers only `MODEL_LIST` of
-them back, and says how many more there are rather than implying none.
+**That check asks uncapped** (`models_for(..., limit=None)`), as does the
+board's `models/use` — `MODEL_CAP` bounds a list a person reads, and asking
+"is this name real" with it refuses everything past the fortieth. The refusal
+offers `MODEL_LIST` back and says how many more there are.
 
 ## `config add`, and the line between declaring and choosing
 
@@ -261,18 +242,10 @@ lives, and a guessed `base_url` is worse than none.
 
 **Already declared means already reached, by address and not by name.**
 `detect.declared_as` is the rule: the key, then the address through
-`one_machine` — so `localhost:11434` and `127.0.0.1:11434` are one server — and
-for an endpoint with no address at all, the type, since Claude's SDK resolves
-its own and there is nothing to compare. Filtering on the key alone wrote one
-server into one file twice, under two names, pointing at one port; and the
-board's offer had been comparing addresses all along, so the offer it withheld
-was one this command would happily have written in.
-
-The same rule decides the refusal, from `rebind.already`, **read off the file**.
-The board used to ask the spec it was holding, which a terminal edit can leave a
-step behind — so it answered "already declares 'office'" over an endpoint the
-file does not have, while this command accepted the same one. Two hand-copied
-spellings of one question, including the sentence, written out twice.
+`one_machine` (`localhost:11434` and `127.0.0.1:11434` are one server), and
+for an endpoint with no address, the type. The same rule decides the refusal,
+from `rebind.already`, **read off the file** — the CLI and the board share
+both the rule and the sentence, so they cannot disagree.
 
 The key leads each block it prints, because that is what `config use` takes
 back — but **what the thing is** is printed beside it, from `Engine.known_as`.
@@ -317,11 +290,10 @@ rather than in this shell, and an endpoint that lists for anyone still declares.
 It is only named when the address also answered nothing, because then it is the
 likelier of the two explanations.
 
-An address that is not one — a port that is not a number, a hostname that cannot
-be encoded — is refused before any of that, quoting back what was typed and the
-part of it that cannot be read. It used to raise past `_guarded` as a traceback,
-and "nothing usable answered" would have been the wrong sentence anyway: it has
-the reader checking whether their server is up over a typo in what they typed.
+An address that is not one — a port that is not a number, a hostname that
+cannot be encoded — is refused before any of that, quoting back the part that
+cannot be read; "nothing usable answered" would send the reader checking a
+server over a typo.
 
 **The board can do this too.** `POST …/models/add` is `config add` from a
 browser, through the same `rebind.declare`, and the board finds the engine
@@ -334,8 +306,7 @@ is answering that the project cannot reach. There is no "look again" button, and
 `validate`, `show`, `run` and `view` all take "a graph or a card".
 `_load_card()` answers which (by document shape — see [tasks.md](tasks.md)) and
 `_load_spec()` returns the graph either way: the file itself, the graph a card
-names, or the graph a card expands to. Each is loaded **once per command** — `run`
-used to read the same file four times through helpers that each opened it again.
+names, or the graph a card expands to. Each is loaded **once per command**.
 
 A card run by hand and the same card run by the daemon must write **one**
 history, not two, so `run` asks for the store from the *card's own folder* rather

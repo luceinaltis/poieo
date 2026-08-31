@@ -54,31 +54,17 @@ paths exactly; the page is never matched at all, because it is never chosen.
 
 ### What counts as one word
 
-`words()` reduces each word to its **shape** before either question is asked, so
-`feeds` and `feed` are one word. That is not a nicety: a card whose prompt said
-"feeds" was measured missing an entry that said "feed", and the cost doubled —
-an entry never shown is then counted as one shown and never used, which is the
-report's cue to retire it.
+`words()` reduces each word to its **shape** before either question is asked,
+so `feeds` and `feed` are one word — an entry missed over a plural is then
+also miscounted as "shown and never used", a double cost.
 
-The shaping is **plurals and nothing else**, by suffix, not a stemmer. Verb
-endings were tried and taken back out: stripping `ed` and `ing` joins `refused`
-to `refusing` but not to `refuse`, whose silent `e` survives, so half the family
-still misses while the vocabulary fills with shapes like `runn` that match
-nothing. A real stemmer answers that by cutting to the root (`generalization` →
-`gener`), which earns its keep over thousands of documents and loses precision
-over tens, where one wrong match is a whole wrong entry in a prompt.
-
-Both sides of a comparison are shaped by the same function, so a shape has only
-to be *consistent*, never right: `series` → `sery` costs nothing. Two outcomes
-would cost something and are refused — a stem under four letters, which stops
-being a word and starts being a prefix, and a stem landing on a glue word, which
-would delete the word instead of widening it.
-
-It happens in **one** place, and both judges read it from there. And `pieces`
-stores the shape beside the text: the lookup matches shapes against shapes, or
-it would find an entry when the card was plural and miss it when the entry
-was — a disagreement between narrowing and scoring, which is exactly the failure
-the two paths are built to make impossible.
+The shaping is **plurals and nothing else**, by suffix, not a stemmer: verb
+endings and real stemming both lose precision over tens of documents, where
+one wrong match is a whole wrong entry in a prompt. Both sides of a comparison
+are shaped by the same function, so a shape only has to be consistent, never
+right; a stem under four letters or landing on a glue word is refused. Shaping
+happens in **one** place, and `pieces` stores the shape beside the text, so
+narrowing and scoring can never disagree.
 
 The machinery names stay in this package and on this page. `poieo memory` says
 different words on purpose, and neither list is the other's mistake:
@@ -223,12 +209,10 @@ is all comments and costs a project nothing.
 
 ### Who is in the room, and who is merely first
 
-**Scope decides admission. Matching decides the order. The budget decides who is
-cut.** Sharing a word is *evidence*, not a ticket — an entry the card matched
-nothing in used to be dropped, and the room it would have taken went unused.
-With a 4 000-character budget and entries that run about a hundred characters,
-that was three quarters of the prompt's memory left empty while entries were
-discarded for not repeating a word.
+**Scope decides admission. Matching decides the order. The budget decides who
+is cut.** Sharing a word is *evidence*, not a ticket — dropping unmatched
+in-scope entries used to leave most of the budget empty while lessons went
+unshown.
 
 Two things are not room-dependent, and both stay:
 
@@ -251,12 +235,9 @@ no observable effect and no way to verify it. Above it, ranking decides who is
 cut, and *that* is measurable — does the order put the right entries above the
 line? At roughly a hundred characters an entry, the crossing is near forty.
 
-The evidence for what to build then, gathered when this was written: hybrid
-retrieval beats either channel alone on agent-memory benchmarks (LongMemEval
-R@5 86.2% words-only against 95.2% fused; LoCoMo's ablation costs 12.7 points
-for removing the word channel and 2.4 for removing the meaning channel), the two
-are fused by rank rather than by score because their units do not compare, and
-the word channel is weighted higher. Until the budget fills, none of that has
+The notes for what to build then: hybrid retrieval beats either channel alone
+on agent-memory benchmarks, fused by rank (the units do not compare) with the
+word channel weighted higher. Until the budget fills, none of that has
 anything to decide.
 
 `connected()` decides who arrives beside an entry: `[[mentions]]` count in

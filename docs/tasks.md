@@ -14,17 +14,12 @@ prompt: |
 
 ## Sugar, not a second format
 
-**A card and a task are two things.** A card is the file a person writes; a task
-is what runs. `CardSpec` is the first, `TaskSpec` the second, and `expand()` is
-the only crossing between them — which is why the loader is the last place that
-knows cards exist at all.
-
-A card is sugar. At load time `expand()` turns it into a `TaskSpec` plus a
-one-node `GraphSpec` indistinguishable from hand-written ones, so **nothing
-downstream of the loader knows cards exist**. The expansion is visible
-(`poieo show`) and reversible (`poieo eject`), and that is the whole discipline:
-the moment a card's expansion is something you could not have written by hand,
-the short form has become a hidden second configuration format.
+**A card and a task are two things.** A card is the file a person writes
+(`CardSpec`); a task is what runs (`TaskSpec`); `expand()` is the only
+crossing, so **nothing downstream of the loader knows cards exist**. The
+expansion is visible (`poieo show`) and reversible (`poieo eject`) — the
+moment it produces something you could not have written by hand, the short
+form has become a hidden second configuration format.
 
 ```
 CardSpec ──expand()──►  TaskSpec        name, graph, binding, trigger,
@@ -89,10 +84,8 @@ rewritten.
 - 2026-08-23 03:00 · task    [build-docs] rebuilt the docs; 30 links changed
 ```
 
-It sits with the rest of what the project remembers rather than beside the card,
-because a card is a thing a person edits and a journal is a thing that grows
-every night — side by side, the folder of definitions went dirty in git on every
-run.
+It sits under `memory/` rather than beside the card, so the folder of
+definitions does not go dirty in git on every run.
 
 Four `kind`s write to it: `did` and `failed` (the card's own run), `you` (the
 user, via `poieo note` or an editor), and `task` (a sibling's note). The tail is

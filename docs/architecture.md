@@ -15,7 +15,7 @@ graph (logical)                     binding (physical)
 ```
 
 A graph never names a model; a binding never names a step. Moving a workflow
-from a laptop model to Claude is a `--binding` flag, not an edit. Anything that
+from a laptop model to a frontier one is a `--binding` flag, not an edit. Anything that
 would make a graph mention a model — or a binding mention a node — is wrong,
 however convenient.
 
@@ -107,7 +107,7 @@ an agent node, a timeout for a command, `MAX_CHAIN` for a chain of handoffs,
 the next trigger starts fresh.
 
 **Hide the mechanism, never the result.** The user's vocabulary is three words —
-a *task*, a piece of *work*, a *change*. Worktrees, containers, refs and indexes are
+a *task*, a *run*, a *change*. Worktrees, containers, refs and indexes are
 machinery and stay out of the interface. The one exception is the moment the
 user's own files are about to change, where poieo says exactly what will happen.
 
