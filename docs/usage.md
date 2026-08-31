@@ -4,13 +4,14 @@ Every command, every key a task file takes, and the worked examples.
 [`README.md`](../README.md) is the short version; this is the whole of it, and
 `docs/` has one document per component for anyone changing the code.
 
-A harness for running LLM workflows where **what the work is** and **which model does it**
-are two separate files.
+poieo keeps **what the work is** and **which model does it** in two separate
+files.
 
-A *graph* describes the logical task: classify this, then branch, then draft a reply. It
-names **roles** (`classifier`, `writer`, `critic`) and never names a model. A *binding*
-maps those roles onto physical endpoints — Claude, a local vLLM server, Ollama. Moving a
-workflow from a laptop model to Claude Opus 5 is a `--binding` flag, not an edit.
+A *graph* describes the logical task: classify this, then branch, then draft a
+reply. It names **roles** (`classifier`, `writer`, `critic`) and never names a
+model. A *binding* maps those roles onto real endpoints — a local server, a
+cloud API. Moving a workflow from a laptop model to a frontier one is a
+`--binding` flag, not an edit.
 
 A *daemon* keeps tasks alive on triggers, so the logical task just keeps running.
 
@@ -685,9 +686,10 @@ shaped that way. Start at [architecture.md](architecture.md).
 
 ## Not built yet
 
-* Editing and removing a card from the page. Making one is live — the rail's
-  `new task` writes a card and the daemon finds it — but changing a card's
-  name or folder, and deleting it, still mean editing the file.
+* Editing a card from the page. Making one is live (the rail's `new task`),
+  and so is setting one aside — the card moves whole to `.set-aside/`,
+  recoverably — but changing a card's name, folder or prompt still means
+  editing the file.
 * The editor folded into the board. `poieo edit` is a canvas over the graph schema
   today, and `poieo show --mermaid` draws one; the board draws the work but does
   not let you edit it.

@@ -6,8 +6,8 @@
 
 ## One line
 
-**An autonomous task board: write down the work you want done, and the LLMs on
-your own machine keep it running around the clock.**
+**An autonomous task board: write down the work you want done, and the models
+you choose keep it running around the clock.**
 
 The user designs the shape of the work; the model does the hands-on part of each
 step. Pin up a task like "keep improving this project" and — find something to
@@ -204,10 +204,9 @@ each of those works *today* is in its component document — a roadmap that also
 described finished work would be a second, staler account of it.
 
 - **The board writes, not only reads.** Creating a card from the browser is
-  live — the rail's `new task` writes the file and the daemon finds it — and a
-  prompt edited at noon is what the next run uses. What is left: editing and
-  removing a card from the page, and folding the existing canvas editor into
-  the detail view.
+  live, and so is setting one aside — recoverably, the card moved whole rather
+  than deleted. What is left: editing a card's fields from the page, and
+  folding the existing canvas editor into the detail view.
 - **Beyond, as candidates.** Delegating a step to an external agent CLI;
   fan-out steps; deciding what happens to run logs as they age; stronger
   isolation backends behind the seam the current one already sits on.
