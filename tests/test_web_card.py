@@ -362,3 +362,87 @@ def test_a_renamed_task_stops_firing_under_its_old_name(tmp_path, monkeypatch):
 
     assert answer.status_code == 200, answer.text
     assert held == [True]
+
+
+def test_a_three_field_card_says_it_is_plain(tmp_path):
+    """`plain` is what lets the board offer fields instead of a file: a card
+    holding only the three things make writes can be rebuilt from them."""
+    client, cards = _client(tmp_path)
+    assert _get(client).json()["plain"] is True
+
+
+def test_a_card_carrying_more_than_the_three_fields_is_not_plain(tmp_path):
+    """A schedule, an isolation, a comment somebody wrote: a form would
+    silently drop them on save, so such a card stays a file on screen."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n", encoding="utf-8")
+    assert _get(client).json()["plain"] is False
+
+    (cards / "already.yaml").write_text(
+        "name: Already\n# keep an eye on this one\nfolder: ../work\nprompt: x\n",
+        encoding="utf-8",
+    )
+    assert _get(client).json()["plain"] is False
+
+
+def test_fields_rewrite_a_plain_card_through_the_same_dump_make_uses(tmp_path):
+    """The user never touches the spelling: three fields in, and the file
+    comes out exactly as make would have written it."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper words"},
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"ok": True, "task": "already", "live": True}
+    written = (cards / "already.yaml").read_text(encoding="utf-8")
+    assert written == yaml.safe_dump(
+        {"name": "Already", "folder": "../work", "prompt": "sharper words"},
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
+
+def test_fields_take_the_same_folder_fence_as_text(tmp_path):
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../gone", "prompt": "x"},
+    )
+    assert answer.status_code == 400, answer.text
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == before
+
+
+def test_fields_refuse_a_card_that_is_not_plain(tmp_path):
+    """The one thing a form must never do is drop what it cannot show."""
+    client, cards = _client(tmp_path)
+    kept = "name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n"
+    (cards / "already.yaml").write_text(kept, encoding="utf-8")
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "y"},
+    )
+    assert answer.status_code == 409, answer.text
+    assert "more than the three fields" in answer.json()["error"]
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == kept
+
+
+def test_a_field_save_after_a_set_aside_answers_not_raises(tmp_path):
+    """The same race the text path already answers: drawer open, task set
+    aside, save pressed. Field-mode reads the card before rebuilding it, and
+    that read must land on the same 409 sentence, not a 500."""
+    client, cards = _client(tmp_path)
+    client.delete("/api/projects/board/tasks/already")
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "x"},
+    )
+    assert answer.status_code == 409, answer.text
+    assert "set aside" in answer.json()["error"]
+    assert not (cards / "already.yaml").exists()

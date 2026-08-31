@@ -219,3 +219,63 @@ test("make one like it hands the three fields up, not the yaml", async () => {
     prompt: "tidy",
   })
 })
+
+test("a plain card opens as the three fields, not as a file", async () => {
+  // The person filled a form to make this card; handing them YAML to edit
+  // it would be giving the form and then taking it away. Values only -- the
+  // daemon owns the spelling, through the same dump make uses.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
+  await open()
+
+  expect(container.querySelector(".card-text")).toBeNull()
+  const prompt = container.querySelector<HTMLTextAreaElement>(".card-field-prompt")!
+  expect(prompt.value).toBe("tidy")
+  expect(container.querySelector<HTMLInputElement>(".card-field-name")!.value).toBe("Chores")
+  expect(container.querySelector<HTMLInputElement>(".card-field-folder")!.value).toBe("../work")
+
+  // Nothing changed, nothing to save -- same rule as the file mode.
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(save().disabled).toBe(true)
+
+  await act(async () => {
+    const write = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!
+    write.call(prompt, "sharper")
+    prompt.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+
+  // Fields go over the wire; the daemon spells the file.
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../work",
+    prompt: "sharper",
+  })
+  expect(container.textContent).toContain("next run")
+})
+
+test("a card carrying more than the three fields still opens as a file", async () => {
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nevery: 15m\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: false,
+  })
+  await open()
+
+  expect(container.querySelector(".card-text")).not.toBeNull()
+  expect(container.querySelector(".card-field-prompt")).toBeNull()
+})

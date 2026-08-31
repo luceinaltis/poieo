@@ -39,6 +39,10 @@ export function Card({
 }) {
   const [was, setWas] = useState<string | null>(null)
   const [fields, setFields] = useState<CardFields | null>(null)
+  /** The form's three values, alive only for a plain card. */
+  const [name, setName] = useState("")
+  const [folder, setFolder] = useState("")
+  const [prompt, setPrompt] = useState("")
   const [text, setText] = useState("")
   const [gone, setGone] = useState(false)
   const [saved, setSaved] = useState<RewrittenCard | null>(null)
@@ -59,6 +63,9 @@ export function Card({
     setWas(card.text)
     setText(card.text)
     setFields(card)
+    setName(card.name)
+    setFolder(card.folder ?? "")
+    setPrompt(card.prompt ?? "")
   }
 
   const putAside = () =>
@@ -72,11 +79,18 @@ export function Card({
       return answer
     })
 
+  const plain = fields?.plain === true
+  // Same rule both modes: nothing changed, nothing to save.
+  const untouched = plain
+    ? name === fields.name && folder === (fields.folder ?? "") && prompt === (fields.prompt ?? "")
+    : text === was
+
   const save = () =>
     void act(async () => {
-      const answer = await rewriteCard(project, task, text)
+      const answer = await rewriteCard(project, task, plain ? { name, folder, prompt } : text)
       if (answer.ok) {
-        setWas(text)
+        if (plain && fields) setFields({ ...fields, name, folder, prompt })
+        else setWas(text)
         setSaved(answer)
       } else {
         setSaved(null)
@@ -94,19 +108,71 @@ export function Card({
         <Refusal>The card could not be read. It may have moved on disk.</Refusal>
       ) : was === null ? null : (
         <>
-          <textarea
-            className="card-text"
-            rows={Math.min(16, Math.max(6, text.split("\n").length + 1))}
-            value={text}
-            disabled={busy}
-            spellCheck={false}
-            onChange={(event) => {
-              setText(event.target.value)
-              setSaved(null)
-              // Reaching for the words is deciding to keep the task.
-              setArmed(false)
-            }}
-          />
+          {plain ? (
+            /* The person filled a form to make this card; handing them YAML
+               to edit it would be giving the form and then taking it away.
+               Values only -- the daemon owns the spelling, through the same
+               dump make uses. A card carrying more than the three fields
+               falls through to the file below, because a form must never
+               drop what it cannot show. */
+            <div className="card-form">
+              <label className="card-field">
+                name
+                <input
+                  className="card-field-name"
+                  value={name}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setName(event.target.value)
+                    setSaved(null)
+                    setArmed(false)
+                  }}
+                />
+              </label>
+              <label className="card-field">
+                folder
+                <input
+                  className="card-field-folder"
+                  value={folder}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setFolder(event.target.value)
+                    setSaved(null)
+                    setArmed(false)
+                  }}
+                />
+              </label>
+              <label className="card-field">
+                prompt
+                <textarea
+                  className="card-field-prompt"
+                  rows={Math.min(12, Math.max(4, prompt.split("\n").length + 1))}
+                  value={prompt}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setPrompt(event.target.value)
+                    setSaved(null)
+                    // Reaching for the words is deciding to keep the task.
+                    setArmed(false)
+                  }}
+                />
+              </label>
+            </div>
+          ) : (
+            <textarea
+              className="card-text"
+              rows={Math.min(16, Math.max(6, text.split("\n").length + 1))}
+              value={text}
+              disabled={busy}
+              spellCheck={false}
+              onChange={(event) => {
+                setText(event.target.value)
+                setSaved(null)
+                // Reaching for the words is deciding to keep the task.
+                setArmed(false)
+              }}
+            />
+          )}
 
           {refused ? <Refusal answer={refused} /> : null}
 
@@ -134,7 +200,7 @@ export function Card({
               type="button"
               className="card-save"
               data-do="save-card"
-              disabled={busy || text === was || rested !== null}
+              disabled={busy || untouched || rested !== null}
               onClick={save}
             >
               {busy ? "saving…" : "save"}

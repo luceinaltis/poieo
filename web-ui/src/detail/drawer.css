@@ -259,3 +259,32 @@
   border-color: #d16d5a;
   color: #d16d5a;
 }
+
+/* The plain card as fields: the same form make gave, kept on the edit. */
+.card-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.card-field {
+  color: #9a9086;
+  display: grid;
+  font-size: 0.85em;
+  gap: 4px;
+}
+
+.card-field input,
+.card-field textarea {
+  background: #14120f;
+  border: 1px solid #2e2820;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #e8e2d8;
+  font: inherit;
+  padding: 6px 8px;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+  width: 100%;
+}
