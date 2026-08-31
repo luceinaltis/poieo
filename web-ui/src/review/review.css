@@ -170,16 +170,17 @@
   color: #d16d5a;
 }
 
+/* Both take their own row under the buttons. The note is the quiet one; a
+   refusal takes its colour and size from `.refusal` in index.css. */
 .decide-note,
-.decide-refusal {
-  color: #9a9086;
+.decide .refusal {
   flex-basis: 100%;
-  font-size: 0.8em;
-  margin: 0;
 }
 
-.decide-refusal {
-  color: #d16d5a;
+.decide-note {
+  color: #9a9086;
+  font-size: 0.8em;
+  margin: 0;
 }
 
 @media (max-width: 720px) {

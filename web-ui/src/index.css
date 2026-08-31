@@ -36,6 +36,17 @@ button:disabled {
   opacity: 0.5;
 }
 
+/* What a refusal reads like, on all five surfaces that can hit one. It was
+   five rules under five names, agreeing on the colour and disagreeing on the
+   size by two hundredths of an em. Where a refusal sits is still the parent's
+   business -- a control strip wants it on its own row, the models panel wants
+   a gap under it -- and those rules live beside the surfaces that need them. */
+.refusal {
+  color: #d16d5a;
+  font-size: 0.8em;
+  margin: 0;
+}
+
 /* The aside on the right edge: the run drawer, the models panel, the new-task
    form. Only ever one of them is open and `.shell-stage` reserves one margin
    for whichever it is, so their width and box model have to agree.

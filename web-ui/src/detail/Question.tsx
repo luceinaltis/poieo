@@ -13,6 +13,7 @@
 
 import { answer } from "../api"
 import type { AnswerReply } from "../api"
+import { Refusal } from "../Refusal"
 import type { Question as Asked } from "../types"
 import { useAct } from "../useAct"
 
@@ -48,12 +49,11 @@ export function Question({
         ))}
       </div>
       {refused ? (
-        <p className="question-refusal">
-          {refused.error || "That didn't work."}
+        <Refusal answer={refused}>
           {refused.choices?.length
             ? ` It is asking for one of: ${refused.choices.join(", ")}.`
             : ""}
-        </p>
+        </Refusal>
       ) : null}
     </section>
   )

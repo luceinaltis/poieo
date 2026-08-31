@@ -354,11 +354,11 @@
   font-size: 0.95em;
 }
 
-.models-refusal {
-  color: #d16d5a;
+/* Above the lists and not squeezed by them -- this is a flex column, so it has
+   to say it will not shrink. Colour and size are `.refusal` in index.css. */
+.models .refusal {
   flex: none;
-  font-size: 0.82em;
-  margin: 0 0 10px;
+  margin-bottom: 10px;
 }
 
 /* A footnote to the catalogue above it, so it reads quieter than an endpoint

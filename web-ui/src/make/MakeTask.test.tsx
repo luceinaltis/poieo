@@ -157,6 +157,24 @@ test("a refusal is shown and the form keeps what was typed", async () => {
 })
 
 
+test("a refusal with nothing to say still says something", async () => {
+  // `ok: false` and no sentence is a shape the API produces: `post` builds its
+  // answer from `response.ok` spread with a body that may have failed to parse
+  // to `{}`. Four of the five writing surfaces fall back to a sentence; this
+  // one showed a disabled button, a form that would not clear, and no reason.
+  createTask.mockResolvedValue({ ok: false })
+  show()
+  type("name", "tidy up")
+  type("folder", "../work")
+  type("prompt", "look around")
+
+  await act(async () => {
+    save().click()
+  })
+
+  expect(host.textContent).toContain("didn't work")
+})
+
 test("an answer with no task is a refusal, not a card", async () => {
   // A 2xx whose body did not parse arrives as {ok: true} and nothing else.
   // Taken as made it would clear the form over a card that may not exist, and

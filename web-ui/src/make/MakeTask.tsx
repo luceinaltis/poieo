@@ -21,6 +21,7 @@ import { useState } from "react"
 
 import { createTask } from "../api"
 import type { MadeTask } from "../api"
+import { Refusal } from "../Refusal"
 import { slugOf } from "./slug"
 import { useAct } from "../useAct"
 import "./make.css"
@@ -113,9 +114,7 @@ export function MakeTask({
       </label>
 
       {collides ? (
-        <p className="make-refusal" role="alert">
-          this project already has a task called ‘{slugOf(name)}’
-        </p>
+        <Refusal>this project already has a task called ‘{slugOf(name)}’</Refusal>
       ) : null}
 
       <label className="make-field">
@@ -180,11 +179,7 @@ export function MakeTask({
         </p>
       )}
 
-      {refused?.error ? (
-        <p className="make-refusal" role="alert">
-          {refused.error}
-        </p>
-      ) : null}
+      {refused ? <Refusal answer={refused} /> : null}
 
       {made ? <p className="make-made">Made “{made}”. It starts on its own.</p> : null}
 
