@@ -246,14 +246,18 @@ class AnthropicProvider(Provider):
         ]
         thinking = "\n".join(getattr(b, "thinking", "") for b in message.content if b.type == "thinking")
         usage = message.usage
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
         return LLMResponse(
             text=text,
             model=message.model,
             usage=Usage(
-                input_tokens=usage.input_tokens or 0,
+                # Anthropic reports three disjoint prompt counters. Usage
+                # exposes the whole prompt, with the cache counters as parts.
+                input_tokens=(usage.input_tokens or 0) + cache_read + cache_write,
                 output_tokens=usage.output_tokens or 0,
-                cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
-                cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+                cache_read_tokens=cache_read,
+                cache_write_tokens=cache_write,
             ),
             stop_reason=message.stop_reason,
             meta={

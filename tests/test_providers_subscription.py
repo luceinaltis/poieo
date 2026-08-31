@@ -184,6 +184,46 @@ def test_a_subscription_charges_nothing_for_a_call_and_says_so(monkeypatch, kind
     assert answer.meta["would_have_cost"] == 0.42
 
 
+def test_claude_code_counts_cached_input_in_the_prompt_total(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="claude_code"))
+
+    answer = provider.read(
+        {
+            "result": "hello",
+            "usage": {
+                "input_tokens": 108,
+                "output_tokens": 3,
+                "cache_read_input_tokens": 2_502_763,
+                "cache_creation_input_tokens": 5_000,
+            },
+        }
+    )
+
+    assert answer.usage.input_tokens == 2_507_871
+    assert answer.usage.cache_read_tokens == 2_502_763
+    assert answer.usage.cache_write_tokens == 5_000
+
+
+def test_codex_input_already_includes_its_cached_share(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="codex"))
+
+    answer = provider.read(
+        {
+            "result": "hello",
+            "usage": {
+                "input_tokens": 10_000,
+                "output_tokens": 3,
+                "cache_read_input_tokens": 8_000,
+            },
+        }
+    )
+
+    assert answer.usage.input_tokens == 10_000
+    assert answer.usage.cache_read_tokens == 8_000
+
+
 @pytest.mark.parametrize("kind", ["claude_code", "codex"])
 def test_a_harness_that_reports_no_usage_is_not_invented_for(monkeypatch, kind):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

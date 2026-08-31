@@ -709,7 +709,7 @@ def _message(**overrides):
             input_tokens=10,
             output_tokens=4,
             cache_read_input_tokens=6,
-            cache_creation_input_tokens=0,
+            cache_creation_input_tokens=2,
         ),
     )
     base.update(overrides)
@@ -722,8 +722,9 @@ async def test_completion_joins_text_blocks_and_reports_usage(anthropic_provider
         LLMRequest(model="claude-opus-5", messages=[{"role": "user", "content": "hi"}])
     )
     assert response.text == "hello world"  # thinking blocks are not part of the output
-    assert response.usage.input_tokens == 10
+    assert response.usage.input_tokens == 18
     assert response.usage.cache_read_tokens == 6
+    assert response.usage.cache_write_tokens == 2
 
 
 async def test_completion_stashes_raw_content_including_thinking_blocks(anthropic_provider, monkeypatch):
