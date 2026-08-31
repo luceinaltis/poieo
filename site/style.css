@@ -329,19 +329,58 @@ footer p { margin: 0.4rem 0; }
 .docs-layout {
   display: grid;
   gap: 3rem;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 210px minmax(0, 1fr) 190px;
   margin: 0 auto;
-  max-width: var(--column);
+  max-width: 78rem;
   padding: 2.5rem 20px 4rem;
 }
 
-.doc-nav { align-self: start; max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 66px; }
-
-.doc-toc { border-top: 1px solid var(--rule); margin-top: 1.2rem; padding-top: 1.2rem; }
-.doc-toc a { border-left: 2px solid transparent; color: #7a6e60; display: block; font-size: 0.82rem; padding: 3px 0 3px 12px; text-decoration: none; }
-.doc-toc a:hover { color: var(--text); }
-.doc-toc a.toc-h3 { padding-left: 26px; }
+.doc-nav { align-self: start; grid-column: 1; max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 66px; }
+.doc-body { grid-column: 2; grid-row: 1; }
 .doc-nav-fold { display: none; }
+
+/* The outline rail: a different grammar from the document list on purpose —
+   smaller, greyer, hung on one continuous hairline whose active stretch the
+   scroll-spy paints amber. */
+.doc-toc {
+  align-self: start;
+  font-size: 0.8rem;
+  grid-column: 3;
+  grid-row: 1;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+  position: sticky;
+  top: 66px;
+}
+
+.doc-toc summary {
+  color: #6b6257;
+  cursor: default;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  list-style: none;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+}
+
+.doc-toc summary::-webkit-details-marker { display: none; }
+
+.doc-toc nav { border-left: 1px solid var(--rule); }
+
+.doc-toc a {
+  border-left: 2px solid transparent;
+  color: #7a6e60;
+  display: block;
+  line-height: 1.4;
+  margin-left: -1px;
+  padding: 3px 0 3px 12px;
+  text-decoration: none;
+}
+
+.doc-toc a:hover { color: var(--text); }
+.doc-toc a.active { border-left-color: var(--ember); color: var(--text); }
+.doc-toc a.toc-h3 { padding-left: 26px; }
 
 .nav-group { margin-bottom: 1.6rem; }
 
@@ -369,6 +408,23 @@ footer p { margin: 0.4rem 0; }
 /* the document itself */
 .doc-body { max-width: 72ch; min-height: 60vh; }
 .doc-meta { color: #6b6257; font-size: 0.85rem; margin: 0 0 1.8rem; }
+.doc-crumb {
+  color: var(--live);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  margin-right: 12px;
+  text-transform: uppercase;
+}
+
+.h-anchor { margin-left: 8px; opacity: 0; text-decoration: none; transition: opacity 0.12s; }
+h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
+
+.pager { border-top: 1px solid var(--rule); display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; margin-top: 3rem; padding-top: 1.5rem; }
+.pager a { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; color: var(--text); display: block; padding: 12px 16px; text-decoration: none; }
+.pager a:hover { border-color: var(--ember); }
+.pager a span { color: #6b6257; display: block; font-size: 0.78rem; margin-bottom: 3px; }
+.pager-next { text-align: right; }
 .doc-state { color: var(--dim); }
 
 .doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 { scroll-margin-top: 62px; }
@@ -423,6 +479,24 @@ footer p { margin: 0.4rem 0; }
 .md-table th { color: var(--text); font-size: 0.85rem; text-align: left; }
 .md-table th, .md-table td { border-top: 1px solid var(--rule); padding: 8px 18px 8px 0; vertical-align: top; }
 .md-table td { color: var(--dim); font-size: 0.92rem; line-height: 1.55; }
+
+@media (max-width: 1100px) {
+  .docs-layout { grid-template-columns: 210px minmax(0, 1fr); }
+  .doc-nav { grid-row: 1 / 3; }
+  .doc-toc {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    grid-column: 2;
+    margin-bottom: 1.2rem;
+    max-height: none;
+    padding: 10px 14px;
+    position: static;
+  }
+  .doc-toc summary { cursor: pointer; margin-bottom: 0; }
+  .doc-toc[open] summary { margin-bottom: 0.6rem; }
+  .doc-body { grid-row: 2; }
+}
 
 @media (max-width: 900px) {
   .docs-layout { display: block; }

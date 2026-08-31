@@ -38,7 +38,10 @@ const GROUPS = [
   ]],
 ]
 
-const DOCS = new Map(GROUPS.flatMap(([, docs]) => docs.map(([id, title, path]) => [id, { title, path }])))
+const DOCS = new Map(
+  GROUPS.flatMap(([group, docs]) => docs.map(([id, title, path]) => [id, { title, path, group }])),
+)
+const ORDER = GROUPS.flatMap(([, docs]) => docs.map(([id]) => id))
 const BY_FILE = new Map([...DOCS].map(([id, doc]) => [doc.path.split("/").pop().toLowerCase(), id]))
 const DEFAULT = "usage"
 
@@ -98,6 +101,7 @@ function table(lines) {
 }
 
 function render(md, toc) {
+  const docFor = activeDoc
   const out = []
   const seen = new Map() // slug -> count, so repeated headings stay unique
   const lines = md.split(/\r?\n/)
@@ -130,7 +134,11 @@ function render(md, toc) {
       const n = seen.get(id) || 0
       seen.set(id, n + 1)
       if (n) id += `-${n}`
-      out.push(`<h${level} id="${id}">${inline(heading[2])}</h${level}>`)
+      out.push(
+        `<h${level} id="${id}">${inline(heading[2])}` +
+          (level > 1 ? `<a class="h-anchor" href="#${docFor}/${id}" aria-label="link here">#</a>` : "") +
+          `</h${level}>`,
+      )
       if (toc && (level === 2 || level === 3)) toc.push({ level, id, text: heading[2] })
       i++
       continue
@@ -253,24 +261,74 @@ async function show(id, anchor) {
   }
   if (route().id !== id) return // the reader moved on while this fetched
   const toc = []
+  const group = DOCS.get(id).group
   article.innerHTML =
-    `<p class="doc-meta"><a href="${BLOB + path}">Edit on GitHub</a> · served from <code>main</code></p>` +
-    render(md, toc)
+    `<p class="doc-meta"><span class="doc-crumb">${group}</span>` +
+    `<a href="${BLOB + path}">Edit on GitHub</a> · served from <code>main</code></p>` +
+    render(md, toc) +
+    pager(id)
   paintToc(id, toc)
+  watchHeadings()
   const target = anchor && document.getElementById(anchor)
   if (target) target.scrollIntoView()
   else window.scrollTo(0, 0)
 }
 
-/** "On this page", under the document list in the sidebar. */
-function paintToc(id, toc) {
-  const box = document.getElementById("doc-toc")
-  if (!box) return
-  box.innerHTML = toc.length
-    ? `<div class="nav-title">On this page</div>` +
-      toc.map((h) => `<a class="toc-h${h.level}" href="#${id}/${h.id}">${inline(h.text)}</a>`).join("")
-    : ""
+/** The outline rail. On a wide screen it stands open with its summary hidden;
+    narrow, it is a real disclosure above the document. */
+const tocBox = document.getElementById("doc-toc")
+const wide = window.matchMedia("(min-width: 1100px)")
+
+function tocMode() {
+  if (tocBox) tocBox.open = wide.matches ? true : tocBox.open
 }
+wide.addEventListener("change", tocMode)
+
+function paintToc(id, toc) {
+  if (!tocBox) return
+  tocBox.style.display = toc.length ? "" : "none"
+  tocBox.querySelector("nav").innerHTML = toc
+    .map((h) => `<a class="toc-h${h.level}" href="#${id}/${h.id}">${inline(h.text)}</a>`)
+    .join("")
+  tocMode()
+  // a pick on a phone should close the disclosure it came from
+  if (!wide.matches)
+    for (const a of tocBox.querySelectorAll("a")) a.addEventListener("click", () => (tocBox.open = false))
+}
+
+/** Read on: the previous and next documents, in the sidebar's own order. */
+function pager(id) {
+  const i = ORDER.indexOf(id)
+  const cell = (which, of) =>
+    of
+      ? `<a class="pager-${which}" href="#${of}"><span>${which === "prev" ? "← Previous" : "Next →"}</span>${DOCS.get(of).title}</a>`
+      : `<span></span>`
+  return `<nav class="pager">${cell("prev", ORDER[i - 1])}${cell("next", ORDER[i + 1])}</nav>`
+}
+
+/** The outline marker follows the reader: the last heading above the fold
+    owns the active line. A scroll listener, throttled to frames — a dozen
+    getBoundingClientRect calls per frame is nothing, and unlike an observer
+    it cannot miss a programmatic jump. */
+let heads = []
+function watchHeadings() {
+  heads = [...article.querySelectorAll("h2[id], h3[id]")]
+  markScroll()
+}
+
+let ticking = false
+function markScroll() {
+  if (ticking || !heads.length) return
+  ticking = true
+  requestAnimationFrame(() => {
+    ticking = false
+    let current = heads[0].id
+    for (const h of heads) if (h.getBoundingClientRect().top <= 90) current = h.id
+    for (const a of tocBox.querySelectorAll("a"))
+      a.classList.toggle("active", a.getAttribute("href").endsWith("/" + current))
+  })
+}
+window.addEventListener("scroll", markScroll, { passive: true })
 
 buildNav()
 window.addEventListener("hashchange", () => { const r = route(); show(r.id, r.anchor) })
