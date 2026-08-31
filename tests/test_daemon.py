@@ -612,7 +612,7 @@ def test_a_busy_daemon_waits_its_turn(tmp_path):
     daemon = Daemon(_learning_config(tmp_path))
     assert daemon._ready_to_learn(daemon.projects[0]) is True
 
-    daemon.runners = [SimpleNamespace(status="running")]
+    daemon.runners = [SimpleNamespace(status="running", armed=True)]
     assert daemon._ready_to_learn(daemon.projects[0]) is False
 
 

@@ -190,7 +190,13 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
  */
 function describeNow(taskState: TaskState): string {
   if (taskState.status === "error") return "stopped"
-  if (taskState.status === "paused") return "paused"
+  // Two kinds of stopped, one band. A pause is runtime state and a button
+  // undoes it; a card switched off in its file needs an edit and a restart,
+  // and telling a reader to press resume would send them somewhere that
+  // refuses them.
+  if (taskState.status === "paused") {
+    return taskState.enabled ? "paused" : "switched off in its card"
+  }
   if (taskState.status !== "running") return "waiting for its next turn"
   const parts = [taskState.currentNode ?? "starting"]
   if (taskState.turn > 1) parts.push(`turn ${taskState.turn}`)

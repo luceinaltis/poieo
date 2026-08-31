@@ -14,6 +14,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    enabled: true,
     stale: null,
     current_run_id: null,
     last_run: null,
@@ -33,6 +34,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    enabled: true,
     stale: null,
     current_run_id: null,
     last_run: null,
@@ -694,5 +696,25 @@ test("a handoff is marked at both ends, so the sender is not guessed at", () => 
     svg.querySelectorAll(".basic-tip").length,
   )
   expect(svg.querySelectorAll(".basic-socket").length).toBeGreaterThan(0)
+  handle.destroy()
+})
+
+test("a card its own file switched off is not drawn as one somebody paused", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(
+    initialStage([
+      { ...TASK_ROWS[0], status: "paused", holding: true, enabled: false },
+      { ...TASK_ROWS[1], status: "paused", holding: true },
+    ]),
+  )
+
+  // Both are stopped, so both take the band. What differs is what a reader has
+  // to do: one is a button away, the other is an edit and a restart.
+  const off = el.querySelector('[data-task="board/chores"]') as HTMLElement
+  expect(off.dataset.status).toBe("paused")
+  expect(off.querySelector(".basic-now")!.textContent).toContain("switched off")
+
+  const held = el.querySelector('[data-task="board/revision"] .basic-now')!
+  expect(held.textContent).toBe("paused")
   handle.destroy()
 })

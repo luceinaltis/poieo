@@ -141,3 +141,28 @@ async def test_the_board_is_told_to_read_again(tmp_path, monkeypatch):
     await asyncio.sleep(0.3)
     assert queue.empty()
     await down(daemon, task)
+
+
+async def test_a_card_naming_its_own_graph_is_judged_too(tmp_path, monkeypatch):
+    """The shape the first cut of this passed over. A card with a `graph:` of
+    its own hands back no generated graph, and that was read as "nothing to
+    compare" -- so a schedule edited on one of those was ignored *and* silent,
+    which is the exact pair this exists to break up."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    (tmp_path / "g.yaml").write_text(
+        "name: quick\nentry: a\nnodes:\n  - {id: a, type: agent, role: r, prompt: hi}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    card(tmp_path / "cards", "chores", 'graph: ../g.yaml\nat: "0 3 * * *"\n')
+    path = tmp_path / "poieo.yaml"
+    path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
+    daemon = Daemon(load_config(path), store=NullStore())
+    task = await up(daemon)
+    assert _named(daemon, "chores").stale is None
+
+    card(tmp_path / "cards", "chores", 'graph: ../g.yaml\nat: "0 4 * * *"\n')
+
+    await until(lambda: _named(daemon, "chores").stale is not None, "the edit to be noticed")
+    assert "restart" in _named(daemon, "chores").stale
+    await down(daemon, task)

@@ -100,3 +100,14 @@ test("a double click cannot post twice", async () => {
   expect(pause).toHaveBeenCalledTimes(1)
   await act(async () => release({ ok: true, status: "paused" }))
 })
+
+test("a task its card switched off offers no button, and says why", () => {
+  // Every verb here is refused by the daemon on such a task, and a button that
+  // is always refused is worse than no button.
+  render({ status: "paused", enabled: false })
+
+  expect(button("pause")).toBeNull()
+  expect(button("resume")).toBeNull()
+  expect(button("run-now")).toBeNull()
+  expect(container.textContent).toContain("enabled: true")
+})

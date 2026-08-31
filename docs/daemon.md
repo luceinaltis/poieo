@@ -106,6 +106,29 @@ spinning through a pause — and at most one already-due fire is dropped in favo
 of the next scheduled one. Fires that come due while paused are **skipped, not
 queued**.
 
+**Switched off is a state, not an absence.** `enabled: false` used to mean the
+daemon built no runner at all, so the card was not merely stopped — it was
+missing from the board, and the one thing a reader could not find out there was
+that a task they wrote exists and is not running. It gets a runner now, held,
+and `/api/tasks` carries `enabled` beside `holding` so a view can tell the two
+kinds of stopped apart.
+
+`TaskRunner.armed` is that switch, and it holds **harder than the pause button
+does**. A pause is runtime state, and a run-now or a handoff is allowed to win
+over one; this is a file saying no, and nothing on a page may overrule a file.
+So `run_now()` refuses, `resume()` refuses, and `_hand_off` passes an unarmed
+target over exactly as it passes over one that is not there — a handoff is a
+kick and a kick wins over a hold, so without that guard a `then:` would have
+started a task somebody switched off while the file went on saying otherwise.
+
+Its loop **ends rather than parks**. There is nothing to wait for, and parking
+would turn every project holding one disabled card into a daemon that never
+stands down — `poieo daemon --once` over the shipped examples, which have five.
+The runner object stays in `daemon.runners`, which is the whole point; only its
+coroutine is finished. `_ready_to_learn` skips them for the same reason it has
+to: a task sitting at `paused` forever would mean a project with one disabled
+card never learned again.
+
 **The control seam.** `pause()`, `resume()` and `run_now()` are three flags and
 an `asyncio.Event`, read between runs. That is the whole mechanism, and it can be
 that small because the web server shares the daemon's event loop. `run_now()`
