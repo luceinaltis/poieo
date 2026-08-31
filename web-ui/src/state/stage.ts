@@ -30,7 +30,17 @@ export interface TaskState {
   /** What to call it on screen. The key it is filed under is the identity. */
   name: string
   project: string
-  status: "waiting" | "running" | "error"
+  /**
+   * The four states a view has to draw apart.
+   *
+   * `paused` is one of them because a task somebody stopped and a task between
+   * two runs are the same picture otherwise, and they are opposite answers to
+   * the only question a board is really asked. A task held back by its budget
+   * lands here too: a different reason, the same answer.
+   */
+  status: "waiting" | "running" | "paused" | "error"
+  /** Whether a hold is on, even while the run it was pressed during finishes. */
+  held: boolean
   currentNode: string | null
   step: number
   turn: number
@@ -127,6 +137,7 @@ export function subjectOf(raw: unknown): string {
 function blankFlow(): TaskState {
   return {
     status: "waiting",
+    held: false,
     name: "",
     project: "",
     currentNode: null,
@@ -174,6 +185,21 @@ export function onlyProject(stage: StageState, project: string | null): StageSta
   return { ...stage, tasks }
 }
 
+/**
+ * The daemon's word for a runner, as the four states a view draws.
+ *
+ * The daemon has one more word than the board needs -- `over budget`, which is
+ * a task that will run again once its spend ages out. It draws as paused
+ * because that is the true answer to what a reader is asking: not right now.
+ * Anything unrecognised is `waiting`, so a state added to the daemon draws as
+ * the quiet one rather than breaking an old build.
+ */
+function drawnStatus(row: TaskRow): TaskState["status"] {
+  if (row.status === "running") return "running"
+  if (row.status === "paused" || row.status === "over budget") return "paused"
+  return "waiting"
+}
+
 export function initialStage(rows: TaskRow[]): StageState {
   const tasks: Record<string, TaskState> = {}
   for (const row of rows) {
@@ -185,7 +211,8 @@ export function initialStage(rows: TaskRow[]): StageState {
       then: row.then,
       shape: row.shape,
       trigger: row.trigger,
-      status: row.status === "running" ? "running" : "waiting",
+      status: drawnStatus(row),
+      held: row.holding,
       lastRun: row.last_run
         ? {
             status: row.last_run.status,
@@ -270,7 +297,10 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
       return {}
 
     case "run_finished":
-      return { status: "waiting", currentNode: null }
+      // Back to whichever kind of not-running this task is. A pause pressed
+      // mid-run is honoured the moment the run leaves, which is exactly what
+      // the daemon does with it -- and what this used to undo.
+      return { status: flowState.held ? "paused" : "waiting", currentNode: null }
 
     case "run_failed":
     case "run_aborted":

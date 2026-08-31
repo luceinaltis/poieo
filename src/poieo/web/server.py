@@ -434,6 +434,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "graph": runner.task.graph.name,
                     "trigger": runner.trigger.describe,
                     "status": runner.status,
+                    # Beside the status, not folded into it. A pause takes
+                    # effect between runs, so a task can be held and running at
+                    # the same moment -- and the board, which learns the hold
+                    # from `status` alone, watched the run in flight overwrite
+                    # it on the way out and drew a stopped task as a waiting
+                    # one until somebody reloaded the page.
+                    "holding": runner.holding,
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
                     **state,

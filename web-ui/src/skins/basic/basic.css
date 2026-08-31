@@ -173,6 +173,13 @@
   background: var(--stop);
 }
 
+/* Cool, where every other state on this board is warm. Paused is not a degree
+   of running and not a kind of failure, and the one thing it must never be
+   mistaken for is the dim grey beside it -- a task quietly waiting its turn. */
+.basic-task[data-status="paused"] .basic-dot {
+  background: #7f9bb5;
+}
+
 .basic-toggle {
   background: none;
   border: 0;
@@ -226,13 +233,17 @@
 }
 
 /* Nothing is happening, so this line is not there at all. */
-.basic-now:empty {
-  display: none;
-}
-
+/* One line, always. A border's height is measured once, when the wiring
+   changes, and every arrow on the board is drawn against that number -- while
+   this line is rewritten on every frame. Left free to wrap, a long node id
+   would push the box taller than the arrows think it is. The same rule `warn`
+   already keeps, and for the same reason. */
 .basic-now {
   color: var(--text);
   font-size: 0.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .basic-task[data-status="error"] .basic-now {
@@ -257,7 +268,10 @@
   white-space: nowrap;
 }
 
-/* Nothing to warn about, so no room taken -- the same rule as `now`. */
+/* Nothing to warn about, so no room taken. The last of these: `now` used to
+   hide the same way, until going blank turned out to be how a stopped task
+   came to look like a waiting one. A warning has no such pair -- there is one
+   thing to say or nothing. */
 .basic-warn:empty {
   display: none;
 }
@@ -278,6 +292,21 @@
 
 .basic-task[data-status="error"]::before {
   background: var(--stop);
+}
+
+/* The band a scan of the board actually lands on. A stopped task used to have
+   nothing at all: same border, same dim band, and a `now` line that went
+   blank -- so it sat among the waiting ones and read as one of them. */
+.basic-task[data-status="paused"] {
+  border-color: #3b4652;
+}
+
+.basic-task[data-status="paused"]::before {
+  background: #7f9bb5;
+}
+
+.basic-task[data-status="paused"] .basic-now {
+  color: #9db4c9;
 }
 
 @media (prefers-reduced-motion: no-preference) {

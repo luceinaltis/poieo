@@ -44,6 +44,7 @@ const row = (name: string, project: string): TaskRow => ({
   graph: "g",
   trigger: "loop",
   status: "waiting",
+  holding: false,
   current_run_id: null,
   last_run: null,
   pending: 0,

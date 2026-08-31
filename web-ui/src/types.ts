@@ -135,6 +135,16 @@ export interface TaskRow {
   graph: string
   trigger: string
   status: string
+  /**
+   * Whether a hold is on, whatever the task happens to be doing this second.
+   *
+   * Beside `status` rather than folded into it, because a pause takes effect
+   * *between* runs: press it mid-run and the task is held and running at once.
+   * Without this the board learned the hold only from `status`, which the run
+   * in flight then overwrote on its way out -- leaving a stopped task drawn
+   * exactly like one waiting for its next turn, until the page reconnected.
+   */
+  holding: boolean
   current_run_id: string | null
   last_run: RunSummary | null
   /** How many changes are waiting to be looked at. */
