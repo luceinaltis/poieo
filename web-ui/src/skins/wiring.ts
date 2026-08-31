@@ -332,28 +332,11 @@ export function fit(board: Size, host: Size, margin = 24): View {
  */
 export const ZOOM = { min: 0.1, max: 4 }
 
-/** Slide the board by a pointer's movement, which is in screen pixels. */
-export function pan(view: View, dx: number, dy: number): View {
-  return { x: view.x + dx, y: view.y + dy, zoom: view.zoom }
-}
-
-/**
- * Scale the view about a point on screen, holding whatever is under it still.
- *
- * That is the whole trick of a usable zoom: the board point under the pointer
- * is `(at - view) / zoom`, and keeping it there through a change of zoom is
- * what decides the new x and y. Scaling about the corner instead throws the
- * thing the reader was looking at off the screen.
- */
-export function zoom(view: View, by: number, at: { x: number; y: number }): View {
-  const next = Math.min(ZOOM.max, Math.max(ZOOM.min, view.zoom * by))
-  const scale = next / view.zoom
-  return {
-    x: at.x - (at.x - view.x) * scale,
-    y: at.y - (at.y - view.y) * scale,
-    zoom: next,
-  }
-}
+/* Sliding and scaling a view by hand is `d3-zoom`'s, not this module's. Both
+   were four lines of arithmetic here and correct for a mouse; what they did
+   not have is the trackpad pinch, the two-finger touch and the keyboard paths
+   a reader reaches for first. `ZOOM` stays, because the bounds are poieo's
+   judgement rather than the gesture's. */
 
 /** A rectangle in minimap coordinates. */
 export interface Patch {

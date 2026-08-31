@@ -17,13 +17,17 @@
  * every frame would make the board unreadable as well as slow.
  */
 
+import { select } from "d3-selection"
+import { zoom as d3zoom, zoomIdentity } from "d3-zoom"
+import type { D3ZoomEvent } from "d3-zoom"
+
 import { changedTasks } from "../changed"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
-  BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
-  place, wire, zoom,
+  BOX, ZOOM, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap,
+  place, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -475,44 +479,48 @@ export const basic: Skin = {
       map.addEventListener("pointerup", done)
     })
 
-    viewport.addEventListener("pointerdown", (event) => {
-      if (!grabbable(event) || event.button !== 0) return
-      const from = { x: event.clientX, y: event.clientY }
-      viewport.setPointerCapture(event.pointerId)
-      viewport.dataset.grabbing = "true"
-
-      const move = (to: PointerEvent) => {
-        chosen = pan(chosen ?? where(), to.clientX - from.x, to.clientY - from.y)
-        from.x = to.clientX
-        from.y = to.clientY
-        show()
-      }
-      const done = () => {
+    /**
+     * Dragging and scaling the board, which `d3-zoom` owns.
+     *
+     * It was written here, in pointer events, and it worked for a mouse. What
+     * it did not have is what a reader on a laptop reaches for first: a
+     * trackpad pinch, two fingers on a touchscreen, and the double-tap and
+     * keyboard paths that come with them. Those are not a few more lines; they
+     * are the reason this library exists, and every one of them is now free.
+     *
+     * poieo keeps the `View` -- a fit is still poieo's arithmetic, and the
+     * minimap still centres on a point -- and hands over only *how a hand
+     * moves it*. `settling` is what keeps the two in step: pushing poieo's own
+     * view into d3 fires the same event a drag does, and without the guard the
+     * board would count its own fit as the reader having chosen one.
+     */
+    let settling = false
+    const zoomer = d3zoom<HTMLDivElement, unknown>()
+      .scaleExtent([ZOOM.min, ZOOM.max])
+      // A box's own controls are buttons, and a press on one is a click on the
+      // box rather than a grab of the board behind it.
+      .filter((event: Event) => {
+        if (!grabbable(event)) return false
+        if (event.type === "wheel") return true
+        return !(event as MouseEvent).button
+      })
+      .on("start", () => {
+        viewport.dataset.grabbing = "true"
+      })
+      .on("end", () => {
         viewport.dataset.grabbing = "false"
-        viewport.removeEventListener("pointermove", move)
-        viewport.removeEventListener("pointerup", done)
-        viewport.removeEventListener("pointercancel", done)
-      }
-      viewport.addEventListener("pointermove", move)
-      viewport.addEventListener("pointerup", done)
-      viewport.addEventListener("pointercancel", done)
-    })
+      })
+      .on("zoom", (event: D3ZoomEvent<HTMLDivElement, unknown>) => {
+        const view = { x: event.transform.x, y: event.transform.y, zoom: event.transform.k }
+        if (!settling) chosen = view
+        draw(view)
+      })
 
-    // Not passive: a wheel over the board zooms it rather than scrolling the
-    // page, and saying so has to happen before the default does.
-    viewport.addEventListener(
-      "wheel",
-      (event) => {
-        event.preventDefault()
-        const box = viewport.getBoundingClientRect()
-        chosen = zoom(chosen ?? where(), Math.exp(-event.deltaY * 0.0015), {
-          x: event.clientX - box.left,
-          y: event.clientY - box.top,
-        })
-        show()
-      },
-      { passive: false },
-    )
+    const held = select(viewport as HTMLDivElement)
+    held.call(zoomer)
+    // d3 zooms in on a double click; here that gesture is the way back to the
+    // whole board, which is handled below.
+    held.on("dblclick.zoom", null)
 
     // The way back. A board a reader has lost themselves in is otherwise only
     // recoverable by reloading the page.
@@ -620,8 +628,8 @@ export const basic: Skin = {
       )
     }
 
-    function show(): void {
-      const view = where()
+    /** Put a view on screen, and say where the window is looking. */
+    function draw(view: View): void {
       board.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
 
       const window = { width: viewport.clientWidth, height: viewport.clientHeight }
@@ -637,6 +645,21 @@ export const basic: Skin = {
       // minimap of something wholly visible is a second, smaller copy of it.
       const all = patch.width >= mapped.width - 1 && patch.height >= mapped.height - 1
       map.dataset.needed = String(!all && mapped.width > 0)
+    }
+
+    /**
+     * The view poieo wants, handed to d3 and then drawn.
+     *
+     * Through `zoomer.transform` rather than by setting the style directly, so
+     * that d3's own idea of where the board is never drifts from where it is:
+     * a fit written straight to the transform would be forgotten the moment a
+     * hand touched the board, and it would jump back.
+     */
+    function show(): void {
+      const view = where()
+      settling = true
+      held.call(zoomer.transform, zoomIdentity.translate(view.x, view.y).scale(view.zoom))
+      settling = false
     }
 
     return {

@@ -1,8 +1,8 @@
 import { expect, test } from "vitest"
 
 import {
-  BOX, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap, pan,
-  place, walk, wire, zoom,
+  BOX, ZOOM, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap,
+  place, walk, wire,
 } from "./wiring"
 import type { GraphShape } from "../types"
 
@@ -325,36 +325,17 @@ test("an empty board does not divide by zero", () => {
 })
 
 
-test("dragging moves the board by exactly what the pointer moved", () => {
-  // In screen pixels, not board ones: a drag that feels like an inch has to
-  // move an inch whatever the zoom, or the board slides out from under the
-  // hand that is holding it.
-  const moved = pan({ x: 100, y: 50, zoom: 0.5 }, 30, -20)
-
-  expect(moved).toEqual({ x: 130, y: 30, zoom: 0.5 })
-})
-
-test("zooming holds still whatever is under the pointer", () => {
-  // The whole trick of a usable zoom. Scaling about the corner instead throws
-  // the thing the reader was looking at off the screen.
-  const before = { x: 0, y: 0, zoom: 1 }
-  const at = { x: 400, y: 300 }
-  const after = zoom(before, 2, at)
-
-  expect(after.zoom).toBe(2)
-  // The board point under the pointer was (400, 300); it must still be there.
-  const board = (v: typeof before, s: typeof at) => ({
-    x: (s.x - v.x) / v.zoom,
-    y: (s.y - v.y) / v.zoom,
-  })
-  expect(board(after, at)).toEqual(board(before, at))
-})
+/* Dragging and scaling by hand are `d3-zoom`'s now, and how a gesture moves a
+   view is its business to get right rather than this suite's to restate. What
+   stays here is what remains poieo's: the bounds those gestures are held to,
+   and the fit and the minimap below, which are arithmetic about this board. */
 
 test("zoom stops short of vanishing and of filling the screen with one box", () => {
-  const view = { x: 0, y: 0, zoom: 1 }
-
-  expect(zoom(view, 100, { x: 0, y: 0 }).zoom).toBe(4)
-  expect(zoom(view, 0.0001, { x: 0, y: 0 }).zoom).toBe(0.1)
+  // Handed to d3 as its scale extent. The ceiling stops a board becoming one
+  // box and a lot of felt; the floor is deliberately below what a fit may use,
+  // because seeing the whole shape is worth more than legible type and there
+  // is no other way to get it.
+  expect(ZOOM).toEqual({ min: 0.1, max: 4 })
 })
 
 
