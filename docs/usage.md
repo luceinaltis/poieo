@@ -282,6 +282,11 @@ prompt: Rebuild the docs when the source has changed.
 tools: [files, shell, notes]     # `notes` is opt-in
 ```
 
+A card with no `tools:` line gets `files` and `shell`, because a task made from
+a prompt is meant to have hands. **`tools: []` is how a card asks for none** —
+it looks and reports and cannot touch a thing. The two were read as one until
+`examples/tasks/night-watch.yaml` needed the second.
+
 It then has one more tool, `tell`, and its prompt lists the tasks it may use it
 on. The link checker sees the result on its next run:
 

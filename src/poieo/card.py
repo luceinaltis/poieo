@@ -269,7 +269,13 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
                 # one: a path is physical and a graph is not. Pinning the real
                 # folder here sent the model there even on a night when the
                 # task had a private copy of it open -- which is every night.
-                tools=task.tools or list(DEFAULT_TOOLSETS),
+                # `None` is "the card did not say", and a card-made task is
+                # meant to have hands. **`[]` is the card saying none**, and
+                # `or` read the two as one thing -- so a task written to be
+                # harmless was given the files and shell toolsets anyway, which
+                # is the one place a key that reads as configured and does
+                # nothing costs more than a puzzled reader.
+                tools=list(DEFAULT_TOOLSETS) if task.tools is None else list(task.tools),
                 max_turns=task.max_turns,
                 deadline=task.deadline,
                 system=system_block(task, roster),

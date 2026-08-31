@@ -370,6 +370,13 @@ to refuse to enforce anything. `docs/binding.md` covers both.
 
 ## Handoff
 
+`examples/tasks/` ships one: **night-watch → mend → tell-me**, on the mock
+binding, so the chain really fires and costs nothing. It is there because
+nothing else demonstrated `then:` — the pair beside it talk through *notes*,
+which is a different mechanism on purpose — and the board's central rule is
+that an arrow crossing a border is a new run. A reader who opens the sample
+project and finds no arrow anywhere never meets that rule.
+
 `then:` on a task is the router's `branches`, one level up: `graph.Branch`
 imported rather than redeclared, so `when` / `to` / `label` mean there what they
 mean inside a graph. There is no `default` — a router needs one because a run has
@@ -440,13 +447,21 @@ only at that point, and a handoff is entitled to name one):
 work next does not depend on whether this runner carries on. A task that pauses
 itself on a third failure is exactly the one whose `broke` branch someone wanted.
 
-1. `handoff_scope(result)` builds what a branch may test. **One shape, not two**:
-   whatever the condition could ask about, the run it starts reads as
-   `input.sender`. It carries the same `usage` a router sees inside the run, so
-   a guard on what a chain has cost is written once and reads the same at both
-   levels — `MAX_CHAIN` bounds the hops, never what they spend. `change` is
-   present-and-`None` rather than absent, because `when: "run.change"`
-   is the commonest branch there is and it has to read false rather than raise.
+1. `handoff_scope(result)` builds what a branch may test, and the run it starts
+   reads the same object as `input.sender` — one shape, so there is no second
+   list to keep in sync. It carries the same `usage` a router sees inside the
+   run, so a guard on what a chain has cost is written once and reads the same
+   at both levels — `MAX_CHAIN` bounds the hops, never what they spend. `change`
+   is present-and-`None` rather than absent, because `when: "run.change"` is the
+   commonest branch there is and it has to read false rather than raise.
+
+   **Aliases are the one thing spelled differently at the two ends**, and it
+   catches people out: `_chosen` hoists them to the top level for the condition,
+   so a branch reads `when: "summary == 'GREEN'"` — but the object itself keeps
+   them under `aliases`, so the *next* run's prompt reads
+   `{{ input.sender.aliases.summary }}`. Writing the condition's spelling into
+   the prompt fails the node with `no 'summary' here`, which is where
+   `examples/tasks/mend.yaml` started.
 2. `_chosen()` evaluates the branches router-style, first match wins. **A branch
    that will not evaluate is skipped, not fatal.** A router raises and takes the
    run with it, which is right while a run is still going; here the sender has

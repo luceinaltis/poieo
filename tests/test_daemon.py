@@ -125,7 +125,14 @@ def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
     tasks = load_tasks(config)
 
     # Cards are read in filename order, and the disabled ones are skipped.
-    assert [f.spec.name for f in tasks] == ["keep-tidy", "revision", "triage"]
+    assert [f.spec.name for f in tasks] == [
+        "keep-tidy",
+        "mend",
+        "night-watch",
+        "revision",
+        "tell-me",
+        "triage",
+    ]
     assert tasks[-1].graph.name == "support-triage"
     assert config.store_path() == (EXAMPLES / "runs").resolve()
 
@@ -201,16 +208,43 @@ def test_a_credential_no_role_asks_for_is_not_demanded(tmp_path, monkeypatch):
 
 async def test_daemon_runs_every_task_once_and_shuts_down(sample_project, monkeypatch):
     config = load_config(sample_project / "poieo.yaml")
+    # The scheduled ones only. A `manual` task never fires on its own -- it
+    # waits to be asked, forever, which is what "only when something asks"
+    # means -- so a daemon holding one has nothing to stand down *from*, and
+    # this test is about standing down. The sample project's handoff chain is
+    # two such tasks; `test_a_manual_task_keeps_the_daemon_standing` is where
+    # that rule is pinned.
+    config.tasks = [task for task in config.tasks if task.trigger.type != "manual"]
     for task in config.tasks:
         task.trigger.max_iterations = 1
 
     daemon = Daemon(config, store=NullStore())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=10)
 
-    assert {r.task for r in results} == {"keep-tidy", "revision", "triage"}
+    assert {r.task for r in results} == {"keep-tidy", "night-watch", "revision", "triage"}
     assert all(r.status == "completed" for r in results)
     assert daemon.pools  # a pool was created...
     assert not any(p.instantiated() for p in daemon.pools.values())  # ...and closed
+
+
+async def test_a_manual_task_keeps_the_daemon_standing(sample_project):
+    """ "Only when something asks" means the daemon has to still be there to ask.
+
+    A `manual` trigger never yields, so a daemon holding one does not stand
+    down however many iterations the scheduled tasks have spent. That is the
+    rule, not an oversight -- but it is worth pinning here rather than only in
+    the trigger, because the consequence is at this level: a project that
+    gained a handoff chain quietly stopped being one `serve()` returns from,
+    and the test above had to say which tasks it meant.
+    """
+    config = load_config(sample_project / "poieo.yaml")
+    config.tasks = [task for task in config.tasks if task.name in {"night-watch", "mend"}]
+    for task in config.tasks:
+        task.trigger.max_iterations = 1
+
+    daemon = Daemon(config, store=NullStore())
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(daemon.serve(install_signals=False), timeout=2)
 
 
 async def test_carry_state_feeds_the_next_iteration(sample_project):
