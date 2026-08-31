@@ -18,7 +18,7 @@ to be true to add a sixth.
 
 | route | does |
 |---|---|
-| `GET /api/tasks` | every project on this board, then every task: which project's, status, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/tasks` | every project on this board, then every task: which project's, status, whether a hold is on, trigger, last run, how much is waiting for review, and its wiring |
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
@@ -779,6 +779,26 @@ the board has. A glyph would be one more thing to learn for the same reason.
 three fields and expands to exactly one node, called `work` — so the commonest
 border on the board opened onto a single pill named after nothing the reader
 chose. The border already is that step.
+
+**Four states, and a task not running says which kind of not.** `basic` used to
+leave that line blank when nothing was happening, so the stylesheet could take
+the room back — which meant a task somebody had stopped and a task between two
+runs were the same picture, and those are opposite answers to the question the
+board is opened with. So `waiting`, `running`, `paused` and `error` each get a
+word on the shut border and a colour on the band down its left edge; the band
+is what a scan of ten borders lands on, and the word is what says which quiet
+it is. `paused` takes the one cool colour on a warm board, because it is
+neither a degree of running nor a kind of failure — and the daemon's `over
+budget`, a task whose spend has to age out before it fires again, draws as
+paused too: a different reason, the same answer.
+
+**A hold is carried apart from the status, because a pause takes effect between
+runs.** Press it mid-run and the task is held *and* running, and the run in
+flight used to overwrite the hold on its way out — `run_finished` parked the
+board back on `waiting`, nothing republishes when somebody presses pause, and
+`/api/tasks` is not read again until the page reconnects. So the row carries
+`holding` beside `status`, `TaskState` keeps it as `held`, and a run ending on a
+held task lands on `paused` rather than undoing the press that put it there.
 
 That leaves the fact the graph was carrying for those tasks with nowhere to be,
 and it is the one worth keeping: **a task that can edit files and keeps no

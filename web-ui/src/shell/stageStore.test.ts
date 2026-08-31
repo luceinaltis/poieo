@@ -12,6 +12,7 @@ const CHORES: TaskRow = {
   graph: "agent-task",
   trigger: "loop",
   status: "waiting",
+  holding: false,
   current_run_id: null,
   last_run: null,
   pending: 0,
@@ -243,5 +244,36 @@ test("the store tallies each task's recent work from the run index", async () =>
     succeeded: 1,
     insertions: 9,
   })
+  store.stop()
+})
+
+test("a task stopped while the page was open survives the next read", async () => {
+  // The listing is authoritative about a hold, because nothing is published
+  // when somebody presses pause. This fold used to flatten every state that
+  // was not `running` back to `waiting` on its way in, so the board forgot a
+  // pause on the very next resync -- including the one the press itself
+  // triggers, which made the button look like it had done nothing.
+  const rows = [{ ...CHORES, status: "paused", holding: true }]
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing(rows)) })
+  await store.start()
+  await store.resync()
+
+  expect(store.getStage().tasks["board/chores"].status).toBe("paused")
+  expect(store.getStage().tasks["board/chores"].held).toBe(true)
+  store.stop()
+})
+
+test("a run that died still reads as stopped after a resync", async () => {
+  // The other half, and why the fold cannot simply take the listing's word:
+  // the daemon calls a task whose run failed `waiting` again, and only the
+  // event stream ever saw the failure.
+  const { store, feed } = harness()
+  await store.start()
+  for (const event of AGENT_RUN.slice(0, 2)) feed().onEvent(event)
+  feed().onEvent({ run_id: AGENT_RUN[0].run_id, type: "run_failed", at: "", data: {} })
+  expect(store.getStage().tasks["board/chores"].status).toBe("error")
+
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].status).toBe("error")
   store.stop()
 })

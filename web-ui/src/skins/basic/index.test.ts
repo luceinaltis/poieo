@@ -13,6 +13,7 @@ const FLOWS: TaskRow[] = [
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
+    holding: false,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -30,6 +31,7 @@ const FLOWS: TaskRow[] = [
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
+    holding: false,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -618,13 +620,30 @@ test("a shut border says what the task is doing right now", () => {
   handle.destroy()
 })
 
-test("a border with nothing happening says nothing, and takes no room for it", () => {
+test("a border with nothing happening says which kind of nothing", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
 
-  // Empty rather than absent: `:empty` is what the stylesheet hides on, so an
-  // idle border is its name and its schedule and no blank space beneath.
-  expect(el.querySelector('[data-task="board/revision"] .basic-now')!.textContent).toBe("")
+  // It used to say nothing at all here, so that `:empty` could take the room
+  // back. That made a task waiting its turn and a task somebody stopped the
+  // same picture, which is the one pair on this board that must not be.
+  const now = el.querySelector('[data-task="board/revision"] .basic-now')!
+  expect(now.textContent).toBe("waiting for its next turn")
+  handle.destroy()
+})
+
+test("a stopped task is not drawn as one waiting its turn", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([FLOWS[0], { ...FLOWS[1], status: "paused", holding: true }]))
+
+  const card = el.querySelector('[data-task="board/revision"]') as HTMLElement
+  // The band and the dot hang off this; the words carry the same fact for a
+  // reader who is closer, or who cannot tell the two colours apart.
+  expect(card.dataset.status).toBe("paused")
+  expect(card.querySelector(".basic-now")!.textContent).toContain("paused")
+
+  const other = el.querySelector('[data-task="board/chores"]') as HTMLElement
+  expect(other.dataset.status).toBe("waiting")
   handle.destroy()
 })
 

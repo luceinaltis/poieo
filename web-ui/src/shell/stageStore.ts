@@ -66,12 +66,17 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
       shape: blank.shape,
       trigger: blank.trigger,
       lastRun: blank.lastRun ?? existing.lastRun,
+      // Whether a hold is on is the daemon's to say, never the event
+      // stream's: no frame is published when somebody presses pause.
+      held: blank.held,
+      // The listing wins on everything except a failure it has no word for --
+      // the daemon calls a task that died `waiting` again, and only the event
+      // stream saw why. Held reaches here from `blank`, so a pause pressed
+      // while this page was open survives the read that follows it.
       status:
-        blank.status === "running"
-          ? "running"
-          : existing.status === "error"
-            ? "error"
-            : "waiting",
+        blank.status === "waiting" && existing.status === "error"
+          ? "error"
+          : blank.status,
     }
   }
   return { ...state, tasks }

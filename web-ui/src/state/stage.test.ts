@@ -18,6 +18,7 @@ const FLOWS: TaskRow[] = [
     graph: "agent-task",
     trigger: "loop",
     status: "waiting",
+    holding: false,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -32,6 +33,7 @@ const FLOWS: TaskRow[] = [
     graph: "draft-review",
     trigger: "loop",
     status: "waiting",
+    holding: false,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -327,4 +329,42 @@ test("a task still knows what it is called, whatever it is filed under", () => {
 
   expect(one.name).toBe("chores")
   expect(one.project).toBe("night shift")
+})
+
+// -- what a task is doing, when it is not running --------------------------
+//
+// The board used to fold every state that was not `running` into `waiting`,
+// so a task somebody had stopped looked exactly like one between two runs.
+
+test("a paused task is not folded into waiting", () => {
+  const stage = initialStage([{ ...FLOWS[0], status: "paused", holding: true }])
+  expect(stage.tasks["board/chores"].status).toBe("paused")
+})
+
+test("a task held back by its budget reads as paused too", () => {
+  // Not the same reason, but the same answer to the question the board is
+  // asked: this one is not going to run right now.
+  const stage = initialStage([{ ...FLOWS[0], status: "over budget", holding: false }])
+  expect(stage.tasks["board/chores"].status).toBe("paused")
+})
+
+test("a hold survives the run it was pressed during", () => {
+  // Pause takes effect between runs, so the run in flight finishes first --
+  // and `run_finished` parked the board back on `waiting`, which is what an
+  // unpaused task looks like. Nothing asks the daemon again until the page
+  // reconnects, so the board stayed wrong for as long as it was open.
+  let stage = initialStage([
+    { ...FLOWS[0], status: "running", current_run_id: "r1", holding: true },
+  ])
+  stage = reduce(stage, { run_id: "r1", type: "run_started", at: "", data: { task: "chores", project: "board" } })
+  expect(stage.tasks["board/chores"].status).toBe("running")
+  stage = reduce(stage, { run_id: "r1", type: "run_finished", at: "", data: { steps: 1 } })
+  expect(stage.tasks["board/chores"].status).toBe("paused")
+})
+
+test("a run finishing on a task nobody held leaves it waiting", () => {
+  let stage = initialStage([{ ...FLOWS[0], holding: false }])
+  stage = reduce(stage, { run_id: "r1", type: "run_started", at: "", data: { task: "chores", project: "board" } })
+  stage = reduce(stage, { run_id: "r1", type: "run_finished", at: "", data: { steps: 1 } })
+  expect(stage.tasks["board/chores"].status).toBe("waiting")
 })

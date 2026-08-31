@@ -93,6 +93,9 @@ function describeSpan(span: Span): string {
  */
 function describeLast(flowState: TaskState): string {
   if (flowState.status === "running") return "running now"
+  // Said before the clock, because it changes what the bare lane to the right
+  // of the last mark means: not "quiet tonight" but "it will not look again".
+  if (flowState.status === "paused") return "paused"
   const at = Date.parse(flowState.runs[0]?.finished_at ?? flowState.lastRun?.finished_at ?? "")
   return Number.isNaN(at) ? "nothing has run yet" : `last looked ${clock(at)}`
 }

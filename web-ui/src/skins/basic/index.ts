@@ -172,11 +172,20 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
  * largest area on the board and it answered nothing.
  *
  * Running, this is where the run is: which step, and how many model calls it
- * has spent there. Idle, it is empty and the stylesheet takes the space back.
+ * has spent there.
+ *
+ * **Not running, it says so in words rather than going blank.** It used to go
+ * blank, on the reasoning that a card with nothing to report should take no
+ * room -- which left the state that matters most, a task somebody stopped,
+ * with nothing on screen at all. Ten quiet cards and one stopped one looked
+ * like eleven quiet cards, and the difference is the whole reason to open the
+ * board. The colour band beside it carries the same fact from further away;
+ * this is the half that says which quiet it is.
  */
 function describeNow(flowState: TaskState): string {
   if (flowState.status === "error") return "stopped"
-  if (flowState.status !== "running") return ""
+  if (flowState.status === "paused") return "paused"
+  if (flowState.status !== "running") return "waiting for its next turn"
   const parts = [flowState.currentNode ?? "starting"]
   if (flowState.turn > 1) parts.push(`turn ${flowState.turn}`)
   return parts.join(" · ")

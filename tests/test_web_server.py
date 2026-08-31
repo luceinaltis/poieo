@@ -73,6 +73,7 @@ STUB_BINDING = {
 def stub_runner(
     name="triage",
     status="waiting",
+    holding=False,
     current=None,
     last=None,
     workspace=None,
@@ -84,6 +85,7 @@ def stub_runner(
         name=name,
         config=None,
         status=status,
+        holding=holding,
         current_run_id=current,
         last_result=last,
         workspace=workspace,
@@ -109,6 +111,7 @@ def test_flows_lists_runner_state(tmp_path):
             "graph": "support-triage",
             "trigger": "interval 30s",
             "status": "waiting",
+            "holding": False,
             "current_run_id": None,
             "last_run": {"run_id": "r0", "status": "completed"},
             "pending": 0,
@@ -784,3 +787,16 @@ def test_a_task_with_no_question_says_nothing_about_one(tmp_path):
     client = TestClient(create_app(stub_daemon(tmp_path, [stub_runner()])))
 
     assert client.get("/api/tasks").json()["tasks"][0]["asking"] is None
+
+
+def test_a_hold_is_reported_apart_from_the_status(tmp_path):
+    """A pause takes effect between runs, so a task can be held and running at
+    the same moment. The board learned the hold from `status` alone and watched
+    the run in flight overwrite it on the way out, leaving a stopped task drawn
+    exactly like one waiting its turn until somebody reloaded the page."""
+    daemon = stub_daemon(tmp_path, [stub_runner(status="running", holding=True, current="r1")])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+    assert row["status"] == "running"
+    assert row["holding"] is True
