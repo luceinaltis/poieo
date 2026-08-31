@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
-from conftest import card
+from conftest import card, until
 from starlette.testclient import TestClient
 
 from poieo.daemon import Daemon, load_config
@@ -165,14 +165,6 @@ def _config(tmp_path, trigger):
     return load_config(path)
 
 
-async def _until(predicate, what="the condition", timeout=5.0):
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
-        await asyncio.sleep(0.01)
-
-
 async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
     """End to end on one event loop, exactly as uvicorn shares the daemon's.
 
@@ -181,7 +173,7 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
     """
     daemon = Daemon(_config(tmp_path, "{type: manual}"), store=NullStore())
     serve = asyncio.create_task(daemon.serve(install_signals=False))
-    await _until(lambda: bool(daemon.runners), "the runner")
+    await until(lambda: bool(daemon.runners), "the runner")
     runner = daemon.runners[0]
 
     transport = httpx.ASGITransport(app=create_app(daemon))
@@ -193,7 +185,7 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
 
         response = await client.post(f"/api/tasks/{daemon.config.display_name}/f/run")
         assert response.json() == {"status": "starting"}
-        await _until(lambda: len(runner.results) == 1, "the manual run")
+        await until(lambda: len(runner.results) == 1, "the manual run")
         assert runner.results[0].status == "completed"
 
         assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/pause")).json() == {"status": "paused"}

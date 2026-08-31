@@ -2,7 +2,7 @@
 
 import asyncio
 
-from conftest import card
+from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
@@ -38,31 +38,10 @@ def _config(tmp_path, trigger, binding=_MOCK, graph=_GRAPH):
     return load_config(path)
 
 
-async def _up(daemon):
-    """Start serving and hand back the task once the runner exists."""
-    task = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
-    return task
-
-
-async def _until(predicate, what="the condition", timeout=5.0):
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
-        await asyncio.sleep(0.01)
-
-
-async def _down(daemon, task):
-    daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
-
-
 async def test_pause_skips_due_fires_and_resume_rearms_the_schedule(tmp_path):
     config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
     assert runner.pause() == "paused"
@@ -71,8 +50,8 @@ async def test_pause_skips_due_fires_and_resume_rearms_the_schedule(tmp_path):
     assert runner.status == "paused"
 
     assert runner.resume() == "waiting"
-    await _until(lambda: len(runner.results) >= 1, "a run after resume")
-    await _down(daemon, task)
+    await until(lambda: len(runner.results) >= 1, "a run after resume")
+    await down(daemon, task)
 
 
 async def test_a_paused_loop_flow_neither_runs_nor_burns_its_schedule(tmp_path):
@@ -84,64 +63,64 @@ async def test_a_paused_loop_flow_neither_runs_nor_burns_its_schedule(tmp_path):
     """
     config = _config(tmp_path, "{type: loop, cooldown: 0.05s, max_iterations: 5}")
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
-    await _until(lambda: len(runner.results) >= 1, "the first run")
+    await until(lambda: len(runner.results) >= 1, "the first run")
     runner.pause()
-    await _until(lambda: runner.status == "paused", "the pause to land")
+    await until(lambda: runner.status == "paused", "the pause to land")
     count = len(runner.results)
     await asyncio.sleep(0.3)
     assert len(runner.results) == count  # nothing ran while paused
 
     runner.resume()
-    await _until(lambda: len(runner.results) > count, "a run after resume")
-    await _down(daemon, task)
+    await until(lambda: len(runner.results) > count, "a run after resume")
+    await down(daemon, task)
 
 
 async def test_run_now_is_the_first_way_a_manual_flow_ever_runs(tmp_path):
     config = _config(tmp_path, "{type: manual}")
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
     await asyncio.sleep(0.05)
     assert len(runner.results) == 0  # never fires on its own
 
     assert runner.run_now() is True
-    await _until(lambda: len(runner.results) == 1, "the manual run")
+    await until(lambda: len(runner.results) == 1, "the manual run")
     assert runner.results[0].status == "completed"
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_run_now_on_a_paused_flow_runs_once_and_stays_paused(tmp_path):
     config = _config(tmp_path, "{type: interval, every: 60s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
     runner.pause()
     assert runner.run_now() is True
-    await _until(lambda: len(runner.results) == 1, "the probe run")
-    await _until(lambda: runner.status == "paused", "the pause to hold")
+    await until(lambda: len(runner.results) == 1, "the probe run")
+    await until(lambda: runner.status == "paused", "the pause to hold")
     await asyncio.sleep(0.1)
     assert len(runner.results) == 1  # once means once
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_run_now_mid_run_is_refused(tmp_path):
     config = _config(tmp_path, "{type: manual}", binding=_SLOW_MOCK)
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
     assert runner.run_now() is True
-    await _until(lambda: runner.status == "running", "the run to start")
+    await until(lambda: runner.status == "running", "the run to start")
     assert runner.run_now() is False  # iterations never overlap
-    await _until(lambda: len(runner.results) == 1, "the run to finish")
+    await until(lambda: len(runner.results) == 1, "the run to finish")
     await asyncio.sleep(0.1)
     assert len(runner.results) == 1  # and no second run sneaked in behind it
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 _JSON_GRAPH = """\
@@ -168,29 +147,29 @@ async def test_a_self_paused_flow_comes_back_with_resume(tmp_path):
         graph=_JSON_GRAPH,
     )
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
-    await _until(lambda: runner.status == "paused", "the self-pause")
+    await until(lambda: runner.status == "paused", "the self-pause")
     assert len(runner.results) == 3
 
     runner.resume()
     # Still failing identically: three more runs, then paused again --
     # proof the failure counter started over rather than tripping at one.
-    await _until(
+    await until(
         lambda: len(runner.results) == 6 and runner.status == "paused",
         "the second self-pause",
     )
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_shutdown_reaches_a_paused_runner_promptly(tmp_path):
     config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     runner = daemon.runners[0]
 
     runner.pause()
     await asyncio.sleep(0.15)  # a fire has come due and is being held unrun
-    results = await _down(daemon, task)  # wait_for inside is the promptness check
+    results = await down(daemon, task)  # wait_for inside is the promptness check
     assert results == []

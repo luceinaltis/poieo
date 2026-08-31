@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import shutil
@@ -118,6 +119,41 @@ def remember(project, slug: str, text: str, writer: str = "person"):
                 body = "\n".join(lines[i + 1 :])
                 break
     return write_entry(project, slug, body, frontmatter(matter), writer=writer)
+
+
+async def up(daemon):
+    """Start serving, and hand the task back once the runners exist.
+
+    A daemon is up when it has loaded what it is going to run, not when
+    `serve()` has been scheduled -- a test that asserted on `daemon.runners`
+    straight after `create_task` was reading an empty list on a fast machine
+    and the right one on a slow one.
+    """
+    task = asyncio.create_task(daemon.serve(install_signals=False))
+    while not daemon.runners:
+        await asyncio.sleep(0.01)
+    return task
+
+
+async def until(predicate, what="the condition", timeout=5.0):
+    """Wait for something the daemon does on its own, or say what never came.
+
+    Every one of these tests waits on a background loop rather than on a
+    return value, so the failure to design for is the one that hangs. The
+    deadline turns that into a named assertion, which is the difference
+    between a red suite and a suite somebody kills after ten minutes.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError(f"timed out waiting for {what}")
+        await asyncio.sleep(0.01)
+
+
+async def down(daemon, task):
+    """Stop it and wait for the serve task, so nothing outlives the test."""
+    daemon.stop()
+    return await asyncio.wait_for(task, timeout=10)
 
 
 def card(folder, name: str, body: str = "") -> Path:

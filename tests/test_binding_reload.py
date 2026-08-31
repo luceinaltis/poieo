@@ -10,10 +10,8 @@ model, which is the one thing docs/web.md says the board may never do.
 Design: docs/daemon.md
 """
 
-import asyncio
-
 import httpx
-from conftest import card
+from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
@@ -57,30 +55,10 @@ def _rewrite(tmp_path, text):
     (tmp_path / "b.yaml").write_text(text, encoding="utf-8")
 
 
-async def _up(daemon):
-    task = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
-    return task
-
-
-async def _until(predicate, what="the condition", timeout=5.0):
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
-        await asyncio.sleep(0.01)
-
-
-async def _down(daemon, task):
-    daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
-
-
 async def _ran(runner, count):
     """Fire the runner by hand and wait for its nth result."""
     assert runner.run_now() is True
-    await _until(lambda: len(runner.results) == count, f"run {count}")
+    await until(lambda: len(runner.results) == count, f"run {count}")
 
 
 def _asked(daemon):
@@ -95,7 +73,7 @@ def _asked(daemon):
 
 async def test_a_binding_edited_between_runs_is_used_by_the_next_one(tmp_path):
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     await _ran(runner, 1)
@@ -105,7 +83,7 @@ async def test_a_binding_edited_between_runs_is_used_by_the_next_one(tmp_path):
     await _ran(runner, 2)
 
     assert _asked(daemon) == ["m1", "m2"]
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_the_board_paints_the_model_the_next_run_will_use(tmp_path):
@@ -116,7 +94,7 @@ async def test_the_board_paints_the_model_the_next_run_will_use(tmp_path):
     runs make another. On one event loop, as uvicorn shares the daemon's.
     """
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     transport = httpx.ASGITransport(app=create_app(daemon))
@@ -134,7 +112,7 @@ async def test_the_board_paints_the_model_the_next_run_will_use(tmp_path):
 
         assert await painted() == ["m2"]
 
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_two_tasks_sharing_one_binding_file_are_rebound_together(tmp_path):
@@ -145,7 +123,7 @@ async def test_two_tasks_sharing_one_binding_file_are_rebound_together(tmp_path)
     a mix, which is harder to read than uniform staleness.
     """
     daemon = Daemon(_project(tmp_path, cards=("f", "g")), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     first, second = daemon.runners[0], daemon.runners[1]
 
     _rewrite(tmp_path, _MOVED)
@@ -154,14 +132,14 @@ async def test_two_tasks_sharing_one_binding_file_are_rebound_together(tmp_path)
     # `second` has not run at all, and is already on the new spec.
     assert not second.results
     assert second.task.binding.resolve("r").model == "m2"
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_a_binding_that_will_not_parse_leaves_the_last_good_one_running(tmp_path, caplog):
     """3am is no time to stop. The spec in memory is still valid and still
     what the board is claiming, so the run goes ahead on it and says why."""
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     await _ran(runner, 1)
@@ -172,7 +150,7 @@ async def test_a_binding_that_will_not_parse_leaves_the_last_good_one_running(tm
     assert _asked(daemon) == ["m1", "m1"]
     assert runner.results[1].status == "completed"
     assert "b.yaml" in caplog.text
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_a_reread_that_cannot_resolve_a_role_is_not_adopted(tmp_path):
@@ -183,7 +161,7 @@ async def test_a_reread_that_cannot_resolve_a_role_is_not_adopted(tmp_path):
     to start.
     """
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     # Parses fine; declares no default, so role 'r' resolves to nothing.
@@ -196,14 +174,14 @@ async def test_a_reread_that_cannot_resolve_a_role_is_not_adopted(tmp_path):
 
     assert _asked(daemon) == ["m1"]
     assert runner.results[0].status == "completed"
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_a_reread_that_needs_a_key_that_is_not_set_is_not_adopted(tmp_path, monkeypatch):
     """The other startup check, applied to the same moment."""
     monkeypatch.delenv("POIEO_TEST_KEY", raising=False)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     _rewrite(
@@ -217,7 +195,7 @@ async def test_a_reread_that_needs_a_key_that_is_not_set_is_not_adopted(tmp_path
     # so the status is the assertion, not the call count.
     assert runner.results[0].status == "completed"
     assert _asked(daemon) == ["m1"]
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_the_pool_keeps_its_clients_when_only_a_role_moved(tmp_path):
@@ -229,7 +207,7 @@ async def test_the_pool_keeps_its_clients_when_only_a_role_moved(tmp_path):
     so there is nothing to close and nothing to rebuild.
     """
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     await _ran(runner, 1)
@@ -241,7 +219,7 @@ async def test_the_pool_keeps_its_clients_when_only_a_role_moved(tmp_path):
 
     assert pool.instantiated()["fake"] is before
     assert _asked(daemon) == ["m1", "m2"]
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_a_newly_declared_endpoint_is_reachable_without_a_restart(tmp_path):
@@ -252,7 +230,7 @@ async def test_a_newly_declared_endpoint_is_reachable_without_a_restart(tmp_path
     an endpoint declared after startup would have been "not declared".
     """
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
     runner = daemon.runners[0]
 
     await _ran(runner, 1)
@@ -268,4 +246,4 @@ async def test_a_newly_declared_endpoint_is_reachable_without_a_restart(tmp_path
     pool = daemon.pools[runner.task.binding_key]
     assert "later" in pool.instantiated()
     assert _asked(daemon) == ["m1", "m2"]
-    await _down(daemon, serving)
+    await down(daemon, serving)

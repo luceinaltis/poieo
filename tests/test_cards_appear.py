@@ -11,7 +11,7 @@ Design: docs/daemon.md
 import asyncio
 
 import httpx
-from conftest import card
+from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
@@ -41,26 +41,6 @@ def _project(tmp_path):
     return load_config(path)
 
 
-async def _up(daemon):
-    task = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
-    return task
-
-
-async def _until(predicate, what="the condition", timeout=5.0):
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
-        await asyncio.sleep(0.01)
-
-
-async def _down(daemon, task):
-    daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
-
-
 def _named(daemon, name):
     return next((r for r in daemon.runners if r.name == name), None)
 
@@ -69,20 +49,20 @@ async def test_a_card_written_while_the_daemon_runs_starts_running(tmp_path, mon
     """The whole slice, in one file appearing."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     assert [r.name for r in daemon.runners] == ["first"]
 
     card(tmp_path / "cards", "second", "graph: ../g.yaml\ntrigger: {type: manual}\n")
 
-    await _until(lambda: _named(daemon, "second") is not None, "the new card to be noticed")
+    await until(lambda: _named(daemon, "second") is not None, "the new card to be noticed")
     added = _named(daemon, "second")
 
     # Noticed is not running. It has to be able to take a kick and finish one.
     assert added.run_now() is True
-    await _until(lambda: len(added.results) == 1, "the new card's first run")
+    await until(lambda: len(added.results) == 1, "the new card's first run")
     assert added.results[-1].status == "completed"
 
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_card_saved_half_written_does_not_take_the_others_down(tmp_path, monkeypatch, caplog):
@@ -91,11 +71,11 @@ async def test_a_card_saved_half_written_does_not_take_the_others_down(tmp_path,
     and the daemon says why nothing new started."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         (tmp_path / "cards" / "broken.yaml").write_text("name: [", encoding="utf-8")
-        await _until(
+        await until(
             lambda: any("nothing new starts" in m for m in caplog.messages),
             "the daemon to say it could not read the folder",
         )
@@ -104,9 +84,9 @@ async def test_a_card_saved_half_written_does_not_take_the_others_down(tmp_path,
     running = _named(daemon, "first")
     assert running is not None
     assert running.run_now() is True
-    await _until(lambda: len(running.results) == 1, "the surviving task's run")
+    await until(lambda: len(running.results) == 1, "the surviving task's run")
 
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_the_daemon_still_comes_down_with_a_task_it_grew(tmp_path, monkeypatch):
@@ -116,14 +96,14 @@ async def test_the_daemon_still_comes_down_with_a_task_it_grew(tmp_path, monkeyp
     one failure a resident process may never have."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
 
     card(tmp_path / "cards", "late", "graph: ../g.yaml\ntrigger: {type: manual}\n")
-    await _until(lambda: _named(daemon, "late") is not None, "the new card")
+    await until(lambda: _named(daemon, "late") is not None, "the new card")
 
     # Never kicked, so it is parked waiting for a trigger that will not come:
     # exactly the state a task is in at 3am when somebody stops the daemon.
-    await asyncio.wait_for(_down(daemon, task), timeout=15)
+    await asyncio.wait_for(down(daemon, task), timeout=15)
 
 
 async def test_a_card_whose_filename_is_its_identity(tmp_path, monkeypatch):
@@ -132,14 +112,14 @@ async def test_a_card_whose_filename_is_its_identity(tmp_path, monkeypatch):
     name, and a card retitled at noon must not read as a second task."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
 
     card(tmp_path / "cards", "later", "name: a title\ngraph: ../g.yaml\ntrigger: {type: manual}\n")
-    await _until(lambda: len(daemon.runners) == 2, "the new card")
+    await until(lambda: len(daemon.runners) == 2, "the new card")
 
     assert sorted(r.name for r in daemon.runners) == ["first", "later"]
 
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_daemon_with_nothing_to_run_still_watches(tmp_path, monkeypatch):
@@ -159,9 +139,9 @@ async def test_a_daemon_with_nothing_to_run_still_watches(tmp_path, monkeypatch)
     assert not serving.done(), "the daemon stopped instead of waiting for a card"
 
     card(tmp_path / "cards", "born", "graph: ../g.yaml\ntrigger: {type: manual}\n")
-    await _until(lambda: _named(daemon, "born") is not None, "the first card ever")
+    await until(lambda: _named(daemon, "born") is not None, "the first card ever")
 
-    await _down(daemon, serving)
+    await down(daemon, serving)
 
 
 async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeypatch, caplog):
@@ -176,7 +156,7 @@ async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeyp
     # here and failed on all three CI legs.
     monkeypatch.setattr("poieo.daemon.config.check_isolation", lambda tasks: None)
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         card(
@@ -184,14 +164,14 @@ async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeyp
             "fenced",
             "graph: ../g.yaml\ntrigger: {type: manual}\nisolation: {image: alpine:3.20}\n",
         )
-        await _until(
+        await until(
             lambda: any("asks for isolation" in m for m in caplog.messages),
             "the daemon to refuse it",
         )
 
     assert _named(daemon, "fenced") is None
 
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
@@ -202,7 +182,7 @@ async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     (tmp_path / "work").mkdir()
     daemon = Daemon(_project(tmp_path), store=NullStore())
-    serving = await _up(daemon)
+    serving = await up(daemon)
 
     transport = httpx.ASGITransport(app=create_app(daemon))
     async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
@@ -212,7 +192,7 @@ async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
         )
         assert answer.status_code == 200, answer.text
 
-        await _until(
+        await until(
             lambda: _named(daemon, "from-the-board") is not None,
             "the posted card to start running",
         )
@@ -220,7 +200,7 @@ async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
         # a card takes `every: 1h` and runs at start -- so kicking it here
         # would race that first firing and be refused mid-run some of the time.
         made = _named(daemon, "from-the-board")
-        await _until(lambda: len(made.results) == 1, "the run it starts itself")
+        await until(lambda: len(made.results) == 1, "the run it starts itself")
         assert made.results[-1].status == "completed"
 
-    await _down(daemon, serving)
+    await down(daemon, serving)
