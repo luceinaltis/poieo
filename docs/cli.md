@@ -322,10 +322,10 @@ graph is dumped with `exclude_defaults=True`, so what lands on disk is what the
 card actually said rather than every field with its default spelled out.
 
 The card keeps only what still means something once a graph exists — name,
-folder, schedule, binding, `enabled` — and the command says two things out loud:
-that comments in the card were not preserved, and that the ejected graph still
-reads `{{ input.journal }}`, which only a card supplies. Run it through the card,
-or pass `--set journal=…`.
+folder, schedule, binding, `enabled`, `isolation` — and the command says two
+things out loud: that comments in the card were not preserved, and that the
+ejected graph still reads `{{ input.journal }}`, which only a card supplies. Run
+it through the card, or pass `--set journal=…`.
 
 `eject` is the escape hatch that keeps the short form honest: the moment one line
 stops being enough, the sugar hands over a real graph and gets out of the way.
