@@ -12,6 +12,11 @@ schedule or the isolation only takes effect on a restart -- so the answer
 says which of the two the caller just did, and the board can warn instead of
 letting a person believe an ignored edit took.
 
+Renaming is the verb beside it, and it is the file and nothing in it: the
+filename is the task's identity, so the move carries the body byte for byte
+under make's own fence -- a name is turned into a filename here, never taken
+as one.
+
 Design: docs/web.md
 """
 
@@ -48,6 +53,10 @@ def _get(client, task="already", project="board"):
 
 def _put(client, text, task="already", project="board"):
     return client.put(f"/api/projects/{project}/tasks/{task}", json={"text": text})
+
+
+def _patch(client, name, task="already", project="board"):
+    return client.patch(f"/api/projects/{project}/tasks/{task}", json={"name": name})
 
 
 def test_the_card_reads_back_as_the_file_and_as_its_three_fields(tmp_path):
@@ -284,3 +293,72 @@ def test_a_rewrite_cannot_resurrect_a_set_aside_card(tmp_path):
     assert answer.status_code == 409, answer.text
     assert not (cards / "already.yaml").exists()
     assert sorted(p.name for p in cards.iterdir() if p.is_file()) == []
+
+
+def test_a_rename_moves_the_card_and_keeps_the_body(tmp_path):
+    """The filename is the task's identity, so renaming it is a verb of its
+    own -- and it moves the file and nothing else: the body arrives byte for
+    byte, because the `name:` inside is a title the rewrite owns."""
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+    answer = _patch(client, "renamed")
+
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["ok"] is True and body["task"] == "renamed"
+    assert not (cards / "already.yaml").exists()
+    moved = cards / "renamed.yaml"
+    assert moved.read_text(encoding="utf-8") == before
+    assert str(moved) == body["path"]
+
+
+def test_a_rename_onto_a_name_the_project_uses_is_refused(tmp_path):
+    """Two cards of one name is the one thing the tasks folder cannot hold, so
+    the collision is answered rather than resolved by overwriting somebody's
+    card. Both files are exactly as they were."""
+    client, cards = _client(tmp_path)
+    made = client.post(
+        "/api/projects/board/tasks",
+        json={"name": "other", "folder": "../work", "prompt": "second life"},
+    )
+    assert made.status_code == 200, made.text
+    before = {p.name: p.read_text(encoding="utf-8") for p in cards.iterdir() if p.is_file()}
+
+    answer = _patch(client, "other")
+
+    assert answer.status_code == 409, answer.text
+    assert {p.name: p.read_text(encoding="utf-8") for p in cards.iterdir() if p.is_file()} == before
+
+
+def test_a_rename_to_a_path_is_refused_rather_than_rewritten(tmp_path):
+    """The same fence make built: a name is turned into a filename here, never
+    taken as one. "../escape" quietly becoming "escape" would be a different
+    request answered without saying so."""
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+
+    for name in ("../escape", "sub/deep", "sub" + chr(92) + "deep", "..", ""):
+        answer = _patch(client, name)
+        assert answer.status_code == 400, f"{name!r}: {answer.text}"
+
+    assert sorted(p.name for p in cards.iterdir() if p.is_file()) == ["already.yaml"]
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == before
+
+
+def test_a_renamed_task_stops_firing_under_its_old_name(tmp_path, monkeypatch):
+    """The old name's schedule is still armed against a file that has moved,
+    and the folder the daemon watches now holds the new one -- so without this
+    hold the same work fires twice until a restart."""
+    from types import SimpleNamespace
+
+    import poieo.web.server as server
+
+    held = []
+    runner = SimpleNamespace(name="already", pause=lambda: held.append(True) or "paused")
+    monkeypatch.setattr(server, "_runner_for", lambda daemon, project, task: runner)
+
+    client, cards = _client(tmp_path)
+    answer = _patch(client, "renamed")
+
+    assert answer.status_code == 200, answer.text
+    assert held == [True]
