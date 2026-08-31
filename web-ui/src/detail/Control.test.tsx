@@ -109,5 +109,9 @@ test("a task its card switched off offers no button, and says why", () => {
   expect(button("pause")).toBeNull()
   expect(button("resume")).toBeNull()
   expect(button("run-now")).toBeNull()
-  expect(container.textContent).toContain("enabled: true")
+  // ...and points at the switch in the card fold below, which is live: the
+  // sentence used to send a reader off to edit the file and restart the
+  // daemon, which is neither the shortest way nor true any more.
+  expect(container.textContent).toContain("card below")
+  expect(container.textContent).not.toContain("restart")
 })

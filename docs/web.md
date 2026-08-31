@@ -814,9 +814,11 @@ held task lands on `paused` rather than undoing the press that put it there.
 **Two kinds of stopped, one band.** A task somebody paused and a task its own
 card switched off are both stopped, and both take the band and the cool colour;
 what differs is the word and what the reader has to do about it. `paused` is a
-button away. `switched off in its card` is an edit and a restart, so the drawer
+button away. `switched off in its card` is the card's own switch, so the drawer
 offers no button at all there — the daemon refuses every verb on such a task,
-and a button that is always refused is worse than none.
+and a button that is always refused is worse than none. It says where the
+switch is instead: the card fold below, whose form carries it, and the daemon
+adopts that one field without a restart.
 
 **A card that has outrun what is running says so on the shut border.** Only a
 prompt is really re-read before a run; a schedule, a folder or an `enabled:`

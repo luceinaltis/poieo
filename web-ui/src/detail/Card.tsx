@@ -1,9 +1,11 @@
 /**
  * The card behind a task, loaded only when opened and rewritable in place.
  *
- * Plain cards keep the form used to create them. Richer YAML stays as text so
- * comments and fields the form cannot represent survive. Renaming moves the
- * identity file without rewriting its contents.
+ * Plain cards keep the form used to create them, switch and all -- `enabled`
+ * is the one field a save takes live, so a card written down without being
+ * started is started here. Richer YAML stays as text so comments and fields
+ * the form cannot represent survive. Renaming moves the identity file without
+ * rewriting its contents.
  */
 
 import { useState } from "react"
@@ -32,6 +34,9 @@ export function Card({
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
   const [prompt, setPrompt] = useState("")
+  /** The switch, and the only one of the four the daemon adopts without a
+   *  restart. Starts wherever the file has it. */
+  const [isEnabled, setIsEnabled] = useState(true)
   const [text, setText] = useState("")
   const [isMissing, setIsMissing] = useState(false)
   const [saveResult, setSaveResult] = useState<RewrittenCard | null>(null)
@@ -58,6 +63,7 @@ export function Card({
     setName(card.name)
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
+    setIsEnabled(card.enabled !== false)
   }
 
   const setCardAside = () =>
@@ -90,7 +96,8 @@ export function Card({
   const isUnchanged = isPlainCard
     ? name === cardFields.name &&
       folder === (cardFields.folder ?? "") &&
-      prompt === (cardFields.prompt ?? "")
+      prompt === (cardFields.prompt ?? "") &&
+      isEnabled === (cardFields.enabled !== false)
     : text === originalText
 
   const saveCard = () =>
@@ -98,11 +105,11 @@ export function Card({
       const answer = await rewriteCard(
         project,
         task,
-        isPlainCard ? { name, folder, prompt } : text,
+        isPlainCard ? { name, folder, prompt, enabled: isEnabled } : text,
       )
       if (answer.ok) {
         if (isPlainCard && cardFields) {
-          setCardFields({ ...cardFields, name, folder, prompt })
+          setCardFields({ ...cardFields, name, folder, prompt, enabled: isEnabled })
         } else {
           setOriginalText(text)
         }
@@ -171,6 +178,24 @@ export function Card({
                     setIsSetAsideArmed(false)
                   }}
                 />
+              </label>
+              {/* The fourth field, and the only one that is live: the daemon
+                  adopts `enabled:` whole on its next look at the folder, so
+                  a card written down without being started is started from
+                  here rather than by editing the file and restarting. */}
+              <label className="card-field card-switch">
+                <input
+                  type="checkbox"
+                  className="card-field-enabled"
+                  checked={isEnabled}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setIsEnabled(event.target.checked)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+                enabled — off leaves the card on the board without running it
               </label>
             </div>
           ) : (
