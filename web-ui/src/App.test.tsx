@@ -181,7 +181,21 @@ async function render(
 
 test("no tasks renders the invitation, not an error", async () => {
   await render(initialStage([]))
-  expect(container.textContent).toContain("Nothing is running yet")
+  expect(container.textContent).toContain("No tasks yet. Create one to put your models to work.")
+
+  const start = container.querySelector<HTMLElement>('[data-do="empty-new-task"]')
+  expect(start?.textContent).toBe("New task")
+  await act(async () => start!.click())
+  expect(container.querySelector('.make[aria-label="New task"]')).not.toBeNull()
+})
+
+test("the shell carries the approved poieo lockup", async () => {
+  await render(initialStage([]))
+
+  const lockup = container.querySelector<HTMLImageElement>(".shell-lockup")
+  expect(lockup?.alt).toBe("poieo")
+  expect(lockup?.src).toContain("lockup.svg")
+  expect(container.querySelector(".shell-title")).toBeNull()
 })
 
 test("one rendering means no picker, and the board carries the tasks", async () => {
