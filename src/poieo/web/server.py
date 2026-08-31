@@ -730,6 +730,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         title = str(body.get("name") or "").strip()
         prompt = str(body.get("prompt") or "").strip()
         folder = str(body.get("folder") or "").strip()
+        # Default on, because DESIGN.md's board is one where saving a card
+        # starts it. `false` is the second, quieter action beside that: make
+        # it, look at it, then switch it on -- which is not a workflow at all
+        # if switching it on means restarting the daemon, and so arrived with
+        # the scan that adopts the switch.
+        enabled = body.get("enabled", True) is not False
 
         # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
         # is a spelling; "../escape" becoming "escape" is a different request
@@ -789,7 +795,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             )
 
         payload = yaml.safe_dump(
-            {"name": title, "folder": folder, "prompt": prompt},
+            # `enabled` only when it is the unusual one. A card carrying
+            # `enabled: true` says nothing a card without it does not, and the
+            # three fields are the whole of the short form.
+            {"name": title, "folder": folder, "prompt": prompt, **({} if enabled else {"enabled": False})},
             allow_unicode=True,
             sort_keys=False,
         )
@@ -834,7 +843,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
         A form must never drop what it cannot show, so anything beyond
         make's three keys -- a schedule, an isolation, a `then:` -- keeps the
-        card a file on screen. A `#` anywhere counts too: comments live in
+        card a file on screen. `enabled` is the fourth the form *can* show:
+        the panel has a switch for it, and make writes it, so a card carrying
+        one is still a card the form can rebuild without losing anything. A `#` anywhere counts too: comments live in
         the bytes, not the parse, and the dump would silently lose them. The
         cost of being wrong here is asymmetric on purpose -- a false "not
         plain" is a raw editor, a false "plain" is somebody's schedule gone.
@@ -847,7 +858,21 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return False
         if not isinstance(data, dict):
             return False
-        return set(data) <= {"name", "folder", "prompt"}
+        return set(data) <= {"name", "folder", "prompt", "enabled"}
+
+    def _switch(text: str) -> bool:
+        """Whether the card on disk is switched on, read from its own bytes.
+
+        Not from the spec the daemon is holding: that was expanded when the
+        daemon started, and this is the value a *previous* rewrite may have
+        put there since. Two saves in a row through the form would otherwise
+        undo the first one's switch.
+        """
+        try:
+            data = yaml.safe_load(text)
+        except Exception:
+            return True
+        return not isinstance(data, dict) or data.get("enabled", True) is not False
 
     async def project_task_card(request: Request) -> JSONResponse:
         """One task's card: the file read back, or rewritten in place.
@@ -903,6 +928,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "name": fresh.name,
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
+                    "enabled": fresh.enabled,
                     "plain": _plain(text),
                 }
             )
@@ -941,6 +967,14 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "name": str(body.get("name") or spec.slug),
                     "folder": str(body.get("folder") or ""),
                     "prompt": str(body.get("prompt") or ""),
+                    # Written only when off, as make writes it: a card saying
+                    # `enabled: true` says nothing a card without it does not.
+                    #
+                    # Absent from the body means **unchanged**, not on. A form
+                    # that sends three fields is editing three fields, and
+                    # defaulting to on here would have a prompt tweak silently
+                    # start a task somebody had switched off.
+                    **({} if body.get("enabled", _switch(current)) is not False else {"enabled": False}),
                 },
                 allow_unicode=True,
                 sort_keys=False,
@@ -1034,11 +1068,20 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 try:
                     loaded = next((t for t in project.tasks if t.spec.name == spec.slug), None)
                     new_spec, _ = expand(fresh.model_copy(update={"source_path": path}), roster=roster)
+
+                    # `enabled` is live where the rest of a spec is not: the
+                    # folder scan adopts that one field whole, because both
+                    # directions happen while the task is not running. So the
+                    # comparison ignores it, and a switch flipped here is
+                    # honestly promised rather than sent away for a restart.
+                    def _same(old: Any, new: Any) -> bool:
+                        return old.model_copy(update={"enabled": new.enabled}) == new
+
                     if loaded is not None:
-                        live = loaded.spec == new_spec
+                        live = _same(loaded.spec, new_spec)
                     else:
                         old_spec, _ = expand(load_card(path), roster=roster)
-                        live = old_spec == new_spec
+                        live = _same(old_spec, new_spec)
                 except PoieoError:
                     # The card on disk no longer expands -- this rewrite may be
                     # the repair. Written, and honestly not promised as live.

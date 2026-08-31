@@ -26,7 +26,7 @@ to be true to add a sixth.
 | `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
 | `GET /api/events` | every event, live (SSE; `?task=` filters), plus `tasks_changed` |
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
-| `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
+| `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder, started or not |
 | `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
 | `PATCH /api/projects/{p}/tasks/{f}` | **make** — rename that card's file, body untouched |
 | `DELETE /api/projects/{p}/tasks/{f}` | **make** — set the task aside: the card moves to `.set-aside/`, whole |
@@ -918,6 +918,24 @@ daemon's next run reads the edit or whether it waits for a restart: the daemon
 refuses to half-adopt a card whose spec changed — `_reread_graph` owns that
 judgement — and this route makes the same comparison so the board can warn
 instead of letting a person believe an ignored edit took.
+
+**`enabled` is the fourth field the form can show**, and the only one that is
+*live*: the folder scan adopts that one field whole (see
+[daemon.md](daemon.md)), so a switch flipped here is promised rather than sent
+away for a restart. Absent from a rewrite's body it means **unchanged**, never
+on — a form that sends three fields is editing three fields, and defaulting to
+on would have a prompt tweak silently start a task somebody had switched off.
+It is read back from the card's own bytes rather than from the spec the daemon
+is holding, which was expanded at startup and does not know what a previous
+rewrite put there.
+
+Make takes it too, and that is the make panel's second press. Saving a card
+starts a shell-capable agent over the reader's own files within seconds — that
+is the board DESIGN.md describes and it stays the default — but there was no
+way to write one down and look at it first except by going and finding the
+file. The quiet press is second and plainer, because the consequence belongs to
+the loud one, and the confirmation says which of the two happened: *it starts
+on its own* must never be said of a card that did not.
 
 A card holding only those three fields answers `plain`, and the rewrite takes
 a second spelling for it: the three fields themselves, serialised on the

@@ -43,6 +43,11 @@ default: {provider: fake, model: m1}
 # which is right -- and is not what these tests are looking at.
 _STANDING = {"standing": "graph: ../g.yaml\ntrigger: {type: manual}\n"}
 
+# A schedule: the kind of edit a scan may *not* adopt, whatever else is in the
+# same save.
+_AT_THREE = 'graph: ../g.yaml\nat: "0 3 * * *"\n'
+_AT_FOUR = 'graph: ../g.yaml\nat: "0 4 * * *"\n'
+
 
 def _project(tmp_path, cards):
     (tmp_path / "g.yaml").write_text(_GRAPH, encoding="utf-8")
@@ -117,17 +122,65 @@ async def test_a_handoff_cannot_start_one(tmp_path):
     await down(daemon, task)
 
 
-async def test_switching_one_on_takes_a_restart_and_says_so(tmp_path, monkeypatch):
-    """`enabled:` is not among the fields a run re-reads, so a file edited to
-    `true` while the daemon is up is exactly the case the drift line is for --
-    and the runner stays off until somebody restarts."""
+async def test_switching_one_on_in_its_file_arms_it(tmp_path, monkeypatch):
+    """The other half of the switch, and the reason the board may write it.
+
+    `enabled:` is the one field a scan can adopt whole: the task is not
+    mid-run either way, so a fresh runner built from the file is a full
+    adoption rather than the half-adoption `_reread_graph` refuses. Anything
+    else in the card still wants a restart.
+    """
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
-    daemon = Daemon(_project(tmp_path, {"sleeper": "graph: ../g.yaml\nenabled: false\n"}), store=NullStore())
+    daemon = Daemon(
+        _project(tmp_path, {"sleeper": "graph: ../g.yaml\ntrigger: {type: manual}\nenabled: false\n"}),
+        store=NullStore(),
+    )
+    task = await up(daemon)
+    assert _named(daemon, "sleeper").armed is False
+
+    card(tmp_path / "cards", "sleeper", "graph: ../g.yaml\ntrigger: {type: manual}\nenabled: true\n")
+
+    await until(lambda: _named(daemon, "sleeper").armed, "the task to be armed")
+    # Armed means it takes a kick, which is the whole of what being on means.
+    assert _named(daemon, "sleeper").run_now() is True
+    await until(lambda: _named(daemon, "sleeper").results, "the run it was asked for")
+    # And nothing is left saying the file and the daemon disagree.
+    assert _named(daemon, "sleeper").stale is None
+    await down(daemon, task)
+
+
+async def test_switching_one_off_in_its_file_stops_it(tmp_path, monkeypatch):
+    """Both halves, the way setting a task aside does them: the file is the
+    durable one, and the schedule stops now rather than firing all night
+    against a card that says not to."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(
+        _project(tmp_path, {"sleeper": "graph: ../g.yaml\ntrigger: {type: manual}\n"}),
+        store=NullStore(),
+    )
+    task = await up(daemon)
+    assert _named(daemon, "sleeper").armed is True
+
+    card(tmp_path / "cards", "sleeper", "graph: ../g.yaml\ntrigger: {type: manual}\nenabled: false\n")
+
+    await until(lambda: not _named(daemon, "sleeper").armed, "the task to be switched off")
+    assert _named(daemon, "sleeper").status == "paused"
+    assert _named(daemon, "sleeper").run_now() is False
+    assert _named(daemon, "sleeper").stale is None
+    await down(daemon, task)
+
+
+async def test_anything_else_in_the_card_still_wants_a_restart(tmp_path, monkeypatch):
+    """The line that keeps this from being "the scan adopts edits now". A
+    schedule reaches a trigger built at startup, and rebuilding a runner
+    around one is not the same as adopting it -- a task mid-run would lose
+    what it was doing."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path, {"sleeper": _AT_THREE}), store=NullStore())
     task = await up(daemon)
 
-    card(tmp_path / "cards", "sleeper", "graph: ../g.yaml\nenabled: true\n")
+    card(tmp_path / "cards", "sleeper", _AT_FOUR)
 
     await until(lambda: _named(daemon, "sleeper").stale is not None, "the edit to be noticed")
-    assert _named(daemon, "sleeper").armed is False
-    assert len(_named(daemon, "sleeper").results) == 0
+    assert "restart" in _named(daemon, "sleeper").stale
     await down(daemon, task)

@@ -419,11 +419,14 @@ export function createTask(
   name: string,
   folder: string,
   prompt: string,
+  /** False makes the card switched off: written, on the board, not running. */
+  enabled = true,
 ): Promise<MadeTask> {
   return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
     name,
     folder,
     prompt,
+    enabled,
   })
 }
 

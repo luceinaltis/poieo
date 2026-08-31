@@ -699,10 +699,11 @@ shaped that way. Start at [architecture.md](architecture.md).
 
 ## Not built yet
 
-* Editing a card from the page. Making one is live (the rail's `new task`),
-  and so is setting one aside — the card moves whole to `.set-aside/`,
-  recoverably — but changing a card's name, folder or prompt still means
-  editing the file.
+* Everything about a card except its schedule. Making one is live (the rail's
+  `new task`, started or not), so is editing its name, folder and prompt, so is
+  switching it on and off, and so is setting one aside — the card moves whole
+  to `.set-aside/`, recoverably. A schedule, an isolation or a `then:` still
+  means editing the file, and the board says so on the card when you do.
 * The editor folded into the board. `poieo edit` is a canvas over the graph schema
   today, and `poieo show --mermaid` draws one; the board draws the work but does
   not let you edit it.
