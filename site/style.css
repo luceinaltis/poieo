@@ -43,12 +43,49 @@
   --dim: #9a9086;         /* what is beside the point but still readable */
   --ember: #d8a657;       /* the one amber bud, and so every accent here */
   --live: #a9b665;        /* a task that is running */
+  --faint: #6b6257;       /* labels and asides, a step below --dim */
+  --faint2: #7a6e60;      /* outline links and quiet notes */
+  --prose: #c8beb0;       /* long-form body text, softer than --text */
+  --ember-hi: #f0c983;    /* the accent, lit up on hover */
+  --on-ember: #1a1509;    /* text sitting on an amber button */
 
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* One measure for the whole page. Sections that want the full width say so. */
   --column: 68rem;
+}
+
+/* Light: the brand's own rule — parchment becomes ink, the amber stays (a
+   shade deeper where it has to carry text). data-theme is set before first
+   paint by theme.js, loaded synchronously in each page's head. */
+[data-theme="light"] {
+  color-scheme: light;
+  --ground: #f4f0e8;
+  --panel: #fbf8f2;
+  --raised: #ece5d8;
+  --rule: #ddd4c3;
+  --text: #221e18;
+  --dim: #6f6656;
+  --ember: #a06f26;
+  --live: #6d7a35;
+  --faint: #8a7f6c;
+  --faint2: #8a7f6c;
+  --prose: #4a4237;
+  --ember-hi: #7d5417;
+  --on-ember: #fdf9f0;
+}
+
+/* Art with a baked dark ground swaps for its light-voiced sibling. */
+[data-theme="light"] .hero-art { content: url("img/tree-light.jpg"); }
+[data-theme="light"] .logo-mark { content: url("img/mark-light.svg"); }
+[data-theme="light"] .logo-word { content: url("img/wordmark-light.svg"); }
+[data-theme="light"] .shot img { border-color: #cfc5b0; }
+
+/* On a phone, ink branches at the dark theme's opacity fight the words —
+   the light weather has to be fainter to stay weather. */
+@media (max-width: 760px) {
+  [data-theme="light"] .hero-art { opacity: 0.12; }
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +102,7 @@ body {
 }
 
 a { color: var(--ember); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-a:hover { color: #f0c983; }
+a:hover { color: var(--ember-hi); }
 
 code, pre { font-family: var(--mono); font-size: 0.88em; }
 
@@ -97,7 +134,21 @@ h1, h2, h3 { line-height: 1.15; margin: 0 0 0.5em; }
 .wordmark img { display: block; }
 
 .bar-sub { color: var(--dim); font-size: 0.85rem; }
-.bar nav { display: flex; gap: 18px; margin-left: auto; }
+.bar nav { align-items: center; display: flex; gap: 18px; margin-left: auto; }
+
+.theme-flip {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.theme-flip:hover { border-color: var(--ember); color: var(--ember); }
 .bar nav a { font-size: 0.9rem; text-decoration: none; }
 
 main { margin: 0 auto; max-width: var(--column); padding: 0 20px; }
@@ -144,7 +195,7 @@ h3 { font-size: 1.05rem; }
   max-width: 44ch;
 }
 
-.hero-note { color: #7a6e60; font-size: 0.9rem; margin: 1.4rem 0 0; }
+.hero-note { color: var(--faint2); font-size: 0.9rem; margin: 1.4rem 0 0; }
 
 .cta {
   align-items: stretch;
@@ -199,11 +250,11 @@ h3 { font-size: 1.05rem; }
 .button.primary {
   background: var(--ember);
   border-color: var(--ember);
-  color: #1a1509;
+  color: var(--on-ember);
   font-weight: 600;
 }
 
-.button.primary:hover { background: #f0c983; border-color: #f0c983; color: #1a1509; }
+.button.primary:hover { background: var(--ember-hi); border-color: var(--ember-hi); color: var(--on-ember); }
 
 /* --- pictures ------------------------------------------------------------ */
 
@@ -301,7 +352,7 @@ footer {
 }
 
 footer p { margin: 0.4rem 0; }
-.quiet { color: #6b6257; }
+.quiet { color: var(--faint); }
 
 /* --- one column ---------------------------------------------------------- */
 
@@ -354,7 +405,7 @@ footer p { margin: 0.4rem 0; }
 }
 
 .doc-toc summary {
-  color: #6b6257;
+  color: var(--faint);
   cursor: default;
   font-family: var(--mono);
   font-size: 11px;
@@ -370,7 +421,7 @@ footer p { margin: 0.4rem 0; }
 
 .doc-toc a {
   border-left: 2px solid transparent;
-  color: #7a6e60;
+  color: var(--faint2);
   display: block;
   line-height: 1.4;
   margin-left: -1px;
@@ -385,7 +436,7 @@ footer p { margin: 0.4rem 0; }
 .nav-group { margin-bottom: 1.6rem; }
 
 .nav-title {
-  color: #6b6257;
+  color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -407,7 +458,7 @@ footer p { margin: 0.4rem 0; }
 
 /* the document itself */
 .doc-body { max-width: 72ch; min-height: 60vh; }
-.doc-meta { color: #6b6257; font-size: 0.85rem; margin: 0 0 1.8rem; }
+.doc-meta { color: var(--faint); font-size: 0.85rem; margin: 0 0 1.8rem; }
 .doc-crumb {
   color: var(--live);
   font-family: var(--mono);
@@ -423,7 +474,7 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
 .pager { border-top: 1px solid var(--rule); display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; margin-top: 3rem; padding-top: 1.5rem; }
 .pager a { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; color: var(--text); display: block; padding: 12px 16px; text-decoration: none; }
 .pager a:hover { border-color: var(--ember); }
-.pager a span { color: #6b6257; display: block; font-size: 0.78rem; margin-bottom: 3px; }
+.pager a span { color: var(--faint); display: block; font-size: 0.78rem; margin-bottom: 3px; }
 .pager-next { text-align: right; }
 .doc-state { color: var(--dim); }
 
@@ -437,7 +488,7 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
 }
 .doc-body h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
 .doc-body h4 { font-size: 0.95rem; margin: 1.4rem 0 0.5rem; }
-.doc-body p, .doc-body li { color: #c8beb0; line-height: 1.7; }
+.doc-body p, .doc-body li { color: var(--prose); line-height: 1.7; }
 .doc-body li { margin: 0.25rem 0; }
 .doc-body hr { border: 0; border-top: 1px solid var(--rule); margin: 2rem 0; }
 
@@ -453,7 +504,7 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
 }
 
 .doc-body pre[data-lang]::after {
-  color: #6b6257;
+  color: var(--faint);
   content: attr(data-lang);
   font-family: var(--mono);
   font-size: 10px;
@@ -462,7 +513,7 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
   top: 7px;
 }
 
-.doc-body code { color: var(--parchment, #e8e2d8); }
+.doc-body code { color: var(--text); }
 .doc-body p code, .doc-body li code, .doc-body td code {
   background: var(--panel);
   border-radius: 4px;

@@ -23,6 +23,7 @@ it. To change a mark: generate, get it approved, trace, replace.
 | `site/img/favicon.svg` | the same tree on its own dark plate, for grounds we do not control |
 | `site/img/wordmark.svg` | `poieo` in custom monoline lettering; the e flows into the final o as a small infinity |
 | `site/img/lockup.svg` / `lockup-light.svg` | mark + wordmark, for dark and light grounds |
+| `site/img/mark-light.svg` / `wordmark-light.svg` | the same traced paths in ink, for the site's light theme |
 | `site/img/social.png` | the 1280×640 share card; its source page is `site/social.html` |
 | `mark-source.jpg` (here) | the generation the mark's SVG is traced from |
 | `wordmark-source.png` (here) | the generation the wordmark's SVG is traced from |
@@ -70,5 +71,5 @@ not their exact pixels:
 | file | register |
 |---|---|
 | `reference-crooked-tree.jpg` | **rich** — the full wilful tree; hero and card art (`site/img/tree.jpg` is a copy) |
-| `reference-windswept-tree.png` | **dramatic** — motion, one fruit about to let go; note it arrived on a light ground, which reads as the light-theme voice |
+| `reference-windswept-tree.png` | **dramatic** — motion, one fruit about to let go; note it arrived on a light ground, which reads as the light-theme voice (`site/img/tree-light.jpg` is a copy) |
 | `reference-ikebana-branch.png` | **minimal** — one pruned branch, editorial air; where small or quiet surfaces should head |
