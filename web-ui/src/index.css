@@ -1,6 +1,75 @@
+/* The two faces the landing page already ships, carried here so the product
+   speaks with one voice. Self-hosted rather than fetched: the daemon serves
+   this page from a machine that may have no internet, and a board that falls
+   back to a system face on a plane is a board that looks broken there. 63 kB
+   for the pair, and the licence travels with them. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/hanken-grotesk-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/dm-mono-latin-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/dm-mono-latin-500.woff2") format("woff2");
+}
+
+/*
+ * The one place a colour is decided.
+ *
+ * `site/style.css` has carried these names for a while, and says of itself
+ * that it took them from `web-ui/src/` and should follow when the board's
+ * ground changes. It took them from an app that never had them: forty-eight
+ * hex values across eight stylesheets, tuned by eye against each other. This
+ * is the app finally holding what the site copied.
+ *
+ * **Two rulers, and using one for both is what went wrong before.**
+ *
+ * A *surface* -- the page, a card, the well a graph sits in, a pill -- is
+ * judged by lightness step (L*), where about 5 is just visible and 8 reads
+ * clearly. Contrast ratio cannot judge these at all: its flare term dominates
+ * two adjacent dark colours, and page-to-card could not be pushed past 1.11
+ * even by lifting the whole scale. It measured 0.5 of lightness before, which
+ * is why a card did not read as a thing on a page.
+ *
+ * A *stroke or a letter* -- a wire, an arrowhead, a word, the edge of a
+ * control you have to see to use -- is judged by contrast ratio, 3.0 for the
+ * graphic ones and 4.5 for text. The wire inside a card measured 1.83, half of
+ * what it needed, while the wire between two cards measured 3.76 and passed --
+ * which is exactly why one kind of arrow was visible and the other was not.
+ */
 :root {
   color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+
+  --ground: #100e0c;  /* the page */
+  --panel: #201c18;   /* a card on it              page -> card   dL* 6.5 */
+  --well: #181513;    /* the graph inside a card   card -> well   dL* 3.6 */
+  --raised: #2e2721;  /* a step, a button          well -> pill   dL* 9.2 */
+  --rule: #463c31;    /* every hairline            dL* 15.4 / 19.0 */
+  --line: #7d7164;    /* wires and arrowheads      3.82 on the well */
+  --text: #f0e7d9;    /* body                     13.81 on a card */
+  --dim: #a0958a;     /* beside the point          5.77 */
+  --ember: #d8a657;   /* the accent, and focus     7.67 */
+  --live: #a9b665;    /* a task that is running    7.71 */
+  --stop: #e08a74;    /* a task that failed        6.49 */
+
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  font-family: var(--sans);
   /* One source of truth: the drawer starts where the bar ends, so the skin
      picker in the bar's right corner stays reachable with the drawer open. */
   --bar-height: 42px;
@@ -21,8 +90,8 @@
    that are deliberately bare (a work row, a file row) already say
    `background: none; border: 0` themselves, which outranks this. */
 button {
-  background: #221e18;
-  border: 1px solid #2e2820;
+  background: var(--raised);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   color: inherit;
   cursor: pointer;
@@ -42,7 +111,7 @@ button:disabled {
    business -- a control strip wants it on its own row, the models panel wants
    a gap under it -- and those rules live beside the surfaces that need them. */
 .refusal {
-  color: #d16d5a;
+  color: var(--stop);
   font-size: 0.8em;
   margin: 0;
 }
@@ -60,8 +129,8 @@ button:disabled {
    with the fix missing. What each panel puts *inside* this box -- grid or
    column, scrolling or clipped -- is still its own. */
 .panel {
-  background: #191612;
-  border-left: 1px solid #2e2820;
+  background: var(--panel);
+  border-left: 1px solid var(--rule);
   bottom: 0;
   box-sizing: border-box;
   padding: 12px 16px;
@@ -73,8 +142,8 @@ button:disabled {
 
 body {
   margin: 0;
-  background: #14120f;
-  color: #e8e2d8;
+  background: var(--ground);
+  color: var(--text);
   /* Holding a bench must not raise the phone's Copy / Look Up callout, and a
      drag across the board must not paint half the page blue. Text worth
      copying opts back in below. */

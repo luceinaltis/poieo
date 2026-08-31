@@ -1,6 +1,6 @@
 .shell-bar {
   align-items: center;
-  border-bottom: 1px solid #2e2820;
+  border-bottom: 1px solid var(--rule);
   box-sizing: border-box;
   display: flex;
   gap: 12px;
@@ -18,7 +18,7 @@
    boards -- and dimmer than the title, which is not what a reader is here
    for. */
 .shell-project {
-  color: #d6ccbe;
+  color: var(--text);
   font-size: 0.9em;
 }
 
@@ -28,7 +28,7 @@
 .shell-project-pick {
   background: transparent;
   border: 0;
-  color: #d6ccbe;
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   font-size: 0.9em;
@@ -36,40 +36,40 @@
 }
 
 .shell-project-pick:focus-visible {
-  outline: 1px solid #6b6257;
+  outline: 1px solid var(--line);
   outline-offset: 2px;
 }
 
 .shell-project-pick option {
-  background: #1c1915;
-  color: #d6ccbe;
+  background: var(--panel);
+  color: var(--text);
 }
 
 .shell-status {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.85em;
   margin-right: auto;
 }
 
 .shell-status[data-status="live"] {
-  color: #a9b665;
+  color: var(--live);
 }
 
 .shell-status[data-status="lost"] {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 .shell-pick {
   align-items: center;
-  color: #9a9086;
+  color: var(--dim);
   display: flex;
   font-size: 0.85em;
   gap: 6px;
 }
 
 .shell-skin {
-  background: #1c1915;
-  border: 1px solid #2e2820;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   color: inherit;
   font: inherit;
@@ -80,7 +80,7 @@
    as views are added, where the bar's controls are a fixed handful about the
    board already on screen. Narrow on purpose: it is navigation, not content. */
 .shell-rail {
-  border-right: 1px solid #2e2820;
+  border-right: 1px solid var(--rule);
   bottom: 0;
   display: grid;
   align-content: start;
@@ -96,7 +96,7 @@
   background: none;
   border: 0;
   border-radius: 4px;
-  color: #7a6e60;
+  color: var(--dim);
   cursor: pointer;
   font: inherit;
   font-size: 0.85em;
@@ -105,7 +105,7 @@
 }
 
 .shell-rail button:hover:not(:disabled) {
-  color: #d6ccbe;
+  color: var(--text);
 }
 
 .shell-rail button:disabled {
@@ -115,8 +115,8 @@
 
 /* Where you are, not what you last pressed. */
 .shell-rail button[aria-current="page"] {
-  background: #221e18;
-  color: #e8dcc8;
+  background: var(--raised);
+  color: var(--text);
 }
 
 .shell-stage {
@@ -137,7 +137,7 @@
 
 .shell-empty {
   align-content: center;
-  color: #9a9086;
+  color: var(--dim);
   display: grid;
   inset: 0;
   justify-items: center;
@@ -160,7 +160,7 @@
      items long. Across the top it costs a line. */
   .shell-rail {
     align-content: center;
-    border-bottom: 1px solid #2e2820;
+    border-bottom: 1px solid var(--rule);
     border-right: 0;
     bottom: auto;
     box-sizing: border-box;

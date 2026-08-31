@@ -24,8 +24,8 @@
   position: absolute;
   right: 16px;
   bottom: 16px;
-  background: #14120f;
-  border: 1px solid #2e2820;
+  background: var(--ground);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   cursor: pointer;
   display: none;
@@ -37,7 +37,7 @@
 
 .basic-speck {
   position: absolute;
-  background: #4a4034;
+  background: var(--line);
   border-radius: 1px;
   /* Never thinner than a hairline: a task scaled to nothing would leave the
      minimap describing a board with gaps in it. */
@@ -49,8 +49,8 @@
    underneath stay readable through it. */
 .basic-seen {
   position: absolute;
-  border: 1px solid #d8a657;
-  background: #d8a6571a;
+  border: 1px solid var(--ember);
+  background: var(--ember)1a;
   border-radius: 2px;
   pointer-events: none;
 }
@@ -78,23 +78,23 @@
    not tell a handoff from two boxes that happened to sit side by side. */
 .basic-wire {
   fill: none;
-  stroke: #7a6e60;
+  stroke: var(--line);
   stroke-width: 1.5;
 }
 
 .basic-tip {
-  fill: #7a6e60;
+  fill: var(--line);
 }
 
 .basic-word {
-  fill: #9a9086;
+  fill: var(--dim);
   font-size: 11px;
   text-anchor: middle;
   dominant-baseline: middle;
   /* A halo of the page behind the word, so the line runs up to it rather than
      through it. Cheaper than a backing rect, and it moves with the text. */
   paint-order: stroke;
-  stroke: #14120f;
+  stroke: var(--ground);
   stroke-width: 4px;
 }
 
@@ -107,8 +107,8 @@
   /* Lifted off the page rather than tinted like it. At one step from the
      background a border stopped reading as a thing on a board and started
      reading as a patch of the board. */
-  background: #16130f;
-  border: 1px solid #322b22;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 8px;
   display: grid;
   gap: 9px;
@@ -126,11 +126,11 @@
   bottom: 10px;
   width: 2px;
   border-radius: 0 2px 2px 0;
-  background: #322b22;
+  background: var(--rule);
 }
 
 .basic-task:hover {
-  border-color: #4a4034;
+  border-color: var(--line);
 }
 
 .basic-head {
@@ -162,21 +162,21 @@
   flex: none;
   height: 8px;
   width: 8px;
-  background: #6b6257;
+  background: var(--dim);
 }
 
 .basic-task[data-status="running"] .basic-dot {
-  background: #d8a657;
+  background: var(--ember);
 }
 
 .basic-task[data-status="error"] .basic-dot {
-  background: #d16d5a;
+  background: var(--stop);
 }
 
 .basic-toggle {
   background: none;
   border: 0;
-  color: #6b6257;
+  color: var(--dim);
   cursor: pointer;
   font: inherit;
   line-height: 1;
@@ -184,7 +184,7 @@
 }
 
 .basic-toggle:hover {
-  color: #d8c8a8;
+  color: var(--text);
 }
 
 /* Both one line. A model id long enough to wrap -- and they get long -- would
@@ -204,7 +204,7 @@
 
 .basic-when,
 .basic-tally {
-  color: #8d8377;
+  color: var(--dim);
   font-size: 0.78em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,12 +231,12 @@
 }
 
 .basic-now {
-  color: #e8dcc8;
+  color: var(--text);
   font-size: 0.8em;
 }
 
 .basic-task[data-status="error"] .basic-now {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 /* What the morning cannot take back. Kept with the border shut, because a
@@ -250,7 +250,7 @@
    meaning, so a reader who cannot tell this from the amber beside it has lost
    nothing. */
 .basic-warn {
-  color: #d16d5a;
+  color: var(--stop);
   font-size: 0.85em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -265,19 +265,19 @@
 /* A running task, from across the room. The dot carries the exact state;
    this carries the one bit somebody scanning the board actually wants. */
 .basic-task[data-status="running"] {
-  border-color: #6b5a34;
+  border-color: var(--ember);
 }
 
 .basic-task[data-status="running"]::before {
-  background: #d8a657;
+  background: var(--ember);
 }
 
 .basic-task[data-status="error"] {
-  border-color: #5b3229;
+  border-color: var(--stop);
 }
 
 .basic-task[data-status="error"]::before {
-  background: #d16d5a;
+  background: var(--stop);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -299,13 +299,23 @@
    out of a loop at all. */
 .basic-inside {
   position: relative;
+  /* **A recessed well, not the card's own face.** The card's border already
+     means something here -- an arrow crossing it is a new run -- so the graph
+     should read as held by it rather than floating on it. It is also what
+     gives a wire something to be light against: a stroke on the card measured
+     1.83 against its ground and a stroke on this measures 3.82. */
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 1px 0 2px;
   /* A long run is wider than a border. It scrolls rather than spilling across
      the board -- and rather than being clipped, which would hide steps while
      looking complete. */
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #3a332a transparent;
+  scrollbar-color: var(--rule) transparent;
 }
 
 /* Laid out, not overlaid: an overlay bar fades away, and a run that continues
@@ -315,7 +325,7 @@
 }
 
 .basic-inside::-webkit-scrollbar-thumb {
-  background: #3a332a;
+  background: var(--rule);
   border-radius: 3px;
 }
 
@@ -337,47 +347,52 @@
 
 .basic-step-wire {
   fill: none;
-  stroke: #4a4034;
-  stroke-width: 1.2;
+  stroke: var(--line);
+  stroke-width: 1.3;
 }
 
 .basic-step-tip {
-  fill: #4a4034;
+  fill: var(--line);
 }
 
 /* The word that chooses an arm. Haloed with the border's own background so
    the line runs up to it rather than through it. */
 .basic-step-word {
-  fill: #8d7a52;
+  fill: var(--ember);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 9.5px;
   text-anchor: middle;
   paint-order: stroke;
-  stroke: #16130f;
-  stroke-width: 3px;
+  /* Haloed with the well it sits on, so the line runs up to the word and stops
+     rather than through it. */
+  stroke: var(--well);
+  stroke-width: 3.5px;
 }
 
 /* Where a run can end. One per arm: two different ways of ending are two
    different facts, and sharing a mark would say there is one. */
+/* Where a run can end. Filled with the well and ringed, so it reads as a
+   stopper on the line rather than a speck the line happens to pass. */
 .basic-step-stop {
-  fill: none;
-  stroke: #4a4034;
-  stroke-width: 1.2;
+  fill: var(--well);
+  stroke: var(--line);
+  stroke-width: 1.4;
 }
 
 .basic-node {
   align-items: center;
-  background: #1f1a15;
-  border: 1px solid #2b241c;
+  background: var(--raised);
+  border: 1px solid var(--rule);
   border-radius: 5px;
-  color: #a2988c;
+  color: var(--text);
   display: flex;
   font-size: 0.82em;
   gap: 6px;
   padding: 4px 9px;
-  /* Placed on its own centre, which is the point `dagre` answered with. */
+  /* Placed by its own top-left, worked out from the centre dagre answered
+     with: a `translate` would move the paint and leave the layout box behind,
+     and the well would scroll for room nothing is using. */
   position: absolute;
-  transform: translate(-50%, -50%);
   white-space: nowrap;
 }
 
@@ -397,7 +412,7 @@
   width: 6px;
   height: 6px;
   flex: 0 0 6px;
-  background: #574c3d;
+  background: var(--line);
 }
 
 /* the model does it */
@@ -410,14 +425,14 @@
 .basic-node[data-type="confirm"]::after {
   border-radius: 50%;
   background: none;
-  box-shadow: inset 0 0 0 1.5px #b39a6a;
+  box-shadow: inset 0 0 0 1.5px var(--ember);
 }
 
 /* What actually runs this step, when the flow's steps do not agree. Dimmer
    than the id: the reader is looking for the step and then reading the model,
    not the other way round. */
 .basic-node-model {
-  color: #6f6459;
+  color: var(--dim);
   font-size: 0.9em;
 }
 
@@ -425,18 +440,28 @@
    dimmer, and that is the whole point of the colour: the model is a detail the
    reader goes looking for, and this is one they need to find without looking. */
 .basic-node-hands {
-  color: #b39a6a;
+  color: var(--ember);
   font-size: 0.9em;
 }
 
+/* The step a run is on **right now**. The one piece of motion on the board, on
+   the one thing that changes while you watch -- so "where is it" is answered
+   before anything is read. The keyframe is the status dot's, which already
+   stands still for a reader who asked for that. */
+@media (prefers-reduced-motion: no-preference) {
+  .basic-node[data-here="true"] {
+    animation: basic-alive 1.6s ease-in-out infinite;
+  }
+}
+
 .basic-node[data-here="true"] {
-  background: #3a2f1e;
-  border-color: #d8a657;
-  color: #e8dcc8;
+  background: var(--raised);
+  border-color: var(--ember);
+  color: var(--text);
 }
 
 .basic-node[data-here="true"] .basic-node-model {
-  color: #b39a6a;
+  color: var(--ember);
 }
 
 /* Where a handoff leaves from -- the step whose ending starts the next task's
@@ -444,7 +469,7 @@
    the dashes that already say "the run can stop here": a step is often both,
    and two facts sharing one mark is one fact. */
 .basic-node[data-exit="true"] {
-  border-color: #6b5a34;
+  border-color: var(--ember);
 }
 
 /* One row, always, for the same reason as the line above: a tool call is a
@@ -464,7 +489,7 @@
 /* A pill now carries what it acted on, so it has to be stopped from growing
    the row: one long `grep` line would push every other pill off the card. */
 .basic-tool {
-  background: #262019;
+  background: var(--raised);
   border-radius: 3px;
   flex: 0 0 auto;
   font-size: 0.8em;
@@ -476,7 +501,7 @@
 }
 
 .basic-tool[data-error="true"] {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 /* One line, always -- reserved before the model has said anything, so the
@@ -491,6 +516,6 @@
 }
 
 .basic-said[data-thinking="true"] {
-  color: #9a9086;
+  color: var(--dim);
   font-style: italic;
 }
