@@ -8,6 +8,7 @@
 
 <link rel="canonical" href="https://luceinaltis.github.io/poieo/">
 <meta name="theme-color" content="#14120f">
+<script src="theme.js"></script>
 
 <meta property="og:site_name" content="poieo">
 <meta property="og:title" content="poieo — an autonomous task board for the AI models you choose">
@@ -45,14 +46,15 @@
 <body>
 
 <header class="bar">
-  <a class="wordmark" href="/poieo/">
-    <img src="img/mark.svg" alt="" width="24" height="24">
-    <img src="img/wordmark.svg" alt="poieo" height="20">
+  <a class="wordmark" aria-label="poieo — home" href="/poieo/">
+    <img class="logo-mark" src="img/mark.svg" alt="" width="24" height="24">
+    <img class="logo-word" src="img/wordmark.svg" alt="poieo" height="20">
   </a>
   <span class="bar-sub">an autonomous task board</span>
   <nav>
     <a href="docs.html">Docs</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
+    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch between light and dark">☀</button>
   </nav>
 </header>
 

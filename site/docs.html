@@ -7,6 +7,7 @@
 <meta name="description" content="poieo's documentation, served straight from the main branch: the manual, one page per component, and how to contribute.">
 <link rel="canonical" href="https://luceinaltis.github.io/poieo/docs.html">
 <meta name="theme-color" content="#14120f">
+<script src="theme.js"></script>
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
@@ -14,14 +15,15 @@
 <body>
 
 <header class="bar">
-  <a class="wordmark" href="./">
-    <img src="img/mark.svg" alt="" width="24" height="24">
-    <img src="img/wordmark.svg" alt="poieo" height="20">
+  <a class="wordmark" aria-label="poieo — home" href="./">
+    <img class="logo-mark" src="img/mark.svg" alt="" width="24" height="24">
+    <img class="logo-word" src="img/wordmark.svg" alt="poieo" height="20">
   </a>
   <span class="bar-sub">docs</span>
   <nav>
     <a href="./">Home</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
+    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch between light and dark">☀</button>
   </nav>
 </header>
 
