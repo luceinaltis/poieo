@@ -10,7 +10,7 @@ Design: docs/daemon.md
 import asyncio
 
 import pytest
-from conftest import card
+from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config, load_tasks
 from poieo.daemon.service import MAX_CHAIN
@@ -212,26 +212,6 @@ then:
 """
 
 
-async def _up(daemon):
-    task = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
-    return task
-
-
-async def _until(predicate, what="the condition", timeout=5.0):
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not predicate():
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
-        await asyncio.sleep(0.01)
-
-
-async def _down(daemon, task):
-    daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
-
-
 def _named(daemon, name):
     return next(r for r in daemon.runners if r.name == name)
 
@@ -248,14 +228,14 @@ def _calls(daemon):
 
 async def test_a_matching_branch_starts_the_other_flow(tmp_path):
     daemon = Daemon(load_config(_wired(tmp_path, _TO_RECEIVER)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     assert _named(daemon, "sender").run_now() is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
 
     assert receiver.results[0].status == "completed"
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 # A node whose output answers to a name of its own -- which is what almost
@@ -279,12 +259,12 @@ async def test_a_then_block_reads_an_output_by_the_name_the_graph_gave_it(tmp_pa
     """
     block = _TO_RECEIVER.replace("run.status == 'completed'", "verdict == 'done'")
     daemon = Daemon(load_config(_wired(tmp_path, block, sender_graph=_ALIASED)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     assert _named(daemon, "sender").run_now() is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
-    await _down(daemon, task)
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await down(daemon, task)
 
 
 async def test_an_alias_cannot_shadow_the_run_it_describes(tmp_path):
@@ -300,27 +280,27 @@ async def test_an_alias_cannot_shadow_the_run_it_describes(tmp_path):
         load_config(_wired(tmp_path, _TO_RECEIVER, sender_graph=shadow)),
         store=NullStore(),
     )
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     # `run.status == 'completed'` still reads the run, not the string "done".
     assert _named(daemon, "sender").run_now() is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
-    await _down(daemon, task)
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await down(daemon, task)
 
 
 async def test_a_branch_that_does_not_match_wakes_nobody(tmp_path):
     block = _TO_RECEIVER.replace("run.status == 'completed'", "run.status == 'failed'")
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_only_the_first_match_fires(tmp_path):
@@ -335,83 +315,83 @@ then:
     label: never
 """
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_the_next_run_reads_what_the_last_one_did(tmp_path):
     """Waking a task without telling it why is half a feature."""
     config = load_config(_wired(tmp_path, _TO_RECEIVER, takes="came from {{ input.sender.task }}"))
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     _named(daemon, "sender").run_now()
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
 
     # A prompt naming `input.from` cannot render without it, so completing is
     # already proof it arrived; the mock's record says it arrived filled in.
     assert receiver.results[0].status == "completed"
     asked = [c for c in _calls(daemon) if c.role == "taker"]
     assert "came from sender" in asked[0].messages[0]["content"]
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_the_handed_off_run_records_what_fired_it(tmp_path):
     """A run whose trigger says `manual` when a handoff started it is a lie."""
     daemon = Daemon(load_config(_wired(tmp_path, _TO_RECEIVER)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     _named(daemon, "sender").run_now()
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
 
     assert "sender" in receiver.results[0].trigger
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_handoff_arriving_mid_run_waits_and_the_newest_wins(tmp_path, caplog):
     """The interval trigger's rule, one level up: skip the middle, keep the last."""
     config = load_config(_wired(tmp_path, _TO_RECEIVER, slow=True))
     daemon = Daemon(config, store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         for _ in range(3):
             sender.run_now()
-            await _until(lambda n=len(sender.results): len(sender.results) > n, "a sender run")
+            await until(lambda n=len(sender.results): len(sender.results) > n, "a sender run")
         # First runs, second parks, third displaces the second.
-        await _until(lambda: len(receiver.results) == 2, "both handoffs", timeout=8)
+        await until(lambda: len(receiver.results) == 2, "both handoffs", timeout=8)
         await asyncio.sleep(0.4)
 
     assert len(receiver.results) == 2
     assert "dropped" in " ".join(caplog.messages)
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_paused_target_is_not_woken(tmp_path, caplog):
     """A handoff is not a reason to override a hold someone put on."""
     daemon = Daemon(load_config(_wired(tmp_path, _TO_RECEIVER)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
     receiver.pause()
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
-        await _until(lambda: len(sender.results) == 1, "the sender's run")
+        await until(lambda: len(sender.results) == 1, "the sender's run")
         await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
     assert "paused" in " ".join(caplog.messages)
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
@@ -423,17 +403,17 @@ async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
         encoding="utf-8",
     )
     daemon = Daemon(load_config(path), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
-        await _until(lambda: "chain" in " ".join(caplog.messages), "the chain to be cut", timeout=8)
+        await until(lambda: "chain" in " ".join(caplog.messages), "the chain to be cut", timeout=8)
         await asyncio.sleep(0.3)
 
     total = len(sender.results) + len(receiver.results)
     assert total <= MAX_CHAIN + 1  # the kick, then at most MAX_CHAIN handoffs
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_condition_that_cannot_be_read_skips_its_branch(tmp_path, caplog):
@@ -449,15 +429,15 @@ then:
     label: fallback
 """
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         _named(daemon, "sender").run_now()
-        await _until(lambda: len(receiver.results) == 1, "the fallback branch")
+        await until(lambda: len(receiver.results) == 1, "the fallback branch")
 
     assert "nonesuch" in " ".join(caplog.messages)
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 # -- a role nobody declared -------------------------------------------------
@@ -527,13 +507,13 @@ async def test_a_card_can_hand_off_on_what_the_run_spent(tmp_path):
     through the night hands the next one a bill, not a reason to stop."""
     block = _TO_RECEIVER.replace("run.status == 'completed'", "run.usage.output_tokens < 1000")
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     receiver = _named(daemon, "receiver")
 
     assert _named(daemon, "sender").run_now() is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
 
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
@@ -545,17 +525,17 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
     """
     block = _TO_RECEIVER.replace("run.status == 'completed'", "run.usage.output_tokens > 1000")
     daemon = Daemon(load_config(_wired(tmp_path, block)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
-        await _until(lambda: len(sender.results) == 1, "the sender's run")
+        await until(lambda: len(sender.results) == 1, "the sender's run")
         await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
     assert caplog.messages == []
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 _ASKING = """\
@@ -588,11 +568,11 @@ async def test_a_run_waiting_on_a_person_hands_off_to_nobody(tmp_path, caplog):
     """The whole point. `then:` is deferred, not skipped -- nothing downstream
     moves until somebody says so."""
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
@@ -603,61 +583,61 @@ async def test_a_run_waiting_on_a_person_hands_off_to_nobody(tmp_path, caplog):
     # Deferred, and not merely unreadable: a `then:` that raised on the missing
     # name would also wake nobody, and would be the wrong reason.
     assert "no 'answer' here" not in caplog.text
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_answering_lets_the_chain_carry_on(tmp_path):
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
 
     assert sender.answer("land") is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
 
     assert sender.results[0].answer == "land"
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_the_other_answer_wakes_nobody(tmp_path):
     """A decision, not a formality: `hold` is an answer and it stops here."""
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender, receiver = _named(daemon, "sender"), _named(daemon, "receiver")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
 
     assert sender.answer("hold") is True
     await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_an_answer_that_was_not_offered_is_refused(tmp_path):
     """Only what the node offered. Anything else is somebody guessing, which
     is the reading this node exists to replace."""
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender = _named(daemon, "sender")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
 
     assert sender.answer("merge") is False
     assert sender.results[0].status == "asking"
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_answering_a_task_that_asked_nothing_is_refused(tmp_path):
     daemon = Daemon(load_config(_wired(tmp_path, _TO_RECEIVER)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
 
     assert _named(daemon, "sender").answer("land") is False
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_unanswered_questions_are_not_failures(tmp_path):
@@ -666,15 +646,15 @@ async def test_unanswered_questions_are_not_failures(tmp_path):
     from poieo.daemon.service import PAUSE_AFTER
 
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=NullStore())
-    task = await _up(daemon)
+    task = await up(daemon)
     sender = _named(daemon, "sender")
 
     for n in range(PAUSE_AFTER + 1):
         sender.run_now()
-        await _until(lambda: len(sender.results) == n + 1, f"run {n + 1}")
+        await until(lambda: len(sender.results) == n + 1, f"run {n + 1}")
 
     assert sender.holding is False
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_an_answer_is_written_down(tmp_path):
@@ -685,11 +665,11 @@ async def test_an_answer_is_written_down(tmp_path):
 
     store = RunStore(tmp_path / "runs")
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=store)
-    task = await _up(daemon)
+    task = await up(daemon)
     sender = _named(daemon, "sender")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     sender.answer("land")
 
     kinds = [e["type"] for e in store.events(sender.results[0].run_id)]
@@ -697,7 +677,7 @@ async def test_an_answer_is_written_down(tmp_path):
     assert "run_answered" in kinds
     answered = next(e for e in store.events(sender.results[0].run_id) if e["type"] == "run_answered")
     assert answered["data"]["answer"] == "land"
-    await _down(daemon, task)
+    await down(daemon, task)
 
 
 async def test_a_question_survives_the_daemon(tmp_path):
@@ -706,21 +686,21 @@ async def test_a_question_survives_the_daemon(tmp_path):
     config = _asking_pair(tmp_path)
 
     first = Daemon(load_config(config), store=NullStore())
-    task = await _up(first)
+    task = await up(first)
     sender = _named(first, "sender")
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     asked_run = sender.results[0].run_id
-    await _down(first, task)
+    await down(first, task)
 
     second = Daemon(load_config(config), store=NullStore())
-    task = await _up(second)
+    task = await up(second)
     restored = _named(second, "sender").asking()
 
     assert restored is not None
     assert restored.run_id == asked_run
     assert restored.asked["question"] == "Land it?"
-    await _down(second, task)
+    await down(second, task)
 
 
 async def test_an_answer_after_a_restart_still_carries_the_chain_on(tmp_path):
@@ -729,19 +709,19 @@ async def test_an_answer_after_a_restart_still_carries_the_chain_on(tmp_path):
     config = _asking_pair(tmp_path)
 
     first = Daemon(load_config(config), store=NullStore())
-    task = await _up(first)
+    task = await up(first)
     sender = _named(first, "sender")
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
-    await _down(first, task)
+    await until(lambda: len(sender.results) == 1, "the sender's run")
+    await down(first, task)
 
     second = Daemon(load_config(config), store=NullStore())
-    task = await _up(second)
+    task = await up(second)
     receiver = _named(second, "receiver")
 
     assert _named(second, "sender").answer("land") is True
-    await _until(lambda: len(receiver.results) == 1, "the handoff to land")
-    await _down(second, task)
+    await until(lambda: len(receiver.results) == 1, "the handoff to land")
+    await down(second, task)
 
 
 async def test_an_answered_question_is_not_asked_again(tmp_path):
@@ -750,18 +730,18 @@ async def test_an_answered_question_is_not_asked_again(tmp_path):
     config = _asking_pair(tmp_path)
 
     first = Daemon(load_config(config), store=NullStore())
-    task = await _up(first)
+    task = await up(first)
     sender = _named(first, "sender")
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     sender.answer("hold")
-    await _down(first, task)
+    await down(first, task)
 
     second = Daemon(load_config(config), store=NullStore())
-    task = await _up(second)
+    task = await up(second)
 
     assert _named(second, "sender").asking() is None
-    await _down(second, task)
+    await down(second, task)
 
 
 async def test_answering_updates_what_the_board_will_show(tmp_path):
@@ -771,11 +751,11 @@ async def test_answering_updates_what_the_board_will_show(tmp_path):
 
     store = RunStore(tmp_path / "runs")
     daemon = Daemon(load_config(_asking_pair(tmp_path)), store=store)
-    task = await _up(daemon)
+    task = await up(daemon)
     sender = _named(daemon, "sender")
 
     sender.run_now()
-    await _until(lambda: len(sender.results) == 1, "the sender's run")
+    await until(lambda: len(sender.results) == 1, "the sender's run")
     assert store.summary(sender.results[0].run_id)["status"] == "asking"
 
     sender.answer("land")
@@ -783,4 +763,4 @@ async def test_answering_updates_what_the_board_will_show(tmp_path):
     listed = [row for row in store.list_runs() if row["task"] == "sender"]
     assert len(listed) == 1
     assert listed[0]["status"] == "completed"
-    await _down(daemon, task)
+    await down(daemon, task)
