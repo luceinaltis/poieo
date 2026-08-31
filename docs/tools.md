@@ -29,42 +29,28 @@ rather than the whole thing. The numbers are what make a range askable --
 Anthropic's text editor calls them "essential" for exactly that -- and
 `search_files` answers with line numbers that go straight into one.
 
-They cost something: a model may copy a number into an `edit_file` call. That
-is why matching takes them back off rather than failing on them. The reference
-implementations instead tell the model to strip them, which works until the
-model forgets.
+They cost something: a model may copy a number into an `edit_file` call,
+which is why matching takes them back off rather than failing on them.
 
-**There is no default window.** SWE-agent measured whole-file reads at 5.3
-points below a window, and a window too *narrow* at 3.7 below a wider one --
-too little context is its own failure. How much to read is the model's to
-choose; only the ceiling is ours.
+**There is no default window** — too little context is its own failure
+(SWE-agent's ablations put both whole-file reads and narrow windows below a
+well-chosen one). How much to read is the model's to choose; only the ceiling
+is ours.
 
 ### `_READ_CAP` is a guard, not context management
 
-It is 200,000 characters and stays there, and that is a decision rather than an
-oversight. The largest file in this repository is 54,921 characters, so the cap
-has never fired on it -- and the conversation that ran to 271,064 characters got
-there on **four mid-sized files**, none of which any per-file cap would have
-stopped.
-
-Bounding the conversation is the agent loop's job, and since the caps became the
-model's (`docs/runtime.md`) it does it against a number that means something.
-This one is here for the pathological single file -- a minified bundle, a log --
-and the tools stay ignorant of which model is reading them, which is worth more
-than making one number derive from another.
-
-What it did owe was a way out: a truncated read now cuts on a line and hands
-back the `offset` to carry on from. Before windows existed `... [truncated]` was
-all there was to say; it is not any more.
+It is 200,000 characters and stays there. Bounding the conversation is the
+agent loop's job (`docs/runtime.md`); this cap exists for the pathological
+single file — a minified bundle, a log — and the tools stay ignorant of which
+model is reading them. A truncated read cuts on a line and hands back the
+`offset` to carry on from.
 
 ## Changing part of a file
 
 `edit_file` replaces `old` with `new`, and refuses unless `old` appears exactly
 once. Ambiguity is an error rather than a guess: quietly changing the first of
-three is the failure nobody notices until the tests do. `append_file` adds to
-the end, which in a measured run was **four of the five file surgeries** the
-model performed -- as `cat >> file << 'EOF'`, which the Windows shell rejected
-outright, and as a write-a-temp-file-then-append-it-then-delete-it dance.
+three is the failure nobody notices until the tests do. `append_file` adds to the end — the commonest file surgery models
+otherwise attempt through shell heredocs that Windows rejects.
 
 **Matching is forgiving in three steps; the safeguard is not.** Exact first;
 then with the line numbers a file viewer prints taken off, because the
@@ -76,26 +62,21 @@ reported edit failure rates on models never trained on this shape mostly live.
 and a different depth is a different block. Uniqueness is still required no
 matter which reading matched.
 
-**A Python file that would stop parsing is not written.** `compile()` from the
-standard library, checked before the write, and the file is left as it was.
-SWE-agent's ablation puts a linting edit command three points above one without
-it: a broken file is worse than a refused edit, because the model finds out one
-test run later and spends its next turns debugging its own typo.
+**A Python file that would stop parsing is not written.** `compile()` from
+the standard library, checked before the write — a broken file is worse than a
+refused edit, because the model finds out one test run later and debugs its
+own typo.
 
 ## Searching is a tool, not a shell command
 
-`search_files` takes a regular expression and answers `path:line: text`. It
-exists for the same reason `run_command`'s `env` does: in a measured run,
-**twenty-three of seventy shell commands were `grep`**, and the POSIX spelling
-of one of them died on a Windows shell. A search is not about the shell, so the
-shell's dialect should not decide whether it works.
+`search_files` takes a regular expression and answers `path:line: text`. A
+search is not about the shell, so the shell's dialect should not decide
+whether it works.
 
-**It is capped twice, in matches and in the length of any one line, and this
-matters more than it looks.** SWE-agent's own ablation measured an
-unsummarized, iterative search scoring *six points below having no search at
-all*: an answer that fills the context is worse than no answer. It also stays
-out of dot-directories -- a run's folder is a git copy, so `.git` is packs and
-objects, which are noise at best and binary at worst.
+**It is capped twice, in matches and in the length of any one line** — an
+answer that fills the context is worse than no answer. It stays out of
+dot-directories: a run's folder is a git copy, and `.git` is noise at best,
+binary at worst.
 
 ## Failure is text, not an exception
 
@@ -116,12 +97,9 @@ outside `execute()` raise. An unknown tool name is answered the same way.
 Windows, where `create_subprocess_shell` would otherwise use `COMSPEC` --
 `cmd.exe`. A model writes POSIX; so does this repository's own AGENTS.md.
 
-The measured run that prompted this is the argument. Unix binaries were on
-PATH, so `grep` went 21/23 and `sed` 3/3 -- and then a heredoc came back
-`<<은(는) 예상되지 않았습니다`, because the *binaries* were POSIX and the
-*syntax* was cmd.exe. Nothing had told the model which it was talking to, so
-the tool's description now opens by naming it, built from what was found rather
-than hardcoded.
+Models write POSIX syntax even when the binaries alone are on PATH, and
+cmd.exe rejects it mid-command — so the tool's description opens by naming the
+shell actually found, never a hardcoded claim.
 
 **`C:\Windows\System32\bash.exe` is refused.** It is the WSL launcher: it
 starts a Linux distribution with its own filesystem, so the `cwd` points

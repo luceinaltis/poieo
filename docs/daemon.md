@@ -87,14 +87,9 @@ queued. It always advances by at least one tick: a timer that woke a hair early
 (Windows' clock is coarse) would otherwise land back on the tick just fired and
 turn one period into two.
 
-Both of those live in `_next_tick(tick, elapsed, every)`, a function rather than
-two lines inside the loop **because that is where they can be asked about**. The
-test that used to guard them timed the gaps between fires, and gaps cannot
-answer this on a loaded machine: a starved loop records one timestamp late and
-the next on time, so the gap between them shrinks whatever the timer did. It
-failed CI at 16ms against a 30ms floor with the trigger behaving perfectly. The
-invariant is arithmetic and is now asked as arithmetic; what remains of the
-timing test measures the **whole run**, which starvation can only lengthen.
+Both of those live in `_next_tick(tick, elapsed, every)` as a function so the
+invariant can be tested as arithmetic — timing the gaps between fires cannot
+answer it on a loaded machine.
 
 `cron.py` implements the standard 5 fields with `*/n`, ranges, lists, `mon-fri`
 names, and the day-of-month **or** day-of-week rule.
@@ -129,11 +124,8 @@ use`, a hand edit, a pull, and now a changed prompt — is in effect on the next
 run rather than after a restart, which is what [DESIGN.md](../DESIGN.md)
 promises.
 
-The binding half has been here since the board began painting which model would
-answer. The graph half is newer, and it closes the more visible gap: the file a
-person actually edits is the one that says what the run *does*, and until now
-that one alone needed the daemon restarted. A card carrying its own prompt is
-re-expanded from the card file; a task naming a graph file re-reads that.
+A card carrying its own prompt is re-expanded from the card file; a task
+naming a graph file re-reads that.
 
 **Only the graph is adopted, and only when nothing else changed.** A card expands
 into a spec *and* a graph, and the two split fields a reader would call one
@@ -236,10 +228,8 @@ which is what stood here first, refused the ordinary case: every project has a
 
 ## Where the board listens
 
-`127.0.0.1`, and `--host` is how that changes. The default is not a precaution
-somebody added; it is what makes the rest of the design honest. DESIGN.md says
-poieo is one person's machine and that there is no auth — and *no auth* is a
-decision resting on *nothing outside can reach it*.
+`127.0.0.1`, and `--host` is how that changes. *No auth* is a decision
+resting on *nothing outside can reach it*, so the default is load-bearing.
 
 So `web_exposure()` returns a sentence for every address that is not loopback,
 logged at **warning** before the port is bound. It names what is reachable
@@ -273,16 +263,11 @@ in, which is the one thing loopback never covered.
 
 ## Cards that appear while it runs
 
-The tasks folder used to be read once, at startup, so a card written afterwards
-sat there until somebody restarted the daemon — the last thing a board that can
-create tasks may ask of the person using it.
-
-`Daemon._watch_cards()` is a loop beside the learning pass, not a change to the
-wait every existing runner already sits in. `serve()` gathers a fixed set of
-runner coroutines, and one built after that gather began has nowhere to be
-started from; the watcher starts those itself and waits them out on the way
-down. That is why shutdown reaches them at all, and why it has a test of its
-own: a resident process may fail many ways, but never by refusing to stop.
+`Daemon._watch_cards()` notices cards written after startup — a board that
+can create tasks cannot ask for a restart. `serve()` gathers a fixed set of
+runner coroutines, so the watcher starts late arrivals itself and waits them
+out on the way down; a resident process may fail many ways, but never by
+refusing to stop.
 
 It **looks**, every `SCAN_SECONDS`, rather than being told. A card written by
 hand has to start the same way a card written by the board does, and there is no
@@ -318,8 +303,7 @@ would name recipients the postbox then refuses. Both wait for a restart, and say
 so.
 
 **A daemon with nothing to run still waits**, as long as it has a folder to
-watch. It used to warn and stop, which would have left the first card the board
-ever writes with nowhere to land.
+watch — the first card the board writes needs somewhere to land.
 
 Removal is not here yet: a card deleted while its run is in flight is a
 different question, and this one only had to answer *appeared*.
@@ -419,14 +403,10 @@ output: {as: verdict}             then:
                                     - when: "verdict == 'GREEN'"
 ```
 
-They are carried on `RunResult.aliases` and merged in by `_chosen()`. Before
-that they were carried nowhere: `outputs` is keyed by **node id**, so an output
-aliased `verdict` on a node called `a` was `verdict` everywhere inside the graph
-and reachable by no spelling at all out here — which is the value a handoff is
-most often about. The merge uses `setdefault` for the reason the graph's own
-scope does: a graph may alias an output `run`, and a `then:` whose `run.status`
-had quietly become a node's completion text is the worst bug this block can
-have.
+They are carried on `RunResult.aliases` and merged in by `_chosen()`, with
+`setdefault` for the reason the graph's own scope uses it: a graph may alias
+an output `run`, and a `then:` whose `run.status` had quietly become a node's
+completion text is the worst bug this block can have.
 
 `run.outputs` still answers by node id, and it is the spelling to reach for
 when **the node may not have run at all**. A bare name that never arrived

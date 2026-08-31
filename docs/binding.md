@@ -55,11 +55,9 @@ to answer however it can.
 provider forwards what it does not recognise. A parameter a new API version
 adds is usable from a binding without a code change here, which is deliberate.
 
-The one worth knowing about is how much a reasoning model thinks. `max_tokens`
-bounds *everything the model emits*, thinking included, so a model that thinks
-hard can spend the whole ceiling before it starts answering and come back cut
-off mid-turn. A run measured here spent **194,037 output tokens over thirty-one
-turns and was cut off anyway**, at three to seven minutes a turn.
+The one worth knowing about is how much a reasoning model thinks.
+`max_tokens` bounds *everything the model emits*, thinking included — a model
+that thinks hard can spend the whole ceiling before it starts answering.
 
 ```yaml
 params:
@@ -80,10 +78,8 @@ converts the number into one by its share of `max_tokens`:
 | ~10% | `minimal` |
 
 So `16000` against a ceiling of `24000` is 67% — it asks for **roughly medium
-effort**, not for a 16,000-token cap on thinking. Measured on the same step
-afterwards: output fell to **181 tokens a turn on average**, nowhere near the
-number written down, and the run went from sixty-five minutes to seven. The
-parameter selects a mode; it does not put a lid on one.
+effort**, not for a 16,000-token cap on thinking. The parameter selects a
+mode; it does not put a lid on one.
 
 Written as an effort level (`reasoning: {effort: "medium"}`) it says the same
 thing more honestly, and does not depend on a ratio to a second number. Use the
@@ -206,12 +202,9 @@ cannot be.** Every refusal names the step, because a graph has several and only
 some carry tools.
 
 *Claude Code keeps poieo's fence.* Its built-ins stay off, and poieo's own
-toolsets are handed over as an **in-process MCP server** whose every call lands
-back in the node's executor. So the workdir confinement holds, the run log still
-gets a `node_tool_call` for each one, and a task that asked for `isolation:` is
-**still working inside its container** — measured: the same step answered
-`MINGW64_NT-10.0-19045` on the host and `Linux 6.18.33.2-microsoft-standard-WSL2`
-boxed. No safety boundary moves.
+toolsets are handed over as an **in-process MCP server** whose every call
+lands back in the node's executor — workdir confinement, the run log's
+`node_tool_call` events, and `isolation:` all hold. No safety boundary moves.
 
 *Codex brings its own.* It cannot approve someone else's tool calls
 non-interactively, so it works in its own sandbox (`--sandbox workspace-write`,
@@ -241,14 +234,10 @@ would arm [runtime.md](runtime.md)'s spend limits against money nobody is
 billed, while the figure is still worth keeping: it answers *what did this save
 me*.
 
-The two are not symmetrical, and should not be forced to be. Claude Code lends
-a Python library that lets a host **turn every built-in tool off and supply its
-own, in-process** — so poieo can keep its own tools, its executor seam and its
-container. Codex is the other way round by design: its non-interactive mode
-cannot approve someone else's tool calls at all, and the only flag that gets
-past that switches off the sandbox with it, so its vendor's own answer is to
-call Codex *as* a tool and hand it a sandbox mode. Each is the supported way
-in.
+The two are not symmetrical, and should not be forced to be: Claude Code lets
+a host supply its own in-process tools; Codex's non-interactive mode cannot
+approve someone else's tool calls at all, so its vendor's supported way in is
+a sandbox mode. Each is used as designed.
 
 The Claude side needs only `pip install 'poieo[claude-code]'` — the SDK
 carries its own copy of the CLI, so the one on `PATH` is not a second
@@ -292,19 +281,13 @@ stale price inflates a bill quietly; a stale context window truncates a
 conversation quietly; **a stale address fails to connect, loudly, on the first
 call.** Only tables that are wrong in silence are dangerous.
 
-Every address was probed against the live endpoint when it was written. Two of
-them are why that is worth saying: Gemini and Perplexity answer 404 on `/models`
-and 400/401 on `/chat/completions`, so a check that only asked the first would
-have called two correct addresses wrong.
+Every address was probed against the live endpoint when it was written.
 
 ### The same Claude, three counters
 
-Companies reach Claude through Bedrock or Vertex because the billing and the
-security review already run through the cloud account they have — many will not
-register a card with Anthropic separately. It is the same model behind a
-different counter, and the counter **signs its requests with AWS or Google
-credentials** rather than taking an API key, which is why no header could have
-bridged it.
+Bedrock and Vertex are the same model behind a different counter — one that
+**signs requests with AWS or Google credentials** rather than taking an API
+key, which is why no header could have bridged it.
 
 ```yaml
 providers:
@@ -427,11 +410,10 @@ warn builder          declares context: 1310720 but openrouter reports 1048576
                       cleared later than this endpoint allows
 ```
 
-Said, never enforced, for three reasons and all three were measured. The
-endpoint's answer can be **absent** — Ollama reports nothing for a model it has
-not loaded. It can be **stale** — `num_ctx` is whatever the last request asked
-for, and the next one can change it. And a daemon that will not start because a
-local server happens to have a small model loaded is worse than one that warns.
+Said, never enforced: the endpoint's answer can be absent (Ollama says
+nothing for an unloaded model), stale (`num_ctx` is whatever the last request
+asked), and a daemon that will not start over a small loaded model is worse
+than one that warns.
 
 It is also no longer the last line of defence: the runtime notices when an
 endpoint keeps less than it was sent (`docs/runtime.md`), so a warning ignored
@@ -439,11 +421,8 @@ here becomes a visible event there rather than a silent corruption.
 
 **The two answers keep for different lengths of time, and are cached
 accordingly.** OpenRouter's is a property of a deployment and holds for the
-process. Ollama's is "what is loaded right now", and a single request from any
-client — poieo, or the editor somebody has open beside it — reloads the model at
-a different size: measured, `num_ctx=16384` took 5.43s to load and the next
-plain request took 3.91s to put 4,096 back. So that one is asked every time, and
-being wrong about it is caught at runtime rather than prevented here. It is the second place the runtime looks: the binding's
+process; Ollama's is "what is loaded right now", changed by any client's next
+request — so that one is asked every time. It is the second place the runtime looks: the binding's
 `context:` is the first, because somebody who wrote the number down meant it.
 Implementations cache; a window does not change while a process runs, and this
 must not become a round trip per turn. An endpoint that will not answer is not

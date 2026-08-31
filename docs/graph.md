@@ -42,7 +42,7 @@ one.
 
 Both sequence work, so the choice comes up on the second step of anything: a
 node's `next:` inside one graph, or a second card reached by `then:` (see
-[daemon.md](daemon.md)). One rule decides it, and it is not a matter of taste.
+[daemon.md](daemon.md)). One rule decides it.
 
 **A run works in a private copy of the folder and lands its work as one change**
 (see [workspace.md](workspace.md)). So *steps that must share one change are one
@@ -104,12 +104,9 @@ meaning something on the way past — `command: python -c "print(json.dumps({'k'
 1}))"` does not even parse as YAML, and the quoted spelling that does needs
 `''k''`.
 
-Stdin rather than a temp file, which is what GitHub Actions writes: a file
-would have to live in the workdir for a container to see it, and
-[workspace.md](workspace.md) commits the workdir whole as the night's change —
-so a scratch file would arrive in somebody's diff. (Their reason for a file is
-`cmd` and `powershell` needing extensions; poieo calls interpreters, not
-shells, and every one of those reads stdin.)
+Stdin rather than a temp file, because the workdir is committed whole as the
+night's change ([workspace.md](workspace.md)) — a scratch file would arrive in
+somebody's diff.
 
 `LANGUAGES` in `tools/__init__.py` is the table, and adding one is a line. An
 interpreter that is not installed fails with its own message, which is the
@@ -134,21 +131,16 @@ folder by the hash of the code *is* the cache — skipping the build is then one
 `if the binary is already there`. Building once and running many times is not a
 feature added on top; it is what content-addressing gives for free.
 
-Two constraints decide where that folder is, and both come from
-[workspace.md](workspace.md): the workdir is committed whole as the night's
-change, so nothing scratch may go there — and `layout_for()` answers with the
-workdir *itself* when it holds no `poieo.yaml`, so a cache worked out from the
-workdir would land inside the user's repository. The project's cache path is
-passed in on `ToolContext` instead.
+The cache cannot live in the workdir (it is committed whole as the change),
+so the project's cache path is passed in on `ToolContext`.
 
 | | where | how long |
 |---|---|---|
 | local | the project's `memory/cache/builds/` | the folder's own "delete freely" contract |
 | isolated | `/tmp/poieo-build/` **inside the container** | the container's, like everything else it installed |
 
-Inside the container rather than a second mount, and that is not only
-simplicity: a binary built there is for the image's platform, so a cache shared
-with the host would eventually hand a Windows executable to a Linux container.
+Inside the container rather than a mount: a cache shared with the host would
+eventually hand a Windows executable to a Linux container.
 
 **A compiled script is not a template.** Rendering one would change the hash
 every run, so the cache would never hit and would grow without bound — and it
@@ -171,11 +163,9 @@ script: |
   int main(void) { return atof(getenv("FLOOR")) >= 90 ? 0 : 1; }
 ```
 
-That rule is also why there is no expiry to write: the cache is bounded by the
-number of distinct scripts in the project. The toolchain's version is
-deliberately not in the key — upgrading a compiler over unchanged source almost
-never changes what the program does, and reading a version would cost a process
-on every *hit*, which is the cost this exists to remove.
+No expiry needed: the cache is bounded by the number of distinct scripts. The
+toolchain version is deliberately not in the key — reading it would cost a
+process on every hit, the cost this exists to remove.
 
 A build that fails comes back as its own exit code and the compiler's own
 output, exactly as a red test suite does.
@@ -305,13 +295,10 @@ walks. A short list of builtins (`len`, `str`, `any`, `sorted`, `json_loads`, �
 is in scope; `**` refuses an exponent over 64 so `10 ** 10 ** 10` cannot hang the
 daemon.
 
-Every one of those three expressions was typed into a **YAML** file, so `true`,
-`false` and `null` resolve alongside Python's `True`, `False` and `None`. They
-are aliases, not replacements — the source is still parsed as Python, and the
-scope is checked first, so a run carrying data named `true` keeps it. Without
-them `when: "true"` failed with `unknown name 'true'`, which in a router is loud
-and in a task's `then:` block is the quietest possible bug: an unreadable
-condition there is logged and skipped, so the branch simply never fires.
+These expressions live in **YAML** files, so `true`, `false` and `null`
+resolve alongside Python's spellings — aliases checked after the scope, so run
+data named `true` keeps it. Without them, a `then:` condition written
+`when: "true"` was logged, skipped, and simply never fired.
 
 `DotDict` is why `input.text` works on data that arrived as plain JSON: run data
 is wrapped once at the boundary (`wrap()`), and `unwrap()` is its inverse for

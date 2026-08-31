@@ -206,15 +206,10 @@ no variable, because "its SDK resolves its own" is a different fact from "the ke
 is missing", and a panel warning about the first would cry wolf on every local
 endpoint.
 
-**The address now crosses, as `host` — and only as much of it as names a
-machine.** This route used to withhold it entirely, on the argument that an
-endpoint's own name tells one from another, and said the argument for letting
-it through would have to be concrete. It became concrete: `poieo config` writes
-the key `ollama` for an Ollama wherever it runs, so a project with one on this
-laptop and one on an office server had two endpoints a reader could not tell
-apart — and, worse, the panel told them both were on this machine. `host:port`
-answers that; the scheme and the path say nothing about which box replied and
-still do not cross.
+**The address crosses as `host` — and only as much of it as names a
+machine.** A project with an Ollama on this laptop and one on an office server
+otherwise shows two endpoints a reader cannot tell apart; `host:port` answers
+that, while the scheme and the path still do not cross.
 
 **`installed` and `here` are two facts, and were one.** `installed` says the
 listing is things *pulled and ready* rather than a menu — a property of the
@@ -238,15 +233,11 @@ why* — which reads as "there is nothing there", and the only cure was a termin
 as `{name, label, type, models}` — ids only, because this is a notice that
 something is here rather than a second catalogue. Almost always empty.
 
-**Its own route, and that is the decision worth recording.** It was first written
-as a field on the report, on the assumption that a closed local port refuses
-immediately and joining the existing gather would therefore be free. Measured, it
-is not: on Windows a candidate nothing is listening on costs the **full
-`HTTP_TIMEOUT`** — 1.5s, not 1.5ms. Folded in, every paint of the catalogue would
-have waited a second and a half for its own footnote. Asked apart, the catalogue
-arrives when it arrives and this lands under it later, which is the order a
-reader wants them in anyway. `test_the_catalogue_does_not_go_looking_for_engines`
-holds the split.
+**Its own route, deliberately.** A candidate nothing listens on costs the
+full `HTTP_TIMEOUT`, so folding this into the catalogue would make every paint
+wait for its own footnote. Asked apart, the catalogue arrives first and this
+lands under it — `test_the_catalogue_does_not_go_looking_for_engines` holds
+the split.
 
 **Still not behind a button.** A standing "look again" would have been worse than
 a slow paint: its usual answer is "nothing new", and a control whose usual answer
@@ -255,10 +246,8 @@ is nothing is one people learn to ignore. Two requests cost nobody anything.
 `_unclaimed` decides *cannot reach* **by address as well as by key**: somebody
 who declared the vLLM on this machine as `fast` has it, and offering it again
 under the name detection would have picked writes one server into one file
-twice. That is `detect.declared_as`, which `rebind.declare` asks too — they were
-two answers once, this comparing addresses and `declare` comparing keys, so the
-offer this route withheld was one `poieo config add` would happily have written
-in as a second name for one server.
+twice. That is `detect.declared_as`, which `rebind.declare` asks too — one rule,
+shared, so the offer and the write cannot disagree.
 
 What "the same address" means is `detect.one_machine` — **`host:port`, because a
 port is a server**. Two of them cannot share one, so which listing path a server
@@ -302,12 +291,9 @@ any shape it does not recognise. In order:
 **`adopted` says whether the running daemon took it, not just the file.**
 `point_at` verifies the file reloads, but `daemon.reread` validates what
 start-up validates and may refuse — a role pointed at an endpoint whose key is
-unset is the case that happens. That used to pass silently, on the reasoning
-that the next run would report it. It cannot: the panel draws from the same
-in-memory spec the daemon kept, so it redraws the **old** model, and a reader
-told `using` watches nothing change while the file quietly becomes a state the
-project will not start from. `why` carries the daemon's own sentence, and the
-panel shows it until the next write.
+unset is the case that happens, and the panel would otherwise redraw the old
+model while the file became a state the project will not start from. `why`
+carries the daemon's own sentence, shown until the next write.
 
 An endpoint that **did not answer does not block the edit**, exactly as
 `poieo config use` allows: a laptop with its server switched off still gets to
@@ -600,15 +586,10 @@ web-ui/src/
 ```
 
 **A refusal is a value, and it is shown the same way everywhere.** `useAct`
-holds the last one; `Refusal` draws it. The pair matters because the API may
-legitimately refuse *without a sentence* — `post` builds its answer as
-`{ok: response.ok, ...payload}` over a body that may not have parsed — so there
-is a fallback, and it lives in one place. It used to be written once per
-surface, and two of the six had no fallback at all: they tested `refused.error`
-rather than `refused` and showed a disabled button with nothing beside it. The
-second of those was written while the first was being fixed, which is the
-argument for the component rather than for another careful copy. Where the line
-sits is still each surface's own CSS; what it says is not.
+holds the last one; `Refusal` draws it — including the fallback for an API
+that refuses *without a sentence*, which lives in one place because hand
+copies of it drifted. Where the line sits is each surface's own CSS; what it
+says is not.
 
 **`Models` is reached from the rail, not from a card.** A project's models are
 the project's, and putting them in the drawer would repeat one answer on every
@@ -629,13 +610,10 @@ and the panel's constant on the right; the rail is `position: fixed`, so the
 stage has to reserve exactly that much or the board slides under it.
 
 **There are three of these asides and one geometry.** The drawer, the models
-panel and the make form share `.panel` in `index.css` — background, border,
-padding, the pinned edges and `box-sizing`; each keeps only what it does
-*inside* that box. They used to be three copies, and the copies drifted: only
-one of them counted its own padding against its width, so on a phone the other
-two laid `min(440px, 100vw)` plus 32px of padding across the screen, hung the
-overflow off the *left* edge, and silently chopped their own headings. A panel
-added here takes the class rather than the file.
+panel and the make form share `.panel` in `index.css`; each keeps only what it
+does *inside* that box. Three hand copies drifted once (two chopped their own
+headings on a phone), so a panel added here takes the class rather than the
+file.
 
 **A big catalogue folds by maker.** A hosted listing names every model
 `maker/model` — 396 across 58 makers — and a flat list of that is not read, it
