@@ -214,9 +214,50 @@ is all comments and costs a project nothing.
    with; its claim is its seed's, divided by the seed's rank and multiplied by
    how strong that connection is. A **second** hop is taken only across a strong
    connection, so with nothing reinforced one hop means one hop
-5. **cut** — best first, on whole-entry boundaries. Half a lesson is worse than
+5. **fill** — entries in scope that the card matched nothing in, newest first,
+   behind everything above. They seed no associations of their own: a claim
+   divided by rank has to start from a claim
+6. **cut** — best first, on whole-entry boundaries. Half a lesson is worse than
    none, and an entry too big for the budget loses only its own place: skipping
    it leaves the room to whoever ranks below, where stopping at it hid them all
+
+### Who is in the room, and who is merely first
+
+**Scope decides admission. Matching decides the order. The budget decides who is
+cut.** Sharing a word is *evidence*, not a ticket — an entry the card matched
+nothing in used to be dropped, and the room it would have taken went unused.
+With a 4 000-character budget and entries that run about a hundred characters,
+that was three quarters of the prompt's memory left empty while entries were
+discarded for not repeating a word.
+
+Two things are not room-dependent, and both stay:
+
+- **Scope** is the author saying who an entry is for. An entry scoped to another
+  card is not shown however much room there is.
+- **`contradicts` is a veto.** Putting an entry and the one disputing it in front
+  of a model together is the thing that field exists to prevent, and having space
+  is not a reason to. Step 5 skips both sides of a standing disagreement.
+
+### When meaning-ranking earns its place
+
+Nothing here compares meaning — the whole of it is set intersection over shaped
+words. That is deliberate, and the condition for revisiting it is written down
+rather than left to taste:
+
+**When a project's entries start filling `ENTRIES_BUDGET`.** Below that, ranking
+decides only what order things are read in, because everything in scope is shown
+either way; a hybrid of word-matching and meaning-matching would be a change with
+no observable effect and no way to verify it. Above it, ranking decides who is
+cut, and *that* is measurable — does the order put the right entries above the
+line? At roughly a hundred characters an entry, the crossing is near forty.
+
+The evidence for what to build then, gathered when this was written: hybrid
+retrieval beats either channel alone on agent-memory benchmarks (LongMemEval
+R@5 86.2% words-only against 95.2% fused; LoCoMo's ablation costs 12.7 points
+for removing the word channel and 2.4 for removing the meaning channel), the two
+are fused by rank rather than by score because their units do not compare, and
+the word channel is weighted higher. Until the budget fills, none of that has
+anything to decide.
 
 `connected()` decides who arrives beside an entry: `[[mentions]]` count in
 **either** direction (nearness is symmetric), `depends_on` **forward only** (what
