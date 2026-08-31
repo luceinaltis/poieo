@@ -31,15 +31,76 @@ def _fact(project, slug, body, matter=""):
     return remember(project, slug, f"---\n{matter}\n---\n{body}" if matter else body)
 
 
-def test_a_relevant_entry_reaches_the_block(tmp_path):
+def test_the_entry_a_task_matches_comes_first(tmp_path):
+    """Matching still decides the *order*. It no longer decides who is in the
+    room: an entry the task shares no word with used to be dropped, and the
+    space it would have taken went unused."""
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
     _fact(project, "unrelated", "The deploy pipeline reruns twice on Mondays.")
 
     block = read_memory(project, task)
     assert "What earlier work here has learned:" in block
-    assert "The api rejects batch sizes over 50." in block
-    assert "deploy pipeline" not in block
+    assert block.index("batch sizes over 50") < block.index("deploy pipeline")
+
+
+def test_room_left_over_goes_to_entries_the_task_matches_nothing_in(tmp_path):
+    """The budget is what says no. Below it, an entry in scope is shown --
+    dropping one to leave the room empty helps nobody."""
+    task, project = _project(tmp_path)
+    _fact(project, "unrelated", "The deploy pipeline reruns twice on Mondays.")
+
+    assert "deploy pipeline" in (read_memory(project, task) or "")
+
+
+def test_a_full_budget_still_keeps_the_matched_ones(tmp_path, monkeypatch):
+    """When there is not room for everyone, matching decides who is cut."""
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
+    for i in range(6):
+        _fact(project, f"filler-{i}", f"Something unrelated to anything, number {i}.")
+
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 80)
+    block = read_memory(project, task)
+    assert "batch sizes over 50" in block
+
+
+def test_room_is_counted_in_what_this_task_could_be_shown(tmp_path):
+    """Filling stops when the *task's* room is full, not when enough rows have
+    been read. Counting raw rows would stop at a run of entries scoped to other
+    cards and leave this one's room empty anyway."""
+    task, project = _project(tmp_path)
+    _fact(project, "mine", "Nothing here is about anything the card mentions.")
+    for i in range(8):
+        _fact(project, f"theirs-{i}", f"Belongs to the exporter, number {i}.", "scope: [exporter]")
+
+    assert "Nothing here is about anything" in (read_memory(project, task) or "")
+
+
+def test_two_entries_disputing_each_other_do_not_both_arrive(tmp_path):
+    """The veto holds between entries that arrive together, not only between one
+    already shown and one about to be. Otherwise a pair would slip in as a pair.
+    """
+    task, project = _project(tmp_path)
+    _fact(project, "wild-claim", "Nothing ever gets refused, honestly.")
+    _fact(
+        project,
+        "measured",
+        "Refusals happen most nights.",
+        matter="links:\n  contradicts: [wild-claim]",
+    )
+
+    block = read_memory(project, task) or ""
+    assert ("honestly" in block) != ("most nights" in block)
+
+
+def test_an_entry_outside_this_task_is_still_never_shown(tmp_path):
+    """Filling the room is not the same as ignoring scope. Scope is the
+    author saying who an entry is for, and that still holds."""
+    task, project = _project(tmp_path)
+    _fact(project, "for-another", "The exporter api needs batch flushing.", "scope: [exporter]")
+
+    assert read_memory(project, task) is None
 
 
 def test_the_fallback_returns_the_same_entries_as_fts(tmp_path, monkeypatch):
@@ -217,7 +278,7 @@ def test_a_mention_is_followed_in_both_directions(tmp_path):
     assert "alphabetically" in read_memory(project, task)
 
 
-def test_a_leaned_on_entry_joins_forward_only(tmp_path):
+def test_a_leaned_on_entry_joins_forward_only(tmp_path, monkeypatch):
     task, project = _project(tmp_path)
     _fact(
         project,
@@ -233,6 +294,10 @@ def test_a_leaned_on_entry_joins_forward_only(tmp_path):
         matter="links:\n  depends_on: [batch-cap]",
     )
 
+    # Association reach is what is under test, so the room is closed to the
+    # width of what association should bring: with space left over an entry
+    # arrives on its own, which would hide whether the walk reached it.
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 80)
     block = read_memory(project, task)
     assert "alphabetically" in block
     assert "links back here" not in block
@@ -277,12 +342,16 @@ def test_a_set_aside_neighbor_stays_out(tmp_path):
     assert "sat lower" not in read_memory(project, task)
 
 
-def test_one_hop_means_one_hop(tmp_path):
+def test_one_hop_means_one_hop(tmp_path, monkeypatch):
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
     _fact(project, "near", "Feeds land alphabetically. [[far]]")
     _fact(project, "far", "Somewhere a bell rings twice.")
 
+    # Association reach is what is under test, so the room is closed to the
+    # width of what association should bring: with space left over an entry
+    # arrives on its own, which would hide whether the walk reached it.
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 80)
     block = read_memory(project, task)
     assert "alphabetically" in block
     assert "bell rings" not in block
@@ -365,13 +434,17 @@ def test_a_worn_two_hop_path_arrives(tmp_path):
     assert block.index("alphabetically") < block.index("bell rings")
 
 
-def test_an_unworn_second_hop_is_never_taken(tmp_path):
+def test_an_unworn_second_hop_is_never_taken(tmp_path, monkeypatch):
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[near]]")
     _fact(project, "near", "Feeds land alphabetically. [[far]]")
     _fact(project, "far", "Somewhere a bell rings twice.")
     _worn(project, "batch-cap", "near")  # the first hop is strength; the second is not
 
+    # Association reach is what is under test, so the room is closed to the
+    # width of what association should bring: with space left over an entry
+    # arrives on its own, which would hide whether the walk reached it.
+    monkeypatch.setattr(memory_recall, "ENTRIES_BUDGET", 80)
     assert "bell rings" not in read_memory(project, task)
 
 

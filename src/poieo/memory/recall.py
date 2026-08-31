@@ -8,6 +8,12 @@ The page never competes with them for room.
 and only the winners are fetched -- reading every entry to choose forty is the
 one thing this file must not do.
 
+**Matching decides the order, and the budget decides who is cut.** An entry the
+task shares no word with used to be dropped; the room it would have taken went
+unused, which helped nobody. It is shown last instead, and only when there is
+room. Sharing a word is evidence, not admission -- **scope** is admission, and
+that is the author saying who an entry is for.
+
 Design: docs/memory.md
 """
 
@@ -15,7 +21,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..layout import layout_for
 from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
@@ -26,6 +32,10 @@ from .index import narrow
 ENTRIES_BUDGET = 4_000
 # An entry anchored where the task works beats any merely-similar one.
 _ANCHOR_BOOST = 1_000
+# How far the walk that fills leftover room will read before giving up. The
+# budget usually stops it long first; this is the floor under a project whose
+# newest entries all belong to other cards.
+_SCAN_CAP = 500
 
 # Interface words only past this point: the machinery names (entries, recall)
 # stay in this package and the spec. docs/memory.md pairs the two lists.
@@ -84,23 +94,50 @@ def _fetch(con: sqlite3.Connection, slugs: list[str]) -> list[Entry]:
     return [entry_of(row) for row in rows]
 
 
-def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool) -> list[Entry]:
+def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool, allowed: "Callable[[Entry], bool]") -> list[Entry]:
     """The entries worth scoring, fetched and no more.
 
-    An anchored entry is relevant by where it points, not by the words it
-    shares, so it must not depend on the lookup finding a shared word -- it is
-    asked for by the one thing the row already knows, that it has anchors.
+    Three things get fetched, and nothing else. What the lookup matched, because
+    those have evidence. Anything **anchored**, because an anchored entry is
+    relevant by where it points rather than by the words it shares. And enough
+    of the rest, newest first, to fill the budget -- so leftover room can go to
+    an entry the task happens to share no word with.
+
+    "Enough" counts only what this task could actually be shown: filling against
+    the raw row count would stop at forty entries scoped to other cards and
+    leave the room empty anyway. `_SCAN_CAP` bounds the walk regardless, so a
+    project whose newest thousand entries all belong elsewhere costs a bounded
+    read rather than a full one.
     """
     hits = narrow(con, seed) if use_index else None
     if hits is None:
         return [entry_of(row) for row in con.execute("SELECT * FROM entries").fetchall()]
     names = sorted(hits)
-    if not names:
-        rows = con.execute("SELECT * FROM entries WHERE anchors != '[]'").fetchall()
-    else:
-        holes = ",".join("?" * len(names))
-        rows = con.execute(f"SELECT * FROM entries WHERE slug IN ({holes}) OR anchors != '[]'", names).fetchall()
-    return [entry_of(row) for row in rows]
+    holes = ",".join("?" * len(names))
+    rows = con.execute(
+        f"SELECT * FROM entries WHERE slug IN ({holes}) OR anchors != '[]'"
+        if names
+        else "SELECT * FROM entries WHERE anchors != '[]'",
+        names,
+    ).fetchall()
+    found = [entry_of(row) for row in rows]
+
+    spent = sum(len(entry.body) for entry in found if allowed(entry))
+    if spent >= ENTRIES_BUDGET:
+        return found
+    taken = {entry.slug for entry in found}
+    seen = 0
+    for row in con.execute("SELECT * FROM entries ORDER BY updated_at DESC, slug"):
+        if spent >= ENTRIES_BUDGET or seen >= _SCAN_CAP:
+            break
+        seen += 1
+        if row["slug"] in taken:
+            continue
+        entry = entry_of(row)
+        found.append(entry)
+        if allowed(entry):
+            spent += len(entry.body)
+    return found
 
 
 def _neighbours(con: sqlite3.Connection, slugs: set[str]) -> list[Entry]:
@@ -130,28 +167,34 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         return []
     seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
 
+    def in_scope(entry: Entry) -> bool:
+        return entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
+
     def allowed(entries: list[Entry]) -> list[Entry]:
-        return [
-            entry for entry in entries if entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
-        ]
+        return [entry for entry in entries if in_scope(entry)]
 
     from ..strength import STRONG_FLOOR, strengths
 
     strength = strengths(project_dir)
 
     with open_memory(project_dir) as con:
-        candidates = allowed(_pool(con, seed, use_index))
+        candidates = allowed(_pool(con, seed, use_index, in_scope))
         if not candidates:
             return []
 
         scored = []
+        # Entries the task matches nothing in. They wait behind everything with
+        # evidence, and behind everything association reached -- and they seed
+        # no associations of their own, because a claim divided by rank has to
+        # start from a claim.
+        spare = []
         for entry in candidates:
             score = len(seed & words(entry.body))
             if _anchored(entry, task, project_dir):
                 score += _ANCHOR_BOOST
-            if score > 0:
-                scored.append((score, entry))
+            (scored if score > 0 else spare).append((score, entry))
         scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
+        spare.sort(key=lambda pair: (-pair[1].updated_at.timestamp(), pair[1].slug))
 
         # Association after evidence: a neighbour's claim is its seed's,
         # divided by rank and scaled by how strong the connection is. Scope and
@@ -189,6 +232,18 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         (by_slug[slug] for slug in carry),
         key=lambda entry: (-carry[entry.slug], entry.slug),
     )
+    # A disagreement is a veto, and room does not overrule it: putting an entry
+    # and the one that disputes it in front of a model together is the thing
+    # `contradicts` exists to prevent, whether it arrives by a connection or by
+    # there being space for it. Both directions, and against what filling has
+    # already let in -- two entries disputing each other must not both arrive
+    # just because they arrived together.
+    for _, entry in spare:
+        here = {shown.slug for shown in sequence}
+        disputed = {slug for shown in sequence for slug in shown.matter.links.contradicts}
+        if entry.slug in disputed or set(entry.matter.links.contradicts) & here:
+            continue
+        sequence.append(entry)
 
     # One entry too big for the budget loses its own place, not everybody
     # else's: the room it could not use goes to whoever ranks below it.

@@ -347,8 +347,10 @@ def test_an_episode_records_what_the_run_was_shown(tmp_path):
 
     record_run(task, result)
     data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
-    assert "tidy-order" in data["shown"]
-    assert "elsewhere" not in data["shown"]
+    # Every entry the run had in mind, in the order it had them: the one the
+    # task matched leads, and the one it matched nothing in followed because
+    # there was room. The record is what the accounting later reads.
+    assert data["shown"] == ["tidy-order", "elsewhere"]
 
 
 def test_a_memoryless_projects_episode_records_nothing_new(tmp_path):

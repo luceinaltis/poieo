@@ -390,10 +390,13 @@ one copy of what the project knows, and because every change to it is kept:
 `poieo memory` shows what an entry said before, and who changed it.
 
 The page is read whole, every run, first -- put the rules there that every
-task must hold and that nothing would think to look up. The entries are
-chosen per task: by a scope in their frontmatter (`global`, a
-task's name, or a path), by the words they share with what the task is about,
-and above all by naming the code the task is working on. A wrong entry is not
+task must hold and that nothing would think to look up.
+
+The entries are **ordered** per task, not filtered down to a few: what a task
+shares words with comes first, what names the code it is working on comes above
+that, and what it matches nothing in follows while there is room. A scope
+(`global`, a task's name, or a path) is the one thing that keeps an entry out of
+a task entirely -- that is you saying who it is for. A wrong entry is not
 deleted; set it aside and it steps out of every prompt, its words and its
 history intact.
 
