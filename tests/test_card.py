@@ -21,7 +21,7 @@ from poieo.card import (
     read_journal,
     system_block,
 )
-from poieo.daemon.config import TaskSpec, load_config, load_tasks
+from poieo.daemon.config import TaskSpec, check_handoffs, load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
 from poieo.memory import write_page
@@ -692,3 +692,69 @@ def test_a_graph_is_still_a_graph():
     """`nodes:` outranks everything, and a file with neither is neither."""
     assert not is_card_document({"name": "g", "entry": "a", "nodes": [{"id": "a"}]})
     assert not is_card_document({"name": "proj", "store": "runs", "binding": "b.yaml"})
+
+
+# -- the shipped chain --------------------------------------------------------
+
+
+def test_the_example_project_ships_a_chain_of_handoffs():
+    """Nothing demonstrated `then:` until this, which is why nobody could see it.
+
+    The board's central rule is that **an arrow crossing a border is a new
+    run** -- a new private copy, and one more thing to accept or discard. A
+    reader who opens the sample project and finds no arrow anywhere has no way
+    to meet that rule, and the pair of tasks that were already there talk
+    through notes instead, which is a different mechanism on purpose.
+    """
+    config = load_config(EXAMPLES / "poieo.yaml")
+    by_name = {task.name: task for task in config.tasks}
+
+    hands = {name: [(branch.to, branch.label) for branch in task.then] for name, task in by_name.items() if task.then}
+    assert hands["night-watch"] == [("mend", "red")]
+    assert hands["mend"] == [("tell-me", "green again")]
+    # The end of a chain says nothing, rather than saying "nowhere": falling
+    # off the end is what almost every task does.
+    assert not by_name["tell-me"].then
+
+    # Every target is a task and nothing points at itself. It is also a chain
+    # rather than a ring: a catch-all last branch back to the first task reads
+    # like a retry, loads with a warning, and then two tasks wake each other
+    # for as long as the chain depth allows -- which is not what an example
+    # somebody arms should do on its first night.
+    check_handoffs(config)
+
+
+def test_the_chain_only_wakes_on_a_handoff():
+    """A task with no schedule is not a broken task. `mend` has nothing to say
+    about a suite nobody reported broken, so it waits to be woken."""
+    config = load_config(EXAMPLES / "poieo.yaml")
+    by_name = {task.name: task for task in config.tasks}
+
+    assert by_name["mend"].trigger.type == "manual"
+    assert by_name["tell-me"].trigger.type == "manual"
+    assert by_name["night-watch"].trigger.type == "interval"
+
+
+def test_the_chain_looks_but_does_not_touch():
+    """Three tasks that only answer. A prompt-shaped task is given the files
+    and shell toolsets unless it says otherwise, and an example that anybody
+    may arm should not be handed more than it needs."""
+    loaded = {item.spec.name: item for item in load_tasks(load_config(EXAMPLES / "poieo.yaml"))}
+
+    for name in ("night-watch", "mend", "tell-me"):
+        assert loaded[name].graph.nodes[0].tools == [], name
+
+
+def test_a_card_that_asks_for_no_tools_is_given_none(tmp_path):
+    """`None` is "the card did not say", and a card-made task is meant to have
+    hands. `[]` is the card saying none -- and `or` read the two as one, so a
+    task written to be harmless was handed the files and shell toolsets anyway.
+
+    Of all the places a key can read as configured and do nothing, this is the
+    one that costs more than a puzzled reader.
+    """
+    quiet = write_card(tmp_path, "quiet", "name: quiet\nprompt: look\ntools: []\n")
+    ordinary = write_card(tmp_path, "ordinary", "name: ordinary\nprompt: work\n")
+
+    assert expand(load_card(quiet))[1].nodes[0].tools == []
+    assert expand(load_card(ordinary))[1].nodes[0].tools == ["files", "shell"]

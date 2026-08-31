@@ -1,0 +1,13 @@
+# Last of three, and it hands off to nobody. Falling off the end is what almost
+# every task does, and it is why there is no `default:` on a card: a run that
+# has finished does not have to go anywhere.
+name: tell me
+folder: ..
+role: teller
+tools: []
+trigger:
+  type: manual
+prompt: |
+  Write one sentence for the morning about what was wrong and what fixed it.
+
+  {{ input.sender.aliases.summary }}

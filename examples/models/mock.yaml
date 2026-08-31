@@ -23,6 +23,16 @@ providers:
               - name: write_file
                 arguments: {path: TODO.md, content: "- write more tests\n- add docs\n- ship\n"}
           - "Wrote TODO.md with three next steps."
+        # The three that hand off to one another. Scripted so the chain really
+        # fires on a binding that spends nothing: the first answer is red, so
+        # `night-watch` hands to `mend`, whose answer is green, so it hands to
+        # `tell-me`. A second look finds it green and the chain stops there,
+        # which is what most nights are.
+        watcher:
+          - "RED. test_expr fails on two expressions that used to parse."
+          - "GREEN. Nothing to do."
+        mender: "GREEN. The two expressions parse again; one was missing a guard."
+        teller: "The suite went red on two expressions overnight, and a missing guard was the cause."
         # What the learning pass hears when it reads the night. Empty "from"
         # means the harness stamps every record shown as the source.
         learner: '{"entries": [{"slug": "one-at-a-time", "body": "The mock feed

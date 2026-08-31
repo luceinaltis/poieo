@@ -1,0 +1,31 @@
+# First of three, and the only one on a clock. `then:` is what makes them a
+# chain: when this run finds the suite red, it hands the work to `mend`.
+#
+# **Every arrow here starts a new run.** Not the next step of this one -- a new
+# private copy, its own journal, and one more thing to accept or discard in the
+# morning. That is the whole reason to spend an arrow rather than another node:
+# `docs/graph.md` has the rule, and this is it drawn.
+#
+# On the mock binding, so watching it costs nothing.
+name: night watch
+folder: ..
+role: watcher
+# It only looks; it does not touch anything. Without this line a task has the
+# files and shell toolsets, which is more than looking needs.
+tools: []
+trigger:
+  type: interval
+  every: 10m
+  # So the chain is visible the moment the daemon starts, rather than in ten
+  # minutes. An example nobody sees work is an example nobody believes.
+  run_at_start: true
+prompt: |
+  Run the suite and say GREEN or RED, then one line about what you found.
+
+then:
+  # `summary` is what a prompt-shaped task's one step is aliased to, so a
+  # condition reads what the step said. Nothing matched means the chain ends
+  # here, which is what a green night looks like.
+  - when: "'RED' in summary"
+    to: mend
+    label: red

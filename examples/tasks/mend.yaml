@@ -1,0 +1,25 @@
+# Second of three. **`manual` means nothing but a handoff wakes it** -- there is
+# no schedule here, because there is no point looking at a suite nobody said was
+# broken. A task woken this way reads what woke it as `input.sender`.
+name: mend
+folder: ..
+role: mender
+tools: []
+trigger:
+  type: manual
+prompt: |
+  The night watch found the suite red. Put it right, then say GREEN or RED
+  and one line about what you changed.
+
+  What it saw:
+  {{ input.sender.aliases.summary }}
+
+then:
+  # Nothing matched means the chain stops, which is what a card says instead of
+  # a router's `default:` -- a router must send a run somewhere and a finished
+  # run may simply stop. A catch-all here (`when: "true"` back to night-watch)
+  # reads like a retry and is a cycle: it loads, with a warning, and then two
+  # tasks wake each other for as long as the chain depth allows.
+  - when: "'GREEN' in summary"
+    to: tell-me
+    label: green again
