@@ -36,7 +36,8 @@ export function Control({
   if (!enabled) {
     return (
       <p className="control-off">
-        Switched off in its card. Set <code>enabled: true</code> and restart the daemon to run it.
+        Switched off in its card. The switch is in the card below — turn it on and
+        save, and the daemon picks it up within seconds.
       </p>
     )
   }

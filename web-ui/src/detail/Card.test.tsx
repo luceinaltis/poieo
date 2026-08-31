@@ -241,6 +241,7 @@ test("a plain card opens as the three fields, not as a file", async () => {
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    enabled: true,
     plain: true,
   })
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
@@ -267,11 +268,51 @@ test("a plain card opens as the three fields, not as a file", async () => {
   expect(save().disabled).toBe(false)
   await act(async () => save().click())
 
-  // Fields go over the wire; the daemon spells the file.
+  // Fields go over the wire; the daemon spells the file. The switch rides
+  // with them at the position it was read back at, so an edit to the prompt
+  // alone leaves it where it stands.
   expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
     name: "Chores",
     folder: "../work",
     prompt: "sharper",
+    enabled: true,
+  })
+  expect(container.textContent).toContain("next run")
+})
+
+test("the switch is the fourth field, and saving carries it", async () => {
+  // The one live field: the folder scan adopts `enabled:` whole, so a card
+  // written down without being started is started from here rather than by
+  // editing the file and restarting the daemon. The payload is what is
+  // asserted -- a switch that draws and sends nothing is the whole defect.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nenabled: false\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    enabled: false,
+    plain: true,
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
+  await open()
+
+  const box = () => container.querySelector<HTMLInputElement>(".card-field-enabled")!
+  expect(box().checked).toBe(false)
+  // Nothing changed yet, so there is nothing to save.
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(save().disabled).toBe(true)
+
+  await act(async () => box().click())
+  expect(box().checked).toBe(true)
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    enabled: true,
   })
   expect(container.textContent).toContain("next run")
 })

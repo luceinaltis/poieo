@@ -302,6 +302,22 @@
   width: 100%;
 }
 
+/* The switch reads as a line rather than as a labelled box: it sits beside its
+   words, and takes its own size instead of the full width every other field's
+   input takes -- a checkbox stretched across the fold is not a checkbox. */
+.card-field.card-switch {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+}
+
+.card-switch input {
+  flex: none;
+  padding: 0;
+  width: auto;
+}
+
 /* Why the card on disk is not what is running, in the daemon's own words.
 
    Amber, the colour the board's card uses for the same fact: nothing was lost

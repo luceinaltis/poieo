@@ -443,6 +443,8 @@ export interface Card {
   name: string
   folder: string | null
   prompt: string | null
+  /** Whether the card lets the task run. The one field a save takes live. */
+  enabled: boolean
   /**
    * Whether the card can be rebuilt from the three fields alone. Plain, the
    * board offers a form and the daemon spells the file; carrying more -- a
@@ -478,11 +480,15 @@ export interface RewrittenCard extends Answer {
 export function rewriteCard(
   project: string,
   task: string,
-  card: string | { name: string; folder: string; prompt: string },
+  card:
+    | string
+    | { name: string; folder: string; prompt: string; enabled: boolean },
 ): Promise<RewrittenCard> {
-  // Two spellings of one write: the raw file, or the three fields the daemon
+  // Two spellings of one write: the raw file, or the fields the daemon
   // serialises itself -- through the same dump make uses, so a person who
-  // came in through the form never touches YAML.
+  // came in through the form never touches YAML. `enabled` rides with them
+  // rather than being left out: the daemon reads an absent one as unchanged,
+  // and the form is showing a switch whose position it means to send.
   return withBody(
     "PUT",
     `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
