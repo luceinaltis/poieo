@@ -298,7 +298,7 @@ function fillInside(box: Box, flowState: TaskState): void {
       stop.setAttribute("class", "basic-step-stop")
       stop.setAttribute("cx", String(step.x))
       stop.setAttribute("cy", String(step.y))
-      stop.setAttribute("r", "3.5")
+      stop.setAttribute("r", "4")
       // Where a run can end. Its own mark per arm, because two different ways
       // of ending are two different facts and must not collapse into one.
       stop.append(title("the run ends here"))
@@ -307,8 +307,13 @@ function fillInside(box: Box, flowState: TaskState): void {
     }
     const pill = pills.get(step.id)
     if (pill === undefined) continue
-    pill.style.left = `${step.x}px`
-    pill.style.top = `${step.y}px`
+    // Its own top-left, worked out from the centre dagre answered with, rather
+    // than the centre plus a `translate(-50%, -50%)`. Layout ignores a
+    // transform, so a pill placed that way had a *layout* box reaching half its
+    // own width past where it was drawn -- and the well went on scrolling for
+    // room nothing occupied, clipping the last step in every branching graph.
+    pill.style.left = `${step.x - step.width / 2}px`
+    pill.style.top = `${step.y - step.height / 2}px`
     if (step.ends) pill.dataset.ends = "true"
   }
 
@@ -317,7 +322,16 @@ function fillInside(box: Box, flowState: TaskState): void {
   // not know is there, and the whole point of drawing this unasked is that it
   // is read at a glance. There is a floor -- past it the type stops being type
   // -- and below that the border scrolls, which is why the overflow rule stays.
-  const room = BOX.width - 30
+  // Measured, not guessed from `BOX.width`: the graph sits in a well with its
+  // own padding and border, inside a border with its own padding, and a
+  // constant here went stale the moment the well was added. `clientWidth`
+  // counts the padding, so it is taken off -- that twenty pixels is exactly
+  // what was clipping the last step of every branching graph. The fallback is
+  // for a border not yet laid out, and for jsdom.
+  const pad = getComputedStyle(box.inside)
+  const room =
+    box.inside.clientWidth - (parseFloat(pad.paddingLeft) || 0) - (parseFloat(pad.paddingRight) || 0) ||
+    BOX.width - 54
   const shrink = laid.width > room ? Math.max(0.66, room / laid.width) : 1
   box.inside.style.height = `${Math.ceil(laid.height * shrink)}px`
   // The **scaled** size, not the laid-out one. A transform changes what is
@@ -341,7 +355,9 @@ function head(at: { x: number; y: number }, from: { x: number; y: number }): SVG
   const turn = (Math.atan2(at.y - from.y, at.x - from.x) * 180) / Math.PI
   const tip = document.createElementNS(SVG, "path")
   tip.setAttribute("class", "basic-step-tip")
-  tip.setAttribute("d", "M0 0 L-5 2.6 L-5 -2.6 Z")
+  // Bigger than it was: at five pixels the head vanished before the line did,
+  // and the head is what says which way a run goes.
+  tip.setAttribute("d", "M0 0 L-7 3.4 L-7 -3.4 Z")
   tip.setAttribute("transform", `translate(${at.x} ${at.y}) rotate(${turn})`)
   return tip
 }
