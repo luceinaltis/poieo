@@ -1,11 +1,15 @@
 # The poieo brand
 
-**The work grows like a tree; you conduct it.** The brand runs on two
-metaphors with separate jobs and no third. The **tree** is the picture:
-something alive and a little wilful, branches growing where they decide to,
-a bud on every twig, one amber where something ripened. **Conducting** is the
-voice: the reader stops doing tasks and starts directing them. Every visual
-decision answers to the tree; every sentence answers to the conductor.
+**Your models, at work.** The brand has one picture and one promise. The
+**tree** shows work that keeps growing after the task is written: crooked
+branches are work in motion, the buds are continuing tasks, and the single
+amber fruit is a change ready for review. The voice stays plain and user-side:
+the reader chooses the models and schedule, then decides what reaches their
+files.
+
+The product should feel like a quiet working team without pretending the
+models are people. No faces, names, avatars, or employee cards enter the
+interface. Its vocabulary remains **task, run, change**.
 
 The look began with a photographed kinetic sculpture (a sphere sprouting
 crooked ball-tipped stalks) and was distilled through tree studies into the
@@ -35,10 +39,17 @@ running software are one thing:
 
 | token | hex | job |
 |---|---|---|
-| Ground | `#14120f` | the warm near-black everything sits on |
-| Parchment | `#e8e2d8` | shapes and body text on dark |
+| Ground | `#100e0c` | the warm near-black everything sits on |
+| Panel | `#201c18` | a task card on the ground |
+| Well | `#181513` | a recessed graph or field inside a card |
+| Raised | `#2e2721` | buttons and steps |
+| Rule | `#332b23` | hairlines and quiet borders |
+| Line | `#7d7164` | wires, arrowheads, and stronger outlines |
+| Parchment | `#f0e7d9` | shapes and body text on dark |
+| Dim | `#a0958a` | supporting copy that remains readable |
 | Ember | `#d8a657` | the one ripe bud; every accent |
 | Live | `#a9b665` | the product's own "running right now" — the board owns this word, not the mark |
+| Stop | `#e08a74` | failure and direct-file risk |
 | Ink | `#221e18` | what parchment becomes on light grounds |
 
 ## Type
@@ -62,6 +73,18 @@ running software are one thing:
    fires) is retired from every brand surface — README, site, cards,
    screenshots. The atelier skin that carried it has since been removed from
    the product as well; nothing renders a forge anywhere now.
+
+## Voice
+
+The active copy hierarchy is fixed:
+
+- **Headline:** Your models, at work.
+- **Descriptor:** An autonomous task board for the models you choose.
+- **Explanation:** Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.
+
+Explain the product in the order a person experiences it: **Write the task →
+Let it run → Review the change.** Night and morning may illustrate a use case,
+but they are not the brand promise.
 
 ## Registers — reference images
 

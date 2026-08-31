@@ -42,15 +42,18 @@
 
   --ground: #100e0c;      /* the board's background */
   --panel: #201c18;       /* a card on it */
+  --well: #181513;        /* a recessed surface inside a card */
   --raised: #2e2721;      /* a button on it */
   --rule: #332b23;        /* every hairline */
+  --line: #7d7164;        /* a wire, arrowhead, or quiet outline */
   --text: #f0e7d9;        /* body */
   --dim: #a0958a;         /* what is beside the point but still readable */
   --ember: #d8a657;       /* the one amber bud, and so every accent here */
   --live: #a9b665;        /* a task that is running */
-  --faint: #6b6257;       /* labels and asides, a step below --dim */
-  --faint2: #7a6e60;      /* outline links and quiet notes */
-  --prose: #c8beb0;       /* long-form body text, softer than --text */
+  --stop: #e08a74;        /* a task that failed */
+  --faint: #7d7164;       /* labels and asides, a step below --dim */
+  --faint2: #7d7164;      /* outline links and quiet notes */
+  --prose: #d6ccbe;       /* long-form body text, softer than --text */
   --ember-hi: #f0c983;    /* the accent, lit up on hover */
   --on-ember: #1a1509;    /* text sitting on an amber button */
 
@@ -68,12 +71,15 @@
   color-scheme: light;
   --ground: #f4f0e8;
   --panel: #fbf8f2;
-  --raised: #ece5d8;
-  --rule: #ddd4c3;
+  --well: #ece5d8;
+  --raised: #e4dccf;
+  --rule: #cfc5b0;
+  --line: #766b5e;
   --text: #221e18;
   --dim: #6f6656;
   --ember: #a06f26;
   --live: #6d7a35;
+  --stop: #a44939;
   --faint: #8a7f6c;
   --faint2: #8a7f6c;
   --prose: #4a4237;
@@ -190,19 +196,25 @@ h3 { font-size: 1.05rem; }
 
 .hero-copy { max-width: 35rem; position: relative; }
 
-/* The break in the markup owns the line count: two lines, never three, so
-   the width stays open and the size is what yields. */
 .hero h1 {
-  font-size: clamp(1.55rem, 4.4vw, 2.85rem);
-  letter-spacing: -0.02em;
-  white-space: nowrap;
+  font-size: clamp(2.25rem, 6vw, 4.6rem);
+  letter-spacing: -0.045em;
+  line-height: 0.96;
+  margin: 0 0 1.35rem;
+}
+
+.descriptor {
+  color: var(--text);
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  font-weight: 600;
+  margin: 0 0 0.6rem;
 }
 
 .lead {
   color: var(--dim);
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
+  font-size: clamp(1rem, 1.8vw, 1.12rem);
   margin: 0 0 2.2rem;
-  max-width: 44ch;
+  max-width: 50ch;
 }
 
 .hero-note { color: var(--faint2); font-size: 0.9rem; margin: 1.4rem 0 0; }
@@ -215,18 +227,20 @@ h3 { font-size: 1.05rem; }
   display: inline-flex;
   gap: 10px;
   margin-bottom: 1.8rem;
-  max-width: 100%;
+  max-width: calc(100vw - 40px);
   overflow: hidden;
   padding: 0 0 0 14px;
   text-align: left;
+  width: 40rem;
 }
 
 .cta code {
   align-self: center;
   color: var(--text);
-  overflow-x: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 12px 0;
-  white-space: nowrap;
+  white-space: pre-wrap;
 }
 
 .cta button {
@@ -316,28 +330,60 @@ pre {
 
 pre .c { color: var(--dim); }
 
-/* --- three words --------------------------------------------------------- */
+/* --- the working loop ---------------------------------------------------- */
 
-.grid { display: grid; gap: 1.2rem; grid-template-columns: repeat(3, 1fr); }
-
-.word {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 1.4rem 1.5rem;
+.cycle > h2 {
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 0 0 3rem;
+  max-width: 22ch;
 }
 
-.word h3 { color: var(--live); font-family: var(--mono); font-size: 1.1rem; }
-.word p { color: var(--dim); margin: 0; }
+.cycle-steps {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.cycle-steps article {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
+.cycle-steps span {
+  color: var(--live);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+
+.cycle-steps h3 {
+  font-size: 1.05rem;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.cycle-steps p {
+  color: var(--dim);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.cycle-proof {
+  align-items: end;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 5fr 8fr;
+  margin-top: 3.5rem;
+}
+
+.cycle-review { margin-top: 4rem; }
 
 .aside { color: var(--dim); font-size: 0.95rem; margin: 1.6rem 0 0; max-width: 62ch; }
 
 /* --- the morning --------------------------------------------------------- */
 
 .morning-text { max-width: 66ch; }
-/* The picture is a screenshot of a dense panel, so it gets the whole measure.
-   Beside the prose in a column it was legible as a shape and nothing else. */
-.morning .shot { margin-top: 2.5rem; }
 .morning p { color: var(--dim); }
 .morning strong { color: var(--text); font-weight: 600; }
 
@@ -366,6 +412,10 @@ footer p { margin: 0.4rem 0; }
 
 /* --- one column ---------------------------------------------------------- */
 
+@media (min-width: 761px) {
+  .hero h1 { white-space: nowrap; }
+}
+
 @media (max-width: 760px) {
   body { font-size: 16px; }
   section { padding: 3rem 0; }
@@ -375,12 +425,14 @@ footer p { margin: 0.4rem 0; }
   .hero-art {
     -webkit-mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
     mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
-    opacity: 0.3;
+    opacity: 0.16;
     right: -30%;
     width: 130vw;
   }
-  .steps, .grid, .why dl, .proof { grid-template-columns: 1fr; }
+  .steps, .cycle-steps, .cycle-proof, .why dl { grid-template-columns: 1fr; }
+  .cycle-review { margin-top: 0; }
   .cta { display: flex; width: 100%; }
+  .cta code { flex: 1; }
   .bar-sub { display: none; }
 }
 
@@ -454,9 +506,33 @@ footer p { margin: 0.4rem 0; }
   text-transform: uppercase;
 }
 
+.nav-contributor {
+  border-top: 1px solid var(--rule);
+  margin-top: 1.8rem;
+  padding-top: 1rem;
+}
+
+.nav-contributor > summary {
+  color: var(--dim);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  list-style-position: outside;
+  margin-left: 1rem;
+}
+
+.nav-contributor[open] > summary {
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.nav-contributor .nav-group {
+  margin-left: 0.25rem;
+}
+
 .doc-nav a {
   border-left: 2px solid transparent;
-  color: var(--ash);
+  color: var(--dim);
   display: block;
   font-size: 0.92rem;
   padding: 4px 0 4px 12px;
@@ -584,10 +660,6 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
 }
 
 
-/* --- proof: real cards beside the real board --------------------------- */
-
-.proof { align-items: center; display: grid; gap: 3.5rem; grid-template-columns: 6fr 5fr; }
-
 .proof-label {
   color: var(--live);
   font-family: var(--mono);
@@ -595,17 +667,3 @@ h2:hover .h-anchor, h3:hover .h-anchor, h4:hover .h-anchor { opacity: 0.6; }
   letter-spacing: 0.14em;
   margin: 0 0 1rem;
 }
-
-.chips { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0 0 1.4rem; padding: 0; }
-
-.chips li {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  padding: 7px 14px;
-}
-
-.proof-shot { max-width: 400px; justify-self: center; }

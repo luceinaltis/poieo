@@ -13,6 +13,8 @@
  */
 
 const { chromium } = require("playwright")
+const path = require("node:path")
+const { pathToFileURL } = require("node:url")
 
 const [, , base = "http://127.0.0.1:8484", out = "site/img", open] = process.argv
 
@@ -58,6 +60,21 @@ async function shot(browser, { skin, file, settle, size, then }) {
   return problems
 }
 
+async function social(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 640 } })
+  const problems = []
+  page.on("console", (m) => m.type() === "error" && problems.push(m.text()))
+  page.on("pageerror", (e) => problems.push(String(e)))
+
+  const source = pathToFileURL(path.resolve(__dirname, "../site/social.html")).href
+  await page.goto(source, { waitUntil: "networkidle" })
+  await page.screenshot({ path: `${out}/social.png` })
+  await page.close()
+
+  console.log(`  social.png${problems.length ? `  (console: ${problems[0]})` : ""}`)
+  return problems
+}
+
 ;(async () => {
   const browser = await chromium.launch()
 
@@ -82,6 +99,8 @@ async function shot(browser, { skin, file, settle, size, then }) {
         await page.waitForTimeout(1500)
       },
     })))
+
+    problems.push(...(await social(browser)))
   } finally {
     await browser.close()
   }

@@ -104,7 +104,7 @@
 /* Now. Every lane ends here, so a mark against it is still going rather than
    merely the most recent one. */
 .runs-edge {
-  background: var(--live)3d;
+  background: color-mix(in srgb, var(--live) 24%, transparent);
   bottom: 0;
   position: absolute;
   right: 0;

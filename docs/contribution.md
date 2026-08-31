@@ -26,7 +26,7 @@ served the bug `main` had already fixed — with both suites green over it the
 whole time. **A green run is not evidence that the bundle is current; only the
 rebuild is.**
 
-## Photographing the board
+## Photographing the board and share card
 
 *No rule sends you here.* The pictures in `README.md` and on the site are of a
 real board, and they go stale the way the bundle does — silently, because
@@ -41,7 +41,8 @@ That builds a whole poieo project in a temporary folder — a git repository for
 the work to happen in, five cards over it, a scripted binding that spends
 nothing — runs it until there is history worth looking at, starts the daemon on
 a free port, and photographs it. Nothing inside this repository is written
-except the pictures.
+except the pictures. It also renders `site/social.html` at 1280×640, so the
+share card is made from the same local fonts, lockup, and message as its source.
 
 Nothing is arranged for the camera, which is the point and also the constraint:
 the runs happen, the model's tools run, the change in the third picture is a

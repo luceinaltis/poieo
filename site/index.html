@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>poieo — an autonomous task board for the AI models you choose</title>
-<meta name="description" content="Write down the work you want done. poieo keeps it running around the clock on the models you choose — free local ones, capable ones where they earn it — and you read the diff in the morning.">
+<title>poieo — Your models, at work.</title>
+<meta name="description" content="Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.">
 
 <link rel="canonical" href="https://luceinaltis.github.io/poieo/">
-<meta name="theme-color" content="#14120f">
+<meta name="theme-color" content="#100e0c">
 <script src="theme.js"></script>
 
 <meta property="og:site_name" content="poieo">
-<meta property="og:title" content="poieo — an autonomous task board for the AI models you choose">
-<meta property="og:description" content="Write down the work you want done. poieo keeps it running around the clock on the models you choose, and you read the diff in the morning.">
+<meta property="og:title" content="poieo — Your models, at work.">
+<meta property="og:description" content="Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.">
 <meta property="og:image" content="https://luceinaltis.github.io/poieo/img/social.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
@@ -26,7 +26,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "poieo",
-  "description": "An autonomous task board: write down the work you want done, and the AI models you choose keep it running around the clock. Local-first, everything is a file, every change reviewable.",
+  "description": "An autonomous task board for the models you choose. Write a task once, keep it running on your machine and schedule, and review every change.",
   "url": "https://luceinaltis.github.io/poieo/",
   "image": "https://luceinaltis.github.io/poieo/img/social.png",
   "applicationCategory": "DeveloperApplication",
@@ -50,7 +50,7 @@
     <img class="logo-mark" src="img/mark.svg" alt="" width="24" height="24">
     <img class="logo-word" src="img/wordmark.svg" alt="poieo" height="20">
   </a>
-  <span class="bar-sub">an autonomous task board</span>
+  <span class="bar-sub">models at work</span>
   <nav>
     <a href="docs.html">Docs</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
@@ -65,15 +65,13 @@
        so it reads as one painting with the page rather than a framed image. -->
   <img class="hero-art" src="img/tree.jpg" width="1408" height="768" aria-hidden="true" alt="">
   <div class="hero-copy">
-    <h1>Stop doing your tasks.<br>Start conducting them.</h1>
-    <p class="lead">
-      An autonomous task board: point it at any AI model — local or cloud —
-      and it runs your recurring tasks around the clock. Nothing touches your
-      files until you accept it.
-    </p>
+    <h1>Your models, at work.</h1>
+    <p class="descriptor">An autonomous task board for the models you choose.</p>
+    <p class="lead">Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.</p>
 
     <div class="cta">
-      <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp; pip install .</code>
+      <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp;
+  pip install .</code>
       <button type="button" data-copy="install" hidden>copy</button>
     </div>
 
@@ -81,28 +79,42 @@
       <a class="button primary" href="#sixty">Get started</a>
       <a class="button" href="docs.html">Read the docs</a>
     </p>
-    <p class="hero-note">Any OpenAI-compatible server or cloud API, chosen per step — Ollama, vLLM, LM Studio, llama.cpp among them.</p>
+    <p class="hero-note">Local or cloud, chosen per step. Your tasks stay on your machine; every change waits for you.</p>
   </div>
 </section>
 
-<section class="proof">
-  <div>
-    <p class="proof-label">CARDS PEOPLE LEAVE RUNNING</p>
-    <ul class="chips">
-      <li>keep the tests green</li>
-      <li>write the week's digest</li>
-      <li>bump the dependencies</li>
-      <li>watch for stale docs</li>
-      <li>triage the new issues</li>
-    </ul>
-    <p class="aside">Each one is a small file — a name, a folder, a sentence.
-    The daemon takes it from there.</p>
+<section class="cycle" aria-labelledby="cycle-title">
+  <p class="proof-label">THE WORKING LOOP</p>
+  <h2 id="cycle-title">Write the task. Let it run. Review the change.</h2>
+  <div class="cycle-steps">
+    <article>
+      <span>task</span>
+      <h3>Write the task</h3>
+      <p>A name, a folder, and a prompt. One plain file is enough.</p>
+    </article>
+    <article>
+      <span>run</span>
+      <h3>Let it run</h3>
+      <p>Pick the models that fit. poieo keeps the task moving on its schedule.</p>
+    </article>
+    <article>
+      <span>change</span>
+      <h3>Review the change</h3>
+      <p>Read the result and the diff. Accept it or discard it; you stay in control.</p>
+    </article>
   </div>
-  <figure class="shot proof-shot">
-    <img src="img/board.png" width="820" height="900"
-         alt="The board: five task cards with their schedules, one holding a change waiting to be read">
-    <figcaption>The board, this morning: one card has a change waiting.</figcaption>
-  </figure>
+  <div class="cycle-proof">
+    <figure class="shot">
+      <img src="img/board.png" width="820" height="900"
+           alt="Five task cards on the poieo board, with one change waiting">
+      <figcaption>Tasks keep moving without becoming a wall of chats.</figcaption>
+    </figure>
+    <figure class="shot cycle-review">
+      <img src="img/task.png" width="1440" height="900"
+           alt="A task opened on the board, showing its runs and a change ready to review">
+      <figcaption>Every change comes back with its history and diff.</figcaption>
+    </figure>
+  </div>
 </section>
 
 <section id="sixty">
@@ -145,28 +157,6 @@ prompt: |
   </div>
 </section>
 
-<section class="words">
-  <h2>How it works: task, run, change</h2>
-  <div class="grid">
-    <div class="word">
-      <h3>task</h3>
-      <p>A name, a folder, and a prompt. One file, which you can read.</p>
-    </div>
-    <div class="word">
-      <h3>run</h3>
-      <p>One pass through it. It succeeded, it failed, or it found nothing to do.</p>
-    </div>
-    <div class="word">
-      <h3>change</h3>
-      <p>What a run did to your files — which you accept, or throw away.</p>
-    </div>
-  </div>
-  <p class="aside">
-    You learn these three and no fourth — everything underneath is machinery,
-    and machinery stays out of the way.
-  </p>
-</section>
-
 <section class="morning">
   <div class="morning-text">
     <h2>The night, and the morning after</h2>
@@ -180,15 +170,10 @@ prompt: |
       nothing is lost for good.
     </p>
   </div>
-  <figure class="shot">
-    <img src="img/task.png" width="1440" height="900"
-         alt="A task opened on the board: four runs, what the model said, and the change waiting to be accepted">
-    <figcaption>Four runs. Three found nothing. One is waiting.</figcaption>
-  </figure>
 </section>
 
 <section class="why">
-  <h2>What conducting buys you</h2>
+  <h2>Why it earns a place on your machine</h2>
   <dl>
     <div>
       <dt>Cheaper than doing it one prompt at a time</dt>
