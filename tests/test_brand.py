@@ -23,6 +23,9 @@ EXPLANATION = (
 )
 ACTIVE_SURFACES = [ROOT / "README.md", ROOT / "brand" / "README.md", ROOT / "site" / "index.html"]
 CORE_TOKENS = {"ground", "panel", "well", "raised", "rule", "line", "text", "dim", "ember", "live", "stop"}
+DARK_BRAND_ASSETS = [
+    ROOT / "site" / "img" / name for name in ("favicon.svg", "lockup.svg", "mark.svg", "wordmark.svg")
+]
 
 
 @pytest.mark.parametrize("path", ACTIVE_SURFACES, ids=lambda path: str(path.relative_to(ROOT)))
@@ -64,6 +67,25 @@ def test_site_and_product_share_the_core_dark_palette():
     assert CORE_TOKENS <= product.keys()
     assert CORE_TOKENS <= site.keys()
     assert {name: site[name] for name in CORE_TOKENS} == {name: product[name] for name in CORE_TOKENS}
+
+
+@pytest.mark.parametrize("path", DARK_BRAND_ASSETS, ids=lambda path: path.name)
+def test_dark_brand_assets_use_the_product_text_colour(path: Path):
+    product = _dark_tokens(ROOT / "web-ui" / "src" / "index.css")
+    assert product["text"].lower() in path.read_text(encoding="utf-8").lower()
+
+
+def test_favicon_uses_the_product_ground_colour():
+    product = _dark_tokens(ROOT / "web-ui" / "src" / "index.css")
+    favicon = (ROOT / "site" / "img" / "favicon.svg").read_text(encoding="utf-8")
+    assert product["ground"].lower() in favicon.lower()
+
+
+def test_landing_headline_can_wrap_on_a_narrow_screen():
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    base_rule = re.search(r"\.hero h1\s*\{([^}]*)\}", css, re.S)
+    assert base_rule
+    assert "white-space: nowrap" not in base_rule.group(1)
 
 
 def test_running_tasks_use_live_green_not_the_review_accent():
