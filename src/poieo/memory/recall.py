@@ -4,9 +4,10 @@ The page comes first and whole, so the stable part of the prompt stays stable;
 the entries the task earned follow it, best first, on whole-entry boundaries.
 The page never competes with them for room.
 
-**The lookup is asked before anything is read.** Candidates are narrowed first
-and only the winners are fetched -- reading every entry to choose forty is the
-one thing this file must not do.
+**The lookup is asked before anything is read, and ranking reads less than an
+entry.** Candidates are narrowed first, ranked from the few columns ranking
+actually needs, and only what will be shown is read in full -- parsing fifty
+thousand entries to choose forty is the one thing this file must not do.
 
 **Matching decides the order, and the budget decides who is cut.** An entry the
 task shares no word with used to be dropped; the room it would have taken went
@@ -19,9 +20,11 @@ Design: docs/memory.md
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ..layout import layout_for
 from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
@@ -93,10 +96,18 @@ class _Where:
             found = self._named[relative] = (self.root / relative).resolve()
         return found
 
-    def in_scope(self, entry: Entry) -> bool:
-        """A filter over one store, never a wall: the word that means everyone,
-        the task's own name, or a path that covers where it works."""
-        for named in entry.matter.scope:
+    def in_scope(self, scope: str) -> bool:
+        """A filter over one store, never a wall.
+
+        Takes the column as it is stored. Almost every entry is for everyone,
+        and that answer costs a string comparison instead of a parse.
+        """
+        return True if scope == _EVERYONE else self.covers(json.loads(scope))
+
+    def covers(self, scope: "list[str]") -> bool:
+        """The same question of a scope already in hand: the word that means
+        everyone, the task's own name, or a path that covers where it works."""
+        for named in scope:
             if named in ("global", self.slug):
                 return True
             base = self.named(named)
@@ -104,12 +115,15 @@ class _Where:
                 return True
         return False
 
-    def anchors(self, entry: Entry) -> bool:
+    def anchors(self, raw: str) -> bool:
         """Anchor paths are written relative to the project -- the folder the
-        `poieo.yaml` sits in, which is also where the memory does."""
+        `poieo.yaml` sits in, which is also where the memory does.
+
+        Most entries anchor nothing, and the column says so without being read.
+        """
         if self.folder is None:
             return False  # a task that works on no folder is covered by no anchor
-        for anchor in entry.matter.anchors:
+        for anchor in _tuple(raw):
             target = self.named(anchor.split("::", 1)[0])
             if target == self.folder or target.is_relative_to(self.folder) or self.folder.is_relative_to(target):
                 return True
@@ -121,6 +135,36 @@ class _Where:
 _PER_QUERY = 400
 
 
+# The ordinary scope, as it sits in the column. Comparing the stored text
+# against this answers "is this for everyone?" without parsing anything, which
+# is the answer for almost every entry there is.
+_EVERYONE = json.dumps(["global"])
+
+
+@dataclass(frozen=True)
+class _Ranked:
+    """An entry as **ranking** sees it: enough to score, order and cut by, and
+    not one field more.
+
+    Recall showed about forty entries out of however many matched, and built
+    every one of them first -- six JSON columns parsed and three models
+    validated each, then discarded. What decides the answer is the shape it is
+    matched by, its size, its scope, whether it anchors, and what it disputes;
+    all of that is a column, and most of it needs no parsing at all.
+    """
+
+    slug: str
+    score: int
+    size: int
+    at: str
+    contradicts: tuple[str, ...]
+
+
+def _tuple(raw: str) -> tuple[str, ...]:
+    """A JSON list column, parsed only when it holds something."""
+    return () if raw in ("[]", "", None) else tuple(json.loads(raw))
+
+
 def _fetch(con: sqlite3.Connection, slugs: list[str]) -> list[Entry]:
     found: list[Entry] = []
     for at in range(0, len(slugs), _PER_QUERY):
@@ -130,14 +174,24 @@ def _fetch(con: sqlite3.Connection, slugs: list[str]) -> list[Entry]:
     return found
 
 
-def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool, allowed: "Callable[[Entry], bool]") -> list[Entry]:
-    """The entries worth scoring, fetched and no more.
+# The columns ranking needs. `length(body)` rather than the body: the budget is
+# decided in characters, and the characters themselves are only wanted for the
+# entries that survive it.
+_RANKING = (
+    "SELECT e.slug, e.scope, e.anchors, e.contradicts, e.superseded_by,"
+    "       e.updated_at AS at, length(e.body) AS size, p.shape"
+    "  FROM entries e JOIN pieces p ON p.slug = e.slug AND p.ord = 0"
+)
 
-    Three things get fetched, and nothing else. What the lookup matched, because
-    those have evidence. Anything **anchored**, because an anchored entry is
-    relevant by where it points rather than by the words it shares. And enough
-    of the rest, newest first, to fill the budget -- so leftover room can go to
-    an entry the task happens to share no word with.
+
+def _rank(con: sqlite3.Connection, seed: set[str], use_index: bool, where: "_Where") -> list[_Ranked]:
+    """Everything worth scoring, scored, without reading an entry.
+
+    Three things are considered, and nothing else. What the lookup matched,
+    because those have evidence. Anything **anchored**, because an anchored
+    entry is relevant by where it points rather than by the words it shares. And
+    enough of the rest, newest first, to fill the budget -- so leftover room can
+    go to an entry the task happens to share no word with.
 
     "Enough" counts only what this task could actually be shown: filling against
     the raw row count would stop at forty entries scoped to other cards and
@@ -146,27 +200,52 @@ def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool, allowed: "Ca
     read rather than a full one.
     """
     hits = narrow(con, seed) if use_index else None
-    if hits is None:
-        return [entry_of(row) for row in con.execute("SELECT * FROM entries").fetchall()]
-    found = [entry_of(row) for row in con.execute("SELECT * FROM entries WHERE anchors != '[]'")]
-    found += _fetch(con, sorted(hits - {entry.slug for entry in found}))
 
-    spent = sum(len(entry.body) for entry in found if allowed(entry))
+    def rank(row: "sqlite3.Row") -> "_Ranked | None":
+        if row["superseded_by"] is not None or not where.in_scope(row["scope"]):
+            return None
+        score = len(seed & set(row["shape"].split()))
+        if where.anchors(row["anchors"]):
+            score += _ANCHOR_BOOST
+        return _Ranked(row["slug"], score, row["size"], row["at"], _tuple(row["contradicts"]))
+
+    if hits is None:
+        return [found for row in con.execute(_RANKING) if (found := rank(row)) is not None]
+
+    ranked: list[_Ranked] = []
+    seen: set[str] = set()
+    for row in con.execute(f"{_RANKING} WHERE e.anchors != '[]'"):
+        seen.add(row["slug"])
+        if (found := rank(row)) is not None:
+            ranked.append(found)
+    # Sorted once. Sorting inside the loop re-sorted the whole match set for
+    # every batch of four hundred, which at fifty thousand was most of what
+    # ranking cost.
+    outstanding = sorted(hits - seen)
+    for at in range(0, len(outstanding), _PER_QUERY):
+        batch = outstanding[at : at + _PER_QUERY]
+        holes = ",".join("?" * len(batch))
+        for row in con.execute(f"{_RANKING} WHERE e.slug IN ({holes})", batch):
+            seen.add(row["slug"])
+            if (found := rank(row)) is not None:
+                ranked.append(found)
+
+    spent = sum(found.size for found in ranked)
     if spent >= ENTRIES_BUDGET:
-        return found
-    taken = {entry.slug for entry in found}
-    seen = 0
-    for row in con.execute("SELECT * FROM entries ORDER BY updated_at DESC, slug"):
-        if spent >= ENTRIES_BUDGET or seen >= _SCAN_CAP:
+        return ranked
+    walked = 0
+    for row in con.execute(f"{_RANKING} ORDER BY e.updated_at DESC, e.slug"):
+        if spent >= ENTRIES_BUDGET or walked >= _SCAN_CAP:
             break
-        seen += 1
-        if row["slug"] in taken:
+        walked += 1
+        if row["slug"] in seen:
             continue
-        entry = entry_of(row)
-        found.append(entry)
-        if allowed(entry):
-            spent += len(entry.body)
-    return found
+        seen.add(row["slug"])
+        found = rank(row)
+        if found is not None:
+            ranked.append(found)
+            spent += found.size
+    return ranked
 
 
 def _neighbours(con: sqlite3.Connection, slugs: set[str]) -> list[Entry]:
@@ -201,103 +280,116 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
     if not keeps_memory(project_dir):
         return []
     seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
-
     where = _Where(task, project_dir)
-
-    def in_scope(entry: Entry) -> bool:
-        return entry.matter.superseded_by is None and where.in_scope(entry)
-
-    def allowed(entries: list[Entry]) -> list[Entry]:
-        return [entry for entry in entries if in_scope(entry)]
 
     from ..strength import STRONG_FLOOR, strengths
 
     strength = strengths(project_dir)
 
     with open_memory(project_dir) as con:
-        candidates = allowed(_pool(con, seed, use_index, in_scope))
-        if not candidates:
+        ranked = _rank(con, seed, use_index, where)
+        if not ranked:
             return []
 
-        scored = []
         # Entries the task matches nothing in. They wait behind everything with
         # evidence, and behind everything association reached -- and they seed
         # no associations of their own, because a claim divided by rank has to
         # start from a claim.
-        spare = []
-        for entry in candidates:
-            score = len(seed & words(entry.body))
-            if where.anchors(entry):
-                score += _ANCHOR_BOOST
-            (scored if score > 0 else spare).append((score, entry))
-        scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
-        spare.sort(key=lambda pair: (-pair[1].updated_at.timestamp(), pair[1].slug))
+        scored = sorted((r for r in ranked if r.score > 0), key=lambda r: (-r.score, r.slug))
+        # Newest first, and by name within a moment -- two sorts because one
+        # `reverse` would turn the names round with the clock.
+        spare = sorted((r for r in ranked if r.score == 0), key=lambda r: r.slug)
+        spare.sort(key=lambda r: r.at, reverse=True)
 
-        # Association after evidence: a neighbour's claim is its seed's,
-        # divided by rank and scaled by how strong the connection is. Scope and
-        # set-aside hold through connections; a second hop needs a strong
-        # connection, so with nothing reinforced one hop means one hop.
-        sequence = [entry for _, entry in scored]
-        taken = {entry.slug for entry in sequence}
-        by_slug = {entry.slug: entry for entry in sequence}
-
-        seeds = {entry.slug for entry in sequence[:_ASSOCIATION_SEEDS]}
-        first = allowed(_neighbours(con, seeds))
-        by_slug |= {entry.slug: entry for entry in first}
+        # Association needs what an entry *says* -- its mentions and its typed
+        # links -- so here, and only here, entries are read in full. The seeds
+        # are the strongest handful and their neighbours are however many the
+        # link table names, so this is bounded by neither the memory's size nor
+        # the budget.
+        seeds = [found.slug for found in scored[:_ASSOCIATION_SEEDS]]
+        told = {entry.slug: entry for entry in _fetch(con, seeds)}
+        # Everything with evidence, not only the seeds: a neighbour that is
+        # already ranked on its own words is not reached, it is already here.
+        taken = {found.slug for found in scored}
+        allowed = {found.slug for found in ranked}
+        first = [e for e in _neighbours(con, set(seeds)) if e.slug in allowed or _also(where, e)]
 
         carry: dict[str, float] = {}
-        for rank, (_, entry) in enumerate(scored[:_ASSOCIATION_SEEDS]):
+        for rank, slug in enumerate(seeds):
+            entry = told.get(slug)
+            if entry is None:
+                continue
             for neighbor in connected(entry, first):
                 if neighbor.slug in taken:
                     continue
-                weight = strength.get(frozenset((entry.slug, neighbor.slug)), 0.0)
+                weight = strength.get(frozenset((slug, neighbor.slug)), 0.0)
                 carry[neighbor.slug] = carry.get(neighbor.slug, 0.0) + (1.0 + weight) / (1 + rank)
 
-        second = allowed(_neighbours(con, set(carry)))
+        by_slug = {entry.slug: entry for entry in first}
+        second = [e for e in _neighbours(con, set(carry)) if e.slug in allowed or _also(where, e)]
         by_slug |= {entry.slug: entry for entry in second}
 
-    further: dict[str, float] = {}
-    for slug, reached in carry.items():
-        for neighbor in connected(by_slug[slug], second):
-            if neighbor.slug in taken or neighbor.slug in carry:
+        further: dict[str, float] = {}
+        for slug, reached in carry.items():
+            for neighbor in connected(by_slug[slug], second):
+                if neighbor.slug in taken or neighbor.slug in carry:
+                    continue
+                weight = strength.get(frozenset((slug, neighbor.slug)), 0.0)
+                if weight >= STRONG_FLOOR:
+                    further[neighbor.slug] = further.get(neighbor.slug, 0.0) + reached * weight
+        carry.update(further)
+
+        # One ordered list of names, and their sizes, before a single body has
+        # been read: what the lookup scored, what association reached, then what
+        # is left while there is room.
+        order: list[tuple[str, int, tuple[str, ...]]] = [(r.slug, r.size, r.contradicts) for r in scored]
+        placed = {slug for slug, _, _ in order}
+        for slug in sorted(carry, key=lambda s: (-carry[s], s)):
+            entry = by_slug[slug]
+            if slug not in placed:
+                order.append((slug, len(entry.body), tuple(entry.matter.links.contradicts)))
+                placed.add(slug)
+        # A disagreement is a veto, and room does not overrule it: putting an
+        # entry and the one that disputes it in front of a model together is the
+        # thing `contradicts` exists to prevent, whether it arrives by a
+        # connection or by there being space for it. Arriving by two routes is
+        # not two lessons either -- shown twice it spends the budget twice for
+        # one thing said once.
+        for found in spare:
+            if found.slug in placed:
                 continue
-            weight = strength.get(frozenset((slug, neighbor.slug)), 0.0)
-            if weight >= STRONG_FLOOR:
-                further[neighbor.slug] = further.get(neighbor.slug, 0.0) + reached * weight
+            here = {slug for slug, _, _ in order}
+            disputed = {other for _, _, says in order for other in says}
+            if found.slug in disputed or set(found.contradicts) & here:
+                continue
+            order.append((found.slug, found.size, found.contradicts))
+            placed.add(found.slug)
 
-    carry.update(further)
-    sequence += sorted(
-        (by_slug[slug] for slug in carry),
-        key=lambda entry: (-carry[entry.slug], entry.slug),
-    )
-    # A disagreement is a veto, and room does not overrule it: putting an entry
-    # and the one that disputes it in front of a model together is the thing
-    # `contradicts` exists to prevent, whether it arrives by a connection or by
-    # there being space for it. Both directions, and against what filling has
-    # already let in -- two entries disputing each other must not both arrive
-    # just because they arrived together.
-    for _, entry in spare:
-        here = {shown.slug for shown in sequence}
-        # Association may already have brought this one in. Arriving by two
-        # routes is not two lessons: shown twice it reads as emphasis and
-        # spends the budget twice for one thing said once.
-        if entry.slug in here:
-            continue
-        disputed = {slug for shown in sequence for slug in shown.matter.links.contradicts}
-        if entry.slug in disputed or set(entry.matter.links.contradicts) & here:
-            continue
-        sequence.append(entry)
+        # One entry too big for the budget loses its own place, not everybody
+        # else's: the room it could not use goes to whoever ranks below it.
+        chosen: list[str] = []
+        spent = 0
+        for slug, size, _ in order:
+            if spent + size > ENTRIES_BUDGET:
+                continue
+            chosen.append(slug)
+            spent += size
 
-    # One entry too big for the budget loses its own place, not everybody
-    # else's: the room it could not use goes to whoever ranks below it.
-    chosen: list[Entry] = []
-    spent = 0
-    for entry in sequence:
-        if spent + len(entry.body) > ENTRIES_BUDGET:
-            continue
-        chosen.append(entry)
-        spent += len(entry.body)
-    return chosen
+        # And now, at last, the bodies -- of the ones that will be read.
+        have = {slug: entry for slug, entry in told.items()} | by_slug
+        missing = [slug for slug in chosen if slug not in have]
+        have |= {entry.slug: entry for entry in _fetch(con, missing)}
+    return [have[slug] for slug in chosen if slug in have]
+
+
+def _also(where: "_Where", entry: Entry) -> bool:
+    """Whether a neighbour the ranking never saw is one this task may see.
+
+    Association reaches entries the lookup did not match, so their scope has not
+    been asked about yet. Asked of the entry, because association is the one
+    place that already holds the whole thing.
+    """
+    return entry.matter.superseded_by is None and where.covers(entry.matter.scope)
 
 
 def connected(entry: Entry, eligible: list[Entry]) -> list[Entry]:
