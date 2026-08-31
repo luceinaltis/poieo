@@ -137,86 +137,13 @@ export function walk(shape: GraphShape): string[] {
   return order
 }
 
-/** Where one node sits inside a border: a step across, a sibling down. */
-export interface Cell {
-  id: string
-  column: number
-  row: number
-}
-
-/** Everywhere a node points: `next`, then `default`, then its branches. */
-export function targets(node: GraphShape["nodes"][number]): string[] {
-  return [node.next, node.default, ...node.branches.map((branch) => branch.to)].filter(
-    (to): to is string => to !== null,
-  )
-}
-
-/**
- * A graph's nodes on a grid: a column per step from the entry, a row per arm.
- *
- * Laid out in one wrapping line, a router's arms read as four steps in a row
- * -- which is the one thing about a branching graph a reader needs and the
- * line could never say. A column is how far along the run a node is; nodes
- * sharing a column are alternatives at that point.
- *
- * Depth comes off `walk`'s own descent rather than a longest-path pass,
- * because a graph here may loop: an edge back to a node already placed is not
- * another step forward, and counting it as one would march a cycle off the
- * right-hand edge of the border for as long as the walk cared to go.
- */
-export function depths(shape: GraphShape): Cell[] {
-  const byId = new Map(shape.nodes.map((node) => [node.id, node]))
-  const column = new Map<string, number>()
-  const seen = new Set<string>()
-
-  const visit = (id: string, at: number): void => {
-    if (seen.has(id)) return
-    const node = byId.get(id)
-    if (node === undefined) return
-    seen.add(id)
-    column.set(id, at)
-    for (const to of targets(node)) visit(to, at + 1)
-  }
-  visit(shape.entry, 0)
-
-  const filled = new Map<number, number>()
-  return walk(shape).map((id) => {
-    // A node the walk reached but this descent did not is unreachable, which
-    // GraphSpec refuses; drawn last, in a column of its own, rather than lost.
-    const at = column.get(id) ?? 0
-    const row = filled.get(at) ?? 0
-    filled.set(at, row + 1)
-    return { id, column: at, row }
-  })
-}
-
-/**
- * The nodes something in the column to their left points at.
- *
- * Which is where the connector goes -- on the node being arrived at, not on
- * the one leading away. A router points at every one of its arms, and an
- * arrow hung off the router could only be drawn to one of them; hung off each
- * arm, all three are drawn and they converge on the router by themselves.
- *
- * Nodes sharing a column are alternatives, never a chain, so nothing is drawn
- * between them.
- */
-export function arrivals(shape: GraphShape): string[] {
-  const byId = new Map(shape.nodes.map((node) => [node.id, node]))
-  const cells = depths(shape)
-  const before = new Map<number, string[]>()
-  for (const cell of cells) {
-    before.set(cell.column, [...(before.get(cell.column) ?? []), cell.id])
-  }
-  return cells
-    .filter((cell) =>
-      (before.get(cell.column - 1) ?? []).some((from) => {
-        const node = byId.get(from)
-        return node !== undefined && targets(node).includes(cell.id)
-      }),
-    )
-    .map((cell) => cell.id)
-}
+/* Where a step sits inside a border, and which of them a line arrives at,
+   were this module's when the steps were a wrapping grid with an arrow drawn
+   before each pill. They are `dagre`'s now -- see `basic/steps.ts` -- because
+   ranking a directed graph and routing a line that runs backwards around the
+   boxes rather than through them is the part nobody should write twice.
+   `walk` and `exits` stay: reading order and where a run can stop are what
+   the picture *means*, which is poieo's and not a layout engine's. */
 
 /**
  * The nodes a run can stop on, in walk order.
