@@ -123,7 +123,7 @@
 .make-later {
   background: none;
   border: 0;
-  color: #8d8377;
+  color: var(--dim);
   cursor: pointer;
   font: inherit;
   padding: 0;
@@ -132,7 +132,7 @@
 }
 
 .make-later:hover:not(:disabled) {
-  color: #d8c8a8;
+  color: var(--text);
 }
 
 .make-later:disabled {

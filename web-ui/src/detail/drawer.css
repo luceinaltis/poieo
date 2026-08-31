@@ -320,7 +320,7 @@
    would be, because that is where a reader goes to start something and the
    honest answer is that they cannot start it from here. */
 .control-off {
-  color: #9db4c9;
+  color: var(--paused-text);
   font-size: 0.85em;
   line-height: 1.45;
   margin: 0;

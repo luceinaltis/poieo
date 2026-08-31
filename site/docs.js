@@ -12,11 +12,13 @@ const REPO = "luceinaltis/poieo"
 const RAW = `https://raw.githubusercontent.com/${REPO}/main/`
 const BLOB = `https://github.com/${REPO}/blob/main/`
 
-const GROUPS = [
+const USER_GROUPS = [
   ["Using poieo", [
     ["usage", "The manual", "docs/usage.md"],
     ["design", "What poieo promises", "DESIGN.md"],
   ]],
+]
+const CONTRIBUTOR_GROUPS = [
   ["The code, part by part — for contributors", [
     ["architecture", "Architecture", "docs/architecture.md"],
     ["tasks", "tasks", "docs/tasks.md"],
@@ -37,6 +39,8 @@ const GROUPS = [
     ["conventions", "How the code is written", "docs/conventions.md"],
   ]],
 ]
+const GROUPS = [...USER_GROUPS, ...CONTRIBUTOR_GROUPS]
+const CONTRIBUTOR_IDS = new Set(CONTRIBUTOR_GROUPS.flatMap(([, docs]) => docs.map(([id]) => id)))
 
 const DOCS = new Map(
   GROUPS.flatMap(([group, docs]) => docs.map(([id, title, path]) => [id, { title, path, group }])),
@@ -218,17 +222,24 @@ function route() {
 }
 
 function buildNav() {
-  nav.innerHTML = GROUPS.map(
+  const groups = (of) => of.map(
     ([group, docs]) => `
     <div class="nav-group">
       <div class="nav-title">${group}</div>
       ${docs.map(([id, title]) => `<a data-id="${id}" href="#${id}">${title}</a>`).join("")}
     </div>`,
   ).join("")
+  nav.innerHTML = `${groups(USER_GROUPS)}
+    <details class="nav-contributor">
+      <summary>Contributor reference</summary>
+      ${groups(CONTRIBUTOR_GROUPS)}
+    </details>`
 }
 
 function markActive(id) {
   for (const a of nav.querySelectorAll("a")) a.classList.toggle("active", a.dataset.id === id)
+  const contributor = nav.querySelector(".nav-contributor")
+  if (contributor) contributor.open = CONTRIBUTOR_IDS.has(id)
   const folded = document.querySelector(".doc-nav-fold")
   if (folded) {
     folded.open = false

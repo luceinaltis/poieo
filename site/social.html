@@ -5,18 +5,22 @@
      the same files it advertises. Re-render after changing it:
      a 1280x640 screenshot of this page is the card. -->
 <style>
-  body { margin:0; width:1280px; height:640px; background:#14120f; overflow:hidden;
-         font-family: ui-sans-serif, system-ui, sans-serif; position:relative; }
-  .lockup { position:absolute; left:96px; top:150px; width:520px; }
-  .line { position:absolute; left:100px; top:318px; color:#9a9086; font-size:32px;
-          line-height:1.5; width:780px; }
-  .mono { position:absolute; left:102px; top:478px; color:#a9b665; font-size:19px;
+  @font-face { font-family:"Hanken Grotesk"; font-style:normal; font-weight:100 900;
+               src:url("fonts/hanken-grotesk-latin.woff2") format("woff2"); }
+  body { margin:0; width:1280px; height:640px; background:#100e0c; overflow:hidden;
+         font-family:"Hanken Grotesk",ui-sans-serif,system-ui,sans-serif; position:relative; }
+  .lockup { position:absolute; left:96px; top:78px; width:360px; }
+  .headline { position:absolute; left:96px; top:238px; color:#f0e7d9; font-size:68px;
+              font-weight:650; letter-spacing:-.045em; line-height:1; }
+  .line { position:absolute; left:100px; top:340px; color:#a0958a; font-size:28px;
+          line-height:1.45; width:720px; }
+  .mono { position:absolute; left:102px; top:500px; color:#a9b665; font-size:18px;
           letter-spacing:.14em; font-family: ui-monospace, Consolas, monospace; }
-  .big { position:absolute; right:-150px; top:-120px; width:640px; opacity:.16; }
+  .big { position:absolute; right:-120px; top:-90px; width:650px; filter:grayscale(1); opacity:.18; }
 </style></head><body>
   <img class="lockup" src="img/lockup.svg" alt="poieo">
-  <div class="line">Write down the work you want done. The models you choose keep
-    it running — and you read the diff in the morning.</div>
-  <div class="mono">YOUR MODELS &nbsp;·&nbsp; PLAIN FILES &nbsp;·&nbsp; UNDO</div>
+  <div class="headline">Your models, at work.</div>
+  <div class="line">An autonomous task board for the models you choose. Every change comes back for your approval.</div>
+  <div class="mono">WRITE THE TASK &nbsp;·&nbsp; LET IT RUN &nbsp;·&nbsp; REVIEW THE CHANGE</div>
   <img class="big" src="img/mark.svg" alt="">
 </body></html>

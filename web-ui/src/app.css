@@ -8,9 +8,11 @@
   padding: 0 16px;
 }
 
-.shell-title {
-  font-weight: 600;
-  letter-spacing: 0.04em;
+.shell-lockup {
+  display: block;
+  flex: none;
+  height: 23px;
+  width: auto;
 }
 
 /* The subject of the page, beside the name of the tool. Reads brighter than
@@ -139,13 +141,28 @@
   align-content: center;
   color: var(--dim);
   display: grid;
+  gap: 14px;
   inset: 0;
   justify-items: center;
   margin: 0;
   padding: 32px 16px;
-  pointer-events: none;
   position: absolute;
   text-align: center;
+}
+
+.shell-empty p {
+  margin: 0;
+}
+
+.shell-empty button {
+  border-color: var(--ember);
+  color: var(--text);
+  padding: 6px 12px;
+}
+
+.shell-empty button:hover:not(:disabled) {
+  background: var(--ember);
+  color: var(--ground);
 }
 
 /* On a phone the drawer takes the whole screen, so there is nothing to make

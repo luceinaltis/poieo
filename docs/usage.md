@@ -115,6 +115,25 @@ hands it over the moment one line stops being enough. An ejected graph still
 reads `{{ input.journal }}`, which the task supplies -- run it through the task,
 or pass `--set journal=...` when running that graph on its own.
 
+### Run it and review the change
+
+Start the board and leave it open:
+
+```bash
+poieo daemon
+# open http://127.0.0.1:8484
+```
+
+The first screen now carries the whole product loop. The **task** is the file
+above. Each scheduled pass is a **run**, with its result and history on the
+card. When a run edits a git project, its **change** waits in a private copy:
+open the task, read the diff, then accept or discard it. Accept is the only
+moment poieo writes that work to your branch.
+
+That is the complete path: **task → run → change**. The sections below explain
+memory, schedules, graphs, bindings, and isolation only when you need more than
+the defaults.
+
 A task's identity is its **filename**, so the title on the card can be
 rewritten without orphaning its run history. Paths written inside a task file
 resolve against the task file itself.

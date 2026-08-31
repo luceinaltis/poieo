@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { afterEach, expect, test, vi } from "vitest"
 
-const SCRIPT = readFileSync(new URL("../../site/docs.js", import.meta.url), "utf8")
+const SCRIPT = readFileSync(resolve(process.cwd(), "../site/docs.js"), "utf8")
 
 afterEach(() => {
   location.hash = ""

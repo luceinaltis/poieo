@@ -50,7 +50,7 @@
 .basic-seen {
   position: absolute;
   border: 1px solid var(--ember);
-  background: var(--ember)1a;
+  background: color-mix(in srgb, var(--ember) 10%, transparent);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -182,7 +182,7 @@
 }
 
 .basic-task[data-status="running"] .basic-dot {
-  background: var(--ember);
+  background: var(--live);
 }
 
 .basic-task[data-status="error"] .basic-dot {
@@ -193,7 +193,7 @@
    of running and not a kind of failure, and the one thing it must never be
    mistaken for is the dim grey beside it -- a task quietly waiting its turn. */
 .basic-task[data-status="paused"] .basic-dot {
-  background: #7f9bb5;
+  background: var(--paused);
 }
 
 .basic-toggle {
@@ -295,11 +295,11 @@
 /* A running task, from across the room. The dot carries the exact state;
    this carries the one bit somebody scanning the board actually wants. */
 .basic-task[data-status="running"] {
-  border-color: var(--ember);
+  border-color: var(--live);
 }
 
 .basic-task[data-status="running"]::before {
-  background: var(--ember);
+  background: var(--live);
 }
 
 .basic-task[data-status="error"] {
@@ -314,15 +314,15 @@
    nothing at all: same border, same dim band, and a `now` line that went
    blank -- so it sat among the waiting ones and read as one of them. */
 .basic-task[data-status="paused"] {
-  border-color: #3b4652;
+  border-color: var(--paused-rule);
 }
 
 .basic-task[data-status="paused"]::before {
-  background: #7f9bb5;
+  background: var(--paused);
 }
 
 .basic-task[data-status="paused"] .basic-now {
-  color: #9db4c9;
+  color: var(--paused-text);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -576,7 +576,7 @@
    and the next step is yours. Nothing was lost and nothing is at risk -- the
    edit is in the file, waiting for a restart. */
 .basic-stale {
-  color: #d8a657;
+  color: var(--ember);
   font-size: 0.8em;
   overflow: hidden;
   text-overflow: ellipsis;

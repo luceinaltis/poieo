@@ -3,11 +3,11 @@
   <img src="site/img/lockup-light.svg" alt="poieo" width="380">
 </picture>
 
-**Stop doing your tasks. Start conducting them.**
+**Your models, at work.**
 
-poieo is an autonomous task board: point it at any AI model — local or cloud —
-and it runs your recurring tasks around the clock. Nothing touches your files
-until you accept it.
+**An autonomous task board for the models you choose.**
+
+Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.
 
 [![gate](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml/badge.svg)](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
@@ -72,7 +72,7 @@ where last night stopped, and you can put a line in it yourself:
 poieo note tasks/keep-green.yaml "leave the prose alone, spend the night on tests"
 ```
 
-## What conducting buys you
+## Why it earns a place on your machine
 
 - **Cheaper than doing it one prompt at a time.** Each step names a role, and
   you pick the model that serves it — free ones for the night shift, a costly

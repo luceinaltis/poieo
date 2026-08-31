@@ -33,7 +33,8 @@ def test_active_brand_surfaces_use_one_headline(path: Path):
 
 
 def test_landing_tells_the_whole_story_in_order():
-    page = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    source = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    page = source.split("<main>", 1)[1]
     promises = [HEADLINE, DESCRIPTOR, EXPLANATION, "Write the task", "Let it run", "Review the change"]
     positions = [page.index(promise) for promise in promises]
     assert positions == sorted(positions)
@@ -63,3 +64,20 @@ def test_site_and_product_share_the_core_dark_palette():
     assert CORE_TOKENS <= product.keys()
     assert CORE_TOKENS <= site.keys()
     assert {name: site[name] for name in CORE_TOKENS} == {name: product[name] for name in CORE_TOKENS}
+
+
+def test_running_tasks_use_live_green_not_the_review_accent():
+    css = (ROOT / "web-ui" / "src" / "skins" / "basic" / "basic.css").read_text(encoding="utf-8")
+    running = re.findall(r'\.basic-task\[data-status="running"\][^{]*\{([^}]+)\}', css)
+    paint = [rule for rule in running if "background:" in rule or "border-color:" in rule]
+    assert paint
+    assert all("var(--live)" in rule and "var(--ember)" not in rule for rule in paint)
+
+
+def test_product_components_use_the_shared_palette_tokens():
+    styles = [path for path in (ROOT / "web-ui" / "src").rglob("*.css") if path.name != "index.css"]
+    hardcoded = {
+        str(path.relative_to(ROOT)): re.findall(r"#[0-9a-fA-F]{3,8}", path.read_text(encoding="utf-8"))
+        for path in styles
+    }
+    assert not {path: colours for path, colours in hardcoded.items() if colours}

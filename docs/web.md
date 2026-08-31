@@ -602,6 +602,18 @@ that refuses *without a sentence*, which lives in one place because hand
 copies of it drifted. Where the line sits is each surface's own CSS; what it
 says is not.
 
+**The shell carries the traced brand lockup, never font text.** The approved
+SVG remains in `site/img/lockup.svg`; Vite imports that same source into the
+checked-in board bundle, so the product and public site cannot drift into two
+wordmarks. On an empty board the stage explains what to do next and its `New
+task` button opens the existing make panel; it does not invent a second path to
+create one.
+
+**Colour names are the contract.** `index.css` owns ground, panel, well,
+raised, rule, line, text, dim, ember, live, and stop. Component styles use those
+names rather than keeping private hex values. Live green means a run in flight;
+ember marks a choice or a result worth review, never the running lamp.
+
 **`Models` is reached from the rail, not from a card.** A project's models are
 the project's, and putting them in the drawer would repeat one answer on every
 task.

@@ -23,6 +23,7 @@ import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { DEFAULT_SKIN_ID, SKINS, skinById } from "./skins/registry"
 import { keyOfTask, onlyProject } from "./state/stage"
+import lockupUrl from "../../site/img/lockup.svg"
 import "./app.css"
 
 const PROJECT_KEY = "poieo.project"
@@ -184,7 +185,7 @@ export default function App({ store }: { store?: StageStore }) {
   return (
     <>
       <header className="shell-bar">
-        <span className="shell-title">poieo</span>
+        <img className="shell-lockup" src={lockupUrl} alt="poieo" />
         {/* One project is a name, not a thing to choose between: a picker with
             one option in it is furniture. The folder is the tooltip either
             way -- two worktrees of one repository are two projects whose names
@@ -301,9 +302,17 @@ export default function App({ store }: { store?: StageStore }) {
       >
         <div className="shell-board" ref={boardRef} />
         {empty ? (
-          <p className="shell-empty">
-            Nothing is running yet. When the daemon starts a run, it shows up here.
-          </p>
+          <div className="shell-empty">
+            <p>No tasks yet. Create one to put your models to work.</p>
+            <button
+              type="button"
+              data-do="empty-new-task"
+              disabled={!project}
+              onClick={openMake}
+            >
+              New task
+            </button>
+          </div>
         ) : null}
       </div>
 

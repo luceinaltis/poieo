@@ -70,6 +70,9 @@
   --ember: #d8a657;   /* the accent, and focus     7.67 */
   --live: #a9b665;    /* a task that is running    7.71 */
   --stop: #e08a74;    /* a task that failed        6.49 */
+  --paused: #7f9bb5;  /* deliberately cool: neither running nor failed */
+  --paused-rule: #3b4652;
+  --paused-text: #9db4c9;
 
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
