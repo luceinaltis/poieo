@@ -35,10 +35,10 @@ tonight. Hand-written tasks still opt into carrying state.
 `every: loop`, `every: 30m` and `at: "0 3 * * *"` are the schedule sugar;
 `_trigger()` maps them onto the three real trigger types.
 
-`role`, `tools`, `max_turns` and `prompt` describe the generated node, so a card
-that names a `graph:` of its own may not also set them — there would be nowhere
-to put them. `isolation:` is not a node key: it describes the task, so
-`poieo eject` keeps it.
+`role`, `tools`, `max_turns`, `deadline` and `prompt` describe the generated
+node, so a card that names a `graph:` of its own may not also set them — there
+would be nowhere to put them. `isolation:` is not a node key: it describes the
+task, so `poieo eject` keeps it.
 
 ## Identity is the filename
 
