@@ -521,16 +521,25 @@ test("a wheel over the board zooms it rather than scrolling the page", () => {
 test("dragging the board moves it; pressing a control does not", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(FLOWS))
-  const viewport = el.querySelector(".basic-viewport")!
+  const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
   letItGrab(viewport)
   const before = transform()
 
+  // Mouse events, because `d3-zoom` owns the gesture now and that is what it
+  // listens for. `view` is set after construction rather than passed in:
+  // jsdom's MouseEvent refuses to take a Window for that field, and d3 reads
+  // it to find the window a drag continues on -- left unset it dereferences
+  // null and the press throws.
+  const here = document.defaultView!
+  const mouse = (kind: string, x: number, bubbles = false) => {
+    const at = new MouseEvent(kind, { clientX: x, clientY: 0, button: 0, bubbles })
+    Object.defineProperty(at, "view", { value: here })
+    return at
+  }
   const drag = (from: Element, dx: number) => {
-    from.dispatchEvent(
-      new PointerEvent("pointerdown", { clientX: 0, clientY: 0, button: 0, bubbles: true }),
-    )
-    viewport.dispatchEvent(new PointerEvent("pointermove", { clientX: dx, clientY: 0 }))
-    viewport.dispatchEvent(new PointerEvent("pointerup", {}))
+    from.dispatchEvent(mouse("mousedown", 0, true))
+    here.dispatchEvent(mouse("mousemove", dx))
+    here.dispatchEvent(mouse("mouseup", dx))
   }
 
   // A press that starts on a border's own button is that button's, not a grab
