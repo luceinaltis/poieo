@@ -23,9 +23,7 @@ EXPLANATION = (
 )
 ACTIVE_SURFACES = [ROOT / "README.md", ROOT / "brand" / "README.md", ROOT / "site" / "index.html"]
 CORE_TOKENS = {"ground", "panel", "well", "raised", "rule", "line", "text", "dim", "ember", "live", "stop"}
-DARK_BRAND_ASSETS = [
-    ROOT / "site" / "img" / name for name in ("favicon.svg", "lockup.svg", "mark.svg", "wordmark.svg")
-]
+DARK_BRAND_ASSETS = [ROOT / "site" / "img" / name for name in ("favicon.svg", "lockup.svg", "mark.svg", "wordmark.svg")]
 
 
 @pytest.mark.parametrize("path", ACTIVE_SURFACES, ids=lambda path: str(path.relative_to(ROOT)))

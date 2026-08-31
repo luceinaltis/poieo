@@ -201,7 +201,6 @@ h3 { font-size: 1.05rem; }
   letter-spacing: -0.045em;
   line-height: 0.96;
   margin: 0 0 1.35rem;
-  white-space: nowrap;
 }
 
 .descriptor {
@@ -412,6 +411,10 @@ footer p { margin: 0.4rem 0; }
 .quiet { color: var(--faint); }
 
 /* --- one column ---------------------------------------------------------- */
+
+@media (min-width: 761px) {
+  .hero h1 { white-space: nowrap; }
+}
 
 @media (max-width: 760px) {
   body { font-size: 16px; }
