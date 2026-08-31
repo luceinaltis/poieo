@@ -22,7 +22,7 @@ const row = (name: string): TaskRow => ({
   shape: { entry: "", nodes: [] },
 })
 
-test("every flowState is changed the first time a skin sees it", () => {
+test("every task is changed the first time a skin sees it", () => {
   const stage = initialStage([row("a"), row("b")])
   const painted = new Map<string, TaskState>()
   expect(changedTasks(stage.tasks, painted).map(([task]) => task)).toEqual(["board/a", "board/b"])

@@ -82,7 +82,7 @@ import type { StageStore } from "./shell/stageStore"
 import type { ProjectRow } from "./types"
 import type { TaskRow } from "./types"
 
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "chores",
     project: "board",
@@ -119,7 +119,7 @@ const FLOWS: TaskRow[] = [
 
 function fakeStore(
   stage: StageState,
-  // Named for the project FLOWS' rows belong to: the board shows one
+  // Named for the project represented by TASK_ROWS: the board shows one
   // project's tasks, so a fake naming another would filter them all away.
   project: ProjectRow | ProjectRow[] | null = { name: "board", root: "/home/k/chores", keeps_copies: true },
 ): StageStore & { push(next: StageState): void } {
@@ -130,7 +130,7 @@ function fakeStore(
   const listeners = new Set<() => void>()
   return {
     getStage: () => current,
-    getFlows: () => FLOWS,
+    getTasks: () => TASK_ROWS,
     getProjects: () => projectList,
     getStatus: () => "live",
     subscribe: (listener) => {
@@ -153,7 +153,7 @@ let root: Root
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   localStorage.clear()
-  // The shell is driven here by clicking a flowState on the board, so these ask
+  // The shell is driven here by clicking a task on the board, so these ask
   // for the DOM skin explicitly. The default is the canvas one.
   localStorage.setItem("poieo.skin", "basic")
   container = document.createElement("div")
@@ -183,7 +183,7 @@ test("no tasks renders the invitation, not an error", async () => {
 })
 
 test("one rendering means no picker, and the board carries the tasks", async () => {
-  await render(initialStage(FLOWS))
+  await render(initialStage(TASK_ROWS))
 
   // One rendering of the board exists, so there is no picker at all -- the
   // same furniture rule the project name follows: a control with one option
@@ -196,7 +196,7 @@ test("one rendering means no picker, and the board carries the tasks", async () 
 })
 
 test("runs is a place on the rail: there when you go, gone when you leave", async () => {
-  await render(initialStage(FLOWS))
+  await render(initialStage(TASK_ROWS))
 
   // The rail carries it beside board, models and new task.
   const go = container.querySelector<HTMLElement>('[data-do="open-runs"]')!
@@ -220,7 +220,7 @@ test("runs is a place on the rail: there when you go, gone when you leave", asyn
 })
 
 test("a panel opens over runs without knocking it off the stage", async () => {
-  await render(initialStage(FLOWS))
+  await render(initialStage(TASK_ROWS))
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
 
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
@@ -241,7 +241,7 @@ test("a panel opens over runs without knocking it off the stage", async () => {
 })
 
 test("a task picked off a runs lane opens the drawer with runs still on stage", async () => {
-  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
 
   await act(async () => {
@@ -255,7 +255,7 @@ test("a task picked off a runs lane opens the drawer with runs still on stage", 
 
 test("a reader who left on runs comes back to runs", async () => {
   localStorage.setItem("poieo.skin", "runs")
-  await render(initialStage(FLOWS))
+  await render(initialStage(TASK_ROWS))
 
   expect(container.querySelector(".runs")).not.toBeNull()
   expect(
@@ -266,15 +266,15 @@ test("a reader who left on runs comes back to runs", async () => {
 test("a stale stored skin id still renders a board", async () => {
   // "atelier" is the id every reader who tried the workshop has stored.
   localStorage.setItem("poieo.skin", "atelier")
-  await render(initialStage(FLOWS))
+  await render(initialStage(TASK_ROWS))
 
   // The registry falls back rather than blanking the page.
   expect(container.querySelector(".basic")).not.toBeNull()
   expect(container.querySelectorAll("[data-task]").length).toBeGreaterThan(0)
 })
 
-test("selecting a flowState opens the drawer, and reading it leaves the board alone", async () => {
-  const stage = replay(initialStage(FLOWS), AGENT_RUN)
+test("selecting a task opens the drawer, and reading it leaves the board alone", async () => {
+  const stage = replay(initialStage(TASK_ROWS), AGENT_RUN)
   const store = await render(stage)
 
   await act(async () => {
@@ -290,7 +290,7 @@ test("selecting a flowState opens the drawer, and reading it leaves the board al
 })
 
 test("closing the drawer puts it away", async () => {
-  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
@@ -303,10 +303,10 @@ test("closing the drawer puts it away", async () => {
 })
 
 
-test("opening a different flowState does not show the previous one's runs", async () => {
+test("opening a different task does not show the previous one's runs", async () => {
   // The drawer keeps a selected run. Without a fresh instance per
   // task, switching tasks leaves the last task's run in the diff pane.
-  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
@@ -320,7 +320,7 @@ test("opening a different flowState does not show the previous one's runs", asyn
 
   const drawer = container.querySelector(".drawer")!
   expect(drawer.getAttribute("data-task")).toBe("revision")
-  // nothing carried over from the flowState we just left
+  // nothing carried over from the task we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
 })
 
@@ -329,7 +329,7 @@ test("a frame for another task leaves the open drawer alone", async () => {
   // A busy board streams frames while someone reads a drawer. Every entry in
   // the timeline formats its timestamp on render, so "the drawer did not
   // re-render" is observable as "no timestamp was formatted again".
-  const stage = replay(initialStage(FLOWS), AGENT_RUN)
+  const stage = replay(initialStage(TASK_ROWS), AGENT_RUN)
   const store = await render(stage)
 
   await act(async () => {
@@ -350,7 +350,7 @@ test("a frame for another task leaves the open drawer alone", async () => {
 test("the drawer opens on the run that changed something", async () => {
   // The newest run found nothing to do. Opening on it greets the reader with
   // "this run changed no files", which is not what they came for.
-  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
@@ -394,15 +394,15 @@ const TWO: ProjectRow[] = [
 ]
 
 const MIXED: TaskRow[] = [
-  { ...FLOWS[0], project: "night shift" },
-  { ...FLOWS[1], project: "day job" },
+  { ...TASK_ROWS[0], project: "night shift" },
+  { ...TASK_ROWS[1], project: "day job" },
 ]
 
 const picker = () => container.querySelector<HTMLSelectElement>(".shell-project-pick")
 
 
 test("one project is a name, not a thing to choose between", async () => {
-  await render(initialStage(FLOWS), { name: "night shift", root: "/home/k/a", keeps_copies: true })
+  await render(initialStage(TASK_ROWS), { name: "night shift", root: "/home/k/a", keeps_copies: true })
 
   expect(picker()).toBeNull()
   expect(container.querySelector(".shell-project")!.textContent).toBe("night shift")
@@ -479,7 +479,7 @@ test("make one like it opens the make panel already filled in", async () => {
   // Most new tasks are not blank pages: they are "like that one, but". The
   // drawer's card fold hands the three fields to the make panel, and the
   // person edits from there rather than from nothing.
-  await render(replay(initialStage(FLOWS), AGENT_RUN))
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
@@ -513,7 +513,7 @@ test("switching projects puts a seeded make panel away with its seed", async () 
   // A seed's folder means something in the project it came from. Carried
   // across a switch it would offer that path against another project's tasks
   // folder -- the exact mistake the panel's own key comment promises against.
-  await render(replay(initialStage(FLOWS), AGENT_RUN), [
+  await render(replay(initialStage(TASK_ROWS), AGENT_RUN), [
     { name: "board", root: "/home/k/chores", keeps_copies: true },
     { name: "other", root: "/home/k/other", keeps_copies: true },
   ])

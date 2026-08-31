@@ -6,7 +6,7 @@ import { AGENT_RUN } from "../state/fixtures"
 import { initialStage, replay } from "../state/stage"
 import type { TaskRow } from "../types"
 
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "chores",
     project: "board",
@@ -47,7 +47,7 @@ const FLOWS: TaskRow[] = [
   },
 ]
 
-const midRun = () => replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4))
+const midRun = () => replay(initialStage(TASK_ROWS), AGENT_RUN.slice(0, 4))
 
 test("every registered skin satisfies the contract", () => {
   expect(SKINS.length).toBeGreaterThan(0)
@@ -104,7 +104,7 @@ test("basic renders one box per task and reflects status", () => {
 test("the latest thinking and tool call surface on an open task", () => {
   const el = document.createElement("div")
   const handle = basic.mount(el, { onSelectTask: () => {} })
-  handle.update(replay(initialStage(FLOWS), AGENT_RUN))
+  handle.update(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   const card = el.querySelector('[data-task="board/chores"]')!
   expect(card.textContent).toContain("list_dir")

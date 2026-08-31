@@ -3,7 +3,7 @@
  *
  * A `confirm` node ends its run with a question rather than doing something
  * that cannot be undone -- a push, a merge, a deployment. Everything after it
- * is held until this is answered, so a question nobody notices is a flow that
+ * is held until this is answered, so a question nobody notices is a run that
  * never finishes: it is drawn first in the drawer, above the controls.
  *
  * No confirmation step, unlike Decide. The graph's author already wrote the

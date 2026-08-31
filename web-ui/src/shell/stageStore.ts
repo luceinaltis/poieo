@@ -6,7 +6,7 @@
  */
 
 import {
-  fetchTasks as defaultFetchFlows,
+  fetchTasks as defaultFetchTasks,
   fetchRunEvents as defaultFetchRunEvents,
   fetchRuns as defaultFetchRuns,
   openFeed as defaultOpenFeed,
@@ -17,7 +17,7 @@ import type { StageState, TaskState } from "../state/stage"
 import type { ProjectRow, TaskRow, PoieoEvent } from "../types"
 
 export interface StageApi {
-  fetchTasks: typeof defaultFetchFlows
+  fetchTasks: typeof defaultFetchTasks
   fetchRunEvents: typeof defaultFetchRunEvents
   fetchRuns: typeof defaultFetchRuns
   openFeed: typeof defaultOpenFeed
@@ -29,7 +29,7 @@ export const REVIEW_LIMIT = WINDOW
 
 export interface StageStore {
   getStage(): StageState
-  getFlows(): TaskRow[]
+  getTasks(): TaskRow[]
   /** Whose board this is -- every project the daemon runs. Empty until the
    *  first listing answers. */
   getProjects(): ProjectRow[]
@@ -84,7 +84,7 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
 }
 
 export function createStageStore(api: StageApi = {
-  fetchTasks: defaultFetchFlows,
+  fetchTasks: defaultFetchTasks,
   fetchRunEvents: defaultFetchRunEvents,
   fetchRuns: defaultFetchRuns,
   openFeed: defaultOpenFeed,
@@ -169,7 +169,7 @@ export function createStageStore(api: StageApi = {
 
   return {
     getStage: () => stage,
-    getFlows: () => tasks,
+    getTasks: () => tasks,
     getProjects: () => projects,
     getStatus: () => status,
 

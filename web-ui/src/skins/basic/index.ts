@@ -74,15 +74,15 @@ function element(tag: string, className: string, parent: Element): HTMLElement {
  * "fine, and there was nothing to do" apart from "stuck", and the only reason
  * the count was ever wanted.
  */
-function describeRecent(flowState: TaskState): string {
-  const recent = flowState.recent
+function describeRecent(taskState: TaskState): string {
+  const recent = taskState.recent
   if (recent.runs === 0) return "nothing has run yet"
 
   const parts: string[] = []
   if (recent.succeeded) {
     // A task with no private copy has nothing to change against, so a run
     // that ran is the whole of what there is to say about it.
-    const what = flowState.tracked ? "change" : "run"
+    const what = taskState.tracked ? "change" : "run"
     parts.push(`${recent.succeeded} ${what}${recent.succeeded === 1 ? "" : "s"}`)
   }
   if (recent.insertions || recent.deletions) {
@@ -91,14 +91,14 @@ function describeRecent(flowState: TaskState): string {
   if (recent.failed) parts.push(`${recent.failed} failed`)
 
   if (parts.length > 0) return parts.join(" · ")
-  const last = flowState.lastRun?.finished_at
+  const last = taskState.lastRun?.finished_at
   return last ? `quiet · last looked ${shortTime(last)}` : "quiet"
 }
 
 /** The distinct models a task's nodes would call, in the order they appear. */
-function modelsOf(flowState: TaskState): string[] {
+function modelsOf(taskState: TaskState): string[] {
   const seen: string[] = []
-  for (const node of flowState.shape.nodes) {
+  for (const node of taskState.shape.nodes) {
     if (node.model && !seen.includes(node.model)) seen.push(node.model)
   }
   return seen
@@ -113,10 +113,10 @@ function modelsOf(flowState: TaskState): string[] {
  * the count says so and the nodes inside carry the detail. Opening buys the
  * answer, exactly as it does for a handoff arrow.
  */
-function describeWhen(flowState: TaskState): string {
-  const models = modelsOf(flowState)
-  if (models.length === 0) return flowState.trigger
-  return `${flowState.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
+function describeWhen(taskState: TaskState): string {
+  const models = modelsOf(taskState)
+  if (models.length === 0) return taskState.trigger
+  return `${taskState.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
 }
 
 function buildBox(task: string, callbacks: SkinCallbacks): Box {
@@ -188,12 +188,12 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
  * board. The colour band beside it carries the same fact from further away;
  * this is the half that says which quiet it is.
  */
-function describeNow(flowState: TaskState): string {
-  if (flowState.status === "error") return "stopped"
-  if (flowState.status === "paused") return "paused"
-  if (flowState.status !== "running") return "waiting for its next turn"
-  const parts = [flowState.currentNode ?? "starting"]
-  if (flowState.turn > 1) parts.push(`turn ${flowState.turn}`)
+function describeNow(taskState: TaskState): string {
+  if (taskState.status === "error") return "stopped"
+  if (taskState.status === "paused") return "paused"
+  if (taskState.status !== "running") return "waiting for its next turn"
+  const parts = [taskState.currentNode ?? "starting"]
+  if (taskState.turn > 1) parts.push(`turn ${taskState.turn}`)
   return parts.join(" · ")
 }
 
@@ -216,9 +216,9 @@ function describeNow(flowState: TaskState): string {
  * whose git has broken is warned about too. That is the direction to be wrong
  * in -- it names a folder that really is unprotected until somebody looks.
  */
-function describeRisk(flowState: TaskState): string {
-  if (flowState.tracked) return ""
-  if (!flowState.shape.nodes.some((node) => node.tools.length > 0)) return ""
+function describeRisk(taskState: TaskState): string {
+  if (taskState.tracked) return ""
+  if (!taskState.shape.nodes.some((node) => node.tools.length > 0)) return ""
   return "edits your files directly — no undo"
 }
 
@@ -236,8 +236,8 @@ function describeRisk(flowState: TaskState): string {
  * the sentence they need is the next action, and the daemon's own words are on
  * the tooltip for whoever wants the rest.
  */
-function describeStale(flowState: TaskState): string {
-  return flowState.stale ? "edited — restart the daemon for it to take" : ""
+function describeStale(taskState: TaskState): string {
+  return taskState.stale ? "edited — restart the daemon for it to take" : ""
 }
 
 /**
@@ -254,17 +254,17 @@ function describeStale(flowState: TaskState): string {
  * had opened a border to find; with every other task showing its steps
  * unasked, the same blank reads as broken instead.
  */
-function fillInside(box: Box, flowState: TaskState): void {
+function fillInside(box: Box, taskState: TaskState): void {
   // Only when they differ. A task on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
-  const differ = modelsOf(flowState).length > 1
+  const differ = modelsOf(taskState).length > 1
 
   // Built first and measured, then placed: how wide a step is drawn depends on
   // its label and on whether it carries a model or a pair of hands, and the
   // layout cannot rank what it cannot size. Off-screen rather than hidden --
   // `display: none` has no width to read.
   const pills = new Map<string, HTMLElement>()
-  for (const spec of flowState.shape.nodes) {
+  for (const spec of taskState.shape.nodes) {
     const pill = document.createElement("span")
     pill.className = "basic-node"
     pill.dataset.node = spec.id
@@ -290,7 +290,7 @@ function fillInside(box: Box, flowState: TaskState): void {
     pills.set(spec.id, pill)
   }
 
-  const laid = layOutSteps(flowState.shape, (spec) => {
+  const laid = layOutSteps(taskState.shape, (spec) => {
     const pill = pills.get(spec.id)
     // `offsetWidth` is zero where nothing lays anything out -- jsdom, and a
     // border not yet on the page. The estimate keeps the shape of the graph
@@ -398,33 +398,33 @@ function title(said: string): SVGElement {
 }
 
 /** What moves: which node is lit, and what the task has been saying. */
-function paint(box: Box, flowState: TaskState, open: boolean): void {
+function paint(box: Box, taskState: TaskState, open: boolean): void {
   // The name on the card, not the key it is filed under: that carries the
   // project as well, which is the board's business and not the reader's.
-  box.name.textContent = flowState.name
-  box.root.dataset.status = flowState.status
+  box.name.textContent = taskState.name
+  box.root.dataset.status = taskState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
   box.toggle.setAttribute("aria-expanded", String(open))
-  box.when.textContent = describeWhen(flowState)
-  box.warn.textContent = describeRisk(flowState)
-  box.stale.textContent = describeStale(flowState)
+  box.when.textContent = describeWhen(taskState)
+  box.warn.textContent = describeRisk(taskState)
+  box.stale.textContent = describeStale(taskState)
   // The daemon's own sentence, which is long and exact where the line is short:
   // the summary is what a scan of the board needs, and this is what the person
   // who just saved the file needs.
-  box.stale.title = flowState.stale
-  box.now.textContent = describeNow(flowState)
+  box.stale.title = taskState.stale
+  box.now.textContent = describeNow(taskState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
-    pill.dataset.here = String(pill.dataset.node === flowState.currentNode)
+    pill.dataset.here = String(pill.dataset.node === taskState.currentNode)
   }
 
-  const thinking = !flowState.lastText && Boolean(flowState.lastThinking)
+  const thinking = !taskState.lastText && Boolean(taskState.lastThinking)
   box.said.dataset.thinking = String(thinking)
-  box.said.textContent = flowState.lastText || flowState.lastThinking || ""
+  box.said.textContent = taskState.lastText || taskState.lastThinking || ""
 
   box.tools.replaceChildren(
-    ...flowState.recentToolCalls.map((call) => {
+    ...taskState.recentToolCalls.map((call) => {
       const item = document.createElement("li")
       item.className = "basic-tool"
       item.dataset.error = String(call.failed)
@@ -436,7 +436,7 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
       return item
     }),
   )
-  box.tally.textContent = describeRecent(flowState)
+  box.tally.textContent = describeRecent(taskState)
 }
 
 /**
@@ -475,16 +475,16 @@ function drawWires(
   const lastRow = placed.reduce((low, one) => Math.max(low, one.row), 0)
   const lines: SVGElement[] = []
 
-  for (const [task, flowState] of Object.entries(stage.tasks)) {
+  for (const [task, taskState] of Object.entries(stage.tasks)) {
     const from = at.get(task)
     if (from === undefined) continue
-    for (const arrow of flowState.then) {
+    for (const arrow of taskState.then) {
       // `then:` names a task in the sender's own project, which is the only
       // place a handoff can reach -- so the key is built from that project.
       const to =
         arrow.to === null
           ? undefined
-          : at.get(keyOfTask(flowState.project, arrow.to))
+          : at.get(keyOfTask(taskState.project, arrow.to))
       // A branch that deliberately stops has nothing to point at, and a target
       // that is disabled has no box on this board.
       if (to === undefined) continue
@@ -558,13 +558,13 @@ function drawWires(
 function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boolean): string {
   return Object.entries(stage.tasks)
     .map(
-      ([task, flowState]) =>
+      ([task, taskState]) =>
         // Open, and every line that appears and disappears under the header:
         // all of them change a border's height, and the rows and the arrows
         // are measured off those heights. Left out, a card that grows a line
         // keeps the geometry of the board before it had one.
-        `${task}>${flowState.then.map((a) => a.to).join(",")}${open(task, flowState) ? "+" : "-"}` +
-        `${describeRisk(flowState) ? "r" : ""}${describeStale(flowState) ? "s" : ""}`,
+        `${task}>${taskState.then.map((a) => a.to).join(",")}${open(task, taskState) ? "+" : "-"}` +
+        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}`,
     )
     .join("|")
 }
@@ -709,13 +709,13 @@ export const basic: Skin = {
     function relayout(stage: StageState): void {
       const tasks = Object.keys(stage.tasks)
       const handoffs: Record<string, string[]> = {}
-      for (const [task, flowState] of Object.entries(stage.tasks)) {
+      for (const [task, taskState] of Object.entries(stage.tasks)) {
         // Keyed the way the board is: `then:` names a task in the sender's
         // own project, which is the only place a handoff can reach.
-        handoffs[task] = flowState.then
+        handoffs[task] = taskState.then
           .map((arrow) => arrow.to)
           .filter((to): to is string => to !== null)
-          .map((to) => keyOfTask(flowState.project, to))
+          .map((to) => keyOfTask(taskState.project, to))
       }
       // How many independent tasks stand across before wrapping. Read off the
       // window rather than fixed: a grid that runs off the side of a laptop is
@@ -825,12 +825,12 @@ export const basic: Skin = {
     return {
       update(stage: StageState) {
         let moved = false
-        for (const [task, flowState] of changedTasks(stage.tasks, painted)) {
+        for (const [task, taskState] of changedTasks(stage.tasks, painted)) {
           let box = boxes.get(task)
           if (box === undefined) {
             box = buildBox(task, callbacks)
             box.toggle.addEventListener("click", () => {
-              byHand.set(task, !isOpen(task, painted.get(task) ?? flowState))
+              byHand.set(task, !isOpen(task, painted.get(task) ?? taskState))
               const now = painted.get(task)
               if (now !== undefined) paint(box!, now, isOpen(task, now))
               if (last !== null) relayout(last)
@@ -839,8 +839,8 @@ export const basic: Skin = {
             board.append(box.root)
             moved = true
           }
-          fillInside(box, flowState)
-          paint(box, flowState, isOpen(task, flowState))
+          fillInside(box, taskState)
+          paint(box, taskState, isOpen(task, taskState))
         }
         for (const [task, box] of boxes) {
           if (!(task in stage.tasks)) {

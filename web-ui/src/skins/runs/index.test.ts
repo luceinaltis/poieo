@@ -8,7 +8,7 @@ import type { RunSummary, TaskRow } from "../../types"
 
 // Handed over in an order that is not the order they are drawn in, so the
 // test below can tell a sorted board from an accidentally sorted one.
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "revision",
     project: "board",
@@ -45,7 +45,7 @@ const FLOWS: TaskRow[] = [
   },
 ]
 
-const CHORES = FLOWS[1]
+const CHORES = TASK_ROWS[1]
 
 const run = (id: string, ago: number, extra: Partial<RunSummary> = {}): RunSummary => ({
   run_id: id,
@@ -67,7 +67,7 @@ const run = (id: string, ago: number, extra: Partial<RunSummary> = {}): RunSumma
 const CHANGE = { base: "a", head: "b", files: ["x.py"], insertions: 4, deletions: 2, message: "" }
 
 const board = (runs: RunSummary[]): StageState =>
-  setRuns(initialStage(FLOWS), "board/chores", runs)
+  setRuns(initialStage(TASK_ROWS), "board/chores", runs)
 
 let el: HTMLDivElement
 
@@ -367,8 +367,8 @@ test("a task with nothing to change says its runs ran, not that they changed som
   // what there is to say. Read as "changed something" the lane told a reader
   // who cannot see it that a task had changed a thing it cannot change. The
   // graph view has guarded this since it was written; this one had not.
-  const untracked = FLOWS.map((flow) =>
-    flow.name === "chores" ? { ...flow, into: null } : flow,
+  const untracked = TASK_ROWS.map((taskRow) =>
+    taskRow.name === "chores" ? { ...taskRow, into: null } : taskRow,
   )
   const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(setRuns(initialStage(untracked), "board/chores", [run("a", HOUR), run("b", 2 * HOUR)]))

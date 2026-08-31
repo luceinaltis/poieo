@@ -91,20 +91,20 @@ function describeSpan(span: Span): string {
  * "stopped" -- and no mark can carry it, because a task that stopped has bare
  * lane to the right of its final mark and so does a task still working.
  */
-function describeLast(flowState: TaskState): string {
-  if (flowState.status === "running") return "running now"
+function describeLast(taskState: TaskState): string {
+  if (taskState.status === "running") return "running now"
   // Said before the clock, because it changes what the bare lane to the right
   // of the last mark means: not "quiet tonight" but "it will not look again".
-  if (flowState.status === "paused") return "paused"
-  const at = Date.parse(flowState.runs[0]?.finished_at ?? flowState.lastRun?.finished_at ?? "")
+  if (taskState.status === "paused") return "paused"
+  const at = Date.parse(taskState.runs[0]?.finished_at ?? taskState.lastRun?.finished_at ?? "")
   return Number.isNaN(at) ? "nothing has run yet" : `last looked ${clock(at)}`
 }
 
 /** The newest finish anywhere on the board, which is how far back it reaches. */
 function newestFinish(tasks: Record<string, TaskState>): number | null {
   let newest: number | null = null
-  for (const flowState of Object.values(tasks)) {
-    for (const run of flowState.runs) {
+  for (const taskState of Object.values(tasks)) {
+    for (const run of taskState.runs) {
       const at = Date.parse(run.finished_at)
       if (!Number.isNaN(at) && (newest === null || at > newest)) newest = at
     }
@@ -167,13 +167,13 @@ function summarise(marks: Mark[], earlier: number, span: Span, tracked: boolean)
   return parts.join(", ") + before
 }
 
-function paint(row: Row, flowState: TaskState, span: Span): void {
-  row.name.textContent = flowState.name
-  row.trigger.textContent = flowState.trigger
-  row.last.textContent = describeLast(flowState)
-  row.root.dataset.status = flowState.status
+function paint(row: Row, taskState: TaskState, span: Span): void {
+  row.name.textContent = taskState.name
+  row.trigger.textContent = taskState.trigger
+  row.last.textContent = describeLast(taskState)
+  row.root.dataset.status = taskState.status
 
-  const drawn = lane(flowState.runs, flowState.tracked, span)
+  const drawn = lane(taskState.runs, taskState.tracked, span)
   const marks: HTMLElement[] = []
 
   // What the window opened after. A number rather than a mark, because the
@@ -209,14 +209,14 @@ function paint(row: Row, flowState: TaskState, span: Span): void {
 
   // A run in flight has no finish to be placed by, so it is drawn at now --
   // the right edge, and the only mark that moves on its own.
-  if (flowState.status === "running") {
+  if (taskState.status === "running") {
     const live = document.createElement("span")
     live.className = "runs-live"
     live.title = "running now"
     marks.push(live)
   }
 
-  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span, flowState.tracked)
+  row.track.ariaLabel = summarise(drawn.marks, drawn.earlier, span, taskState.tracked)
   row.track.replaceChildren(...marks)
 }
 
@@ -283,8 +283,8 @@ export const runs: Skin = {
     function repaint(stage: StageState, tasks: Iterable<string>): void {
       for (const task of tasks) {
         const row = rows.get(task)
-        const flowState = stage.tasks[task]
-        if (row !== undefined && flowState !== undefined) paint(row, flowState, span)
+        const taskState = stage.tasks[task]
+        if (row !== undefined && taskState !== undefined) paint(row, taskState, span)
       }
     }
 

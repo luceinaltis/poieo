@@ -1,18 +1,8 @@
 /**
- * Every model this project can reach.
+ * Every model this project can reach, grouped by endpoint and fetched live.
  *
- * Not what it is bound to -- that is one line of the answer and the smaller
- * one. The question this opens for is "what could I be running, and what would
- * it cost", so the shape is endpoint → its models, asked live because a
- * catalogue written down a month ago has since gone wrong.
- *
- * Shell UI, not a skin, so it is allowed to read the API. It hangs off the
- * rail rather than off a card because a project's endpoints are the project's,
- * not one task's.
- *
- * Everything a row shows is what the endpoint said about that model. A blank
- * is "it did not say", never a zero and never a guess -- poieo keeps no price
- * table, and this does not become one.
+ * This is project-level shell UI rather than one task's detail. Rows show only
+ * what their endpoint reports; missing facts remain blank instead of guessed.
  */
 
 import { useEffect, useState } from "react"
@@ -40,25 +30,26 @@ export function Models({
   const [filter, setFilter] = useState("")
   // Which role a click moves. `default` unless the file names others and the
   // reader picks one -- the common project has no others and never sees this.
-  const [role, setRole] = useState("default")
-  const [reload, setReload] = useState(0)
-  const [asking, setAsking] = useState(true)
+  const [selectedRole, setSelectedRole] = useState("default")
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(true)
   // Two requests, not one. Looking for an engine this project has never used
   // means asking ports nothing may be listening on, and a closed one costs a
   // whole timeout -- so the catalogue would have waited a second and a half
   // for its own footnote. This lands under it whenever it arrives.
-  const [offers, setOffers] = useState<UndeclaredEngine[]>([])
+  const [undeclaredEngines, setUndeclaredEngines] = useState<UndeclaredEngine[]>([])
   // A write can land in the file and still be refused by the running daemon,
   // which keeps the last good spec -- and the panel reads that same spec, so it
   // would redraw off the old one with nothing said. Kept until the next write,
-  // and it holds either write: `use` and `add` both answer `adopted`.
-  const [notTaken, setNotTaken] = useState<ModelsAnswer | null>(null)
-  const [at, setAt] = useState("")
-  const [atName, setAtName] = useState("")
-  const [atKeyEnv, setAtKeyEnv] = useState("")
+  // and it holds either write: selecting a model and adding an endpoint both
+  // answer `adopted`.
+  const [unappliedChange, setUnappliedChange] = useState<ModelsAnswer | null>(null)
+  const [endpointUrl, setEndpointUrl] = useState("")
+  const [endpointName, setEndpointName] = useState("")
+  const [apiKeyEnvName, setApiKeyEnvName] = useState("")
   const { busy, refused, act } = useAct<ModelsAnswer>((answer) => {
-    setNotTaken(answer.adopted === false ? answer : null)
-    setReload((n) => n + 1)
+    setUnappliedChange(answer.adopted === false ? answer : null)
+    setRefreshVersion((version) => version + 1)
   })
 
   // Blanking belongs to a change of subject, not to a re-ask. Every refresh
@@ -72,49 +63,49 @@ export function Models({
 
   useEffect(() => {
     let live = true
-    setAsking(true)
+    setIsRefreshing(true)
     void fetchModels(project).then((answer) => {
       if (!live) return
       setReport(answer)
-      setAsking(false)
+      setIsRefreshing(false)
     })
     return () => {
       live = false
     }
-  }, [project, reload])
+  }, [project, refreshVersion])
 
   useEffect(() => {
     let live = true
     void fetchUndeclared(project).then((found) => {
-      if (live) setOffers(found)
+      if (live) setUndeclaredEngines(found)
     })
     return () => {
       live = false
     }
-  }, [project, reload])
+  }, [project, refreshVersion])
 
   // A role the file stopped naming is not a role to keep pointing at.
   useEffect(() => {
-    if (report && !report.roles.includes(role)) setRole("default")
-  }, [report, role])
+    if (report && !report.roles.includes(selectedRole)) setSelectedRole("default")
+  }, [report, selectedRole])
 
-  const use = (model: ServedModel) =>
-    void act(() => pickModel(project, model.ref, role))
+  const selectModel = (model: ServedModel) =>
+    void act(() => pickModel(project, model.ref, selectedRole))
 
-  const add = (engine: UndeclaredEngine) =>
+  const addDetectedEngine = (engine: UndeclaredEngine) =>
     void act(() => addEngine(project, { engine: engine.name }))
 
   // An engine at an address nobody guessed. Detection knows four ports on this
   // machine; a vLLM on 8001, an Ollama on a desktop and an office box had no
   // way in at all. The reader types where it is -- which backend it is comes
   // from asking it, not from a field asking them to classify their own server.
-  const addAt = () => {
-    if (!at.trim()) return
+  const addEndpoint = () => {
+    if (!endpointUrl.trim()) return
     void act(async () => {
       const answer = await addEngine(project, {
-        url: at.trim(),
-        ...(atName.trim() ? { name: atName.trim() } : {}),
-        ...(atKeyEnv.trim() ? { key_env: atKeyEnv.trim() } : {}),
+        url: endpointUrl.trim(),
+        ...(endpointName.trim() ? { name: endpointName.trim() } : {}),
+        ...(apiKeyEnvName.trim() ? { key_env: apiKeyEnvName.trim() } : {}),
       })
       // Emptied here and not off `act`'s answer, which is *whether the request
       // went out* -- a refused address counts, and clearing on it left the
@@ -129,9 +120,9 @@ export function Models({
       // nothing in it, and emptying the form over an endpoint that may not
       // have been declared is the same loss under a friendlier status.
       if (answer.ok && answer.engine) {
-        setAt("")
-        setAtName("")
-        setAtKeyEnv("")
+        setEndpointUrl("")
+        setEndpointName("")
+        setApiKeyEnvName("")
       }
       return answer
     })
@@ -156,8 +147,8 @@ export function Models({
           data-do="refresh"
           aria-label="Ask the endpoints again"
           title="Ask again"
-          disabled={asking}
-          onClick={() => setReload((n) => n + 1)}
+          disabled={isRefreshing}
+          onClick={() => setRefreshVersion((version) => version + 1)}
         >
           ↻
         </button>
@@ -190,8 +181,8 @@ export function Models({
           <select
             className="models-role"
             aria-label="Role to bind"
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
+            value={selectedRole}
+            onChange={(event) => setSelectedRole(event.target.value)}
           >
             {report.roles.map((one) => (
               <option key={one} value={one}>
@@ -205,27 +196,26 @@ export function Models({
           running daemon taking it -- and since the panel draws from what the
           daemon kept, the reader is about to see the screen they had, with no
           explanation. This is that explanation. */}
-      {notTaken ? (
+      {unappliedChange ? (
         <p className="models-not-taken" data-do="not-taken" role="alert">
           {report?.binding ? shortPath(report.binding.path) : "The models file"} now{" "}
-          {notTaken.status === "added" ? (
+          {unappliedChange.status === "added" ? (
             <>
-              declares <code>{notTaken.engine}</code>
+              declares <code>{unappliedChange.engine}</code>
             </>
           ) : (
             <>
-              says <code>{notTaken.ref}</code>
+              says <code>{unappliedChange.ref}</code>
             </>
           )}
-          , but the daemon has not taken it — {sentence(notTaken.why)}{" "}
-          {/* What the reader is about to see, which is not the same for each
-              write. `use` redraws the model that was there before; `add` goes
-              on offering the endpoint just declared, and pressing that offer
-              again answers "this project already reaches it". */}
-          {notTaken.status === "added" ? (
+          , but the daemon has not taken it — {withSentenceEnding(unappliedChange.why)}{" "}
+          {/* What the reader is about to see differs by write. Selecting a
+              model redraws the previous choice; adding an endpoint keeps
+              offering it until the daemon accepts the changed file. */}
+          {unappliedChange.status === "added" ? (
             <>
               The list below is what the daemon has, so it will go on offering{" "}
-              <code>{notTaken.engine}</code> until that is fixed.
+              <code>{unappliedChange.engine}</code> until that is fixed.
             </>
           ) : (
             <>
@@ -246,14 +236,13 @@ export function Models({
         </Refusal>
       ) : null}
       <div className="models-body">
-        {/* Above the lists, not under them. It is the one piece of news here,
-            and under a 396-model catalogue it sat 2181px down a 729px panel --
-            the last thing a reader would ever find. Drawn only when there is
-            one, so the usual panel is not pushed down by an empty slot.
+        {/* Above the lists so a discovered engine cannot disappear below a
+            long catalogue. Drawn only when there is one, so the usual panel
+            is not pushed down by an empty slot.
 
-            Outside `Body` on purpose: a filter is about models, and an engine
+            Outside `ModelsBody` on purpose: a filter is about models, and an engine
             with none of them yet is not something a search can miss. */}
-        {offers.map((one) => (
+        {undeclaredEngines.map((one) => (
           <p className="models-offer" data-offer={one.name} key={one.name}>
             <span>
               <strong>{one.label}</strong> is answering on this machine, with{" "}
@@ -264,15 +253,20 @@ export function Models({
                 Pressing this declares the endpoint; it moves nothing that is
                 already in use, and choosing among these models is still a
                 separate click on one of them. */}
-            <button type="button" data-do="add" disabled={busy} onClick={() => add(one)}>
+            <button
+              type="button"
+              data-do="add"
+              disabled={busy}
+              onClick={() => addDetectedEngine(one)}
+            >
               let it use them
             </button>
           </p>
         ))}
-        <Body
+        <ModelsBody
           report={report}
           filter={filter.trim().toLowerCase()}
-          onUse={use}
+          onSelectModel={selectModel}
           busy={busy}
         />
         {/* Last, because it is what you reach for when nothing above it was
@@ -292,29 +286,34 @@ export function Models({
               type="url"
               aria-label="Address of an engine"
               placeholder="http://gpu-box:8001"
-              value={at}
+              value={endpointUrl}
               disabled={busy}
-              onChange={(event) => setAt(event.target.value)}
+              onChange={(event) => setEndpointUrl(event.target.value)}
             />
             <div className="models-at-more">
               <input
                 data-do="url-name"
                 aria-label="What to call it"
                 placeholder="name it (optional)"
-                value={atName}
+                value={endpointName}
                 disabled={busy}
-                onChange={(event) => setAtName(event.target.value)}
+                onChange={(event) => setEndpointName(event.target.value)}
               />
               <input
                 data-do="url-key-env"
                 aria-label="Variable its key is read from"
                 placeholder="key variable (optional)"
-                value={atKeyEnv}
+                value={apiKeyEnvName}
                 disabled={busy}
-                onChange={(event) => setAtKeyEnv(event.target.value)}
+                onChange={(event) => setApiKeyEnvName(event.target.value)}
               />
             </div>
-            <button type="button" data-do="add-at" disabled={busy || !at.trim()} onClick={addAt}>
+            <button
+              type="button"
+              data-do="add-at"
+              disabled={busy || !endpointUrl.trim()}
+              onClick={addEndpoint}
+            >
               ask it
             </button>
           </section>
@@ -324,15 +323,15 @@ export function Models({
   )
 }
 
-function Body({
+function ModelsBody({
   report,
   filter,
-  onUse,
+  onSelectModel,
   busy,
 }: {
   report: ModelsReport | null | undefined
   filter: string
-  onUse(model: ServedModel): void
+  onSelectModel(model: ServedModel): void
   busy: boolean
 }) {
   if (report === undefined) return <p className="models-note">asking…</p>
@@ -348,37 +347,36 @@ function Body({
       </p>
     )
   }
-  // What is on this machine first. The report is in the binding file's order,
-  // which is where `poieo init` happened to write each endpoint -- provenance,
-  // not an answer to "what can I run". Measured on a real board, that order put
-  // the eight models sitting on the disk 1786px below a 396-model menu of
-  // things that cost money and needed a key nobody had set.
-  //
-  // One step, not a sort: `installed` before the rest, and inside each half the
-  // reader's own arrangement is left alone. `sort` is stable, so that holds.
-  const ordered = [...report.endpoints].sort((a, b) => rank(b) - rank(a))
-  const blocks = ordered.map((endpoint) => ({
+  // What is ready on this machine comes first. The binding file's order is
+  // provenance, not an answer to "what can I run"; stable sorting preserves
+  // that order within each execution location.
+  const orderedEndpoints = [...report.endpoints].sort(
+    (a, b) => executionLocationRank(b) - executionLocationRank(a),
+  )
+  const endpointViews = orderedEndpoints.map((endpoint) => ({
     endpoint,
-    shown: filter
-      ? endpoint.models.filter((m) => m.id.toLowerCase().includes(filter))
+    visibleModels: filter
+      ? endpoint.models.filter((model) => model.id.toLowerCase().includes(filter))
       : endpoint.models,
   }))
   // An endpoint with nothing matching is dropped rather than shown empty: with
   // a filter on, "no answer" under a heading would read as a broken endpoint
   // rather than as a search that missed.
-  const matched = filter ? blocks.filter((b) => b.shown.length > 0) : blocks
-  if (filter && matched.length === 0) {
+  const visibleEndpointViews = filter
+    ? endpointViews.filter(({ visibleModels }) => visibleModels.length > 0)
+    : endpointViews
+  if (filter && visibleEndpointViews.length === 0) {
     return <p className="models-note">nothing matches “{filter}”.</p>
   }
   return (
     <>
-      {matched.map(({ endpoint, shown }) => (
+      {visibleEndpointViews.map(({ endpoint, visibleModels }) => (
         <EndpointBlock
           key={endpoint.name}
           endpoint={endpoint}
-          shown={shown}
+          visibleModels={visibleModels}
           filtered={Boolean(filter)}
-          onUse={onUse}
+          onSelectModel={onSelectModel}
           busy={busy}
         />
       ))}
@@ -388,18 +386,18 @@ function Body({
 
 function EndpointBlock({
   endpoint,
-  shown,
+  visibleModels,
   filtered,
-  onUse,
+  onSelectModel,
   busy,
 }: {
   endpoint: Endpoint
-  shown: ServedModel[]
+  visibleModels: ServedModel[]
   filtered: boolean
-  onUse(model: ServedModel): void
+  onSelectModel(model: ServedModel): void
   busy: boolean
 }) {
-  const groups = groupsOf(endpoint, shown)
+  const modelGroups = groupModelsByMaker(endpoint, visibleModels)
   return (
     <section className="models-endpoint" data-endpoint={endpoint.name}>
       <h3>
@@ -427,9 +425,9 @@ function EndpointBlock({
         ) : null}
         <span
           className="models-count"
-          data-listing={runsOn(endpoint) ?? "offered"}
+          data-listing={executionLocationOf(endpoint) ?? "offered"}
         >
-          {countText(endpoint, shown, filtered)}
+          {modelCountText(endpoint, visibleModels, filtered)}
         </span>
         {/* Only when the endpoint names a variable. One that does not is
             resolving its own credential, which is not news. */}
@@ -443,10 +441,10 @@ function EndpointBlock({
           </span>
         ) : null}
       </h3>
-      {shown.length === 0 ? (
-        <p className="models-note">{emptyBecause(endpoint)}</p>
-      ) : groups ? (
-        groups.map(([maker, models]) => (
+      {visibleModels.length === 0 ? (
+        <p className="models-note">{emptyEndpointMessage(endpoint)}</p>
+      ) : modelGroups ? (
+        modelGroups.map(([maker, models]) => (
           // Open while a filter is on: a reader who typed "deepseek" is
           // looking at the matches, not at a folder holding them.
           <details key={maker} className="models-maker" data-maker={maker} open={filtered}>
@@ -456,14 +454,14 @@ function EndpointBlock({
             </summary>
             <ul className="models-list">
               {models.map((model) => (
-                <Row
+                <ModelRow
                   key={model.id}
                   model={model}
-                  runs={runsOn(endpoint)}
+                  executionLocation={executionLocationOf(endpoint)}
                   // The maker is the card's own heading; repeating it on every
                   // row inside costs the width the model's name needs.
-                  drop={`${maker}/`}
-                  onUse={onUse}
+                  prefixToHide={`${maker}/`}
+                  onSelectModel={onSelectModel}
                   busy={busy}
                 />
               ))}
@@ -472,12 +470,12 @@ function EndpointBlock({
         ))
       ) : (
         <ul className="models-list">
-          {shown.map((model) => (
-            <Row
+          {visibleModels.map((model) => (
+            <ModelRow
               key={model.id}
               model={model}
-              runs={runsOn(endpoint)}
-              onUse={onUse}
+              executionLocation={executionLocationOf(endpoint)}
+              onSelectModel={onSelectModel}
               busy={busy}
             />
           ))}
@@ -488,7 +486,7 @@ function EndpointBlock({
 }
 
 /** Below this a flat list is easier to read than folders holding one row each. */
-const WORTH_GROUPING = 12
+const MIN_GROUPED_MODELS = 12
 
 /**
  * The models by who made them, or null when that would not help.
@@ -503,22 +501,24 @@ const WORTH_GROUPING = 12
  * every id carries a prefix, and there are enough of them to be worth folding.
  * An endpoint that grows into that shape gets it without anybody deciding.
  */
-function groupsOf(
+function groupModelsByMaker(
   endpoint: Endpoint,
-  shown: ServedModel[],
+  visibleModels: ServedModel[],
 ): [string, ServedModel[]][] | null {
-  if (endpoint.models.length < WORTH_GROUPING) return null
-  if (!endpoint.models.every((m) => m.id.includes("/"))) return null
-  const by = new Map<string, ServedModel[]>()
-  for (const model of shown) {
+  if (endpoint.models.length < MIN_GROUPED_MODELS) return null
+  if (!endpoint.models.every((model) => model.id.includes("/"))) return null
+  const modelsByMaker = new Map<string, ServedModel[]>()
+  for (const model of visibleModels) {
     const maker = model.id.slice(0, model.id.indexOf("/"))
-    const bucket = by.get(maker)
+    const bucket = modelsByMaker.get(maker)
     if (bucket) bucket.push(model)
-    else by.set(maker, [model])
+    else modelsByMaker.set(maker, [model])
   }
   // Biggest first, then alphabetically: the makers a reader is looking for are
   // usually the ones with most on offer, and ties should not shuffle.
-  return [...by].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+  return [...modelsByMaker].sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  )
 }
 
 /**
@@ -528,66 +528,74 @@ function groupsOf(
  * working `mock` as a broken server. The missing key comes first because it is
  * the one the reader can do something about.
  */
-function emptyBecause(endpoint: Endpoint): string {
+function emptyEndpointMessage(endpoint: Endpoint): string {
   if (!endpoint.askable) return "answers from the models file, so there is nothing to ask"
   if (endpoint.api_key_set === false) return `no answer — ${endpoint.api_key_env} is not set`
   return "no answer"
 }
 
-/** How many, and of what -- the endpoint's own count when a filter narrows it. */
 /**
  * Where this endpoint's models actually run.
  *
- * Two facts the panel used to carry as one. `installed` says the listing is
- * things **pulled and ready** rather than a menu -- a property of the backend,
- * as true of an Ollama on an office server as of one here. `here` says whose
- * machine that is, which only the address can answer. Reading the first as
- * both had every Ollama anywhere claiming to be on this laptop.
+ * `installed` says the listing is pulled and ready rather than a menu, while
+ * `here` identifies whose machine runs it. A remote Ollama is installed but
+ * does not run on this machine, so the two facts stay separate.
  */
-type Runs = "here" | "elsewhere" | null
+type ExecutionLocation = "here" | "elsewhere" | null
 
-function rank(endpoint: Endpoint): number {
+function executionLocationRank(endpoint: Endpoint): number {
   // This machine, then somebody else's, then the menus. Both of the first two
   // are models that exist and are ready; only the first costs nothing but the
   // memory in front of the reader.
-  const runs = runsOn(endpoint)
-  return runs === "here" ? 2 : runs === "elsewhere" ? 1 : 0
+  const executionLocation = executionLocationOf(endpoint)
+  return executionLocation === "here" ? 2 : executionLocation === "elsewhere" ? 1 : 0
 }
 
-function runsOn(endpoint: Endpoint): Runs {
+function executionLocationOf(endpoint: Endpoint): ExecutionLocation {
   if (!endpoint.installed) return null
   return endpoint.here === false ? "elsewhere" : "here"
 }
 
-const WHERE: Record<string, string> = {
+const EXECUTION_LOCATION_LABELS: Record<string, string> = {
   here: "on this machine",
   elsewhere: "on that machine",
 }
 
-function countText(endpoint: Endpoint, shown: ServedModel[], filtered: boolean): string {
-  const whole = endpoint.models.length
-  if (!whole) return ""
-  const what = WHERE[runsOn(endpoint) ?? ""] ?? "offered"
-  if (filtered && shown.length !== whole) return `${shown.length} of ${whole} ${what}`
-  return `${whole} ${what}`
+/** How many, and of what -- the endpoint's own count when a filter narrows it. */
+function modelCountText(
+  endpoint: Endpoint,
+  visibleModels: ServedModel[],
+  filtered: boolean,
+): string {
+  const totalModels = endpoint.models.length
+  if (!totalModels) return ""
+  const locationLabel =
+    EXECUTION_LOCATION_LABELS[executionLocationOf(endpoint) ?? ""] ?? "offered"
+  if (filtered && visibleModels.length !== totalModels) {
+    return `${visibleModels.length} of ${totalModels} ${locationLabel}`
+  }
+  return `${totalModels} ${locationLabel}`
 }
 
 
-function Row({
+function ModelRow({
   model,
-  runs,
-  drop = "",
-  onUse,
+  executionLocation,
+  prefixToHide = "",
+  onSelectModel,
   busy,
 }: {
   model: ServedModel
-  runs: Runs
+  executionLocation: ExecutionLocation
   /** A prefix the surrounding card already shows; stripped from the name. */
-  drop?: string
-  onUse(model: ServedModel): void
+  prefixToHide?: string
+  onSelectModel(model: ServedModel): void
   busy: boolean
 }) {
-  const shown = drop && model.id.startsWith(drop) ? model.id.slice(drop.length) : model.id
+  const displayName =
+    prefixToHide && model.id.startsWith(prefixToHide)
+      ? model.id.slice(prefixToHide.length)
+      : model.id
   return (
     <li data-model={model.ref}>
       {/* The row is the button. A catalogue is read by scanning names, and a
@@ -601,12 +609,14 @@ function Row({
         title={model.id}
         data-do="use"
         disabled={busy}
-        onClick={() => onUse(model)}
+        onClick={() => onSelectModel(model)}
       >
-        {shown}
+        {displayName}
       </button>
       <span className="models-facts">
-        {model.context ? <span data-fact="context">{compact(model.context)}</span> : null}
+        {model.context ? (
+          <span data-fact="context">{formatTokenCount(model.context)}</span>
+        ) : null}
         {model.size ? <span data-fact="size">{model.size}</span> : null}
         {model.quantization ? (
           <span data-fact="quant">{model.quantization}</span>
@@ -619,8 +629,8 @@ function Row({
             </span>
           ))}
       </span>
-      <span className="models-price" data-price={priceKind(model, runs)}>
-        {priceText(model, runs)}
+      <span className="models-price" data-price={priceKind(model, executionLocation)}>
+        {priceText(model, executionLocation)}
       </span>
       {/* One word, and only on the models a role is actually on. */}
       {model.used_by.length > 0 ? (
@@ -630,22 +640,26 @@ function Row({
   )
 }
 
-function priceKind(model: ServedModel, runs: Runs): string {
+function priceKind(model: ServedModel, executionLocation: ExecutionLocation): string {
   if (model.price) return model.price.input === 0 && model.price.output === 0 ? "free" : "paid"
   // Ollama bills nothing per token wherever it runs -- a fact about the
   // backend, not a rate looked up in a table. Which machine is running it is
   // still worth saying, because it is the difference between spending your own
   // memory and spending somebody's server.
-  if (runs === "here") return "local"
-  return runs === "elsewhere" ? "self-hosted" : "unknown"
+  if (executionLocation === "here") return "local"
+  return executionLocation === "elsewhere" ? "self-hosted" : "unknown"
 }
 
-function priceText(model: ServedModel, runs: Runs): string {
+function priceText(model: ServedModel, executionLocation: ExecutionLocation): string {
   if (model.price) {
     if (model.price.input === 0 && model.price.output === 0) return "free"
-    return `$${money(model.price.input)} / $${money(model.price.output)}`
+    return `$${formatPrice(model.price.input)} / $${formatPrice(model.price.output)}`
   }
-  return runs === "here" ? "local" : runs === "elsewhere" ? "self-hosted" : ""
+  return executionLocation === "here"
+    ? "local"
+    : executionLocation === "elsewhere"
+      ? "self-hosted"
+      : ""
 }
 
 /**
@@ -656,14 +670,14 @@ function priceText(model: ServedModel, runs: Runs): string {
  * that two places would render as $0.04 and $0.15. Trailing zeros go: a column
  * of `$0.150` reads as more precision than anybody published.
  */
-function money(value: number): string {
+function formatPrice(value: number): string {
   if (value >= 100) return value.toFixed(0)
   if (value >= 1) return value.toFixed(2)
   return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")
 }
 
 /** 262144 reads as 262k. A window is compared, not counted. */
-function compact(tokens: number): string {
+function formatTokenCount(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`
   return String(tokens)
@@ -676,9 +690,11 @@ function compact(tokens: number): string {
  * and the paragraph it lands in has another sentence after it, which ran
  * straight on: "…is not set It is still running the previous model".
  */
-function sentence(said: string | undefined): string {
-  const said_ = (said ?? "").trim()
-  return !said_ || /[.!?]$/.test(said_) ? said_ : `${said_}.`
+function withSentenceEnding(text: string | undefined): string {
+  const trimmedText = (text ?? "").trim()
+  return !trimmedText || /[.!?]$/.test(trimmedText)
+    ? trimmedText
+    : `${trimmedText}.`
 }
 
 /** The tail of a path: enough to recognise, short enough for a header. */

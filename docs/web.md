@@ -729,7 +729,7 @@ polling would re-ask a 396-model catalogue with nobody watching.
 
 **`Question` is drawn first in the drawer, above the controls.** Everything
 after a `confirm` node is held until it is answered, so a reader who scrolls
-past it is looking at a flow that has quietly stopped. It has no confirmation
+past it is looking at a run that has quietly stopped. It has no confirmation
 step, unlike `Decide`: the graph's author already wrote the question, and
 asking "are you sure?" over the top of somebody else's sentence only makes it
 easier to stop reading it.

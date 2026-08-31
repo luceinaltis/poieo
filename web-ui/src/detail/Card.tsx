@@ -1,25 +1,9 @@
 /**
- * The card behind a task, opened for rewriting.
+ * The card behind a task, loaded only when opened and rewritable in place.
  *
- * The loop this exists for is the one a person actually runs: watch a night,
- * sharpen the prompt, watch the next. Until now the middle step meant leaving
- * the board to find a file on disk -- for a task whose card the board itself
- * may have written.
- *
- * The editor holds the file, not a form: the card is the user's own YAML,
- * comments and all, and a form would re-serialise it into something they did
- * not write. Shut it costs nothing -- no fetch until somebody opens it -- and
- * open it is deliberately plain: one textarea, one save.
- *
- * Renaming is the one control here that does not edit the card: the filename
- * is the task's identity, so it moves the file and leaves the body byte for
- * byte. It is a name that goes over, not a filename -- the daemon spells it,
- * and refuses one that reads like a path or one the folder already uses.
- *
- * `live` is the daemon's own answer about the edit, and it is repeated here
- * word for word: a prompt change is read by the next run, anything more waits
- * for a restart. Saying nothing was the alternative, and it teaches a person
- * that edits silently do not take.
+ * Plain cards keep the form used to create them. Richer YAML stays as text so
+ * comments and fields the form cannot represent survive. Renaming moves the
+ * identity file without rewriting its contents.
  */
 
 import { useState } from "react"
@@ -42,95 +26,104 @@ export function Card({
   /** "Make one like it": the three fields, parsed, for the make panel to open on. */
   onAlike?(seed: { name: string; folder: string; prompt: string }): void
 }) {
-  const [was, setWas] = useState<string | null>(null)
-  const [fields, setFields] = useState<CardFields | null>(null)
+  const [originalText, setOriginalText] = useState<string | null>(null)
+  const [cardFields, setCardFields] = useState<CardFields | null>(null)
   /** The form's three values, alive only for a plain card. */
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
   const [prompt, setPrompt] = useState("")
   const [text, setText] = useState("")
-  const [gone, setGone] = useState(false)
-  const [saved, setSaved] = useState<RewrittenCard | null>(null)
-  const [opened, setOpened] = useState(false)
+  const [isMissing, setIsMissing] = useState(false)
+  const [saveResult, setSaveResult] = useState<RewrittenCard | null>(null)
+  const [hasRequestedCard, setHasRequestedCard] = useState(false)
   /** Two-step: the first press arms, the second acts, an edit stands it down. */
-  const [armed, setArmed] = useState(false)
-  const [rested, setRested] = useState<SetAside | null>(null)
+  const [isSetAsideArmed, setIsSetAsideArmed] = useState(false)
+  const [setAsideResult, setSetAsideResult] = useState<SetAside | null>(null)
   /** The filename the task would have. Starts as the one it has. */
-  const [renameTo, setRenameTo] = useState(task)
-  const [renamed, setRenamed] = useState<RenamedCard | null>(null)
+  const [newTaskName, setNewTaskName] = useState(task)
+  const [renameResult, setRenameResult] = useState<RenamedCard | null>(null)
   const { busy, refused, act } = useAct<RewrittenCard>(() => {})
 
-  const open = async () => {
-    if (opened) return
-    setOpened(true)
+  const loadCard = async () => {
+    if (hasRequestedCard) return
+    setHasRequestedCard(true)
     const card = await fetchCard(project, task)
     if (card === null) {
-      setGone(true)
+      setIsMissing(true)
       return
     }
-    setWas(card.text)
+    setOriginalText(card.text)
     setText(card.text)
-    setFields(card)
+    setCardFields(card)
     setName(card.name)
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
   }
 
-  const putAside = () =>
+  const setCardAside = () =>
     void act(async () => {
       const answer = (await setAside(project, task)) as RewrittenCard & SetAside
-      setArmed(false)
+      setIsSetAsideArmed(false)
       if (answer.ok) {
-        setRested(answer)
+        setSetAsideResult(answer)
         onSetAside?.()
       }
       return answer
     })
 
-  const rename = () =>
+  const renameTaskCard = () =>
     void act(async () => {
-      const answer = (await renameCard(project, task, renameTo)) as RewrittenCard &
+      const answer = (await renameCard(project, task, newTaskName)) as RewrittenCard &
         RenamedCard
-      setArmed(false)
+      setIsSetAsideArmed(false)
       if (answer.ok) {
-        setSaved(null)
-        setRenamed(answer)
+        setSaveResult(null)
+        setRenameResult(answer)
       }
       return answer
     })
 
   /** The file this fold is editing is no longer where it was. */
-  const moved = rested !== null || renamed !== null
-  const plain = fields?.plain === true
+  const isCardMoved = setAsideResult !== null || renameResult !== null
+  const isPlainCard = cardFields?.plain === true
   // Same rule both modes: nothing changed, nothing to save.
-  const untouched = plain
-    ? name === fields.name && folder === (fields.folder ?? "") && prompt === (fields.prompt ?? "")
-    : text === was
+  const isUnchanged = isPlainCard
+    ? name === cardFields.name &&
+      folder === (cardFields.folder ?? "") &&
+      prompt === (cardFields.prompt ?? "")
+    : text === originalText
 
-  const save = () =>
+  const saveCard = () =>
     void act(async () => {
-      const answer = await rewriteCard(project, task, plain ? { name, folder, prompt } : text)
+      const answer = await rewriteCard(
+        project,
+        task,
+        isPlainCard ? { name, folder, prompt } : text,
+      )
       if (answer.ok) {
-        if (plain && fields) setFields({ ...fields, name, folder, prompt })
-        else setWas(text)
-        setSaved(answer)
+        if (isPlainCard && cardFields) {
+          setCardFields({ ...cardFields, name, folder, prompt })
+        } else {
+          setOriginalText(text)
+        }
+        setSaveResult(answer)
       } else {
-        setSaved(null)
+        setSaveResult(null)
       }
       return answer
     })
 
   return (
     <details className="drawer-card">
-      <summary className="card-open" onClick={() => void open()}>
+      <summary className="card-open" onClick={() => void loadCard()}>
         card
       </summary>
 
-      {gone ? (
+      {isMissing ? (
         <Refusal>The card could not be read. It may have moved on disk.</Refusal>
-      ) : was === null ? null : (
+      ) : originalText === null ? null : (
         <>
-          {plain ? (
+          {isPlainCard ? (
             /* The person filled a form to make this card; handing them YAML
                to edit it would be giving the form and then taking it away.
                Values only -- the daemon owns the spelling, through the same
@@ -146,8 +139,8 @@ export function Card({
                   disabled={busy}
                   onChange={(event) => {
                     setName(event.target.value)
-                    setSaved(null)
-                    setArmed(false)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
                   }}
                 />
               </label>
@@ -159,8 +152,8 @@ export function Card({
                   disabled={busy}
                   onChange={(event) => {
                     setFolder(event.target.value)
-                    setSaved(null)
-                    setArmed(false)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
                   }}
                 />
               </label>
@@ -173,9 +166,9 @@ export function Card({
                   disabled={busy}
                   onChange={(event) => {
                     setPrompt(event.target.value)
-                    setSaved(null)
+                    setSaveResult(null)
                     // Reaching for the words is deciding to keep the task.
-                    setArmed(false)
+                    setIsSetAsideArmed(false)
                   }}
                 />
               </label>
@@ -189,17 +182,17 @@ export function Card({
               spellCheck={false}
               onChange={(event) => {
                 setText(event.target.value)
-                setSaved(null)
+                setSaveResult(null)
                 // Reaching for the words is deciding to keep the task.
-                setArmed(false)
+                setIsSetAsideArmed(false)
               }}
             />
           )}
 
           {refused ? <Refusal answer={refused} /> : null}
 
-          {saved ? (
-            saved.live ? (
+          {saveResult ? (
+            saveResult.live ? (
               <p className="card-saved">Saved. The next run reads this.</p>
             ) : (
               <p className="card-saved card-waits">
@@ -209,17 +202,17 @@ export function Card({
             )
           ) : null}
 
-          {rested ? (
+          {setAsideResult ? (
             <p className="card-saved card-waits">
-              Set aside — the file is kept at <code>{rested.kept}</code>. The
+              Set aside — the file is kept at <code>{setAsideResult.kept}</code>. The
               schedule has stopped; the task leaves the board when the daemon
               restarts, and putting the file back is putting the task back.
             </p>
           ) : null}
 
-          {renamed ? (
+          {renameResult ? (
             <p className="card-saved card-waits">
-              Renamed — the card is now <code>{renamed.task}</code>. The schedule
+              Renamed — the card is now <code>{renameResult.task}</code>. The schedule
               has stopped under the old name; this fold still points at the file
               that moved, so go on from the new task, which the daemon picks up
               on its own.
@@ -235,12 +228,12 @@ export function Card({
               rename to
               <input
                 className="card-rename-to"
-                value={renameTo}
-                disabled={busy || moved}
+                value={newTaskName}
+                disabled={busy || isCardMoved}
                 onChange={(event) => {
-                  setRenameTo(event.target.value)
+                  setNewTaskName(event.target.value)
                   // Reaching for a new name is deciding to keep the task.
-                  setArmed(false)
+                  setIsSetAsideArmed(false)
                 }}
               />
             </label>
@@ -248,8 +241,10 @@ export function Card({
               type="button"
               className="card-rename-do"
               data-do="rename"
-              disabled={busy || moved || renameTo.trim() === "" || renameTo === task}
-              onClick={rename}
+              disabled={
+                busy || isCardMoved || newTaskName.trim() === "" || newTaskName === task
+              }
+              onClick={renameTaskCard}
             >
               rename
             </button>
@@ -260,13 +255,13 @@ export function Card({
               type="button"
               className="card-save"
               data-do="save-card"
-              disabled={busy || untouched || moved}
-              onClick={save}
+              disabled={busy || isUnchanged || isCardMoved}
+              onClick={saveCard}
             >
               {busy ? "saving…" : "save"}
             </button>
 
-            {onAlike && fields ? (
+            {onAlike && cardFields ? (
               <button
                 type="button"
                 className="card-alike"
@@ -274,9 +269,9 @@ export function Card({
                 disabled={busy}
                 onClick={() =>
                   onAlike({
-                    name: fields.name,
-                    folder: fields.folder ?? "",
-                    prompt: fields.prompt ?? "",
+                    name: cardFields.name,
+                    folder: cardFields.folder ?? "",
+                    prompt: cardFields.prompt ?? "",
                   })
                 }
               >
@@ -291,11 +286,13 @@ export function Card({
               type="button"
               className="card-aside"
               data-do="set-aside"
-              data-armed={String(armed)}
-              disabled={busy || moved}
-              onClick={() => (armed ? putAside() : setArmed(true))}
+              data-armed={String(isSetAsideArmed)}
+              disabled={busy || isCardMoved}
+              onClick={() =>
+                isSetAsideArmed ? setCardAside() : setIsSetAsideArmed(true)
+              }
             >
-              {armed ? "sure? set it aside" : "set aside"}
+              {isSetAsideArmed ? "sure? set it aside" : "set aside"}
             </button>
           </div>
         </>

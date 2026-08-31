@@ -11,7 +11,7 @@ import { WINDOW, initialStage, reduce, replay, setRuns } from "./stage"
 import type { StageState } from "./stage"
 import type { TaskRow, PoieoEvent } from "../types"
 
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "chores",
     project: "board",
@@ -46,9 +46,9 @@ const FLOWS: TaskRow[] = [
   },
 ]
 
-const start = () => initialStage(FLOWS)
+const start = () => initialStage(TASK_ROWS)
 
-test("initialStage seeds one flowState per task", () => {
+test("initialStage seeds one state per task", () => {
   const stage = start()
   expect(Object.keys(stage.tasks)).toEqual(["board/chores", "board/revision"])
   expect(stage.tasks["board/chores"].status).toBe("waiting")
@@ -149,7 +149,7 @@ test("node_finished does not clear the current node", () => {
   expect(stage.tasks["board/revision"].currentNode).toBe("draft")
 })
 
-test("run_failed puts the flowState in error", () => {
+test("run_failed puts the task in error", () => {
   const stage = replay(start(), FAILED_RUN)
   expect(stage.tasks["board/chores"].status).toBe("error")
   expect(stage.tasks["board/chores"].currentNode).toBeNull()
@@ -308,8 +308,8 @@ test("two projects may each have a chores, and they do not become one", () => {
   // the second project's chores landed on top of the first's and the board
   // showed one card doing two things.
   const rows = [
-    { ...FLOWS[0], project: "night shift" },
-    { ...FLOWS[0], project: "day job" },
+    { ...TASK_ROWS[0], project: "night shift" },
+    { ...TASK_ROWS[0], project: "day job" },
   ]
   const stage = initialStage(rows)
 
@@ -326,7 +326,7 @@ test("two projects may each have a chores, and they do not become one", () => {
 
 
 test("a task still knows what it is called, whatever it is filed under", () => {
-  const stage = initialStage([{ ...FLOWS[0], project: "night shift" }])
+  const stage = initialStage([{ ...TASK_ROWS[0], project: "night shift" }])
   const one = stage.tasks["night shift/chores"]
 
   expect(one.name).toBe("chores")
@@ -339,14 +339,14 @@ test("a task still knows what it is called, whatever it is filed under", () => {
 // so a task somebody had stopped looked exactly like one between two runs.
 
 test("a paused task is not folded into waiting", () => {
-  const stage = initialStage([{ ...FLOWS[0], status: "paused", holding: true }])
+  const stage = initialStage([{ ...TASK_ROWS[0], status: "paused", holding: true }])
   expect(stage.tasks["board/chores"].status).toBe("paused")
 })
 
 test("a task held back by its budget reads as paused too", () => {
   // Not the same reason, but the same answer to the question the board is
   // asked: this one is not going to run right now.
-  const stage = initialStage([{ ...FLOWS[0], status: "over budget", holding: false }])
+  const stage = initialStage([{ ...TASK_ROWS[0], status: "over budget", holding: false }])
   expect(stage.tasks["board/chores"].status).toBe("paused")
 })
 
@@ -356,7 +356,7 @@ test("a hold survives the run it was pressed during", () => {
   // unpaused task looks like. Nothing asks the daemon again until the page
   // reconnects, so the board stayed wrong for as long as it was open.
   let stage = initialStage([
-    { ...FLOWS[0], status: "running", current_run_id: "r1", holding: true },
+    { ...TASK_ROWS[0], status: "running", current_run_id: "r1", holding: true },
   ])
   stage = reduce(stage, { run_id: "r1", type: "run_started", at: "", data: { task: "chores", project: "board" } })
   expect(stage.tasks["board/chores"].status).toBe("running")
@@ -365,7 +365,7 @@ test("a hold survives the run it was pressed during", () => {
 })
 
 test("a run finishing on a task nobody held leaves it waiting", () => {
-  let stage = initialStage([{ ...FLOWS[0], holding: false }])
+  let stage = initialStage([{ ...TASK_ROWS[0], holding: false }])
   stage = reduce(stage, { run_id: "r1", type: "run_started", at: "", data: { task: "chores", project: "board" } })
   stage = reduce(stage, { run_id: "r1", type: "run_finished", at: "", data: { steps: 1 } })
   expect(stage.tasks["board/chores"].status).toBe("waiting")
