@@ -278,6 +278,11 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
     # just because they arrived together.
     for _, entry in spare:
         here = {shown.slug for shown in sequence}
+        # Association may already have brought this one in. Arriving by two
+        # routes is not two lessons: shown twice it reads as emphasis and
+        # spends the budget twice for one thing said once.
+        if entry.slug in here:
+            continue
         disputed = {slug for shown in sequence for slug in shown.matter.links.contradicts}
         if entry.slug in disputed or set(entry.matter.links.contradicts) & here:
             continue
