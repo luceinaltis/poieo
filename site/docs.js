@@ -13,12 +13,12 @@ const RAW = `https://raw.githubusercontent.com/${REPO}/main/`
 const BLOB = `https://github.com/${REPO}/blob/main/`
 
 const GROUPS = [
-  ["Start", [
+  ["Using poieo", [
     ["usage", "The manual", "docs/usage.md"],
     ["design", "What poieo promises", "DESIGN.md"],
-    ["architecture", "Architecture", "docs/architecture.md"],
   ]],
-  ["Components", [
+  ["The code, part by part — for contributors", [
+    ["architecture", "Architecture", "docs/architecture.md"],
     ["tasks", "tasks", "docs/tasks.md"],
     ["graph", "graph", "docs/graph.md"],
     ["binding", "binding", "docs/binding.md"],
@@ -31,7 +31,7 @@ const GROUPS = [
     ["web", "web", "docs/web.md"],
     ["cli", "cli", "docs/cli.md"],
   ]],
-  ["Contributing", [
+  ["Working here — for contributors", [
     ["agents", "The working agreements", "AGENTS.md"],
     ["contribution", "The longer procedures", "docs/contribution.md"],
     ["conventions", "How the code is written", "docs/conventions.md"],
