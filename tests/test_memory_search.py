@@ -5,6 +5,8 @@ speed -- and the plain scan behind the same interface must return the same
 entries, or the fallback is a different feature wearing the same name.
 """
 
+from unittest import mock
+
 import pytest
 from conftest import at, remember
 from test_card import write_card
@@ -92,6 +94,48 @@ def test_two_entries_disputing_each_other_do_not_both_arrive(tmp_path):
 
     block = read_memory(project, task) or ""
     assert ("honestly" in block) != ("most nights" in block)
+
+
+def test_where_the_task_works_is_asked_of_the_disk_once(tmp_path):
+    """Scope and anchors compare paths, and resolving one is a syscall. The
+    card's folder does not move while a recall runs, so asking per entry made
+    recall cost a syscall per entry -- 0.9 s of pure `realpath` at five thousand.
+    """
+    task, project = _project(tmp_path)
+    for i in range(30):
+        _fact(project, f"note-{i}", f"The api batch importer note number {i}.")
+
+    asked = 0
+    real = type(task).folder_path
+
+    def counted(self):
+        nonlocal asked
+        asked += 1
+        return real(self)
+
+    with mock.patch.object(type(task), "folder_path", counted):
+        read_memory(project, task)
+    assert asked <= 2, f"asked the disk {asked} times for one recall"
+
+
+def test_naming_more_entries_than_sqlite_takes_variables_still_answers(tmp_path):
+    """Recall may never be the reason a run fails. Asking the database about
+    every matched entry at once was a statement with one variable per entry,
+    and past a few thousand SQLite refuses it outright -- which reached the run
+    as an exception, from the one place that promised never to. Asked directly
+    here rather than by building fifty thousand entries: the ceiling is on the
+    statement, not on the memory."""
+    from poieo.memory import open_memory
+    from poieo.memory.recall import _fetch, _neighbours
+
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50.")
+    many = [f"absent-{i:05d}" for i in range(50_000)]
+
+    with open_memory(project) as con:
+        assert _fetch(con, many) == []
+        assert _neighbours(con, set(many)) == []
+    assert "over 50." in (read_memory(project, task) or "")
 
 
 def test_an_entry_outside_this_task_is_still_never_shown(tmp_path):

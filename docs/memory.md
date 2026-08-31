@@ -235,6 +235,14 @@ no observable effect and no way to verify it. Above it, ranking decides who is
 cut, and *that* is measurable — does the order put the right entries above the
 line? At roughly a hundred characters an entry, the crossing is near forty.
 
+There is a second reason waiting at the same place, and it is arithmetic rather
+than judgement. Ranking by shared words means scoring **every** entry the lookup
+matched, so a card whose words are common to the project scores the whole memory:
+4 ms at fifty entries, 130 ms at five thousand, 1.8 s at fifty thousand. Letting
+the lookup rank and return only its best would make that flat — and the lookup
+already has `bm25()` sitting unused. Neither reason binds yet; both come due
+together.
+
 The notes for what to build then: hybrid retrieval beats either channel alone
 on agent-memory benchmarks, fused by rank (the units do not compare) with the
 word channel weighted higher. Until the budget fills, none of that has
