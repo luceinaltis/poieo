@@ -5,6 +5,7 @@ speed -- and the plain scan behind the same interface must return the same
 entries, or the fallback is a different feature wearing the same name.
 """
 
+import sqlite3
 from unittest import mock
 
 import pytest
@@ -148,6 +149,97 @@ def test_an_entry_reached_two_ways_is_shown_once(tmp_path):
 
     block = read_memory(project, task) or ""
     assert block.count("Alphabetical order") == 1
+
+
+def _every_rule_at_once(project):
+    """One corpus that exercises every rule recall has, so a change to *when*
+    it reads an entry cannot quietly change *which* it picks.
+
+    An anchor, a scope that names one card, a scope that names another, a
+    set-aside entry, a disagreement, a mention that association follows, a
+    reinforced pair, and entries the card matches nothing in.
+    """
+    from poieo.strength import reinforce
+
+    (project / "notebook").mkdir(exist_ok=True)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[feeds-order]]", "scope: [importer]")
+    _fact(project, "feeds-order", "Alphabetical order keeps things stable; newest last.", "scope: [importer]")
+    _fact(project, "rate-limits", "The outside feeds rate-limit hard around 02:00.")
+    _fact(project, "anchored", "Watch what lands in the notebook.", "anchors: ['notebook']")
+    _fact(project, "old-cap", "Caps sat at 10 once.", "superseded_by: batch-cap")
+    _fact(project, "wild", "Nothing ever gets refused, honestly.")
+    _fact(project, "measured", "Refusals happen nightly.", "links:\n  contradicts: [wild]")
+    _fact(project, "elsewhere", "Digest pages flush nightly.", "scope: [exporter]")
+    _fact(project, "far", "Somewhere a bell rings twice.")
+    _fact(project, "quiet", "Tabs, never spaces, in the makefile.")
+    reinforce(project, [("batch-cap", "feeds-order")])
+    # Entries the card matches nothing in are ordered newest first, so a corpus
+    # written inside one second orders by name instead -- and a slower machine
+    # that crosses a second orders differently. Stamp them so the answer below
+    # is the same answer everywhere.
+    con = sqlite3.connect(at(project).longterm())
+    for i, slug in enumerate(
+        [
+            "quiet",
+            "far",
+            "elsewhere",
+            "measured",
+            "wild",
+            "old-cap",
+            "anchored",
+            "rate-limits",
+            "feeds-order",
+            "batch-cap",
+        ]
+    ):
+        con.execute(
+            "UPDATE entries SET updated_at = ? WHERE slug = ?",
+            (f"2026-08-30T12:{59 - i:02d}:00+00:00", slug),
+        )
+    con.commit()
+    con.close()
+
+
+def test_what_recall_answers_is_written_down(tmp_path):
+    """The answer itself, not a property of it. Recall reads and ranks in two
+    passes so it does not parse fifty thousand entries to show forty; this says
+    the split moved when the work happens and nothing else."""
+    task, project = _project(tmp_path, prompt="review the api batch sizes in the importer")
+    task = task.model_copy(update={"folder": "notebook"})
+    _every_rule_at_once(project)
+
+    assert [entry.slug for entry in memory_recall.recall(project, task)] == [
+        "anchored",  # anchors where the task works, so it leads
+        "batch-cap",  # shares words, and scoped to this card
+        "feeds-order",  # no shared word: reached by batch-cap's mention
+        "quiet",  # no shared word, no connection: newest of what was left
+        "far",
+        "measured",  # the side of the disagreement that stands
+        "rate-limits",
+    ]
+    # `wild` is disputed by `measured`; `old-cap` is set aside; `elsewhere`
+    # belongs to another card. None of the three is room-dependent.
+
+
+def test_what_a_closing_room_takes_away_first(tmp_path):
+    """With less room, evidence keeps its place and filling is what goes. Said
+    as a property rather than a list: which entry falls off next depends on how
+    long its sentence happens to be, and a reworded fixture should not read as
+    a broken rule."""
+    task, project = _project(tmp_path, prompt="review the api batch sizes in the importer")
+    task = task.model_copy(update={"folder": "notebook"})
+    _every_rule_at_once(project)
+
+    roomy = [entry.slug for entry in memory_recall.recall(project, task)]
+    original, memory_recall.ENTRIES_BUDGET = memory_recall.ENTRIES_BUDGET, 120
+    try:
+        tight = [entry.slug for entry in memory_recall.recall(project, task)]
+    finally:
+        memory_recall.ENTRIES_BUDGET = original
+
+    assert tight == roomy[: len(tight)], "the order held; only the tail was cut"
+    assert {"anchored", "batch-cap"} <= set(tight), "what the task matched kept its place"
+    assert len(tight) < len(roomy)
 
 
 def test_an_entry_outside_this_task_is_still_never_shown(tmp_path):
