@@ -7,7 +7,15 @@ const fetchCard = vi.hoisted(() => vi.fn())
 const rewriteCard = vi.hoisted(() => vi.fn())
 const setAside = vi.hoisted(() => vi.fn())
 
-vi.mock("../api", () => ({ fetchCard, rewriteCard, setAside }))
+// The reads and the two writes this file already covers are stubs; everything
+// else stays the real module, so the rename test below watches the request the
+// daemon would actually receive rather than a mock agreeing with itself.
+vi.mock("../api", async () => ({
+  ...(await vi.importActual<typeof import("../api")>("../api")),
+  fetchCard,
+  rewriteCard,
+  setAside,
+}))
 
 import { Card } from "./Card"
 
@@ -34,6 +42,9 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  // Whatever a test stubbed on the global, including a failed one: a leaked
+  // fetch stub would be answered by the next file's test, not this one's.
+  vi.unstubAllGlobals()
 })
 
 const onSetAside = vi.fn()
@@ -278,4 +289,45 @@ test("a card carrying more than the three fields still opens as a file", async (
 
   expect(container.querySelector(".card-text")).not.toBeNull()
   expect(container.querySelector(".card-field-prompt")).toBeNull()
+})
+
+test("renaming sends the new name to the card's own route, and nothing else", async () => {
+  // The filename is the task's identity, so this is a PATCH of the file's
+  // name and no edit inside it -- asserted on the request itself, because a
+  // caller that agreed with a mock about the wrong URL is the failure that
+  // left this half unbuilt.
+  const fetchStub = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true, task: "errands", path: "cards/errands.yaml" }),
+  }))
+  vi.stubGlobal("fetch", fetchStub)
+  await open()
+
+  await act(async () => {
+    const box = container.querySelector<HTMLInputElement>(".card-rename-to")!
+    const write = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!
+    write.call(box, "Errands")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="rename"]')!.click()
+  })
+
+  expect(fetchStub).toHaveBeenCalledTimes(1)
+  const [path, init] = fetchStub.mock.calls[0] as unknown as [string, RequestInit]
+  expect(path).toBe("/api/projects/board/tasks/chores")
+  expect(init.method).toBe("PATCH")
+  expect(JSON.parse(init.body as string)).toEqual({ name: "Errands" })
+  // The daemon's own spelling of the new name, not the one that was typed.
+  expect(container.textContent).toContain("errands")
+})
+
+test("a card is not renamed to the name it already has", async () => {
+  await open()
+  const button = () => container.querySelector<HTMLButtonElement>('[data-do="rename"]')!
+  expect(button().disabled).toBe(true)
 })

@@ -11,6 +11,11 @@
  * not write. Shut it costs nothing -- no fetch until somebody opens it -- and
  * open it is deliberately plain: one textarea, one save.
  *
+ * Renaming is the one control here that does not edit the card: the filename
+ * is the task's identity, so it moves the file and leaves the body byte for
+ * byte. It is a name that goes over, not a filename -- the daemon spells it,
+ * and refuses one that reads like a path or one the folder already uses.
+ *
  * `live` is the daemon's own answer about the edit, and it is repeated here
  * word for word: a prompt change is read by the next run, anything more waits
  * for a restart. Saying nothing was the alternative, and it teaches a person
@@ -19,8 +24,8 @@
 
 import { useState } from "react"
 
-import { fetchCard, rewriteCard, setAside } from "../api"
-import type { Card as CardFields, RewrittenCard, SetAside } from "../api"
+import { fetchCard, renameCard, rewriteCard, setAside } from "../api"
+import type { Card as CardFields, RenamedCard, RewrittenCard, SetAside } from "../api"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 
@@ -50,6 +55,9 @@ export function Card({
   /** Two-step: the first press arms, the second acts, an edit stands it down. */
   const [armed, setArmed] = useState(false)
   const [rested, setRested] = useState<SetAside | null>(null)
+  /** The filename the task would have. Starts as the one it has. */
+  const [renameTo, setRenameTo] = useState(task)
+  const [renamed, setRenamed] = useState<RenamedCard | null>(null)
   const { busy, refused, act } = useAct<RewrittenCard>(() => {})
 
   const open = async () => {
@@ -79,6 +87,20 @@ export function Card({
       return answer
     })
 
+  const rename = () =>
+    void act(async () => {
+      const answer = (await renameCard(project, task, renameTo)) as RewrittenCard &
+        RenamedCard
+      setArmed(false)
+      if (answer.ok) {
+        setSaved(null)
+        setRenamed(answer)
+      }
+      return answer
+    })
+
+  /** The file this fold is editing is no longer where it was. */
+  const moved = rested !== null || renamed !== null
   const plain = fields?.plain === true
   // Same rule both modes: nothing changed, nothing to save.
   const untouched = plain
@@ -195,12 +217,50 @@ export function Card({
             </p>
           ) : null}
 
+          {renamed ? (
+            <p className="card-saved card-waits">
+              Renamed — the card is now <code>{renamed.task}</code>. The schedule
+              has stopped under the old name; this fold still points at the file
+              that moved, so go on from the new task, which the daemon picks up
+              on its own.
+            </p>
+          ) : null}
+
+          {/* The filename is the task's identity, so this moves the file and
+              edits nothing in it -- the `name:` field above is the card's own
+              title and stays whatever it says. A name, not a filename: the
+              daemon spells it, and refuses one that reads like a path. */}
+          <div className="card-rename">
+            <label className="card-field">
+              rename to
+              <input
+                className="card-rename-to"
+                value={renameTo}
+                disabled={busy || moved}
+                onChange={(event) => {
+                  setRenameTo(event.target.value)
+                  // Reaching for a new name is deciding to keep the task.
+                  setArmed(false)
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="card-rename-do"
+              data-do="rename"
+              disabled={busy || moved || renameTo.trim() === "" || renameTo === task}
+              onClick={rename}
+            >
+              rename
+            </button>
+          </div>
+
           <div className="card-acts">
             <button
               type="button"
               className="card-save"
               data-do="save-card"
-              disabled={busy || untouched || rested !== null}
+              disabled={busy || untouched || moved}
               onClick={save}
             >
               {busy ? "saving…" : "save"}
@@ -232,7 +292,7 @@ export function Card({
               className="card-aside"
               data-do="set-aside"
               data-armed={String(armed)}
-              disabled={busy || rested !== null}
+              disabled={busy || moved}
               onClick={() => (armed ? putAside() : setArmed(true))}
             >
               {armed ? "sure? set it aside" : "set aside"}
