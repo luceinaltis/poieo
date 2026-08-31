@@ -118,8 +118,15 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
     The graph when the file still expands to the task that is running -- which
     includes a card whose *prompt* changed, since that is the half a run really
     does adopt. A sentence when it does not, and ``(None, None)`` when there is
-    no card to re-expand at all: a task naming a graph file of its own re-reads
-    that instead, on its own terms.
+    no card to re-expand at all -- a task written straight into a `poieo.yaml`
+    rather than as a card.
+
+    A card naming a `graph:` of its own is judged like any other and hands back
+    no graph, because its graph is a file `_reread_graph` re-reads on its own
+    terms. It used to be passed over entirely, which meant a schedule or an
+    `enabled:` edited on one of those was ignored *and* said nothing -- the
+    exact silence this function exists to end, for the one shape of card it
+    happened not to cover.
 
     Asked from two places at two moments, which is the whole reason it is one
     function. `_reread_graph` asks before a run, to decide whether it may adopt
@@ -134,14 +141,14 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
     is the one case where a reader most needs the card pointed at.
     """
     card = config.cards_by_task.get(task.spec.name)
-    if card is None or card.source_path is None or config.card_graphs.get(task.spec.name) is None:
+    if card is None or card.source_path is None:
         return None, None
     try:
         roster = [c.slug for c in config.cards_by_task.values()]
         spec, graph = expand(load_card(card.source_path), roster=roster)
     except PoieoError as exc:
         return None, str(exc)
-    if graph is None or spec != task.spec:
+    if spec != task.spec:
         return None, STALE_CARD
     return graph, None
 
@@ -267,7 +274,23 @@ class TaskRunner:
         self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
-        self.status: str = "waiting"
+        # Whether the file lets this task run at all.
+        #
+        # A held runner rather than no runner, so a card somebody switched off
+        # is on the board switched off rather than missing from it -- the one
+        # thing a reader could not find out from a board was that a task they
+        # wrote exists and is not running.
+        #
+        # Held *harder* than the pause button holds. A pause is runtime state
+        # and a run-now or a handoff is allowed to win over one; this is a file
+        # saying no, and nothing on a page may overrule a file. Every verb that
+        # could start a run asks this first, so the hold below can never be
+        # lifted by anything but an edit and a restart.
+        self.armed: bool = task.spec.enabled
+        # Stopped from the first frame the board draws, not once the run loop
+        # has got round to noticing: an unarmed runner's loop ends immediately,
+        # so there is no later moment for it to be set in.
+        self.status: str = "waiting" if self.armed else "paused"
         # What the card on disk now asks for that this runner cannot become
         # without a restart, in the daemon's own words -- or None while the
         # file and what is running still agree. Set by the folder scan rather
@@ -281,7 +304,7 @@ class TaskRunner:
         # The control seam: the board's three verbs poke these and the run loop
         # reads them between runs. The web server shares this event loop, so
         # flags and an Event are the whole mechanism.
-        self._hold = False
+        self._hold = not self.armed
         self._kick = False
         self._wake = asyncio.Event()
         self._manual_fires = 0
@@ -405,6 +428,10 @@ class TaskRunner:
 
     def pause(self) -> str:
         """Hold the schedule. Takes effect between runs; due fires are skipped."""
+        if not self.armed:
+            # Already stopped, by the file rather than by anyone here. Saying
+            # so beats reporting a pause nothing could undo.
+            return self.status
         self._hold = True
         if self.status == "waiting":
             self.status = "paused"
@@ -416,7 +443,14 @@ class TaskRunner:
 
         Works the same on a task that paused itself: the failure counter
         starts over rather than tripping again on the first bad run.
+
+        **Refused on a task the file switched off.** Lifting the hold there
+        would run a task whose card says `enabled: false`, and leave the file
+        going on saying otherwise -- the board would be the only place the
+        truth was, until a restart put it back.
         """
+        if not self.armed:
+            return self.status
         self._hold = False
         self._repeat_key, self._repeat_count = None, 0
         if self.status == "paused":
@@ -426,8 +460,11 @@ class TaskRunner:
 
     def run_now(self) -> bool:
         """One fire, immediately, outside the schedule -- or False mid-run:
-        iterations never overlap, exactly as the triggers promise."""
-        if self.status == "running":
+        iterations never overlap, exactly as the triggers promise.
+
+        And False on a task the file switched off, which no button may start.
+        """
+        if self.status == "running" or not self.armed:
             return False
         self._kick = True
         self._wake.set()
@@ -526,6 +563,16 @@ class TaskRunner:
             await close()
 
     async def run(self) -> None:
+        # A task its file switched off has nothing to wait for, so it does not
+        # wait. It stays in `daemon.runners` -- that is the whole point, so the
+        # board can draw a card somebody switched off rather than omit it --
+        # but the loop ends here rather than parking forever. Parking would
+        # make every project holding one disabled card into a daemon that
+        # never stands down, which is what `--once` on the shipped examples
+        # would have become.
+        if not self.armed:
+            log.info("task '%s' is switched off in its card and is not armed", self.name)
+            return
         log.info("task '%s' armed (%s)", self.name, self.trigger.describe)
         fires = self.trigger.fires(self.cancel)
         try:
@@ -934,7 +981,11 @@ class Daemon:
             LoadedProject(
                 config=each,
                 store=self._history_for(each, store, web_port),
-                tasks=load_tasks(each),
+                # Disabled tasks too. Each gets a runner that is held, so a
+                # card somebody switched off is on the board switched off
+                # rather than missing from it. `load_tasks` still checks
+                # credentials and images only for the ones that will run.
+                tasks=load_tasks(each, enabled_only=False),
             )
             for each in configs
         ]
@@ -1152,7 +1203,7 @@ class Daemon:
             return []
         try:
             fresh = load_config(config.source_path)
-            loaded = load_tasks(fresh)
+            loaded = load_tasks(fresh, enabled_only=False)
         except Exception as exc:
             # Once per distinct complaint. A card left half-written over lunch
             # would otherwise write the same line every SCAN_SECONDS until
@@ -1286,13 +1337,20 @@ class Daemon:
         # be reached from a valid config -- but the search should say which
         # namespace it means rather than rely on names being unique daemon-wide,
         # which is a rule this daemon enforces today and will not forever.
+        # An unarmed target is not a target. A handoff is a kick, and a kick
+        # wins over a hold -- so without this a `then:` would start a task
+        # whose card says `enabled: false`, which is the one thing that switch
+        # has to mean. Passed over here rather than refused inside `hand`, so
+        # it reads like the missing-target case it is, and warns like one.
         target = next(
-            (r for r in self.runners if r.name == branch.to and r.config is sender.config),
+            (r for r in self.runners if r.name == branch.to and r.config is sender.config and r.armed),
             None,
         )
         if target is None:
-            # Disabled, so it has no runner. check_handoffs already said so at
-            # load; saying it again per run would be noise.
+            # Switched off in its file, and so passed over above. It has a
+            # runner now -- held, and on the board -- but not one a handoff may
+            # start. `check_handoffs` already said so at load, and saying it
+            # again on every run would be noise.
             return
         if target.holding:
             log.warning(
@@ -1466,7 +1524,10 @@ class Daemon:
             return False
         if not keeps_memory(config.base_dir):
             return False
-        return all(runner.status == "waiting" for runner in self.runners)
+        # Only the runners that could be busy. A task the file switched off
+        # sits at "paused" forever, and counting it would mean a project with
+        # one disabled card never learned again.
+        return all(runner.status == "waiting" for runner in self.runners if runner.armed)
 
     async def _learn_once(self, project: LoadedProject, spec: Any, pool: ProviderPool) -> None:
         """One guarded attempt. Nothing here may take the daemon down."""

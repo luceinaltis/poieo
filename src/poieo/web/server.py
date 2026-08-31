@@ -445,6 +445,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # it on the way out and drew a stopped task as a waiting
                     # one until somebody reloaded the page.
                     "holding": runner.holding,
+                    # Whether the *file* lets this task run. A switched-off
+                    # card draws as stopped like a paused one, and the two are
+                    # opposite kinds of stopped: a pause is runtime state the
+                    # resume button undoes, and this is an edit and a restart.
+                    "enabled": runner.armed,
                     # What the card on disk asks for that this task cannot
                     # become without a restart, or null. The daemon refuses to
                     # half-adopt such an edit and used to say so only in its

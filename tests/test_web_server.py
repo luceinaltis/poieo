@@ -74,6 +74,7 @@ def stub_runner(
     name="triage",
     status="waiting",
     holding=False,
+    armed=True,
     stale=None,
     current=None,
     last=None,
@@ -87,6 +88,7 @@ def stub_runner(
         config=None,
         status=status,
         holding=holding,
+        armed=armed,
         stale=stale,
         current_run_id=current,
         last_result=last,
@@ -114,6 +116,7 @@ def test_flows_lists_runner_state(tmp_path):
             "trigger": "interval 30s",
             "status": "waiting",
             "holding": False,
+            "enabled": True,
             "stale": None,
             "current_run_id": None,
             "last_run": {"run_id": "r0", "status": "completed"},
@@ -814,3 +817,16 @@ def test_a_card_the_daemon_will_not_adopt_is_reported_on_its_task(tmp_path):
     client = TestClient(create_app(daemon))
 
     assert client.get("/api/tasks").json()["tasks"][0]["stale"] == why
+
+
+def test_a_switched_off_task_says_which_kind_of_stopped_it_is(tmp_path):
+    """It draws as stopped like a paused one, and the two are opposite kinds:
+    a pause is runtime state the resume button undoes, and this is an edit and
+    a restart. A board that could not tell them apart would offer the wrong
+    button for one of them."""
+    daemon = stub_daemon(tmp_path, [stub_runner(status="paused", holding=True, armed=False)])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+    assert row["status"] == "paused"
+    assert row["enabled"] is False

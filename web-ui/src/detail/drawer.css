@@ -315,3 +315,13 @@
   line-height: 1.45;
   margin: 0;
 }
+
+/* A task its own card switched off. Said where the pause and run-now buttons
+   would be, because that is where a reader goes to start something and the
+   honest answer is that they cannot start it from here. */
+.control-off {
+  color: #9db4c9;
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 0;
+}

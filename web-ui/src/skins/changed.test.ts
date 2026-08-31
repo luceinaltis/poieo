@@ -12,6 +12,7 @@ const row = (name: string): TaskRow => ({
   trigger: "loop",
   status: "waiting",
   holding: false,
+  enabled: true,
   stale: null,
   current_run_id: null,
   last_run: null,

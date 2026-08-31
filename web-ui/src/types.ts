@@ -146,6 +146,15 @@ export interface TaskRow {
    */
   holding: boolean
   /**
+   * Whether the *file* lets this task run at all.
+   *
+   * A switched-off card draws as stopped like a paused one, and the two are
+   * opposite kinds of stopped: a pause is runtime state the resume button
+   * undoes, and this is an edit and a restart. A view that could not tell them
+   * apart would offer the wrong button for one of them.
+   */
+  enabled: boolean
+  /**
    * What the card on disk asks for that this task cannot become without a
    * restart, in the daemon's own words -- or null while the file and what is
    * running agree. Only a card's prompt is really re-read before a run; a

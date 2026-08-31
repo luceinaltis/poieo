@@ -16,17 +16,30 @@ export function Control({
   project,
   task,
   status,
+  enabled = true,
   onActed,
 }: {
   project: string
   task: string
   status: string
+  /** Whether the card file lets this task run. False offers nothing: the
+   *  daemon refuses every verb here, and a button that is always refused is
+   *  worse than none. */
+  enabled?: boolean
   onActed(): void
 }) {
   const { busy, refused, act } = useAct<ControlAnswer>(onActed)
 
   const paused = status === "paused"
   const running = status === "running"
+
+  if (!enabled) {
+    return (
+      <p className="control-off">
+        Switched off in its card. Set <code>enabled: true</code> and restart the daemon to run it.
+      </p>
+    )
+  }
 
   return (
     <div className="control">

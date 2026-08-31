@@ -353,6 +353,7 @@ export default function App({ store }: { store?: StageStore }) {
           project={selectedTask?.project ?? ""}
           task={selectedTask?.name ?? selectedTaskKey}
           status={selectedTask?.status ?? "waiting"}
+          enabled={selectedTask?.enabled ?? true}
           stale={selectedTask?.stale ?? null}
           pending={selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}

@@ -205,6 +205,7 @@ export const Drawer = memo(function Drawer({
   project,
   task,
   status = "waiting",
+  enabled = true,
   stale = null,
   pending = 0,
   into = null,
@@ -216,6 +217,8 @@ export const Drawer = memo(function Drawer({
   project: string
   task: string
   status?: string
+  /** Whether the card file lets this task run at all. */
+  enabled?: boolean
   /** Why the card file and the running task disagree, or null. */
   stale?: string | null
   pending?: number
@@ -276,6 +279,7 @@ export const Drawer = memo(function Drawer({
         trigger: "",
         status: "waiting",
         holding: false,
+        enabled: true,
         stale: null,
         current_run_id: null,
         last_run: null,
@@ -313,6 +317,7 @@ export const Drawer = memo(function Drawer({
           project={project}
           task={task}
           status={status}
+          enabled={enabled}
           onActed={refreshAfterAction}
         />
 

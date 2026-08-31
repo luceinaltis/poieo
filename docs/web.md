@@ -18,7 +18,7 @@ to be true to add a sixth.
 
 | route | does |
 |---|---|
-| `GET /api/tasks` | every project on this board, then every task: which project's, status, whether a hold is on, whether its card has outrun it, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/tasks` | every project on this board, then every task: which project's, status, whether a hold is on, whether its card lets it run at all, whether its card has outrun it, trigger, last run, how much is waiting for review, and its wiring |
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
@@ -810,6 +810,13 @@ board back on `waiting`, nothing republishes when somebody presses pause, and
 `/api/tasks` is not read again until the page reconnects. So the row carries
 `holding` beside `status`, `TaskState` keeps it as `held`, and a run ending on a
 held task lands on `paused` rather than undoing the press that put it there.
+
+**Two kinds of stopped, one band.** A task somebody paused and a task its own
+card switched off are both stopped, and both take the band and the cool colour;
+what differs is the word and what the reader has to do about it. `paused` is a
+button away. `switched off in its card` is an edit and a restart, so the drawer
+offers no button at all there — the daemon refuses every verb on such a task,
+and a button that is always refused is worse than none.
 
 **A card that has outrun what is running says so on the shut border.** Only a
 prompt is really re-read before a run; a schedule, a folder or an `enabled:`

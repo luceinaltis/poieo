@@ -42,6 +42,14 @@ export interface TaskState {
   /** Whether a hold is on, even while the run it was pressed during finishes. */
   held: boolean
   /**
+   * Whether the card file lets this task run at all.
+   *
+   * Beside `status` rather than a fifth value of it: it is stopped either way,
+   * and the band on the card says so either way. What differs is the word, and
+   * what a reader has to do about it.
+   */
+  enabled: boolean
+  /**
    * Why the card file and this task disagree, or "" while they do not.
    *
    * Structure rather than state: it changes only when a file does. The empty
@@ -146,6 +154,7 @@ function createEmptyTaskState(): TaskState {
   return {
     status: "waiting",
     held: false,
+    enabled: true,
     stale: "",
     name: "",
     project: "",
@@ -222,6 +231,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       trigger: row.trigger,
       status: drawnStatus(row),
       held: row.holding,
+      enabled: row.enabled,
       stale: row.stale ?? "",
       lastRun: row.last_run
         ? {
