@@ -11,8 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from ..binding import BindingSpec, load_binding
 from ..card import CardSpec, card_payload, expand, load_cards
-from ..errors import SpecError, describe_invalid
-from ..graph import Branch, GraphSpec, load_document, load_graph
+from ..errors import SpecError
+from ..graph import Branch, GraphSpec, load_document, load_graph, load_spec
 from ..layout import find_project_file
 from ..memory import check_memory, keeps_memory
 from ..project import ProjectSpec, load_project
@@ -182,15 +182,7 @@ class LoadedTask(BaseModel):
 
 
 def load_config(path: str | Path) -> DaemonConfig:
-    path = Path(path)
-    data = load_document(path)
-    try:
-        config = DaemonConfig.model_validate(data)
-    except Exception as exc:
-        raise SpecError(
-            f"{path}: invalid daemon config: {describe_invalid(exc, tuple(DaemonConfig.model_fields))}"
-        ) from exc
-    config.source_path = path.resolve()
+    config = load_spec(path, DaemonConfig, "daemon config", resolve=True)
     _load_cards(config)
     check_handoffs(config)
     return config

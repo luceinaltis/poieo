@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -412,18 +412,49 @@ def load_document(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def load_graph(path: str | Path) -> GraphSpec:
-    """Load and fully validate a graph file."""
+_Spec_co = TypeVar("_Spec_co", bound=BaseModel)
+
+
+def load_spec(
+    path: str | Path,
+    model: type[_Spec_co],
+    noun: str,
+    *,
+    also: tuple[type[BaseModel], ...] = (),
+    resolve: bool = False,
+) -> _Spec_co:
+    """Read one configuration file, or say what is wrong with it in the
+    user's words.
+
+    Five loaders -- a binding, a graph, a card, a project and a daemon config
+    -- had this same body: read the document, validate it, and turn a refusal
+    into `SpecError` with `describe_invalid`'s nearest-real-key suggestion.
+    That last part is the point. `_Spec` sets `extra="forbid"` so a key poieo
+    does not recognise is a loud failure, and this is where the failure becomes
+    a sentence rather than a pydantic dump (`docs/conventions.md`).
+
+    ``also`` names the *nested* models whose fields also belong to this file.
+    A graph file carries node settings as much as its own, so a typo inside a
+    node should be measured against both -- and only the graph loader did that,
+    which is why four of the five gave no "did you mean" for a typo one level
+    down.
+
+    ``resolve`` is a divergence rather than a decision: the project and daemon
+    loaders resolve `source_path`, the other three do not, and callers that
+    need an absolute one bolt `.resolve()` on themselves. Named here so it is
+    one flag to look at rather than five files to compare.
+    """
     path = Path(path)
     data = load_document(path)
+    known = tuple(model.model_fields) + tuple(name for nested in also for name in nested.model_fields)
     try:
-        graph = GraphSpec.model_validate(data)
+        spec = model.model_validate(data)
     except Exception as exc:
-        # A node's settings are as much a part of a graph file as the graph's
-        # own, so both sets are what a near-miss is measured against.
-        raise SpecError(
-            f"{path}: invalid graph: "
-            f"{describe_invalid(exc, tuple(GraphSpec.model_fields) + tuple(NodeSpec.model_fields))}"
-        ) from exc
-    graph.source_path = path
-    return graph
+        raise SpecError(f"{path}: invalid {noun}: {describe_invalid(exc, known)}") from exc
+    spec.source_path = path.resolve() if resolve else path  # type: ignore[attr-defined]
+    return spec
+
+
+def load_graph(path: str | Path) -> GraphSpec:
+    """Load and fully validate a graph file."""
+    return load_spec(path, GraphSpec, "graph", also=(NodeSpec,))
