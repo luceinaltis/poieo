@@ -753,7 +753,10 @@ answers what this project does and where it is right now; `runs` answers what
 it has been doing, and when. A third skin that answers a question one of those
 already answers is a second way of saying an existing thing, which DESIGN.md
 refuses. (The 3D workshop, `atelier`, answered "is it working" and was removed
-whole -- its id still lands on `basic` via the fallback.)
+whole -- its id still lands on `basic` via the fallback. Not quite whole:
+`skins/layout.ts` outlived it by a year, exporting `Cell`, `fit`, `ZOOM` and
+`place` that nothing imported and that `wiring.ts` also exports with different
+meanings. It is gone now.)
 
 Answering a *different* question also decides where a skin is offered. The
 bar's picker holds renderings of the board, so with one rendering it does not
