@@ -146,9 +146,11 @@ export function RunList({
             data-selected={String(run.run_id === selected)}
           >
             <button type="button" className="run-open" onClick={() => onSelect(run.run_id)}>
-              <span className="run-when">{shortTime(run.started_at)}</span>
+              <span className="run-meta">
+                <span className="run-when">{shortTime(run.started_at)}</span>
+                <span className="run-size">{size(run)}</span>
+              </span>
               <span className="run-what">{account(run, tracked)}</span>
-              <span className="run-size">{size(run)}</span>
             </button>
             {controls ? <div className="run-controls">{controls(run)}</div> : null}
           </li>

@@ -1,3 +1,6 @@
+/// <reference types="node" />
+
+import { readFileSync } from "node:fs"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
@@ -5,6 +8,8 @@ import { afterEach, beforeEach, expect, test } from "vitest"
 
 import { RunList } from "./RunList"
 import type { RunSummary } from "../types"
+
+const REVIEW_CSS = readFileSync("src/review/review.css", "utf8")
 
 const USAGE = {
   input_tokens: 0,
@@ -88,6 +93,25 @@ test("a row reads time, size, and the run's own account of itself", () => {
   expect(text).toContain("+42")
   expect(text).toContain("11")
   expect(text).toContain("3 files")
+})
+
+test("time and spend share a ledger line above the run's account", () => {
+  render([
+    run({
+      run_id: "wide",
+      said: "x".repeat(600),
+      usage: { ...USAGE, input_tokens: 160_360, output_tokens: 6_578 },
+    }),
+  ])
+
+  const row = rows()[0]
+  const meta = row.querySelector<HTMLElement>(".run-meta")!
+  const account = row.querySelector<HTMLElement>(".run-what")!
+  expect(meta.querySelector(".run-when")).not.toBeNull()
+  expect(meta.querySelector(".run-size")?.textContent).toContain("160,360 sent")
+  expect(meta.nextElementSibling).toBe(account)
+  expect(REVIEW_CSS).toMatch(/\.run-open\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s)
+  expect(REVIEW_CSS).toMatch(/\.run-what\s*\{[^}]*overflow-wrap:\s*anywhere/s)
 })
 
 test("a run that found nothing to do says so, and is not a failure", () => {

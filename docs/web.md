@@ -646,6 +646,12 @@ removed from pointer and keyboard navigation until the panel closes. Focus
 enters the panel when it opens and returns to the control that opened it when
 its own close button is used.
 
+**The drawer is one vertical log, never a wider page.** Each run puts its time
+and usage on a quiet data line above what happened, so the number that explains
+an expensive night cannot be pushed off the edge by the account beside it. The
+timeline keeps time in a narrow rail and lets commands, paths and model output
+break inside the remaining column; the panel itself scrolls only downward.
+
 **A big catalogue folds by maker.** A hosted listing names every model
 `maker/model` — 396 across 58 makers — and a flat list of that is not read, it
 is scrolled past. So each maker is a `<details>` card, shut until opened, with

@@ -20,6 +20,7 @@
   display: grid;
   gap: 10px;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   /* What a run said, what it changed, and why it failed are all worth
      copying out of here. */
@@ -88,7 +89,14 @@
 .drawer-entry {
   display: grid;
   gap: 8px;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* The timestamp is a fixed rail; every answer, path and command beside it is
+   allowed to break rather than widening the whole panel. */
+.drawer-event {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .drawer-when {
