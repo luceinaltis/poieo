@@ -807,6 +807,26 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return None, None, JSONResponse({"error": f"no task '{slug}' in this project"}, status_code=404)
         return project, spec, None
 
+    def _plain(text: str) -> bool:
+        """Whether a card can be rebuilt from the three fields alone.
+
+        A form must never drop what it cannot show, so anything beyond
+        make's three keys -- a schedule, an isolation, a `then:` -- keeps the
+        card a file on screen. A `#` anywhere counts too: comments live in
+        the bytes, not the parse, and the dump would silently lose them. The
+        cost of being wrong here is asymmetric on purpose -- a false "not
+        plain" is a raw editor, a false "plain" is somebody's schedule gone.
+        """
+        if "#" in text:
+            return False
+        try:
+            data = yaml.safe_load(text)
+        except Exception:
+            return False
+        if not isinstance(data, dict):
+            return False
+        return set(data) <= {"name", "folder", "prompt"}
+
     async def project_task_card(request: Request) -> JSONResponse:
         """One task's card: the file read back, or rewritten in place.
 
@@ -861,6 +881,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "name": fresh.name,
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
+                    "plain": _plain(text),
                 }
             )
 
@@ -868,7 +889,40 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             body = await request.json()
         except Exception:
             body = {}
-        text = str((body or {}).get("text") or "")
+        body = body or {}
+        text = str(body.get("text") or "")
+        # The other spelling of a rewrite: the three fields, serialised here
+        # through the same dump make uses -- so a person edits values and
+        # never the spelling. Only for a card the dump can rebuild whole; a
+        # form must never drop what it cannot show.
+        if not text and "prompt" in body:
+            try:
+                current = await asyncio.to_thread(path.read_text, encoding="utf-8")
+            except FileNotFoundError:
+                # The same race the text path answers at its replace: drawer
+                # open, task set aside, save pressed. Same sentence, not a 500.
+                return JSONResponse(
+                    {"error": f"task '{spec.slug}' was set aside; its card is no longer here"},
+                    status_code=409,
+                )
+            if not _plain(current):
+                return JSONResponse(
+                    {
+                        "error": (
+                            f"the card of '{spec.slug}' carries more than the three fields, so it is edited as a file"
+                        )
+                    },
+                    status_code=409,
+                )
+            text = yaml.safe_dump(
+                {
+                    "name": str(body.get("name") or spec.slug),
+                    "folder": str(body.get("folder") or ""),
+                    "prompt": str(body.get("prompt") or ""),
+                },
+                allow_unicode=True,
+                sort_keys=False,
+            )
         if not text.strip():
             return JSONResponse({"error": "a card cannot be empty"}, status_code=400)
 

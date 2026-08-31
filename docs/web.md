@@ -885,6 +885,13 @@ refuses to half-adopt a card whose spec changed — `_reread_graph` owns that
 judgement — and this route makes the same comparison so the board can warn
 instead of letting a person believe an ignored edit took.
 
+A card holding only those three fields answers `plain`, and the rewrite takes
+a second spelling for it: the three fields themselves, serialised on the
+daemon through the same dump make uses — so a person who came in through the
+form edits values and never YAML. A card carrying more — a schedule, an
+isolation, a comment — stays a file both ways, because a form must never drop
+what it cannot show.
+
 The third verb is **set aside**, and it is not a delete: the card moves to
 `.set-aside/` inside the tasks folder — a dotted name the loader skips — whole
 and never overwritten (a task set aside, remade and set aside again is two

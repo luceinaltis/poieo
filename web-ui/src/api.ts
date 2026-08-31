@@ -434,6 +434,13 @@ export interface Card {
   name: string
   folder: string | null
   prompt: string | null
+  /**
+   * Whether the card can be rebuilt from the three fields alone. Plain, the
+   * board offers a form and the daemon spells the file; carrying more -- a
+   * schedule, an isolation, a comment -- it stays a file on screen, because
+   * a form must never drop what it cannot show.
+   */
+  plain: boolean
 }
 
 export async function fetchCard(project: string, task: string): Promise<Card | null> {
@@ -459,10 +466,17 @@ export interface RewrittenCard extends Answer {
   live?: boolean
 }
 
-export function rewriteCard(project: string, task: string, text: string): Promise<RewrittenCard> {
+export function rewriteCard(
+  project: string,
+  task: string,
+  card: string | { name: string; folder: string; prompt: string },
+): Promise<RewrittenCard> {
+  // Two spellings of one write: the raw file, or the three fields the daemon
+  // serialises itself -- through the same dump make uses, so a person who
+  // came in through the form never touches YAML.
   return put(
     `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
-    { text },
+    typeof card === "string" ? { text: card } : card,
   )
 }
 
