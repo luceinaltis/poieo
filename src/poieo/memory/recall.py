@@ -32,6 +32,15 @@ from .index import narrow
 ENTRIES_BUDGET = 4_000
 # An entry anchored where the task works beats any merely-similar one.
 _ANCHOR_BOOST = 1_000
+# How many entries association spreads from. A neighbour's claim is its seed's
+# divided by the seed's rank, so the hundredth-ranked entry contributes a
+# hundredth of a claim to something that is ranked after every direct hit
+# anyway. Bounding it also bounds the question asked of the database: naming
+# every matched entry at once is a statement with one variable per entry, and
+# past a few thousand SQLite refuses it -- which reached the run as an
+# exception, from the one place that promised never to.
+_ASSOCIATION_SEEDS = 64
+
 # How far the walk that fills leftover room will read before giving up. The
 # budget usually stops it long first; this is the floor under a project whose
 # newest entries all belong to other cards.
@@ -60,38 +69,65 @@ def read_memory(project_dir: Path, task: Any | None = None, *, preview: bool = F
     return "\n\n".join(parts) or None
 
 
-def _in_scope(entry: Entry, task: Any, project_dir: Path) -> bool:
-    """A filter over one store, never a wall: the word that means everyone,
-    the task's own name, or a path that covers where it works."""
-    folder = task.folder_path()  # None for a task that works on no folder
-    for named in entry.matter.scope:
-        if named in ("global", task.slug):
-            return True
-        base = (layout_for(project_dir).root / named).resolve()
-        if folder is not None and (folder == base or folder.is_relative_to(base)):
-            return True
-    return False
+class _Where:
+    """Where this task works, and where paths written in an entry point.
+
+    Comparing scopes and anchors means resolving paths, and resolving one is a
+    syscall. Neither the task's folder nor the project root moves while a recall
+    runs, so both are asked for once and every entry compares against the
+    answer -- asking per entry cost a syscall per entry, which was most of what
+    recall spent at any size worth measuring.
+    """
+
+    def __init__(self, task: Any, project_dir: Path):
+        self.folder = task.folder_path()  # None for a task that works on no folder
+        self.slug = task.slug
+        self.root = layout_for(project_dir).root
+        self._named: dict[str, Path] = {}
+
+    def named(self, relative: str) -> Path:
+        """A path written in an entry, resolved. Entries repeat each other's
+        scopes and anchors constantly, so the answer is kept."""
+        found = self._named.get(relative)
+        if found is None:
+            found = self._named[relative] = (self.root / relative).resolve()
+        return found
+
+    def in_scope(self, entry: Entry) -> bool:
+        """A filter over one store, never a wall: the word that means everyone,
+        the task's own name, or a path that covers where it works."""
+        for named in entry.matter.scope:
+            if named in ("global", self.slug):
+                return True
+            base = self.named(named)
+            if self.folder is not None and (self.folder == base or self.folder.is_relative_to(base)):
+                return True
+        return False
+
+    def anchors(self, entry: Entry) -> bool:
+        """Anchor paths are written relative to the project -- the folder the
+        `poieo.yaml` sits in, which is also where the memory does."""
+        if self.folder is None:
+            return False  # a task that works on no folder is covered by no anchor
+        for anchor in entry.matter.anchors:
+            target = self.named(anchor.split("::", 1)[0])
+            if target == self.folder or target.is_relative_to(self.folder) or self.folder.is_relative_to(target):
+                return True
+        return False
 
 
-def _anchored(entry: Entry, task: Any, project_dir: Path) -> bool:
-    """Anchor paths are written relative to the project -- the folder the
-    `poieo.yaml` sits in, which is also where the memory does."""
-    folder = task.folder_path()
-    for anchor in entry.matter.anchors:
-        target = (layout_for(project_dir).root / anchor.split("::", 1)[0]).resolve()
-        if folder is None:
-            continue  # a task that works on no folder is covered by no anchor
-        if target == folder or target.is_relative_to(folder) or folder.is_relative_to(target):
-            return True
-    return False
+# Names per statement. Comfortably under every SQLite build's ceiling, and the
+# caller never notices there was more than one.
+_PER_QUERY = 400
 
 
 def _fetch(con: sqlite3.Connection, slugs: list[str]) -> list[Entry]:
-    if not slugs:
-        return []
-    holes = ",".join("?" * len(slugs))
-    rows = con.execute(f"SELECT * FROM entries WHERE slug IN ({holes})", slugs).fetchall()
-    return [entry_of(row) for row in rows]
+    found: list[Entry] = []
+    for at in range(0, len(slugs), _PER_QUERY):
+        batch = slugs[at : at + _PER_QUERY]
+        holes = ",".join("?" * len(batch))
+        found += [entry_of(row) for row in con.execute(f"SELECT * FROM entries WHERE slug IN ({holes})", batch)]
+    return found
 
 
 def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool, allowed: "Callable[[Entry], bool]") -> list[Entry]:
@@ -112,15 +148,8 @@ def _pool(con: sqlite3.Connection, seed: set[str], use_index: bool, allowed: "Ca
     hits = narrow(con, seed) if use_index else None
     if hits is None:
         return [entry_of(row) for row in con.execute("SELECT * FROM entries").fetchall()]
-    names = sorted(hits)
-    holes = ",".join("?" * len(names))
-    rows = con.execute(
-        f"SELECT * FROM entries WHERE slug IN ({holes}) OR anchors != '[]'"
-        if names
-        else "SELECT * FROM entries WHERE anchors != '[]'",
-        names,
-    ).fetchall()
-    found = [entry_of(row) for row in rows]
+    found = [entry_of(row) for row in con.execute("SELECT * FROM entries WHERE anchors != '[]'")]
+    found += _fetch(con, sorted(hits - {entry.slug for entry in found}))
 
     spent = sum(len(entry.body) for entry in found if allowed(entry))
     if spent >= ENTRIES_BUDGET:
@@ -149,16 +178,22 @@ def _neighbours(con: sqlite3.Connection, slugs: set[str]) -> list[Entry]:
     """
     if not slugs:
         return []
-    holes = ",".join("?" * len(slugs))
     names = sorted(slugs)
-    rows = con.execute(
-        f"SELECT target AS other FROM links WHERE slug IN ({holes})"
-        "   AND kind IN ('mentions', 'depends_on')"
-        f" UNION SELECT slug AS other FROM links WHERE target IN ({holes})"
-        "   AND kind = 'mentions'",
-        names + names,
-    ).fetchall()
-    return _fetch(con, sorted({row["other"] for row in rows} - slugs))
+    reached: set[str] = set()
+    for at in range(0, len(names), _PER_QUERY // 2):
+        batch = names[at : at + _PER_QUERY // 2]
+        holes = ",".join("?" * len(batch))
+        reached |= {
+            row["other"]
+            for row in con.execute(
+                f"SELECT target AS other FROM links WHERE slug IN ({holes})"
+                "   AND kind IN ('mentions', 'depends_on')"
+                f" UNION SELECT slug AS other FROM links WHERE target IN ({holes})"
+                "   AND kind = 'mentions'",
+                batch + batch,
+            )
+        }
+    return _fetch(con, sorted(reached - slugs))
 
 
 def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
@@ -167,8 +202,10 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         return []
     seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
 
+    where = _Where(task, project_dir)
+
     def in_scope(entry: Entry) -> bool:
-        return entry.matter.superseded_by is None and _in_scope(entry, task, project_dir)
+        return entry.matter.superseded_by is None and where.in_scope(entry)
 
     def allowed(entries: list[Entry]) -> list[Entry]:
         return [entry for entry in entries if in_scope(entry)]
@@ -190,7 +227,7 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         spare = []
         for entry in candidates:
             score = len(seed & words(entry.body))
-            if _anchored(entry, task, project_dir):
+            if where.anchors(entry):
                 score += _ANCHOR_BOOST
             (scored if score > 0 else spare).append((score, entry))
         scored.sort(key=lambda pair: (-pair[0], pair[1].slug))
@@ -204,11 +241,12 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         taken = {entry.slug for entry in sequence}
         by_slug = {entry.slug: entry for entry in sequence}
 
-        first = allowed(_neighbours(con, taken))
+        seeds = {entry.slug for entry in sequence[:_ASSOCIATION_SEEDS]}
+        first = allowed(_neighbours(con, seeds))
         by_slug |= {entry.slug: entry for entry in first}
 
         carry: dict[str, float] = {}
-        for rank, (_, entry) in enumerate(scored):
+        for rank, (_, entry) in enumerate(scored[:_ASSOCIATION_SEEDS]):
             for neighbor in connected(entry, first):
                 if neighbor.slug in taken:
                     continue
