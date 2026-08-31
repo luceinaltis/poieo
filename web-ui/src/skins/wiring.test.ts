@@ -24,11 +24,35 @@ const LINE: GraphShape = {
   ],
 }
 
-test("a board with no handoffs is one column, not a failure to lay out", () => {
-  const placed = place(["a", "b", "c"], {})
+test("a board with no handoffs is a grid, because the axis is carrying nothing", () => {
+  // It was one column, on the argument that independent work must not read as
+  // a failure to lay anything out. The column was what read that way: the
+  // left-to-right axis means depth only while something points somewhere, and
+  // with nothing pointing it is free to be used for reading.
+  const placed = place(["a", "b", "c"], {}, 4)
 
-  expect(placed.map((p) => p.column)).toEqual([0, 0, 0])
-  expect(placed.map((p) => p.row)).toEqual([0, 1, 2])
+  expect(placed.map((p) => p.column)).toEqual([0, 1, 2])
+  expect(placed.map((p) => p.row)).toEqual([0, 0, 0])
+})
+
+test("a grid wraps rather than running off the side of the board", () => {
+  const placed = place(["a", "b", "c", "d", "e"], {}, 2)
+
+  expect(placed.map((p) => [p.column, p.row])).toEqual([
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+    [0, 2],
+  ])
+})
+
+test("one arrow anywhere gives the axis its meaning back", () => {
+  const placed = place(["a", "b", "c"], { a: ["b"] })
+
+  // `c` hands to nobody, but the board now reads left to right, so it keeps
+  // its place in the first column rather than being packed beside `b`.
+  expect(placed.map((p) => p.column)).toEqual([0, 1, 0])
 })
 
 test("a task sits to the right of whatever hands to it", () => {

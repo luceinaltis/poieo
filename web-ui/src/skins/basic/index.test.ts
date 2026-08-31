@@ -315,13 +315,32 @@ function oneStep(): TaskRow {
   }
 }
 
-test("a task of one step draws no graph inside it", () => {
+test("a task draws its steps without being opened first", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([build()]))
+
+  // What a task walks is structure: it changes when a file does, never
+  // between one frame and the next. So it can be drawn on a shut border
+  // without the board moving under the reader -- and being able to read the
+  // work at a glance is the whole reason the board is a canvas rather than a
+  // list.
+  expect(el.querySelector('[data-task="board/chores"]')!.getAttribute("data-open")).toBe("false")
+  expect(el.querySelectorAll('[data-task="board/chores"] .basic-node')).toHaveLength(2)
+  handle.destroy()
+})
+
+test("a task of one step draws that step, rather than an empty row", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([oneStep()]))
 
-  // The border already is that step. Drawing it again inside itself says the
-  // same thing twice, under a name -- `work` -- the reader never chose.
-  expect(el.querySelectorAll('[data-task="board/chores"] .basic-node')).toHaveLength(0)
+  // It was drawn as nothing while the steps were hidden until asked for: one
+  // pill named `work` was noise the reader had opened a border to find. Now
+  // that every other task shows its steps unasked, a blank where they belong
+  // reads as broken -- and the step carries whether it can reach the folder,
+  // which is worth the row on its own.
+  const only = el.querySelector<HTMLElement>('[data-task="board/chores"] .basic-node')!
+  expect(only.dataset.node).toBe("work")
+  expect(only.querySelector(".basic-node-hands")).not.toBeNull()
   handle.destroy()
 })
 

@@ -104,12 +104,29 @@
      reader sees. Declared here it was 260 plus padding plus border = 286,
      and every arrow's arithmetic was 26px wrong about where a box ends. */
   box-sizing: border-box;
-  background: #1c1915;
-  border: 1px solid #2e2820;
-  border-radius: 6px;
+  /* Lifted off the page rather than tinted like it. At one step from the
+     background a border stopped reading as a thing on a board and started
+     reading as a patch of the board. */
+  background: #16130f;
+  border: 1px solid #322b22;
+  border-radius: 8px;
   display: grid;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 9px;
+  padding: 12px 14px 11px;
+}
+
+/* A status edge, readable before any word on the card is. Colour is emphasis
+   here and never the message: every state below also says itself in words on
+   the `now` or `warn` line. */
+.basic-task::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: #322b22;
 }
 
 .basic-task:hover {
@@ -172,10 +189,23 @@
 
 /* Both one line. A model id long enough to wrap -- and they get long -- would
    otherwise make the border a line taller than the one beside it. */
+/* A schedule, a tally and a clock are data, and read as data: a mono face
+   lines their digits up down a column of borders where a proportional one
+   makes every row start somewhere else. No webfont -- the daemon serves this
+   page from a machine that may have no internet, so the stack is whatever the
+   reader already has. */
+.basic-when,
+.basic-tally,
+.basic-now,
+.basic-warn {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-feature-settings: "tnum" 1;
+}
+
 .basic-when,
 .basic-tally {
-  color: #9a9086;
-  font-size: 0.85em;
+  color: #8d8377;
+  font-size: 0.78em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -190,7 +220,6 @@
    shrink all day. Nothing opens itself any more -- the `now` line says what
    that was for -- so the size changes only when a person asks, and a shut
    border is as small as what it has to say. */
-.basic-task[data-open="false"] .basic-inside,
 .basic-task[data-open="false"] .basic-tools,
 .basic-task[data-open="false"] .basic-said {
   display: none;
@@ -203,7 +232,7 @@
 
 .basic-now {
   color: #e8dcc8;
-  font-size: 0.85em;
+  font-size: 0.8em;
 }
 
 .basic-task[data-status="error"] .basic-now {
@@ -237,7 +266,18 @@
    this carries the one bit somebody scanning the board actually wants. */
 .basic-task[data-status="running"] {
   border-color: #6b5a34;
-  box-shadow: inset 2px 0 0 #d8a657;
+}
+
+.basic-task[data-status="running"]::before {
+  background: #d8a657;
+}
+
+.basic-task[data-status="error"] {
+  border-color: #5b3229;
+}
+
+.basic-task[data-status="error"]::before {
+  background: #d16d5a;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -258,11 +298,11 @@
   display: grid;
   grid-auto-columns: max-content;
   justify-items: start;
-  align-items: start;
-  gap: 4px 10px;
+  align-items: center;
+  gap: 5px 14px;
   /* Room on the left for the connector of every node past the first column;
-     it hangs 9px before its pill. */
-  padding: 2px 0 2px 10px;
+     it hangs before its pill. */
+  padding: 3px 0 4px 14px;
   /* A grid does not wrap, and a long enough run is wider than a border. It
      scrolls rather than spilling across the board -- and rather than being
      clipped, which would hide steps while looking complete. */
@@ -283,13 +323,43 @@
 }
 
 .basic-node {
-  background: #262019;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  color: #9a9086;
-  font-size: 0.8em;
-  padding: 1px 7px;
+  align-items: center;
+  background: #1f1a15;
+  border: 1px solid #2b241c;
+  border-radius: 5px;
+  color: #a2988c;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.82em;
+  gap: 6px;
+  padding: 4px 9px;
   position: relative;
+}
+
+/* Which kind of step this is, in the one place a reader is already looking.
+   A shape rather than a word: there are four kinds and they recur on every
+   card, so the name would be read a hundred times to be learned once. The
+   `title` says it in words for anyone who wants them. */
+.basic-node::after {
+  content: "";
+  order: -1;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  background: #574c3d;
+}
+
+/* the model does it */
+.basic-node[data-type="agent"]::after { border-radius: 50%; }
+/* the machine does it, exactly as written */
+.basic-node[data-type="command"]::after { border-radius: 1px; }
+/* nobody does it -- it only decides */
+.basic-node[data-type="router"]::after { transform: rotate(45deg); }
+/* you do it */
+.basic-node[data-type="confirm"]::after {
+  border-radius: 50%;
+  background: none;
+  box-shadow: inset 0 0 0 1.5px #b39a6a;
 }
 
 /* The step into a node: the same arrow as the one between two borders, at the
