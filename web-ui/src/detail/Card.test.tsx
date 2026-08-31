@@ -324,6 +324,19 @@ test("renaming sends the new name to the card's own route, and nothing else", as
   expect(JSON.parse(init.body as string)).toEqual({ name: "Errands" })
   // The daemon's own spelling of the new name, not the one that was typed.
   expect(container.textContent).toContain("errands")
+
+  // And the fold stops offering to write into a file that has moved. Every
+  // write on this panel addresses the card by its old name, so one sent after
+  // the rename would answer 404 -- or, worse, land on a card somebody else
+  // has since made under it. Asserted rather than assumed: put the guard back
+  // to the one set aside alone raises and every other line here still passes,
+  // which is exactly how it reached review without a test.
+  expect(
+    container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.disabled,
+  ).toBe(true)
+  expect(
+    container.querySelector<HTMLButtonElement>('[data-do="set-aside"]')!.disabled,
+  ).toBe(true)
 })
 
 test("a card is not renamed to the name it already has", async () => {
