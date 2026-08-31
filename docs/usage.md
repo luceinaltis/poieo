@@ -4,23 +4,11 @@ Every command, every key a task file takes, and the worked examples.
 [`README.md`](../README.md) is the short version; this is the whole of it, and
 `docs/` has one document per component for anyone changing the code.
 
-poieo keeps **what the work is** and **which model does it** in two separate
-files.
-
-A *graph* describes the logical task: classify this, then branch, then draft a
-reply. It names **roles** (`classifier`, `writer`, `critic`) and never names a
-model. A *binding* maps those roles onto real endpoints — a local server, a
-cloud API. Moving a workflow from a laptop model to a frontier one is a
-`--binding` flag, not an edit.
-
-A *daemon* keeps tasks alive on triggers, so the logical task just keeps running.
-
-```
-graph (logical)          binding (physical)          daemon (resident)
-  classify   ──role──►     classifier → ollama:llama3.2:3b     interval / cron / loop
-  route                    writer     → claude:claude-opus-5
-  draft_bug
-```
+Most work here is three moves: write a **task** (one small file), leave the
+daemon running, and read the diff in the morning. This manual follows that
+order — install, start a project, write a task, keep it running, review what
+it did. The long form underneath — graphs, bindings, the full wiring — comes
+after, under *When one line is not enough*.
 
 ## Install
 
@@ -87,210 +75,10 @@ providers. A flag always wins when passed; discovery only fills silence, and
 detection never runs again after init — run time reads files, nothing else.
 Existing files are never touched, so `init` in a full project changes nothing.
 
-## Try it without spending a token
-
-The `mock` provider answers from a script in the binding file, so the wiring can be
-exercised offline.
-
-```bash
-poieo show     examples/tasks/support-triage.graph.yaml
-poieo validate examples/tasks/support-triage.graph.yaml -b examples/models/claude.yaml
-poieo run      examples/tasks/support-triage.graph.yaml -b examples/models/mock.yaml \
-               --set message="the export button crashes on 2.1"
-poieo daemon   examples/poieo.yaml --once
-```
-
-A task card that names its own `binding:` needs no flags at all --
-`poieo run tasks/card.yaml` runs it once, and `poieo daemon tasks/` keeps
-every card in the folder running.
-
-## The logical layer
-
-```yaml
-name: support-triage
-entry: classify
-nodes:
-  - id: classify
-    type: agent
-    role: classifier                 # a role, not a model
-    prompt: |
-      Classify as bug, feature, or question.
-      {{ input.message }}
-    output: {as: category}
-    next: route
-
-  - id: route
-    type: router
-    branches:
-      - when: "'bug' in category.lower()"
-        to: draft_bug
-    default: draft_answer
-```
-
-**Node types**
-
-| type | does | keys |
-|---|---|---|
-| `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
-| `command` | runs a command, or a script in a named language, through the executor seam; calls no model | `command` **or** `script` + `language`; `output`, `next`, and optionally `workdir`, `timeout`, `env` |
-| `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
-| `confirm` | puts a question to **you** and ends the run there; the card's `then:` waits for the answer | `prompt`, `choices` |
-
-Four types, by who does the step: the model, the machine, nobody, or you.
-`confirm` is for the step before something that cannot be undone -- a push, a
-merge, a deployment, an email. poieo's other safeguard is the private copy the
-run works in, and discarding that does not unsend a message.
-**No `tools:` line means no tools** — the node calls the model once and reads
-the answer, and cannot touch a file. Hands are asked for, never defaulted.
-
-`script:` carries the code in the node itself, so the graph is readable on its
-own — `python`, `node` and `sh` go to the interpreter's stdin; `c`, `go` and
-`rust` are compiled once and cached by the hash of the code, so a second run
-skips the build. A compiled script is not templated — `{{` there is the
-language's, as in Go's `[][]int{{1,2}}` — so what varies goes in `env:`, which
-is templated and keeps the binary the same. See [graph.md](graph.md).
-
-`next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
-
-### Hands
-
-A node that names `tools:` gives its model hands: `files` (read/write/list/glob)
-and `shell` (run a command) toolsets, every call confined to the node's
-`workdir`.
-The node loops — model asks, poieo executes, result goes back — until the
-model answers without a tool call; `max_turns` bounds the loop. Tool failures
-are fed back to the model as text so it can correct itself. Every call is
-recorded as a `node_tool_call` event in the run log.
-
-Path confinement prevents accidents, not malice: a shell command can still
-name absolute paths. Point `workdir` only at a directory you would let a
-junior contributor loose in — or turn on isolation, below. `poieo run
-examples/tasks/agent-task.graph.yaml -b examples/models/mock.yaml --set
-workdir=/tmp/demo` exercises the loop offline.
-
-### Isolation
-
-A task can be told to keep its hands inside its folder:
-
-```yaml
-name: keep the tests green
-folder: ~/src/thing
-prompt: Run the tests and fix what fails.
-isolation:
-  image: python:3.12-slim    # must already be pulled; poieo never pulls for you
-  network: none              # the default; `bridge` if the task needs to fetch
-```
-
-Without it, poieo's file tools stay inside the folder but a command the model
-runs does not — it reaches whatever you can reach. With it, the command stays
-inside the folder too. Nothing else changes: the same task without the block
-behaves exactly as before, and a machine with no docker is never even asked.
-
-`poieo run … --isolate python:3.12-slim` does the same for a single run.
-Whether docker is present and the image is here is checked when the config
-loads, not when the trigger fires at 3am.
-
-The environment is kept between runs, so what a task installs on Monday is
-there on Tuesday, and tasks over the same folder share one. It is disposable
-state: `poieo reset <task>` throws it away and the next run rebuilds it, which
-is the first thing to try when a task starts behaving oddly. Nothing in your
-folder is touched by that.
-
-**What it does not protect.** The folder itself — that is the work, and it is
-exposed by definition; reviewing what a run changed is a separate feature.
-What reaches the model, either: prompts and file contents leave your machine
-exactly as before. And a container shares your kernel, so this is a strong
-boundary rather than an absolute one; a VM is stronger.
-
-The question it actually asks you is: *can you predict every command this
-prompt will run, overnight, with this model?* If yes, isolation buys little.
-If no, that is what it is for.
-
-**Expressions** in `{{ … }}` templates and `when:` conditions run in a sandbox: attribute
-and index access, comparisons, boolean logic, and a short list of builtins (`len`, `str`,
-`any`, `sorted`, …). Imports, lambdas, comprehensions, and dunder access are rejected when
-the graph is parsed, not when it runs.
-
-Names in scope:
-
-| name | is |
-|---|---|
-| `input` | the payload the trigger or CLI supplied |
-| `state` | mapping that survives across loop iterations |
-| `nodes.<id>` | any earlier node's output |
-| `<alias>` | an output's `as:` name, at the top level |
-| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
-
-`output` shapes what a node stores: `as` names it, `format: json` parses the completion
-(tolerating a markdown fence), `path: a.b` digs into it, and `into_state: k` also writes it
-to `state` so the next iteration can read it.
-
-**Cycles are allowed.** `examples/tasks/draft-review.graph.yaml` loops draft → review → revise
-until the critic approves, counting its own attempts with `run.path.count('revise')`.
-`max_steps` bounds any graph that forgets to exit.
-
-## The physical layer
-
-```yaml
-name: hybrid
-providers:
-  ollama: {type: ollama, base_url: http://localhost:11434}
-  claude: {type: anthropic}
-
-default:
-  provider: claude
-  model: claude-opus-5
-  params: {max_tokens: 16000, effort: high}
-
-roles:
-  classifier:                       # cheap local model for one-word labels
-    provider: ollama
-    model: llama3.2:3b
-    params: {max_tokens: 16, temperature: 0}
-```
-
-Role settings layer over `default`, and `params` merge key by key. A node's own `params`
-win over both. Four bindings ship as examples: `mock`, `local`, `claude`, `hybrid`.
-
-**Providers**
-
-| type | talks to | notes |
-|---|---|---|
-| `anthropic` | Claude API | official SDK, always streams; credentials from `ANTHROPIC_API_KEY` or an `ant auth login` profile |
-| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
-| `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` are folded into `options` |
-| `claude_code` | Claude Code, on a Claude plan | no key — the plan's own login. `pip install 'poieo[claude-code]'` |
-| `codex` | Codex, on a ChatGPT plan | no key — `codex login`. `npm i -g @openai/codex` |
-| `mock` | nothing | scripted replies for tests and dry runs |
-
-The last two spend a **subscription** rather than tokens, and there is no key to
-name. A key in the environment is refused rather than worked around — both
-harnesses prefer one over the login, so the run would go on the API bill
-instead. A step with `tools:` is served differently by each: Claude Code
-is handed **poieo's own tools**, so the workdir and any `isolation:` still hold
-and the run log still records every call; Codex works in **its own sandbox**
-instead, and refuses a task that asked for `isolation:` rather than pretend to
-honour it. `examples/models/subscription.yaml` is one, and `docs/binding.md`
-says why the two differ.
-
-The Anthropic provider is capability-aware: `thinking: auto` becomes adaptive thinking on
-models that support it and is omitted on ones that do not, `effort` is dropped where it is
-not accepted, and sampling parameters are stripped for models that reject them — so one
-binding can point different roles at different model generations without 400s. Unrecognized
-params pass through untouched, so a new API parameter is usable from the binding file
-without a code change.
-
-Add a backend with `poieo.providers.register("my_type", MyProvider)`; binding files may
-name it from that point on.
-
-```bash
-poieo check -b examples/models/local.yaml      # probe every declared endpoint
-```
-
 ## The short form: a task
 
-A graph plus a binding plus a daemon entry is three files. When the work is
-*one model, one folder, one instruction, on repeat*, write one instead:
+When the work is *one model, one folder, one instruction, on repeat*, a task
+is one file:
 
 ```yaml
 # tasks/keep-improving.yaml
@@ -530,7 +318,7 @@ tasks: tasks/
 ```yaml
 # tasks/triage.yaml
 name: triage
-graph: support-triage.graph.yaml
+graph: support-triage.graph.yaml   # the long form -- see below
 trigger: {type: interval, every: 30s}
 input: {message: "…"}
 ```
@@ -629,6 +417,226 @@ poieo runs show 20260820T130243-36ef0db5 --store examples/runs
 Each `node_finished` event records which binding served it, the model that answered, the
 branch a router took, and token usage — enough to answer "what ran, what did it decide,
 what did it cost" without a database.
+
+## When one line is not enough
+
+poieo keeps **what the work is** and **which model does it** in two separate
+files.
+
+A *graph* describes the logical task: classify this, then branch, then draft a
+reply. It names **roles** (`classifier`, `writer`, `critic`) and never names a
+model. A *binding* maps those roles onto real endpoints — a local server, a
+cloud API. Moving a workflow from a laptop model to a frontier one is a
+`--binding` flag, not an edit.
+
+A *daemon* keeps tasks alive on triggers, so the logical task just keeps running.
+
+```
+graph (logical)          binding (physical)          daemon (resident)
+  classify   ──role──►     classifier → ollama:llama3.2:3b     interval / cron / loop
+  route                    writer     → claude:claude-opus-5
+  draft_bug
+```
+
+## Try it without spending a token
+
+The `mock` provider answers from a script in the binding file, so the wiring can be
+exercised offline.
+
+```bash
+poieo show     examples/tasks/support-triage.graph.yaml
+poieo validate examples/tasks/support-triage.graph.yaml -b examples/models/claude.yaml
+poieo run      examples/tasks/support-triage.graph.yaml -b examples/models/mock.yaml \
+               --set message="the export button crashes on 2.1"
+poieo daemon   examples/poieo.yaml --once
+```
+
+A task card that names its own `binding:` needs no flags at all --
+`poieo run tasks/card.yaml` runs it once, and `poieo daemon tasks/` keeps
+every card in the folder running.
+
+## The logical layer
+
+```yaml
+name: support-triage
+entry: classify
+nodes:
+  - id: classify
+    type: agent
+    role: classifier                 # a role, not a model
+    prompt: |
+      Classify as bug, feature, or question.
+      {{ input.message }}
+    output: {as: category}
+    next: route
+
+  - id: route
+    type: router
+    branches:
+      - when: "'bug' in category.lower()"
+        to: draft_bug
+    default: draft_answer
+```
+
+**Node types**
+
+| type | does | keys |
+|---|---|---|
+| `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
+| `command` | runs a command, or a script in a named language, through the executor seam; calls no model | `command` **or** `script` + `language`; `output`, `next`, and optionally `workdir`, `timeout`, `env` |
+| `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
+| `confirm` | puts a question to **you** and ends the run there; the card's `then:` waits for the answer | `prompt`, `choices` |
+
+Four types, by who does the step: the model, the machine, nobody, or you.
+`confirm` is for the step before something that cannot be undone -- a push, a
+merge, a deployment, an email. poieo's other safeguard is the private copy the
+run works in, and discarding that does not unsend a message.
+**No `tools:` line means no tools** — the node calls the model once and reads
+the answer, and cannot touch a file. Hands are asked for, never defaulted.
+
+`script:` carries the code in the node itself, so the graph is readable on its
+own — `python`, `node` and `sh` go to the interpreter's stdin; `c`, `go` and
+`rust` are compiled once and cached by the hash of the code, so a second run
+skips the build. A compiled script is not templated — `{{` there is the
+language's, as in Go's `[][]int{{1,2}}` — so what varies goes in `env:`, which
+is templated and keeps the binary the same. See [graph.md](graph.md).
+
+`next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
+
+### Hands
+
+A node that names `tools:` gives its model hands: `files` (read/write/list/glob)
+and `shell` (run a command) toolsets, every call confined to the node's
+`workdir`.
+The node loops — model asks, poieo executes, result goes back — until the
+model answers without a tool call; `max_turns` bounds the loop. Tool failures
+are fed back to the model as text so it can correct itself. Every call is
+recorded as a `node_tool_call` event in the run log.
+
+Path confinement prevents accidents, not malice: a shell command can still
+name absolute paths. Point `workdir` only at a directory you would let a
+junior contributor loose in — or turn on isolation, below. `poieo run
+examples/tasks/agent-task.graph.yaml -b examples/models/mock.yaml --set
+workdir=/tmp/demo` exercises the loop offline.
+
+### Isolation
+
+A task can be told to keep its hands inside its folder:
+
+```yaml
+name: keep the tests green
+folder: ~/src/thing
+prompt: Run the tests and fix what fails.
+isolation:
+  image: python:3.12-slim    # must already be pulled; poieo never pulls for you
+  network: none              # the default; `bridge` if the task needs to fetch
+```
+
+Without it, poieo's file tools stay inside the folder but a command the model
+runs does not — it reaches whatever you can reach. With it, the command stays
+inside the folder too. Nothing else changes: the same task without the block
+behaves exactly as before, and a machine with no docker is never even asked.
+
+`poieo run … --isolate python:3.12-slim` does the same for a single run.
+Whether docker is present and the image is here is checked when the config
+loads, not when the trigger fires at 3am.
+
+The environment is kept between runs, so what a task installs on Monday is
+there on Tuesday, and tasks over the same folder share one. It is disposable
+state: `poieo reset <task>` throws it away and the next run rebuilds it, which
+is the first thing to try when a task starts behaving oddly. Nothing in your
+folder is touched by that.
+
+**What it does not protect.** The folder itself — that is the work, and it is
+exposed by definition; reviewing what a run changed is a separate feature.
+What reaches the model, either: prompts and file contents leave your machine
+exactly as before. And a container shares your kernel, so this is a strong
+boundary rather than an absolute one; a VM is stronger.
+
+The question it actually asks you is: *can you predict every command this
+prompt will run, overnight, with this model?* If yes, isolation buys little.
+If no, that is what it is for.
+
+**Expressions** in `{{ … }}` templates and `when:` conditions run in a sandbox: attribute
+and index access, comparisons, boolean logic, and a short list of builtins (`len`, `str`,
+`any`, `sorted`, …). Imports, lambdas, comprehensions, and dunder access are rejected when
+the graph is parsed, not when it runs.
+
+Names in scope:
+
+| name | is |
+|---|---|
+| `input` | the payload the trigger or CLI supplied |
+| `state` | mapping that survives across loop iterations |
+| `nodes.<id>` | any earlier node's output |
+| `<alias>` | an output's `as:` name, at the top level |
+| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
+
+`output` shapes what a node stores: `as` names it, `format: json` parses the completion
+(tolerating a markdown fence), `path: a.b` digs into it, and `into_state: k` also writes it
+to `state` so the next iteration can read it.
+
+**Cycles are allowed.** `examples/tasks/draft-review.graph.yaml` loops draft → review → revise
+until the critic approves, counting its own attempts with `run.path.count('revise')`.
+`max_steps` bounds any graph that forgets to exit.
+
+## The physical layer
+
+```yaml
+name: hybrid
+providers:
+  ollama: {type: ollama, base_url: http://localhost:11434}
+  claude: {type: anthropic}
+
+default:
+  provider: claude
+  model: claude-opus-5
+  params: {max_tokens: 16000, effort: high}
+
+roles:
+  classifier:                       # cheap local model for one-word labels
+    provider: ollama
+    model: llama3.2:3b
+    params: {max_tokens: 16, temperature: 0}
+```
+
+Role settings layer over `default`, and `params` merge key by key. A node's own `params`
+win over both. Four bindings ship as examples: `mock`, `local`, `claude`, `hybrid`.
+
+**Providers**
+
+| type | talks to | notes |
+|---|---|---|
+| `anthropic` | Claude API | official SDK, always streams; credentials from `ANTHROPIC_API_KEY` or an `ant auth login` profile |
+| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
+| `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` are folded into `options` |
+| `claude_code` | Claude Code, on a Claude plan | no key — the plan's own login. `pip install 'poieo[claude-code]'` |
+| `codex` | Codex, on a ChatGPT plan | no key — `codex login`. `npm i -g @openai/codex` |
+| `mock` | nothing | scripted replies for tests and dry runs |
+
+The last two spend a **subscription** rather than tokens, and there is no key to
+name. A key in the environment is refused rather than worked around — both
+harnesses prefer one over the login, so the run would go on the API bill
+instead. A step with `tools:` is served differently by each: Claude Code
+is handed **poieo's own tools**, so the workdir and any `isolation:` still hold
+and the run log still records every call; Codex works in **its own sandbox**
+instead, and refuses a task that asked for `isolation:` rather than pretend to
+honour it. `examples/models/subscription.yaml` is one, and `docs/binding.md`
+says why the two differ.
+
+The Anthropic provider is capability-aware: `thinking: auto` becomes adaptive thinking on
+models that support it and is omitted on ones that do not, `effort` is dropped where it is
+not accepted, and sampling parameters are stripped for models that reject them — so one
+binding can point different roles at different model generations without 400s. Unrecognized
+params pass through untouched, so a new API parameter is usable from the binding file
+without a code change.
+
+Add a backend with `poieo.providers.register("my_type", MyProvider)`; binding files may
+name it from that point on.
+
+```bash
+poieo check -b examples/models/local.yaml      # probe every declared endpoint
+```
 
 ## Library use
 
