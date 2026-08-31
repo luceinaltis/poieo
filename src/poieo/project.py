@@ -22,8 +22,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from .detect import CANDIDATES, Engine
-from .errors import SpecError, describe_invalid
-from .graph import load_document
+from .graph import load_spec
 
 # Where a project keeps things is one question with one answer, and it lives
 # in layout.py. What is re-exported here is what already had callers.
@@ -155,16 +154,7 @@ class ProjectSpec(BaseModel):
 
 def load_project(path: str | Path) -> ProjectSpec:
     """Parse a ``poieo.yaml`` for its paths. Tasks are not read."""
-    path = Path(path)
-    data = load_document(path)
-    try:
-        project = ProjectSpec.model_validate(data)
-    except Exception as exc:
-        raise SpecError(
-            f"{path}: invalid project file: {describe_invalid(exc, tuple(ProjectSpec.model_fields))}"
-        ) from exc
-    project.source_path = path.resolve()
-    return project
+    return load_spec(path, ProjectSpec, "project file", resolve=True)
 
 
 def find_project(start: str | Path | None = None) -> ProjectSpec | None:

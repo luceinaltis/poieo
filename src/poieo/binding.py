@@ -12,8 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .errors import BindingError, SpecError, describe_invalid
-from .graph import load_document
+from .errors import BindingError
+from .graph import load_spec
 
 # Populated by `poieo.providers.register()` at import time. Keeping the set here
 # rather than a closed Literal lets a caller add a backend without editing this
@@ -290,11 +290,4 @@ def split_ref(target: str) -> tuple[str, str]:
 
 
 def load_binding(path: str | Path) -> BindingSpec:
-    path = Path(path)
-    data = load_document(path)
-    try:
-        binding = BindingSpec.model_validate(data)
-    except Exception as exc:
-        raise SpecError(f"{path}: invalid binding: {describe_invalid(exc, tuple(BindingSpec.model_fields))}") from exc
-    binding.source_path = path
-    return binding
+    return load_spec(path, BindingSpec, "binding")

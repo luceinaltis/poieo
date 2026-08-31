@@ -287,6 +287,20 @@ candidate keys are `GraphSpec`'s *and* `NodeSpec`'s, because a node's settings
 are as much part of a graph file as the graph's own, and the match is made on
 the last path segment so a typo nested at `nodes.0.promt` gets the same help.
 
+**`load_spec()` is that reading, once.** A binding, a graph, a card, a project
+and a daemon config are five files with one loading rule — read the document,
+validate it, turn a refusal into a `SpecError` a person can act on — and each
+had its own copy of it. It lives here beside `load_document()` because that is
+where the reading already lived, and it takes the model rather than importing
+one, so the four modules that call it keep pointing this way and not back.
+
+Two things the copies disagreed about are arguments now rather than differences
+to find: `also=` names the nested models whose fields a typo is also measured
+against (only the graph loader passed any, which is why a typo one level down
+went unsuggested in the other four), and `resolve=` says whether `source_path`
+comes back absolute (the project and daemon loaders resolve; the other three do
+not, and callers needing an absolute one still add `.resolve()` themselves).
+
 ## Expressions
 
 Three surfaces use one small sandboxed language:

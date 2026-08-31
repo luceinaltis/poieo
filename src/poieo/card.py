@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import SpecError, describe_invalid
-from .graph import Branch, GraphSpec, NodeSpec, OutputSpec, load_document
+from .graph import Branch, GraphSpec, NodeSpec, OutputSpec, load_document, load_spec
 from .layout import layout_for
 from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
@@ -191,13 +191,7 @@ class CardSpec(BaseModel):
 
 def load_card(path: str | Path) -> CardSpec:
     """Load and fully validate a task file."""
-    path = Path(path)
-    data = load_document(path)
-    try:
-        task = CardSpec.model_validate(data)
-    except Exception as exc:
-        raise SpecError(f"{path}: invalid task: {describe_invalid(exc, tuple(CardSpec.model_fields))}") from exc
-    task.source_path = path
+    task = load_spec(path, CardSpec, "task")
     folder = task.folder_path()
     if folder is not None and not folder.is_dir():
         raise SpecError(f"{path}: folder does not exist: {folder}")
