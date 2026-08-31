@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import locale
 import logging
 import shlex
 import subprocess
@@ -25,7 +24,7 @@ from typing import Any, Sequence
 
 from ..errors import IsolationError
 from . import CommandResult, Executor, Isolation, Tool, ToolError
-from .shell import _DEFAULT_TIMEOUT, _MAX_TIMEOUT, _OUTPUT_CAP
+from .shell import _DEFAULT_TIMEOUT, _MAX_TIMEOUT, capped, command_text, decode_output
 
 # A finite sleep, not `sleep infinity`: the latter is a GNU coreutils extension
 # that older busybox builds reject, which would exit the container instantly and
@@ -100,14 +99,7 @@ async def _docker(*args: str, timeout: float = _PROBE_TIMEOUT, stdin: str | None
         process.kill()
         await process.communicate()
         raise
-    return process.returncode or 0, _decode(stdout)
-
-
-def _decode(raw: bytes) -> str:
-    try:
-        return raw.decode()
-    except UnicodeDecodeError:
-        return raw.decode(locale.getpreferredencoding(False), errors="replace")
+    return process.returncode or 0, decode_output(stdout)
 
 
 def _resolved(workdir: Path) -> Path:
@@ -316,9 +308,7 @@ class DockerExecutor(Executor):
             )
         except asyncio.TimeoutError:
             raise ToolError(f"command timed out after {seconds:.0f}s: {command}")
-        if len(text) > _OUTPUT_CAP:
-            text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
-        return CommandResult(exit_code=code, output=text)
+        return CommandResult(exit_code=code, output=capped(text))
 
     def build_paths(self, key: str, source: str) -> tuple[str, str]:
         """Built things live **inside the container**, not on a mounted folder.
@@ -357,13 +347,7 @@ class DockerExecutor(Executor):
         return await _docker(*argv, self.container_id, "sh", "-c", command, stdin=stdin)
 
     async def _run_command_in_box(self, _workdir: Path, args: dict[str, Any]) -> str:
-        """The same run, shaped for a model to read."""
-        result = await self.run_command(
-            str(args["command"]),
-            timeout=float(args.get("timeout", _DEFAULT_TIMEOUT)),
-            env=args.get("env"),
-        )
-        return result.as_text()
+        return await command_text(self.run_command, args)
 
 
 def container_key(workdir: Path, isolation: Isolation) -> str:

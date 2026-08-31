@@ -45,6 +45,20 @@ single file — a minified bundle, a log — and the tools stay ignorant of whic
 model is reading them. A truncated read cuts on a line and hands back the
 `offset` to carry on from.
 
+### The caps are not one cap
+
+The `offset` above is why. `_OUTPUT_CAP` bounds what a command printed and can
+only say that it stopped — a shell has nowhere to resume from. `_GLOB_CAP` and
+`_LINE_CAP` bound a list and a line. Four ceilings for four questions, and
+folding them together would cost the one thing that makes the read cap usable.
+
+What *is* shared is the cutting itself: `capped()` in `shell.py` is the one
+place a command's output meets `_OUTPUT_CAP`, and both executors go through it.
+`decode_output()` is the same story for the bytes a command wrote — UTF-8, then
+the console's encoding with replacement — and `command_text()` holds the part
+the model's arguments decide, which of them are optional and what they fall back
+to. All three were written once for the host shell and again for the container.
+
 ## Changing part of a file
 
 `edit_file` replaces `old` with `new`, and refuses unless `old` appears exactly
