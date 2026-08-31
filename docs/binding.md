@@ -334,6 +334,35 @@ an endpoint that wants something extra need not restate the parts every
 endpoint shares. **Values are literal**, so a key does not belong in them — the
 rule the rest of this file exists to keep.
 
+### Not every key reaches every backend
+
+A provider block is one schema, and each backend reads the part of it its own
+transport can act on. Written out, because the alternative is finding out at
+3am that a setting did nothing:
+
+| key | `openai_compatible`, `ollama` | `anthropic` | `mock`, the subscription backends |
+|---|---|---|---|
+| `base_url` | yes | yes | — |
+| `api_key_env` | yes | yes | — |
+| `timeout` | yes | yes | yes |
+| `headers` | **yes** | no | no |
+| `query` | **yes** | no | no |
+| `max_retries` | no | **yes** | no |
+| `options` | — | yes | yes |
+
+`headers` and `query` are HTTP for an endpoint that puts its credential or its
+version somewhere unusual, and the Anthropic SDK does not take either.
+`max_retries` is that SDK's own retry setting and has no counterpart in the
+plain HTTP client. **This is a gap, not a design**: a binding that sets
+`max_retries: 4` on an Ollama endpoint is not refused and does nothing, which
+is the failure mode `extra="forbid"` exists to prevent one level up.
+
+It is left alone deliberately for now. Retrying is already happening a layer
+above — `retry:` on a node, applied by `call_with_retry` for every backend
+(`docs/runtime.md`) — so nothing is going unretried; what is missing is a
+refusal, and refusing a key that today's binding files already carry is a
+change to make on purpose rather than while writing a table.
+
 ### Where the OpenAI shape is not one shape
 
 OpenAI's own reasoning models (the o-series, GPT-5.x) **reject `max_tokens`**

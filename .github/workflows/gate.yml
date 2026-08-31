@@ -1,8 +1,10 @@
 # The gate from AGENTS.md Part 2, run on every pull request.
 #
-# It does not block a merge -- `main` is unprotected by choice -- so this
-# reports, and a person still decides. What it removes is the honour system
-# under condition 1: the run is here whether or not anyone pasted it.
+# Five of these six jobs are required to merge, admins included: `main` was
+# left unprotected until the jobs had been watched, and they were made required
+# after that. `docs/contribution.md` has the story and the escape hatch. What
+# this removes is the honour system under condition 1: the run is here whether
+# or not anyone pasted it.
 #
 # The Python suite runs on the OS this is developed on and on the OS it is not,
 # and on the newest Python as well as the oldest one `requires-python` claims.
