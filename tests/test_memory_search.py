@@ -138,6 +138,18 @@ def test_naming_more_entries_than_sqlite_takes_variables_still_answers(tmp_path)
     assert "over 50." in (read_memory(project, task) or "")
 
 
+def test_an_entry_reached_two_ways_is_shown_once(tmp_path):
+    """An entry can arrive by being connected to a chosen one *and* by there
+    being room for it. Both paths ran, and it landed in the prompt twice --
+    reading as two separate lessons and spending the budget twice over."""
+    task, project = _project(tmp_path)
+    _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[feeds-order]]")
+    _fact(project, "feeds-order", "Alphabetical order keeps things stable; newest last.")
+
+    block = read_memory(project, task) or ""
+    assert block.count("Alphabetical order") == 1
+
+
 def test_an_entry_outside_this_task_is_still_never_shown(tmp_path):
     """Filling the room is not the same as ignoring scope. Scope is the
     author saying who an entry is for, and that still holds."""
