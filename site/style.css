@@ -82,6 +82,11 @@
 [data-theme="light"] .logo-word { content: url("img/wordmark-light.svg"); }
 [data-theme="light"] .shot img { border-color: #cfc5b0; }
 
+/* The light art's ground IS the page (multiplied in), so the edge mask has
+   nothing to hide — and with it on, buds near the edge fade half-away.
+   The tree stands whole, roots and all. */
+[data-theme="light"] .hero-art { -webkit-mask-image: none; mask-image: none; }
+
 /* On a phone, ink branches at the dark theme's opacity fight the words —
    the light weather has to be fainter to stay weather. */
 @media (max-width: 760px) {
