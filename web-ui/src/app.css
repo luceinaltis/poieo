@@ -126,7 +126,7 @@
 }
 
 .shell-stage[data-drawer="true"] {
-  margin-right: min(440px, 100vw);
+  margin-right: var(--panel-width);
 }
 
 .shell-board {

@@ -137,7 +137,7 @@ export function Models({
   }
 
   return (
-    <aside className="models" aria-label="Models">
+    <aside className="panel models" aria-label="Models">
       <header className="models-head">
         <h2>models</h2>
         {report?.binding ? (

@@ -72,6 +72,11 @@ async function show(events: PoieoEvent[]) {
 
 const timeline = () => container.querySelector(".drawer-timeline")!.textContent ?? ""
 
+test("it is one of the panels on the right edge, not a third geometry", async () => {
+  await show([])
+  expect(container.querySelector("aside")?.classList.contains("panel")).toBe(true)
+})
+
 test("a step says its name and nothing about what kind of node it is", async () => {
   await show([event("node_started", { node_id: "sweep", data: { type: "agent" } })])
 

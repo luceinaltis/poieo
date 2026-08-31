@@ -93,7 +93,7 @@ export function MakeTask({
     })
 
   return (
-    <aside className="make" aria-label="New task">
+    <aside className="panel make" aria-label="New task">
       <header className="make-head">
         <h2 className="make-title">New task</h2>
         <button type="button" className="make-close" onClick={onClose}>

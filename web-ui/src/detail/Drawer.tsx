@@ -284,7 +284,7 @@ export const Drawer = memo(function Drawer({
   }, [events, project, task])
 
   return (
-    <aside className="drawer" data-task={task}>
+    <aside className="panel drawer" data-task={task}>
       <header className="drawer-head">
         <h2>{task}</h2>
         <button type="button" onClick={onClose} aria-label="Close">
