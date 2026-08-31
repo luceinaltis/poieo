@@ -242,3 +242,22 @@ test("a failed run says why on the timeline", async () => {
   const entry = container.querySelector('[data-error="true"]')!
   expect(entry.textContent).toContain("the model refused")
 })
+
+test("a card the daemon will not adopt says why, in the daemon's own words", async () => {
+  // The board's card carries the short form -- what to do -- because ten
+  // cards have no room for more. A reader who opened this one came for the
+  // whole sentence.
+  const why = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
+  fetchRuns.mockResolvedValue([])
+  await act(async () => {
+    root.render(<Drawer project="board" task="chores" stale={why} onClose={() => {}} />)
+  })
+  await act(async () => {})
+
+  expect(container.querySelector(".drawer-stale")?.textContent).toBe(why)
+})
+
+test("a card nobody edited says nothing about restarts", async () => {
+  await show([])
+  expect(container.querySelector(".drawer-stale")).toBeNull()
+})

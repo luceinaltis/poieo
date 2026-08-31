@@ -74,3 +74,17 @@ async def test_unsubscribe_stops_delivery(tmp_path):
     store.unsubscribe(queue)
     store.append(Event(run_id="r1", type="node_started"))
     assert queue.qsize() == 0
+
+
+async def test_an_announcement_reaches_readers_and_is_not_history(tmp_path):
+    """The one frame that is not a run event: it says a file the listing is
+    built from has changed, so an open page should read it again. There is
+    nothing to append it to, and appending it would put a line in a run's
+    history that belongs to no run."""
+    store = make_store(tmp_path)
+    queue = store.subscribe()
+
+    store.announce({"type": "tasks_changed", "project": "board"})
+
+    assert queue.get_nowait() == {"type": "tasks_changed", "project": "board"}
+    assert list(store.events("tasks_changed")) == []

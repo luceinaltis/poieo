@@ -14,6 +14,7 @@ const FLOWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    stale: null,
     current_run_id: null,
     last_run: null,
     pending: 0,

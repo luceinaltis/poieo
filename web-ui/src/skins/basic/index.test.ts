@@ -14,6 +14,7 @@ const FLOWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    stale: null,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -32,6 +33,7 @@ const FLOWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    stale: null,
     current_run_id: null,
     last_run: null,
     pending: 0,
@@ -660,5 +662,21 @@ test("a task that stopped says so where it would have said what it was doing", (
   handle.update(stage)
 
   expect(el.querySelector('[data-task="board/chores"] .basic-now')!.textContent).toBe("stopped")
+  handle.destroy()
+})
+
+test("a card whose edit will not take says so, and keeps the daemon's own words", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const why = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
+  handle.update(initialStage([{ ...FLOWS[0], stale: why }, FLOWS[1]]))
+
+  const line = el.querySelector('[data-task="board/chores"] .basic-stale') as HTMLElement
+  // The next action, not the daemon's refusal: the reader wants to know what
+  // to do, and the exact sentence is a hover away for whoever wants the rest.
+  expect(line.textContent).toContain("restart")
+  expect(line.title).toBe(why)
+
+  // And a card nobody edited says nothing, so `:empty` takes the room back.
+  expect(el.querySelector('[data-task="board/revision"] .basic-stale')!.textContent).toBe("")
   handle.destroy()
 })

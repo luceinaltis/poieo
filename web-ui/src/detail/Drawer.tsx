@@ -204,6 +204,7 @@ export const Drawer = memo(function Drawer({
   project,
   task,
   status = "waiting",
+  stale = null,
   pending = 0,
   into = null,
   asking = null,
@@ -214,6 +215,8 @@ export const Drawer = memo(function Drawer({
   project: string
   task: string
   status?: string
+  /** Why the card file and the running task disagree, or null. */
+  stale?: string | null
   pending?: number
   into?: string | null
   asking?: Asked | null
@@ -272,6 +275,7 @@ export const Drawer = memo(function Drawer({
         trigger: "",
         status: "waiting",
         holding: false,
+        stale: null,
         current_run_id: null,
         last_run: null,
         pending: 0,
@@ -300,6 +304,15 @@ export const Drawer = memo(function Drawer({
         <Question project={project} task={task} asking={asking} onAnswered={decided} />
 
         <Control project={project} task={task} status={status} onActed={decided} />
+
+        {/* The daemon's own sentence, whole. The board's card carries the
+            short form -- what to do -- because ten cards have no room for
+            more; a reader who opened this one came for the rest of it. */}
+        {stale ? (
+          <p className="drawer-stale" role="status">
+            {stale}
+          </p>
+        ) : null}
 
         {/* Under the controls, above the nights: the definition, openable.
             What the task *is* sits between what you can do to it now and

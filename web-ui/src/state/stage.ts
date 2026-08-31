@@ -41,6 +41,14 @@ export interface TaskState {
   status: "waiting" | "running" | "paused" | "error"
   /** Whether a hold is on, even while the run it was pressed during finishes. */
   held: boolean
+  /**
+   * Why the card file and this task disagree, or "" while they do not.
+   *
+   * Structure rather than state: it changes only when a file does. The empty
+   * string and not null, so a view asks it the same way it asks the other
+   * lines on a card whether they have anything to say.
+   */
+  stale: string
   currentNode: string | null
   step: number
   turn: number
@@ -138,6 +146,7 @@ function blankFlow(): TaskState {
   return {
     status: "waiting",
     held: false,
+    stale: "",
     name: "",
     project: "",
     currentNode: null,
@@ -213,6 +222,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       trigger: row.trigger,
       status: drawnStatus(row),
       held: row.holding,
+      stale: row.stale ?? "",
       lastRun: row.last_run
         ? {
             status: row.last_run.status,

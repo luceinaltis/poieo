@@ -51,6 +51,7 @@ interface Box {
   tools: HTMLElement
   tally: HTMLElement
   warn: HTMLElement
+  stale: HTMLElement
 }
 
 function element(tag: string, className: string, parent: Element): HTMLElement {
@@ -148,6 +149,11 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     // task is, rather than what it is doing this minute -- and above `now`,
     // because it is true whether or not anything is running.
     warn: element("div", "basic-warn", root),
+    // Beside it, and the same kind of fact: what is true of this task rather
+    // than what it is doing. Its own line because a card can be both -- one
+    // that edits your files directly *and* one whose last edit did not take --
+    // and either of those crowding the other out is the wrong trade.
+    stale: element("div", "basic-stale", root),
     // Shut, this is the whole of what a task says about right now. It sits
     // above the graph because it is the answer to the question a person came
     // to the board with, and the graph is the answer to the next one.
@@ -214,6 +220,24 @@ function describeRisk(flowState: TaskState): string {
   if (flowState.tracked) return ""
   if (!flowState.shape.nodes.some((node) => node.tools.length > 0)) return ""
   return "edits your files directly — no undo"
+}
+
+/**
+ * That the card on disk is not what is running, in one line.
+ *
+ * Only a prompt is really re-read before a run. A schedule, a folder or an
+ * `enabled:` reaches a trigger that was built when the daemon started, so the
+ * daemon refuses to half-adopt the edit -- and said so only in its own log,
+ * where a person who saved the file in an editor was never going to see it. A
+ * card edited at noon kept its old schedule all day and the board agreed with
+ * it.
+ *
+ * Said as what the reader must *do*, not as what the daemon declined to do:
+ * the sentence they need is the next action, and the daemon's own words are on
+ * the tooltip for whoever wants the rest.
+ */
+function describeStale(flowState: TaskState): string {
+  return flowState.stale ? "edited — restart the daemon for it to take" : ""
 }
 
 /**
@@ -388,6 +412,11 @@ function paint(box: Box, flowState: TaskState, open: boolean): void {
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(flowState)
   box.warn.textContent = describeRisk(flowState)
+  box.stale.textContent = describeStale(flowState)
+  // The daemon's own sentence, which is long and exact where the line is short:
+  // the summary is what a scan of the board needs, and this is what the person
+  // who just saved the file needs.
+  box.stale.title = flowState.stale
   box.now.textContent = describeNow(flowState)
 
   for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
@@ -521,7 +550,12 @@ function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boo
   return Object.entries(stage.tasks)
     .map(
       ([task, flowState]) =>
-        `${task}>${flowState.then.map((a) => a.to).join(",")}${open(task, flowState) ? "+" : "-"}`,
+        // Open, and every line that appears and disappears under the header:
+        // all of them change a border's height, and the rows and the arrows
+        // are measured off those heights. Left out, a card that grows a line
+        // keeps the geometry of the board before it had one.
+        `${task}>${flowState.then.map((a) => a.to).join(",")}${open(task, flowState) ? "+" : "-"}` +
+        `${describeRisk(flowState) ? "r" : ""}${describeStale(flowState) ? "s" : ""}`,
     )
     .join("|")
 }

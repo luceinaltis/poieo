@@ -65,6 +65,7 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
       then: blank.then,
       shape: blank.shape,
       trigger: blank.trigger,
+      stale: blank.stale,
       lastRun: blank.lastRun ?? existing.lastRun,
       // Whether a hold is on is the daemon's to say, never the event
       // stream's: no frame is published when somebody presses pause.

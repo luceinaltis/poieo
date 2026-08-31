@@ -18,7 +18,7 @@ from ..binding import BindingSpec, load_binding
 from ..card import append_journal, closing_line, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
-from ..graph import Branch, load_graph
+from ..graph import Branch, GraphSpec, load_graph
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
 from ..providers import ProviderPool, check_credentials
@@ -104,6 +104,46 @@ SHUTDOWN_GRACE = 5.0
 # cost is one directory listing; the wait is what somebody stares at after
 # pressing save, so it is seconds and not minutes.
 SCAN_SECONDS = 5.0
+
+# What a reader is told when the card on disk asks for something the running
+# task cannot become. One sentence in one place: a run's own reread refuses on
+# this, and the folder scan reports it, and two accounts of one fact is how the
+# board comes to say something the daemon does not mean.
+STALE_CARD = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
+
+
+def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec | None, str | None]":
+    """The card on disk as the graph this task may adopt, or why it may not.
+
+    The graph when the file still expands to the task that is running -- which
+    includes a card whose *prompt* changed, since that is the half a run really
+    does adopt. A sentence when it does not, and ``(None, None)`` when there is
+    no card to re-expand at all: a task naming a graph file of its own re-reads
+    that instead, on its own terms.
+
+    Asked from two places at two moments, which is the whole reason it is one
+    function. `_reread_graph` asks before a run, to decide whether it may adopt
+    the new graph; the folder scan asks every few seconds, so a card edited at
+    noon is not answered for at 3am by a line in a log nobody is reading. Two
+    accounts of what a card is allowed to change is how the board comes to say
+    something the daemon does not mean.
+
+    A card that will not *load* answers with the reason rather than with None.
+    An unreadable file is a change the reader has to be told about too, and the
+    folder scan's own complaint names the folder rather than the card -- which
+    is the one case where a reader most needs the card pointed at.
+    """
+    card = config.cards_by_task.get(task.spec.name)
+    if card is None or card.source_path is None or config.card_graphs.get(task.spec.name) is None:
+        return None, None
+    try:
+        roster = [c.slug for c in config.cards_by_task.values()]
+        spec, graph = expand(load_card(card.source_path), roster=roster)
+    except PoieoError as exc:
+        return None, str(exc)
+    if graph is None or spec != task.spec:
+        return None, STALE_CARD
+    return graph, None
 
 
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
@@ -228,6 +268,12 @@ class TaskRunner:
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}
         self.status: str = "waiting"
+        # What the card on disk now asks for that this runner cannot become
+        # without a restart, in the daemon's own words -- or None while the
+        # file and what is running still agree. Set by the folder scan rather
+        # than by a run, because a card edited at noon whose task fires at 3am
+        # would otherwise keep its old schedule all day with nothing to say so.
+        self.stale: str | None = None
         # Consecutive failures sharing one cause; a completed run resets it.
         self._repeat_key: str | None = None
         self._repeat_count: int = 0
@@ -1006,9 +1052,29 @@ class Daemon:
                         # would stop every card from ever being noticed again,
                         # and say so only on the way down.
                         log.warning("the tasks folder could not be scanned: %s", exc)
-                        continue
+                        # Nothing new starts, but the drift check below still
+                        # runs: a folder that will not load is usually one card
+                        # with a typo in it, and naming that card is the whole
+                        # of what the reader needs.
+                        appeared = []
                     for runner in appeared:
                         started.append(self._start(runner))
+                    # The other half of the same look at the folder: of the
+                    # cards that were already here, which no longer describe
+                    # what is running. Its own thread call, and outside the
+                    # `try` above, because a folder that will not load is
+                    # exactly when this has something to say -- it reads one
+                    # card at a time, so a typo names its own task.
+                    try:
+                        moved = await asyncio.to_thread(self._note_drift, project)
+                    except Exception as exc:
+                        log.warning("the tasks could not be checked against their cards: %s", exc)
+                        moved = False
+                    if moved:
+                        # The board does not poll, and no frame is published
+                        # when a file changes under it. Without this a reader
+                        # who edited a card learns nothing until they reconnect.
+                        self._announce(project, "tasks_changed")
         finally:
             # Together, not one after another: the caller gives this whole loop
             # one shutdown grace, and waiting three tasks out in series would
@@ -1032,6 +1098,45 @@ class Daemon:
 
         task.add_done_callback(_crashed)
         return task
+
+    def _note_drift(self, project: LoadedProject) -> bool:
+        """Ask every running task whether its card still describes it.
+
+        Returns whether any answer *changed*, which is what decides if the
+        board is told. Answering "still stale" every five seconds would push a
+        frame at every open page forever over a file nobody has touched since
+        lunch -- the same reason `_appeared` says its complaint once.
+
+        Runs in a thread: it reads a file per task, and this loop is the one
+        the board and every timer share.
+        """
+        moved = False
+        for runner in self.runners:
+            if runner.config is not project.config:
+                continue
+            drift = reread_card(project.config, runner.task)[1]
+            if drift != runner.stale:
+                if drift is not None:
+                    log.warning("task '%s': %s", runner.name, drift)
+                runner.stale = drift
+                moved = True
+        return moved
+
+    def _announce(self, project: LoadedProject, kind: str) -> None:
+        """Push one frame that is not a run event at every page watching.
+
+        The board reads `/api/tasks` when it opens and when the feed
+        reconnects, and nothing else -- so a file changing under it reaches
+        nobody. This is how the daemon says *ask again*, and it deliberately
+        carries no detail: what changed is what the read is for, and a frame
+        that duplicated it would be a second answer free to be the wrong one.
+
+        On the loop, never from the scan's thread: the subscriber queues are
+        asyncio queues, and `put_nowait` from another thread is not safe.
+        """
+        store = project.store
+        if isinstance(store, BroadcastStore):
+            store.announce({"type": kind, "project": project.config.display_name})
 
     def _appeared(self, project: LoadedProject, said: dict[Path, str]) -> list[TaskRunner]:
         """Every card in this project's folder that is not a task yet.
@@ -1263,19 +1368,16 @@ class Daemon:
         if project is None:
             return
         config = project.config
-        card = config.cards_by_task.get(task.spec.name)
-        if card is not None and config.card_graphs.get(task.spec.name) is not None:
-            roster = [c.slug for c in config.cards_by_task.values()]
-            spec, graph = expand(load_card(card.source_path), roster=roster)
-            if graph is None or spec != task.spec:
-                raise SpecError(
-                    f"task '{task.spec.name}': the card changed more than its prompt, "
-                    f"and the rest of it only takes effect on a restart"
-                )
-        elif task.spec.graph:
+        # The same judgement the folder scan reports on the board, made by the
+        # same function, so the two cannot come to disagree about what a card
+        # is allowed to change.
+        graph, drift = reread_card(config, task)
+        if drift is not None:
+            raise SpecError(f"task '{task.spec.name}': {drift}")
+        if graph is None:
+            if not task.spec.graph:
+                return
             graph = load_graph(config.resolve_path(task.spec.graph).resolve())
-        else:
-            return
         try:
             preflight(graph, task.binding, workdir=config.workdir_path(task.spec))
             # Both startup checks, not one. A graph naming a role whose key is

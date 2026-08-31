@@ -176,3 +176,20 @@ test("the close function detaches and stops delivery", () => {
   expect(source.closed).toBe(true)
   expect(events).toEqual([])
 })
+
+test("a frame saying the listing changed asks for a resync, not a fold", () => {
+  // Nothing is published when a card file changes under an open page, and the
+  // board reads /api/tasks only when it opens. So the daemon says "ask again",
+  // and this is the one frame that is not a run event: it carries no detail,
+  // because the read is the detail and a second answer here would be free to
+  // be the wrong one.
+  const { events, resyncs, handlers } = collect()
+  openFeed(handlers)
+  const source = FakeEventSource.instances[0]
+
+  source.open()
+  source.deliver({ type: "tasks_changed", project: "board" })
+
+  expect(resyncs()).toBe(2) // the open, then the frame
+  expect(events).toEqual([]) // and nothing reached the reducer
+})
