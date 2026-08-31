@@ -892,6 +892,13 @@ with the same hold set aside takes — the old name's runner is armed against a
 file that has moved, and the watched folder now holds the new one, so without
 the hold the same work fires twice until a restart.
 
+The fold's rename control is a name and a button, apart from the acts that
+write inside the card, and it offers the name the task has: nothing changed,
+nothing to rename, the same rule save keeps. The sentence after it names the
+daemon's spelling rather than what was typed, because that is the task from
+here on — the fold itself still points at the file that moved, so the board is
+where the renamed task is picked up.
+
 The rail item that calls **make** is `make/MakeTask.tsx`, beside `models/` because
 making a task is what the board is *for* rather than something one task does. It asks for the three fields and names the folder in a sentence
 above the button — the card starts running when it is saved, and that sentence
@@ -931,10 +938,6 @@ it and a green run says nothing about it. `docs/contribution.md` has the whole s
 
 ## Not built yet
 
-- **Renaming a task.** Making a card is live, editing it is live, and setting
-  it aside is live — the drawer's `card` fold does all three — but the filename
-  is the task's identity, so a rename still means touching the file (or setting
-  aside and remaking).
 - **The canvas editor folded in.** `editor.py` and `viewer.py` render a graph as
   a standalone page today (`poieo edit`, `poieo view`, `poieo show --mermaid`);
   the board does not host them.

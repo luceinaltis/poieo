@@ -209,10 +209,16 @@ export interface Answer {
   error?: string
 }
 
-async function put<T extends Answer>(path: string, body: unknown): Promise<T> {
+// PUT rewrites the card, PATCH renames the file it lives in; they differ in
+// the verb and nothing else, so they share the one sender.
+async function withBody<T extends Answer>(
+  method: "PUT" | "PATCH",
+  path: string,
+  body: unknown,
+): Promise<T> {
   try {
     const response = await fetch(path, {
-      method: "PUT",
+      method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     })
@@ -474,9 +480,39 @@ export function rewriteCard(
   // Two spellings of one write: the raw file, or the three fields the daemon
   // serialises itself -- through the same dump make uses, so a person who
   // came in through the form never touches YAML.
-  return put(
+  return withBody(
+    "PUT",
     `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
     typeof card === "string" ? { text: card } : card,
+  )
+}
+
+/**
+ * Renaming that task: the card's file moves, and nothing inside it is touched.
+ *
+ * The filename is the task's identity -- the `name:` line in the card is a
+ * title `rewriteCard` owns -- so this is the one write that changes which task
+ * the board is looking at. The name given here is a name, not a filename: the
+ * daemon spells it, refusing one that reads like a path or one the folder
+ * already uses, so `task` in the answer is the daemon's spelling and the only
+ * one to go on afterwards.
+ */
+export interface RenamedCard extends Answer {
+  /** The new slug, as the daemon spelled it. */
+  task?: string
+  /** Where the card now lives, so the sentence on screen can say it. */
+  path?: string
+}
+
+export function renameCard(
+  project: string,
+  task: string,
+  name: string,
+): Promise<RenamedCard> {
+  return withBody(
+    "PATCH",
+    `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
+    { name },
   )
 }
 

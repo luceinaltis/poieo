@@ -254,6 +254,19 @@
   margin-top: 0;
 }
 
+/* The name beside its button: a rename is a move of the file, so it sits
+   apart from the acts that write inside it. */
+.card-rename {
+  align-items: end;
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.card-rename .card-field {
+  flex: 1;
+}
+
 /* Quiet until armed: the first press only changes the word on the button. */
 .card-aside[data-armed="true"] {
   border-color: #d16d5a;
