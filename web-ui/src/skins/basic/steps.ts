@@ -115,7 +115,10 @@ export function layOutSteps(shape: GraphShape, sizeOf: (node: NodeShape) => Size
       graph.setEdge(
         node.id,
         to,
-        way.label ? { width: way.label.length * 5.4 + 6, height: 11, labelpos: "c" } : {},
+        // 11px DM Mono is 0.6em to the character, so ~6.6px, and dagre is told
+        // the true width or it keeps the wrong amount of room and the word
+        // lands across a step.
+        way.label ? { width: way.label.length * 6.6 + 8, height: 13, labelpos: "c" } : {},
       )
       words.set(`${node.id} ${to}`, way.label)
     })
