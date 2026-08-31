@@ -1483,6 +1483,10 @@ def eject(
         kept["binding"] = task.binding
     if not task.enabled:
         kept["enabled"] = False
+    if task.isolation is not None:
+        # Where the work may run describes the task, not the node the graph
+        # took over -- so it stays on the card the graph is run through.
+        kept["isolation"] = task.isolation.model_dump(mode="json", exclude_none=True)
     try:
         named = Path(os.path.relpath(target, task.dir)).as_posix()
     except ValueError:  # a different drive on Windows: no relative path exists

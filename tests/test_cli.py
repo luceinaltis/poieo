@@ -1,5 +1,6 @@
 import json
 
+import yaml
 from conftest import EXAMPLES, at, card
 from test_workspace import make_repo
 from typer.testing import CliRunner
@@ -423,6 +424,18 @@ def test_an_ejected_graph_does_not_become_a_second_task(tmp_path):
     assert result.exit_code == 0, result.output
     # One status marker, so one card -- the graph beside it is not a task.
     assert result.stdout.count("[on ]") + result.stdout.count("[off]") == 1
+
+
+def test_eject_preserves_isolation(tmp_path):
+    """`isolation:` describes the task, not the node -- so the card keeps it."""
+    body = "name: tidy\nprompt: go\nisolation:\n  image: python:3.12\n  network: bridge\n"
+    path = _task(tmp_path, body=body)
+    result = runner.invoke(app, ["eject", str(path)])
+    assert result.exit_code == 0, result.output
+
+    rewritten = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert rewritten["isolation"]["image"] == "python:3.12"
+    assert rewritten["isolation"]["network"] == "bridge"
 
 
 def test_eject_refuses_to_overwrite(tmp_path):
