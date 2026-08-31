@@ -18,13 +18,13 @@ to be true to add a sixth.
 
 | route | does |
 |---|---|
-| `GET /api/tasks` | every project on this board, then every task: which project's, status, whether a hold is on, trigger, last run, how much is waiting for review, and its wiring |
+| `GET /api/tasks` | every project on this board, then every task: which project's, status, whether a hold is on, whether its card has outrun it, trigger, last run, how much is waiting for review, and its wiring |
 | `GET /api/runs` | run summaries, newest first (`?task=`, `?project=`, `?limit=`) |
 | `GET /api/runs/{id}` | one run's whole event stream |
 | `GET /api/runs/{id}/diff` | what that run changed |
 | `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
-| `GET /api/events` | every event, live (SSE; `?task=` filters) |
+| `GET /api/events` | every event, live (SSE; `?task=` filters), plus `tasks_changed` |
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder |
 | `PUT /api/projects/{p}/tasks/{f}` | **make** — rewrite that card in place, same fence |
@@ -562,6 +562,17 @@ happened to be standing in.
 `run_tasks` maps run id → task, learned from `run_started`, so the SSE endpoint
 can filter by task without parsing every payload.
 
+**One frame is not a run event.** `announce()` publishes without storing, and
+`tasks_changed` is its only sender: the daemon saying *a file the listing is
+built from has changed, so read it again*. It exists because the board reads
+`/api/tasks` when it opens and when the feed reconnects and at no other time —
+so a card edited by hand under an open page reached nobody. It carries no
+detail beyond which project, because the read is the detail and a second answer
+here would be free to be the wrong one; the client turns it straight into a
+resync rather than handing it to the reducer. `?task=` does not filter it out:
+that narrows the *runs* a reader is watching, and a listing that changed is
+true of whichever task they are watching too.
+
 Static assets are served immutable (Vite emits content-hashed names), while
 `index.html` is `no-cache` — that document names the build, and a cached one
 would leave the reader running an old page with no way to find out.
@@ -799,6 +810,21 @@ board back on `waiting`, nothing republishes when somebody presses pause, and
 `/api/tasks` is not read again until the page reconnects. So the row carries
 `holding` beside `status`, `TaskState` keeps it as `held`, and a run ending on a
 held task lands on `paused` rather than undoing the press that put it there.
+
+**A card that has outrun what is running says so on the shut border.** Only a
+prompt is really re-read before a run; a schedule, a folder or an `enabled:`
+reaches a trigger built when the daemon started, and the daemon refuses to
+half-adopt the rest of an edit — see [daemon.md](daemon.md). The line says what
+the reader has to *do* rather than what the daemon declined to do, because the
+next action is the sentence they need, and the daemon's own words are on the
+tooltip and in the drawer for whoever wants the rest. It takes amber and not
+the red beside it: nothing was lost and nothing is at risk, the edit is in the
+file waiting for a restart, and the one line on this board that means *your
+files, no undo* must not have company.
+
+Its own line rather than sharing `warn`, because a card can be both. And both
+are in `wiringKey`: a line that appears and disappears changes a border's
+height, and the rows and the arrows are measured off those heights.
 
 That leaves the fact the graph was carrying for those tasks with nowhere to be,
 and it is the one worth keeping: **a task that can edit files and keeps no

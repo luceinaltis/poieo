@@ -204,7 +204,8 @@
 .basic-when,
 .basic-tally,
 .basic-now,
-.basic-warn {
+.basic-warn,
+.basic-stale {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-feature-settings: "tnum" 1;
 }
@@ -232,7 +233,6 @@
   display: none;
 }
 
-/* Nothing is happening, so this line is not there at all. */
 /* One line, always. A border's height is measured once, when the wiring
    changes, and every arrow on the board is drawn against that number -- while
    this line is rewritten on every frame. Left free to wrap, a long node id
@@ -547,4 +547,25 @@
 .basic-said[data-thinking="true"] {
   color: var(--dim);
   font-style: italic;
+}
+
+/* The card on disk is not what is running. Its own line beside `warn`, one
+   line and clipped for the same reason, and the daemon's whole sentence on
+   the tooltip.
+
+   Amber rather than the red beside it: this is not something the task is
+   doing to your files, it is something the daemon declined to do to itself,
+   and the next step is yours. Nothing was lost and nothing is at risk -- the
+   edit is in the file, waiting for a restart. */
+.basic-stale {
+  color: #d8a657;
+  font-size: 0.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nothing out of step, so no room taken -- the rule `warn` keeps. */
+.basic-stale:empty {
+  display: none;
 }

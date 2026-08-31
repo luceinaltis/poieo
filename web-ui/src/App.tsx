@@ -343,6 +343,7 @@ export default function App({ store }: { store?: StageStore }) {
           project={openRow?.project ?? ""}
           task={openRow?.name ?? selected}
           status={openRow?.status ?? "waiting"}
+          stale={openRow?.stale ?? null}
           pending={openRow?.pending ?? 0}
           into={openRow?.into ?? null}
           asking={openRow?.asking ?? null}

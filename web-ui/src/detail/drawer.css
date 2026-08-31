@@ -301,3 +301,17 @@
   user-select: text;
   width: 100%;
 }
+
+/* Why the card on disk is not what is running, in the daemon's own words.
+
+   Amber, the colour the board's card uses for the same fact: nothing was lost
+   and nothing is at risk -- the edit is in the file, waiting for a restart --
+   so this is not the red a failure takes. It wraps where the card's line
+   clips, because the room is here and the exact sentence is what a reader
+   opened the drawer for. */
+.drawer-stale {
+  color: #d8a657;
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 0;
+}

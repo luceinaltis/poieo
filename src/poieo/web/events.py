@@ -53,6 +53,18 @@ class BroadcastStore(RunStore):
             except asyncio.QueueFull:
                 self._subscribers.discard(queue)
 
+    def announce(self, record: dict[str, Any]) -> None:
+        """Push one frame that is not a run event, and store nothing.
+
+        Everything else here is a line of some run's JSONL that also happens to
+        reach a browser. This is the other kind: a frame that exists only to
+        tell an open page that something it *reads* has changed, so it should
+        read again. It is not history and there is nothing to append it to.
+
+        Must be called on the loop -- the subscriber queues are asyncio queues.
+        """
+        self._publish(record)
+
     def append(self, event: Event) -> None:
         self._inner.append(event)
         if event.type == "run_started":

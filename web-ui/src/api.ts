@@ -574,6 +574,15 @@ export function openFeed(handlers: FeedHandlers): () => void {
     } catch {
       return // a torn frame must not take the page down
     }
+    // The one frame that is not a run event. It belongs to no run and carries
+    // no detail -- it says a file the listing is built from has changed, so go
+    // and read it again. Sent because nothing else is: the board reads
+    // `/api/tasks` when it opens, and a card edited by hand under an open page
+    // would otherwise reach nobody until they reconnected.
+    if (event.type === "tasks_changed") {
+      handlers.onResync()
+      return
+    }
     handlers.onEvent(event)
   }
 

@@ -137,6 +137,36 @@ rooted in. So a card whose expansion changed anything but its graph is refused
 and says so. A schedule, a folder or an `enabled:` still wants a restart, and
 adding a card at runtime is its own piece of work.
 
+**And says so where the person who made the edit is looking.** For a long time
+that refusal was one `log.warning`, at the next firing, into a terminal nobody
+watches — so a card edited at noon whose task fires at 3am kept its old
+schedule all day, and the board agreed with it. `reread_card` is the one
+judgement, asked from two places at two moments: a run asks before it starts,
+to decide whether it may adopt the new graph, and the folder scan asks every
+`SCAN_SECONDS`, so an edit is answered for while the reader is still at the
+keyboard. What it answers lands on `TaskRunner.stale`, which `/api/tasks`
+carries and the board draws on the card. Two accounts of what a card is allowed
+to change is how a board comes to say something the daemon does not mean, which
+is why it is one function and not two.
+
+A card that will not *load* answers with the reason rather than with silence.
+That case used to be the worst one: a typo made the whole folder unreadable, so
+the scan gave up before it reached any card and the complaint it logged named
+the folder rather than the file. The drift check reads one card at a time and
+runs whether or not the folder loaded, so a typo names its own task.
+
+**Told once, and only when the answer changes.** `_note_drift` reports a change
+of answer, never a standing one — the same rule `_appeared` keeps for its own
+complaint. Repeating it every five seconds over a file nobody has touched since
+lunch is how a reader learns to ignore the feed. The telling itself is
+`_announce`, one frame on the event stream saying *the listing changed, read it
+again*: the board reads `/api/tasks` when it opens and when the feed reconnects
+and at no other time, so without it a card edited under an open page reaches
+nobody. The frame carries no detail on purpose — the read is the detail, and a
+second answer beside it would be free to be the wrong one. It is published on
+the loop and never from the scan's thread, because the subscriber queues are
+asyncio queues.
+
 **Both files are attempted, and the graph runs both startup checks.** Each is
 read in its own attempt, so a half-written binding cannot silently freeze the
 graph's reread, and the warning names whichever failed. `check_credentials` runs

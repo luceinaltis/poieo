@@ -145,6 +145,14 @@ export interface TaskRow {
    * exactly like one waiting for its next turn, until the page reconnected.
    */
   holding: boolean
+  /**
+   * What the card on disk asks for that this task cannot become without a
+   * restart, in the daemon's own words -- or null while the file and what is
+   * running agree. Only a card's prompt is really re-read before a run; a
+   * schedule, a folder or an `enabled:` reaches a trigger built at startup,
+   * and the daemon refuses to half-adopt the rest of an edit.
+   */
+  stale: string | null
   current_run_id: string | null
   last_run: RunSummary | null
   /** How many changes are waiting to be looked at. */

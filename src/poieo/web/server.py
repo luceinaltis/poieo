@@ -61,7 +61,11 @@ async def _event_stream(store: BroadcastStore, task: str | None = None) -> Async
     try:
         while True:
             record = await queue.get()
-            if task:
+            # `?task=` narrows the *runs* a reader is watching. A frame that
+            # belongs to no run says the listing itself changed, which is true
+            # of whichever task they are watching too -- filtered out, a reader
+            # following one task would be the only one never told.
+            if task and record.get("type") != "tasks_changed":
                 run_flow = record.get("task") or store.run_tasks.get(record.get("run_id", ""))
                 if run_flow != task:
                     continue
@@ -441,6 +445,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # it on the way out and drew a stopped task as a waiting
                     # one until somebody reloaded the page.
                     "holding": runner.holding,
+                    # What the card on disk asks for that this task cannot
+                    # become without a restart, or null. The daemon refuses to
+                    # half-adopt such an edit and used to say so only in its
+                    # own log -- so a card edited by hand at noon kept its old
+                    # schedule with nothing on the board to say why.
+                    "stale": runner.stale,
                     "current_run_id": runner.current_run_id,
                     "last_run": last.summary() if last else None,
                     **state,

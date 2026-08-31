@@ -74,6 +74,7 @@ def stub_runner(
     name="triage",
     status="waiting",
     holding=False,
+    stale=None,
     current=None,
     last=None,
     workspace=None,
@@ -86,6 +87,7 @@ def stub_runner(
         config=None,
         status=status,
         holding=holding,
+        stale=stale,
         current_run_id=current,
         last_result=last,
         workspace=workspace,
@@ -112,6 +114,7 @@ def test_flows_lists_runner_state(tmp_path):
             "trigger": "interval 30s",
             "status": "waiting",
             "holding": False,
+            "stale": None,
             "current_run_id": None,
             "last_run": {"run_id": "r0", "status": "completed"},
             "pending": 0,
@@ -800,3 +803,14 @@ def test_a_hold_is_reported_apart_from_the_status(tmp_path):
     row = client.get("/api/tasks").json()["tasks"][0]
     assert row["status"] == "running"
     assert row["holding"] is True
+
+
+def test_a_card_the_daemon_will_not_adopt_is_reported_on_its_task(tmp_path):
+    """A hand edit the running task cannot take used to leave the board saying
+    nothing at all -- the daemon's refusal went to its own log, where the person
+    who saved the file in an editor was never going to look."""
+    why = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
+    daemon = stub_daemon(tmp_path, [stub_runner(stale=why)])
+    client = TestClient(create_app(daemon))
+
+    assert client.get("/api/tasks").json()["tasks"][0]["stale"] == why
