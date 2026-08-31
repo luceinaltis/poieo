@@ -10,6 +10,13 @@
  */
 
 import type { DiffReport, Listing, PoieoEvent, RunSummary } from "./types"
+import type {
+  MemoryAskReply,
+  MemoryEntry,
+  MemoryOverview,
+  MemorySearchMode,
+  MemorySearchReply,
+} from "./memory/types"
 
 async function getJson<T>(path: string): Promise<T | null> {
   const response = await fetch(path)
@@ -23,6 +30,28 @@ export async function fetchTasks(): Promise<Listing> {
   // recognise least -- the one with no tasks in it -- needs naming most.
   const body = await getJson<Listing>("/api/tasks")
   return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
+}
+
+const memoryUrl = (project: string, tail = "") =>
+  `/api/projects/${encodeURIComponent(project)}/memory${tail}`
+
+export async function fetchMemory(project: string): Promise<MemoryOverview | null> {
+  try {
+    return await getJson<MemoryOverview>(memoryUrl(project))
+  } catch {
+    return null
+  }
+}
+
+export async function fetchMemoryEntry(
+  project: string,
+  slug: string,
+): Promise<MemoryEntry | null> {
+  try {
+    return await getJson<MemoryEntry>(memoryUrl(project, `/${encodeURIComponent(slug)}`))
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -247,6 +276,31 @@ async function post<T extends Answer>(path: string, body?: unknown): Promise<T> 
   } catch {
     return { ok: false, error: "the daemon did not answer" } as T
   }
+}
+
+export function searchMemory(
+  project: string,
+  query: string,
+  mode: MemorySearchMode,
+  includeSetAside: boolean,
+): Promise<MemorySearchReply> {
+  return post<MemorySearchReply>(memoryUrl(project, "/search"), {
+    query,
+    mode,
+    limit: 20,
+    include_set_aside: includeSetAside,
+  })
+}
+
+export function askMemory(
+  project: string,
+  question: string,
+  includeSetAside: boolean,
+): Promise<MemoryAskReply> {
+  return post<MemoryAskReply>(memoryUrl(project, "/ask"), {
+    question,
+    include_set_aside: includeSetAside,
+  })
 }
 
 // A project and a task name between them pick out one task; a name alone

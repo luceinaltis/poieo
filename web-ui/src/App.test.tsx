@@ -71,6 +71,23 @@ vi.mock("./api", () => ({
     endpoints: [],
   })),
   fetchUndeclared: vi.fn(async () => []),
+  fetchMemory: vi.fn(async () => ({
+    enabled: false,
+    page: null,
+    stats: null,
+    capabilities: { words: false, meaning: false, ask: false },
+    graph: {
+      nodes: [],
+      edges: [],
+      total_nodes: 0,
+      total_edges: 0,
+      truncated: false,
+      edges_truncated: false,
+    },
+  })),
+  fetchMemoryEntry: vi.fn(async () => null),
+  searchMemory: vi.fn(async () => ({ ok: true, results: [] })),
+  askMemory: vi.fn(async () => ({ ok: true, citations: [], evidence: [] })),
 }))
 
 import App from "./App"
@@ -233,6 +250,23 @@ test("runs is a place on the rail: there when you go, gone when you leave", asyn
   expect(
     container.querySelector('[data-do="open-board"]')!.getAttribute("aria-current"),
   ).toBe("page")
+})
+
+test("memory is a project place on the rail, not a rendering of the task board", async () => {
+  await render(initialStage(TASK_ROWS))
+
+  const go = container.querySelector<HTMLElement>('[data-do="open-memory"]')!
+  expect(go).not.toBeNull()
+  await act(async () => go.click())
+  await act(async () => {})
+
+  expect(container.textContent).toContain("This project keeps no long memory")
+  expect(container.querySelector(".shell-board")!.getAttribute("data-hidden")).toBe("true")
+  expect(go.getAttribute("aria-current")).toBe("page")
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-board"]')!.click())
+  expect(container.querySelector(".basic")).not.toBeNull()
+  expect(container.querySelector(".memory-state")).toBeNull()
 })
 
 test("a panel opens over runs without knocking it off the stage", async () => {

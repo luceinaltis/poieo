@@ -7,6 +7,7 @@ These speak their own native HTTP APIs over httpx. (The Claude backend lives in
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from typing import Any
 
@@ -73,6 +74,17 @@ def _openai_messages(request: LLMRequest) -> list[dict[str, Any]]:
 
 def _ollama_messages(request: LLMRequest) -> list[dict[str, Any]]:
     return _translate_history(request, arguments_as_json=False)
+
+
+def _check_embeddings(name: str, vectors: list[list[float]], expected: int) -> None:
+    """One vector per input, all in the one space the endpoint named."""
+    dimensions = {len(vector) for vector in vectors}
+    finite = all(math.isfinite(value) for vector in vectors for value in vector)
+    if len(vectors) != expected or dimensions == {0} or len(dimensions) != 1 or not finite:
+        raise ProviderError(
+            f"{name}: embedding response did not contain {expected} equal-sized vectors",
+            provider=name,
+        )
 
 
 class _HttpProvider(Provider):
@@ -166,6 +178,7 @@ class OpenAICompatibleProvider(_HttpProvider):
     """vLLM, SGLang, llama.cpp server, LM Studio, TGI -- anything exposing /v1."""
 
     type = "openai_compatible"
+    supports_embeddings = True
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         params = dict(request.params)
@@ -230,6 +243,24 @@ class OpenAICompatibleProvider(_HttpProvider):
     async def health(self) -> tuple[bool, str]:
         return await self._list_health("/models", key="data", field="id")
 
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        data = await self._post("/embeddings", {"model": model, "input": texts})
+        rows = data.get("data") or []
+        try:
+            ordered = sorted(rows, key=lambda row: int(row["index"]))
+            if [int(row["index"]) for row in ordered] != list(range(len(texts))):
+                raise ValueError("embedding indices do not match the inputs")
+            vectors = [[float(value) for value in row["embedding"]] for row in ordered]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ProviderError(
+                f"{self.name}: embedding response had an invalid shape",
+                provider=self.name,
+            ) from exc
+        _check_embeddings(self.name, vectors, len(texts))
+        return vectors
+
     async def context_for(self, model: str) -> int | None:
         """`/models` lists every model with its `context_length`."""
 
@@ -259,6 +290,7 @@ class OllamaProvider(_HttpProvider):
     """Ollama's native /api/chat endpoint."""
 
     type = "ollama"
+    supports_embeddings = True
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         params = dict(request.params)
@@ -308,6 +340,20 @@ class OllamaProvider(_HttpProvider):
 
     async def health(self) -> tuple[bool, str]:
         return await self._list_health("/api/tags", key="models", field="name")
+
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        data = await self._post("/api/embed", {"model": model, "input": texts})
+        try:
+            vectors = [[float(value) for value in row] for row in (data.get("embeddings") or [])]
+        except (TypeError, ValueError) as exc:
+            raise ProviderError(
+                f"{self.name}: embedding response had an invalid shape",
+                provider=self.name,
+            ) from exc
+        _check_embeddings(self.name, vectors, len(texts))
+        return vectors
 
     async def context_for(self, model: str) -> int | None:
         """What Ollama **loaded**, which is not what the model can do.

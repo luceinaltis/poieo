@@ -390,7 +390,7 @@ provider-neutral:
 LLMRequest    model, messages, system, params, role, tools[], hands?
 LLMResponse   text, model, usage, stop_reason, meta, tool_calls[]
 Hands         run(call) → (text, failed)  ·  workdir · max_turns · toolsets · boxed
-Provider      complete()  ·  health()  ·  aclose()  ·  context_for()
+Provider      complete()  ·  embed(model, texts)  ·  health()  ·  aclose()  ·  context_for()
 ```
 
 **`tools` says what exists; `hands` says how to run one.** Almost every backend
@@ -415,6 +415,14 @@ survive a tool round trip. Other providers ignore the key.
 `context_for(model)` answers how many tokens that model can hold **where it is
 actually running**, and the base class answers `None` — so a backend that cannot
 say inherits the right answer and writes nothing.
+
+`embed(model, texts)` is optional in behaviour, not in shape: the base provider
+refuses it. Ollama implements `/api/embed`; OpenAI-compatible endpoints implement
+`/embeddings`. The board enables meaning search only for one of those wires.
+Two roles are reserved for the memory place and must be written explicitly:
+`memory_embedder` for vectors and `memory_searcher` for cited answers. Neither
+falls through to `default` — opening a search must not silently choose an
+expensive chat model or pretend a chat model is an embedder.
 
 *Where it is actually running* is the whole difficulty. Both endpoints publish
 two numbers and only one of them is enforced:

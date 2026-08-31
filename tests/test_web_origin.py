@@ -62,6 +62,8 @@ def test_the_list_below_is_every_write_there_is(tmp_path):
 
 
 WRITES = [
+    "/api/projects/board/memory/search",
+    "/api/projects/board/memory/ask",
     "/api/tasks/board/f/pause",
     "/api/tasks/board/f/resume",
     "/api/tasks/board/f/run",
