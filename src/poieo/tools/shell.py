@@ -11,6 +11,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+from functools import partial
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
@@ -42,6 +43,49 @@ def quote_path(path: str) -> str:
 
 
 _OUTPUT_CAP = 20_000
+
+
+def decode_output(raw: bytes) -> str:
+    """Bytes a command wrote, as text, whatever it thought it was writing in.
+
+    UTF-8 first because that is what nearly everything means. The fallback is
+    the console's own encoding with replacement, because a command that printed
+    one byte of cp949 in the middle of a build log should cost that byte and
+    not the whole run.
+    """
+    try:
+        return raw.decode()
+    except UnicodeDecodeError:
+        return raw.decode(locale.getpreferredencoding(False), errors="replace")
+
+
+def capped(text: str) -> str:
+    """Output a model is about to read, with a ceiling and a note when it hit it.
+
+    Said out loud rather than silently cut: a model handed 20,000 characters
+    ending mid-word will reason about the end of the file it thinks it saw.
+    Everything that runs a command goes through here -- the host shell and the
+    container both -- so there is one ceiling rather than one per executor.
+    """
+    if len(text) <= _OUTPUT_CAP:
+        return text
+    return text[:_OUTPUT_CAP] + "\n... [output truncated]"
+
+
+async def command_text(run: Any, args: dict[str, Any]) -> str:
+    """The same run, shaped for a model to read.
+
+    `run` is whichever runner this executor uses -- the host's `run_here` bound
+    to a workdir, or the container's `run_command`. What is shared is the part
+    the model's arguments decide: which of them are optional and what they fall
+    back to. Written twice, a third argument arrives in one of them.
+    """
+    result = await run(
+        str(args["command"]),
+        timeout=float(args.get("timeout", _DEFAULT_TIMEOUT)),
+        env=args.get("env"),
+    )
+    return result.as_text()
 
 
 def _kill_tree(process: asyncio.subprocess.Process) -> None:
@@ -162,24 +206,11 @@ async def run_here(
         # Not an exit code: "this never finished" and "this finished badly" are
         # different facts, and a caller has to be able to tell them apart.
         raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
-    try:
-        text = stdout.decode()
-    except UnicodeDecodeError:
-        text = stdout.decode(locale.getpreferredencoding(False), errors="replace")
-    if len(text) > _OUTPUT_CAP:
-        text = text[:_OUTPUT_CAP] + "\n... [output truncated]"
-    return CommandResult(exit_code=process.returncode or 0, output=text)
+    return CommandResult(exit_code=process.returncode or 0, output=capped(decode_output(stdout)))
 
 
 async def _run_command(workdir: Path, args: dict[str, Any]) -> str:
-    """The same run, shaped for a model to read."""
-    result = await run_here(
-        workdir,
-        str(args["command"]),
-        timeout=float(args.get("timeout", _DEFAULT_TIMEOUT)),
-        env=args.get("env"),
-    )
-    return result.as_text()
+    return await command_text(partial(run_here, workdir), args)
 
 
 SHELL_TOOLS: list[Tool] = [
