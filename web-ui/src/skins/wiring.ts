@@ -22,9 +22,11 @@ export interface Placed {
  * rather than its nearest -- otherwise a long arrow that skips a task would
  * point backwards on screen.
  *
- * Flows nothing points at start on the left, which is where a board with no
- * handoffs at all ends up: one column of independent work. That is the common
- * case today and it must not read as a failure to lay anything out.
+ * Flows nothing points at start on the left. A board where *nothing* hands to
+ * anything is laid out as a grid instead of a column: the axis only carries
+ * depth when something points somewhere, so with nothing pointing it is free,
+ * and a single column of independent work reads as a failure to lay anything
+ * out even though it was the layout.
  *
  * A cycle cannot be peeled at all -- nothing in one has all its senders
  * placed -- so peeling stalls and the loop is broken at the first task
@@ -32,10 +34,24 @@ export interface Placed {
  * the leftovers into a single column instead would make every arrow among
  * them run backwards, including the ones that go forwards.
  */
-export function place(tasks: string[], handoffs: Record<string, string[]>): Placed[] {
+export function place(tasks: string[], handoffs: Record<string, string[]>, across = 4): Placed[] {
   const rank = new Map(tasks.map((task, index) => [task, index]))
   const targets = (task: string): string[] =>
     (handoffs[task] ?? []).filter((to) => rank.has(to) && to !== task)
+
+  // **Nothing hands to anything, so left-to-right means nothing** -- and a
+  // column is then not a reading of the work, it is a column. Laid out as a
+  // grid instead, which says the same thing (these are independent) while
+  // using the board a reader is looking at. The moment one task hands to
+  // another the axis carries depth again, and every rule below applies.
+  if (!tasks.some((task) => targets(task).length > 0)) {
+    const wide = Math.max(1, across)
+    return tasks.map((task, index) => ({
+      task,
+      column: index % wide,
+      row: Math.floor(index / wide),
+    }))
+  }
 
   const waiting = new Map(tasks.map((task) => [task, 0]))
   for (const task of tasks) {
@@ -229,8 +245,12 @@ export function exits(shape: GraphShape): string[] {
  * which is what lets it be tested at all, jsdom having no layout to measure.
  * A box may grow taller than `height` when it is opened; `head` is why that
  * does not drag its arrows down with it.
+ *
+ * The width is what a task's steps need, not what its name needs: they are
+ * drawn on a shut border now, and at 260 a chain of four wrapped onto three
+ * lines and stopped reading as a sequence.
  */
-export const BOX = { width: 260, height: 132, gapX: 96, gapY: 20, head: 21, around: 34 }
+export const BOX = { width: 348, height: 132, gapX: 104, gapY: 22, head: 21, around: 34 }
 
 export interface Anchor {
   x: number

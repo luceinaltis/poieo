@@ -200,17 +200,18 @@ function describeRisk(flowState: TaskState): string {
 /**
  * The graph inside a border, drawn once: it moves only when a file does.
  *
- * A task of one step draws nothing. The board's own `new task` writes one --
- * three fields, and the step it expands to is called `work` -- so the
- * commonest border on the board opened onto a single pill named after
- * nothing the reader chose. The border already is that step, and a picture of
- * one node is the node.
+ * **Drawn on a shut border, not only an open one.** That is what makes the
+ * board worth being a canvas: the work is readable at a glance, and a handoff
+ * arrow between two borders lands beside the steps it leaves from. It costs
+ * nothing to hold still, because what a task walks is structure -- it changes
+ * when a file does, never between one frame and the next.
+ *
+ * A task of one step draws that step. It drew nothing while the steps were
+ * hidden until asked for, when a lone pill named `work` was noise somebody
+ * had opened a border to find; with every other task showing its steps
+ * unasked, the same blank reads as broken instead.
  */
 function fillInside(box: Box, flowState: TaskState): void {
-  if (flowState.shape.nodes.length < 2) {
-    box.inside.replaceChildren()
-    return
-  }
   const leaves = new Set(exits(flowState.shape))
   // Which nodes something to their left points at. Hung on the arriving
   // node, so a router draws an arrow into every arm rather than one.
@@ -548,7 +549,13 @@ export const basic: Skin = {
           .filter((to): to is string => to !== null)
           .map((to) => keyOfTask(flowState.project, to))
       }
-      const placed = place(tasks, handoffs)
+      // How many independent tasks stand across before wrapping. Read off the
+      // window rather than fixed: a grid that runs off the side of a laptop is
+      // the column problem again, one axis over. The gap is added back before
+      // dividing because the last box in a row has no gap after it -- without
+      // that, three boxes that fit are laid out two and one.
+      const across = Math.max(1, Math.floor((viewport.clientWidth + BOX.gapX) / (BOX.width + BOX.gapX)))
+      const placed = place(tasks, handoffs, across)
       const rows = measure(placed, boxes)
       for (const one of placed) {
         const box = boxes.get(one.task)

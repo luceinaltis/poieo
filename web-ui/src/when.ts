@@ -8,5 +8,12 @@
 
 export function shortTime(iso: string): string {
   const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString()
+  if (Number.isNaN(at.getTime())) return iso
+  // The reader's own clock, but a 24-hour one and no seconds. The default
+  // format follows the browser's locale into a 12-hour clock with a
+  // localised marker, which lands a word of another language in the middle
+  // of an English line and is a different width every hour. Seconds go
+  // because nothing here is answered by them: "last looked 21:56" is the
+  // whole of what the line is for.
+  return at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })
 }
