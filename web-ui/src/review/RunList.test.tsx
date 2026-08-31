@@ -244,6 +244,28 @@ test("a run that was mostly answered from cache says so", () => {
   expect(rows()[0].textContent).toContain("96% cached")
 })
 
+test("an older Claude run reconstructs its prompt total from split counters", () => {
+  render(
+    [
+      run({
+        run_id: "a",
+        usage: {
+          ...USAGE,
+          input_tokens: 108,
+          output_tokens: 3,
+          cache_read_tokens: 2_502_763,
+          cache_write_tokens: 5_000,
+        },
+      }),
+    ],
+    false,
+  )
+
+  expect(rows()[0].textContent).toContain("2,507,871 sent")
+  expect(rows()[0].textContent).toContain("100% cached")
+  expect(rows()[0].textContent).not.toContain("2317373%")
+})
+
 test("a failed run still leads with why, not with how long", () => {
   render([BROKE], false)
   // Failed runs stay collapsed until asked for; the point here is what the row

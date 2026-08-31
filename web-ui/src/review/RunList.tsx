@@ -42,14 +42,18 @@ function size(run: RunSummary): string {
   const out = run.usage?.output_tokens ?? 0
   const sent = run.usage?.input_tokens ?? 0
   const cached = run.usage?.cache_read_tokens ?? 0
+  const cacheParts = cached + (run.usage?.cache_write_tokens ?? 0)
+  // Older Claude runs stored three disjoint counters, before input_tokens was
+  // normalised to the whole prompt. That shape is impossible for a new run.
+  const total = cacheParts > sent ? sent + cacheParts : sent
   // One number, because the row is 440px wide and the run's own sentence is
   // what the other column is for. When both are known, sent is the one worth
   // the space: it is the half that grows without bound and the half that says
   // why a run stopped. Output alone still shows for a backend that reports
   // nothing else.
-  if (sent > 0) {
-    const share = cached > 0 ? ` · ${Math.round((cached / sent) * 100)}% cached` : ""
-    return `${counted(sent)} sent${share}`
+  if (total > 0) {
+    const share = cached > 0 ? ` · ${Math.round((cached / total) * 100)}% cached` : ""
+    return `${counted(total)} sent${share}`
   }
   return out > 0 ? `${counted(out)} tokens` : ""
 }

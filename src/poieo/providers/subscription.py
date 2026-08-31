@@ -45,6 +45,8 @@ class _Subscription(Provider):
     key_variable = ""
     #: What a person runs to fix that, in their own words.
     login_command = ""
+    #: Whether the harness reports uncached input rather than the whole prompt.
+    _input_excludes_cache = False
 
     def _refuse_a_key(self) -> None:
         """A set key wins over the subscription login, and cannot be unset.
@@ -133,6 +135,11 @@ class _Subscription(Provider):
         arming a spend limit against money nobody is billed.
         """
         usage = result.get("usage") or {}
+        cache_read = int(usage.get("cache_read_input_tokens") or 0)
+        cache_write = int(usage.get("cache_creation_input_tokens") or 0)
+        input_tokens = int(usage.get("input_tokens") or 0)
+        if self._input_excludes_cache:
+            input_tokens += cache_read + cache_write
         meta: dict[str, Any] = {}
         notional = result.get("total_cost_usd")
         if notional is not None:
@@ -143,10 +150,10 @@ class _Subscription(Provider):
             text=result.get("result") or "",
             model=result.get("model") or "",
             usage=Usage(
-                input_tokens=int(usage.get("input_tokens") or 0),
+                input_tokens=input_tokens,
                 output_tokens=int(usage.get("output_tokens") or 0),
-                cache_read_tokens=int(usage.get("cache_read_input_tokens") or 0),
-                cache_write_tokens=int(usage.get("cache_creation_input_tokens") or 0),
+                cache_read_tokens=cache_read,
+                cache_write_tokens=cache_write,
                 reasoning_tokens=int(usage.get("reasoning_tokens") or 0),
                 cost=0.0,
             ),
@@ -178,6 +185,7 @@ class ClaudeCodeProvider(_Subscription):
     type = "claude_code"
     key_variable = "ANTHROPIC_API_KEY"
     login_command = "claude auth login"
+    _input_excludes_cache = True
 
     def plan(self, request: LLMRequest) -> dict[str, Any]:
         """The options this call would run under.
