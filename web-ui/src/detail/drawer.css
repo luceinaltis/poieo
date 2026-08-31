@@ -37,7 +37,7 @@
    the drawer does not use: everything after it is held until it is answered,
    so it is the one thing here that must not read as another row of buttons. */
 .question {
-  border: 1px solid #c8a04a;
+  border: 1px solid var(--ember);
   border-radius: 6px;
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -72,7 +72,7 @@
 }
 
 .drawer-summary {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.85em;
   margin: 0;
 }
@@ -92,7 +92,7 @@
 }
 
 .drawer-when {
-  color: #6b6257;
+  color: var(--dim);
   font-size: 0.75em;
   white-space: nowrap;
 }
@@ -102,14 +102,14 @@
 }
 
 .drawer-entry[data-kind="node"] .drawer-label {
-  color: #9a9086;
+  color: var(--dim);
 }
 
 /* Housekeeping, not work: it belongs in the timeline because a history that
    shrinks silently cannot be reasoned about afterwards, but it must not read
    as a step the model took. */
 .drawer-entry[data-kind="cleared"] .drawer-label {
-  color: #6b6257;
+  color: var(--dim);
   font-style: italic;
 }
 
@@ -117,12 +117,12 @@
    to a reader looking for why nothing happened it is the same news. */
 .drawer-entry[data-kind="stuck"] .drawer-label,
 .drawer-entry[data-kind="stuck"] .drawer-text {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 .drawer-entry[data-error="true"] .drawer-label,
 .drawer-entry[data-error="true"] .drawer-text {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 .drawer-text {
@@ -133,7 +133,7 @@
    sequence and one `cat` of a long file must not bury what came next. Dimmed,
    because the row above it -- the tool and its subject -- is the headline. */
 .drawer-result {
-  color: #9a9086;
+  color: var(--dim);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -144,19 +144,19 @@
 }
 
 .drawer-entry[data-error="true"] .drawer-result {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 /* Quieter than what the model said, because it is bookkeeping about the
    saying rather than the saying itself. */
 .drawer-cost {
-  color: #6b6257;
+  color: var(--dim);
   font-size: 0.85em;
   margin: 2px 0 0;
 }
 
 .drawer-thinking {
-  color: #9a9086;
+  color: var(--dim);
   font-style: italic;
   margin-top: 2px;
 }
@@ -187,18 +187,18 @@
 }
 
 .drawer-said[open] > summary {
-  color: #6b6257;
+  color: var(--dim);
 }
 
 /* The card, openable. Same quiet register as the drawer's other folds. */
 .drawer-card {
-  border: 1px solid #2e2820;
+  border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 6px 10px;
 }
 
 .drawer-card summary {
-  color: #9a9086;
+  color: var(--dim);
   cursor: pointer;
   font-size: 0.85em;
   user-select: none;
@@ -206,11 +206,11 @@
 
 /* The file as it is, in the file's own face. */
 .card-text {
-  background: #14120f;
-  border: 1px solid #2e2820;
+  background: var(--ground);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   box-sizing: border-box;
-  color: #e8e2d8;
+  color: var(--text);
   font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
   font-size: 0.85em;
   line-height: 1.5;
@@ -228,7 +228,7 @@
 }
 
 .card-saved {
-  color: #a9b665;
+  color: var(--live);
   font-size: 0.85em;
   margin: 8px 0 0;
 }
@@ -236,7 +236,7 @@
 /* True, but not good news: the save landed and the daemon will not read
    half of it until a restart. */
 .card-waits {
-  color: #d8a657;
+  color: var(--ember);
 }
 
 .card-save {
@@ -269,8 +269,8 @@
 
 /* Quiet until armed: the first press only changes the word on the button. */
 .card-aside[data-armed="true"] {
-  border-color: #d16d5a;
-  color: #d16d5a;
+  border-color: var(--stop);
+  color: var(--stop);
 }
 
 /* The plain card as fields: the same form make gave, kept on the edit. */
@@ -281,7 +281,7 @@
 }
 
 .card-field {
-  color: #9a9086;
+  color: var(--dim);
   display: grid;
   font-size: 0.85em;
   gap: 4px;
@@ -289,11 +289,11 @@
 
 .card-field input,
 .card-field textarea {
-  background: #14120f;
-  border: 1px solid #2e2820;
+  background: var(--ground);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   box-sizing: border-box;
-  color: #e8e2d8;
+  color: var(--text);
   font: inherit;
   padding: 6px 8px;
   resize: vertical;
@@ -310,7 +310,7 @@
    clips, because the room is here and the exact sentence is what a reader
    opened the drawer for. */
 .drawer-stale {
-  color: #d8a657;
+  color: var(--ember);
   font-size: 0.85em;
   line-height: 1.45;
   margin: 0;

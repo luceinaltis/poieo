@@ -257,7 +257,11 @@ export const runs: Skin = {
         label.style.left = `${mark.x * 100}%`
         label.textContent =
           mark.kind === "date"
-            ? at.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+            ? // `undefined` follows the reader's locale, which put `9월 1일`
+              // in the middle of an English ruler -- the same thing the clock
+              // did before it was pinned, one formatter over. The date sits
+              // between `18:00` and `03:00`, so it reads as those do.
+              at.toLocaleDateString("en-GB", { month: "short", day: "numeric" })
             : clock(mark.at)
         labels.push(label)
 
