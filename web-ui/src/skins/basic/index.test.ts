@@ -386,16 +386,17 @@ test("a task that reports no model at all leaves the trigger line alone", () => 
 })
 
 
-test("a connector is drawn only where the run really goes", () => {
+test("the steps are drawn as a graph, with a line for every way the run can go", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
-  // The entry is arrived at from nowhere. route is arrived at from classify,
-  // and draft from route -- and nothing is drawn between two nodes that only
-  // happen to share a column.
-  expect(pill("classify").dataset.from).toBeUndefined()
-  expect(pill("route").dataset.from).toBe("true")
-  expect(pill("draft").dataset.from).toBe("true")
+  // classify -> route, and route's default -> draft. Lines, not a connector
+  // hung off each pill: an arm was a row position before, and a reader had to
+  // be told that two pills sharing a column were alternatives rather than a
+  // sequence. `steps.test.ts` says which lines; this says they reach the page.
+  const inside = el.querySelector('[data-task="board/chores"] .basic-inside')!
+  expect(inside.querySelectorAll(".basic-step-wire")).toHaveLength(2)
+  expect(inside.querySelectorAll(".basic-step-tip")).toHaveLength(2)
   handle.destroy()
 })
 

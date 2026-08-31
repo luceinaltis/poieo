@@ -292,21 +292,18 @@
   }
 }
 
-/* A grid, not a line: the column a node sits in is how far along the run it
-   is, and nodes sharing a column are alternatives at that point. */
+/* The steps, as the graph they are: `dagre` places them and routes the lines,
+   and each pill is put on its own centre. It was a wrapping CSS grid with an
+   arrow drawn before each pill -- which read as a sequence, but left a
+   router's arms *implied* by which row they landed on and drew no way back
+   out of a loop at all. */
 .basic-inside {
-  display: grid;
-  grid-auto-columns: max-content;
-  justify-items: start;
-  align-items: center;
-  gap: 5px 14px;
-  /* Room on the left for the connector of every node past the first column;
-     it hangs before its pill. */
-  padding: 3px 0 4px 14px;
-  /* A grid does not wrap, and a long enough run is wider than a border. It
-     scrolls rather than spilling across the board -- and rather than being
-     clipped, which would hide steps while looking complete. */
+  position: relative;
+  /* A long run is wider than a border. It scrolls rather than spilling across
+     the board -- and rather than being clipped, which would hide steps while
+     looking complete. */
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: #3a332a transparent;
 }
@@ -322,6 +319,52 @@
   border-radius: 3px;
 }
 
+/* Everything the layout placed, moved as one. A graph wider than its border is
+   scaled here rather than per pill, so the lines and the steps stay together. */
+.basic-steps-group {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+/* Under the pills, and never in the way of a pointer. */
+.basic-steps {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.basic-step-wire {
+  fill: none;
+  stroke: #4a4034;
+  stroke-width: 1.2;
+}
+
+.basic-step-tip {
+  fill: #4a4034;
+}
+
+/* The word that chooses an arm. Haloed with the border's own background so
+   the line runs up to it rather than through it. */
+.basic-step-word {
+  fill: #8d7a52;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: #16130f;
+  stroke-width: 3px;
+}
+
+/* Where a run can end. One per arm: two different ways of ending are two
+   different facts, and sharing a mark would say there is one. */
+.basic-step-stop {
+  fill: none;
+  stroke: #4a4034;
+  stroke-width: 1.2;
+}
+
 .basic-node {
   align-items: center;
   background: #1f1a15;
@@ -329,11 +372,19 @@
   border-radius: 5px;
   color: #a2988c;
   display: flex;
-  flex-wrap: wrap;
   font-size: 0.82em;
   gap: 6px;
   padding: 4px 9px;
-  position: relative;
+  /* Placed on its own centre, which is the point `dagre` answered with. */
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* A step the run can stop on. Dashed for the same reason the terminal beside
+   a branch is hollow: an ending is drawn, never left as an absence. */
+.basic-node[data-ends="true"] {
+  border-style: dashed;
 }
 
 /* Which kind of step this is, in the one place a reader is already looking.
@@ -362,45 +413,20 @@
   box-shadow: inset 0 0 0 1.5px #b39a6a;
 }
 
-/* The step into a node: the same arrow as the one between two borders, at the
-   scale where it costs nothing to draw.
-
-   Hung on the node being arrived at rather than the one leading away, so that
-   a router draws an arrow into each of its arms. On the router it could reach
-   only one of them, and the rest sat there looking unreachable. Safe on the
-   left now that the nodes are a grid: a column never wraps, so nothing but a
-   real predecessor is ever to a node's left. */
-.basic-node[data-from="true"]::before {
-  color: #4a4034;
-  content: "→";
-  position: absolute;
-  left: -9px;
-  /* Pinned to the first line, not left to fall where the box ends: a node
-     carrying a model is two lines tall, and its arrow would sit under the
-     row rather than beside an id. */
-  top: 1px;
-}
-
-/* What actually runs this step, when the flow's nodes do not agree. Dimmer
-   than the id: the reader is looking for the node and then reading the model,
+/* What actually runs this step, when the flow's steps do not agree. Dimmer
+   than the id: the reader is looking for the step and then reading the model,
    not the other way round. */
 .basic-node-model {
   color: #6f6459;
-  display: block;
   font-size: 0.9em;
-  line-height: 1.3;
 }
 
 /* Which steps can reach the folder. Brighter than the model rather than
    dimmer, and that is the whole point of the colour: the model is a detail the
-   reader goes looking for, and this is one they need to find without looking.
-   Its own line, like the model, so a pill keeps one shape however many of
-   these it carries. */
+   reader goes looking for, and this is one they need to find without looking. */
 .basic-node-hands {
   color: #b39a6a;
-  display: block;
   font-size: 0.9em;
-  line-height: 1.3;
 }
 
 .basic-node[data-here="true"] {
@@ -413,10 +439,12 @@
   color: #b39a6a;
 }
 
-/* Where the run can stop, and so where a handoff leaves from. */
+/* Where a handoff leaves from -- the step whose ending starts the next task's
+   run. Marked in the colour an arrow between two borders is drawn in, not with
+   the dashes that already say "the run can stop here": a step is often both,
+   and two facts sharing one mark is one fact. */
 .basic-node[data-exit="true"] {
-  border-color: #4a4034;
-  border-style: dashed;
+  border-color: #6b5a34;
 }
 
 /* One row, always, for the same reason as the line above: a tool call is a

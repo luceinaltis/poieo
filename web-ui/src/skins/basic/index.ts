@@ -22,11 +22,12 @@ import { zoom as d3zoom, zoomIdentity } from "d3-zoom"
 import type { D3ZoomEvent } from "d3-zoom"
 
 import { changedTasks } from "../changed"
+import { layOutSteps } from "./steps"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
-  BOX, ZOOM, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap,
+  BOX, ZOOM, backWire, centreOn, corner, exits, fit, looking, loops, minimap,
   place, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
@@ -45,6 +46,7 @@ interface Box {
   when: HTMLElement
   now: HTMLElement
   inside: HTMLElement
+  steps: HTMLElement
   said: HTMLElement
   tools: HTMLElement
   tally: HTMLElement
@@ -117,6 +119,7 @@ function describeWhen(flowState: TaskState): string {
 }
 
 function buildBox(task: string, callbacks: SkinCallbacks): Box {
+  let inside: HTMLElement
   const root = document.createElement("div")
   root.className = "basic-task"
   root.dataset.task = task
@@ -150,7 +153,10 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     // to the board with, and the graph is the answer to the next one.
     name,
     now: element("div", "basic-now", root),
-    inside: element("div", "basic-inside", root),
+    // Both, in order: the group is what a too-wide graph is scaled by, and it
+    // has to be inside the part that scrolls when scaling has hit its floor.
+    inside: (inside = element("div", "basic-inside", root)),
+    steps: element("div", "basic-steps-group", inside),
     said: element("p", "basic-said", root),
     tools: element("ul", "basic-tools", root),
     tally: element("div", "basic-tally", root),
@@ -217,30 +223,27 @@ function describeRisk(flowState: TaskState): string {
  */
 function fillInside(box: Box, flowState: TaskState): void {
   const leaves = new Set(exits(flowState.shape))
-  // Which nodes something to their left points at. Hung on the arriving
-  // node, so a router draws an arrow into every arm rather than one.
-  const reached = new Set(arrivals(flowState.shape))
   // Only when they differ. A task on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
   const differ = modelsOf(flowState).length > 1
-  const nodes = depths(flowState.shape).map((cell) => {
-    const id = cell.id
+  const handsOff = flowState.then.length > 0
+
+  // Built first and measured, then placed: how wide a step is drawn depends on
+  // its label and on whether it carries a model or a pair of hands, and the
+  // layout cannot rank what it cannot size. Off-screen rather than hidden --
+  // `display: none` has no width to read.
+  const pills = new Map<string, HTMLElement>()
+  for (const spec of flowState.shape.nodes) {
     const pill = document.createElement("span")
     pill.className = "basic-node"
-    pill.dataset.node = id
-    // A column per step from the entry, a row per arm of a branch. In one
-    // wrapping line a router's arms read as four steps in a row.
-    pill.style.gridColumn = String(cell.column + 1)
-    pill.style.gridRow = String(cell.row + 1)
-    const spec = flowState.shape.nodes.find((node) => node.id === id)
-    if (spec) pill.dataset.type = spec.type
-    // Where a handoff leaves from, once you can see the nodes at all.
-    if (leaves.has(id) && flowState.then.length > 0) pill.dataset.exit = "true"
-    if (reached.has(id)) pill.dataset.from = "true"
-    pill.textContent = id
+    pill.dataset.node = spec.id
+    pill.dataset.type = spec.type
+    // Where a handoff leaves from, once you can see the steps at all.
+    if (leaves.has(spec.id) && handsOff) pill.dataset.exit = "true"
+    pill.append(spec.id)
     // A router has no model because it calls none, and the gap is itself
     // information: it is why branching is free.
-    if (differ && spec?.model) {
+    if (differ && spec.model) {
       element("span", "basic-node-model", pill).textContent = spec.model
     }
     // Unconditional, unlike the model above: two steps on one model say it
@@ -250,14 +253,103 @@ function fillInside(box: Box, flowState: TaskState): void {
     // have learned nothing yet. Said as what happens rather than as "hands",
     // which is the word the design documents use among themselves. Which
     // toolsets is the detail, and hangs off it.
-    if (spec && spec.tools.length > 0) {
+    if (spec.tools.length > 0) {
       const hands = element("span", "basic-node-hands", pill)
       hands.textContent = "edits files"
       hands.title = spec.tools.join(", ")
     }
-    return pill
+    pills.set(spec.id, pill)
+  }
+
+  const laid = layOutSteps(flowState.shape, (spec) => {
+    const pill = pills.get(spec.id)
+    // `offsetWidth` is zero where nothing lays anything out -- jsdom, and a
+    // border not yet on the page. The estimate keeps the shape of the graph
+    // right there rather than collapsing every step onto one point.
+    const width = pill?.offsetWidth || 22 + spec.id.length * 6.5 + (spec.tools.length ? 62 : 0)
+    return { width, height: pill?.offsetHeight || 24 }
   })
-  box.inside.replaceChildren(...nodes)
+
+  const svg = document.createElementNS(SVG, "svg")
+  svg.setAttribute("class", "basic-steps")
+  svg.setAttribute("width", String(laid.width))
+  svg.setAttribute("height", String(laid.height))
+  for (const edge of laid.edges) {
+    const line = document.createElementNS(SVG, "path")
+    line.setAttribute("class", "basic-step-wire")
+    line.setAttribute("d", through(edge.points))
+    svg.append(line)
+    const last = edge.points[edge.points.length - 1]
+    const before = edge.points[edge.points.length - 2] ?? last
+    svg.append(head(last, before))
+    if (edge.label && edge.at) {
+      const word = document.createElementNS(SVG, "text")
+      word.setAttribute("class", "basic-step-word")
+      word.setAttribute("x", String(edge.at.x))
+      word.setAttribute("y", String(edge.at.y))
+      word.textContent = edge.label
+      svg.append(word)
+    }
+  }
+
+  for (const step of laid.steps) {
+    if (step.stop) {
+      const stop = document.createElementNS(SVG, "circle")
+      stop.setAttribute("class", "basic-step-stop")
+      stop.setAttribute("cx", String(step.x))
+      stop.setAttribute("cy", String(step.y))
+      stop.setAttribute("r", "3.5")
+      // Where a run can end. Its own mark per arm, because two different ways
+      // of ending are two different facts and must not collapse into one.
+      stop.append(title("the run ends here"))
+      svg.append(stop)
+      continue
+    }
+    const pill = pills.get(step.id)
+    if (pill === undefined) continue
+    pill.style.left = `${step.x}px`
+    pill.style.top = `${step.y}px`
+    if (step.ends) pill.dataset.ends = "true"
+  }
+
+  // A graph wider than the border it lives in is shrunk to fit rather than
+  // scrolled out of sight: a step you have to go looking for is a step you do
+  // not know is there, and the whole point of drawing this unasked is that it
+  // is read at a glance. There is a floor -- past it the type stops being type
+  // -- and below that the border scrolls, which is why the overflow rule stays.
+  const room = BOX.width - 30
+  const shrink = laid.width > room ? Math.max(0.66, room / laid.width) : 1
+  box.inside.style.height = `${Math.ceil(laid.height * shrink)}px`
+  // The **scaled** size, not the laid-out one. A transform changes what is
+  // painted and not the box it is painted in, so a group left at its full
+  // width goes on asking the border to scroll for room that is no longer used
+  // -- a scrollbar under a graph that is wholly visible.
+  box.steps.style.width = `${Math.ceil(laid.width * shrink)}px`
+  box.steps.style.height = `${Math.ceil(laid.height * shrink)}px`
+  box.steps.style.transform = shrink === 1 ? "" : `scale(${shrink})`
+  box.steps.replaceChildren(svg, ...pills.values())
+  box.inside.replaceChildren(box.steps)
+}
+
+/** A path through dagre's points for an edge. */
+function through(points: { x: number; y: number }[]): string {
+  return points.map((at, index) => `${index ? "L" : "M"}${at.x} ${at.y}`).join(" ")
+}
+
+/** The arrowhead, pointed the way the line arrives. */
+function head(at: { x: number; y: number }, from: { x: number; y: number }): SVGElement {
+  const turn = (Math.atan2(at.y - from.y, at.x - from.x) * 180) / Math.PI
+  const tip = document.createElementNS(SVG, "path")
+  tip.setAttribute("class", "basic-step-tip")
+  tip.setAttribute("d", "M0 0 L-5 2.6 L-5 -2.6 Z")
+  tip.setAttribute("transform", `translate(${at.x} ${at.y}) rotate(${turn})`)
+  return tip
+}
+
+function title(said: string): SVGElement {
+  const node = document.createElementNS(SVG, "title")
+  node.textContent = said
+  return node
 }
 
 /** What moves: which node is lit, and what the task has been saying. */

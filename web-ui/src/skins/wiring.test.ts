@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 
 import {
-  BOX, ZOOM, arrivals, backWire, centreOn, corner, depths, exits, fit, looking, loops, minimap,
+  BOX, ZOOM, backWire, centreOn, corner, exits, fit, looking, loops, minimap,
   place, walk, wire,
 } from "./wiring"
 import type { GraphShape } from "../types"
@@ -162,77 +162,13 @@ test("an arrow leaves one box's right edge and enters the next one's left", () =
 })
 
 
-// A router with two arms: the walk reads them one after the other, but the
-// graph does not run one into the other.
-const FORK: GraphShape = {
-  entry: "classify",
-  nodes: [
-    { id: "classify", type: "agent", next: "route", default: null, branches: [], model: null, tools: [] },
-    {
-      id: "route",
-      type: "router",
-      next: null,
-      default: "answer",
-      branches: [{ to: "bug", label: "bug" }],
-      model: null,
-      tools: [],
-    },
-    { id: "answer", type: "agent", next: null, default: null, branches: [], model: null, tools: [] },
-    { id: "bug", type: "agent", next: null, default: null, branches: [], model: null, tools: [] },
-  ],
-}
-
-test("every node of a straight line is arrived at, bar the one it starts on", () => {
-  expect(arrivals(LINE)).toEqual(["review", "gate", "revise"])
-})
-
-test("every arm of a router is arrived at, not just the first", () => {
-  // The whole reason the connector hangs off the node being arrived at. On
-  // the router it could be drawn to one arm only, and the other would sit
-  // there looking like something nothing reaches.
-  expect(arrivals(FORK)).toEqual(["route", "answer", "bug"])
-})
-
-test("a loop back draws no arrow into a node already passed", () => {
-  // `revise` points at `review`, which sits to its left. An arrow there
-  // would run backwards through three nodes that have nothing to do with it.
-  expect(arrivals(LINE)).not.toContain("draft")
-})
-
-
-test("a straight line is one node per column, all on one row", () => {
-  expect(depths(LINE)).toEqual([
-    { id: "draft", column: 0, row: 0 },
-    { id: "review", column: 1, row: 0 },
-    { id: "gate", column: 2, row: 0 },
-    { id: "revise", column: 3, row: 0 },
-  ])
-})
-
-test("a router's arms share a column and stack under one another", () => {
-  // The one thing a wrapped row of pills could never say: these are
-  // alternatives at the same step, not four steps in a row.
-  expect(depths(FORK)).toEqual([
-    { id: "classify", column: 0, row: 0 },
-    { id: "route", column: 1, row: 0 },
-    { id: "answer", column: 2, row: 0 },
-    { id: "bug", column: 2, row: 1 },
-  ])
-})
-
-test("a loop back does not push its target into a further column", () => {
-  // `revise` points at `review`, which is already placed. Counting that as
-  // another step would march a cycle off the right of the border forever.
-  const looping: GraphShape = {
-    entry: "draft",
-    nodes: [
-      { id: "draft", type: "agent", next: "revise", default: null, branches: [], model: null, tools: [] },
-      { id: "revise", type: "agent", next: "draft", default: null, branches: [], model: null, tools: [] },
-    ],
-  }
-  expect(depths(looping).map((cell) => cell.column)).toEqual([0, 1])
-})
-
+/* Where a step sits inside a border, and which of them a line arrives at, are
+   `dagre`'s now -- `basic/steps.test.ts` asserts what the picture *means*
+   there, and the coordinates are not restated because pinning them would make
+   dagre's next release a failing suite rather than a layout that moved by two
+   pixels. What those tests said, and what `steps.test.ts` still says in its
+   own words: a router's arms are alternatives at one step rather than four
+   steps in a row, and a loop back does not march off the edge of the border. */
 
 test("a handoff forward is not a loop; one to an earlier column is", () => {
   const chores = { task: "chores", column: 0, row: 0 }
