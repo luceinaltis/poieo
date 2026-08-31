@@ -121,6 +121,23 @@ target over exactly as it passes over one that is not there — a handoff is a
 kick and a kick wins over a hold, so without that guard a `then:` would have
 started a task somebody switched off while the file went on saying otherwise.
 
+**`enabled:` is the one field the folder scan adopts whole.** Everything else
+in a card reaches something built at startup, and half-adopting a spec is worse
+than not adopting one — the paragraph above says why. This is the exception
+because both directions happen while the task is *not* running, so what is
+adopted is the whole of what changed. `_reconcile_switch` does it, on the same
+five-second look at the folder that starts a card somebody dropped in, and an
+edit touching anything **else** in the same save is left alone and goes on
+asking for a restart: flipping the switch around a new schedule would arm a
+trigger nobody built.
+
+Both halves, the way setting a task aside does them. Off: the file is the
+durable half, and the schedule stops now rather than firing all night against a
+card that says not to. On: the file is the durable half, and the runner is
+armed and started here. The board writing `enabled:` is what this is for —
+*make it, look at it, then start it* is not a workflow if starting it means
+restarting the daemon.
+
 Its loop **ends rather than parks**. There is nothing to wait for, and parking
 would turn every project holding one disabled card into a daemon that never
 stands down — `poieo daemon --once` over the shipped examples, which have five.

@@ -6,6 +6,14 @@
  * how often, where output lands -- stays on a default until somebody opens the
  * file to change it.
  *
+ * **Two presses, though, and no third field.** Saving a card starts a
+ * shell-capable agent over the reader's own files within seconds -- that is
+ * DESIGN.md's board and it stays the default -- but until the daemon could
+ * switch a card on without being restarted there was no way to write one down
+ * and look at it first except by going and finding the file. The quiet press
+ * is second and plainer for the same reason the warning below it exists: the
+ * consequence belongs to the loud one.
+ *
  * **The folder is required and never filled in.** It is the one thing the
  * model's hands will touch, so a default there would fill in the single moment
  * principle 7 keeps out of the machinery it otherwise hides. That is also why
@@ -63,6 +71,11 @@ export function MakeTask({
   const [folder, setFolder] = useState(seed?.folder ?? "")
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [made, setMade] = useState<string | null>(null)
+  // Which of the two presses made it, so the confirmation says which happened.
+  // The whole reason the second button exists is that "it starts on its own"
+  // is a sentence with consequences, and it must not be said of a card that
+  // did not.
+  const [started, setStarted] = useState(true)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
   // In the daemon's own spelling of the filename, so "Chores!" collides with
@@ -70,9 +83,9 @@ export function MakeTask({
   const collides = taken.includes(slugOf(name))
   const ready = Boolean(name.trim() && folder.trim() && prompt.trim()) && !collides
 
-  const send = () =>
+  const send = (enabled: boolean) => () =>
     void act(async () => {
-      const answer = await createTask(project, name.trim(), folder.trim(), prompt.trim())
+      const answer = await createTask(project, name.trim(), folder.trim(), prompt.trim(), enabled)
       // `ok` alone is not enough: a 2xx whose body did not parse arrives as
       // {ok: true} with no task, and treating that as made would clear the
       // form over a card that may not exist -- and a second press would
@@ -89,6 +102,7 @@ export function MakeTask({
         setName("")
         setFolder("")
         setPrompt("")
+        setStarted(enabled)
       }
       return answer
     })
@@ -152,7 +166,7 @@ export function MakeTask({
           the card, but a card exists because somebody pressed this button. */}
       {folder.trim() ? (
         <p className="make-warning">
-          Saving starts this task. It will read and change files in{" "}
+          Saving and starting runs this task. It will read and change files in{" "}
           <code>{folder.trim()}</code>
           {folder.trim().startsWith("/") || /^[A-Za-z]:/.test(folder.trim()) ? null : (
             // A relative folder is read from the project's tasks folder, not
@@ -181,17 +195,40 @@ export function MakeTask({
 
       {refused ? <Refusal answer={refused} /> : null}
 
-      {made ? <p className="make-made">Made “{made}”. It starts on its own.</p> : null}
+      {made ? (
+        <p className="make-made">
+          Made “{made}”.{" "}
+          {started
+            ? "It starts on its own."
+            : "It is on the board, switched off — start it from there."}
+        </p>
+      ) : null}
 
-      <button
-        type="button"
-        className="make-save"
-        data-do="make-task"
-        disabled={!ready || busy}
-        onClick={send}
-      >
-        {busy ? "saving…" : "save"}
-      </button>
+      {/* Two presses, and the quiet one is second and plainer. Saving a card
+          starts a shell-capable agent over the reader's own files within
+          seconds, which is DESIGN.md's board and stays the default; what was
+          missing was any way to write one down and look at it first without
+          going and finding the file. */}
+      <div className="make-actions">
+        <button
+          type="button"
+          className="make-save"
+          data-do="make-task"
+          disabled={!ready || busy}
+          onClick={send(true)}
+        >
+          {busy ? "saving…" : "save and start"}
+        </button>
+        <button
+          type="button"
+          className="make-later"
+          data-do="make-task-off"
+          disabled={!ready || busy}
+          onClick={send(false)}
+        >
+          save without starting
+        </button>
+      </div>
     </aside>
   )
 }

@@ -6,7 +6,8 @@
  * it is required, it is never filled in, and the moment before saving says
  * plainly whose files are about to change. That sentence is principle 7's one
  * exception to hiding the machinery, and it is the whole reason a card may be
- * created already running.
+ * created already running -- and the whole reason it may also be created not
+ * running, which is the second press.
  */
 
 import { act } from "react"
@@ -131,7 +132,7 @@ test("a saved card is sent as the three things, and says so in place", async () 
     save().click()
   })
 
-  expect(createTask).toHaveBeenCalledWith("board", "tidy up", "../work", "look around")
+  expect(createTask).toHaveBeenCalledWith("board", "tidy up", "../work", "look around", true)
   // Said here, not by closing. Closing was the first shape, and it unmounted
   // the panel in the same batch that set the confirmation -- so a save gave
   // no sign at all that anything had happened.
@@ -202,4 +203,25 @@ test("a relative folder says which folder it is relative to", async () => {
 
   type("folder", "/tmp/elsewhere")
   expect(host.textContent).not.toContain("tasks folder")
+})
+
+test("the quiet press writes a card that does not start", async () => {
+  // Saving a card starts a shell-capable agent over the reader's own files
+  // within seconds. That stays the default; what was missing was any way to
+  // write one down and look at it first without going and finding the file.
+  show()
+  type("name", "later")
+  type("folder", "../work")
+  type("prompt", "go")
+
+  await act(async () => {
+    host.querySelector<HTMLElement>('[data-do="make-task-off"]')!.click()
+  })
+
+  expect(createTask).toHaveBeenCalledWith("board", "later", "../work", "go", false)
+  // And the confirmation says which of the two happened: "it starts on its
+  // own" is a sentence with consequences, and must not be said of a card that
+  // did not.
+  expect(host.textContent).toContain("switched off")
+  expect(host.textContent).not.toContain("starts on its own")
 })

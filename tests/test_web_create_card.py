@@ -157,3 +157,64 @@ def test_a_title_that_is_not_english_still_makes_a_card(tmp_path):
     made = cards / f"{answer.json()['task']}.yaml"
     assert made.exists(), sorted(p.name for p in cards.iterdir())
     assert "매일 정리" in made.read_text(encoding="utf-8")
+
+
+def test_a_card_can_be_made_without_being_started(tmp_path):
+    """The second, quieter action beside save. Saving a card starts it within
+    seconds -- a shell-capable agent over the reader's own files -- and until
+    now the only way to make one and look at it first was to find the file."""
+    client, cards = _client(tmp_path)
+    answer = _make(client, {"name": "later", "folder": "../work", "prompt": "go", "enabled": False})
+
+    assert answer.status_code == 200, answer.text
+    assert "enabled: false" in cards.joinpath("later.yaml").read_text(encoding="utf-8")
+
+
+def test_a_card_made_the_usual_way_says_nothing_about_being_enabled(tmp_path):
+    """`enabled: true` says nothing a card without it does not, and the three
+    fields are the whole of the short form."""
+    client, cards = _client(tmp_path)
+    _make(client, {"name": "now", "folder": "../work", "prompt": "go"})
+
+    assert "enabled" not in cards.joinpath("now.yaml").read_text(encoding="utf-8")
+
+
+def test_rewriting_a_card_leaves_its_switch_where_it_was(tmp_path):
+    """Absent means unchanged, not on. A form that sends three fields is
+    editing three fields, and defaulting to on here would have a prompt tweak
+    silently start a task somebody had switched off."""
+    client, cards = _client(tmp_path)
+    off = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "already", "folder": "../work", "prompt": "hi", "enabled": False},
+    )
+    assert off.status_code == 200, off.text
+    assert "enabled: false" in cards.joinpath("already.yaml").read_text(encoding="utf-8")
+
+    again = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "already", "folder": "../work", "prompt": "hi again"},
+    )
+
+    assert again.status_code == 200, again.text
+    text = cards.joinpath("already.yaml").read_text(encoding="utf-8")
+    assert "enabled: false" in text and "hi again" in text
+
+
+def test_switching_a_card_on_through_the_form_is_promised_as_live(tmp_path):
+    """`enabled` is the one field the folder scan adopts whole, so the answer
+    must not send the reader off for a restart they do not need."""
+    client, cards = _client(tmp_path)
+    client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "already", "folder": "../work", "prompt": "hi", "enabled": False},
+    )
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "already", "folder": "../work", "prompt": "hi", "enabled": True},
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["live"] is True
+    assert "enabled" not in cards.joinpath("already.yaml").read_text(encoding="utf-8")

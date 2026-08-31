@@ -110,3 +110,32 @@
   color: var(--line);
   cursor: default;
 }
+
+/* Two presses, and the quiet one reads as the quiet one: the same row, and no
+   fill. Ranked rather than balanced -- saving and starting is what the panel
+   is for, and a pair of equal buttons would make the reader choose twice. */
+.make-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.make-later {
+  background: none;
+  border: 0;
+  color: #8d8377;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.make-later:hover:not(:disabled) {
+  color: #d8c8a8;
+}
+
+.make-later:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

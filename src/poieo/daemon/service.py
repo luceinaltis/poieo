@@ -1150,6 +1150,68 @@ class Daemon:
         task.add_done_callback(_crashed)
         return task
 
+    def _reconcile_switch(self, project: LoadedProject, task: LoadedTask) -> "TaskRunner | None":
+        """Make a task the daemon already knows match what its card now says
+        about being switched on -- and only about that.
+
+        Returns the runner to start, when switching one on, or None.
+
+        **`enabled:` is the one field a scan may adopt whole.** Everything else
+        in a card reaches something built at startup, and half-adopting a spec
+        is worse than not adopting one -- `_reread_graph` says why. This is the
+        exception because both directions happen while the task is *not*
+        running, so what is adopted is the whole of what changed. That is also
+        why an edit touching anything **else** in the same save is left alone
+        and goes on asking for a restart: flipping the switch around a new
+        schedule would arm a trigger nobody built.
+
+        The two halves setting a task aside already uses, in both directions.
+        Off: the file is the durable half, and the schedule stops now rather
+        than firing all night against a card that says not to. On: the file is
+        the durable half, and the runner is armed and started here.
+
+        The board writing `enabled:` is what this is for -- "make it, look at
+        it, then start it" is not a workflow if starting it means restarting
+        the daemon.
+        """
+        runner = next(
+            (r for r in self.runners if r.name == task.spec.name and r.config is project.config),
+            None,
+        )
+        if runner is None or runner.armed == task.spec.enabled:
+            return None
+        # Only the switch. Anything else in the same save is a restart, and
+        # saying so is `_note_drift`'s job rather than this one's.
+        if task.spec.model_copy(update={"enabled": runner.task.spec.enabled}) != runner.task.spec:
+            return None
+        if runner.status == "running":
+            # Never mid-run. The next scan is seconds away, and stopping a run
+            # to honour a switch would throw away the work rather than the
+            # schedule.
+            return None
+
+        # The spec it answers to is the one on disk now, either way, so the
+        # drift line clears rather than standing for an edit that did take.
+        runner.task.spec = task.spec
+        if not task.spec.enabled:
+            # In place: its coroutine is live, and parking one is what a hold
+            # is for. `armed` last, so `pause()` still applies to it.
+            runner.pause()
+            runner.armed = False
+            runner.status = "paused"
+            log.info("task '%s' was switched off in its card", task.spec.name)
+            return None
+
+        # Started again rather than rebuilt. Its loop ended the moment it was
+        # built unarmed -- there is nothing to un-hold -- but the runner itself
+        # is the object the board has been drawing, and swapping it would drop
+        # what it is holding for no gain.
+        runner.armed = True
+        runner._hold = False
+        runner.status = "waiting"
+        log.info("task '%s' was switched on in its card", task.spec.name)
+        return runner
+
     def _note_drift(self, project: LoadedProject) -> bool:
         """Ask every running task whether its card still describes it.
 
@@ -1221,6 +1283,8 @@ class Daemon:
         appeared: list[TaskRunner] = []
         for task in loaded:
             if task.spec.name in known:
+                if (switched := self._reconcile_switch(project, task)) is not None:
+                    appeared.append(switched)
                 continue
             # The live config learns the card too, or the graph reread would
             # have nothing to re-expand it from.
