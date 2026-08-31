@@ -26,8 +26,8 @@
    the thing it filters is full width, and above the scroll so it does not
    leave with the list. */
 .models-filter {
-  background: #1c1915;
-  border: 1px solid #2e2820;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   color: inherit;
   flex: none;
@@ -38,7 +38,7 @@
 }
 
 .models-filter:focus-visible {
-  border-color: #4a4034;
+  border-color: var(--line);
   outline: none;
 }
 
@@ -50,7 +50,7 @@
 /* The file, not the whole path: enough to know which project's endpoints
    these are, with the rest on the tooltip for whoever goes to edit it. */
 .models-file {
-  color: #7a6e60;
+  color: var(--line);
   font-size: 0.82em;
   margin-right: auto;
 }
@@ -59,7 +59,7 @@
 .models-again {
   background: none;
   border: 0;
-  color: #7a6e60;
+  color: var(--line);
   cursor: pointer;
   font: inherit;
   padding: 0 2px;
@@ -67,7 +67,7 @@
 
 .models-close:hover:not(:disabled),
 .models-again:hover:not(:disabled) {
-  color: #e8dcc8;
+  color: var(--text);
 }
 
 /* Dimmed rather than hidden while the answers are on their way: the button
@@ -96,14 +96,14 @@
 }
 
 .models-note {
-  color: #7a6e60;
+  color: var(--line);
   font-size: 0.82em;
   margin: 0;
 }
 
 .models-endpoint h3 {
   align-items: baseline;
-  border-bottom: 1px solid #2e2820;
+  border-bottom: 1px solid var(--rule);
   display: flex;
   /* `OPENROUTER_API_KEY -- not set` beside a count beside a name is more than
      440px holds. Wrapping is fine; a count broken across two lines is not. */
@@ -116,11 +116,11 @@
 }
 
 .models-endpoint-name {
-  color: #e8dcc8;
+  color: var(--text);
 }
 
 .models-kind {
-  color: #6b6257;
+  color: var(--dim);
   font-weight: 400;
 }
 
@@ -128,27 +128,27 @@
    listing *of*. Dimmer for a catalogue than for what is on the machine: one is
    ready to run and the other is a menu. */
 .models-count {
-  color: #6b6257;
+  color: var(--dim);
   font-weight: 400;
   margin-left: auto;
   white-space: nowrap;
 }
 
 .models-count[data-listing="here"] {
-  color: #a9b665;
+  color: var(--live);
 }
 
 /* Ready to run, but on somebody else's machine: between the two, because that
    is exactly where it sits -- nothing to pull, and nothing of yours spent. */
 .models-count[data-listing="elsewhere"] {
-  color: #8a9a6a;
+  color: var(--live);
 }
 
 /* Which machine answered. Quiet, because most projects have one endpoint per
    kind and the reader already knows where it is -- it earns its place only in
    the project that has two, where nothing else on the line differs. */
 .models-host {
-  color: #6b6257;
+  color: var(--dim);
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.82em;
   font-weight: 400;
@@ -172,11 +172,11 @@
 }
 
 .models-key[data-key="set"] {
-  color: #6b6257;
+  color: var(--dim);
 }
 
 .models-key[data-key="missing"] {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 /* Further apart between rows than inside one. They were the other way around
@@ -207,7 +207,7 @@
 }
 
 .models-id {
-  color: #d6ccbe;
+  color: var(--text);
   grid-column: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -215,7 +215,7 @@
 }
 
 .models-price {
-  color: #9a9086;
+  color: var(--dim);
   font-variant-numeric: tabular-nums;
   grid-column: 2;
   text-align: right;
@@ -227,13 +227,13 @@
 .models-price[data-price="local"],
 .models-price[data-price="self-hosted"],
 .models-price[data-price="free"] {
-  color: #6b6257;
+  color: var(--dim);
 }
 
 /* What the endpoint said, under the id: the window, and for a local build the
    two numbers that are its real price. */
 .models-facts {
-  color: #6b6257;
+  color: var(--dim);
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -243,12 +243,12 @@
 }
 
 .models-facts [data-fact="can"] {
-  color: #8a7a55;
+  color: var(--ember);
 }
 
 /* Which roles are on this model. One word, and only where there is one. */
 .models-using {
-  color: #d8a657;
+  color: var(--ember);
   grid-column: 2;
   grid-row: 2;
   font-size: 0.92em;
@@ -260,7 +260,7 @@
    makers, and the maker is the first thing a reader narrows by -- so it is the
    fold, and the count on it is what says whether opening is worth it. */
 .models-maker {
-  border-top: 1px solid #221e18;
+  border-top: 1px solid var(--raised);
 }
 
 .models-maker:first-of-type {
@@ -280,7 +280,7 @@
 /* The triangle, drawn rather than inherited: the default marker is a different
    glyph in every browser and sits at a different baseline in each. */
 .models-maker > summary::before {
-  color: #6b6257;
+  color: var(--dim);
   content: "▸";
   font-size: 0.9em;
 }
@@ -294,16 +294,16 @@
 }
 
 .models-maker-name {
-  color: #d6ccbe;
+  color: var(--text);
 }
 
 .models-maker-count {
-  color: #6b6257;
+  color: var(--dim);
   margin-left: auto;
 }
 
 .models-maker > summary:hover .models-maker-name {
-  color: #e8dcc8;
+  color: var(--text);
 }
 
 /* Indented under the card that holds them, so an open maker reads as a branch
@@ -316,7 +316,7 @@
    next, and only drawn when the file names more than one role. */
 .models-for {
   align-items: center;
-  color: #7a6e60;
+  color: var(--line);
   display: flex;
   flex: none;
   font-size: 0.82em;
@@ -325,10 +325,10 @@
 }
 
 .models-role {
-  background: #1c1915;
-  border: 1px solid #2e2820;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 4px;
-  color: #d6ccbe;
+  color: var(--text);
   font: inherit;
   font-size: 1em;
   padding: 3px 6px;
@@ -339,9 +339,9 @@
    close in a terminal -- so it is a warning that stays until the next write,
    rather than a red line about something that failed. */
 .models-not-taken {
-  background: #241f16;
-  border-left: 2px solid #d8a657;
-  color: #c9b98f;
+  background: var(--raised);
+  border-left: 2px solid var(--ember);
+  color: var(--text);
   flex: none;
   font-size: 0.82em;
   line-height: 1.45;
@@ -350,7 +350,7 @@
 }
 
 .models-not-taken code {
-  color: #e8dcc8;
+  color: var(--text);
   font-size: 0.95em;
 }
 
@@ -365,10 +365,10 @@
    heading -- but boxed, because it is the one thing here that is news. */
 .models-offer {
   align-items: baseline;
-  background: #201d17;
-  border: 1px solid #2e2820;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 4px;
-  color: #9a9086;
+  color: var(--dim);
   display: flex;
   font-size: 0.82em;
   gap: 10px;
@@ -378,15 +378,15 @@
 }
 
 .models-offer strong {
-  color: #d6ccbe;
+  color: var(--text);
   font-weight: 600;
 }
 
 .models-offer button {
-  background: #2a251d;
-  border: 1px solid #3a3227;
+  background: var(--raised);
+  border: 1px solid var(--rule);
   border-radius: 4px;
-  color: #d6ccbe;
+  color: var(--text);
   cursor: pointer;
   flex: none;
   font: inherit;
@@ -396,8 +396,8 @@
 }
 
 .models-offer button:hover:not(:disabled) {
-  border-color: #6b6257;
-  color: #e8dcc8;
+  border-color: var(--dim);
+  color: var(--text);
 }
 
 .models-offer button:disabled {
@@ -411,7 +411,7 @@
   background: none;
   border: 0;
   border-radius: 3px;
-  color: #d6ccbe;
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   font-size: 1em;
@@ -424,7 +424,7 @@
 }
 
 .models-id:hover:not(:disabled) {
-  color: #d8a657;
+  color: var(--ember);
 }
 
 .models-id:disabled {
@@ -436,14 +436,14 @@
    ordinary machine. It earns its place for the vLLM on 8001 and the box in an
    office, which had no way in at all. */
 .models-at {
-  border-top: 1px solid #221e18;
+  border-top: 1px solid var(--raised);
   display: grid;
   gap: 6px;
   padding-top: 12px;
 }
 
 .models-at h3 {
-  color: #7a6e60;
+  color: var(--line);
   font-size: 0.82em;
   font-weight: 600;
   margin: 0;
@@ -451,8 +451,8 @@
 
 /* The address is the one field that matters, so it gets the width. */
 .models-at input {
-  background: #1c1915;
-  border: 1px solid #2e2820;
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 4px;
   box-sizing: border-box;
   color: inherit;
@@ -463,7 +463,7 @@
 }
 
 .models-at input:focus-visible {
-  border-color: #4a4034;
+  border-color: var(--line);
   outline: none;
 }
 

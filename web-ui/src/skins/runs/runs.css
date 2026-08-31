@@ -15,14 +15,14 @@
      already uses for something happening, red for something broken. A quiet
      run gets the colour of a hairline, because most runs are quiet and a wall
      of bright ticks would say every night was eventful. */
-  --runs-quiet: #8b7c62;
+  --runs-quiet: var(--dim);
   /* One height for "the whole lane": the track, a failure, the live mark.
      Three numbers that had to agree is how a failure ends up not quite
      reaching the rail it is supposed to touch. */
   --runs-track: 44px;
-  --runs-changed: #d8a657;
-  --runs-failed: #d16d5a;
-  --runs-now: #a9b665;
+  --runs-changed: var(--ember);
+  --runs-failed: var(--stop);
+  --runs-now: var(--live);
   /* The register: clock times, triggers, counts. Tabular by nature, and the
      vernacular of a tool that is otherwise driven from a terminal. No web font
      -- the daemon serves a bundle off disk with no network behind it, and a
@@ -34,8 +34,8 @@
    clock it is measured against. */
 .runs-axis {
   align-items: end;
-  background: #14120f;
-  border-bottom: 1px solid #2e2820;
+  background: var(--ground);
+  border-bottom: 1px solid var(--rule);
   display: grid;
   grid-template-columns: var(--runs-gutter) 1fr;
   padding-bottom: 6px;
@@ -50,7 +50,7 @@
    size and tracking instead, which costs no legibility. */
 .runs-caption,
 .runs-tick {
-  color: #9a9086;
+  color: var(--dim);
   font-family: var(--runs-register);
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -88,7 +88,7 @@
 }
 
 .runs-rule {
-  background: #3a332a;
+  background: var(--rule);
   bottom: 0;
   position: absolute;
   top: 0;
@@ -98,13 +98,13 @@
 /* A midnight's rule is heavier than an hour's: on a board days wide, the
    days read as rooms and the hours as marks on their walls. */
 .runs-rule[data-kind="date"] {
-  background: #4f4536;
+  background: var(--rule);
 }
 
 /* Now. Every lane ends here, so a mark against it is still going rather than
    merely the most recent one. */
 .runs-edge {
-  background: #a9b6653d;
+  background: var(--live)3d;
   bottom: 0;
   position: absolute;
   right: 0;
@@ -114,7 +114,7 @@
 
 .runs-lane {
   align-items: center;
-  border-bottom: 1px solid #1e1a15;
+  border-bottom: 1px solid var(--panel);
   display: grid;
   grid-template-columns: var(--runs-gutter) 1fr;
   grid-template-rows: auto auto;
@@ -138,7 +138,7 @@
 }
 
 .runs-head:focus-visible {
-  outline: 1px solid #6b6257;
+  outline: 1px solid var(--dim);
   outline-offset: 3px;
 }
 
@@ -146,7 +146,7 @@
    handful of tasks and each owns a lane, so the name is the handle you reach
    for -- everything else here is register. */
 .runs-name {
-  color: #e8e2d8;
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -157,11 +157,11 @@
 }
 
 .runs-head:hover .runs-name {
-  color: #f2ecdf;
+  color: var(--text);
 }
 
 .runs-trigger {
-  color: #9a9086;
+  color: var(--dim);
   font-family: var(--runs-register);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -172,7 +172,7 @@
    tracked out, a line of these down the right edge read as a second scale
    competing with the real one along the top. */
 .runs-last {
-  color: #9a9086;
+  color: var(--dim);
   font-family: var(--runs-register);
   font-size: 11px;
   grid-column: 2;
@@ -235,9 +235,9 @@
    as a label for the lane rather than as more of it. Backed in the page colour
    so a busy left edge does not run through it. */
 .runs-earlier {
-  background: #14120f;
+  background: var(--ground);
   bottom: 0;
-  color: #9a9086;
+  color: var(--dim);
   font-family: var(--runs-register);
   font-size: 10px;
   left: 0;

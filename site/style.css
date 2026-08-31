@@ -29,18 +29,23 @@
 
 /* The page takes its colours from the board it is about: the values below are
    the ones in web-ui/src/, not a palette invented for a landing page. If the
-   board's ground changes, this is wrong and should follow it. */
+   board's ground changes, this is wrong and should follow it.
+
+   It changed, and this followed: the app now holds these under the same names
+   in `web-ui/src/index.css`, with the reasoning for the values beside them --
+   a surface is judged by lightness step and a stroke by contrast ratio, and
+   the old set failed both inside a card. */
 
 :root {
   color-scheme: dark;
   overflow-x: clip;
 
-  --ground: #14120f;      /* the board's background */
-  --panel: #1c1915;       /* a card on it */
-  --raised: #221e18;      /* a button on it */
-  --rule: #2e2820;        /* every hairline */
-  --text: #e8e2d8;        /* body */
-  --dim: #9a9086;         /* what is beside the point but still readable */
+  --ground: #100e0c;      /* the board's background */
+  --panel: #201c18;       /* a card on it */
+  --raised: #2e2721;      /* a button on it */
+  --rule: #332b23;        /* every hairline */
+  --text: #f0e7d9;        /* body */
+  --dim: #a0958a;         /* what is beside the point but still readable */
   --ember: #d8a657;       /* the one amber bud, and so every accent here */
   --live: #a9b665;        /* a task that is running */
   --faint: #6b6257;       /* labels and asides, a step below --dim */

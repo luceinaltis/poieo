@@ -6,17 +6,17 @@
 /* How it has been going, before the list of when. Quiet while it is going
    well, because a reader scanning for trouble should find none here. */
 .run-summary {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.85em;
   margin: 0 0 2px;
 }
 
 .run-summary[data-failing="true"] {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 .run-empty {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.85em;
   margin: 0;
 }
@@ -30,21 +30,21 @@
 }
 
 .run-row {
-  border-left: 2px solid #4a4034;
+  border-left: 2px solid var(--line);
   padding-left: 8px;
 }
 
 .run-row[data-outcome="nothing"] {
-  border-left-color: #3a332a;
+  border-left-color: var(--rule);
 }
 
 .run-row[data-outcome="failed"] {
-  border-left-color: #d16d5a;
+  border-left-color: var(--stop);
 }
 
 .run-row[data-selected="true"] {
-  background: #262019;
-  border-left-color: #d8a657;
+  background: var(--raised);
+  border-left-color: var(--ember);
 }
 
 .run-open {
@@ -63,19 +63,19 @@
 
 .run-when,
 .run-size {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.8em;
   white-space: nowrap;
 }
 
 .run-row[data-outcome="nothing"] .run-what {
-  color: #9a9086;
+  color: var(--dim);
 }
 
 .run-failed {
   background: none;
   border: 0;
-  color: #d16d5a;
+  color: var(--stop);
   cursor: pointer;
   font: inherit;
   font-size: 0.85em;
@@ -95,7 +95,7 @@
 }
 
 .diff-note {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.85em;
   margin: 0;
 }
@@ -130,12 +130,12 @@
 }
 
 .diff-count {
-  color: #9a9086;
+  color: var(--dim);
   white-space: nowrap;
 }
 
 .diff-hunks {
-  background: #14120f;
+  background: var(--ground);
   border-radius: 4px;
   font-size: 0.78em;
   margin: 2px 0 6px;
@@ -144,15 +144,15 @@
 }
 
 .diff-line[data-line="added"] {
-  color: #a9b665;
+  color: var(--live);
 }
 
 .diff-line[data-line="removed"] {
-  color: #d16d5a;
+  color: var(--stop);
 }
 
 .diff-line[data-line="meta"] {
-  color: #6b6257;
+  color: var(--dim);
 }
 
 .decide {
@@ -162,12 +162,12 @@
 }
 
 .decide-take {
-  border-color: #4a4034;
+  border-color: var(--line);
 }
 
 .decide-drop[data-do="discard-confirm"] {
-  border-color: #d16d5a;
-  color: #d16d5a;
+  border-color: var(--stop);
+  color: var(--stop);
 }
 
 /* Both take their own row under the buttons. The note is the quiet one; a
@@ -178,7 +178,7 @@
 }
 
 .decide-note {
-  color: #9a9086;
+  color: var(--dim);
   font-size: 0.8em;
   margin: 0;
 }
