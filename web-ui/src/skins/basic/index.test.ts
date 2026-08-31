@@ -680,3 +680,19 @@ test("a card whose edit will not take says so, and keeps the daemon's own words"
   expect(el.querySelector('[data-task="board/revision"] .basic-stale')!.textContent).toBe("")
   handle.destroy()
 })
+
+test("a handoff is marked at both ends, so the sender is not guessed at", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage(WIRED))
+
+  // A head at one end said which way the arrow pointed and nothing said where
+  // it began, so a line touching two borders left the reader to follow it to
+  // find out which was which. A socket at the source and a head at the target
+  // are one gesture with two ends.
+  const svg = el.querySelector(".basic-wires")!
+  expect(svg.querySelectorAll(".basic-socket").length).toBe(
+    svg.querySelectorAll(".basic-tip").length,
+  )
+  expect(svg.querySelectorAll(".basic-socket").length).toBeGreaterThan(0)
+  handle.destroy()
+})

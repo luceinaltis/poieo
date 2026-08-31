@@ -50,6 +50,11 @@
  * graphic ones and 4.5 for text. The wire inside a card measured 1.83, half of
  * what it needed, while the wire between two cards measured 3.76 and passed --
  * which is exactly why one kind of arrow was visible and the other was not.
+ *
+ * A hairline is a surface edge and takes the first ruler, and the *floor* is
+ * not the target: `--rule` was first set to 15 of lightness over a card, which
+ * is three times what a hairline needs to be seen, and the bar's full-width
+ * border read as a bright stripe across the top of the page.
  */
 :root {
   color-scheme: dark;
@@ -58,7 +63,7 @@
   --panel: #201c18;   /* a card on it              page -> card   dL* 6.5 */
   --well: #181513;    /* the graph inside a card   card -> well   dL* 3.6 */
   --raised: #2e2721;  /* a step, a button          well -> pill   dL* 9.2 */
-  --rule: #463c31;    /* every hairline            dL* 15.4 / 19.0 */
+  --rule: #332b23;    /* every hairline            dL* 7.6 on a card */
   --line: #7d7164;    /* wires and arrowheads      3.82 on the well */
   --text: #f0e7d9;    /* body                     13.81 on a card */
   --dim: #a0958a;     /* beside the point          5.77 */

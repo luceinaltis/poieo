@@ -27,7 +27,7 @@ import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
-  BOX, ZOOM, backWire, centreOn, corner, exits, fit, looking, loops, minimap,
+  BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
   place, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
@@ -255,11 +255,9 @@ function describeStale(flowState: TaskState): string {
  * unasked, the same blank reads as broken instead.
  */
 function fillInside(box: Box, flowState: TaskState): void {
-  const leaves = new Set(exits(flowState.shape))
   // Only when they differ. A task on one model has already said so on the
   // header, and repeating it four times would be noise for one answer.
   const differ = modelsOf(flowState).length > 1
-  const handsOff = flowState.then.length > 0
 
   // Built first and measured, then placed: how wide a step is drawn depends on
   // its label and on whether it carries a model or a pair of hands, and the
@@ -271,8 +269,6 @@ function fillInside(box: Box, flowState: TaskState): void {
     pill.className = "basic-node"
     pill.dataset.node = spec.id
     pill.dataset.type = spec.type
-    // Where a handoff leaves from, once you can see the steps at all.
-    if (leaves.has(spec.id) && handsOff) pill.dataset.exit = "true"
     pill.append(spec.id)
     // A router has no model because it calls none, and the gap is itself
     // information: it is why branching is free.
@@ -521,6 +517,19 @@ function drawWires(
           : `M ${line.x2 - 8} ${line.y2 - 4} L ${line.x2} ${line.y2} L ${line.x2 - 8} ${line.y2 + 4} Z`,
       )
       lines.push(head)
+
+      // **Where it leaves from.** A head at one end said which way the arrow
+      // pointed and nothing said where it began, so a reader had a line
+      // touching two borders and no way to tell the sender from the receiver
+      // without following it. A socket at the source and a head at the target
+      // are a pair: one gesture, two ends, and which is which is read rather
+      // than worked out.
+      const socket = document.createElementNS(SVG, "circle")
+      socket.setAttribute("class", "basic-socket")
+      socket.setAttribute("cx", String(back ? back.x1 : line.x1))
+      socket.setAttribute("cy", String(back ? back.y1 : line.y1))
+      socket.setAttribute("r", "3.5")
+      lines.push(socket)
 
       const word = document.createElementNS(SVG, "text")
       word.setAttribute("class", "basic-word")

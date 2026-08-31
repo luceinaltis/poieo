@@ -76,19 +76,35 @@
 /* The most important line on the board: it is the one that says where a run
    ends. Drawn at the weight of a border it read as one, and a reader could
    not tell a handoff from two boxes that happened to sit side by side. */
+/* **Amber means a condition chose this path**, and it means that at both
+   scales: the word on a branch inside a card, and the whole thread between two
+   of them. Grey is the run walking from one step to the next; amber is a
+   choice, and between borders it is also a new run -- which is the rule the
+   board rests on, drawn rather than explained. */
 .basic-wire {
   fill: none;
-  stroke: var(--line);
+  stroke: var(--ember);
   stroke-width: 1.5;
 }
 
 .basic-tip {
-  fill: var(--line);
+  fill: var(--ember);
+}
+
+/* Where a handoff leaves. Filled with the page and ringed, so it reads as a
+   socket on the border rather than a blob against it -- and so the pair with
+   the head at the far end is unmistakable. */
+.basic-socket {
+  fill: var(--ground);
+  stroke: var(--ember);
+  stroke-width: 1.5;
 }
 
 .basic-word {
-  fill: var(--dim);
-  font-size: 11px;
+  fill: var(--ember);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   text-anchor: middle;
   dominant-baseline: middle;
   /* A halo of the page behind the word, so the line runs up to it rather than
@@ -388,8 +404,11 @@
    the line runs up to it rather than through it. */
 .basic-step-word {
   fill: var(--ember);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 9.5px;
+  font-family: var(--mono);
+  /* Was 9.5px, which is not a size anybody reads -- it was chosen to fit a
+     gap, and the gap is dagre's to widen once it is told the true width. */
+  font-size: 11px;
+  font-weight: 500;
   text-anchor: middle;
   paint-order: stroke;
   /* Haloed with the well it sits on, so the line runs up to the word and stops
@@ -493,13 +512,12 @@
   color: var(--ember);
 }
 
-/* Where a handoff leaves from -- the step whose ending starts the next task's
-   run. Marked in the colour an arrow between two borders is drawn in, not with
-   the dashes that already say "the run can stop here": a step is often both,
-   and two facts sharing one mark is one fact. */
-.basic-node[data-exit="true"] {
-  border-color: var(--ember);
-}
+/* Where a handoff leaves from used to be marked here too, in the arrow's own
+   colour. It is not any more: the arrow now carries a **socket** on the border
+   it leaves, drawn where it actually leaves, which says the same thing where a
+   reader is already looking. Two marks for one fact only made the amber cheap
+   -- and amber is worth keeping expensive, because it means a condition chose
+   this path. */
 
 /* One row, always, for the same reason as the line above: a tool call is a
    thing that happens mid-run, and the border must not jump when it does. The
