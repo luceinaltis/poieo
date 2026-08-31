@@ -335,7 +335,12 @@ footer p { margin: 0.4rem 0; }
   padding: 2.5rem 20px 4rem;
 }
 
-.doc-nav { align-self: start; position: sticky; top: 66px; }
+.doc-nav { align-self: start; max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 66px; }
+
+.doc-toc { border-top: 1px solid var(--rule); margin-top: 1.2rem; padding-top: 1.2rem; }
+.doc-toc a { border-left: 2px solid transparent; color: #7a6e60; display: block; font-size: 0.82rem; padding: 3px 0 3px 12px; text-decoration: none; }
+.doc-toc a:hover { color: var(--text); }
+.doc-toc a.toc-h3 { padding-left: 26px; }
 .doc-nav-fold { display: none; }
 
 .nav-group { margin-bottom: 1.6rem; }
@@ -366,6 +371,7 @@ footer p { margin: 0.4rem 0; }
 .doc-meta { color: #6b6257; font-size: 0.85rem; margin: 0 0 1.8rem; }
 .doc-state { color: var(--dim); }
 
+.doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 { scroll-margin-top: 62px; }
 .doc-body h1 { font-size: 1.9rem; letter-spacing: -0.01em; margin: 0 0 1rem; }
 .doc-body h2 {
   border-top: 1px solid var(--rule);
