@@ -142,7 +142,7 @@ export function subjectOf(raw: unknown): string {
     .join(" ")
 }
 
-function blankFlow(): TaskState {
+function createEmptyTaskState(): TaskState {
   return {
     status: "waiting",
     held: false,
@@ -213,7 +213,7 @@ export function initialStage(rows: TaskRow[]): StageState {
   const tasks: Record<string, TaskState> = {}
   for (const row of rows) {
     tasks[keyOfTask(row.project, row.name)] = {
-      ...blankFlow(),
+      ...createEmptyTaskState(),
       name: row.name,
       project: row.project,
       tracked: row.into !== null,
@@ -246,7 +246,7 @@ function keyOf(event: PoieoEvent): string {
   return [event.run_id, event.type, event.node_id ?? "", ordinal, event.at ?? ""].join("|")
 }
 
-function flowFor(state: StageState, event: PoieoEvent): string | null {
+function taskKeyForEvent(state: StageState, event: PoieoEvent): string | null {
   if (event.type === "run_started") {
     // Ad-hoc `poieo run` executions have no task and do not belong on a board
     // of daemon tasks.
@@ -258,7 +258,7 @@ function flowFor(state: StageState, event: PoieoEvent): string | null {
 }
 
 /** null = an event this build does not know; {} = known, but nothing to show. */
-function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> | null {
+function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> | null {
   const data = event.data ?? {}
 
   switch (event.type) {
@@ -297,7 +297,7 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
             failed: data.error === true,
             at: event.at ?? "",
           },
-          ...flowState.recentToolCalls,
+          ...taskState.recentToolCalls,
         ].slice(0, TOOL_CALL_CAP),
       }
 
@@ -310,7 +310,7 @@ function patchFor(event: PoieoEvent, flowState: TaskState): Partial<TaskState> |
       // Back to whichever kind of not-running this task is. A pause pressed
       // mid-run is honoured the moment the run leaves, which is exactly what
       // the daemon does with it -- and what this used to undo.
-      return { status: flowState.held ? "paused" : "waiting", currentNode: null }
+      return { status: taskState.held ? "paused" : "waiting", currentNode: null }
 
     case "run_failed":
     case "run_aborted":
@@ -363,7 +363,7 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
 export function reduce(state: StageState, event: PoieoEvent): StageState {
   if (event.type === "run_summary") return applySummary(state, event)
 
-  const task = flowFor(state, event)
+  const task = taskKeyForEvent(state, event)
   if (task === null || !(task in state.tasks)) return state
 
   const key = keyOf(event)
@@ -397,10 +397,10 @@ function windowed(runs: RunSummary[], tracked: boolean): Pick<TaskState, "runs" 
 /** Seed a task's window from the run index, which the reducer cannot see. */
 export function setRuns(state: StageState, task: string, runs: RunSummary[]): StageState {
   if (!(task in state.tasks)) return state
-  const flowState = state.tasks[task]
+  const taskState = state.tasks[task]
   return {
     ...state,
-    tasks: { ...state.tasks, [task]: { ...flowState, ...windowed(runs, flowState.tracked) } },
+    tasks: { ...state.tasks, [task]: { ...taskState, ...windowed(runs, taskState.tracked) } },
   }
 }
 

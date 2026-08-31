@@ -1,8 +1,7 @@
 /**
- * What one flowState has been doing, in detail.
+ * One task's controls, run history, change, and event timeline.
  *
- * The drawer is shell UI, not a skin, so it is allowed to read the API. It
- * keeps its own state throughout: picking a past run here must never move the
+ * The drawer owns its selected historical run so reading it never moves the
  * live board.
  */
 
@@ -29,10 +28,12 @@ import "./drawer.css"
  * reading it. Long answers fold; short ones are just a paragraph, because a
  * disclosure triangle on two lines is furniture.
  */
-const LONG = 240
+const MAX_INLINE_OUTPUT_LENGTH = 240
 
-function Said({ text }: { text: string }) {
-  if (text.length <= LONG) return <p className="drawer-text">{text}</p>
+function RunOutput({ text }: { text: string }) {
+  if (text.length <= MAX_INLINE_OUTPUT_LENGTH) {
+    return <p className="drawer-text">{text}</p>
+  }
   const opening = text.trim().split(/\r?\n/).find((line) => line.trim()) ?? text
   return (
     <details className="drawer-said">
@@ -52,7 +53,7 @@ function Said({ text }: { text: string }) {
  * The step's name stays, because the author chose it and it is on the board
  * too; what goes is everything that describes the loop rather than the work.
  */
-function Entry({ event }: { event: PoieoEvent }) {
+function TimelineEntry({ event }: { event: PoieoEvent }) {
   const data = event.data ?? {}
 
   if (event.type === "node_turn") {
@@ -70,7 +71,7 @@ function Entry({ event }: { event: PoieoEvent }) {
       <li className="drawer-entry" data-kind="turn">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
         <div>
-          {text ? <Said text={text} /> : null}
+          {text ? <RunOutput text={text} /> : null}
           {thinking ? (
             <details className="drawer-thinking">
               <summary>thinking</summary>
@@ -226,16 +227,16 @@ export const Drawer = memo(function Drawer({
   onAlike?(seed: { name: string; folder: string; prompt: string }): void
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
-  const [picked, setPicked] = useState<string | null>(null)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [events, setEvents] = useState<PoieoEvent[]>([])
-  const [reload, setReload] = useState(0)
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
   useEffect(() => {
     let live = true
     void fetchRuns({ task, project, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setPicked(
+      setSelectedRunId(
         (current) =>
           current ?? rows.find((row) => row.change)?.run_id ?? rows[0]?.run_id ?? null,
       )
@@ -243,29 +244,29 @@ export const Drawer = memo(function Drawer({
     return () => {
       live = false
     }
-  }, [task, reload])
+  }, [task, refreshVersion])
 
-  const decided = () => {
-    setReload((n) => n + 1)
+  const refreshAfterAction = () => {
+    setRefreshVersion((version) => version + 1)
     onDecided?.()
   }
 
   useEffect(() => {
-    if (!picked) {
+    if (!selectedRunId) {
       setEvents([])
       return
     }
     let live = true
-    void fetchRunEvents(picked).then((list) => {
+    void fetchRunEvents(selectedRunId).then((list) => {
       if (live) setEvents(list)
     })
     return () => {
       live = false
     }
-  }, [picked])
+  }, [selectedRunId])
 
   // A stage of its own: replaying here must leave the live board alone.
-  const replayed: TaskState | null = useMemo(() => {
+  const replayedTaskState: TaskState | null = useMemo(() => {
     if (events.length === 0) return null
     const scratch = initialStage([
       {
@@ -300,10 +301,20 @@ export const Drawer = memo(function Drawer({
       <div className="drawer-body">
         {/* First, above the controls: everything after the question is held
             until it is answered, so a reader who misses it is looking at a
-            flow that has quietly stopped. */}
-        <Question project={project} task={task} asking={asking} onAnswered={decided} />
+            run that has quietly stopped. */}
+        <Question
+          project={project}
+          task={task}
+          asking={asking}
+          onAnswered={refreshAfterAction}
+        />
 
-        <Control project={project} task={task} status={status} onActed={decided} />
+        <Control
+          project={project}
+          task={task}
+          status={status}
+          onActed={refreshAfterAction}
+        />
 
         {/* The daemon's own sentence, whole. The board's card carries the
             short form -- what to do -- because ten cards have no room for
@@ -317,14 +328,26 @@ export const Drawer = memo(function Drawer({
         {/* Under the controls, above the nights: the definition, openable.
             What the task *is* sits between what you can do to it now and
             what it has done. */}
-        <Card project={project} task={task} onSetAside={decided} onAlike={onAlike} />
+        <Card
+          project={project}
+          task={task}
+          onSetAside={refreshAfterAction}
+          onAlike={onAlike}
+        />
 
-        <Decide project={project} task={task} pending={pending} into={into} runId={null} onDone={decided} />
+        <Decide
+          project={project}
+          task={task}
+          pending={pending}
+          into={into}
+          runId={null}
+          onDone={refreshAfterAction}
+        />
 
         <RunList
           runs={runs}
-          selected={picked}
-          onSelect={setPicked}
+          selected={selectedRunId}
+          onSelect={setSelectedRunId}
           tracked={into !== null}
           controls={(run) =>
             run.change ? (
@@ -334,24 +357,24 @@ export const Drawer = memo(function Drawer({
                 pending={pending}
                 into={into}
                 runId={run.run_id}
-                onDone={decided}
+                onDone={refreshAfterAction}
               />
             ) : null
           }
         />
 
-        {picked ? <Diff runId={picked} /> : null}
+        {selectedRunId ? <Diff runId={selectedRunId} /> : null}
 
-        {replayed ? (
+        {replayedTaskState ? (
           <p className="drawer-summary">
-            {replayed.currentNode ?? "finished"}
-            {replayed.turn > 1 ? ` · turn ${replayed.turn}` : ""}
+            {replayedTaskState.currentNode ?? "finished"}
+            {replayedTaskState.turn > 1 ? ` · turn ${replayedTaskState.turn}` : ""}
           </p>
         ) : null}
 
         <ol className="drawer-timeline">
           {events.map((event, index) => (
-            <Entry key={`${event.type}-${index}`} event={event} />
+            <TimelineEntry key={`${event.type}-${index}`} event={event} />
           ))}
         </ol>
       </div>

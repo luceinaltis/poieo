@@ -16,13 +16,13 @@ export interface Placed {
 }
 
 /**
- * Flows laid out left to right, each one past whatever hands to it.
+ * Tasks laid out left to right, each one past whatever hands to it.
  *
  * Kahn's peeling, so a task sits one column beyond its *furthest* sender
  * rather than its nearest -- otherwise a long arrow that skips a task would
  * point backwards on screen.
  *
- * Flows nothing points at start on the left. A board where *nothing* hands to
+ * Tasks nothing points at start on the left. A board where *nothing* hands to
  * anything is laid out as a grid instead of a column: the axis only carries
  * depth when something points somewhere, so with nothing pointing it is free,
  * and a single column of independent work reads as a failure to lay anything

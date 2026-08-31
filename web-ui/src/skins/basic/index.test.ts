@@ -6,7 +6,7 @@ import { initialStage, reduce, replay, setRuns } from "../../state/stage"
 import type { TaskRow } from "../../types"
 import { BOX } from "../wiring"
 
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "chores",
     project: "board",
@@ -59,7 +59,7 @@ test("a frame for one task does not rebuild the other tasks' boxes", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   // A task of two steps, so there are nodes inside to survive at all: one
   // step draws no graph, the border being that step already.
-  const stage = replay(initialStage([build(), FLOWS[1]]), AGENT_RUN)
+  const stage = replay(initialStage([build(), TASK_ROWS[1]]), AGENT_RUN)
   handle.update(stage)
 
   // chores is drawn with its graph's nodes inside it.
@@ -85,18 +85,18 @@ test("a frame for one task does not rebuild the other tasks' boxes", () => {
 
 const WIRED: TaskRow[] = [
   {
-    ...FLOWS[0],
+    ...TASK_ROWS[0],
     then: [
       { to: "revision", label: "changed" },
       { to: null, label: "quiet" },
     ],
   },
-  FLOWS[1],
+  TASK_ROWS[1],
 ]
 
 test("nothing opens itself, however busy it is", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4)))
+  handle.update(replay(initialStage(TASK_ROWS), AGENT_RUN.slice(0, 4)))
 
   // A running task used to open itself, and shut again when it stopped, so a
   // board that runs every minute rearranged itself all day. The `now` line
@@ -108,7 +108,7 @@ test("nothing opens itself, however busy it is", () => {
 
 test("opening a task by hand outlasts the frames that follow", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  const stage = initialStage(FLOWS)
+  const stage = initialStage(TASK_ROWS)
   handle.update(stage)
 
   el.querySelector<HTMLElement>('[data-task="board/revision"] .basic-toggle')!.click()
@@ -174,7 +174,7 @@ test("a task that found nothing to do says so in one word, not a number", () => 
   // nothing to do. Without one there is nothing to change against, and a run
   // that ran is all there is to say.
   const quiet = setRuns(
-    initialStage([{ ...FLOWS[0], into: "main" }, FLOWS[1]]),
+    initialStage([{ ...TASK_ROWS[0], into: "main" }, TASK_ROWS[1]]),
     "board/chores",
     // Eight runs that all looked and found nothing: a healthy night, and the
     // line the board used to print for it was "8 runs · 8 found nothing to do".
@@ -207,7 +207,7 @@ test("a task that found nothing to do says so in one word, not a number", () => 
 function triage(models: (string | null)[]): TaskRow {
   const [classify, route, draft] = models
   return {
-    ...FLOWS[0],
+    ...TASK_ROWS[0],
     name: "chores",
     project: "board",
     shape: {
@@ -269,7 +269,7 @@ test("a router carries no model, because it calls none", () => {
 /** Two agent steps on one model, differing only in what they may touch. */
 function build(): TaskRow {
   return {
-    ...FLOWS[0],
+    ...TASK_ROWS[0],
     name: "chores",
     project: "board",
     shape: {
@@ -301,7 +301,7 @@ test("a step that can reach the folder says so; one that only answers does not",
 /** One step, which is what the board's own `new task` writes. */
 function oneStep(): TaskRow {
   return {
-    ...FLOWS[0],
+    ...TASK_ROWS[0],
     shape: {
       entry: "work",
       nodes: [
@@ -412,7 +412,7 @@ test("a border is exactly as wide as the arrows think it is", () => {
   // drift from BOX.width, and content-box padding had made it 26px wider:
   // every wire began that far inside the box it was leaving.
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
 
   expect(el.querySelector<HTMLElement>('[data-task="board/chores"]')!.style.width).toBe(
     `${BOX.width}px`,
@@ -425,8 +425,8 @@ test("a handoff that goes back does not run through what lies between", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(
     initialStage([
-      { ...FLOWS[0], then: [{ to: "revision", label: "changed" }] },
-      { ...FLOWS[1], then: [{ to: "chores", label: "and again" }] },
+      { ...TASK_ROWS[0], then: [{ to: "revision", label: "changed" }] },
+      { ...TASK_ROWS[1], then: [{ to: "chores", label: "and again" }] },
     ]),
   )
 
@@ -475,7 +475,7 @@ test("the board hangs in a viewport, and takes it with it when it goes", () => {
   // taking the board out and leaving the viewport would leave an empty div in
   // the host on every skin change.
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
 
   const viewport = el.querySelector(".basic-viewport")!
   expect(viewport).not.toBeNull()
@@ -491,7 +491,7 @@ test("the board is placed by a transform, so nothing drawn has to know", () => {
   // that a transform is written at all, and that it is finite. A NaN here
   // blanks the page, which is far harder to diagnose than a bad number.
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
 
   const style = el.querySelector<HTMLElement>(".basic")!.style.transform
   expect(style).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) scale\([\d.]+\)$/)
@@ -510,7 +510,7 @@ const transform = () => el.querySelector<HTMLElement>(".basic")!.style.transform
 
 test("a wheel over the board zooms it rather than scrolling the page", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
   const before = transform()
 
   const wheel = new WheelEvent("wheel", { deltaY: -400, cancelable: true, bubbles: true })
@@ -525,7 +525,7 @@ test("a wheel over the board zooms it rather than scrolling the page", () => {
 
 test("dragging the board moves it; pressing a control does not", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
   const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
   letItGrab(viewport)
   const before = transform()
@@ -560,7 +560,7 @@ test("dragging the board moves it; pressing a control does not", () => {
 test("a double click puts the board back where it started", () => {
   // A reader who has zoomed into a corner otherwise has only a page reload.
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
   const viewport = el.querySelector(".basic-viewport")!
   const fitted = transform()
 
@@ -575,24 +575,24 @@ test("a double click puts the board back where it started", () => {
 
 test("the minimap carries one speck per task, and keeps its window rectangle", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
 
   const map = el.querySelector(".basic-minimap")!
-  expect(map.querySelectorAll(".basic-speck")).toHaveLength(FLOWS.length)
-  expect(map.querySelectorAll("[data-speck]")).toHaveLength(FLOWS.length)
+  expect(map.querySelectorAll(".basic-speck")).toHaveLength(TASK_ROWS.length)
+  expect(map.querySelectorAll("[data-speck]")).toHaveLength(TASK_ROWS.length)
   // Redrawing the specks must not take the window rectangle with them: it is
   // replaced along with them and has to be put back.
   expect(map.querySelector(".basic-seen")).not.toBeNull()
 
   // `data-task` already means "a border on the board". One selector answering
   // with two kinds of thing is how a board of four tasks counts as eight.
-  expect(el.querySelectorAll("[data-task]")).toHaveLength(FLOWS.length)
+  expect(el.querySelectorAll("[data-task]")).toHaveLength(TASK_ROWS.length)
   handle.destroy()
 })
 
 test("pressing the minimap moves the view without also dragging the board", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
   const viewport = el.querySelector(".basic-viewport")!
   const map = el.querySelector(".basic-minimap")!
   letItGrab(map)
@@ -614,7 +614,7 @@ test("pressing the minimap moves the view without also dragging the board", () =
 test("a shut border says what the task is doing right now", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   // A running task, mid-graph: the answer to why somebody opened the board.
-  const stage = replay(initialStage(FLOWS), AGENT_RUN.slice(0, 4))
+  const stage = replay(initialStage(TASK_ROWS), AGENT_RUN.slice(0, 4))
   handle.update(stage)
 
   const now = el.querySelector('[data-task="board/chores"] .basic-now')!
@@ -624,7 +624,7 @@ test("a shut border says what the task is doing right now", () => {
 
 test("a border with nothing happening says which kind of nothing", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage(FLOWS))
+  handle.update(initialStage(TASK_ROWS))
 
   // It used to say nothing at all here, so that `:empty` could take the room
   // back. That made a task waiting its turn and a task somebody stopped the
@@ -636,7 +636,7 @@ test("a border with nothing happening says which kind of nothing", () => {
 
 test("a stopped task is not drawn as one waiting its turn", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  handle.update(initialStage([FLOWS[0], { ...FLOWS[1], status: "paused", holding: true }]))
+  handle.update(initialStage([TASK_ROWS[0], { ...TASK_ROWS[1], status: "paused", holding: true }]))
 
   const card = el.querySelector('[data-task="board/revision"]') as HTMLElement
   // The band and the dot hang off this; the words carry the same fact for a
@@ -653,7 +653,7 @@ test("a task that stopped says so where it would have said what it was doing", (
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   // The task has to be known to be running before it can be known to have
   // stopped: `run_failed` carries no task of its own.
-  let stage = reduce(initialStage(FLOWS), {
+  let stage = reduce(initialStage(TASK_ROWS), {
     run_id: "r",
     type: "run_started",
     data: { task: "chores", project: "board" },
@@ -668,7 +668,7 @@ test("a task that stopped says so where it would have said what it was doing", (
 test("a card whose edit will not take says so, and keeps the daemon's own words", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   const why = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
-  handle.update(initialStage([{ ...FLOWS[0], stale: why }, FLOWS[1]]))
+  handle.update(initialStage([{ ...TASK_ROWS[0], stale: why }, TASK_ROWS[1]]))
 
   const line = el.querySelector('[data-task="board/chores"] .basic-stale') as HTMLElement
   // The next action, not the daemon's refusal: the reader wants to know what

@@ -235,7 +235,7 @@
   white-space: nowrap;
 }
 
-/* Shut, a flow is a border with a name on it and nothing else -- which is all
+/* Shut, a task is a border with a name on it and nothing else -- which is all
    a node says until you open it.
 
    Removed, not hidden. This was reserved room for a while, because a task
@@ -476,7 +476,7 @@
   box-shadow: inset 0 0 0 1.5px var(--ember);
 }
 
-/* What actually runs this step, when the flow's steps do not agree. Dimmer
+/* What actually runs this step, when the task's steps do not agree. Dimmer
    than the id: the reader is looking for the step and then reading the model,
    not the other way round. */
 .basic-node-model {

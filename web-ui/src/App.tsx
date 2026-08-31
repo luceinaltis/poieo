@@ -38,22 +38,24 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export default function App({ store }: { store?: StageStore }) {
-  const [theStore] = useState<StageStore>(() => store ?? createStageStore())
-  const stage = useSyncExternalStore(theStore.subscribe, theStore.getStage)
-  const status = useSyncExternalStore(theStore.subscribe, theStore.getStatus)
-  const tasks = useSyncExternalStore(theStore.subscribe, theStore.getFlows)
-  const projects = useSyncExternalStore(theStore.subscribe, theStore.getProjects)
-  const [asked, setAsked] = useState(() => recall(PROJECT_KEY, ""))
+  const [stageStore] = useState<StageStore>(() => store ?? createStageStore())
+  const stage = useSyncExternalStore(stageStore.subscribe, stageStore.getStage)
+  const status = useSyncExternalStore(stageStore.subscribe, stageStore.getStatus)
+  const tasks = useSyncExternalStore(stageStore.subscribe, stageStore.getTasks)
+  const projects = useSyncExternalStore(stageStore.subscribe, stageStore.getProjects)
+  const [preferredProjectName, setPreferredProjectName] = useState(() =>
+    recall(PROJECT_KEY, ""),
+  )
   // What the reader asked for, if the daemon is still running it. A remembered
   // project the daemon was restarted without would otherwise leave the board
   // filtering on nothing, which looks exactly like broken.
   const project =
-    projects.find((one) => one.name === asked) ?? projects[0] ?? null
+    projects.find((one) => one.name === preferredProjectName) ?? projects[0] ?? null
 
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
   const [skinId, setSkinId] = useState(readSkinPreference)
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(null)
   // Not remembered across reloads, unlike the skin and the project: this is a
   // thing you open to answer a question, not a way you like the board to sit.
   const [showModels, setShowModels] = useState(false)
@@ -64,15 +66,15 @@ export default function App({ store }: { store?: StageStore }) {
   const [seed, setSeed] = useState<{ name: string; folder: string; prompt: string } | null>(null)
 
   useEffect(() => {
-    void theStore.start()
-    return () => theStore.stop()
-  }, [theStore])
+    void stageStore.start()
+    return () => stageStore.stop()
+  }, [stageStore])
 
   // The stage reserves one margin. A task picked on the board takes it, so a
   // panel that was holding it has to let go -- the rail already does this for
   // its own two, and this is the third way in.
   const selectTask = useCallback((key: string | null) => {
-    setSelected(key)
+    setSelectedTaskKey(key)
     if (key) {
       setShowModels(false)
       setShowMake(false)
@@ -100,17 +102,20 @@ export default function App({ store }: { store?: StageStore }) {
 
   // One project's board at a time. Every arrow on it stays inside a project,
   // so two of them side by side share nothing but a machine.
-  const shown = useMemo(() => onlyProject(stage, project?.name ?? null), [stage, project])
+  const projectStage = useMemo(
+    () => onlyProject(stage, project?.name ?? null),
+    [stage, project],
+  )
 
   useEffect(() => {
-    hostRef.current?.update(shown)
-  }, [shown])
+    hostRef.current?.update(projectStage)
+  }, [projectStage])
 
   const chooseProject = useCallback((name: string) => {
-    setAsked(name)
+    setPreferredProjectName(name)
     remember(PROJECT_KEY, name)
     // The drawer belongs to a task on the board that was there a moment ago.
-    setSelected(null)
+    setSelectedTaskKey(null)
     // ...and so does a seeded make panel. A seed's folder means something in
     // the project it came from; carried across, it would be offered against
     // another project's tasks folder.
@@ -128,9 +133,9 @@ export default function App({ store }: { store?: StageStore }) {
 
   // Standing somewhere other than the board -- a rail place drawn on the
   // stage, like runs -- rather than a rendering of it.
-  const standing = skinById(skinId).standalone ? skinById(skinId).id : null
+  const standaloneViewId = skinById(skinId).standalone ? skinById(skinId).id : null
 
-  const goPlace = useCallback((id: string) => {
+  const openStandaloneView = useCallback((id: string) => {
     setSkinId(id)
     writeSkinPreference(id)
     setShowModels(false)
@@ -138,22 +143,22 @@ export default function App({ store }: { store?: StageStore }) {
   }, [])
 
   // Stable, so the memoized drawer sees the same props while frames stream by.
-  const closeDrawer = useCallback(() => setSelected(null), [])
-  const decided = useCallback(() => void theStore.resync(), [theStore])
+  const closeDrawer = useCallback(() => setSelectedTaskKey(null), [])
+  const resyncAfterAction = useCallback(() => void stageStore.resync(), [stageStore])
 
   // One panel on that edge at a time. Both are fixed to the right at one
   // width, and the stage reserves one margin for whichever is open.
   const openModels = useCallback(() => {
     setShowModels(true)
     setShowMake(false)
-    setSelected(null)
+    setSelectedTaskKey(null)
   }, [])
   const closeModels = useCallback(() => setShowModels(false), [])
   const openMake = useCallback(() => {
     setSeed(null)
     setShowMake(true)
     setShowModels(false)
-    setSelected(null)
+    setSelectedTaskKey(null)
   }, [])
   const closeMake = useCallback(() => {
     setShowMake(false)
@@ -164,16 +169,16 @@ export default function App({ store }: { store?: StageStore }) {
       setSeed(fields)
       setShowMake(true)
       setShowModels(false)
-      setSelected(null)
+      setSelectedTaskKey(null)
     },
     [],
   )
 
-  const empty = Object.keys(shown.tasks).length === 0
-  // `selected` is the board's key -- the project and the task -- because a
+  const empty = Object.keys(projectStage.tasks).length === 0
+  // `selectedTaskKey` is the board's key -- the project and the task -- because a
   // name alone stopped picking out one task.
-  const openRow = selected
-    ? tasks.find((row) => keyOfTask(row.project, row.name) === selected)
+  const selectedTask = selectedTaskKey
+    ? tasks.find((row) => keyOfTask(row.project, row.name) === selectedTaskKey)
     : undefined
 
   return (
@@ -211,7 +216,7 @@ export default function App({ store }: { store?: StageStore }) {
             project name follows -- and it leaves the bar while the stage is
             showing a place instead, because a control that does not apply
             must not sit there looking like it does. */}
-        {standing || SKINS.filter((skin) => !skin.standalone).length < 2 ? null : (
+        {standaloneViewId || SKINS.filter((skin) => !skin.standalone).length < 2 ? null : (
           <label className="shell-pick">
             view
             <select
@@ -239,13 +244,13 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={showModels || showMake || standing ? undefined : "page"}
+          aria-current={showModels || showMake || standaloneViewId ? undefined : "page"}
           onClick={() => {
             closeModels()
             closeMake()
             // Coming back from a place, the board wears the rendering it was
             // left in, not a hard-coded one.
-            if (standing) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
+            if (standaloneViewId) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
           }}
         >
           board
@@ -259,8 +264,10 @@ export default function App({ store }: { store?: StageStore }) {
             key={skin.id}
             type="button"
             data-do={`open-${skin.id}`}
-            aria-current={!showModels && !showMake && standing === skin.id ? "page" : undefined}
-            onClick={() => goPlace(skin.id)}
+            aria-current={
+              !showModels && !showMake && standaloneViewId === skin.id ? "page" : undefined
+            }
+            onClick={() => openStandaloneView(skin.id)}
           >
             {skin.id}
           </button>
@@ -288,7 +295,10 @@ export default function App({ store }: { store?: StageStore }) {
         </button>
       </nav>
 
-      <div className="shell-stage" data-drawer={String(Boolean(selected || showModels || showMake))}>
+      <div
+        className="shell-stage"
+        data-drawer={String(Boolean(selectedTaskKey || showModels || showMake))}
+      >
         <div className="shell-board" ref={boardRef} />
         {empty ? (
           <p className="shell-empty">
@@ -335,20 +345,20 @@ export default function App({ store }: { store?: StageStore }) {
         />
       ) : null}
 
-      {selected ? (
+      {selectedTaskKey ? (
         <Drawer
-          // A fresh drawer per flowState: its selected run, its opened files and
+          // A fresh drawer per task: its selected run, its opened files and
           // its expanded-failures toggle all belong to the task being read.
-          key={selected}
-          project={openRow?.project ?? ""}
-          task={openRow?.name ?? selected}
-          status={openRow?.status ?? "waiting"}
-          stale={openRow?.stale ?? null}
-          pending={openRow?.pending ?? 0}
-          into={openRow?.into ?? null}
-          asking={openRow?.asking ?? null}
+          key={selectedTaskKey}
+          project={selectedTask?.project ?? ""}
+          task={selectedTask?.name ?? selectedTaskKey}
+          status={selectedTask?.status ?? "waiting"}
+          stale={selectedTask?.stale ?? null}
+          pending={selectedTask?.pending ?? 0}
+          into={selectedTask?.into ?? null}
+          asking={selectedTask?.asking ?? null}
           onClose={closeDrawer}
-          onDecided={decided}
+          onDecided={resyncAfterAction}
           onAlike={makeAlike}
         />
       ) : null}

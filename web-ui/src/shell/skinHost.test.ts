@@ -6,7 +6,7 @@ import { initialStage } from "../state/stage"
 import type { Skin, SkinHandle } from "../skins/contract"
 import type { TaskRow } from "../types"
 
-const FLOWS: TaskRow[] = [
+const TASK_ROWS: TaskRow[] = [
   {
     name: "chores",
     project: "board",
@@ -72,7 +72,7 @@ test("a skin mounted mid-run is handed the current stage at once", () => {
   const host = createSkinHost(document.createElement("div"), { onSelectTask: () => {} }, (id) =>
     id === "b" ? b.skin : a.skin,
   )
-  const stage = initialStage(FLOWS)
+  const stage = initialStage(TASK_ROWS)
 
   host.show("a")
   host.update(stage)
