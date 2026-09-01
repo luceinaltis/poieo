@@ -64,7 +64,10 @@ function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
     if (event.type === "node_turn") {
       const expected = Number(event.data?.tool_call_count ?? 0)
       const key = turnKey(event)
-      if (expected > 0 && key && (toolsByTurn.get(key) ?? 0) >= expected) return false
+      if (expected > 0) {
+        if (key && (toolsByTurn.get(key) ?? 0) >= expected) return false
+        return true
+      }
     }
     return appearsInTimeline(event)
   })
@@ -92,13 +95,13 @@ function commandPurpose(command: string): string {
   }
 
   const checkoutRestore = command.match(
-    /\bgit\s+checkout\s+--\s+(?:"([^"]+)"|'([^']+)'|([^\s;|]+))/i,
+    /\bgit\s+checkout\b[^;|]*?\s--\s+(?:"([^"]+)"|'([^']+)'|([^\s;|]+))/i,
   )
   if (checkoutRestore) {
     return `Restore ${checkoutRestore[1] || checkoutRestore[2] || checkoutRestore[3]} from Git`
   }
 
-  const sedEdit = /\bsed\b[^;|]*(?:\s-i\w*|\s--in-place(?:=\S*)?)(?:\s|$)/i.test(command)
+  const sedEdit = /\bsed\b[^;|]*(?:\s-i[^\s]*|\s--in-place(?:=\S*)?)(?:\s|$)/i.test(command)
   if (sedEdit) {
     const segment = command.match(/\bsed\b([^;|]*)/i)?.[1] ?? ""
     const files = segment.match(/(?:[\w.-]+[\\/])*[\w.-]+\.[A-Za-z0-9]+/g)
@@ -220,10 +223,20 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
   if (event.type === "node_turn") {
     const text = String(data.text ?? "")
     const thinking = String(data.thinking ?? "")
-    // A model that reached straight for a tool leaves a turn with nothing in
-    // it. The tool calls below already say the turn happened, so an empty row
-    // here is only a gap in the timeline.
-    if (!text && !thinking) return null
+    // A complete set of tool records folds an empty preamble before this
+    // point. If it survived, the gap is itself evidence worth keeping.
+    if (!text && !thinking) {
+      const expected = Number(data.tool_call_count ?? 0)
+      if (expected <= 0) return null
+      return (
+        <li className="drawer-entry" data-kind="stuck">
+          <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+          <div className="drawer-event drawer-label">
+            {`${expected} tool call${expected === 1 ? "" : "s"} ${expected === 1 ? "was" : "were"} not fully recorded`}
+          </div>
+        </li>
+      )
+    }
     const sent = Number(data.input_tokens ?? 0)
     const wrote = Number(data.output_tokens ?? 0)
     // The turn number is the loop's bookkeeping. What a reader wants from a
