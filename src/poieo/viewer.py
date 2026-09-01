@@ -107,6 +107,19 @@ def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) ->
         parts.append('<div class="block"><span class="block-k">prompt</span>')
         parts.append(f"<pre>{html.escape((node.prompt or '').strip())}</pre></div>")
         parts.append(f'<p class="edge">next &rarr; <code>{html.escape(node.next or "end")}</code></p>')
+    elif node.type == "confirm":
+        # It asks rather than branches: the run ends on whichever answer comes
+        # back, and the task's `then:` reads it afterwards. So every choice
+        # leads to the same place, and there is no default arm to draw.
+        parts.append('<div class="block"><span class="block-k">prompt</span>')
+        parts.append(f"<pre>{html.escape((node.prompt or '').strip())}</pre></div>")
+        parts.append('<ul class="branches">')
+        for choice in node.choices:
+            parts.append(
+                f'<li><code class="choice">{html.escape(choice)}</code>'
+                f'<span class="hop">&rarr;</span><code>end</code></li>'
+            )
+        parts.append("</ul>")
     else:
         parts.append('<ul class="branches">')
         for branch in node.branches:
@@ -263,7 +276,7 @@ pre { background: var(--sunk); border-radius: 8px; padding: .75rem .85rem; margi
 .branches li { padding: .5rem 0; border-top: 1px solid var(--line-soft);
                display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
 .branches li:first-child { border-top: none; padding-top: 0; }
-.cond { background: var(--sunk); padding: .12rem .35rem; border-radius: 4px; }
+.cond, .choice { background: var(--sunk); padding: .12rem .35rem; border-radius: 4px; }
 .label { color: var(--router); font-size: .76rem; font-weight: 500; }
 .fallback { color: var(--muted); }
 .edge { margin: 0; font-size: .82rem; color: var(--muted); }
