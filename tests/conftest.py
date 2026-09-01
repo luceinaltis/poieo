@@ -194,6 +194,39 @@ def method_barrier(instance, monkeypatch, method_name):
     return wait_for_call
 
 
+def timer_barrier(monkeypatch):
+    """Let a test observe and release each trigger timer itself."""
+    from poieo.daemon import triggers
+
+    waiting = asyncio.Queue()
+
+    async def controlled(seconds, cancel):
+        elapsed = asyncio.Event()
+        waiting.put_nowait((seconds, elapsed.set))
+        elapsed_wait = asyncio.create_task(elapsed.wait())
+        cancelled = asyncio.create_task(cancel.wait())
+        try:
+            done, _pending = await asyncio.wait(
+                {elapsed_wait, cancelled},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            return elapsed_wait in done and not cancel.is_set()
+        finally:
+            elapsed_wait.cancel()
+            cancelled.cancel()
+            await asyncio.gather(elapsed_wait, cancelled, return_exceptions=True)
+
+    monkeypatch.setattr(triggers, "_sleep_or_cancel", controlled)
+
+    async def wait_for_timer(timeout=5.0):
+        try:
+            return await asyncio.wait_for(waiting.get(), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError("timed out waiting for a trigger timer") from exc
+
+    return wait_for_timer
+
+
 async def down(daemon, task):
     """Stop it and wait for the serve task, so nothing outlives the test."""
     daemon.stop()

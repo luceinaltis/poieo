@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from conftest import card, down, until, up
+from conftest import card, down, timer_barrier, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
@@ -41,6 +41,13 @@ def _config(tmp_path, trigger, binding=_MOCK, graph=_GRAPH):
     return load_config(path)
 
 
+async def _wait_until_pause_is_active(runner):
+    await until(
+        lambda: runner.status == "paused" and not runner._wake.is_set(),
+        "the runner to enter its paused wait",
+    )
+
+
 async def test_pause_skips_due_fires_and_resume_rearms_the_schedule(tmp_path):
     config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
@@ -57,23 +64,30 @@ async def test_pause_skips_due_fires_and_resume_rearms_the_schedule(tmp_path):
     await down(daemon, task)
 
 
-async def test_a_paused_loop_flow_neither_runs_nor_burns_its_schedule(tmp_path):
+async def test_a_paused_loop_task_neither_runs_nor_burns_its_schedule(tmp_path, monkeypatch):
     """The generator must sit suspended through a pause, not spin through it.
 
     Five iterations with a 50ms cooldown: an implementation that kept
     consuming fires while paused would exhaust the schedule during the pause,
     and resume would have nothing left to run.
     """
+    wait_for_timer = timer_barrier(monkeypatch)
     config = _config(tmp_path, "{type: loop, cooldown: 0.05s, max_iterations: 5}")
     daemon = Daemon(config, store=NullStore())
     task = await up(daemon)
     runner = daemon.runners[0]
 
     await until(lambda: len(runner.results) >= 1, "the first run")
-    runner.pause()
-    await until(lambda: runner.status == "paused", "the pause to land")
     count = len(runner.results)
-    await asyncio.sleep(0.3)
+    delay, elapse = await wait_for_timer()
+    assert delay == pytest.approx(0.05)
+    runner.pause()
+    await _wait_until_pause_is_active(runner)
+    elapse()
+    await until(
+        lambda: runner.status == "paused" and runner._pending is not None and runner._pending.done(),
+        "the due fire to be held",
+    )
     assert len(runner.results) == count  # nothing ran while paused
 
     runner.resume()
@@ -81,13 +95,16 @@ async def test_a_paused_loop_flow_neither_runs_nor_burns_its_schedule(tmp_path):
     await down(daemon, task)
 
 
-async def test_run_now_is_the_first_way_a_manual_flow_ever_runs(tmp_path):
+async def test_run_now_is_the_first_way_a_manual_task_ever_runs(tmp_path):
     config = _config(tmp_path, "{type: manual}")
     daemon = Daemon(config, store=NullStore())
     task = await up(daemon)
     runner = daemon.runners[0]
 
-    await asyncio.sleep(0.05)
+    await until(
+        lambda: runner._pending is not None and not runner._pending.done(),
+        "the manual trigger to arm",
+    )
     assert len(runner.results) == 0  # never fires on its own
 
     assert runner.run_now() is True
@@ -96,19 +113,26 @@ async def test_run_now_is_the_first_way_a_manual_flow_ever_runs(tmp_path):
     await down(daemon, task)
 
 
-async def test_run_now_on_a_paused_flow_runs_once_and_stays_paused(tmp_path):
+async def test_run_now_on_a_paused_task_runs_once_and_stays_paused(tmp_path, monkeypatch):
+    wait_for_timer = timer_barrier(monkeypatch)
     config = _config(tmp_path, "{type: interval, every: 60s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
     task = await up(daemon)
     runner = daemon.runners[0]
 
+    delay, elapse = await wait_for_timer()
+    assert delay == pytest.approx(60)
     runner.pause()
     assert runner.run_now() is True
     await until(lambda: len(runner.results) == 1, "the probe run")
     await until(lambda: runner.status == "paused", "the pause to hold")
-    await asyncio.sleep(0.1)
-    assert len(runner.results) == 1  # once means once
-    await down(daemon, task)
+    elapse()
+    await until(
+        lambda: runner._pending is not None and runner._pending.done(),
+        "the scheduled fire to come due",
+    )
+    results = await down(daemon, task)
+    assert len(results) == 1  # once means once, including through shutdown
 
 
 async def test_run_now_mid_run_is_refused(tmp_path):
@@ -120,9 +144,9 @@ async def test_run_now_mid_run_is_refused(tmp_path):
     assert runner.run_now() is True
     await until(lambda: runner.status == "running", "the run to start")
     assert runner.run_now() is False  # iterations never overlap
+    assert runner._kick is False  # the refusal did not queue another fire
     await until(lambda: len(runner.results) == 1, "the run to finish")
-    await asyncio.sleep(0.1)
-    assert len(runner.results) == 1  # and no second run sneaked in behind it
+    assert runner.status == "waiting"
     await down(daemon, task)
 
 
@@ -141,7 +165,7 @@ default: {provider: fake, model: m}
 """
 
 
-async def test_a_self_paused_flow_comes_back_with_resume(tmp_path):
+async def test_a_self_paused_task_comes_back_with_resume(tmp_path):
     """The failure-causes pause used to demand a daemon restart; no longer."""
     config = _config(
         tmp_path,
@@ -166,13 +190,21 @@ async def test_a_self_paused_flow_comes_back_with_resume(tmp_path):
     await down(daemon, task)
 
 
-async def test_shutdown_reaches_a_paused_runner_promptly(tmp_path):
+async def test_shutdown_reaches_a_paused_runner_promptly(tmp_path, monkeypatch):
+    wait_for_timer = timer_barrier(monkeypatch)
     config = _config(tmp_path, "{type: interval, every: 0.05s, run_at_start: false}")
     daemon = Daemon(config, store=NullStore())
     task = await up(daemon)
     runner = daemon.runners[0]
 
+    delay, elapse = await wait_for_timer()
+    assert delay == pytest.approx(0.05)
     runner.pause()
-    await asyncio.sleep(0.15)  # a fire has come due and is being held unrun
+    await _wait_until_pause_is_active(runner)
+    elapse()
+    await until(
+        lambda: runner.status == "paused" and runner._pending is not None and runner._pending.done(),
+        "the due fire to be held unrun",
+    )
     results = await down(daemon, task)  # wait_for inside is the promptness check
     assert results == []
