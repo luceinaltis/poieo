@@ -381,14 +381,16 @@ export const Drawer = memo(function Drawer({
   }
 
   const liveRunIds = new Set(liveRuns.map((run) => run.run_id))
-  const availableRuns = [
+  const mergedRuns = [
     ...liveRuns,
     ...runs.filter((run) => !liveRunIds.has(run.run_id)),
-  ]
-    .sort((left, right) => runTime(right) - runTime(left))
-    .slice(0, 10)
+  ].sort((left, right) => runTime(right) - runTime(left))
+  const availableRuns = mergedRuns.slice(0, 10)
   const latestRun = availableRuns[0] ?? null
-  const selectedAvailableRun = availableRuns.find((row) => row.run_id === selectedRunId)
+  // A selected run may leave the ten-row history while the stage still holds
+  // its later revision (notably an answered question). Keep the history
+  // bounded, but take the selected snapshot from the full live window.
+  const selectedAvailableRun = mergedRuns.find((row) => row.run_id === selectedRunId)
   const selectedRun =
     selectedAvailableRun ??
     (selectedRunSnapshot?.run_id === selectedRunId ? selectedRunSnapshot : null) ??
