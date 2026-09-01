@@ -362,7 +362,13 @@ test("selecting a task opens the drawer, and reading it leaves the board alone",
   const drawer = container.querySelector(".drawer")!
   expect(drawer).not.toBeNull()
   expect(drawer.getAttribute("data-task")).toBe("chores")
-  // the drawer read a past run through its own scratch stage
+  expect(drawer.querySelector(".run-brief")?.textContent).toContain("did the thing")
+  // The audit costs nothing until asked for, and reading it still belongs to
+  // the drawer rather than the live board.
+  expect(drawer.textContent).not.toContain("list_dir")
+  await act(async () => {
+    drawer.querySelector<HTMLElement>('[data-do="toggle-activity"]')!.click()
+  })
   expect(drawer.textContent).toContain("list_dir")
   expect(store.getStage()).toBe(stage)
 })
@@ -391,7 +397,7 @@ test("opening a different task does not show the previous one's runs", async () 
   )!
   await act(async () => firstOpener.click())
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
-  const first = container.querySelector("[data-run][data-selected='true']")
+  const first = container.querySelector(".run-brief")
 
   const secondOpener = container.querySelector<HTMLElement>(
     '[data-task="board/revision"] .basic-pick',
@@ -401,7 +407,10 @@ test("opening a different task does not show the previous one's runs", async () 
   const drawer = container.querySelector(".drawer")!
   expect(drawer.getAttribute("data-task")).toBe("revision")
   // nothing carried over from the task we just left
-  expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+  expect(container.querySelector(".run-brief")).not.toBe(first)
+  expect(drawer.querySelector('[data-do="toggle-activity"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
 
   await act(async () => {
     drawer.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
@@ -420,6 +429,9 @@ test("a frame for another task leaves the open drawer alone", async () => {
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-activity"]')!.click()
+  })
   expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
 
   const formatted = vi.spyOn(Date.prototype, "toLocaleTimeString")
@@ -432,17 +444,19 @@ test("a frame for another task leaves the open drawer alone", async () => {
 })
 
 
-test("the drawer opens on the run that changed something", async () => {
-  // The newest run found nothing to do. Opening on it greets the reader with
-  // "this run changed no files", which is not what they came for.
+test("the drawer opens on the newest run", async () => {
+  // The first glance answers what happened most recently. An older change is
+  // still in All runs, rather than quietly replacing the latest result.
   await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
 
-  const selected = container.querySelector("[data-run][data-selected='true']")!
-  expect(selected.getAttribute("data-run")).toBe("20260822T072819-98a6708d")
+  const selected = container.querySelector(".run-brief")!
+  expect(selected.getAttribute("data-run")).toBe("newest-but-quiet")
+  expect(selected.querySelector("h3")?.textContent).toBe("Latest run")
+  expect(container.querySelector("[data-run][data-selected='true']")).toBeNull()
 })
 
 

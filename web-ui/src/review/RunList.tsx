@@ -14,7 +14,7 @@ import { shortTime } from "../when"
 import "./review.css"
 
 /** How long a run took, in the coarsest unit that still says something. */
-function took(run: RunSummary): string {
+export function durationOf(run: RunSummary): string {
   const ms = new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()
   if (!Number.isFinite(ms) || ms < 0) return ""
   if (ms < 1000) return `${ms}ms`
@@ -23,7 +23,7 @@ function took(run: RunSummary): string {
   return `${minutes}m ${Math.round((ms % 60_000) / 1000)}s`
 }
 
-function size(run: RunSummary): string {
+export function sizeOf(run: RunSummary): string {
   const change = run.change
   if (change) {
     const files = change.files.length
@@ -68,7 +68,7 @@ function firstLine(said: string, limit = 90): string {
   return line.length > limit ? `${line.slice(0, limit).trimEnd()}…` : line
 }
 
-function account(run: RunSummary, tracked: boolean): string {
+export function accountOf(run: RunSummary, tracked: boolean): string {
   const outcome = outcomeOf(run, tracked)
   if (outcome === "failed") return run.error || "stopped early"
   if (outcome === "nothing") return "found nothing to do"
@@ -80,7 +80,7 @@ function account(run: RunSummary, tracked: boolean): string {
   const said = firstLine(run.said ?? "")
   if (said) return said
   const steps = `${run.steps} step${run.steps === 1 ? "" : "s"}`
-  const spent = took(run)
+  const spent = durationOf(run)
   return spent ? `${steps} · ${spent}` : steps
 }
 
@@ -148,9 +148,9 @@ export function RunList({
             <button type="button" className="run-open" onClick={() => onSelect(run.run_id)}>
               <span className="run-meta">
                 <span className="run-when">{shortTime(run.started_at)}</span>
-                <span className="run-size">{size(run)}</span>
+                <span className="run-size">{sizeOf(run)}</span>
               </span>
-              <span className="run-what">{account(run, tracked)}</span>
+              <span className="run-what">{accountOf(run, tracked)}</span>
             </button>
             {controls ? <div className="run-controls">{controls(run)}</div> : null}
           </li>

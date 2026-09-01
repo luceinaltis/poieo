@@ -184,6 +184,7 @@ test("an older run replaces the brief and closes the run list", async () => {
 
 test("activity stays folded and is fetched only when opened", async () => {
   fetchRunEvents.mockResolvedValue([
+    event("run_started"),
     event("node_tool_call", { data: { name: "read_file", arguments: '{"path":"README.md"}' } }),
   ])
   await draw([run])

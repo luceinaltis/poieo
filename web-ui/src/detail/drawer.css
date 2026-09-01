@@ -7,10 +7,10 @@
 }
 
 .drawer-head {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
   justify-content: space-between;
-  padding-bottom: 10px;
+  padding-bottom: 14px;
 }
 
 /* Everything below the header scrolls together. Nested scroll panes inside a
@@ -18,7 +18,7 @@
 .drawer-body {
   align-content: start;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -32,6 +32,40 @@
 .drawer-head h2 {
   font-size: 1em;
   margin: 0;
+}
+
+.drawer-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* The first answer in the panel: whether the task needs its owner. Colour
+   follows the same fact on the board; the sentence carries it without colour. */
+.drawer-state {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  margin: 0;
+}
+
+.drawer-state[data-state="answer"],
+.drawer-state[data-state="review"],
+.drawer-state[data-state="restart"] {
+  color: var(--ember);
+}
+
+.drawer-state[data-state="failed"] {
+  color: var(--stop);
+}
+
+.drawer-state[data-state="running"] {
+  color: var(--live);
+}
+
+.drawer-state[data-state="paused"],
+.drawer-state[data-state="off"] {
+  color: var(--paused-text);
 }
 
 /* A question waiting on the reader. Given a border and a colour the rest of
@@ -72,10 +106,123 @@
   flex-basis: 100%;
 }
 
-.drawer-summary {
+.run-brief {
+  border-left: 2px solid var(--line);
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 0 5px 12px;
+}
+
+.run-brief[data-change="true"] {
+  border-left-color: var(--ember);
+}
+
+.run-brief[data-outcome="failed"] {
+  border-left-color: var(--stop);
+}
+
+.run-brief[data-outcome="nothing"],
+.run-brief[data-empty="true"] {
+  border-left-color: var(--rule);
+}
+
+.run-brief h3 {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.7em;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.run-brief-what {
+  font-size: 1.08em;
+  line-height: 1.35;
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.run-brief[data-outcome="nothing"] .run-brief-what {
+  color: var(--dim);
+}
+
+.run-brief[data-outcome="failed"] .run-brief-what {
+  color: var(--stop);
+}
+
+.run-brief-meta {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* History and audit are available without owning the first screen. A single
+   ruled disclosure keeps the drawer a ledger rather than a stack of cards. */
+.drawer-fold {
+  border-top: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.drawer-disclosure {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.85em;
+  gap: 7px;
+  padding: 8px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.drawer-disclosure::before {
+  content: "›";
+  font-family: var(--mono);
+  transform: rotate(0deg);
+}
+
+.drawer-disclosure[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+
+.drawer-fold-content {
+  padding: 0 0 8px 13px;
+}
+
+.activity-content {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-loading,
+.activity-empty,
+.activity-error p {
   color: var(--dim);
   font-size: 0.85em;
   margin: 0;
+}
+
+.activity-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.activity-error p {
+  color: var(--stop);
+  flex-basis: 100%;
+}
+
+.activity-error button {
+  font-size: 0.85em;
+  padding: 3px 8px;
 }
 
 .drawer-timeline {
@@ -179,6 +326,8 @@
   .drawer-head button,
   .control button,
   .question-choices button,
+  .drawer-disclosure,
+  .activity-error button,
   .decide-take,
   .decide-drop {
     min-height: 34px;
@@ -198,18 +347,38 @@
   color: var(--dim);
 }
 
-/* The card, openable. Same quiet register as the drawer's other folds. */
+/* Task setup is the last disclosure: important when asked for, but not the
+   answer to what just happened. It shares the ledger rule above it. */
 .drawer-card {
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 6px 10px;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 0;
 }
 
 .drawer-card summary {
+  align-items: center;
   color: var(--dim);
   cursor: pointer;
+  display: flex;
   font-size: 0.85em;
+  gap: 7px;
+  list-style: none;
+  padding: 8px 0;
   user-select: none;
+}
+
+.drawer-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawer-card summary::before {
+  content: "›";
+  font-family: var(--mono);
+}
+
+.drawer-card[open] summary::before {
+  transform: rotate(90deg);
 }
 
 /* The file as it is, in the file's own face. */

@@ -116,7 +116,7 @@ export function Card({
   return (
     <details className="drawer-card">
       <summary className="card-open" onClick={() => void loadCard()}>
-        card
+        Task setup
       </summary>
 
       {isMissing ? (

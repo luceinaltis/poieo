@@ -36,7 +36,7 @@ export function Control({
   if (!enabled) {
     return (
       <p className="control-off">
-        Switched off in its card. Set <code>enabled: true</code> and restart the daemon to run it.
+        Switched off in Task setup. Set <code>enabled: true</code> and restart the daemon to run it.
       </p>
     )
   }
