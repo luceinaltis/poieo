@@ -42,9 +42,6 @@ nodes:
       doing. Five lines at most. Do not propose anything yet, and do not read
       anything else.
 
-      Do not go looking in docs/archive/. It is history -- accurate about the
-      intent on the day it was written, and not guaranteed to describe the code
-      now. Nothing new is written there.
     output:
       as: survey
     next: pick

@@ -42,11 +42,11 @@ Self-review cannot see what you already believe. Look for what a green suite can
 a dropped error path, a surface that quietly widened, a stale comment, a file staged
 by accident. "Self-reviewed, no findings" under a 400-line diff is not one.
 
-And ask where each part came from. Most requirements here arrive from
-`docs/archive/`, written by earlier sessions no longer available to be asked —
-capable ones, which makes them more dangerous to trust, not less. **Before making a
-part faster or more configurable, find out whether the reason it exists is still
-true.** Delete hard enough that some of it has to come back.
+And ask where each part came from. Current reasoning belongs in the component
+document; git history is where to look when that does not explain a surprising
+constraint. **Before making a part faster or more configurable, find out whether
+the reason it exists is still true.** Delete hard enough that some of it has to
+come back.
 
 Merge only when all of these hold:
 
@@ -99,10 +99,8 @@ a curl response, a Windows-only run, anything exercised by hand — as output, n
   how code here is written and where that departs from generic good taste, read before
   your first change to `src/`; and `contribution.md`, the longer procedures these rules
   send you to. `docs/README.md` is the index, and a component's document is edited in
-  the PR that changes its shape.
-- `docs/archive/` — dated design specs features were built from. History: read it
-  for intent, never for current behaviour, and never add to it. Do not start a new
-  dated file anywhere; a design belongs in the component document it describes.
+  the PR that changes its shape. Do not start dated design files; current reasoning
+  belongs in the component document and history belongs in git.
 
 The remote is **public** (`github.com/luceinaltis/poieo`). Never commit an API key, a
 token, or a real model transcript. Run logs live in gitignored `runs/`; keep it there.

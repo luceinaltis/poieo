@@ -1,156 +1,93 @@
-# How code is written here
+# Code conventions
 
-The component documents say how each part works. This one says how a part is
-*written* — the handful of habits this codebase keeps that a competent
-programmer would not guess, because they are not what generic good taste says.
+These are the repository’s deliberate departures from generic Python or
+TypeScript style. The merge procedure and commands are in
+[`AGENTS.md`](../AGENTS.md).
 
-Nothing here is about small functions, clear names, or not repeating yourself.
-You already know those, and a rule you already follow costs attention to read
-without changing a line. What follows is only the places where this repository
-differs, and each says why, because a habit whose reason is gone should be
-dropped rather than obeyed.
+## Point modules at their design contract
 
-If a rule here and the code disagree, the code wins and this document is a bug.
+Production Python modules start with a module docstring that states their
+responsibility. A module that points to a component contract uses a `Design:`
+line naming its guide in `docs/`; tests verify that every pointer used resolves
+to a real document.
 
-## A module says what it is for, and where its design lives
+Keep the component guide about the current contract: responsibility, data and
+configuration shape, important flows, failure handling, constraints, and
+extension points. History belongs in Git. Do not create dated design files.
 
-Every module opens with one line naming its job, and closes the docstring with a
-pointer to the document that explains it:
+## Reject unknown configuration
 
-```python
-"""The logical layer: what work happens, in what order.
+User-authored Pydantic models use `extra="forbid"`. A misspelled key must fail
+where the file is loaded; ignoring it can silently change unattended work.
 
-A graph never names a model. Nodes name a *role* ("classifier", "writer"), and
-:mod:`poieo.binding` maps roles onto physical endpoints.
+Resolve relative paths from the file that contains them, not from the process
+working directory. Preserve authored YAML when a command changes one setting:
+comments and unrelated choices are the user’s data too.
 
-Design: docs/graph.md
-"""
-```
+## Errors are part of the interface
 
-Fourteen modules carry that `Design:` line. It is the only thing tying a file to
-the document that must be updated when the file's shape changes — the merge gate
-asks for that edit, and this is how the next reader finds which document it was.
+Expected configuration, provider, runtime, and workspace failures use the
+project’s `PoieoError` family. CLI commands report those in the product’s voice
+without a traceback. Unexpected programming errors should still surface as
+such.
 
-## A spec forbids what it does not know
+Persisted runtime failures may include a structured cause. Cause slugs and
+their meanings are storage and UI contracts: prefer a stable category plus a
+human explanation and recovery hint over matching exception text. Adding or
+renaming a slug requires updating every reader and its tests.
 
-Every configuration model sets `extra="forbid"`:
+## Unknown is not zero
 
-```python
-class _Spec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-```
+Use `None` when a provider did not report a value. Zero means a measured zero;
+it must not stand in for unknown context size, token usage, cost, or another
+missing observation. Preserve that distinction through storage, aggregation,
+JSON, and the browser.
 
-A key poieo does not recognise is a typo, and a typo must be a loud failure when
-the file loads, never a setting that silently did nothing until someone wonders
-at 3am why the retry never happened. `errors.describe_invalid` turns the refusal
-into the user's words and offers the nearest real key, so strictness costs the
-user a suggestion rather than a puzzle.
+## Comments explain constraints
 
-This is the invariant *fail at launch, not at 3am* (`docs/architecture.md`) in
-the one line that actually enforces it.
+Comments should preserve facts the code cannot express: an ordering required
+for durability, a security boundary, a platform exception, or why an apparent
+simplification would break a contract. Do not narrate the next line or retain
+the story of a bug already fixed.
 
-## The raise says what broke; a `Cause` says it to the user
+Move a comment with the constraint it describes. Module docstrings describe
+the module’s current responsibility, not a roadmap.
 
-Everything raised is a `PoieoError` subclass — nine of them, seven in `errors.py`
-and two beside the code that raises them — and a bare `ValueError` reaching the
-surface is a bug. The message at the `raise` is for whoever reads the traceback.
+## Keep seams narrow
 
-The sentence the *user* reads is not written there. It lives in one place,
-`errors.explain_failure`, which walks the exception chain and returns a `Cause`:
-a stable slug, what happened, and one thing to try.
+The graph, binding, runtime, tools, storage, daemon, workspace, memory, and web
+layers each have a component guide. Depend on their small public contracts
+rather than reaching into implementation state. In particular:
 
-```python
-@dataclass(frozen=True)
-class Cause:
-    slug: str   # the pause logic counts by it, the web groups by it
-    said: str   # what happened, in the user's words
-    fix: str    # one thing to try
-```
+- graphs name roles; bindings choose concrete models;
+- runtime nodes receive tools through the tool registry;
+- run consumers read the store interface, not event files directly;
+- browser actions go through the HTTP boundary;
+- project paths come from the project layout rather than repeated literals.
 
-**The slug is an interface; the sentences are not.** Reword `said` and `fix`
-freely. Renaming a slug silently resets the count that pauses a task after three
-identical failures (`daemon/service.py`, where *identical* means the same slug) and
-regroups the web's history — a change to make deliberately, not while rewording.
+When a new backend fits an existing registry or protocol, extend that seam.
+Do not add a parallel configuration shape for the same idea.
 
-## Not knowing is an answer worth returning
+## Tests name behavior
 
-`explain_failure` returns `None` when nothing matches, and the caller shows the
-raw error instead. An honest *unclassified* beats a confident wrong sentence,
-and the real error is still there either way.
+Write the failing behavior test before the implementation. Test names should
+state the observable rule and avoid private method names unless that private
+unit is itself the only meaningful boundary.
 
-Prefer that shape wherever a guess would be indistinguishable from knowledge.
+Use the narrowest test level that proves the contract, then retain integration
+coverage for boundaries such as YAML preservation, subprocess behavior,
+streamed events, filesystem recovery, and browser requests. Tests must not
+write into committed examples or depend on a developer’s credentials.
 
-## Comments explain the constraint, not the mechanic
+## Use the product vocabulary
 
-The code says what it does. A comment earns its line by saying what the reader
-cannot see — why this branch exists, what it is protecting, what will break:
+The user-facing nouns are **task**, **run**, and **change**:
 
-```python
-# Overload (429/5xx) lands here too: the server's mood, not the request's
-# shape, so the unreachable advice is the right one.
-```
+- a task is the standing instruction;
+- a run is one attempt to carry it out;
+- a change is the reviewable result applied to a user’s files.
 
-```python
-class UiSpec(_Spec):
-    """Canvas coordinates. Written by the editor, ignored by the runtime."""
-```
-
-Comments are sparse on purpose. One that restates the line under it is deleted
-on sight; one holding the reason a surprising line is correct is load-bearing.
-
-## A seam is one module and one registry line
-
-Three things are deliberately swappable, each with a single chokepoint
-(`docs/architecture.md` names them): which backend answers, where tools run,
-what a node type does. Adding a provider, an executor, or a node type should
-touch one new module and add one line to a registry.
-
-**If it needs more than that, the seam has leaked, and the leak is the bug** —
-fix the seam rather than threading the new case through the callers.
-
-## A test is named after the behaviour it defends
-
-```python
-def test_rejects_dangling_edge():
-def test_cycles_are_allowed():
-def test_rejects_bad_template_at_load_time():
-```
-
-Not `test_load_graph_2`. The suite is read most often when something has gone
-red, and the name is the first and sometimes the only description of what was
-promised. This repo is TDD, so the name exists before the behaviour does.
-
-## A new word costs an old one
-
-The user's vocabulary is three words — a **task**, a **run**, a **change** — and
-the merge gate refuses a fourth, or a second way to say one of the three. That
-applies inside the code as well: a concept named one thing in `runtime/` and
-another in `web/` becomes two concepts in the reader's head, and eventually two
-in the product.
-
-Before introducing a name, look for the one already in use. Before keeping both,
-delete one.
-
-## Say what you assumed, before it is only in the code
-
-A change almost always rests on something you could not check: what a caller
-expects, whether a rule still holds, which of two readings of the request was
-meant. **Notice it while you are writing, and put it in the PR** — this belongs
-here rather than with the PR rules because the moment it applies is the moment
-you decide, not the moment you write the description.
-
-This is not general caution, it is specific to how this repository is built.
-Most of what the code answers to came from `docs/archive/`, written by sessions
-that no longer exist to be asked, so a fair number of assumptions cannot be
-resolved at all — only declared. An assumption you state is one a reader can
-disagree with. An assumption that reaches `main` only as code is indistinguishable
-from a decision, and the next session will defend it.
-
-This is *Not knowing is an answer worth returning*, above, turned toward the
-reader: the code declines to name a cause it is unsure of, and you decline to
-encode a belief you could not check.
-
-Two readings that lead to different work are still not a reason to stop. Asking a
-human is reserved for the four one-way doors `AGENTS.md` names, and ambiguity is
-not one of them: take the likelier reading, say which you took, and carry on. A
-question costs a round trip; a declared assumption costs a sentence.
+Use those words in code names, tests, and documentation when they describe the
+product. Keep domain terms such as graph node, provider, binding, journal, and
+worktree only where the distinction is technically necessary. Do not introduce
+a synonym that makes the same object look like a fourth concept.
