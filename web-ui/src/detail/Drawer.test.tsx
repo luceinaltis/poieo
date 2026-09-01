@@ -487,7 +487,9 @@ test("older shell records describe common reads, searches, checks, and revision 
     ["sed -n '60,180p' src/poieo/viewer.py", "Read src/poieo/viewer.py"],
     ["ls docs", "Look through docs"],
     ["sed -i 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
+    ["sed -i.bak 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
     ["git checkout -- docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout HEAD -- docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
     ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
     [
@@ -567,6 +569,19 @@ test("a tool preamble remains when its promised activity records are incomplete"
     "I will inspect both files first.",
   )
   expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
+})
+
+test("a missing tool-only record leaves an explicit gap in the activity", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "", thinking: "", tool_call_count: 2 },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="stuck"]')?.textContent).toContain(
+    "2 tool calls were not fully recorded",
+  )
 })
 
 test("a long tool record stays inside the drawer's event column", async () => {
