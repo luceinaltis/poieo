@@ -20,6 +20,7 @@ import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
+import { Memory } from "./memory/Memory"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { DEFAULT_SKIN_ID, SKINS, skinById } from "./skins/registry"
@@ -32,6 +33,7 @@ const PROJECT_KEY = "poieo.project"
 // (which may name a standalone place): it is what the board rail item comes
 // back to after a visit to runs.
 const BOARD_SKIN_KEY = "poieo.skin.board"
+const MEMORY_PLACE_KEY = "poieo.place.memory"
 
 const STATUS_LABEL: Record<string, string> = {
   connecting: "connecting",
@@ -112,6 +114,11 @@ export default function App({ store }: { store?: StageStore }) {
     }
     panelWasOpenRef.current = panelIsOpen
   }, [activePanel, panelIsOpen])
+  // Remembered across reloads like the skin and project: memory is a place the
+  // reader returns to, not a temporary panel over the board.
+  const [showMemory, setShowMemory] = useState(
+    () => recall(MEMORY_PLACE_KEY, "false") === "true",
+  )
 
   useEffect(() => {
     void stageStore.start()
@@ -184,8 +191,11 @@ export default function App({ store }: { store?: StageStore }) {
   // Standing somewhere other than the board -- a rail place drawn on the
   // stage, like runs -- rather than a rendering of it.
   const standaloneViewId = skinById(skinId).standalone ? skinById(skinId).id : null
+  const memoryOpen = Boolean(showMemory && project)
 
   const openStandaloneView = useCallback((id: string) => {
+    setShowMemory(false)
+    remember(MEMORY_PLACE_KEY, "false")
     setSkinId(id)
     writeSkinPreference(id)
     setActivePanel((current) =>
@@ -202,6 +212,11 @@ export default function App({ store }: { store?: StageStore }) {
     setActivePanel((current) =>
       current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
     )
+  }, [])
+  const openMemory = useCallback(() => {
+    setShowMemory(true)
+    remember(MEMORY_PLACE_KEY, "true")
+    setActivePanel(CLOSED_PANEL)
   }, [])
   const openModels = useCallback(
     (opener: HTMLElement) => {
@@ -266,7 +281,7 @@ export default function App({ store }: { store?: StageStore }) {
             project name follows -- and it leaves the bar while the stage is
             showing a place instead, because a control that does not apply
             must not sit there looking like it does. */}
-        {standaloneViewId || SKINS.filter((skin) => !skin.standalone).length < 2 ? null : (
+        {standaloneViewId || memoryOpen || SKINS.filter((skin) => !skin.standalone).length < 2 ? null : (
           <label className="shell-pick">
             view
             <select
@@ -298,8 +313,10 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={railPanelIsOpen || standaloneViewId ? undefined : "page"}
+          aria-current={railPanelIsOpen || standaloneViewId || memoryOpen ? undefined : "page"}
           onClick={() => {
+            setShowMemory(false)
+            remember(MEMORY_PLACE_KEY, "false")
             closeRailPanel()
             // Coming back from a place, the board wears the rendering it was
             // left in, not a hard-coded one.
@@ -318,13 +335,24 @@ export default function App({ store }: { store?: StageStore }) {
             type="button"
             data-do={`open-${skin.id}`}
             aria-current={
-              !railPanelIsOpen && standaloneViewId === skin.id ? "page" : undefined
+              !railPanelIsOpen && !memoryOpen && standaloneViewId === skin.id
+                ? "page"
+                : undefined
             }
             onClick={() => openStandaloneView(skin.id)}
           >
             {skin.id}
           </button>
         ))}
+        <button
+          type="button"
+          data-do="open-memory"
+          aria-current={!railPanelIsOpen && memoryOpen ? "page" : undefined}
+          disabled={!project}
+          onClick={openMemory}
+        >
+          memory
+        </button>
         <button
           type="button"
           data-do="open-models"
@@ -349,8 +377,9 @@ export default function App({ store }: { store?: StageStore }) {
       </nav>
 
       <div className="shell-stage" data-drawer={String(panelIsOpen)}>
-        <div className="shell-board" ref={boardRef} />
-        {empty ? (
+        <div className="shell-board" data-hidden={String(memoryOpen)} ref={boardRef} />
+        {memoryOpen && project ? <Memory key={project.name} project={project.name} /> : null}
+        {empty && !memoryOpen ? (
           <div className="shell-empty">
             <p>No tasks yet. Create one to put your models to work.</p>
             <button

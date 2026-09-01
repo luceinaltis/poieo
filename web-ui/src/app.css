@@ -137,6 +137,11 @@
   position: absolute;
 }
 
+.shell-board[data-hidden="true"] {
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .shell-empty {
   align-content: center;
   color: var(--dim);

@@ -89,8 +89,10 @@ memory/
     page                    the one page in front of every run
     history                 every write, and who wrote it
     pieces_fts              derived; dropped and rebuilt without being asked
+    pieces_text_fts         derived; Unicode word search for a person
   cache/                    derived; delete it freely
     strength.json           how strong each connection is
+    embeddings.sqlite3      entry vectors, keyed by model and body digest
     blobs/                  copies of what entries were written against
     learning.jsonl          what every pass did
 runs/results/<run_id>.json  the full record of one run
@@ -110,6 +112,9 @@ Losing that one file loses the memory, which is the price of not keeping two.
 |---|---|
 | `entries.py` | where the memory is kept: schema, the one write door, history, the page, load-time checks |
 | `index.py` | a derived lookup over the pieces, dropped and rebuilt without being asked |
+| `browse.py` | the bounded graph, entry detail and a person's word search |
+| `semantic.py` | meaning search and its disposable model-specific vectors |
+| `ask.py` | hybrid shortlist, evidence-only answer and citation checking |
 | `recall.py` | choosing what a card is shown, and assembling the block |
 | `results.py` | the full record every run leaves behind |
 | `upkeep.py` | what the memory would like a person to look at |
@@ -224,6 +229,10 @@ Two things are not room-dependent, and both stay:
 
 ### When meaning-ranking earns its place
 
+This section is about **autonomous recall into a run**, not a person's search
+on the board. The board may compare meaning because it changes what the person
+sees, never what a task is shown on its own.
+
 Nothing here compares meaning — the whole of it is set intersection over shaped
 words. That is deliberate, and the condition for revisiting it is written down
 rather than left to taste:
@@ -253,6 +262,33 @@ anything to decide.
 you chose needs what it leans on, not the reverse), and `contradicts` is a
 **veto** — "this disputes [[x]]" is an ordinary way to write a disagreement, and
 the mention inside it must not smuggle the disputed entry into a prompt.
+
+## What a person searches on the board
+
+The board has three explicit modes. **Words** searches the visible memory slug
+and the raw piece text with Unicode FTS and a Unicode substring fallback; it
+does not reuse the ASCII shape whose narrower job is autonomous recall.
+**Meaning** embeds the query and entry
+bodies in the model named by `memory_embedder`, compares cosine similarity, and
+keeps vectors only under `memory/cache/`. A changed body, model or endpoint
+fingerprint misses that cache and is embedded again. The cache is disposable:
+a damaged SQLite file is removed and rebuilt from the entry bodies.
+That first miss sends each entry body to the configured embedding endpoint;
+choose that role with the same privacy care as any model that reads a prompt.
+
+**Ask** takes both ranked lists and fuses ranks, with the word channel weighted
+twice. The model named by `memory_searcher` receives only that shortlist, no
+tools, and must cite supplied slugs as `[[slug]]`; citations to anything else
+are removed. If meaning search fails, the response says it used words only.
+Queries and answers are not persisted.
+
+Similarity is never topology. The graph draws `mentions`, `depends_on`,
+`contradicts` and `superseded_by`, plus learned strength on those existing
+connections. A similar result may glow; it never earns a line.
+Directional relationships have arrowheads, and the selected entry lists their
+targets and its recorded history beside the graph.
+The initial paint caps both memories and connections; its response says when
+either was shortened, while search still reaches every entry.
 
 ### Strength
 

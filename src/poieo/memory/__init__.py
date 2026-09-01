@@ -36,7 +36,7 @@ from .entries import (
 )
 from .recall import read_memory
 from .results import results_dir, used_in, write_result
-from .upkeep import doubts, memory_report
+from .upkeep import doubts, memory_report, overview_watch_paths
 
 __all__ = [
     "Entry",
@@ -47,6 +47,7 @@ __all__ = [
     "history_of",
     "keeps_memory",
     "memory_report",
+    "overview_watch_paths",
     "open_memory",
     "page_written_at",
     "read_memory",

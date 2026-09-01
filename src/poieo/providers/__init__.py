@@ -63,6 +63,12 @@ def build_provider(name: str, spec: ProviderSpec) -> Provider:
     return cls(name, spec)
 
 
+def supports_embeddings(spec: ProviderSpec) -> bool:
+    """Whether this declared provider has an embedding wire implementation."""
+    cls = _REGISTRY.get(spec.type)
+    return bool(cls and cls.supports_embeddings)
+
+
 def check_credentials(binding: BindingSpec, roles: set[str]) -> None:
     """Every credential the given roles will ask for, before anything is armed.
 
@@ -127,4 +133,5 @@ __all__ = [
     "check_credentials",
     "credential_for",
     "register",
+    "supports_embeddings",
 ]

@@ -875,6 +875,43 @@ async def test_openai_complete_parses_tool_calls(monkeypatch):
     await provider.aclose()
 
 
+async def test_openai_embeddings_keep_input_order(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "openai_compatible", "base_url": "http://x"})
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        assert path == "/embeddings"
+        assert payload == {"model": "embed", "input": ["one", "two"]}
+        return {
+            "data": [
+                {"index": 1, "embedding": [0.0, 1.0]},
+                {"index": 0, "embedding": [1.0, 0.0]},
+            ]
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    assert await provider.embed("embed", ["one", "two"]) == [[1.0, 0.0], [0.0, 1.0]]
+    await provider.aclose()
+
+
+async def test_openai_embeddings_refuse_duplicate_input_indices(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "openai_compatible", "base_url": "http://x"})
+    provider = OpenAICompatibleProvider("vllm", spec)
+
+    async def fake_post(path, payload):
+        return {
+            "data": [
+                {"index": 0, "embedding": [1.0, 0.0]},
+                {"index": 0, "embedding": [0.0, 1.0]},
+            ]
+        }
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    with pytest.raises(ProviderError, match="invalid shape"):
+        await provider.embed("embed", ["one", "two"])
+    await provider.aclose()
+
+
 async def test_openai_complete_rejects_malformed_tool_arguments(monkeypatch):
     spec = ProviderSpec.model_validate({"type": "openai_compatible", "base_url": "http://x"})
     provider = OpenAICompatibleProvider("vllm", spec)
@@ -921,6 +958,20 @@ async def test_ollama_complete_parses_tool_calls(monkeypatch):
     assert response.tool_calls[0].name == "read_file"
     assert response.tool_calls[0].arguments == {"path": "a"}
     assert response.tool_calls[0].id.startswith("call_")
+    await provider.aclose()
+
+
+async def test_ollama_embeddings_use_the_batch_endpoint(monkeypatch):
+    spec = ProviderSpec.model_validate({"type": "ollama", "base_url": "http://x"})
+    provider = OllamaProvider("ollama", spec)
+
+    async def fake_post(path, payload):
+        assert path == "/api/embed"
+        assert payload == {"model": "nomic-embed-text", "input": ["하나", "둘"]}
+        return {"embeddings": [[1, 0], [0, 1]]}
+
+    monkeypatch.setattr(provider, "_post", fake_post)
+    assert await provider.embed("nomic-embed-text", ["하나", "둘"]) == [[1.0, 0.0], [0.0, 1.0]]
     await provider.aclose()
 
 

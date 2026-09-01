@@ -160,6 +160,7 @@ class Provider(abc.ABC):
     """A physical endpoint. One instance per declared provider, reused per run."""
 
     type: str = "base"
+    supports_embeddings: bool = False
 
     def __init__(self, name: str, spec: ProviderSpec):
         self.name = name
@@ -168,6 +169,13 @@ class Provider(abc.ABC):
     @abc.abstractmethod
     async def complete(self, request: LLMRequest) -> LLMResponse:
         """Run one completion. Raise ProviderError on failure."""
+
+    async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
+        """Embed text when this endpoint has a documented embedding wire."""
+        raise ProviderError(
+            f"{self.name}: {self.type} does not support embeddings",
+            provider=self.name,
+        )
 
     async def health(self) -> tuple[bool, str]:
         """Cheap reachability probe used by ``poieo providers check``."""

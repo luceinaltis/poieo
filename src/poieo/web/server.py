@@ -17,6 +17,7 @@ Design: docs/web.md
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -31,7 +32,7 @@ from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -44,7 +45,11 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError
-from ..providers import credential_for
+from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
+from ..memory.ask import ask_memory
+from ..memory.browse import entry_document, graph_snapshot, keyword_search
+from ..memory.semantic import semantic_search
+from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
 from ..workspace import usable as git_keeps_copies
 from .events import BroadcastStore
@@ -1681,6 +1686,272 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # turn of the shared event loop, after this response is already gone.
         return JSONResponse({"status": "starting"})
 
+    def _memory_capabilities(project: Any, enabled: bool) -> dict[str, bool]:
+        """Which searches this project's explicitly named roles can serve."""
+        if not enabled:
+            return {"words": False, "meaning": False, "ask": False}
+        try:
+            spec = _models_of(project)
+        except PoieoError:
+            spec = None
+        if spec is None:
+            return {"words": True, "meaning": False, "ask": False}
+
+        ask = False
+        if "memory_searcher" in spec.roles:
+            try:
+                spec.resolve("memory_searcher")
+                ask = True
+            except BindingError:
+                pass
+        meaning = False
+        if "memory_embedder" in spec.roles:
+            try:
+                resolved = spec.resolve("memory_embedder")
+                meaning = supports_embeddings(resolved.provider)
+            except BindingError:
+                meaning = False
+        return {"words": True, "meaning": meaning, "ask": ask}
+
+    def _memory_revision(project: Any) -> str:
+        """A cheap validator for memory writes, model roles, and run accounting."""
+        layout = project.config.layout()
+        paths = [
+            layout.longterm(),
+            layout.results(),
+            project.config.source_path,
+            project.config.default_binding_path(),
+            *overview_watch_paths(Path(project.config.base_dir)),
+        ]
+        stamps: list[str] = []
+        for path in paths:
+            if path is None:
+                stamps.append("-")
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                stamps.append("-")
+            else:
+                stamps.append(f"{stat.st_mtime_ns}:{stat.st_size}")
+        digest = hashlib.sha256("|".join(stamps).encode("ascii")).hexdigest()[:24]
+        return f'"memory-{digest}"'
+
+    async def project_memory(request: Request) -> Response:
+        """The bounded constellation and the facts needed to caption it."""
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        root = Path(project.config.base_dir)
+        revision = await asyncio.to_thread(_memory_revision, project)
+        # The UI carries this validator only for the lifetime of the open
+        # memory place.  Browsers must not keep a graph after that view closes.
+        cache_headers = {"etag": revision, "cache-control": "no-store"}
+        if request.headers.get("if-none-match") == revision:
+            return Response(status_code=304, headers=cache_headers)
+        enabled = await asyncio.to_thread(keeps_memory, root)
+        capabilities = await asyncio.to_thread(_memory_capabilities, project, enabled)
+        if not enabled:
+            return JSONResponse(
+                {
+                    "enabled": False,
+                    "page": None,
+                    "stats": None,
+                    "capabilities": capabilities,
+                    "graph": {
+                        "nodes": [],
+                        "edges": [],
+                        "total_nodes": 0,
+                        "total_edges": 0,
+                        "truncated": False,
+                        "edges_truncated": False,
+                    },
+                },
+                headers=cache_headers,
+            )
+
+        def read_memory() -> tuple[Any, Any, Any]:
+            # The first open after an upgrade may build derived indexes. Keep
+            # the two database reads sequential so they cannot race that work.
+            return read_page(root), memory_report(root), graph_snapshot(root)
+
+        page, stats, graph = await asyncio.to_thread(read_memory)
+        return JSONResponse(
+            {
+                "enabled": True,
+                "page": page,
+                "stats": stats,
+                "capabilities": capabilities,
+                "graph": graph,
+            },
+            headers=cache_headers,
+        )
+
+    async def project_memory_entry(request: Request) -> JSONResponse:
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        slug = request.path_params["slug"]
+        document = await asyncio.to_thread(entry_document, Path(project.config.base_dir), slug)
+        if document is None:
+            return JSONResponse({"error": f"no memory '{slug}'"}, status_code=404)
+        return JSONResponse(document)
+
+    async def project_memory_search(request: Request) -> JSONResponse:
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return JSONResponse({"error": "the search body must be JSON"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "the search body must be an object"}, status_code=400)
+        query = payload.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return JSONResponse({"error": "query must be a non-empty string"}, status_code=400)
+        if len(query) > 2_000:
+            return JSONResponse({"error": "query must be 2000 characters or fewer"}, status_code=400)
+        mode = payload.get("mode", "words")
+        if mode not in {"words", "meaning"}:
+            return JSONResponse(
+                {"error": "mode must be one of: words, meaning"},
+                status_code=400,
+            )
+        try:
+            limit = int(payload.get("limit", 20))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "limit must be a number"}, status_code=400)
+        limit = min(50, max(1, limit))
+        include_set_aside = payload.get("include_set_aside", True)
+        if not isinstance(include_set_aside, bool):
+            return JSONResponse({"error": "include_set_aside must be true or false"}, status_code=400)
+        root = Path(project.config.base_dir)
+        if mode == "words":
+            results = await asyncio.to_thread(
+                keyword_search,
+                root,
+                query,
+                limit=limit,
+                include_set_aside=include_set_aside,
+            )
+            return JSONResponse({"query": query, "mode": mode, "results": results})
+
+        try:
+            spec = await asyncio.to_thread(_models_of, project)
+        except PoieoError:
+            spec = None
+        if spec is None or "memory_embedder" not in spec.roles:
+            return JSONResponse(
+                {"error": "meaning search needs an explicit memory_embedder role"},
+                status_code=409,
+            )
+        try:
+            resolved = spec.resolve("memory_embedder")
+        except BindingError:
+            return JSONResponse(
+                {"error": "memory_embedder does not resolve to a model"},
+                status_code=409,
+            )
+        if not supports_embeddings(resolved.provider):
+            return JSONResponse(
+                {"error": "memory_embedder must use an endpoint that supports embeddings"},
+                status_code=409,
+            )
+        fingerprint = hashlib.sha256(resolved.provider.model_dump_json(exclude_none=True).encode("utf-8")).hexdigest()[
+            :16
+        ]
+        try:
+            async with ProviderPool(spec) as pool:
+                results = await semantic_search(
+                    root,
+                    query,
+                    provider=pool.get(resolved.provider_name),
+                    model=resolved.model,
+                    model_key=f"{resolved.ref}@{fingerprint}",
+                    limit=limit,
+                    include_set_aside=include_set_aside,
+                )
+        except PoieoError:
+            return JSONResponse(
+                {"error": "memory_embedder could not answer this search"},
+                status_code=503,
+            )
+        return JSONResponse({"query": query, "mode": mode, "model": resolved.ref, "results": results})
+
+    async def project_memory_ask(request: Request) -> JSONResponse:
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            return JSONResponse({"error": "the question body must be JSON"}, status_code=400)
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "the question body must be an object"}, status_code=400)
+        question = payload.get("question")
+        if not isinstance(question, str) or not question.strip():
+            return JSONResponse({"error": "question must be a non-empty string"}, status_code=400)
+        if len(question) > 2_000:
+            return JSONResponse({"error": "question must be 2000 characters or fewer"}, status_code=400)
+        include_set_aside = payload.get("include_set_aside", True)
+        if not isinstance(include_set_aside, bool):
+            return JSONResponse({"error": "include_set_aside must be true or false"}, status_code=400)
+
+        try:
+            spec = await asyncio.to_thread(_models_of, project)
+        except PoieoError:
+            spec = None
+        if spec is None or "memory_searcher" not in spec.roles:
+            return JSONResponse(
+                {"error": "AI answers need an explicit memory_searcher role"},
+                status_code=409,
+            )
+        try:
+            answerer = spec.resolve("memory_searcher")
+        except BindingError:
+            return JSONResponse(
+                {"error": "memory_searcher does not resolve to a model"},
+                status_code=409,
+            )
+
+        embedder = None
+        if "memory_embedder" in spec.roles:
+            try:
+                candidate = spec.resolve("memory_embedder")
+                if supports_embeddings(candidate.provider):
+                    embedder = candidate
+            except BindingError:
+                pass
+
+        root = Path(project.config.base_dir)
+        try:
+            async with ProviderPool(spec) as pool:
+                embed_provider = pool.get(embedder.provider_name) if embedder else None
+                embed_key = None
+                if embedder is not None:
+                    fingerprint = hashlib.sha256(
+                        embedder.provider.model_dump_json(exclude_none=True).encode("utf-8")
+                    ).hexdigest()[:16]
+                    embed_key = f"{embedder.ref}@{fingerprint}"
+                answer = await ask_memory(
+                    root,
+                    question,
+                    answer_provider=pool.get(answerer.provider_name),
+                    answer_model=answerer.model,
+                    answer_params=answerer.params,
+                    embed_provider=embed_provider,
+                    embed_model=embedder.model if embedder else None,
+                    embed_model_key=embed_key,
+                    include_set_aside=include_set_aside,
+                )
+        except PoieoError:
+            return JSONResponse(
+                {"error": "memory_searcher could not answer this question"},
+                status_code=503,
+            )
+        return JSONResponse(answer)
+
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")
         return StreamingResponse(
@@ -1703,6 +1974,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/projects/{project}/models", project_models),
+        Route("/api/projects/{project}/memory", project_memory),
+        Route("/api/projects/{project}/memory/search", project_memory_search, methods=["POST"]),
+        Route("/api/projects/{project}/memory/ask", project_memory_ask, methods=["POST"]),
+        Route("/api/projects/{project}/memory/{slug}", project_memory_entry),
         # Its own read rather than a field on the one above: a candidate port
         # nothing is listening on costs a full timeout, and the catalogue must
         # not wait on its own footnote.

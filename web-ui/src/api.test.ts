@@ -1,6 +1,17 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
-import { fetchTasks, fetchRunEvents, fetchRuns, openFeed, pause, resume, runNow } from "./api"
+import {
+  askMemory,
+  fetchMemory,
+  fetchRunEvents,
+  fetchRuns,
+  fetchTasks,
+  openFeed,
+  pause,
+  resume,
+  runNow,
+  searchMemory,
+} from "./api"
 import type { PoieoEvent } from "./types"
 
 class FakeEventSource {
@@ -44,6 +55,7 @@ function stubFetch(routes: Record<string, { status?: number; body: unknown }>) {
     return {
       ok: status < 400,
       status,
+      headers: { get: () => null },
       json: async () => (hit ? hit.body : { error: "no such thing" }),
     }
   })
@@ -81,6 +93,78 @@ test("fetchTasks keeps the whole listing, project and all", async () => {
 test("a listing the daemon did not answer is an empty board, not a crash", async () => {
   stubFetch({})
   expect(await fetchTasks()).toEqual({ projects: [], tasks: [] })
+})
+
+test("memory reads the selected project and search posts its mode", async () => {
+  const fetchStub = stubFetch({
+    "/api/projects/night%20shift/memory": {
+      body: {
+        enabled: true,
+        graph: {
+          nodes: [],
+          edges: [],
+          total_nodes: 0,
+          total_edges: 0,
+          truncated: false,
+          edges_truncated: false,
+        },
+      },
+    },
+    "/api/projects/night%20shift/memory/search": {
+      body: { query: "셸", mode: "meaning", results: [] },
+    },
+  })
+
+  expect((await fetchMemory("night shift"))?.enabled).toBe(true)
+  expect(await searchMemory("night shift", "셸", "meaning", false)).toMatchObject({
+    ok: true,
+    mode: "meaning",
+  })
+  expect(fetchStub).toHaveBeenLastCalledWith(
+    "/api/projects/night%20shift/memory/search",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        query: "셸",
+        mode: "meaning",
+        limit: 20,
+        include_set_aside: false,
+      }),
+    },
+  )
+})
+
+test("memory revalidation accepts an unchanged overview without a body", async () => {
+  const fetchStub = stubFetch({
+    "/api/projects/board/memory": { status: 304, body: null },
+  })
+
+  expect(await fetchMemory("board", '"memory-one"')).toBeUndefined()
+  expect(fetchStub).toHaveBeenCalledWith("/api/projects/board/memory", {
+    cache: "no-store",
+    headers: { "if-none-match": '"memory-one"' },
+  })
+})
+
+test("asking memory sends a question rather than disguising it as search", async () => {
+  const fetchStub = stubFetch({
+    "/api/projects/board/memory/ask": {
+      body: { answer: "because [[shell]]", citations: ["shell"], evidence: [] },
+    },
+  })
+
+  expect(await askMemory("board", "why?", true)).toMatchObject({
+    ok: true,
+    citations: ["shell"],
+  })
+  expect(fetchStub).toHaveBeenCalledWith(
+    "/api/projects/board/memory/ask",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ question: "why?", include_set_aside: true }),
+    }),
+  )
 })
 
 test("an older daemon that names no project still lists its tasks", async () => {

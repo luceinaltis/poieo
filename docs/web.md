@@ -11,10 +11,11 @@ a user to install.
 ## The API
 
 Almost everything answers *what is happening / what happened*. The routes that
-change anything come in **five kinds**, one fence each and one fence under all
+change user state come in **five kinds**, one fence each and one fence under all
 of them, and both the server and the client keep them together so they stay easy
 to count. Five is already too many; the paragraph on each says what would have
-to be true to add a sixth.
+to be true to add a sixth. Memory search also has two POSTs: fenced because one
+may spend a model call, but neither is a sixth kind of state change.
 
 | route | does |
 |---|---|
@@ -24,6 +25,10 @@ to be true to add a sixth.
 | `GET /api/runs/{id}/diff` | what that run changed |
 | `GET /api/projects/{p}/models` | every model this project can reach, asked live, endpoint by endpoint |
 | `GET /api/projects/{p}/models/undeclared` | engines running on this machine that this project cannot reach |
+| `GET /api/projects/{p}/memory` | the memory's bounded graph, page, upkeep counts and available search modes |
+| `GET /api/projects/{p}/memory/{slug}` | one complete memory entry and its history |
+| `POST /api/projects/{p}/memory/search` | a read-only word or meaning search; the body carries the query and mode |
+| `POST /api/projects/{p}/memory/ask` | a read-only answer from a hybrid shortlist, with cited memory entries |
 | `GET /api/events` | every event, live (SSE; `?task=` filters), plus `tasks_changed` |
 | `GET /api/projects/{p}/tasks/{f}` | one task's card: the file, and its three fields |
 | `POST /api/projects/{p}/tasks` | **make** — write one card into the tasks folder, started or not |
@@ -66,6 +71,12 @@ may write the project's binding file and nothing else, and it never accepts or
 returns a credential.** A key is a variable *name* here and a value nowhere. If
 a route in this group ever needs to take one, that is the signal this kind has
 stopped being what this paragraph describes.
+
+The two memory POSTs are not a sixth user-state kind. Neither changes the memory:
+meaning search may fill `memory/cache/embeddings.sqlite3`, which is disposable,
+and ask may spend a call to the explicitly named model. They use POST because a
+question and its options belong in a JSON body, and therefore receive the same
+origin fence as every other non-GET request.
 
 ### The one fence under all five
 
@@ -594,6 +605,7 @@ web-ui/src/
   detail/Question   what a `confirm` node stopped to ask, and its answers
   review/           last night's work: the list, the diff, accept and discard
   models/           which models this project runs on
+  memory/           the constellation, search evidence and one selected entry
 ```
 
 **A refusal is a value, and it is shown the same way everywhere.** `useAct`
@@ -620,11 +632,41 @@ task.
 
 The **rail** is the nav down the left: what the page is *for*, where the bar's
 controls are a fixed handful about the board already on screen. It holds
-`board`, `runs`, `models` and `new task` today and is where the next view
+`board`, `runs`, `memory`, `models` and `new task` today and is where the next view
 lands. `board` is a rail item
 rather than a close box, because "no panel over it" is a place you can be and
 closing is not — the rail always says where you are, in one item marked
 `aria-current="page"`.
+
+**Memory is a place, not a skin.** A skin receives the already-reduced task
+stage and never fetches. Memory asks a different project API, owns a query and
+selected evidence, and remains useful when no task exists, so the shell mounts
+it beside the skin host rather than widening the skin contract with unrelated
+state.
+While the place stays open it revalidates the overview every fifteen seconds,
+so a learning pass appears without a reload; an unchanged revision answers
+without rebuilding or retransmitting the graph, and the current query and
+evidence remain in place across that quiet refresh. The revision includes the
+learned connection strengths and every declared anchor, since either can
+change the graph or its second-look notes without rewriting an entry.
+
+Its canvas is a two-lobed three-dimensional constellation projected with
+perspective and without a new rendering dependency. Stable slug positions give
+it shape, then declared relationships pull their ends into the same visual
+neighbourhood instead of leaving the graph to chance. Drag orbits, the wheel
+travels, and the evidence list is the keyboard-readable route to every search
+result; compact interface copy stays at least twelve pixels at the normal root
+size. Orbit redraws are coalesced to the display frame, and very dense graphs
+trade decorative curves for straight connections. Only declared memory
+relationships become lines. Search similarity dims or lights nodes; an AI
+answer lights its cited nodes and the real lines between them, never a synthetic
+"similar" edge. Directional lines end in arrowheads, and selecting a node lists
+its outgoing relationships and history. A prose mention may legitimately name
+no entry yet; following one keeps the current detail in place and says that the
+named memory is unavailable. Set-aside entries remain visible as a faint outer
+shadow and can be hidden. Under 720px the search controls wrap, the
+constellation takes the upper half, and evidence becomes the scrolling document
+below it.
 
 The panel itself is the drawer's twin — the same fixed aside on the same edge at
 the same width — so only one of them is ever open, and `.shell-stage` reserves
