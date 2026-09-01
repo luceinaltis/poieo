@@ -125,7 +125,7 @@ function buildRow(task: string, callbacks: SkinCallbacks): Row {
 
   const head = element("button", "runs-head", root)
   ;(head as HTMLButtonElement).type = "button"
-  head.addEventListener("click", () => callbacks.onSelectTask(task))
+  head.addEventListener("click", () => callbacks.onSelectTask(task, head))
 
   return {
     root,

@@ -198,15 +198,42 @@ test("opening the panel closes the drawer", async () => {
   expect(container.querySelector(".models")).not.toBeNull()
 })
 
-test("closing the panel puts the board back", async () => {
+test("closing the panel restores the control that opened it", async () => {
   await open()
-  await act(async () => button("open-models")!.click())
+  const opener = button("open-models")!
+  await act(async () => opener.click())
+
+  const panel = container.querySelector<HTMLElement>(".models")!
+  expect(document.activeElement).toBe(panel)
+  expect(panel.tabIndex).toBe(-1)
+  expect(
+    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+  ).toBe("true")
 
   await act(async () => {
     container.querySelector<HTMLElement>(".models-close")!.click()
   })
 
   expect(container.querySelector(".models")).toBeNull()
+  expect(document.activeElement).toBe(opener)
+  expect(
+    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+  ).toBe("false")
+})
+
+test("switching rail panels restores the latest control", async () => {
+  await open()
+  await act(async () => button("open-models")!.click())
+
+  const opener = button("open-make")!
+  await act(async () => opener.click())
+  expect(document.activeElement).toBe(container.querySelector(".make"))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>(".make-close")!.click()
+  })
+
+  expect(document.activeElement).toBe(opener)
 })
 
 test("a warning about one project is not redrawn over the next", async () => {

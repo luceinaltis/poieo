@@ -638,6 +638,14 @@ does *inside* that box. Three hand copies drifted once (two chopped their own
 headings on a phone), so a panel added here takes the class rather than the
 file.
 
+**A phone panel owns the foreground.** Below 720px its shared width becomes the
+viewport rather than leaving an uncovered strip. It sits above a standalone
+view's sticky ruler, and the covered rail and stage become invisible. They keep
+their dimensions so the mounted view does not relayout at zero width, but are
+removed from pointer and keyboard navigation until the panel closes. Focus
+enters the panel when it opens and returns to the control that opened it when
+its own close button is used.
+
 **A big catalogue folds by maker.** A hosted listing names every model
 `maker/model` — 396 across 58 makers — and a flat list of that is not read, it
 is scrolled past. So each maker is a `<details>` card, shut until opened, with
@@ -758,7 +766,10 @@ speed. Everything downstream reads `StageState` and never an event.
 takes callbacks; it never fetches, never sees a raw event, and keeps no state of
 its own beyond what it needs to draw. If a skin needs to know something,
 `StageState` is what is wrong, not the skin. `App.tsx` is the only file here that
-knows React. Adding a skin is a module and a line in `skins/registry.ts`.
+knows React. A task-selection callback carries both the task key and the control
+that was used, so the shell can return focus even when a tapped button was not
+focused by the browser. Adding a skin is a module and a line in
+`skins/registry.ts`.
 
 `mount()` is synchronous on purpose: a skin whose renderer has to be loaded
 returns its handle at once and swaps the renderer in later, as the removed 3D

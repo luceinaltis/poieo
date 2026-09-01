@@ -324,20 +324,27 @@ test("opening a different task does not show the previous one's runs", async () 
   // task, switching tasks leaves the last task's run in the diff pane.
   await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
-  await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
-  })
+  const firstOpener = container.querySelector<HTMLElement>(
+    '[data-task="board/chores"] .basic-pick',
+  )!
+  await act(async () => firstOpener.click())
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
   const first = container.querySelector("[data-run][data-selected='true']")
 
-  await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="board/revision"] .basic-pick')!.click()
-  })
+  const secondOpener = container.querySelector<HTMLElement>(
+    '[data-task="board/revision"] .basic-pick',
+  )!
+  await act(async () => secondOpener.click())
 
   const drawer = container.querySelector(".drawer")!
   expect(drawer.getAttribute("data-task")).toBe("revision")
   // nothing carried over from the task we just left
   expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+
+  await act(async () => {
+    drawer.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
+  })
+  expect(document.activeElement).toBe(secondOpener)
 })
 
 
@@ -497,9 +504,10 @@ test("make one like it opens the make panel already filled in", async () => {
   // person edits from there rather than from nothing.
   await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
-  await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
-  })
+  const opener = container.querySelector<HTMLElement>(
+    '[data-task="board/chores"] .basic-pick',
+  )!
+  await act(async () => opener.click())
   await act(async () => {
     container.querySelector<HTMLElement>(".card-open")!.click()
   })
@@ -518,6 +526,9 @@ test("make one like it opens the make panel already filled in", async () => {
   expect(container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!.value).toBe(
     "tidy",
   )
+
+  await act(async () => container.querySelector<HTMLElement>(".make-close")!.click())
+  expect(document.activeElement).toBe(opener)
 
   // `new task` from the rail afterwards is a blank page again: the seed
   // belongs to the press that asked for it, not to the panel.
