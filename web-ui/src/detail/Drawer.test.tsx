@@ -453,8 +453,10 @@ test("each tool leads with its agent-written purpose and folds the raw record", 
 
   const details = container.querySelector<HTMLDetailsElement>(".drawer-tool")!
   expect(details.open).toBe(false)
-  expect(details.querySelector("summary")?.textContent).toContain(purpose)
-  expect(details.querySelector("summary")?.textContent).toContain("1.1s")
+  const summary = details.querySelector("summary")!
+  expect(summary.textContent).toContain(purpose)
+  expect(summary.textContent).toContain("run_command · completed · 1.1s")
+  expect(summary.hasAttribute("aria-label")).toBe(false)
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("run_command")
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("gh pr view 343")
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("native tool option")
@@ -484,13 +486,15 @@ test("older shell records describe common reads, searches, checks, and revision 
     ['grep -rn "confirm" src/poieo --include=*.py', "Search the project for “confirm”"],
     ["sed -n '60,180p' src/poieo/viewer.py", "Read src/poieo/viewer.py"],
     ["ls docs", "Look through docs"],
+    ["sed -i 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
+    ["git checkout -- docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
     ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
     [
       "git rev-parse HEAD; git merge-base --is-ancestor main HEAD",
       "Check whether the candidate includes its base",
     ],
-    ['python -c "print(1)"', "Inspect behavior with Python"],
+    ['python -c "print(1)"', "Run a Python command for this task"],
     ["@'\n## Independent review", "Prepare the independent review"],
   ]
   await show(
@@ -515,18 +519,54 @@ test("older shell records describe common reads, searches, checks, and revision 
 test("a tool turn's preamble does not duplicate the purpose entries below it", async () => {
   await show([
     event("node_turn", {
-      data: { text: "I will inspect both files first.", tool_call_count: 2 },
+      node_id: "work",
+      data: { turn: 1, text: "I will inspect both files first.", tool_call_count: 2 },
     }),
     event("node_tool_call", {
-      data: { name: "read_file", purpose: "Read the design contract.", arguments: "DESIGN.md" },
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
     }),
     event("node_tool_call", {
-      data: { name: "read_file", purpose: "Read the web guide.", arguments: "docs/web.md" },
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the web guide.",
+        arguments: "docs/web.md",
+      },
     }),
   ])
 
   expect(container.querySelectorAll('[data-kind="turn"]')).toHaveLength(0)
   expect(container.querySelectorAll(".drawer-tool")).toHaveLength(2)
+})
+
+test("a tool preamble remains when its promised activity records are incomplete", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "I will inspect both files first.", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="turn"]')?.textContent).toContain(
+    "I will inspect both files first.",
+  )
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
 })
 
 test("a long tool record stays inside the drawer's event column", async () => {

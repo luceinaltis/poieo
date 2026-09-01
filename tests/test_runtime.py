@@ -1441,6 +1441,58 @@ async def test_agent_tool_calls_record_their_purpose_without_passing_it_to_the_t
     assert call.data["result"].endswith("the brief")
 
 
+async def test_malformed_tool_arguments_become_a_recorded_tool_failure(tmp_path, monkeypatch):
+    """Display metadata must not bypass the executor's ordinary error record."""
+    from poieo.providers.base import LLMResponse, ToolCall
+
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "work",
+            "nodes": [
+                {
+                    "id": "work",
+                    "type": "agent",
+                    "role": "worker",
+                    "workdir": str(tmp_path),
+                    "tools": ["files"],
+                    "prompt": "go",
+                }
+            ],
+        }
+    )
+    binding = mock_binding({"worker": "unused"})
+    replies = iter(
+        [
+            LLMResponse(
+                text="",
+                model="mock-model",
+                tool_calls=[
+                    ToolCall(
+                        id="malformed",
+                        name="read_file",
+                        arguments=None,  # type: ignore[arg-type]
+                    )
+                ],
+            ),
+            LLMResponse(text="done", model="mock-model"),
+        ]
+    )
+    store = _CapturingStore()
+
+    async def complete(_request):
+        return next(replies)
+
+    async with ProviderPool(binding) as pool:
+        monkeypatch.setattr(pool.get("fake"), "complete", complete)
+        result = await execute(graph, binding, pool, store)
+
+    assert result.status == "completed"
+    call = next(event for event in store.events if event.type == "node_tool_call")
+    assert call.data["error"] is True
+    assert call.data["arguments"] == "null"
+
+
 def agent_graph_without_workdir(**node_overrides):
     node = {
         "id": "work",
