@@ -52,10 +52,13 @@ export function Memory({ project }: { project: string }) {
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
   const detailRequest = useRef(0)
+  const overviewRevision = useRef<string | null>(null)
 
   useEffect(() => {
     let alive = true
     let reading = false
+    let hasOverview = false
+    overviewRevision.current = null
     setOverview(undefined)
     setResults([])
     setAnswer(null)
@@ -70,8 +73,12 @@ export function Memory({ project }: { project: string }) {
       if (reading) return
       reading = true
       try {
-        const found = await fetchMemory(project)
-        if (alive) setOverview(found)
+        const found = await fetchMemory(project, overviewRevision.current ?? undefined)
+        if (!alive || found === undefined) return
+        if (found === null && hasOverview) return
+        hasOverview = found !== null
+        overviewRevision.current = found?.revision ?? null
+        setOverview(found)
       } finally {
         reading = false
       }
@@ -380,7 +387,7 @@ export function Memory({ project }: { project: string }) {
                 {detail.valid_from ? (
                   <>
                     <dt>valid from</dt>
-                    <dd>{new Date(detail.valid_from).toLocaleString()}</dd>
+                    <dd><time dateTime={detail.valid_from}>{detail.valid_from}</time></dd>
                   </>
                 ) : null}
                 <dt>updated</dt>

@@ -23,6 +23,7 @@ vi.mock("./Constellation", () => ({
 }))
 
 const OVERVIEW: MemoryOverview = {
+  revision: '"memory-one"',
   enabled: true,
   page: "Keep tests portable.",
   stats: {
@@ -229,6 +230,7 @@ test("an open memory place refreshes after the learning interval", async () => {
   })
 
   expect(fetchMemory).toHaveBeenCalledTimes(2)
+  expect(fetchMemory).toHaveBeenLastCalledWith("board", '"memory-one"')
   expect(container.textContent).toContain("3 kept")
 })
 
@@ -254,7 +256,7 @@ test("entry detail names directed relationships and keeps its history", async ()
     scope: ["global"],
     anchors: [],
     source: ["person"],
-    valid_from: "2026-08-30T00:00:00Z",
+    valid_from: "2026-08-30",
     superseded_by: "portable-shell",
     links: { depends_on: ["command-env"], contradicts: ["cmd-shell"] },
     second_look: [],
@@ -276,6 +278,7 @@ test("entry detail names directed relationships and keeps its history", async ()
   expect(container.textContent).toContain("set aside for →")
   expect(container.textContent).toContain("history (1)")
   expect(container.querySelector('[data-related="command-env"]')).not.toBeNull()
+  expect(container.querySelector('time[datetime="2026-08-30"]')?.textContent).toBe("2026-08-30")
 })
 
 test("a project with no long memory explains the empty place", async () => {

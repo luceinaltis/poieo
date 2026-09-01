@@ -55,6 +55,7 @@ function stubFetch(routes: Record<string, { status?: number; body: unknown }>) {
     return {
       ok: status < 400,
       status,
+      headers: { get: () => null },
       json: async () => (hit ? hit.body : { error: "no such thing" }),
     }
   })
@@ -132,6 +133,18 @@ test("memory reads the selected project and search posts its mode", async () => 
       }),
     },
   )
+})
+
+test("memory revalidation accepts an unchanged overview without a body", async () => {
+  const fetchStub = stubFetch({
+    "/api/projects/board/memory": { status: 304, body: null },
+  })
+
+  expect(await fetchMemory("board", '"memory-one"')).toBeUndefined()
+  expect(fetchStub).toHaveBeenCalledWith("/api/projects/board/memory", {
+    cache: "no-store",
+    headers: { "if-none-match": '"memory-one"' },
+  })
 })
 
 test("asking memory sends a question rather than disguising it as search", async () => {

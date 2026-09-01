@@ -32,7 +32,7 @@ from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -1713,12 +1713,41 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 meaning = False
         return {"words": True, "meaning": meaning, "ask": ask}
 
-    async def project_memory(request: Request) -> JSONResponse:
+    def _memory_revision(project: Any) -> str:
+        """A cheap validator for memory writes, model roles, and run accounting."""
+        layout = project.config.layout()
+        paths = [
+            layout.longterm(),
+            layout.results(),
+            project.config.source_path,
+            project.config.default_binding_path(),
+        ]
+        stamps: list[str] = []
+        for path in paths:
+            if path is None:
+                stamps.append("-")
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                stamps.append("-")
+            else:
+                stamps.append(f"{stat.st_mtime_ns}:{stat.st_size}")
+        digest = hashlib.sha256("|".join(stamps).encode("ascii")).hexdigest()[:24]
+        return f'"memory-{digest}"'
+
+    async def project_memory(request: Request) -> Response:
         """The bounded constellation and the facts needed to caption it."""
         project, missing = _asked_project(request)
         if missing is not None:
             return missing
         root = Path(project.config.base_dir)
+        revision = await asyncio.to_thread(_memory_revision, project)
+        # The UI carries this validator only for the lifetime of the open
+        # memory place.  Browsers must not keep a graph after that view closes.
+        cache_headers = {"etag": revision, "cache-control": "no-store"}
+        if request.headers.get("if-none-match") == revision:
+            return Response(status_code=304, headers=cache_headers)
         enabled = await asyncio.to_thread(keeps_memory, root)
         capabilities = await asyncio.to_thread(_memory_capabilities, project, enabled)
         if not enabled:
@@ -1736,7 +1765,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         "truncated": False,
                         "edges_truncated": False,
                     },
-                }
+                },
+                headers=cache_headers,
             )
 
         def read_memory() -> tuple[Any, Any, Any]:
@@ -1752,7 +1782,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "stats": stats,
                 "capabilities": capabilities,
                 "graph": graph,
-            }
+            },
+            headers=cache_headers,
         )
 
     async def project_memory_entry(request: Request) -> JSONResponse:

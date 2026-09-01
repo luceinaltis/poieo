@@ -61,6 +61,41 @@ def test_memory_overview_names_capabilities_and_bounded_graph(tmp_path):
     assert body["stats"]["kept"] == 2
 
 
+def test_an_unchanged_memory_overview_skips_the_expensive_read(tmp_path, monkeypatch):
+    client = _client(tmp_path)
+    first = client.get("/api/projects/board/memory")
+    revision = first.headers["etag"]
+
+    def should_not_read(*_args, **_kwargs):
+        raise AssertionError("an unchanged memory should not rebuild its overview")
+
+    monkeypatch.setattr("poieo.web.server.memory_report", should_not_read)
+    monkeypatch.setattr("poieo.web.server.graph_snapshot", should_not_read)
+
+    response = client.get(
+        "/api/projects/board/memory",
+        headers={"if-none-match": revision},
+    )
+
+    assert response.status_code == 304
+    assert response.headers["etag"] == revision
+
+
+def test_a_memory_write_changes_the_overview_revision(tmp_path):
+    client = _client(tmp_path)
+    first = client.get("/api/projects/board/memory")
+
+    remember(tmp_path, "new-rule", "새로 배운 규칙이다.")
+    response = client.get(
+        "/api/projects/board/memory",
+        headers={"if-none-match": first.headers["etag"]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["etag"] != first.headers["etag"]
+    assert response.json()["graph"]["total_nodes"] == 3
+
+
 def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
     response = _client(tmp_path, memory=False).get("/api/projects/board/memory")
 

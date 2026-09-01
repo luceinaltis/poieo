@@ -643,9 +643,10 @@ stage and never fetches. Memory asks a different project API, owns a query and
 selected evidence, and remains useful when no task exists, so the shell mounts
 it beside the skin host rather than widening the skin contract with unrelated
 state.
-While the place stays open it rereads the overview every fifteen seconds, so a
-learning pass appears without a reload; the current query and evidence remain
-in place across that quiet refresh.
+While the place stays open it revalidates the overview every fifteen seconds,
+so a learning pass appears without a reload; an unchanged revision answers
+without rebuilding or retransmitting the graph, and the current query and
+evidence remain in place across that quiet refresh.
 
 Its canvas is a two-lobed three-dimensional constellation projected without a
 new rendering dependency. Drag orbits, the wheel travels, and the evidence list

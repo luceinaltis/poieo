@@ -31,6 +31,8 @@ export interface MemoryGraph {
 }
 
 export interface MemoryOverview {
+  /** Opaque validator used only while this memory place remains open. */
+  revision?: string
   enabled: boolean
   page: string | null
   stats: {

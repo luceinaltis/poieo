@@ -35,9 +35,20 @@ export async function fetchTasks(): Promise<Listing> {
 const memoryUrl = (project: string, tail = "") =>
   `/api/projects/${encodeURIComponent(project)}/memory${tail}`
 
-export async function fetchMemory(project: string): Promise<MemoryOverview | null> {
+export async function fetchMemory(
+  project: string,
+  revision?: string,
+): Promise<MemoryOverview | null | undefined> {
   try {
-    return await getJson<MemoryOverview>(memoryUrl(project))
+    const response = await fetch(memoryUrl(project), {
+      cache: "no-store",
+      ...(revision ? { headers: { "if-none-match": revision } } : {}),
+    })
+    if (response.status === 304) return undefined
+    if (!response.ok) return null
+    const overview = (await response.json()) as MemoryOverview
+    const current = response.headers.get("etag")
+    return current ? { ...overview, revision: current } : overview
   } catch {
     return null
   }
