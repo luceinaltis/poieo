@@ -52,10 +52,11 @@ model's length stop without a complete answer fails the node rather than
 presenting a truncated response as success.
 
 Every offered tool also asks the model for one short, user-facing sentence
-describing what that call is meant to accomplish. The runtime removes that
-display-only sentence before execution and records it beside the bounded
-arguments and result. A model that omits it still gets to use the tool; older
-and less capable providers therefore keep working without inventing intent.
+describing what that call is meant to accomplish. The runtime carries it in a
+reserved display-only field, removes it before execution, and records it beside
+the bounded arguments and result. The runtime tolerates an omitted sentence;
+the board then falls back to a conservative description rather than inventing
+intent.
 
 ## Usage and cost
 

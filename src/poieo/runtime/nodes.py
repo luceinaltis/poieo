@@ -196,7 +196,9 @@ def _clip(value: Any, limit: int = 400) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
 
-_ACTIVITY_PURPOSE = "purpose"
+# Display metadata lives in the model-facing schema, so reserve its name: a
+# tool is otherwise allowed to have a real `purpose` argument of its own.
+_ACTIVITY_PURPOSE = "__poieo_activity_purpose"
 _ACTIVITY_PURPOSE_DESCRIPTION = (
     "One short sentence for the person watching this run: what this call is "
     "about to accomplish and why it helps the current task. Describe the "
