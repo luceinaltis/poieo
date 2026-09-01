@@ -8,7 +8,7 @@ import json
 import re
 import time
 from contextlib import AsyncExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +17,8 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..providers.base import Hands, ToolCall
-from ..tools import ToolError, is_compiled, make_executor
+from ..providers.base import Hands, ToolCall, ToolDef
+from ..tools import Executor, ToolError, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -438,11 +438,255 @@ async def _compact(
     return folded
 
 
+@dataclass(slots=True)
+class _AgentLoop:
+    """One agent node's conversation, tools, and turn accounting.
+
+    ``AgentNode`` owns setup and teardown. This object owns the state that
+    changes between model calls, so each transition has one place to update it.
+    """
+
+    spec: NodeSpec
+    ctx: RunContext
+    bound: _Bound
+    workdir: Path | None
+    toolsets: tuple[str, ...]
+    executor: Executor | None
+    messages: list[dict[str, Any]] = field(init=False)
+    offered_tools: list[ToolDef] = field(init=False)
+    turns: int = field(init=False, default=0)
+    tool_call_count: int = field(init=False, default=0)
+    # Which tools, and how many times each. Only read when the node runs out of
+    # turns, where the counts distinguish productive work from repeated reads.
+    reached_for: dict[str, int] = field(init=False, default_factory=dict)
+    sent_tokens: int = field(init=False, default=0)
+    retried_smaller: bool = field(init=False, default=False)
+    context_shrank: bool = field(init=False, default=False)
+    expires_at: float | None = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.messages = [{"role": "user", "content": self.bound.prompt}]
+        self.offered_tools = self.executor.definitions() if self.executor is not None else []
+
+        # Checked at the top of a turn rather than raced against the model
+        # call: a request already sent is paid for whether its answer is kept.
+        self.expires_at = time.monotonic() + self.spec.deadline if self.spec.deadline else None
+
+    def _hands(self) -> Hands | None:
+        # Only a provider that runs its own tool loop reads this, and only a
+        # node with tools has anything to lend. Built per request rather than
+        # stored here: its bound ``run`` method points back to this loop, and
+        # storing both sides would keep the finished conversation in a cycle.
+        return (
+            Hands(
+                run=self._execute_tool,
+                workdir=str(self.workdir) if self.workdir else None,
+                max_turns=self.spec.max_turns,
+                toolsets=self.toolsets,
+                boxed=bool(self.ctx.tool_context and self.ctx.tool_context.isolation),
+            )
+            if self.executor is not None
+            else None
+        )
+
+    def _start_turn(self) -> None:
+        if self.ctx.cancel is not None and self.ctx.cancel.is_set():
+            raise RunAborted(f"cancelled during agent node '{self.spec.id}'")
+        if self.expires_at is not None and time.monotonic() >= self.expires_at:
+            raise NodeError(
+                f"node '{self.spec.id}' passed its deadline ({self.spec.deadline}s) after {self.turns} turn(s)",
+                node_id=self.spec.id,
+            )
+        self.turns += 1
+
+    async def _make_context_room(self, window: int | None) -> None:
+        # Only past the cap, and then all at once. Clearing on every turn would
+        # move the cached prompt prefix on every turn too.
+        if _too_big(window, self.sent_tokens, self.messages, _CLEAR_AT, _CONTEXT_CAP):
+            freed = _clear_old_results(self.messages)
+            if freed:
+                self.context_shrank = True
+                self.ctx.emit(
+                    "node_context_cleared",
+                    node_id=self.spec.id,
+                    turn=self.turns,
+                    freed=freed,
+                    kept=_KEEP_RESULTS,
+                )
+        # Clearing is free and reversible, so folding follows only when that
+        # was not enough; a summary costs a model call and cannot be undone.
+        if _too_big(window, self.sent_tokens, self.messages, _COMPACT_AT, _COMPACT_CAP):
+            before_fold = len(self.messages)
+            self.messages = await _compact(self.spec, self.ctx, self.bound, self.messages)
+            self.context_shrank = self.context_shrank or len(self.messages) != before_fold
+
+    def _request(self) -> LLMRequest:
+        return self.bound.request(
+            list(self.messages),
+            tools=self.offered_tools,
+            hands=self._hands(),
+        )
+
+    async def _ask_model(self) -> LLMResponse:
+        request = self._request()
+        try:
+            return await call_with_retry(self.spec, self.bound.provider, request, self.ctx)
+        except NodeError:
+            # Retry once with fewer bytes, but only when there was something to
+            # clear. Error text is deliberately not classified by backend.
+            freed = 0 if self.retried_smaller else _clear_old_results(self.messages)
+            if not freed:
+                raise
+            self.retried_smaller = True
+            self.context_shrank = True
+            self.ctx.emit(
+                "node_retried_smaller",
+                node_id=self.spec.id,
+                turn=self.turns,
+                freed=freed,
+                kept=_KEEP_RESULTS,
+            )
+            return await call_with_retry(
+                self.spec,
+                self.bound.provider,
+                self._request(),
+                self.ctx,
+            )
+
+    def _record_response(self, response: LLMResponse) -> None:
+        # What the endpoint says it charged wins; declared prices fill silence.
+        if response.usage.cost is None and self.bound.resolved.prices is not None:
+            response.usage.cost = self.bound.resolved.prices.charge(response.usage)
+        received_tokens = response.usage.input_tokens
+
+        # A conversation only grows unless this loop shrank it. A non-growing
+        # endpoint count therefore means the endpoint silently dropped input.
+        if self.sent_tokens and received_tokens and received_tokens <= self.sent_tokens and not self.context_shrank:
+            # Oldest first. Only when nothing old remains is the newest result
+            # replaced, and only after the endpoint has shown it did not fit.
+            freed, note = _clear_old_results(self.messages), ""
+            if not freed:
+                freed = _drop_newest_result(self.messages)
+                note = _TOO_BIG if freed else ""
+            self.ctx.emit(
+                "node_input_dropped",
+                node_id=self.spec.id,
+                turn=self.turns,
+                before=self.sent_tokens,
+                kept=received_tokens,
+                freed=freed,
+                note=note,
+            )
+            if not freed:
+                raise NodeError(
+                    f"node '{self.spec.id}': the endpoint kept {received_tokens} tokens of a "
+                    f"conversation it was sent more of, and there is nothing left to drop "
+                    f"-- its window is smaller than this step needs",
+                    node_id=self.spec.id,
+                )
+
+        self.context_shrank = False
+        self.sent_tokens = received_tokens
+        self.ctx.usage = self.ctx.usage.merge(response.usage)
+        self.ctx.emit(
+            "node_turn",
+            node_id=self.spec.id,
+            turn=self.turns,
+            text=_clip(response.text),
+            thinking=_clip(response.meta.get("thinking") or ""),
+            tool_call_count=len(response.tool_calls),
+            # The run carries one total; only this pair can show whether a
+            # model writes more as the conversation it reads grows.
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cache_read_tokens=response.usage.cache_read_tokens,
+        )
+
+    def _require_another_turn(self) -> None:
+        if self.turns < self.spec.max_turns:
+            return
+        spent = ", ".join(
+            f"{name} {count}x" for name, count in sorted(self.reached_for.items(), key=lambda pair: -pair[1])
+        )
+        raise NodeError(
+            f"node '{self.spec.id}' hit max_turns ({self.spec.max_turns}) "
+            f"with tool calls still pending; it spent them on {spent or 'nothing'}",
+            node_id=self.spec.id,
+        )
+
+    async def _execute_tool(self, call: ToolCall) -> tuple[str, bool]:
+        """Run and record one call, whoever owns the surrounding tool loop."""
+        if self.executor is None:  # Hands is never built in this state.
+            raise NodeError(f"node '{self.spec.id}': no executor for tool call", node_id=self.spec.id)
+        started = time.monotonic()
+        result = await self.executor.execute(call)
+        self.tool_call_count += 1
+        self.reached_for[call.name] = self.reached_for.get(call.name, 0) + 1
+        self.ctx.emit(
+            "node_tool_call",
+            node_id=self.spec.id,
+            turn=self.turns,
+            name=call.name,
+            arguments=_clip(call.arguments),
+            result=_clip(result.text),
+            error=result.error,
+            duration_ms=round((time.monotonic() - started) * 1000),
+        )
+        return result.text, result.error
+
+    async def _append_tool_results(self, response: LLMResponse) -> None:
+        assistant_turn: dict[str, Any] = {
+            "role": "assistant",
+            "content": response.text,
+            "tool_calls": [
+                {"id": call.id, "name": call.name, "arguments": call.arguments} for call in response.tool_calls
+            ],
+        }
+        raw_content = response.meta.get("raw_content")
+        if raw_content:
+            # Provider-specific blocks (for example, Anthropic thinking) must
+            # be replayed verbatim; other providers ignore the key.
+            assistant_turn["raw_content"] = raw_content
+        self.messages.append(assistant_turn)
+        for call in response.tool_calls:
+            text, _failed = await self._execute_tool(call)
+            self.messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
+
+    async def run(self) -> LLMResponse:
+        # The binding's deliberate limit wins. Otherwise ask the endpoint once;
+        # providers remember the answer, and character caps remain the fallback.
+        window = self.bound.resolved.context
+        if window is None:
+            window = await self.bound.provider.context_for(self.bound.resolved.model)
+
+        while True:
+            self._start_turn()
+            await self._make_context_room(window)
+            response = await self._ask_model()
+            self._record_response(response)
+
+            # A truncated answer has the same no-tool-call shape as a finished
+            # one, so the endpoint's stop reason must be checked first.
+            if response.stop_reason in _CUT_OFF:
+                raise NodeError(
+                    f"node '{self.spec.id}' was cut off before it finished: "
+                    "the model reached its output limit mid-turn",
+                    node_id=self.spec.id,
+                )
+            # No executor means no tools were offered. An invented call cannot
+            # be run, but the answer the model gave is still an answer.
+            if not response.tool_calls or self.executor is None:
+                return response
+
+            self._require_another_turn()
+            await self._append_tool_results(response)
+
+
 class AgentNode(Node):
     """Renders a prompt, calls the model, and loops while it asks for tools.
 
     Tools are the whole of what varies here. A node that names none is shown
-    none, so it cannot ask for one, so the loop below runs once and breaks --
+    none, so it cannot ask for one, so the loop runs once and returns --
     which is what `type: agent` used to be, without a second node type to say
     it. Everything else follows from tools: the directory they work in, the
     executor that runs them, the turn budget the loop spends.
@@ -455,7 +699,6 @@ class AgentNode(Node):
         spec = self.spec
         bound = _prepare(spec, ctx)
         toolsets = spec.tools or []
-
         workdir = Path(_rendered(spec, spec.workdir, bound.scope)).expanduser() if spec.workdir else ctx.workdir
         if toolsets:
             if workdir is None:  # preflight should have caught this
@@ -467,8 +710,7 @@ class AgentNode(Node):
                 )
 
         # Nothing is built for a node with no tools: an executor can mean a
-        # container, and standing one up to offer nothing would be a cost with
-        # no purchase.
+        # container, and standing one up to offer nothing would be pure cost.
         async with AsyncExitStack() as stack:
             executor = (
                 await stack.enter_async_context(
@@ -477,276 +719,25 @@ class AgentNode(Node):
                 if toolsets
                 else None
             )
-            offered = executor.definitions() if executor is not None else []
-            messages: list[dict[str, Any]] = [{"role": "user", "content": bound.prompt}]
-            turns = 0
-            tool_call_count = 0
-            # Which tools, and how many times each. Only read when the node
-            # runs out of turns, and that is the point: the advice there is
-            # "raise max_turns, or make the step smaller", which are opposite
-            # actions with nothing to choose between them. A step that spent
-            # its turns editing and running tests wanted more room; one that
-            # spent them reading the same four files would only have got more
-            # of that, and the counts are what tell them apart.
-            reached_for: dict[str, int] = {}
-
-            async def _reach(call: ToolCall) -> tuple[str, bool]:
-                """One tool call, run and recorded, for a backend that loops.
-
-                The same three things this node does inline for a backend that
-                does not: execute through the seam, count it, and put it in
-                the run log. Written once and lent out, so a harness running
-                its own loop cannot leave the board's tool row empty for the
-                whole night while it works.
-                """
-                started = time.monotonic()
-                result = await executor.execute(call)  # type: ignore[union-attr]
-                nonlocal tool_call_count
-                tool_call_count += 1
-                reached_for[call.name] = reached_for.get(call.name, 0) + 1
-                ctx.emit(
-                    "node_tool_call",
-                    node_id=spec.id,
-                    turn=turns,
-                    name=call.name,
-                    arguments=_clip(call.arguments),
-                    result=_clip(result.text),
-                    error=result.error,
-                    duration_ms=round((time.monotonic() - started) * 1000),
-                )
-                return result.text, result.error
-
-            # Only a provider that runs its own tool loop reads this, and only
-            # a node with tools has anything to lend.
-            lent = (
-                Hands(
-                    run=_reach,
-                    workdir=str(workdir) if workdir else None,
-                    max_turns=spec.max_turns,
-                    toolsets=tuple(toolsets),
-                    boxed=bool(ctx.tool_context and ctx.tool_context.isolation),
-                )
-                if executor is not None
-                else None
+            loop = _AgentLoop(
+                spec=spec,
+                ctx=ctx,
+                bound=bound,
+                workdir=workdir,
+                toolsets=tuple(toolsets),
+                executor=executor,
             )
-            # What the endpoint counted the last request at. Zero until one
-            # has been answered, which is why nothing is cleared on turn one --
-            # there is nothing there yet to clear.
-            sent = 0
-            # An endpoint that refuses a size is telling us something we could
-            # not have measured beforehand. Trying again smaller is worth one
-            # attempt per node -- more than that and a genuinely broken
-            # request gets paid for over and over.
-            went_again = False
-            # When this step must be finished by, if the graph said. Checked at
-            # the top of a turn rather than raced against the model call: a
-            # request already sent is paid for whether or not the answer is
-            # kept, and cancelling it mid-flight would waste the tokens it was
-            # set to save.
-            expires = time.monotonic() + spec.deadline if spec.deadline else None
-            # Whether the loop itself made the conversation smaller since the
-            # last count. Clearing and folding do that on purpose, and reading
-            # their effect as the endpoint dropping something would have the
-            # detector cry wolf on the loop's own housekeeping.
-            shrank = False
-            # The binding first, the endpoint second. Someone who wrote the
-            # number down meant it -- a smaller real window, a deliberately
-            # tighter budget -- so the endpoint is only asked when nobody has
-            # said. Providers remember the answer; this is not a round trip
-            # per turn, and a provider that cannot answer says None and the
-            # character caps take over.
-            window = bound.resolved.context
-            if window is None:
-                window = await bound.provider.context_for(bound.resolved.model)
+            response = await loop.run()
 
-            while True:
-                if ctx.cancel is not None and ctx.cancel.is_set():
-                    raise RunAborted(f"cancelled during agent node '{spec.id}'")
-                if expires is not None and time.monotonic() >= expires:
-                    raise NodeError(
-                        f"node '{spec.id}' passed its deadline ({spec.deadline}s) after {turns} turn(s)",
-                        node_id=spec.id,
-                    )
-                turns += 1
-                # Only past the cap, and then all at once. Clearing on every
-                # turn would move the boundary forward by one result each
-                # time, and an endpoint that caches prompt prefixes would find
-                # a different prefix every turn -- paying the whole
-                # conversation again to save part of it.
-                if _too_big(window, sent, messages, _CLEAR_AT, _CONTEXT_CAP):
-                    freed = _clear_old_results(messages)
-                    if freed:
-                        shrank = True
-                        ctx.emit(
-                            "node_context_cleared",
-                            node_id=spec.id,
-                            turn=turns,
-                            freed=freed,
-                            kept=_KEEP_RESULTS,
-                        )
-                # And if emptying the results was not enough -- the turns
-                # themselves accumulate, and a `write_file` carries a whole
-                # file in its arguments -- the older ones are folded into a
-                # summary. Second because it costs a model call and cannot be
-                # undone, where clearing is free and one repeated call away.
-                if _too_big(window, sent, messages, _COMPACT_AT, _COMPACT_CAP):
-                    before_fold = len(messages)
-                    messages = await _compact(spec, ctx, bound, messages)
-                    shrank = shrank or len(messages) != before_fold
-                request = bound.request(list(messages), tools=offered, hands=lent)
-                try:
-                    response = await call_with_retry(spec, bound.provider, request, ctx)
-                except NodeError:
-                    # `call_with_retry` has already spent this node's retry
-                    # budget on sending the *same* bytes. The one thing left to
-                    # vary is how many of them there are.
-                    #
-                    # The error is not read. Endpoints spell "too long"
-                    # differently and a regular expression over English breaks
-                    # on the next API version; instead this is bounded by what
-                    # it can actually do -- once per node, and only when
-                    # clearing found something to clear. A refusal with nothing
-                    # older to drop was not about size, or was about a size we
-                    # cannot help, and either way sending it again buys the
-                    # same answer twice.
-                    freed = 0 if went_again else _clear_old_results(messages)
-                    if not freed:
-                        raise
-                    went_again = True
-                    shrank = True
-                    ctx.emit(
-                        "node_retried_smaller",
-                        node_id=spec.id,
-                        turn=turns,
-                        freed=freed,
-                        kept=_KEEP_RESULTS,
-                    )
-                    request = bound.request(list(messages), tools=offered, hands=lent)
-                    response = await call_with_retry(spec, bound.provider, request, ctx)
-                # The conversation only grows, so the count the endpoint
-                # reports for it must grow too. When it does not, the endpoint
-                # kept less than we sent -- silently, which is what Ollama does
-                # past `num_ctx`: measured, sending 45,000 characters after
-                # 18,000 made the reported count *fall* from 4,010 to 2,050.
-                #
-                # `sent` and the new count must both be real. A backend that
-                # reports zero has not told us anything, and no measurement is
-                # a different fact from a bad one.
-                # What the endpoint says it charged wins; what the binding
-                # says fills the silence. The same two-tier shape as `context`
-                # and for the same reason -- a reported figure is a fact and a
-                # declared one is somebody's belief -- except that a belief
-                # beats nothing, and Anthropic's API reports no cost at all.
-                if response.usage.cost is None and bound.resolved.prices is not None:
-                    response.usage.cost = bound.resolved.prices.charge(response.usage)
-                took = response.usage.input_tokens
-                if sent and took and took <= sent and not shrank:
-                    # Oldest first, as everywhere else. Only when there is
-                    # nothing old enough left is the newest result the problem,
-                    # and by then the endpoint has shown that it is.
-                    freed, note = _clear_old_results(messages), ""
-                    if not freed:
-                        freed = _drop_newest_result(messages)
-                        note = _TOO_BIG if freed else ""
-                    ctx.emit(
-                        "node_input_dropped",
-                        node_id=spec.id,
-                        turn=turns,
-                        before=sent,
-                        kept=took,
-                        freed=freed,
-                        note=note,
-                    )
-                    if not freed:
-                        raise NodeError(
-                            f"node '{spec.id}': the endpoint kept {took} tokens of a "
-                            f"conversation it was sent more of, and there is nothing "
-                            f"left to drop -- its window is smaller than this step needs",
-                            node_id=spec.id,
-                        )
-                shrank = False
-                sent = took
-                ctx.usage = ctx.usage.merge(response.usage)
-                ctx.emit(
-                    "node_turn",
-                    node_id=spec.id,
-                    turn=turns,
-                    text=_clip(response.text),
-                    thinking=_clip(response.meta.get("thinking") or ""),
-                    tool_call_count=len(response.tool_calls),
-                    # What this turn cost, turn by turn. The run's own record
-                    # carries one total for the whole of itself, which cannot
-                    # answer the question the caps keep raising: does a model
-                    # write more as the conversation it reads grows? Two runs
-                    # measured here differed by ninety times on output and
-                    # also in whether the step was working or thrashing, so
-                    # neither said which caused which. Only the pair, inside
-                    # one run, can.
-                    input_tokens=response.usage.input_tokens,
-                    output_tokens=response.usage.output_tokens,
-                    cache_read_tokens=response.usage.cache_read_tokens,
-                )
-
-                # A turn the model was cut off in the middle of is not an
-                # answer, and it arrives looking exactly like one: the loop
-                # ends on a turn with no tool calls, and a truncated turn has
-                # none. Half a sentence then becomes the node's output and the
-                # run reports success. The endpoint says so plainly --
-                # OpenAI-shaped ones `length`, Anthropic `max_tokens` -- and it
-                # was already being carried this far unread.
-                if response.stop_reason in _CUT_OFF:
-                    raise NodeError(
-                        f"node '{spec.id}' was cut off before it finished: the model reached its output limit mid-turn",
-                        node_id=spec.id,
-                    )
-
-                # No executor means none were offered, so a tool call here is
-                # a model inventing one. There is nothing to run it with, and
-                # the answer it gave is still an answer.
-                if not response.tool_calls or executor is None:
-                    break
-                if turns >= spec.max_turns:
-                    spent = ", ".join(
-                        f"{name} {count}x" for name, count in sorted(reached_for.items(), key=lambda pair: -pair[1])
-                    )
-                    raise NodeError(
-                        f"node '{spec.id}' hit max_turns ({spec.max_turns}) "
-                        f"with tool calls still pending; it spent them on "
-                        f"{spent or 'nothing'}",
-                        node_id=spec.id,
-                    )
-
-                assistant_turn: dict[str, Any] = {
-                    "role": "assistant",
-                    "content": response.text,
-                    "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in response.tool_calls],
-                }
-                raw = response.meta.get("raw_content")
-                if raw:
-                    # Provider-specific blocks (e.g. anthropic thinking) replayed
-                    # verbatim on the next turn; other providers ignore the key.
-                    assistant_turn["raw_content"] = raw
-                messages.append(assistant_turn)
-                for call in response.tool_calls:
-                    started = time.monotonic()
-                    result = await executor.execute(call)
-                    tool_call_count += 1
-                    reached_for[call.name] = reached_for.get(call.name, 0) + 1
-                    ctx.emit(
-                        "node_tool_call",
-                        node_id=spec.id,
-                        turn=turns,
-                        name=call.name,
-                        arguments=_clip(call.arguments),
-                        result=_clip(result.text),
-                        error=result.error,
-                        duration_ms=round((time.monotonic() - started) * 1000),
-                    )
-                    messages.append({"role": "tool", "tool_call_id": call.id, "content": result.text})
-
-        # `response` is deliberately the loop's last one, read after the
-        # executor has closed: the turn that answered without a tool call.
-        return _finish(spec, ctx, bound, response, turns=turns, tool_calls=tool_call_count)
+        # The answering turn is finished only after the executor is closed.
+        return _finish(
+            spec,
+            ctx,
+            bound,
+            response,
+            turns=loop.turns,
+            tool_calls=loop.tool_call_count,
+        )
 
 
 def _workdir_for(spec: NodeSpec, ctx: RunContext, scope: dict[str, Any]) -> Path:
