@@ -440,7 +440,10 @@ test("each tool leads with its agent-written purpose and folds the raw record", 
       data: {
         name: "run_command",
         purpose,
-        arguments: JSON.stringify({ command: "gh pr view 343" }),
+        arguments: JSON.stringify({
+          command: "gh pr view 343",
+          purpose: "native tool option",
+        }),
         result: "exit code: 0\nstate: OPEN",
         error: false,
         duration_ms: 1100,
@@ -454,6 +457,7 @@ test("each tool leads with its agent-written purpose and folds the raw record", 
   expect(details.querySelector("summary")?.textContent).toContain("1.1s")
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("run_command")
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("gh pr view 343")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("native tool option")
   expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("state: OPEN")
 })
 
