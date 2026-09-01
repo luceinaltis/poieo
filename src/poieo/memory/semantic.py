@@ -7,6 +7,7 @@ import hashlib
 import math
 import sqlite3
 from array import array
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -41,22 +42,52 @@ def _digest(entry: Entry) -> str:
     return hashlib.sha256(_text(entry).encode("utf-8")).hexdigest()
 
 
+def _discard_cache(path: Path) -> None:
+    """Remove only the disposable embedding database and its SQLite sidecars."""
+    try:
+        for candidate in (
+            path,
+            path.with_name(f"{path.name}-wal"),
+            path.with_name(f"{path.name}-shm"),
+        ):
+            candidate.unlink(missing_ok=True)
+    except OSError as exc:
+        raise ProviderError("the memory embedding cache could not be reset", provider="memory") from exc
+
+
+def _cache_rows(path: Path, model_key: str) -> dict[str, Any]:
+    with closing(sqlite3.connect(path, timeout=10)) as con:
+        with con:
+            con.executescript(_SCHEMA)
+            return {
+                row[0]: row
+                for row in con.execute(
+                    "SELECT slug, digest, dimensions, vector FROM vectors WHERE model_key = ?",
+                    (model_key,),
+                ).fetchall()
+            }
+
+
 def _cached(
     project_dir: Path,
     model_key: str,
     entries: list[Entry],
 ) -> tuple[dict[str, list[float]], list[Entry]]:
     path = _path(project_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path, timeout=10) as con:
-        con.executescript(_SCHEMA)
-        rows = {
-            row[0]: row
-            for row in con.execute(
-                "SELECT slug, digest, dimensions, vector FROM vectors WHERE model_key = ?",
-                (model_key,),
-            ).fetchall()
-        }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows = _cache_rows(path, model_key)
+    except sqlite3.DatabaseError:
+        # This database is derived and the entry bodies are the truth.  A torn
+        # or foreign file is cheaper and safer to rebuild than to expose as a
+        # 500 from search.
+        _discard_cache(path)
+        try:
+            rows = _cache_rows(path, model_key)
+        except (OSError, sqlite3.Error) as exc:
+            raise ProviderError("the memory embedding cache could not be rebuilt", provider="memory") from exc
+    except OSError as exc:
+        raise ProviderError("the memory embedding cache is unavailable", provider="memory") from exc
     vectors: dict[str, list[float]] = {}
     missing: list[Entry] = []
     for entry in entries:
@@ -71,7 +102,7 @@ def _cached(
         except (TypeError, ValueError):
             missing.append(entry)
             continue
-        if len(vector) != row[2] or not vector:
+        if len(vector) != row[2] or not vector or not all(math.isfinite(value) for value in vector):
             missing.append(entry)
             continue
         vectors[entry.slug] = vector
@@ -85,24 +116,39 @@ def _store(
     vectors: list[list[float]],
 ) -> None:
     path = _path(project_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path, timeout=10) as con:
-        con.executescript(_SCHEMA)
-        con.executemany(
-            "INSERT INTO vectors(model_key, slug, digest, dimensions, vector) VALUES(?,?,?,?,?) "
-            "ON CONFLICT(model_key, slug) DO UPDATE SET "
-            "digest=excluded.digest, dimensions=excluded.dimensions, vector=excluded.vector",
-            [
-                (
-                    model_key,
-                    entry.slug,
-                    _digest(entry),
-                    len(vector),
-                    array("f", vector).tobytes(),
-                )
-                for entry, vector in zip(entries, vectors)
-            ],
+    rows = [
+        (
+            model_key,
+            entry.slug,
+            _digest(entry),
+            len(vector),
+            array("f", vector).tobytes(),
         )
+        for entry, vector in zip(entries, vectors)
+    ]
+
+    def write() -> None:
+        with closing(sqlite3.connect(path, timeout=10)) as con:
+            with con:
+                con.executescript(_SCHEMA)
+                con.executemany(
+                    "INSERT INTO vectors(model_key, slug, digest, dimensions, vector) VALUES(?,?,?,?,?) "
+                    "ON CONFLICT(model_key, slug) DO UPDATE SET "
+                    "digest=excluded.digest, dimensions=excluded.dimensions, vector=excluded.vector",
+                    rows,
+                )
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write()
+    except sqlite3.DatabaseError:
+        _discard_cache(path)
+        try:
+            write()
+        except (OSError, sqlite3.Error) as exc:
+            raise ProviderError("the memory embedding cache could not be rebuilt", provider="memory") from exc
+    except OSError as exc:
+        raise ProviderError("the memory embedding cache is unavailable", provider="memory") from exc
 
 
 def _cosine(one: list[float], other: list[float]) -> float:

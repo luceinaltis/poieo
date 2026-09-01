@@ -151,6 +151,23 @@ def search_text(
         return []
 
     tokens = re.findall(r"\w+", query.casefold(), flags=re.UNICODE)
+    wanted = [token.casefold() for token in tokens] or [query.casefold()]
+    slug_rows = con.execute(
+        "SELECT slug, superseded_by FROM entries WHERE (? OR superseded_by IS NULL)",
+        (include_set_aside,),
+    ).fetchall()
+    slug_matches = [
+        str(row[0])
+        for row in sorted(
+            (row for row in slug_rows if any(token in str(row[0]).casefold() for token in wanted)),
+            key=lambda row: (
+                row[1] is not None,
+                str(row[0]).casefold() != query.casefold(),
+                -sum(token in str(row[0]).casefold() for token in wanted),
+                str(row[0]),
+            ),
+        )
+    ]
     if tokens and ensure_lookup(con):
         expression = " OR ".join(f'"{token.replace(chr(34), chr(34) * 2)}"*' for token in tokens)
         try:
@@ -163,7 +180,7 @@ def search_text(
                 "ORDER BY (e.superseded_by IS NOT NULL), bm25(pieces_text_fts), p.slug LIMIT ?",
                 (expression, include_set_aside, limit * 4),
             ).fetchall()
-            answer = list(dict.fromkeys(str(row[0]) for row in rows))
+            answer = list(dict.fromkeys([*slug_matches, *(str(row[0]) for row in rows)]))
             if answer:
                 return answer[:limit]
         except sqlite3.Error as exc:
@@ -176,8 +193,7 @@ def search_text(
         "ORDER BY (e.superseded_by IS NOT NULL), p.slug, p.ord",
         (include_set_aside,),
     ).fetchall()
-    wanted = [token.casefold() for token in tokens] or [query.casefold()]
-    answer: list[str] = []
+    answer: list[str] = slug_matches[:limit]
     for row in rows:
         folded = str(row[1]).casefold()
         if any(token in folded for token in wanted) and row[0] not in answer:

@@ -27,6 +27,10 @@ const EDGE_DASH: Record<MemoryEdgeKind, number[]> = {
   supersedes: [1, 6],
 }
 
+export function edgeHasArrow(kind: MemoryEdgeKind): boolean {
+  return kind !== "contradicts"
+}
+
 function palette() {
   const style = getComputedStyle(document.documentElement)
   const value = (name: string) => style.getPropertyValue(`--${name}`).trim()
@@ -212,6 +216,27 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
         context.moveTo(source.x, source.y)
         context.lineTo(target.x, target.y)
         context.stroke()
+        if (edgeHasArrow(edge.kind)) {
+          const angle = Math.atan2(target.y - source.y, target.x - source.x)
+          const inset = target.radius + 2
+          const tipX = target.x - Math.cos(angle) * inset
+          const tipY = target.y - Math.sin(angle) * inset
+          const length = 5
+          const spread = 0.55
+          context.fillStyle = style.color
+          context.beginPath()
+          context.moveTo(tipX, tipY)
+          context.lineTo(
+            tipX - Math.cos(angle - spread) * length,
+            tipY - Math.sin(angle - spread) * length,
+          )
+          context.lineTo(
+            tipX - Math.cos(angle + spread) * length,
+            tipY - Math.sin(angle + spread) * length,
+          )
+          context.closePath()
+          context.fill()
+        }
       }
       context.setLineDash([])
 

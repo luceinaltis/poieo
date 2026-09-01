@@ -4,7 +4,7 @@ import type { Root } from "react-dom/client"
 import { beforeEach, afterEach, expect, test, vi } from "vitest"
 
 import { askMemory, fetchMemory, fetchMemoryEntry, searchMemory } from "../api"
-import { Memory } from "./Memory"
+import { MEMORY_REFRESH_MS, Memory } from "./Memory"
 import type { MemoryOverview } from "./types"
 
 vi.mock("../api", () => ({
@@ -109,6 +109,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  vi.useRealTimers()
   vi.clearAllMocks()
 })
 
@@ -201,6 +202,36 @@ test("changing the set-aside scope clears evidence from the old scope", async ()
   expect(container.textContent).toContain("Search, ask, or select a point")
 })
 
+test("changing search mode clears evidence from the previous mode", async () => {
+  await render()
+  await enter("Windows")
+  await act(async () => container.querySelector<HTMLFormElement>("form")!.requestSubmit())
+  expect(container.querySelector('[data-result="windows-shell"]')).not.toBeNull()
+
+  await act(async () => container.querySelector<HTMLElement>('[data-mode="ask"]')!.click())
+
+  expect(container.querySelector('[data-result="windows-shell"]')).toBeNull()
+  expect(container.textContent).toContain("Search, ask, or select a point")
+})
+
+test("an open memory place refreshes after the learning interval", async () => {
+  vi.useFakeTimers()
+  vi.mocked(fetchMemory)
+    .mockResolvedValueOnce(OVERVIEW)
+    .mockResolvedValueOnce({
+      ...OVERVIEW,
+      stats: { ...OVERVIEW.stats!, kept: 3 },
+    })
+  await render()
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(MEMORY_REFRESH_MS)
+  })
+
+  expect(fetchMemory).toHaveBeenCalledTimes(2)
+  expect(container.textContent).toContain("3 kept")
+})
+
 test("an unconfigured model mode is disabled instead of silently falling back", async () => {
   vi.mocked(fetchMemory).mockResolvedValue({
     ...OVERVIEW,
@@ -210,6 +241,41 @@ test("an unconfigured model mode is disabled instead of silently falling back", 
 
   expect(container.querySelector<HTMLButtonElement>('[data-mode="meaning"]')!.disabled).toBe(true)
   expect(container.querySelector<HTMLButtonElement>('[data-mode="ask"]')!.disabled).toBe(true)
+  expect(container.textContent).toContain("meaning needs memory_embedder")
+  expect(container.textContent).toContain("ask needs memory_searcher")
+})
+
+test("entry detail names directed relationships and keeps its history", async () => {
+  vi.mocked(fetchMemoryEntry).mockResolvedValueOnce({
+    slug: "windows-shell",
+    body: "Windows tests need a POSIX shell.",
+    updated_at: "2026-08-31T00:00:00Z",
+    mentions: ["command-env"],
+    scope: ["global"],
+    anchors: [],
+    source: ["person"],
+    valid_from: "2026-08-30T00:00:00Z",
+    superseded_by: "portable-shell",
+    links: { depends_on: ["command-env"], contradicts: ["cmd-shell"] },
+    second_look: [],
+    history: [
+      {
+        at: "2026-08-30T00:00:00Z",
+        writer: "person",
+        did: "updated",
+        slug: "windows-shell",
+      },
+    ],
+  })
+  await render()
+  await act(async () => container.querySelector<HTMLElement>('[data-testid="constellation"]')!.click())
+
+  expect(container.textContent).toContain("mentions →")
+  expect(container.textContent).toContain("depends on →")
+  expect(container.textContent).toContain("disagrees with ↔")
+  expect(container.textContent).toContain("set aside for →")
+  expect(container.textContent).toContain("history (1)")
+  expect(container.querySelector('[data-related="command-env"]')).not.toBeNull()
 })
 
 test("a project with no long memory explains the empty place", async () => {

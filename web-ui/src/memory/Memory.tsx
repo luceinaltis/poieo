@@ -12,6 +12,7 @@ import type {
 import "./memory.css"
 
 type Mode = MemorySearchMode | "ask"
+export const MEMORY_REFRESH_MS = 15_000
 
 function AnswerText({ text, onCitation }: { text: string; onCitation(slug: string): void }) {
   const parts = text.split(/(\[\[[^\[\]]+\]\])/g)
@@ -54,6 +55,7 @@ export function Memory({ project }: { project: string }) {
 
   useEffect(() => {
     let alive = true
+    let reading = false
     setOverview(undefined)
     setResults([])
     setAnswer(null)
@@ -64,11 +66,21 @@ export function Memory({ project }: { project: string }) {
     setError(null)
     request.current += 1
     detailRequest.current += 1
-    void fetchMemory(project).then((found) => {
-      if (alive) setOverview(found)
-    })
+    const readOverview = async () => {
+      if (reading) return
+      reading = true
+      try {
+        const found = await fetchMemory(project)
+        if (alive) setOverview(found)
+      } finally {
+        reading = false
+      }
+    }
+    void readOverview()
+    const timer = window.setInterval(() => void readOverview(), MEMORY_REFRESH_MS)
     return () => {
       alive = false
+      window.clearInterval(timer)
     }
   }, [project])
 
@@ -158,6 +170,20 @@ export function Memory({ project }: { project: string }) {
     setError(null)
   }
 
+  const changeMode = (next: Mode) => {
+    if (next === mode) return
+    request.current += 1
+    detailRequest.current += 1
+    setMode(next)
+    setResults([])
+    setAnswer(null)
+    setDetail(null)
+    setSelected(null)
+    setSearched(false)
+    setBusy(false)
+    setError(null)
+  }
+
   if (overview === undefined) {
     return <div className="memory-state">Reading this project's memory…</div>
   }
@@ -195,7 +221,7 @@ export function Memory({ project }: { project: string }) {
             type="button"
             data-mode="words"
             aria-pressed={mode === "words"}
-            onClick={() => setMode("words")}
+            onClick={() => changeMode("words")}
           >
             words
           </button>
@@ -205,7 +231,7 @@ export function Memory({ project }: { project: string }) {
             aria-pressed={mode === "meaning"}
             disabled={!overview.capabilities.meaning}
             title={overview.capabilities.meaning ? "Find close meanings" : "Name a memory_embedder role to use this"}
-            onClick={() => setMode("meaning")}
+            onClick={() => changeMode("meaning")}
           >
             meaning
           </button>
@@ -215,7 +241,7 @@ export function Memory({ project }: { project: string }) {
             aria-pressed={mode === "ask"}
             disabled={!overview.capabilities.ask}
             title={overview.capabilities.ask ? "Answer from memory with citations" : "Name a memory_searcher role to use this"}
-            onClick={() => setMode("ask")}
+            onClick={() => changeMode("ask")}
           >
             ask
           </button>
@@ -231,6 +257,12 @@ export function Memory({ project }: { project: string }) {
         <button className="memory-go" type="submit" disabled={busy || !query.trim()}>
           {busy ? "looking…" : mode === "ask" ? "ask" : "find"}
         </button>
+        {!overview.capabilities.meaning || !overview.capabilities.ask ? (
+          <p className="memory-capability-note">
+            {!overview.capabilities.meaning ? <span>meaning needs memory_embedder</span> : null}
+            {!overview.capabilities.ask ? <span>ask needs memory_searcher</span> : null}
+          </p>
+        ) : null}
       </form>
 
       <div className="memory-main">
@@ -299,13 +331,38 @@ export function Memory({ project }: { project: string }) {
             <article className="memory-detail" data-memory={detail.slug}>
               <div className="memory-detail-title">
                 <strong>{detail.slug}</strong>
-                {!detail.superseded_by ? null : <span>set aside for {detail.superseded_by}</span>}
+                {!detail.superseded_by ? null : <span>set aside</span>}
               </div>
               <p>{detail.body}</p>
               {detail.second_look.map((reason) => (
                 <p className="memory-second-look" key={reason}>{reason}</p>
               ))}
               <dl>
+                {[
+                  ["mentions →", detail.mentions],
+                  ["depends on →", detail.links.depends_on],
+                  ["disagrees with ↔", detail.links.contradicts],
+                  ["set aside for →", detail.superseded_by ? [detail.superseded_by] : []],
+                ].map(([label, slugs]) =>
+                  slugs.length ? (
+                    <div className="memory-relation" key={label as string}>
+                      <dt>{label as string}</dt>
+                      <dd>
+                        {(slugs as string[]).map((slug) => (
+                          <button
+                            type="button"
+                            className="memory-related"
+                            data-related={slug}
+                            key={slug}
+                            onClick={() => void selectEntry(slug)}
+                          >
+                            {slug}
+                          </button>
+                        ))}
+                      </dd>
+                    </div>
+                  ) : null,
+                )}
                 <dt>scope</dt>
                 <dd>{detail.scope.join(", ") || "global"}</dd>
                 {detail.anchors.length ? (
@@ -314,9 +371,34 @@ export function Memory({ project }: { project: string }) {
                     <dd>{detail.anchors.join(", ")}</dd>
                   </>
                 ) : null}
+                {detail.source.length ? (
+                  <>
+                    <dt>source</dt>
+                    <dd>{detail.source.join(", ")}</dd>
+                  </>
+                ) : null}
+                {detail.valid_from ? (
+                  <>
+                    <dt>valid from</dt>
+                    <dd>{new Date(detail.valid_from).toLocaleString()}</dd>
+                  </>
+                ) : null}
                 <dt>updated</dt>
                 <dd>{new Date(detail.updated_at).toLocaleString()}</dd>
               </dl>
+              {detail.history.length ? (
+                <details className="memory-history">
+                  <summary>history ({detail.history.length})</summary>
+                  <ol>
+                    {detail.history.map((event, index) => (
+                      <li key={`${event.at}-${event.writer}-${index}`}>
+                        <time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time>
+                        <span>{event.writer} · {event.did}{event.slug ? ` · ${event.slug}` : ""}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
             </article>
           ) : null}
 

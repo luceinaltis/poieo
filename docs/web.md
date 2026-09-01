@@ -643,13 +643,17 @@ stage and never fetches. Memory asks a different project API, owns a query and
 selected evidence, and remains useful when no task exists, so the shell mounts
 it beside the skin host rather than widening the skin contract with unrelated
 state.
+While the place stays open it rereads the overview every fifteen seconds, so a
+learning pass appears without a reload; the current query and evidence remain
+in place across that quiet refresh.
 
 Its canvas is a two-lobed three-dimensional constellation projected without a
 new rendering dependency. Drag orbits, the wheel travels, and the evidence list
 is the keyboard-readable route to every search result. Only declared memory
 relationships become lines. Search similarity dims or lights nodes; an AI
 answer lights its cited nodes and the real lines between them, never a synthetic
-"similar" edge. Set-aside entries remain visible as a faint outer shadow and
+"similar" edge. Directional lines end in arrowheads, and selecting a node lists
+its outgoing relationships and history. Set-aside entries remain visible as a faint outer shadow and
 can be hidden. Under 720px the search controls wrap, the constellation takes the
 upper half, and evidence becomes the scrolling document below it.
 

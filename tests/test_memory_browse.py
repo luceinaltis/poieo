@@ -96,6 +96,15 @@ def test_keyword_search_finds_korean_prefixes_and_returns_no_fake_edges(tmp_path
     assert "테스트가" in results[0]["preview"]
 
 
+def test_keyword_search_finds_the_memory_name_people_can_see(tmp_path):
+    start_memory(tmp_path)
+    remember(tmp_path, "command-env", "환경 변수는 명령과 별도 데이터로 전달한다.")
+
+    results = keyword_search(tmp_path, "command-env")
+
+    assert [row["slug"] for row in results] == ["command-env"]
+
+
 def test_word_scan_keeps_the_fts_any_word_semantics(tmp_path, monkeypatch):
     _memory(tmp_path)
     monkeypatch.setattr(memory_index, "ensure_lookup", lambda con: False)

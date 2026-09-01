@@ -265,12 +265,14 @@ the mention inside it must not smuggle the disputed entry into a prompt.
 
 ## What a person searches on the board
 
-The board has three explicit modes. **Words** searches the raw piece text with
-Unicode FTS and a Unicode substring fallback; it does not reuse the ASCII shape
-whose narrower job is autonomous recall. **Meaning** embeds the query and entry
+The board has three explicit modes. **Words** searches the visible memory slug
+and the raw piece text with Unicode FTS and a Unicode substring fallback; it
+does not reuse the ASCII shape whose narrower job is autonomous recall.
+**Meaning** embeds the query and entry
 bodies in the model named by `memory_embedder`, compares cosine similarity, and
 keeps vectors only under `memory/cache/`. A changed body, model or endpoint
-fingerprint misses that cache and is embedded again.
+fingerprint misses that cache and is embedded again. The cache is disposable:
+a damaged SQLite file is removed and rebuilt from the entry bodies.
 That first miss sends each entry body to the configured embedding endpoint;
 choose that role with the same privacy care as any model that reads a prompt.
 
@@ -283,6 +285,8 @@ Queries and answers are not persisted.
 Similarity is never topology. The graph draws `mentions`, `depends_on`,
 `contradicts` and `superseded_by`, plus learned strength on those existing
 connections. A similar result may glow; it never earns a line.
+Directional relationships have arrowheads, and the selected entry lists their
+targets and its recorded history beside the graph.
 The initial paint caps both memories and connections; its response says when
 either was shortened, while search still reaches every entry.
 

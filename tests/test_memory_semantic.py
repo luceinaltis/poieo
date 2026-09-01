@@ -1,5 +1,7 @@
 """Meaning search is derived, model-specific, and never memory topology."""
 
+import sqlite3
+
 from conftest import remember
 
 from poieo.memory import start_memory
@@ -94,3 +96,23 @@ async def test_editing_one_entry_invalidates_only_its_vector(tmp_path):
     await semantic_search(tmp_path, "shell", **kwargs)
 
     assert provider.calls[-1] == ["database\nSQLite is the one durable database."]
+
+
+async def test_a_damaged_embedding_cache_is_discarded_and_rebuilt(tmp_path):
+    start_memory(tmp_path)
+    remember(tmp_path, "windows-shell", "Windows uses a POSIX shell.")
+    cache = tmp_path / "memory" / "cache" / "embeddings.sqlite3"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_bytes(b"this is not sqlite")
+
+    results = await semantic_search(
+        tmp_path,
+        "shell",
+        provider=Embeddings(),
+        model="embed",
+        model_key="local/embed@one",
+    )
+
+    assert [row["slug"] for row in results] == ["windows-shell"]
+    with sqlite3.connect(cache) as con:
+        assert con.execute("SELECT count(*) FROM vectors").fetchone() == (1,)
