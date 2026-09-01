@@ -19,3 +19,9 @@ test("a phone panel hides the rail and stage it covers", () => {
     `.shell-rail[data-covered="true"],\n  .shell-stage[data-drawer="true"] {\n    visibility: hidden;\n  }`,
   )
 })
+
+test("a phone panel fills the foreground it owns", () => {
+  expect(CSS).toContain(
+    `@media (max-width: 720px) {\n  :root {\n    --panel-width: 100vw;\n  }`,
+  )
+})
