@@ -118,6 +118,15 @@ def test_landing_demo_has_motion_and_small_screen_fallbacks():
     assert ".demo-mobile-shot" in css
 
 
+def test_landing_demo_stays_readable_and_keyboard_stable_at_the_edges():
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    script = (ROOT / "site" / "landing.js").read_text(encoding="utf-8")
+    assert "opacity: 0.38" not in css
+    assert "max-height: 650px" in css
+    assert 'setAttribute("aria-disabled"' in script
+    assert ".disabled =" not in script
+
+
 def test_running_tasks_use_live_green_not_the_review_accent():
     css = (ROOT / "web-ui" / "src" / "skins" / "basic" / "basic.css").read_text(encoding="utf-8")
     running = re.findall(r'\.basic-task\[data-status="running"\][^{]*\{([^}]+)\}', css)

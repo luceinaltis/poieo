@@ -38,8 +38,10 @@
       var name = nameOf(active);
       title.textContent = name;
       status.textContent = "Example " + (active + 1) + " of " + steps.length + " — " + name;
-      previous.disabled = active === 0;
-      next.disabled = active === steps.length - 1;
+      /* Boundary arrows stay focusable. Native `disabled` drops keyboard
+         focus just as the reader reaches the first or last example. */
+      previous.setAttribute("aria-disabled", String(active === 0));
+      next.setAttribute("aria-disabled", String(active === steps.length - 1));
     }
 
     function move(by) {

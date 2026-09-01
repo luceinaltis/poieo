@@ -427,14 +427,13 @@ pre .c { color: var(--dim); }
   flex-direction: column;
   justify-content: center;
   min-height: min(76vh, 46rem);
-  opacity: 0.38;
   padding: clamp(3rem, 9vh, 6rem) 0;
   transform: translateY(12px);
-  transition: opacity 220ms ease, transform 220ms ease;
+  transition: transform 220ms ease;
 }
 
 .demo-step:first-child { border-top: 0; }
-.demo-step[aria-current="step"] { opacity: 1; transform: none; }
+.demo-step[aria-current="step"] { transform: none; }
 
 .demo-kind {
   color: var(--demo-live);
@@ -445,10 +444,14 @@ pre .c { color: var(--dim); }
 }
 
 .demo-step h3 {
+  color: var(--demo-dim);
   font-size: clamp(1.8rem, 3vw, 3rem);
   letter-spacing: -0.035em;
   margin: 0 0 1rem;
+  transition: color 220ms ease;
 }
+
+.demo-step[aria-current="step"] h3 { color: var(--demo-text); }
 
 .demo-step > p:not(.demo-kind, .demo-route) {
   color: var(--demo-dim);
@@ -554,7 +557,7 @@ pre .c { color: var(--dim); }
 
 .demo-arrows button:hover:not(:disabled),
 .demo-arrows button:focus-visible { border-color: var(--demo-live); color: var(--demo-live); }
-.demo-arrows button:disabled { cursor: default; opacity: 0.28; }
+.demo-arrows button[aria-disabled="true"] { cursor: default; opacity: 0.5; }
 
 .aside { color: var(--dim); font-size: 0.95rem; margin: 1.6rem 0 0; max-width: 62ch; }
 
@@ -592,14 +595,17 @@ footer p { margin: 0.4rem 0; }
 @media (max-width: 980px) {
   .hero-inner { grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.9fr); }
   .cycle-heading { gap: 1.5rem; grid-template-columns: 1fr; }
+}
+
+@media (max-width: 980px), (max-height: 650px) {
   .demo-story { display: block; }
   .demo-stage { display: none; }
   .demo-step {
     min-height: 0;
-    opacity: 1;
     padding: 3.5rem 0;
     transform: none;
   }
+  .demo-step h3 { color: var(--demo-text); }
   .demo-mobile-shot {
     border: 1px solid var(--demo-line);
     display: block;
@@ -635,7 +641,8 @@ footer p { margin: 0.4rem 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .demo-panel,
-  .demo-step { transition: none; }
+  .demo-step,
+  .demo-step h3 { transition: none; }
 }
 
 
