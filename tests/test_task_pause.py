@@ -1,14 +1,16 @@
 """A task that fails the same way three times pauses itself and says so."""
 
-import asyncio
 from types import SimpleNamespace
 
-from conftest import card
+import pytest
+from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.daemon.service import PAUSE_AFTER, TaskRunner
 from poieo.layout import layout_for
 from poieo.store import NullStore
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 # -- the counter, in isolation ------------------------------------------------
 
@@ -92,14 +94,16 @@ async def _paused(daemon, timeout=10.0):
     A paused runner no longer ends its coroutine -- it parks and waits for
     resume -- so the daemon stays up and the test has to bring it down.
     """
-    task = asyncio.create_task(daemon.serve(install_signals=False))
-    deadline = asyncio.get_running_loop().time() + timeout
-    while not (daemon.runners and daemon.runners[0].status == "paused"):
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError("timed out waiting for the pause")
-        await asyncio.sleep(0.01)
-    daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
+    task = await up(daemon)
+    try:
+        await until(
+            lambda: daemon.runners[0].status == "paused",
+            "the task to pause itself",
+            timeout=timeout,
+        )
+    finally:
+        results = await down(daemon, task)
+    return results
 
 
 async def test_an_identically_failing_flow_pauses_after_three_runs(tmp_path):

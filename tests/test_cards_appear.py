@@ -11,11 +11,14 @@ Design: docs/daemon.md
 import asyncio
 
 import httpx
+import pytest
 from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web import create_app
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 _GRAPH = """\
 name: quick
@@ -134,7 +137,7 @@ async def test_a_daemon_with_nothing_to_run_still_watches(tmp_path, monkeypatch)
     path.write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
 
     daemon = Daemon(load_config(path), store=NullStore())
-    serving = asyncio.create_task(daemon.serve(install_signals=False))
+    serving = await up(daemon, wait_for_runners=False)
     await asyncio.sleep(0.1)
     assert not serving.done(), "the daemon stopped instead of waiting for a card"
 

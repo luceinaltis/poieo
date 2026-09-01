@@ -343,8 +343,8 @@ async def test_daemon_with_web_port_wraps_store_and_serves(sample_project):
         assert "triage" in response.text
     finally:
         daemon.cancel.set()
+        results = await asyncio.wait_for(serve_task, timeout=30)
 
-    results = await asyncio.wait_for(serve_task, timeout=30)
     assert isinstance(daemon.store, BroadcastStore)
     assert results  # the run finished and the server shut down cleanly
 

@@ -17,6 +17,8 @@ from poieo.daemon.service import MAX_CHAIN
 from poieo.errors import SpecError
 from poieo.store import NullStore
 
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
+
 _GRAPH = """\
 name: quick
 entry: a

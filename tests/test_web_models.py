@@ -9,12 +9,12 @@ of this pair.
 Design: docs/web.md
 """
 
-import asyncio
 import os
 from dataclasses import replace
 
 import httpx
-from conftest import card
+import pytest
+from conftest import card, down, up
 from starlette.testclient import TestClient
 
 from poieo import detect as detect_module
@@ -22,6 +22,8 @@ from poieo.daemon import Daemon, load_config
 from poieo.detect import Catalogue, Served
 from poieo.store import NullStore
 from poieo.web import create_app
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 _GRAPH = """\
 name: quick
@@ -584,29 +586,27 @@ async def test_the_board_and_the_daemon_agree_about_the_model_after_a_use(tmp_pa
     card(tmp_path / "cards", "f", "graph: ../g.yaml\ntrigger: {type: manual}\n")
     (tmp_path / "poieo.yaml").write_text("name: board\ntasks: cards\nbinding: b.yaml\n", encoding="utf-8")
     daemon = Daemon(load_config(tmp_path / "poieo.yaml"), store=NullStore())
-    serving = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
+    serving = await up(daemon)
 
-    transport = httpx.ASGITransport(app=create_app(daemon))
-    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
 
-        async def painted():
-            body = (await client.get("/api/tasks")).json()
-            return body["tasks"][0]["shape"]["nodes"][0]["model"]
+            async def painted():
+                body = (await client.get("/api/tasks")).json()
+                return body["tasks"][0]["shape"]["nodes"][0]["model"]
 
-        assert await painted() == "qwen3.5:latest"
+            assert await painted() == "qwen3.5:latest"
 
-        reply = await client.post(
-            "/api/projects/board/models/use",
-            json={"target": "local/llama3.2:3b", "role": "reader"},
-        )
-        assert reply.status_code == 200
+            reply = await client.post(
+                "/api/projects/board/models/use",
+                json={"target": "local/llama3.2:3b", "role": "reader"},
+            )
+            assert reply.status_code == 200
 
-        assert await painted() == "llama3.2:3b"
-
-    daemon.stop()
-    await asyncio.wait_for(serving, timeout=10)
+            assert await painted() == "llama3.2:3b"
+    finally:
+        await down(daemon, serving)
 
 
 def test_the_panel_offers_the_roles_the_file_names(tmp_path, monkeypatch):
