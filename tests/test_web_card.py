@@ -385,6 +385,25 @@ def test_a_card_carrying_more_than_the_three_fields_is_not_plain(tmp_path):
     assert _get(client).json()["plain"] is False
 
 
+def test_a_hash_inside_a_value_does_not_cost_a_card_its_form(tmp_path):
+    """The veto is about comments, which a dump would silently lose -- not
+    about the character. A prompt that says `#` inside a scalar is three
+    fields still, and the form rebuilds it whole; a comment beside a value is
+    not, so that one stays a file on screen."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text(
+        'name: Already\nfolder: ../work\nprompt: "file it under #ui, not #api"\n',
+        encoding="utf-8",
+    )
+    assert _get(client).json()["plain"] is True
+
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: file it  # and say where\n",
+        encoding="utf-8",
+    )
+    assert _get(client).json()["plain"] is False
+
+
 def test_fields_rewrite_a_plain_card_through_the_same_dump_make_uses(tmp_path):
     """The user never touches the spelling: three fields in, and the file
     comes out exactly as make would have written it."""
