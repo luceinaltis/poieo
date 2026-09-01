@@ -5,7 +5,7 @@
  * live board.
  */
 
-import { memo, useEffect, useId, useRef, useState } from "react"
+import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
 import { Card } from "./Card"
@@ -220,24 +220,19 @@ type AttentionKind =
   | "answer"
   | "review"
   | "restart"
-  | "off"
   | "failed"
-  | "running"
-  | "paused"
   | "quiet"
 
 function attentionOf({
   asking,
   pending,
   stale,
-  enabled,
   status,
   latest,
 }: {
   asking: Asked | null
   pending: number
   stale: string | null
-  enabled: boolean
   status: string
   latest: RunSummary | null
 }): { kind: AttentionKind; text: string } {
@@ -249,13 +244,23 @@ function attentionOf({
     }
   }
   if (stale) return { kind: "restart", text: "Restart needed" }
-  if (!enabled) return { kind: "off", text: "Switched off" }
-  if (status === "error" || (latest && latest.status !== "completed")) {
+  if (
+    status === "error" ||
+    (latest && latest.status !== "completed" && latest.status !== "asking")
+  ) {
     return { kind: "failed", text: "Latest run failed" }
   }
-  if (status === "running") return { kind: "running", text: "Running now" }
-  if (status === "paused") return { kind: "paused", text: "Paused" }
   return { kind: "quiet", text: "No action needed" }
+}
+
+function briefAccountOf(run: RunSummary, tracked: boolean): string {
+  if (run.status !== "completed") return accountOf(run, tracked)
+  const line = (run.said ?? "")
+    .trim()
+    .split(/\r?\n/)
+    .find((part) => part.trim())
+  if (!line) return accountOf(run, tracked)
+  return line.length > 180 ? line.slice(0, 180).trimEnd() + "…" : line
 }
 
 function RunBrief({
@@ -279,13 +284,14 @@ function RunBrief({
   }
 
   const outcome = outcomeOf(run, tracked)
+  const account = briefAccountOf(run, tracked)
   const duration = durationOf(run)
   const size = sizeOf(run)
   const meta = [
     `${run.status === "completed" ? "Finished" : "Stopped"} ${shortTime(run.finished_at)}`,
   ]
   if (duration) meta.push(duration)
-  if (outcome === "nothing") meta.push("No files changed")
+  if (outcome === "nothing" && (run.said ?? "").trim()) meta.push("No files changed")
   if (size) meta.push(size)
 
   return (
@@ -297,7 +303,7 @@ function RunBrief({
       aria-labelledby={headingId}
     >
       <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
-      <p className="run-brief-what">{accountOf(run, tracked)}</p>
+      <p className="run-brief-what">{account}</p>
       <p className="run-brief-meta">{meta.join(" · ")}</p>
     </section>
   )
@@ -314,6 +320,7 @@ export const Drawer = memo(function Drawer({
   pending = 0,
   into = null,
   asking = null,
+  liveRun = null,
   onClose,
   onDecided,
   onAlike,
@@ -328,6 +335,8 @@ export const Drawer = memo(function Drawer({
   pending?: number
   into?: string | null
   asking?: Asked | null
+  /** The stage's newest summary, which can arrive while this drawer is open. */
+  liveRun?: RunSummary | null
   onClose(): void
   onDecided?(): void
   /** "Make one like it", passed through to the card fold. */
@@ -353,11 +362,8 @@ export const Drawer = memo(function Drawer({
     void fetchRuns({ task, project, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setSelectedRunId(
-        (current) =>
-          (current && rows.some((row) => row.run_id === current) ? current : null) ??
-          rows[0]?.run_id ??
-          null,
+      setSelectedRunId((current) =>
+        current && rows.some((row) => row.run_id === current) ? current : null,
       )
     })
     return () => {
@@ -370,35 +376,41 @@ export const Drawer = memo(function Drawer({
     onDecided?.()
   }
 
-  useEffect(() => {
+  const availableRuns = liveRun
+    ? [liveRun, ...runs.filter((run) => run.run_id !== liveRun.run_id)].slice(0, 10)
+    : runs
+  const latestRun = availableRuns[0] ?? null
+  const selectedRun =
+    availableRuns.find((row) => row.run_id === selectedRunId) ?? latestRun
+  const selectedRunKey = selectedRun?.run_id ?? null
+
+  useLayoutEffect(() => {
     activityRequest.current += 1
     setActivityOpen(false)
     setEvents(null)
     setActivityLoading(false)
     setActivityError(false)
-  }, [selectedRunId])
+  }, [selectedRunKey])
 
-  const latestRun = runs[0] ?? null
-  const selectedRun =
-    runs.find((row) => row.run_id === selectedRunId) ?? latestRun
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
-  const attention = attentionOf({ asking, pending, stale, enabled, status, latest: latestRun })
+  const attention = attentionOf({ asking, pending, stale, status, latest: latestRun })
   const timelineEvents = events?.filter(appearsInTimeline) ?? null
   const reviewRunId =
     !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
 
   const selectRun = (runId: string) => {
     setHistoryOpen(false)
-    setSelectedRunId(runId)
+    setSelectedRunId(runId === latestRun?.run_id ? null : runId)
   }
 
   const loadActivity = () => {
-    if (!selectedRunId) return
+    const runId = selectedRun?.run_id
+    if (!runId) return
     const request = ++activityRequest.current
     setActivityLoading(true)
     setActivityError(false)
-    void fetchRunEvents(selectedRunId)
+    void fetchRunEvents(runId)
       .then((list) => {
         if (activityRequest.current !== request) return
         setEvents(list)
@@ -481,7 +493,7 @@ export const Drawer = memo(function Drawer({
           headingId={briefId}
         />
 
-        {runs.length > 0 ? (
+        {availableRuns.length > 0 ? (
           <section className="drawer-fold run-history">
             <button
               type="button"
@@ -491,13 +503,13 @@ export const Drawer = memo(function Drawer({
               aria-controls={historyId}
               onClick={() => setHistoryOpen((open) => !open)}
             >
-              {`All runs (${runs.length})`}
+              {`All runs (${availableRuns.length})`}
             </button>
             {historyOpen ? (
               <div id={historyId} className="drawer-fold-content">
                 <RunList
-                  runs={runs}
-                  selected={selectedRunId}
+                  runs={availableRuns}
+                  selected={selectedRun?.run_id ?? null}
                   onSelect={selectRun}
                   tracked={tracked}
                 />

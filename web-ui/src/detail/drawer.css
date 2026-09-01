@@ -59,15 +59,6 @@
   color: var(--stop);
 }
 
-.drawer-state[data-state="running"] {
-  color: var(--live);
-}
-
-.drawer-state[data-state="paused"],
-.drawer-state[data-state="off"] {
-  color: var(--paused-text);
-}
-
 /* A question waiting on the reader. Given a border and a colour the rest of
    the drawer does not use: everything after it is held until it is answered,
    so it is the one thing here that must not read as another row of buttons. */
