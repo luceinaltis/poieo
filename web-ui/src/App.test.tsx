@@ -505,6 +505,62 @@ test("an open drawer follows a live result and its review attention", async () =
   expect(container.querySelector(".drawer-state")?.textContent).toBe("1 change to review")
 })
 
+test("a selected live run stays selected as the live window advances", async () => {
+  let stage = setRuns(initialStage(TASK_ROWS), "board/chores", [DRAWER_RUN])
+  const store = await render(stage)
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+
+  const first: PoieoEvent = {
+    ...DRAWER_RUN,
+    type: "run_summary",
+    run_id: "live-first",
+    started_at: "2026-08-31T09:00:00Z",
+    finished_at: "2026-08-31T09:00:05Z",
+    said: "first live result",
+  }
+  stage = reduce(stage, first)
+  await act(async () => store.push(stage))
+
+  const second: PoieoEvent = {
+    ...DRAWER_RUN,
+    type: "run_summary",
+    run_id: "live-2",
+    started_at: "2026-08-31T10:00:00Z",
+    finished_at: "2026-08-31T10:00:05Z",
+    said: "live result 2",
+  }
+  stage = reduce(stage, second)
+  await act(async () => store.push(stage))
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-run="live-first"] .run-open')!.click()
+  })
+
+  for (let index = 3; index <= 12; index += 1) {
+    const summary: PoieoEvent = {
+      ...DRAWER_RUN,
+      type: "run_summary",
+      run_id: `live-${index}`,
+      started_at: `2026-08-31T${String(index + 8).padStart(2, "0")}:00:00Z`,
+      finished_at: `2026-08-31T${String(index + 8).padStart(2, "0")}:00:05Z`,
+      said: `live result ${index}`,
+    }
+    stage = reduce(stage, summary)
+  }
+  await act(async () => store.push(stage))
+
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("live-first")
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
+  })
+  expect(container.querySelector('[data-run="live-3"]')).not.toBeNull()
+  expect(container.querySelector('[data-run="live-12"]')).not.toBeNull()
+})
+
 test("an open drawer shows a question as soon as the task asks", async () => {
   const stage = setRuns(initialStage(TASK_ROWS), "board/chores", [DRAWER_RUN])
   const store = await render(stage)

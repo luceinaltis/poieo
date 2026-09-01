@@ -4,7 +4,7 @@ import { createStageStore } from "./stageStore"
 import type { StageApi } from "./stageStore"
 import { AGENT_RUN } from "../state/fixtures"
 import type { FeedHandlers } from "../api"
-import type { Listing, TaskRow, PoieoEvent } from "../types"
+import type { Listing, TaskRow, PoieoEvent, RunSummary } from "../types"
 
 const CHORES: TaskRow = {
   name: "chores",
@@ -22,6 +22,30 @@ const CHORES: TaskRow = {
   asking: null,
   then: [],
   shape: { entry: "", nodes: [] },
+}
+
+const CHANGED_RUN: RunSummary = {
+  run_id: "changed-live",
+  task: "chores",
+  project: "board",
+  graph: "agent-task",
+  status: "completed",
+  started_at: "2026-08-31T09:00:00Z",
+  finished_at: "2026-08-31T09:00:05Z",
+  steps: 1,
+  iteration: 1,
+  trigger: "loop",
+  usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+  error: null,
+  said: "updated the guide",
+  change: {
+    base: "a",
+    head: "b",
+    files: ["GUIDE.md"],
+    insertions: 4,
+    deletions: 0,
+    message: "updated the guide",
+  },
 }
 
 /** The envelope `/api/tasks` answers. Only the tasks matter to most of these,
@@ -100,6 +124,35 @@ test("a resync applies the run's history before the live frames that overlapped 
 
   expect(store.getStage().tasks["board/chores"].status).toBe("waiting")
   expect(store.getStage().tasks["board/chores"].currentNode).toBeNull()
+  store.stop()
+})
+
+test("a changed summary after the task listing still increments review attention", async () => {
+  let releaseRuns: (runs: RunSummary[]) => void = () => {}
+  let runsStarted: () => void = () => {}
+  const secondRunsStarted = new Promise<void>((resolve) => {
+    runsStarted = resolve
+  })
+  const pendingRuns = new Promise<RunSummary[]>((resolve) => {
+    releaseRuns = resolve
+  })
+  const fetchRuns = vi
+    .fn()
+    .mockResolvedValueOnce([])
+    .mockImplementationOnce(() => {
+      runsStarted()
+      return pendingRuns
+    })
+  const { store, feed } = harness({ fetchRuns })
+  await store.start()
+
+  const resynced = store.resync()
+  await secondRunsStarted
+  feed().onEvent({ ...CHANGED_RUN, type: "run_summary" })
+  releaseRuns([CHANGED_RUN])
+  await resynced
+
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
   store.stop()
 })
 
@@ -277,5 +330,43 @@ test("a run that died still reads as stopped after a resync", async () => {
 
   await store.resync()
   expect(store.getStage().tasks["board/chores"].status).toBe("error")
+  store.stop()
+})
+
+test("a newer successful run clears an old live failure on resync", async () => {
+  const failed = {
+    ...CHANGED_RUN,
+    run_id: "failed-old",
+    status: "failed",
+    finished_at: "2026-08-31T08:00:05Z",
+    error: "endpoint stopped",
+    change: undefined,
+  } as RunSummary
+  const recovered = {
+    ...CHANGED_RUN,
+    run_id: "recovered-new",
+    finished_at: "2026-08-31T10:00:05Z",
+    said: "recovered",
+    change: undefined,
+  }
+  const fetchTasks = vi
+    .fn()
+    .mockResolvedValueOnce(listing([CHORES]))
+    .mockResolvedValueOnce(listing([{ ...CHORES, last_run: recovered }]))
+  const fetchRuns = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([recovered])
+  const { store, feed } = harness({ fetchTasks, fetchRuns })
+  await store.start()
+
+  feed().onEvent({
+    run_id: failed.run_id,
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  feed().onEvent({ run_id: failed.run_id, type: "run_failed", data: {} })
+  feed().onEvent({ ...failed, type: "run_summary" })
+  expect(store.getStage().tasks["board/chores"].status).toBe("error")
+
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].status).toBe("waiting")
   store.stop()
 })

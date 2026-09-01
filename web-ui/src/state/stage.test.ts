@@ -184,6 +184,28 @@ test("run_asking puts the live question on the task", () => {
   })
 })
 
+test("a revised completed summary clears its matching live question", () => {
+  const begun = reduce(start(), {
+    run_id: "asking",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const asked = reduce(begun, {
+    run_id: "asking",
+    type: "run_asking",
+    data: { question: "Ship it?", choices: ["ship", "hold"] },
+  })
+  const askingSummary = {
+    ...aRun("asking", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  }
+  const indexed = reduce(asked, askingSummary)
+  const answered = reduce(indexed, { ...askingSummary, status: "completed" })
+
+  expect(indexed.tasks["board/chores"].asking?.run_id).toBe("asking")
+  expect(answered.tasks["board/chores"].asking).toBeNull()
+})
+
 test("run_summary reads flat fields and fills lastRun", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
   expect(stage.tasks["board/chores"].lastRun).toEqual({
