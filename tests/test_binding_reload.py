@@ -11,11 +11,14 @@ Design: docs/daemon.md
 """
 
 import httpx
+import pytest
 from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web import create_app
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 _GRAPH = """\
 name: quick

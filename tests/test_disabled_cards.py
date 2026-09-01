@@ -18,10 +18,13 @@ Design: docs/daemon.md
 
 import asyncio
 
+import pytest
 from conftest import card, down, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 _GRAPH = """\
 name: quick

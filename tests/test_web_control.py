@@ -1,16 +1,18 @@
 """The control routes: the board's three verbs reach the runner."""
 
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
-from conftest import card, until
+import pytest
+from conftest import card, down, until, up
 from starlette.testclient import TestClient
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web.server import create_app
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 # -- the routes, over a stub runner -------------------------------------------
 
@@ -172,30 +174,33 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
     keeps the handlers where the runner's primitives live.
     """
     daemon = Daemon(_config(tmp_path, "{type: manual}"), store=NullStore())
-    serve = asyncio.create_task(daemon.serve(install_signals=False))
-    await until(lambda: bool(daemon.runners), "the runner")
+    serve = await up(daemon)
     runner = daemon.runners[0]
 
-    transport = httpx.ASGITransport(app=create_app(daemon))
-    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
 
-        async def board_status():
-            body = (await client.get("/api/tasks")).json()
-            return body["tasks"][0]["status"]
+            async def board_status():
+                body = (await client.get("/api/tasks")).json()
+                return body["tasks"][0]["status"]
 
-        response = await client.post(f"/api/tasks/{daemon.config.display_name}/f/run")
-        assert response.json() == {"status": "starting"}
-        await until(lambda: len(runner.results) == 1, "the manual run")
-        assert runner.results[0].status == "completed"
+            response = await client.post(f"/api/tasks/{daemon.config.display_name}/f/run")
+            assert response.json() == {"status": "starting"}
+            await until(lambda: len(runner.results) == 1, "the manual run")
+            assert runner.results[0].status == "completed"
 
-        assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/pause")).json() == {"status": "paused"}
-        assert await board_status() == "paused"
+            assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/pause")).json() == {
+                "status": "paused"
+            }
+            assert await board_status() == "paused"
 
-        assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/resume")).json() == {"status": "waiting"}
-        assert await board_status() == "waiting"
-
-    daemon.stop()
-    await asyncio.wait_for(serve, timeout=10)
+            assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/resume")).json() == {
+                "status": "waiting"
+            }
+            assert await board_status() == "waiting"
+    finally:
+        await down(daemon, serve)
 
 
 # -- answering a question a run left ------------------------------------------

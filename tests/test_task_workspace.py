@@ -8,12 +8,15 @@ that only holds if git is actually involved.
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from conftest import card
+import pytest
+from conftest import card, down, until, up
 from test_workspace import git, head, make_repo
 
 from poieo.daemon import Daemon, load_config
 from poieo.project import SpendSpec
 from poieo.store import RunStore
+
+pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
 BINDING = """
 name: mock
@@ -368,17 +371,16 @@ async def test_a_card_works_in_a_private_copy_like_any_other_job(tmp_path):
 
     config = load_config(tmp_path / "d.yaml")
     daemon = Daemon(config, store=RunStore(config.store_path()))
-    serving = asyncio.create_task(daemon.serve(install_signals=False))
-    while not daemon.runners:
-        await asyncio.sleep(0.01)
-    deadline = asyncio.get_running_loop().time() + 30
-    while not daemon.runners[0].results:
-        if asyncio.get_running_loop().time() > deadline:
-            raise AssertionError("timed out waiting for the card's first run")
-        await asyncio.sleep(0.02)
-    result = daemon.runners[0].results[0]
-    daemon.stop()
-    await asyncio.wait_for(serving, timeout=30)
+    serving = await up(daemon)
+    try:
+        await until(
+            lambda: bool(daemon.runners[0].results),
+            "the card's first run",
+            timeout=30,
+        )
+        result = daemon.runners[0].results[0]
+    finally:
+        await down(daemon, serving)
 
     assert daemon.runners[0].workspace is not None
     # The user's own checkout is exactly as they left it, and the work is a

@@ -121,16 +121,38 @@ def remember(project, slug: str, text: str, writer: str = "person"):
     return write_entry(project, slug, body, frontmatter(matter), writer=writer)
 
 
-async def up(daemon):
+_STARTED_DAEMONS = {}
+
+
+async def up(daemon, *, wait_for_runners=True):
     """Start serving, and hand the task back once the runners exist.
 
     A daemon is up when it has loaded what it is going to run, not when
     `serve()` has been scheduled -- a test that asserted on `daemon.runners`
     straight after `create_task` was reading an empty list on a fast machine
-    and the right one on a slow one.
+    and the right one on a slow one. The lifecycle fixture records the task
+    before waiting, so an assertion can never leave it running behind the
+    test that started it.
     """
     task = asyncio.create_task(daemon.serve(install_signals=False))
+    _STARTED_DAEMONS[task] = daemon
+    if not wait_for_runners:
+        await asyncio.sleep(0)
+        return task
+
+    deadline = asyncio.get_running_loop().time() + 5.0
     while not daemon.runners:
+        if task.done():
+            _STARTED_DAEMONS.pop(task, None)
+            await task
+            raise AssertionError("the daemon stopped before its runners were ready")
+        if asyncio.get_running_loop().time() > deadline:
+            daemon.stop()
+            try:
+                await asyncio.wait_for(task, timeout=10)
+            finally:
+                _STARTED_DAEMONS.pop(task, None)
+            raise AssertionError("timed out waiting for the daemon's runners")
         await asyncio.sleep(0.01)
     return task
 
@@ -153,7 +175,36 @@ async def until(predicate, what="the condition", timeout=5.0):
 async def down(daemon, task):
     """Stop it and wait for the serve task, so nothing outlives the test."""
     daemon.stop()
-    return await asyncio.wait_for(task, timeout=10)
+    try:
+        return await asyncio.wait_for(task, timeout=10)
+    finally:
+        _STARTED_DAEMONS.pop(task, None)
+
+
+@pytest.fixture
+async def daemon_lifecycle(tmp_path, monkeypatch, caplog):
+    """Stop every daemon before the test's environment is restored.
+
+    The explicit dependencies make this fixture tear down first. Otherwise a
+    failed assertion could restore a monkeypatch while the daemon was still
+    scanning, briefly sending its background work through the real boundary.
+    """
+    del tmp_path, monkeypatch, caplog
+    try:
+        yield
+    finally:
+        started = list(_STARTED_DAEMONS.items())
+        for _task, daemon in started:
+            daemon.stop()
+        results = await asyncio.gather(
+            *(asyncio.wait_for(task, timeout=10) for task, _daemon in started),
+            return_exceptions=True,
+        )
+        for task, _daemon in started:
+            _STARTED_DAEMONS.pop(task, None)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
 
 
 def card(folder, name: str, body: str = "") -> Path:
