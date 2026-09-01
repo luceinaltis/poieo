@@ -110,13 +110,24 @@ async def test_interval_trigger_takes_the_time_its_periods_come_to():
     assert stamps[-1] - stamps[0] >= 19 * 0.05 * 0.66, stamps
 
 
-async def test_manual_trigger_never_fires_on_its_own():
+async def test_manual_trigger_waits_for_shutdown_without_firing(monkeypatch):
     trigger = TriggerSpec(type="manual").build()
     cancel = asyncio.Event()
+    waiting = asyncio.Event()
+    wait_for_cancel = cancel.wait
+
+    async def observed_wait():
+        waiting.set()
+        await wait_for_cancel()
+
+    monkeypatch.setattr(cancel, "wait", observed_wait)
     task = asyncio.create_task(collect(trigger, 1, cancel))
-    await asyncio.sleep(0.05)
-    cancel.set()
-    assert await asyncio.wait_for(task, timeout=1) == []
+    try:
+        await asyncio.wait_for(waiting.wait(), timeout=1)
+    finally:
+        cancel.set()
+        await asyncio.wait_for(task, timeout=1)
+    assert task.result() == []
 
 
 def test_config_resolves_paths_relative_to_itself(tmp_path, monkeypatch):
