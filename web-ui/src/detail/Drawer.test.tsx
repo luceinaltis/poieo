@@ -155,6 +155,28 @@ test("the first glance leads with attention and the newest run", async () => {
   expect(history.getAttribute("aria-expanded")).toBe("false")
 })
 
+test("a fresher run index outranks a stale live window", async () => {
+  const staleRuns = Array.from({ length: 10 }, (_, index) => ({
+    ...run,
+    run_id: `stale-${index}`,
+    started_at: `2026-08-26T01:${String(59 - index).padStart(2, "0")}:00Z`,
+    finished_at: `2026-08-26T01:${String(59 - index).padStart(2, "0")}:04Z`,
+  }))
+  const fresh = {
+    ...run,
+    run_id: "fresh-from-index",
+    started_at: "2026-08-26T03:00:00Z",
+    finished_at: "2026-08-26T03:00:04Z",
+    said: "the newest indexed result",
+  }
+
+  await draw([fresh], { liveRuns: staleRuns })
+
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe(
+    "fresh-from-index",
+  )
+})
+
 test("an older run replaces the brief and closes the run list", async () => {
   const older: RunSummary = {
     ...run,

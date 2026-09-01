@@ -156,6 +156,48 @@ test("a changed summary after the task listing still increments review attention
   store.stop()
 })
 
+test("summaries already reflected by the task listing do not increment review twice", async () => {
+  const quietRun = {
+    ...CHANGED_RUN,
+    run_id: "quiet-after-change",
+    started_at: "2026-08-31T10:00:00Z",
+    finished_at: "2026-08-31T10:00:05Z",
+    said: "nothing else to do",
+    change: undefined,
+  }
+  let releaseListing: (value: Listing) => void = () => {}
+  let listingStarted: () => void = () => {}
+  const secondListingStarted = new Promise<void>((resolve) => {
+    listingStarted = resolve
+  })
+  const pendingListing = new Promise<Listing>((resolve) => {
+    releaseListing = resolve
+  })
+  const fetchTasks = vi
+    .fn()
+    .mockResolvedValueOnce(listing([CHORES]))
+    .mockImplementationOnce(() => {
+      listingStarted()
+      return pendingListing
+    })
+  const fetchRuns = vi
+    .fn()
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([quietRun, CHANGED_RUN])
+  const { store, feed } = harness({ fetchTasks, fetchRuns })
+  await store.start()
+
+  const resynced = store.resync()
+  await secondListingStarted
+  feed().onEvent({ ...CHANGED_RUN, type: "run_summary" })
+  feed().onEvent({ ...quietRun, type: "run_summary" })
+  releaseListing(listing([{ ...CHORES, pending: 1, last_run: quietRun }]))
+  await resynced
+
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  store.stop()
+})
+
 test("a resync refreshes what finished while the feed was down", async () => {
   const summary = {
     run_id: "r-old",

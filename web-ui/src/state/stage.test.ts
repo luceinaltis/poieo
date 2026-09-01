@@ -206,6 +206,24 @@ test("a revised completed summary clears its matching live question", () => {
   expect(answered.tasks["board/chores"].asking).toBeNull()
 })
 
+test("a newer asking or completed summary clears an older failure", () => {
+  const begun = reduce(start(), {
+    run_id: "failed-old",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const failed = reduce(begun, { run_id: "failed-old", type: "run_failed", data: {} })
+  const askingSummary = {
+    ...aRun("answered-new", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  }
+  const asking = reduce(failed, askingSummary)
+  const completed = reduce(asking, { ...askingSummary, status: "completed" })
+
+  expect(asking.tasks["board/chores"].status).toBe("waiting")
+  expect(completed.tasks["board/chores"].status).toBe("waiting")
+})
+
 test("run_summary reads flat fields and fills lastRun", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
   expect(stage.tasks["board/chores"].lastRun).toEqual({
