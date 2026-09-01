@@ -261,7 +261,7 @@ test("a task with no runs points to what happens next", async () => {
 })
 
 test("a person's answer outranks every other task state", async () => {
-  await draw([{ ...run, status: "failed", error: "the endpoint stopped" }], {
+  await draw([{ ...run, status: "asking", said: "Ship this change?" }], {
     status: "error",
     pending: 2,
     into: "main",
@@ -277,6 +277,9 @@ test("a person's answer outranks every other task state", async () => {
   const question = container.querySelector(".question")!
   const control = container.querySelector(".control")!
   expect(question.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("Ship this change?")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Asked 11:00")
+  expect(container.querySelector(".run-brief")?.getAttribute("data-outcome")).toBe("waiting")
 })
 
 test("attention names a waiting change, a restart, and a failed run", async () => {
