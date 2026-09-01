@@ -94,12 +94,19 @@ export function Memory({ project }: { project: string }) {
   const selectEntry = useCallback(
     async (slug: string) => {
       const turn = ++detailRequest.current
+      const previous = detail
       setSelected(slug)
-      setDetail(null)
+      setError(null)
       const chosen = await fetchMemoryEntry(project, slug)
-      if (turn === detailRequest.current && chosen?.slug === slug) setDetail(chosen)
+      if (turn !== detailRequest.current) return
+      if (chosen?.slug === slug) {
+        setDetail(chosen)
+        return
+      }
+      setSelected(previous?.slug ?? null)
+      setError(`The memory named ${slug} is not available.`)
     },
-    [project],
+    [detail, project],
   )
 
   const submit = async (event: React.FormEvent) => {

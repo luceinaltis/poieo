@@ -281,6 +281,32 @@ test("entry detail names directed relationships and keeps its history", async ()
   expect(container.querySelector('time[datetime="2026-08-30"]')?.textContent).toBe("2026-08-30")
 })
 
+test("a dangling mention keeps the current memory and explains why it did not open", async () => {
+  vi.mocked(fetchMemoryEntry)
+    .mockResolvedValueOnce({
+      slug: "windows-shell",
+      body: "Windows tests need a POSIX shell.",
+      updated_at: "2026-08-31T00:00:00Z",
+      mentions: ["missing-rule"],
+      scope: ["global"],
+      anchors: [],
+      source: [],
+      valid_from: null,
+      superseded_by: null,
+      links: { depends_on: [], contradicts: [] },
+      second_look: [],
+      history: [],
+    })
+    .mockResolvedValueOnce(null)
+  await render()
+  await act(async () => container.querySelector<HTMLElement>('[data-testid="constellation"]')!.click())
+
+  await act(async () => container.querySelector<HTMLElement>('[data-related="missing-rule"]')!.click())
+
+  expect(container.querySelector('[data-memory="windows-shell"]')).not.toBeNull()
+  expect(container.textContent).toContain("The memory named missing-rule is not available.")
+})
+
 test("a project with no long memory explains the empty place", async () => {
   vi.mocked(fetchMemory).mockResolvedValue({
     enabled: false,

@@ -656,9 +656,12 @@ is the keyboard-readable route to every search result. Only declared memory
 relationships become lines. Search similarity dims or lights nodes; an AI
 answer lights its cited nodes and the real lines between them, never a synthetic
 "similar" edge. Directional lines end in arrowheads, and selecting a node lists
-its outgoing relationships and history. Set-aside entries remain visible as a faint outer shadow and
-can be hidden. Under 720px the search controls wrap, the constellation takes the
-upper half, and evidence becomes the scrolling document below it.
+its outgoing relationships and history. A prose mention may legitimately name
+no entry yet; following one keeps the current detail in place and says that the
+named memory is unavailable. Set-aside entries remain visible as a faint outer
+shadow and can be hidden. Under 720px the search controls wrap, the
+constellation takes the upper half, and evidence becomes the scrolling document
+below it.
 
 The panel itself is the drawer's twin — the same fixed aside on the same edge at
 the same width — so only one of them is ever open, and `.shell-stage` reserves
