@@ -241,6 +241,18 @@ def test_the_front_page_speaks_the_users_three_words_not_the_designs():
     assert "task" in lowered
 
 
+def test_task_and_daemon_help_use_current_product_words():
+    tasks_help = runner.invoke(app, ["tasks", "--help"])
+    daemon_help = runner.invoke(app, ["daemon", "--help"])
+
+    assert tasks_help.exit_code == 0
+    assert daemon_help.exit_code == 0
+    assert "tasks on the board" in tasks_help.stdout.lower()
+    assert "flows" not in tasks_help.stdout.lower()
+    assert "board port" in daemon_help.stdout.lower()
+    assert "observation ui" not in daemon_help.stdout.lower()
+
+
 def test_hidden_commands_still_work():
     result = runner.invoke(app, ["show", str(EXAMPLES / "tasks/support-triage.graph.yaml")])
     assert result.exit_code == 0
@@ -341,6 +353,22 @@ def test_view_writes_a_page(tmp_path):
     page = out.read_text()
     assert "flowchart TD" in page
     assert "llama3.2:3b" in page
+
+
+def test_view_names_multiple_inputs_as_graphs(tmp_path):
+    out = tmp_path / "graphs.html"
+    result = runner.invoke(
+        app,
+        [
+            "view",
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            str(EXAMPLES / "tasks/draft-review.graph.yaml"),
+            "-o",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "<title>2 graphs</title>" in out.read_text(encoding="utf-8")
 
 
 # -- task cards --------------------------------------------------------------

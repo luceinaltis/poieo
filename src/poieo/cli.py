@@ -455,7 +455,7 @@ def view(
     graphs = [_load_spec(path) for path in graph_paths]
     spec = load_binding(binding) if binding else None
 
-    title = graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows"
+    title = graphs[0].name if len(graphs) == 1 else f"{len(graphs)} graphs"
     page = render_page(graphs, spec, title=title)
 
     # A page you asked for, in the folder you asked from. Nothing reads it back.
@@ -748,7 +748,7 @@ def daemon(
     ),
     once: bool = typer.Option(False, "--once", help="Firing each task a single time, then exit."),
     task: Optional[str] = typer.Option(None, "--task", help="Run only this task from the config."),
-    port: int = typer.Option(8484, "--port", help="Web observation UI port."),
+    port: int = typer.Option(8484, "--port", help="Board port."),
     host: str = typer.Option(
         "127.0.0.1",
         "--host",
@@ -1299,14 +1299,7 @@ def answer(
 def tasks(
     target: Optional[Path] = typer.Argument(None, help="A tasks folder, or a config file [default: the project's]."),
 ) -> None:
-    """The tasks on the board, when each next runs, and what it last said.
-
-    This used to have a second half, `poieo flows`, which loaded every graph
-    and binding to print the same roster with the models resolved. `validate`
-    already answers that for one task and `config` for the project, and the
-    one thing only it said -- that a task's work cannot be reviewed or undone
-    -- belongs here, where a person actually looks.
-    """
+    """The tasks on the board, when each next runs, and what it last said."""
     if target is not None and target.is_dir():
         folder = target
     else:

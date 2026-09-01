@@ -1,10 +1,8 @@
-"""Renders a graph as a self-contained HTML page.
+"""Render one or more graphs as HTML.
 
-This is the read-only half of the web editor that comes later: the same graph
-schema, drawn instead of printed. The page embeds its own CSS and needs no
-build step -- the only external asset is the mermaid bundle, and even that is
-optional (``embed_mermaid_script=False`` produces a page for a host that
-renders ``<pre class="mermaid">`` itself).
+The page embeds its CSS. Full documents load Google Fonts and may load Mermaid
+from its CDN. Set ``embed_mermaid_script=False`` to omit Mermaid and
+``full_document=False`` to return a fragment instead of the document shell.
 """
 
 from __future__ import annotations
@@ -301,7 +299,7 @@ def render_page(
 ) -> str:
     """Build the viewer page for one or more graphs."""
     graphs = list(graphs)
-    page_title = title or (graphs[0].name if len(graphs) == 1 else f"{len(graphs)} workflows")
+    page_title = title or (graphs[0].name if len(graphs) == 1 else f"{len(graphs)} graphs")
 
     body: list[str] = ['<div class="wrap">']
     for graph in graphs:
@@ -318,7 +316,7 @@ def render_page(
         ]
         body.append(f'<div class="chips">{"".join(chips)}</div></header>')
 
-        body.append('<section><h2>Flow</h2><div class="diagram">')
+        body.append('<section><h2>Graph</h2><div class="diagram">')
         body.append(f'<pre class="mermaid">{html.escape(mermaid_source(graph))}</pre>')
         body.append("</div></section>")
 
