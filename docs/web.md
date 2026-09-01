@@ -638,6 +638,13 @@ does *inside* that box. Three hand copies drifted once (two chopped their own
 headings on a phone), so a panel added here takes the class rather than the
 file.
 
+**A phone panel owns the foreground.** It sits above a standalone view's
+sticky ruler, and the covered rail and stage become invisible below 720px.
+They keep their dimensions so the mounted view does not relayout at zero width,
+but are removed from pointer and keyboard navigation until the panel closes.
+Focus enters the panel when it opens and returns to the control that opened it
+when its own close button is used.
+
 **A big catalogue folds by maker.** A hosted listing names every model
 `maker/model` — 396 across 58 makers — and a flat list of that is not read, it
 is scrolled past. So each maker is a `<details>` card, shut until opened, with

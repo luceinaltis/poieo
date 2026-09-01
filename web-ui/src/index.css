@@ -146,6 +146,14 @@ button:disabled {
   right: 0;
   top: var(--bar-height);
   width: var(--panel-width);
+  /* Standalone views may keep a sticky ruler above their own rows. A panel is
+     the foreground over any of them, never another participant in that
+     view's private stacking order. */
+  z-index: 2;
+}
+
+.panel:focus {
+  outline: none;
 }
 
 body {

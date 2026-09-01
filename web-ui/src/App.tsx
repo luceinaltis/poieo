@@ -69,6 +69,46 @@ export default function App({ store }: { store?: StageStore }) {
   // These three panels share one margin, so only one can be open at a time.
   // Unlike the skin and project, the open panel is not remembered across reloads.
   const [activePanel, setActivePanel] = useState<PanelState>(CLOSED_PANEL)
+  const panelOpenerRef = useRef<HTMLElement | null>(null)
+  const panelWasOpenRef = useRef(false)
+  const panelIsOpen = activePanel.kind !== "closed"
+
+  // The panel is the next place to read after its button, not a visual layer
+  // left behind that button in the tab order. A switch from one panel to
+  // another remembers the latest rail button; a handoff inside a panel keeps
+  // the original opener because the old panel disappears under the new one.
+  useEffect(() => {
+    if (panelIsOpen) {
+      const focused = document.activeElement
+      if (!panelWasOpenRef.current) {
+        panelOpenerRef.current = focused instanceof HTMLElement ? focused : null
+      } else if (
+        focused instanceof HTMLElement &&
+        focused !== document.body &&
+        !focused.closest(".panel")
+      ) {
+        panelOpenerRef.current = focused
+      }
+
+      const panel = document.querySelector<HTMLElement>(".panel")
+      if (panel) {
+        panel.tabIndex = -1
+        panel.focus()
+      }
+    } else if (panelWasOpenRef.current) {
+      // A rail or board click has already put focus exactly where the reader
+      // asked to go. Restore only when closing removed the focused panel and
+      // the browser fell back to the page itself.
+      if (
+        document.activeElement === document.body &&
+        panelOpenerRef.current?.isConnected
+      ) {
+        panelOpenerRef.current.focus()
+      }
+      panelOpenerRef.current = null
+    }
+    panelWasOpenRef.current = panelIsOpen
+  }, [activePanel, panelIsOpen])
 
   useEffect(() => {
     void stageStore.start()
@@ -231,7 +271,11 @@ export default function App({ store }: { store?: StageStore }) {
           next view lands beside `models`. `board` is the page with no panel
           over it: a rail item rather than a close box, because closing is not
           a place you can be. */}
-      <nav className="shell-rail" aria-label="Views">
+      <nav
+        className="shell-rail"
+        aria-label="Views"
+        data-covered={String(panelIsOpen)}
+      >
         <button
           type="button"
           data-do="open-board"
@@ -285,10 +329,7 @@ export default function App({ store }: { store?: StageStore }) {
         </button>
       </nav>
 
-      <div
-        className="shell-stage"
-        data-drawer={String(activePanel.kind !== "closed")}
-      >
+      <div className="shell-stage" data-drawer={String(panelIsOpen)}>
         <div className="shell-board" ref={boardRef} />
         {empty ? (
           <div className="shell-empty">

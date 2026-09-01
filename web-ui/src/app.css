@@ -168,6 +168,14 @@
 /* On a phone the drawer takes the whole screen, so there is nothing to make
    room beside -- and reserving 100vw of margin left the board zero wide. */
 @media (max-width: 720px) {
+  /* A phone panel is the whole work surface below the bar. `visibility`
+     removes the covered controls from pointer and keyboard navigation while
+     preserving the stage's dimensions for the skin that is still mounted. */
+  .shell-rail[data-covered="true"],
+  .shell-stage[data-drawer="true"] {
+    visibility: hidden;
+  }
+
   .shell-stage[data-drawer="true"] {
     margin-right: 0;
   }
