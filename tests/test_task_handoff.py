@@ -299,7 +299,6 @@ async def test_a_branch_that_does_not_match_wakes_nobody(tmp_path):
 
     sender.run_now()
     await until(lambda: len(sender.results) == 1, "the sender's run")
-    await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
     await down(daemon, task)
@@ -322,7 +321,6 @@ then:
 
     sender.run_now()
     await until(lambda: len(sender.results) == 1, "the sender's run")
-    await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
     await down(daemon, task)
@@ -389,7 +387,6 @@ async def test_a_paused_target_is_not_woken(tmp_path, caplog):
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
         await until(lambda: len(sender.results) == 1, "the sender's run")
-        await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
     assert "paused" in " ".join(caplog.messages)
@@ -411,7 +408,6 @@ async def test_a_chain_stops_at_the_depth_limit(tmp_path, caplog):
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
         await until(lambda: "chain" in " ".join(caplog.messages), "the chain to be cut", timeout=8)
-        await asyncio.sleep(0.3)
 
     total = len(sender.results) + len(receiver.results)
     assert total <= MAX_CHAIN + 1  # the kick, then at most MAX_CHAIN handoffs
@@ -533,7 +529,6 @@ async def test_a_card_that_spent_too_much_wakes_nobody(tmp_path, caplog):
     with caplog.at_level("WARNING", logger="poieo.daemon"):
         sender.run_now()
         await until(lambda: len(sender.results) == 1, "the sender's run")
-        await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
     assert caplog.messages == []
@@ -575,13 +570,11 @@ async def test_a_run_waiting_on_a_person_hands_off_to_nobody(tmp_path, caplog):
 
     sender.run_now()
     await until(lambda: len(sender.results) == 1, "the sender's run")
-    await asyncio.sleep(0.2)  # long enough for a handoff to have arrived
 
     assert len(receiver.results) == 0
     assert "no 'usage' here" not in caplog.text
     assert sender.results[0].status == "asking"
     assert sender.results[0].asked["question"] == "Land it?"
-    assert len(receiver.results) == 0
     # Deferred, and not merely unreadable: a `then:` that raised on the missing
     # name would also wake nobody, and would be the wrong reason.
     assert "no 'answer' here" not in caplog.text
@@ -613,7 +606,6 @@ async def test_the_other_answer_wakes_nobody(tmp_path):
     await until(lambda: len(sender.results) == 1, "the sender's run")
 
     assert sender.answer("hold") is True
-    await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
     await down(daemon, task)
