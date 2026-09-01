@@ -383,6 +383,12 @@
   margin: 0;
 }
 
+.drawer-missing {
+  color: var(--stop);
+  font-size: 0.8em;
+  margin: 3px 0 0;
+}
+
 /* Quieter than what the model said, because it is bookkeeping about the
    saying rather than the saying itself. */
 .drawer-cost {

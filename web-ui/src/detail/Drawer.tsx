@@ -60,16 +60,25 @@ function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
     const key = turnKey(event)
     if (key) toolsByTurn.set(key, (toolsByTurn.get(key) ?? 0) + 1)
   }
-  return events.filter((event) => {
+  return events.flatMap((event) => {
     if (event.type === "node_turn") {
       const expected = Number(event.data?.tool_call_count ?? 0)
       const key = turnKey(event)
       if (expected > 0) {
-        if (key && (toolsByTurn.get(key) ?? 0) >= expected) return false
-        return true
+        const recorded = key ? (toolsByTurn.get(key) ?? 0) : 0
+        if (recorded >= expected) return []
+        return [
+          {
+            ...event,
+            data: {
+              ...event.data,
+              missing_tool_call_count: expected - recorded,
+            },
+          },
+        ]
       }
     }
-    return appearsInTimeline(event)
+    return appearsInTimeline(event) ? [event] : []
   })
 }
 
@@ -94,11 +103,17 @@ function commandPurpose(command: string): string {
     return "Run a Python command for this task"
   }
 
-  const checkoutRestore = command.match(
-    /\bgit\s+checkout\b[^;|]*?\s--\s+(?:"([^"]+)"|'([^']+)'|([^\s;|]+))/i,
-  )
-  if (checkoutRestore) {
-    return `Restore ${checkoutRestore[1] || checkoutRestore[2] || checkoutRestore[3]} from Git`
+  const checkoutSegment = command.match(/\bgit\s+checkout\b([^;|]*)/i)?.[1] ?? ""
+  const checkoutChangesFiles =
+    /(?:^|\s)--(?:\s|$)|(?:^|\s)(?:--ours|--theirs|-p|--patch)(?:\s|$)/i.test(
+      checkoutSegment,
+    )
+  if (checkoutChangesFiles) {
+    const tokens = checkoutSegment.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? []
+    const last = tokens.at(-1)?.replace(/^(?:"|')|(?:"|')$/g, "") ?? ""
+    return last && !last.startsWith("-")
+      ? `Restore ${last} from Git`
+      : "Restore files from Git"
   }
 
   const sedEdit = /\bsed\b[^;|]*(?:\s-i[^\s]*|\s--in-place(?:=\S*)?)(?:\s|$)/i.test(command)
@@ -187,6 +202,10 @@ function toolPurpose(data: Record<string, any>): string {
   return written || fallbackPurpose(String(data.name ?? ""), data.arguments)
 }
 
+function missingToolActivity(count: number): string {
+  return `${count} tool call${count === 1 ? "" : "s"} ${count === 1 ? "was" : "were"} not fully recorded`
+}
+
 function displayArguments(raw: unknown, command: string): string {
   const parsed = parsedArguments(raw)
   if (!parsed) return command ? "" : String(raw ?? "")
@@ -223,16 +242,17 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
   if (event.type === "node_turn") {
     const text = String(data.text ?? "")
     const thinking = String(data.thinking ?? "")
+    const missingCalls = Number(data.missing_tool_call_count ?? 0)
     // A complete set of tool records folds an empty preamble before this
     // point. If it survived, the gap is itself evidence worth keeping.
     if (!text && !thinking) {
-      const expected = Number(data.tool_call_count ?? 0)
-      if (expected <= 0) return null
+      const missing = missingCalls || Number(data.tool_call_count ?? 0)
+      if (missing <= 0) return null
       return (
         <li className="drawer-entry" data-kind="stuck">
           <span className="drawer-when">{shortTime(event.at ?? "")}</span>
           <div className="drawer-event drawer-label">
-            {`${expected} tool call${expected === 1 ? "" : "s"} ${expected === 1 ? "was" : "were"} not fully recorded`}
+            {missingToolActivity(missing)}
           </div>
         </li>
       )
@@ -260,6 +280,9 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
               {`${sent.toLocaleString("en-US")} in`}
               {wrote > 0 ? ` · ${wrote.toLocaleString("en-US")} out` : ""}
             </p>
+          ) : null}
+          {missingCalls > 0 ? (
+            <p className="drawer-missing">{missingToolActivity(missingCalls)}</p>
           ) : null}
         </div>
       </li>
