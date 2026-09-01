@@ -32,6 +32,23 @@ viewport. Keep credentials and real transcripts out of screenshots. Attach
 images to the PR rather than committing temporary captures unless the image is
 an intentional documentation asset.
 
+## Measuring recall
+
+The suites fix what recall does; they do not say how well it does it.
+
+```bash
+python tools/recall_eval.py                                  # score every arm
+python tools/recall_eval.py --write-terms <binding.yaml>     # only to add cases
+```
+
+Fixed tasks, the one lesson each should surface, and a look-alike aimed at each:
+same topic, opposite advice. Scoring goes through `read_memory` and reports what
+was found, whether the look-alike came with it, and how much budget went
+elsewhere. Model-written inputs are checked in beside the cases, so an ordinary
+run needs no binding and repeats exactly. Nothing inside the repository is
+written. Run it when recall changes, and add a case when a real project turns
+out to hold a lesson it could not find.
+
 ## Stacked branches after a squash merge
 
 A child branch may depend on an unmerged parent. Record that parent and its tip

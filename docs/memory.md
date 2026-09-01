@@ -86,6 +86,11 @@ remaining room after supported entries. Selection stops on whole-entry
 boundaries within a fixed prompt budget; an oversized entry is skipped rather
 than crowding out every entry below it.
 
+Recall compares words and never meaning, so a lesson worded differently from the
+task that needs it is not reached; budget does not change that, because an
+unmatched entry is ordered by age behind every matched one. `tools/recall_eval.py`
+scores that against fixed tasks and the lesson each should surface.
+
 A memory read that fails during a run logs a warning and returns less context.
 Forgetting optional context is preferable to losing the primary work. Load-time
 schema and cross-entry errors remain configuration failures.
