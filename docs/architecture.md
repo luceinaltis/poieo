@@ -1,138 +1,86 @@
 # Architecture
 
-poieo runs LLM workflows on the user's own machine, around the clock. Everything
-below exists to make one sentence true: *the work the user described keeps
-happening, and they can always see and undo what it did.*
+poieo runs recurring model work on the user's machine. A project describes the
+work, the daemon schedules it, the runtime executes it, and the store makes the
+result visible to the CLI and the browser. When the work happens in a Git
+repository, each task uses a private copy so the user can review, accept, or
+discard its changes.
 
-## The two-file split
+## The central split
 
-The organising idea, and the invariant every component respects:
+A [graph](graph.md) describes logical work. Its agent nodes name roles such as
+`writer` or `reviewer`; they never name model endpoints. A [binding](binding.md)
+maps those roles to providers, models, and generation parameters; it never names
+graph nodes.
 
-```
-graph (logical)                     binding (physical)
-  a node names a ROLE      ──────►    a role names a provider + model + params
-  "classifier", "writer"              ollama:llama3.2:3b, claude:claude-opus-5
-```
+This split is a contract. Changing where a workflow runs must not require
+editing the workflow, and changing the workflow must not require embedding a
+provider choice in it.
 
-A graph never names a model; a binding never names a step. Moving a workflow
-from a laptop model to a frontier one is a `--binding` flag, not an edit. Anything that
-would make a graph mention a model — or a binding mention a node — is wrong,
-however convenient.
+## From project to run
 
-## The layers
+1. A [project](storage.md) is found from its nearest `poieo.yaml`. The project
+   points to its task folder, default binding, run store, and optional learning
+   schedule.
+2. A [task card](tasks.md) is validated and expanded to the same task and graph
+   forms used by explicit graph files.
+3. The [daemon](daemon.md) validates every runnable task, graph, role,
+   credential, folder, and requested isolation image before arming triggers.
+4. A trigger starts a run. The daemon opens the task's [workspace](workspace.md)
+   when Git can provide one and builds the input from the card, journal, memory,
+   and any input file.
+5. The [runtime](runtime.md) walks the graph. Agent and command nodes reach the
+   outside world only through provider and tool interfaces.
+6. Events and the final summary go to the [run store](storage.md). The daemon
+   records the task journal and run result, commits reviewable work, preserves a
+   pending question, and evaluates any `then` handoff.
+7. The [web service](web.md) and CLI read the same stores and daemon controls;
+   neither implements a second execution path.
 
-```
-       cli.py  ·  web/server.py            entry points: two front ends, one library
-            │
-   ┌────────┴──────────┐
-   │                   │
- card.py           daemon/config.py         what to run
-   │  expands into       │  reads tasks
-   └────────┬────────────┘
-            │
-      graph.py + binding.py                 the two-file split, validated at load
-            │
-      runtime/executor.py                   the walker: one node, then the next
-            │
-      runtime/nodes.py                      agent · router · command · confirm
-            │            ╲
-   providers/            tools/             who answers          what it may touch
-            │
-      store.py · workspace.py · memory/    what it left behind
-```
+## Ownership boundaries
 
-Nothing points upward. `runtime/` knows nothing about the daemon, `tools/`
-knows nothing about containers (`tools/docker.py` does), `workspace.py` is the
-only module that knows git exists.
+- `card.py` owns the authored short form and its expansion. Runtime code does
+  not know that cards exist.
+- `graph.py` and `expr.py` own workflow shape and safe expressions.
+- `binding.py` and `providers/` own model resolution, credentials, provider
+  capability adaptation, usage, and cost.
+- `runtime/` owns exactly one run. It knows neither schedules nor task folders.
+- `daemon/` owns residency: triggers, live reload, holds, questions, handoffs,
+  workspaces, and graceful shutdown.
+- `layout.py`, `project.py`, and `store.py` own project discovery and durable run
+  history.
+- `memory/` owns long-term memory; `card.py` owns each task's journal.
+- `tools/` owns filesystem, process, notes, and isolation boundaries.
+- `workspace.py` is the only module that knows Git.
+- `web/` and `cli.py` are interfaces over these components, not alternate
+  implementations of them.
 
-## One run, end to end
+## Failure boundaries
 
-A trigger fires (or `poieo run` is typed). Then:
+Configuration errors fail before a task is armed or a one-shot run begins. Once
+a run has started, expected node and provider failures become a failed
+`RunResult`; they do not escape and stop the daemon. Optional memory, journal,
+review, and display work may warn and degrade, but must not erase the primary run
+record or turn an isolated task into an unisolated one.
 
-1. **Payload.** The task's static `input:`, plus `input_file:` if named, plus —
-   for a task card — its journal and the project's memory. Re-read every run, so
-   a note left at 8am is in effect at 9am. → [tasks.md](tasks.md), [memory.md](memory.md)
-2. **A place to work.** If the task names a `workdir`, the runner opens a private
-   copy of it — a git worktree on a branch of its own. The user's own checkout is
-   never written to. → [workspace.md](workspace.md)
-3. **Preflight.** Every role the graph needs resolves against the binding; every
-   agent node has somewhere to work. Failing here costs nothing; failing later
-   costs tokens. → [runtime.md](runtime.md)
-4. **The walk.** `execute()` starts at `graph.entry` and loops: run the node, take
-   the `next` it returns, repeat until `None`. Cycles are allowed and `max_steps`
-   bounds them. → [runtime.md](runtime.md)
-5. **Each node.** An `agent` node renders its prompt and calls the model bound
-   to its role; if it was given `tools:`, it loops until the model answers
-   without calling one. A `router` evaluates conditions and picks a successor,
-   calling no model at all.
-   → [runtime.md](runtime.md), [tools.md](tools.md)
-6. **The record.** Every step appends a JSON line to `runs/events/<run_id>.jsonl`;
-   the run's summary lands in `runs/index.jsonl` and its full outputs in
-   `runs/results/`. → [storage.md](storage.md)
-7. **The change.** Whatever the run wrote in its private copy is committed as one
-   change, with the model's own closing sentence as the subject. In the morning
-   the user reads it as a diff and accepts or discards it.
-   → [workspace.md](workspace.md)
-8. **The journal.** A card appends one line to its journal — what it did, or why
-   it failed — which is what the next run reads first. → [tasks.md](tasks.md)
-9. **The handoff.** If the task's `then:` block has a branch that matches what
-   the run left behind, the task it names wakes and reads this run as
-   `input.sender`. → [daemon.md](daemon.md)
+Files that are the sole source of truth are migrated forward and never rebuilt
+from caches. Derived indexes, model catalogues, containers, and build caches may
+be recreated. The distinction is documented by the component that owns each
+file.
 
-## Invariants
+## Extension seams
 
-These are load-bearing. A change that breaks one is a design change, not a fix.
+The intended seams are small registries and protocols:
 
-**Fail at launch, not at 3am.** Every graph, binding, expression, cron
-expression, memory entry, credential and container image is checked when the
-config loads. `load_tasks()` is where this is enforced for the daemon; the
-`Spec`/`Binding`/`Expression` errors it raises all mean *misconfigured*, not
-*flaky*.
+- providers register endpoint implementations;
+- node types register runtime builders;
+- toolsets register model-visible tools;
+- executors decide where commands run;
+- `RunStore` implementations decide where events and summaries are kept or
+  broadcast;
+- `Workspace` owns reviewable changes;
+- the web skin registry decides how the same stage state is presented.
 
-**An in-run failure never kills the daemon.** `execute()` does not raise for a
-failure inside a run — the error lands on `RunResult.error`, classified into a
-user-facing `Cause`, and the next trigger starts fresh. Only spec and binding
-problems raise. A task that fails the same way three times in a row pauses
-itself rather than failing all night.
-
-**One source of truth for each thing, and no second copy.** Graphs, bindings,
-cards and journals are YAML and markdown under git. The long memory is the one
-exception and it is the same rule: `memory/longterm.sqlite3` is the memory,
-not a cache of it, so a change to its shape migrates rather than rebuilds.
-`memory/cache/` is derived and safe to delete at any moment.
-
-**Everything unbounded has a ceiling.** `max_steps` for a graph, `max_turns` for
-an agent node, a timeout for a command, `MAX_CHAIN` for a chain of handoffs,
-`max_iterations` for a trigger. Endless wandering becomes a recorded failure and
-the next trigger starts fresh.
-
-**Hide the mechanism, never the result.** The user's vocabulary is three words —
-a *task*, a *run*, a *change*. Worktrees, containers, refs and indexes are
-machinery and stay out of the interface. The one exception is the moment the
-user's own files are about to change, where poieo says exactly what will happen.
-
-**One reading of a run.** What the journal shows, what the run record keeps, and
-what the change's commit says are all `task.closing_line(result)` — the last
-node on the path that produced text. Three readings would eventually tell three
-stories about one night.
-
-## Sugar, and what it expands to
-
-A *task card* is one file: a name, a folder, a prompt. At load time it expands
-into a task plus a one-node graph indistinguishable from hand-written ones, so
-nothing below the loader knows cards exist. `poieo show` prints the expansion and
-`poieo eject` writes it out as a real graph. That visibility is what keeps the
-short form from becoming a second, hidden configuration format.
-
-## Where the seams are
-
-Three places are deliberately swappable, and each has exactly one chokepoint:
-
-| seam | chokepoint | today |
-|---|---|---|
-| which backend answers | `providers.register()` / `ProviderPool.get()` | anthropic, openai_compatible, ollama, mock |
-| where tools run | `tools.make_executor()` | local (path-confined), docker |
-| what a node type does | `runtime.nodes.NODE_TYPES` | agent, router, command, confirm |
-
-Adding to any of these should be one module and one registry line. If it is
-not, the seam has leaked.
+New behavior should enter through one of these seams instead of teaching every
+layer a new special case. It must also keep the product vocabulary to **task**,
+**run**, and **change**.
