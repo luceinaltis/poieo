@@ -143,7 +143,12 @@ test("a changed summary after the task listing still increments review attention
       runsStarted()
       return pendingRuns
     })
-  const { store, feed } = harness({ fetchRuns })
+  const fetchTasks = vi
+    .fn()
+    .mockResolvedValueOnce(listing([CHORES]))
+    .mockResolvedValueOnce(listing([CHORES]))
+    .mockResolvedValue(listing([{ ...CHORES, pending: 1, last_run: CHANGED_RUN }]))
+  const { store, feed } = harness({ fetchRuns, fetchTasks })
   await store.start()
 
   const resynced = store.resync()
@@ -180,6 +185,7 @@ test("summaries already reflected by the task listing do not increment review tw
       listingStarted()
       return pendingListing
     })
+    .mockResolvedValue(listing([{ ...CHORES, pending: 1, last_run: quietRun }]))
   const fetchRuns = vi
     .fn()
     .mockResolvedValueOnce([])
@@ -194,6 +200,38 @@ test("summaries already reflected by the task listing do not increment review tw
   releaseListing(listing([{ ...CHORES, pending: 1, last_run: quietRun }]))
   await resynced
 
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  store.stop()
+})
+
+test("a changed frame that outruns a stale task response gets a follow-up listing", async () => {
+  let releaseListing: (value: Listing) => void = () => {}
+  let listingStarted: () => void = () => {}
+  const secondListingStarted = new Promise<void>((resolve) => {
+    listingStarted = resolve
+  })
+  const pendingListing = new Promise<Listing>((resolve) => {
+    releaseListing = resolve
+  })
+  const fetchTasks = vi
+    .fn()
+    .mockResolvedValueOnce(listing([CHORES]))
+    .mockImplementationOnce(() => {
+      listingStarted()
+      return pendingListing
+    })
+    .mockResolvedValue(listing([{ ...CHORES, pending: 1, last_run: CHANGED_RUN }]))
+  const fetchRuns = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([CHANGED_RUN])
+  const { store, feed } = harness({ fetchTasks, fetchRuns })
+  await store.start()
+
+  const resynced = store.resync()
+  await secondListingStarted
+  feed().onEvent({ ...CHANGED_RUN, type: "run_summary" })
+  releaseListing(listing([CHORES]))
+  await resynced
+
+  expect(fetchTasks).toHaveBeenCalledTimes(3)
   expect(store.getStage().tasks["board/chores"].pending).toBe(1)
   store.stop()
 })

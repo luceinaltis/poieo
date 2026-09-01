@@ -224,6 +224,42 @@ test("a newer asking or completed summary clears an older failure", () => {
   expect(completed.tasks["board/chores"].status).toBe("waiting")
 })
 
+test("an older answered summary does not stop a newer running run", () => {
+  const first = reduce(start(), {
+    run_id: "asked-old",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const asked = reduce(first, {
+    run_id: "asked-old",
+    type: "run_asking",
+    data: { question: "Ship it?", choices: ["ship", "hold"] },
+  })
+  const indexed = reduce(asked, {
+    ...aRun("asked-old", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  })
+  const second = reduce(indexed, {
+    run_id: "running-new",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const working = reduce(second, {
+    run_id: "running-new",
+    type: "node_started",
+    node_id: "work",
+    data: { step: 1 },
+  })
+  const answered = reduce(working, {
+    ...aRun("asked-old", { status: "completed", said: "shipped" }),
+    type: "run_summary",
+  })
+
+  expect(answered.tasks["board/chores"].asking).toBeNull()
+  expect(answered.tasks["board/chores"].status).toBe("running")
+  expect(answered.tasks["board/chores"].currentNode).toBe("work")
+})
+
 test("run_summary reads flat fields and fills lastRun", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
   expect(stage.tasks["board/chores"].lastRun).toEqual({
