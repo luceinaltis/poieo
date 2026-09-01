@@ -646,7 +646,9 @@ state.
 While the place stays open it revalidates the overview every fifteen seconds,
 so a learning pass appears without a reload; an unchanged revision answers
 without rebuilding or retransmitting the graph, and the current query and
-evidence remain in place across that quiet refresh.
+evidence remain in place across that quiet refresh. The revision includes the
+learned connection strengths and every declared anchor, since either can
+change the graph or its second-look notes without rewriting an entry.
 
 Its canvas is a two-lobed three-dimensional constellation projected without a
 new rendering dependency. Drag orbits, the wheel travels, and the evidence list

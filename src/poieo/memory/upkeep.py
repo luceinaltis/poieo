@@ -9,12 +9,15 @@ Design: docs/memory.md
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ..blob import digest, path_for
-from .entries import PAGE_BUDGET, Entry, keeps_memory, read_page, readable_entries
+from ..errors import SpecError
+from ..layout import layout_for
+from .entries import PAGE_BUDGET, Entry, keeps_memory, open_memory, read_page, readable_entries
 from .index import fts_available
 from .results import results_dir, used_in
 
@@ -22,6 +25,27 @@ from .results import results_dir, used_in
 # shown, unused, before it is worth naming.
 ACCOUNT_WINDOW = 50
 UNUSED_FLOOR = 3
+
+
+def overview_watch_paths(project_dir: Path) -> list[Path]:
+    """Small derived and anchored inputs that can change the memory board."""
+    watched = {layout_for(project_dir).strength()}
+    if not keeps_memory(project_dir):
+        return sorted(watched)
+    try:
+        with open_memory(project_dir) as con:
+            rows = con.execute("SELECT anchors FROM entries WHERE anchors <> '[]'").fetchall()
+    except (OSError, sqlite3.Error, SpecError):
+        return sorted(watched)
+    for row in rows:
+        try:
+            anchors = json.loads(row["anchors"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for anchor in anchors if isinstance(anchors, list) else ():
+            if isinstance(anchor, str) and anchor:
+                watched.add(project_dir / anchor.split("::", 1)[0])
+    return sorted(watched)
 
 
 def memory_report(project_dir: Path) -> dict[str, Any] | None:

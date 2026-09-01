@@ -45,7 +45,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError
-from ..memory import keeps_memory, memory_report, read_page
+from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
 from ..memory.ask import ask_memory
 from ..memory.browse import entry_document, graph_snapshot, keyword_search
 from ..memory.semantic import semantic_search
@@ -1721,6 +1721,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             layout.results(),
             project.config.source_path,
             project.config.default_binding_path(),
+            *overview_watch_paths(Path(project.config.base_dir)),
         ]
         stamps: list[str] = []
         for path in paths:

@@ -8,6 +8,7 @@ from poieo.memory import start_memory
 from poieo.providers import LLMResponse, Usage
 from poieo.providers.local import OpenAICompatibleProvider
 from poieo.store import NullStore
+from poieo.strength import reinforce
 from poieo.web import create_app
 
 _BINDING = """\
@@ -94,6 +95,43 @@ def test_a_memory_write_changes_the_overview_revision(tmp_path):
     assert response.status_code == 200
     assert response.headers["etag"] != first.headers["etag"]
     assert response.json()["graph"]["total_nodes"] == 3
+
+
+def test_reinforced_connections_change_the_overview_revision(tmp_path):
+    client = _client(tmp_path)
+    first = client.get("/api/projects/board/memory")
+
+    reinforce(tmp_path, [("windows-shell", "command-env")])
+    response = client.get(
+        "/api/projects/board/memory",
+        headers={"if-none-match": first.headers["etag"]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["etag"] != first.headers["etag"]
+    assert response.json()["graph"]["edges"][0]["strength"] > 0
+
+
+def test_an_anchor_change_changes_the_overview_revision(tmp_path):
+    client = _client(tmp_path)
+    anchor = tmp_path / "guide.md"
+    anchor.write_text("before", encoding="utf-8")
+    remember(
+        tmp_path,
+        "anchored-rule",
+        "---\nanchors: [guide.md]\n---\nThe guide is current.",
+    )
+    first = client.get("/api/projects/board/memory")
+
+    anchor.write_text("after", encoding="utf-8")
+    response = client.get(
+        "/api/projects/board/memory",
+        headers={"if-none-match": first.headers["etag"]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["etag"] != first.headers["etag"]
+    assert any("guide.md" in reason for reason in response.json()["stats"]["second_look"])
 
 
 def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
