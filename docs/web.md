@@ -650,9 +650,14 @@ evidence remain in place across that quiet refresh. The revision includes the
 learned connection strengths and every declared anchor, since either can
 change the graph or its second-look notes without rewriting an entry.
 
-Its canvas is a two-lobed three-dimensional constellation projected without a
-new rendering dependency. Drag orbits, the wheel travels, and the evidence list
-is the keyboard-readable route to every search result. Only declared memory
+Its canvas is a two-lobed three-dimensional constellation projected with
+perspective and without a new rendering dependency. Stable slug positions give
+it shape, then declared relationships pull their ends into the same visual
+neighbourhood instead of leaving the graph to chance. Drag orbits, the wheel
+travels, and the evidence list is the keyboard-readable route to every search
+result; compact interface copy stays at least twelve pixels at the normal root
+size. Orbit redraws are coalesced to the display frame, and very dense graphs
+trade decorative curves for straight connections. Only declared memory
 relationships become lines. Search similarity dims or lights nodes; an AI
 answer lights its cited nodes and the real lines between them, never a synthetic
 "similar" edge. Directional lines end in arrowheads, and selecting a node lists

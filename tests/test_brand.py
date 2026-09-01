@@ -107,3 +107,10 @@ def test_memory_set_aside_control_uses_the_memory_accent():
     css = (ROOT / "web-ui" / "src" / "memory" / "memory.css").read_text(encoding="utf-8")
     assert "accent-color: var(--memory-highlight)" in css
     assert "--memory-violet" not in css
+
+
+def test_memory_copy_has_a_readable_compact_floor():
+    css = (ROOT / "web-ui" / "src" / "memory" / "memory.css").read_text(encoding="utf-8")
+    rem_sizes = [float(size) for size in re.findall(r"font-size:\s*([\d.]+)rem", css)]
+    assert rem_sizes
+    assert min(rem_sizes) >= 0.75

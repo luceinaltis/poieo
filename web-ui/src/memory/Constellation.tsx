@@ -17,6 +17,7 @@ interface Projected {
   x: number
   y: number
   z: number
+  perspective: number
   radius: number
 }
 
@@ -25,6 +26,32 @@ const EDGE_DASH: Record<MemoryEdgeKind, number[]> = {
   depends_on: [],
   contradicts: [3, 5],
   supersedes: [1, 6],
+}
+
+export const NODE_LABEL_FONT_PX = 13
+const CURVED_EDGE_LIMIT = 1_200
+
+export function edgeUsesCurve(edgeCount: number): boolean {
+  return edgeCount <= CURVED_EDGE_LIMIT
+}
+
+export function perspectiveForDepth(depth: number): number {
+  const clipped = Math.max(-1.25, Math.min(1.25, depth))
+  return 1 / (1 - clipped * 0.31)
+}
+
+export function fitConstellationScale(
+  width: number,
+  height: number,
+  points: Array<{ x: number; y: number }>,
+): number {
+  const natural = Math.min(width * 0.38, height * 0.36)
+  if (points.length < 2) return natural
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const radiusX = Math.max(0.001, (Math.max(...xs) - Math.min(...xs)) / 2)
+  const radiusY = Math.max(0.001, (Math.max(...ys) - Math.min(...ys)) / 2)
+  return Math.min(natural, (width * 0.44) / radiusX, (height * 0.42) / radiusY)
 }
 
 export function edgeHasArrow(kind: MemoryEdgeKind): boolean {
@@ -81,7 +108,7 @@ function nearest(nodes: Projected[], x: number, y: number): Projected | null {
 export function Constellation({ graph, highlighted, cited, selected, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const positions = useMemo(() => placeMemories(graph), [graph])
-  const view = useRef({ yaw: -0.24, pitch: 0.12, zoom: 1 })
+  const view = useRef({ yaw: -0.58, pitch: -0.16, zoom: 1 })
   const projected = useRef<Projected[]>([])
   const hover = useRef<string | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -99,6 +126,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       contradicts: { color: colors.stop, dash: EDGE_DASH.contradicts },
       supersedes: { color: colors.line, dash: EDGE_DASH.supersedes },
     }
+    const curvedEdges = edgeUsesCurve(graph.edges.length)
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
     const began = performance.now()
     let frame = 0
@@ -118,7 +146,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       canvas.width = Math.round(width * ratio)
       canvas.height = Math.round(height * ratio)
       context.setTransform(ratio, 0, 0, ratio, 0, 0)
-      draw(performance.now())
+      scheduleDraw()
     }
 
     const paintNebula = () => {
@@ -147,13 +175,13 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       }
 
       for (const side of [-1, 1]) {
-        const x = width * (0.5 + side * 0.095)
+        const x = width * (0.5 + side * 0.14)
         const glow = context.createRadialGradient(x, height * 0.5, 0, x, height * 0.5, Math.min(width, height) * 0.3)
         glow.addColorStop(0, alpha(side < 0 ? colors.paused : colors.ember, side < 0 ? 0.075 : 0.085))
         glow.addColorStop(1, alpha(colors.ground, 0))
         context.fillStyle = glow
         context.beginPath()
-        context.ellipse(x, height * 0.5, width * 0.18, height * 0.34, side * 0.08, 0, Math.PI * 2)
+        context.ellipse(x, height * 0.5, width * 0.235, height * 0.32, side * 0.08, 0, Math.PI * 2)
         context.fill()
 
         // A contour, not a literal illustration: just enough anatomy for the
@@ -163,7 +191,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
         context.lineWidth = 0.7
         context.setLineDash([1, 8])
         context.beginPath()
-        context.ellipse(x, height * 0.5, width * 0.19, height * 0.35, side * 0.08, 0, Math.PI * 2)
+        context.ellipse(x, height * 0.5, width * 0.245, height * 0.33, side * 0.08, 0, Math.PI * 2)
         context.stroke()
       }
       context.setLineDash([])
@@ -178,23 +206,43 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
     }
 
     const draw = (now: number) => {
-      cancelAnimationFrame(frame)
       paintNebula()
-      const scale = Math.min(width, height) * 0.4 * view.current.zoom
       const focus = highlighted.size > 0
       const pulse = reduced ? 1 : 1 + Math.max(0, 1 - (now - began) / 1400) * 0.45 * Math.sin((now - began) / 85)
-      const points: Projected[] = []
+      const shape: Array<{
+        node: MemoryNode
+        turned: Point3
+        perspective: number
+        x: number
+        y: number
+      }> = []
       for (const node of graph.nodes) {
         const point = positions.get(node.slug)
         if (!point) continue
         const turned = rotate(point, view.current.yaw, view.current.pitch)
-        const depth = 1 + turned.z * 0.13
-        points.push({
+        const perspective = perspectiveForDepth(turned.z)
+        shape.push({
           node,
-          x: width / 2 + turned.x * scale * depth,
-          y: height / 2 + turned.y * scale * depth,
-          z: turned.z,
-          radius: (2.2 + Math.min(4.2, Math.sqrt(node.degree + 1))) * (0.9 + depth * 0.12),
+          turned,
+          perspective,
+          x: turned.x * perspective,
+          y: turned.y * perspective,
+        })
+      }
+      const xs = shape.map((point) => point.x)
+      const ys = shape.map((point) => point.y)
+      const centreX = shape.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0
+      const centreY = shape.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0
+      const scale = fitConstellationScale(width, height, shape) * view.current.zoom
+      const points: Projected[] = []
+      for (const point of shape) {
+        points.push({
+          node: point.node,
+          x: width / 2 + (point.x - centreX) * scale,
+          y: height / 2 + (point.y - centreY) * scale,
+          z: point.turned.z,
+          perspective: point.perspective,
+          radius: (3 + Math.min(4.6, Math.sqrt(point.node.degree + 1) * 1.15)) * point.perspective,
         })
       }
       projected.current = points
@@ -208,20 +256,35 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
         const style = edgeStyle[edge.kind]
         const involved = highlighted.has(edge.source) || highlighted.has(edge.target)
         const citedPath = cited.has(edge.source) && cited.has(edge.target)
-        context.globalAlpha = citedPath ? 0.92 : focus ? (involved ? 0.42 : 0.035) : edge.kind === "supersedes" ? 0.08 : 0.2
+        const edgePerspective = perspectiveForDepth((source.z + target.z) / 2)
+        const restingAlpha = edge.kind === "supersedes" ? 0.08 : 0.12 + Math.max(0, edgePerspective - 0.7) * 0.18
+        context.globalAlpha = citedPath ? 0.92 : focus ? (involved ? 0.42 : 0.035) : restingAlpha
         context.strokeStyle = style.color
-        context.lineWidth = citedPath ? 1.8 : 0.65 + Math.min(1.2, edge.strength * 0.18)
+        context.lineWidth = citedPath ? 1.8 : (0.65 + Math.min(1.2, edge.strength * 0.18)) * Math.sqrt(edgePerspective)
         context.setLineDash(style.dash)
+        const dx = target.x - source.x
+        const dy = target.y - source.y
+        const distance = Math.hypot(dx, dy) || 1
+        let controlX = source.x
+        let controlY = source.y
         context.beginPath()
         context.moveTo(source.x, source.y)
-        context.lineTo(target.x, target.y)
+        if (curvedEdges) {
+          const direction = edge.source.localeCompare(edge.target) < 0 ? 1 : -1
+          const bend = Math.min(22, distance * 0.065) * (0.75 + Math.abs(source.z - target.z) * 0.35) * direction
+          controlX = (source.x + target.x) / 2 - (dy / distance) * bend
+          controlY = (source.y + target.y) / 2 + (dx / distance) * bend
+          context.quadraticCurveTo(controlX, controlY, target.x, target.y)
+        } else {
+          context.lineTo(target.x, target.y)
+        }
         context.stroke()
         if (edgeHasArrow(edge.kind)) {
-          const angle = Math.atan2(target.y - source.y, target.x - source.x)
+          const angle = Math.atan2(target.y - controlY, target.x - controlX)
           const inset = target.radius + 2
           const tipX = target.x - Math.cos(angle) * inset
           const tipY = target.y - Math.sin(angle) * inset
-          const length = 5
+          const length = 5 * Math.sqrt(edgePerspective)
           const spread = 0.55
           context.fillStyle = style.color
           context.beginPath()
@@ -249,8 +312,14 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
         const isHit = highlighted.has(slug)
         const dimmed = focus && !isHit && !isCited
         const radius = point.radius * (isCited ? pulse : 1)
-        context.globalAlpha = point.node.standing ? (dimmed ? 0.12 : 0.78 + (point.z + 1) * 0.07) : dimmed ? 0.035 : 0.18
-        context.fillStyle = isCited
+        context.globalAlpha = point.node.standing
+          ? dimmed
+            ? 0.1
+            : Math.min(0.96, 0.54 + point.perspective * 0.3)
+          : dimmed
+            ? 0.025
+            : Math.min(0.22, 0.06 + point.perspective * 0.1)
+        const fillColor = isCited
           ? colors.ember
           : isHit
             ? colors.paused
@@ -259,6 +328,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
               : point.node.standing
                 ? colors.pausedText
                 : colors.line
+        context.fillStyle = fillColor
         if (isSelected || isCited) {
           context.shadowColor = isCited ? colors.ember : colors.paused
           context.shadowBlur = isCited ? 18 : 12
@@ -279,16 +349,30 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
 
         if (isSelected || isHovered || isHit || isCited) {
           context.globalAlpha = dimmed ? 0.3 : 0.88
+          const labelX = point.x + radius + 7
+          const labelY = point.y - radius - 3
           context.fillStyle = colors.text
-          context.font = "11px 'DM Mono', ui-monospace, monospace"
-          context.fillText(slug, point.x + radius + 6, point.y - radius - 2)
+          context.font = `500 ${NODE_LABEL_FONT_PX}px 'DM Mono', ui-monospace, monospace`
+          context.lineJoin = "round"
+          context.lineWidth = 3
+          context.strokeStyle = alpha(colors.ground, 0.86)
+          context.strokeText(slug, labelX, labelY)
+          context.fillText(slug, labelX, labelY)
         }
       }
       context.globalAlpha = 1
       canvas.style.cursor = hover.current ? "pointer" : dragging ? "grabbing" : "grab"
       if (!reduced && now - began < 1400 && cited.size > 0) {
-        frame = requestAnimationFrame(draw)
+        scheduleDraw()
       }
+    }
+
+    const scheduleDraw = () => {
+      if (frame !== 0) return
+      frame = requestAnimationFrame((now) => {
+        frame = 0
+        draw(now)
+      })
     }
 
     const position = (event: PointerEvent | WheelEvent) => {
@@ -315,7 +399,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       } else {
         hover.current = nearest(projected.current, here.x, here.y)?.node.slug ?? null
       }
-      draw(performance.now())
+      scheduleDraw()
     }
     const pointerUp = (event: PointerEvent) => {
       const here = position(event)
@@ -325,17 +409,17 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
         const picked = nearest(projected.current, here.x, here.y)
         if (picked) onSelectRef.current(picked.node.slug)
       }
-      draw(performance.now())
+      scheduleDraw()
     }
     const pointerCancel = (event: PointerEvent) => {
       dragging = false
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
-      draw(performance.now())
+      scheduleDraw()
     }
     const wheel = (event: WheelEvent) => {
       event.preventDefault()
       view.current.zoom = Math.max(0.55, Math.min(2.5, view.current.zoom * Math.exp(-event.deltaY * 0.001)))
-      draw(performance.now())
+      scheduleDraw()
     }
 
     canvas.addEventListener("pointerdown", pointerDown)

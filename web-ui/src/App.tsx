@@ -114,8 +114,8 @@ export default function App({ store }: { store?: StageStore }) {
     }
     panelWasOpenRef.current = panelIsOpen
   }, [activePanel, panelIsOpen])
-  // Not remembered across reloads, unlike the skin and the project: this is a
-  // thing you open to answer a question, not a way you like the board to sit.
+  // Remembered across reloads like the skin and project: memory is a place the
+  // reader returns to, not a temporary panel over the board.
   const [showMemory, setShowMemory] = useState(
     () => recall(MEMORY_PLACE_KEY, "false") === "true",
   )
