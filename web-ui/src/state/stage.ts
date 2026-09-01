@@ -9,7 +9,7 @@
 
 import { NOTHING, rollup } from "../review/rollup"
 import type { Rollup } from "../review/rollup"
-import type { Arrow, TaskRow, GraphShape, PoieoEvent, RunSummary } from "../types"
+import type { Arrow, TaskRow, GraphShape, PoieoEvent, Question, RunSummary } from "../types"
 
 export interface ToolCall {
   name: string
@@ -57,6 +57,12 @@ export interface TaskState {
    * lines on a card whether they have anything to say.
    */
   stale: string
+  /** Changes waiting for accept/discard, kept live as summaries arrive. */
+  pending: number
+  /** Changed summaries already reflected in `pending`, bounded to the live window. */
+  countedChangeRuns: ReadonlySet<string>
+  /** The newest unanswered confirm question, if this task has one. */
+  asking: Question | null
   currentNode: string | null
   step: number
   turn: number
@@ -156,6 +162,9 @@ function createEmptyTaskState(): TaskState {
     held: false,
     enabled: true,
     stale: "",
+    pending: 0,
+    countedChangeRuns: new Set(),
+    asking: null,
     name: "",
     project: "",
     currentNode: null,
@@ -233,6 +242,13 @@ export function initialStage(rows: TaskRow[]): StageState {
       held: row.holding,
       enabled: row.enabled,
       stale: row.stale ?? "",
+      pending: row.pending,
+      countedChangeRuns: new Set(
+        row.last_run?.status === "completed" && row.last_run.change
+          ? [row.last_run.run_id]
+          : [],
+      ),
+      asking: row.asking,
       lastRun: row.last_run
         ? {
             status: row.last_run.status,
@@ -322,6 +338,19 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
       // the daemon does with it -- and what this used to undo.
       return { status: taskState.held ? "paused" : "waiting", currentNode: null }
 
+    case "run_asking":
+      return {
+        status: taskState.held ? "paused" : "waiting",
+        currentNode: null,
+        asking: {
+          run_id: event.run_id,
+          question: asString(data.question),
+          choices: Array.isArray(data.choices)
+            ? data.choices.filter((choice): choice is string => typeof choice === "string")
+            : [],
+        },
+      }
+
     case "run_failed":
     case "run_aborted":
       return { status: "error", currentNode: null }
@@ -344,8 +373,37 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
   for (const key of state.seen) {
     if (key.startsWith(`${event.run_id}|`)) state.seen.delete(key)
   }
+  const anotherRunOwnsTask = Object.entries(state.runTask).some(
+    ([runId, owner]) => runId !== event.run_id && owner === task,
+  )
   const runTask = { ...state.runTask }
   delete runTask[event.run_id]
+
+  const current = state.tasks[task]
+  const summary = event as unknown as RunSummary
+  const alreadyKnown = current.runs.some((run) => run.run_id === event.run_id)
+  const runs = alreadyKnown
+    ? current.runs.map((run) => (run.run_id === event.run_id ? summary : run))
+    : [summary, ...current.runs]
+  const latest = runs[0]
+  const summaryOwnsTerminalState = latest?.run_id === event.run_id && !anotherRunOwnsTask
+  const completedChange = event.status === "completed" && event.change !== undefined
+  const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
+  const countedChangeRuns = newlyCountedChange
+    ? new Set([...current.countedChangeRuns, event.run_id].slice(-WINDOW))
+    : current.countedChangeRuns
+  const asking =
+    current.asking?.run_id === event.run_id && event.status !== "asking"
+      ? null
+      : current.asking
+  const status: TaskState["status"] =
+    event.status === "completed" || event.status === "asking"
+      ? current.held
+        ? "paused"
+        : "waiting"
+      : event.status === "failed" || event.status === "aborted"
+        ? "error"
+        : current.status
 
   return {
     ...state,
@@ -353,18 +411,21 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
     tasks: {
       ...state.tasks,
       [task]: {
-        ...state.tasks[task],
-        lastRun: {
-          status: asString(event.status),
-          steps: asNumber(event.steps),
-          finished_at: asString(event.finished_at),
-        },
+        ...current,
+        lastRun: latest
+          ? {
+              status: latest.status,
+              steps: latest.steps,
+              finished_at: latest.finished_at,
+            }
+          : current.lastRun,
+        pending: current.pending + (newlyCountedChange ? 1 : 0),
+        countedChangeRuns,
+        asking,
+        ...(summaryOwnsTerminalState ? { status, currentNode: null } : {}),
         // The frame is the summary, flattened -- so it joins the window
         // like one, at the front, and the oldest falls off the back.
-        ...windowed(
-          [event as unknown as RunSummary, ...state.tasks[task].runs],
-          state.tasks[task].tracked,
-        ),
+        ...windowed(runs, current.tracked),
       },
     },
   }
@@ -386,8 +447,16 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
   // every frame would cost more than the rendering it guards.
   state.seen.add(key)
 
-  const runTask =
-    event.type === "run_started" ? { ...state.runTask, [event.run_id]: task } : state.runTask
+  let runTask = state.runTask
+  if (event.type === "run_started") {
+    runTask = { ...state.runTask, [event.run_id]: task }
+  } else if (
+    ["run_finished", "run_asking", "run_failed", "run_aborted"].includes(event.type) &&
+    event.run_id in state.runTask
+  ) {
+    runTask = { ...state.runTask }
+    delete runTask[event.run_id]
+  }
 
   if (Object.keys(patch).length === 0 && runTask === state.runTask) return state
 

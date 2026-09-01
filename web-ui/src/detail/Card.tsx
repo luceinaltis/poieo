@@ -26,6 +26,7 @@ export function Card({
   /** "Make one like it": the three fields, parsed, for the make panel to open on. */
   onAlike?(seed: { name: string; folder: string; prompt: string }): void
 }) {
+  const [isOpen, setIsOpen] = useState(false)
   const [originalText, setOriginalText] = useState<string | null>(null)
   const [cardFields, setCardFields] = useState<CardFields | null>(null)
   /** The form's three values, alive only for a plain card. */
@@ -114,9 +115,13 @@ export function Card({
     })
 
   return (
-    <details className="drawer-card">
-      <summary className="card-open" onClick={() => void loadCard()}>
-        card
+    <details className="drawer-card" onToggle={(event) => setIsOpen(event.currentTarget.open)}>
+      <summary
+        className="card-open"
+        aria-expanded={isOpen}
+        onClick={() => void loadCard()}
+      >
+        Task setup
       </summary>
 
       {isMissing ? (

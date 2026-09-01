@@ -245,6 +245,7 @@ export default function App({ store }: { store?: StageStore }) {
   const selectedTask = selectedTaskKey
     ? tasks.find((row) => keyOfTask(row.project, row.name) === selectedTaskKey)
     : undefined
+  const selectedTaskState = selectedTaskKey ? stage.tasks[selectedTaskKey] : undefined
 
   return (
     <>
@@ -434,17 +435,18 @@ export default function App({ store }: { store?: StageStore }) {
 
       {selectedTaskKey ? (
         <Drawer
-          // A fresh drawer per task: its selected run, its opened files and
-          // its expanded-failures toggle all belong to the task being read.
+          // A fresh drawer per task: its selected run and opened disclosures
+          // belong to the task being read.
           key={selectedTaskKey}
           project={selectedTask?.project ?? ""}
           task={selectedTask?.name ?? selectedTaskKey}
-          status={selectedTask?.status ?? "waiting"}
-          enabled={selectedTask?.enabled ?? true}
-          stale={selectedTask?.stale ?? null}
-          pending={selectedTask?.pending ?? 0}
+          status={selectedTaskState?.status ?? selectedTask?.status ?? "waiting"}
+          enabled={selectedTaskState?.enabled ?? selectedTask?.enabled ?? true}
+          stale={selectedTaskState?.stale || selectedTask?.stale || null}
+          pending={selectedTaskState?.pending ?? selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
-          asking={selectedTask?.asking ?? null}
+          asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
+          liveRuns={selectedTaskState?.runs ?? []}
           onClose={closePanel}
           onDecided={resyncAfterAction}
           onAlike={makeAlike}

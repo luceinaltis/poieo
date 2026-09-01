@@ -5,7 +5,7 @@
  * live board.
  */
 
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
 import { fetchRunEvents, fetchRuns } from "../api"
 import { Card } from "./Card"
@@ -13,9 +13,9 @@ import { Control } from "./Control"
 import { Question } from "./Question"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
-import { RunList } from "../review/RunList"
-import { initialStage, keyOfTask, replay, subjectOf } from "../state/stage"
-import type { TaskState } from "../state/stage"
+import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
+import { outcomeOf } from "../review/rollup"
+import { subjectOf } from "../state/stage"
 import type { PoieoEvent, Question as Asked, RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
@@ -29,6 +29,23 @@ import "./drawer.css"
  * disclosure triangle on two lines is furniture.
  */
 const MAX_INLINE_OUTPUT_LENGTH = 240
+
+function appearsInTimeline(event: PoieoEvent): boolean {
+  if (event.type === "node_turn") {
+    const data = event.data ?? {}
+    return Boolean(String(data.text ?? "") || String(data.thinking ?? ""))
+  }
+  return [
+    "node_tool_call",
+    "node_context_cleared",
+    "node_input_dropped",
+    "run_change_failed",
+    "node_compact_failed",
+    "node_started",
+    "run_failed",
+    "run_aborted",
+  ].includes(event.type)
+}
 
 function RunOutput({ text }: { text: string }) {
   if (text.length <= MAX_INLINE_OUTPUT_LENGTH) {
@@ -199,6 +216,105 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
   return null
 }
 
+type AttentionKind =
+  | "answer"
+  | "review"
+  | "restart"
+  | "failed"
+  | "quiet"
+
+function attentionOf({
+  asking,
+  pending,
+  stale,
+  status,
+  latest,
+}: {
+  asking: Asked | null
+  pending: number
+  stale: string | null
+  status: string
+  latest: RunSummary | null
+}): { kind: AttentionKind; text: string } {
+  if (asking) return { kind: "answer", text: "Needs your answer" }
+  if (pending > 0) {
+    return {
+      kind: "review",
+      text: `${pending} change${pending === 1 ? "" : "s"} to review`,
+    }
+  }
+  if (stale) return { kind: "restart", text: "Restart needed" }
+  if (
+    status === "error" ||
+    (latest && latest.status !== "completed" && latest.status !== "asking")
+  ) {
+    return { kind: "failed", text: "Latest run failed" }
+  }
+  return { kind: "quiet", text: "No action needed" }
+}
+
+function briefAccountOf(run: RunSummary, tracked: boolean): string {
+  if (run.status !== "completed" && run.status !== "asking") return accountOf(run, tracked)
+  const line = (run.said ?? "")
+    .trim()
+    .split(/\r?\n/)
+    .find((part) => part.trim())
+  if (!line) return run.status === "asking" ? "waiting for your answer" : accountOf(run, tracked)
+  return line.length > 180 ? line.slice(0, 180).trimEnd() + "…" : line
+}
+
+function runTime(run: RunSummary): number {
+  const finished = Date.parse(run.finished_at)
+  if (Number.isFinite(finished)) return finished
+  const started = Date.parse(run.started_at)
+  return Number.isFinite(started) ? started : Number.NEGATIVE_INFINITY
+}
+
+function RunBrief({
+  run,
+  latest,
+  tracked,
+  headingId,
+}: {
+  run: RunSummary | null
+  latest: boolean
+  tracked: boolean
+  headingId: string
+}) {
+  if (!run) {
+    return (
+      <section className="run-brief" data-empty="true" aria-labelledby={headingId}>
+        <h3 id={headingId}>Latest run</h3>
+        <p className="run-empty">Nothing has run yet. Run now or wait for its schedule.</p>
+      </section>
+    )
+  }
+
+  const outcome = run.status === "asking" ? "waiting" : outcomeOf(run, tracked)
+  const account = briefAccountOf(run, tracked)
+  const duration = durationOf(run)
+  const size = sizeOf(run)
+  const verb = run.status === "completed" ? "Finished" : run.status === "asking" ? "Asked" : "Stopped"
+  const meta = [`${verb} ${shortTime(run.finished_at)}`]
+  if (duration) meta.push(duration)
+  if (outcome === "nothing" && (run.said ?? "").trim()) meta.push("No files changed")
+  if (size) meta.push(size)
+
+  return (
+    <section
+      className="run-brief"
+      data-run={run.run_id}
+      data-outcome={outcome}
+      data-change={String(Boolean(run.change))}
+      aria-labelledby={headingId}
+    >
+      <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
+      <p className="run-brief-what">{account}</p>
+      <p className="run-brief-meta">{meta.join(" · ")}</p>
+    </section>
+  )
+}
+
 // Memoized because the shell re-renders on every SSE frame: a drawer being
 // read must not re-reconcile its whole timeline because another task spoke.
 export const Drawer = memo(function Drawer({
@@ -210,6 +326,7 @@ export const Drawer = memo(function Drawer({
   pending = 0,
   into = null,
   asking = null,
+  liveRuns = [],
   onClose,
   onDecided,
   onAlike,
@@ -224,6 +341,8 @@ export const Drawer = memo(function Drawer({
   pending?: number
   into?: string | null
   asking?: Asked | null
+  /** The stage's live summary window, which can advance while this drawer is open. */
+  liveRuns?: RunSummary[]
   onClose(): void
   onDecided?(): void
   /** "Make one like it", passed through to the card fold. */
@@ -231,72 +350,121 @@ export const Drawer = memo(function Drawer({
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
-  const [events, setEvents] = useState<PoieoEvent[]>([])
+  const [selectedRunSnapshot, setSelectedRunSnapshot] = useState<RunSummary | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [events, setEvents] = useState<PoieoEvent[] | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityError, setActivityError] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
+  const activityRequest = useRef(0)
+  const drawerId = useId().replace(/[^a-zA-Z0-9_-]/g, "")
+  const titleId = `drawer-${drawerId}-title`
+  const briefId = `drawer-${drawerId}-brief`
+  const historyId = `drawer-${drawerId}-runs`
+  const activityId = `drawer-${drawerId}-activity`
 
   useEffect(() => {
     let live = true
     void fetchRuns({ task, project, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setSelectedRunId(
-        (current) =>
-          current ?? rows.find((row) => row.change)?.run_id ?? rows[0]?.run_id ?? null,
-      )
     })
     return () => {
       live = false
     }
-  }, [task, refreshVersion])
+  }, [project, task, refreshVersion])
 
   const refreshAfterAction = () => {
     setRefreshVersion((version) => version + 1)
     onDecided?.()
   }
 
+  const liveRunIds = new Set(liveRuns.map((run) => run.run_id))
+  const mergedRuns = [
+    ...liveRuns,
+    ...runs.filter((run) => !liveRunIds.has(run.run_id)),
+  ].sort((left, right) => runTime(right) - runTime(left))
+  const availableRuns = mergedRuns.slice(0, 10)
+  const latestRun = availableRuns[0] ?? null
+  // A selected run may leave the ten-row history while the stage still holds
+  // its later revision (notably an answered question). Keep the history
+  // bounded, but take the selected snapshot from the full live window.
+  const selectedAvailableRun = mergedRuns.find((row) => row.run_id === selectedRunId)
+  const selectedRun =
+    selectedAvailableRun ??
+    (selectedRunSnapshot?.run_id === selectedRunId ? selectedRunSnapshot : null) ??
+    latestRun
+  const selectedRunKey = selectedRun?.run_id ?? null
+
   useEffect(() => {
-    if (!selectedRunId) {
-      setEvents([])
+    if (selectedRunId && selectedAvailableRun) setSelectedRunSnapshot(selectedAvailableRun)
+  }, [selectedAvailableRun, selectedRunId])
+
+  useLayoutEffect(() => {
+    activityRequest.current += 1
+    setActivityOpen(false)
+    setEvents(null)
+    setActivityLoading(false)
+    setActivityError(false)
+  }, [selectedRunKey])
+
+  const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
+  const tracked = into !== null
+  const attention = attentionOf({ asking, pending, stale, status, latest: latestRun })
+  const timelineEvents = events?.filter(appearsInTimeline) ?? null
+  const reviewRunId =
+    !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
+
+  const selectRun = (runId: string) => {
+    setHistoryOpen(false)
+    if (runId === latestRun?.run_id) {
+      setSelectedRunId(null)
+      setSelectedRunSnapshot(null)
       return
     }
-    let live = true
-    void fetchRunEvents(selectedRunId).then((list) => {
-      if (live) setEvents(list)
-    })
-    return () => {
-      live = false
-    }
-  }, [selectedRunId])
+    setSelectedRunId(runId)
+    setSelectedRunSnapshot(availableRuns.find((run) => run.run_id === runId) ?? null)
+  }
 
-  // A stage of its own: replaying here must leave the live board alone.
-  const replayedTaskState: TaskState | null = useMemo(() => {
-    if (events.length === 0) return null
-    const scratch = initialStage([
-      {
-        name: task,
-        project,
-        graph: "",
-        trigger: "",
-        status: "waiting",
-        holding: false,
-        enabled: true,
-        stale: null,
-        current_run_id: null,
-        last_run: null,
-        pending: 0,
-        into: null,
-        asking: null,
-        then: [],
-        shape: { entry: "", nodes: [] },
-      },
-    ])
-    return replay(scratch, events).tasks[keyOfTask(project, task)] ?? null
-  }, [events, project, task])
+  const loadActivity = () => {
+    const runId = selectedRun?.run_id
+    if (!runId) return
+    const request = ++activityRequest.current
+    setActivityLoading(true)
+    setActivityError(false)
+    void fetchRunEvents(runId)
+      .then((list) => {
+        if (activityRequest.current !== request) return
+        setEvents(list)
+        setActivityLoading(false)
+      })
+      .catch(() => {
+        if (activityRequest.current !== request) return
+        setEvents(null)
+        setActivityLoading(false)
+        setActivityError(true)
+      })
+  }
+
+  const toggleActivity = () => {
+    if (activityOpen) {
+      setActivityOpen(false)
+      return
+    }
+    setActivityOpen(true)
+    if (events === null && !activityLoading) loadActivity()
+  }
 
   return (
-    <aside className="panel drawer" data-task={task}>
+    <aside className="panel drawer" data-task={task} aria-labelledby={titleId}>
       <header className="drawer-head">
-        <h2>{task}</h2>
+        <div className="drawer-title">
+          <h2 id={titleId}>{task}</h2>
+          <p className="drawer-state" data-state={attention.kind} role="status">
+            {attention.text}
+          </p>
+        </div>
         <button type="button" onClick={onClose} aria-label="Close">
           close
         </button>
@@ -313,13 +481,16 @@ export const Drawer = memo(function Drawer({
           onAnswered={refreshAfterAction}
         />
 
-        <Control
-          project={project}
-          task={task}
-          status={status}
-          enabled={enabled}
-          onActed={refreshAfterAction}
-        />
+        {pending > 0 ? (
+          <Decide
+            project={project}
+            task={task}
+            pending={pending}
+            into={into}
+            runId={reviewRunId}
+            onDone={refreshAfterAction}
+          />
+        ) : null}
 
         {/* The daemon's own sentence, whole. The board's card carries the
             short form -- what to do -- because ten cards have no room for
@@ -330,58 +501,93 @@ export const Drawer = memo(function Drawer({
           </p>
         ) : null}
 
-        {/* Under the controls, above the nights: the definition, openable.
-            What the task *is* sits between what you can do to it now and
-            what it has done. */}
+        <Control
+          project={project}
+          task={task}
+          status={status}
+          enabled={enabled}
+          onActed={refreshAfterAction}
+        />
+
+        <RunBrief
+          run={selectedRun}
+          latest={selectedIsLatest}
+          tracked={tracked}
+          headingId={briefId}
+        />
+
+        {availableRuns.length > 0 ? (
+          <section className="drawer-fold run-history">
+            <button
+              type="button"
+              className="drawer-disclosure"
+              data-do="toggle-runs"
+              aria-expanded={historyOpen}
+              aria-controls={historyId}
+              onClick={() => setHistoryOpen((open) => !open)}
+            >
+              {`All runs (${availableRuns.length})`}
+            </button>
+            {historyOpen ? (
+              <div id={historyId} className="drawer-fold-content">
+                <RunList
+                  runs={availableRuns}
+                  selected={selectedRun?.run_id ?? null}
+                  onSelect={selectRun}
+                  tracked={tracked}
+                />
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}
+
+        {selectedRun ? (
+          <section className="drawer-fold activity-fold">
+            <button
+              type="button"
+              className="drawer-disclosure"
+              data-do="toggle-activity"
+              aria-expanded={activityOpen}
+              aria-controls={activityId}
+              onClick={toggleActivity}
+            >
+              {`Activity log${timelineEvents !== null ? ` (${timelineEvents.length})` : ""}`}
+            </button>
+            {activityOpen ? (
+              <div id={activityId} className="drawer-fold-content activity-content">
+                {activityLoading ? (
+                  <p className="activity-loading" role="status">
+                    Loading activity…
+                  </p>
+                ) : activityError ? (
+                  <div className="activity-error" role="alert">
+                    <p>Activity could not be loaded.</p>
+                    <button type="button" data-do="retry-activity" onClick={loadActivity}>
+                      try again
+                    </button>
+                  </div>
+                ) : timelineEvents?.length ? (
+                  <ol className="drawer-timeline">
+                    {timelineEvents.map((event, index) => (
+                      <TimelineEntry key={`${event.type}-${index}`} event={event} />
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="activity-empty">No activity was recorded for this run.</p>
+                )}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <Card
           project={project}
           task={task}
           onSetAside={refreshAfterAction}
           onAlike={onAlike}
         />
-
-        <Decide
-          project={project}
-          task={task}
-          pending={pending}
-          into={into}
-          runId={null}
-          onDone={refreshAfterAction}
-        />
-
-        <RunList
-          runs={runs}
-          selected={selectedRunId}
-          onSelect={setSelectedRunId}
-          tracked={into !== null}
-          controls={(run) =>
-            run.change ? (
-              <Decide
-                project={project}
-                task={task}
-                pending={pending}
-                into={into}
-                runId={run.run_id}
-                onDone={refreshAfterAction}
-              />
-            ) : null
-          }
-        />
-
-        {selectedRunId ? <Diff runId={selectedRunId} /> : null}
-
-        {replayedTaskState ? (
-          <p className="drawer-summary">
-            {replayedTaskState.currentNode ?? "finished"}
-            {replayedTaskState.turn > 1 ? ` · turn ${replayedTaskState.turn}` : ""}
-          </p>
-        ) : null}
-
-        <ol className="drawer-timeline">
-          {events.map((event, index) => (
-            <TimelineEntry key={`${event.type}-${index}`} event={event} />
-          ))}
-        </ol>
       </div>
     </aside>
   )

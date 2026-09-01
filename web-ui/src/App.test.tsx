@@ -121,11 +121,10 @@ vi.mock("./api", () => ({
 import App from "./App"
 import { AGENT_RUN } from "./state/fixtures"
 import { SKINS } from "./skins/registry"
-import { initialStage, reduce, replay } from "./state/stage"
+import { initialStage, reduce, replay, setRuns } from "./state/stage"
 import type { StageState } from "./state/stage"
 import type { StageStore } from "./shell/stageStore"
-import type { ProjectRow } from "./types"
-import type { TaskRow } from "./types"
+import type { PoieoEvent, ProjectRow, RunSummary, TaskRow } from "./types"
 
 const TASK_ROWS: TaskRow[] = [
   {
@@ -163,6 +162,22 @@ const TASK_ROWS: TaskRow[] = [
     shape: { entry: "", nodes: [] },
   },
 ]
+
+const DRAWER_RUN: RunSummary = {
+  run_id: "drawer-old",
+  task: "chores",
+  project: "board",
+  graph: "agent-task",
+  status: "completed",
+  started_at: "2026-08-31T08:00:00Z",
+  finished_at: "2026-08-31T08:00:04Z",
+  steps: 1,
+  iteration: 1,
+  trigger: "schedule",
+  usage: { input_tokens: 10, output_tokens: 2, cache_read_tokens: 0, cache_write_tokens: 0 },
+  error: null,
+  said: "the previous result",
+}
 
 function fakeStore(
   stage: StageState,
@@ -362,7 +377,13 @@ test("selecting a task opens the drawer, and reading it leaves the board alone",
   const drawer = container.querySelector(".drawer")!
   expect(drawer).not.toBeNull()
   expect(drawer.getAttribute("data-task")).toBe("chores")
-  // the drawer read a past run through its own scratch stage
+  expect(drawer.querySelector(".run-brief")?.textContent).toContain("did the thing")
+  // The audit costs nothing until asked for, and reading it still belongs to
+  // the drawer rather than the live board.
+  expect(drawer.textContent).not.toContain("list_dir")
+  await act(async () => {
+    drawer.querySelector<HTMLElement>('[data-do="toggle-activity"]')!.click()
+  })
   expect(drawer.textContent).toContain("list_dir")
   expect(store.getStage()).toBe(stage)
 })
@@ -391,7 +412,7 @@ test("opening a different task does not show the previous one's runs", async () 
   )!
   await act(async () => firstOpener.click())
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
-  const first = container.querySelector("[data-run][data-selected='true']")
+  const first = container.querySelector(".run-brief")
 
   const secondOpener = container.querySelector<HTMLElement>(
     '[data-task="board/revision"] .basic-pick',
@@ -401,7 +422,10 @@ test("opening a different task does not show the previous one's runs", async () 
   const drawer = container.querySelector(".drawer")!
   expect(drawer.getAttribute("data-task")).toBe("revision")
   // nothing carried over from the task we just left
-  expect(container.querySelector("[data-run][data-selected='true']")).not.toBe(first)
+  expect(container.querySelector(".run-brief")).not.toBe(first)
+  expect(drawer.querySelector('[data-do="toggle-activity"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
 
   await act(async () => {
     drawer.querySelector<HTMLElement>('[aria-label="Close"]')!.click()
@@ -420,6 +444,9 @@ test("a frame for another task leaves the open drawer alone", async () => {
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-activity"]')!.click()
+  })
   expect(container.querySelectorAll(".drawer-entry").length).toBeGreaterThan(0)
 
   const formatted = vi.spyOn(Date.prototype, "toLocaleTimeString")
@@ -432,17 +459,143 @@ test("a frame for another task leaves the open drawer alone", async () => {
 })
 
 
-test("the drawer opens on the run that changed something", async () => {
-  // The newest run found nothing to do. Opening on it greets the reader with
-  // "this run changed no files", which is not what they came for.
+test("the drawer opens on the newest run", async () => {
+  // The first glance answers what happened most recently. An older change is
+  // still in All runs, rather than quietly replacing the latest result.
   await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
 
-  const selected = container.querySelector("[data-run][data-selected='true']")!
-  expect(selected.getAttribute("data-run")).toBe("20260822T072819-98a6708d")
+  const selected = container.querySelector(".run-brief")!
+  expect(selected.getAttribute("data-run")).toBe("newest-but-quiet")
+  expect(selected.querySelector("h3")?.textContent).toBe("Latest run")
+  expect(container.querySelector("[data-run][data-selected='true']")).toBeNull()
+})
+
+test("an open drawer follows a live result and its review attention", async () => {
+  const stage = setRuns(initialStage(TASK_ROWS), "board/chores", [DRAWER_RUN])
+  const store = await render(stage)
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("drawer-old")
+
+  const summary: PoieoEvent = {
+    ...DRAWER_RUN,
+    type: "run_summary",
+    run_id: "drawer-live",
+    started_at: "2026-08-31T09:00:00Z",
+    finished_at: "2026-08-31T09:00:05Z",
+    said: "updated the guide",
+    change: {
+      base: "a",
+      head: "b",
+      files: ["GUIDE.md"],
+      insertions: 4,
+      deletions: 0,
+      message: "updated the guide",
+    },
+  }
+  await act(async () => store.push(reduce(stage, summary)))
+
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("drawer-live")
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("updated the guide")
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("1 change to review")
+})
+
+test("a selected live run stays selected as the live window advances", async () => {
+  let stage = setRuns(initialStage(TASK_ROWS), "board/chores", [DRAWER_RUN])
+  const store = await render(stage)
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+
+  const first: PoieoEvent = {
+    ...DRAWER_RUN,
+    type: "run_summary",
+    run_id: "live-first",
+    status: "asking",
+    started_at: "2026-08-31T09:00:00Z",
+    finished_at: "2026-08-31T09:00:05Z",
+    said: "Ship the first result?",
+  }
+  stage = reduce(stage, first)
+  await act(async () => store.push(stage))
+
+  const second: PoieoEvent = {
+    ...DRAWER_RUN,
+    type: "run_summary",
+    run_id: "live-2",
+    started_at: "2026-08-31T10:00:00Z",
+    finished_at: "2026-08-31T10:00:05Z",
+    said: "live result 2",
+  }
+  stage = reduce(stage, second)
+  await act(async () => store.push(stage))
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-failed-toggle="true"]')!.click()
+  })
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-run="live-first"] .run-open')!.click()
+  })
+
+  for (let index = 3; index <= 12; index += 1) {
+    const summary: PoieoEvent = {
+      ...DRAWER_RUN,
+      type: "run_summary",
+      run_id: `live-${index}`,
+      started_at: `2026-08-31T${String(index + 8).padStart(2, "0")}:00:00Z`,
+      finished_at: `2026-08-31T${String(index + 8).padStart(2, "0")}:00:05Z`,
+      said: `live result ${index}`,
+    }
+    stage = reduce(stage, summary)
+  }
+  await act(async () => store.push(stage))
+
+  stage = reduce(stage, {
+    ...first,
+    status: "completed",
+    said: "shipped the first result",
+  })
+  await act(async () => store.push(stage))
+
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("live-first")
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe(
+    "shipped the first result",
+  )
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
+  })
+  expect(container.querySelector('[data-run="live-3"]')).not.toBeNull()
+  expect(container.querySelector('[data-run="live-12"]')).not.toBeNull()
+})
+
+test("an open drawer shows a question as soon as the task asks", async () => {
+  const stage = setRuns(initialStage(TASK_ROWS), "board/chores", [DRAWER_RUN])
+  const store = await render(stage)
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+
+  const begun = reduce(stage, {
+    run_id: "asking-live",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const asking = reduce(begun, {
+    run_id: "asking-live",
+    type: "run_asking",
+    data: { question: "Ship this?", choices: ["ship", "hold"] },
+  })
+  await act(async () => store.push(asking))
+
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("Needs your answer")
+  expect(container.querySelector(".question")?.textContent).toContain("Ship this?")
 })
 
 

@@ -142,10 +142,12 @@ working with a newer daemon.
 
 `App.tsx` owns project selection, the memory place, and the single active side
 panel: task detail, models, task creation, or closed. It shows one project's
-stage at a time and keeps only view preferences in local storage. The drawer
-provides control, questions, card editing, run details, and review; model and
-creation panels use the same API. Shared action handling prevents a double
-press from issuing two mutations and keeps refusals visible as results.
+stage at a time and keeps only view preferences in local storage. The task
+drawer leads with whether the reader must act and the latest or selected run's
+result, time, duration, change, or usage. Full history, lazily fetched activity,
+and `Task setup` are closed disclosures below it; selecting an older run keeps
+that run in view while live summaries continue. Shared action handling prevents
+a double press from issuing two mutations and keeps refusals visible as results.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently
 provides the task board and a standalone runs view; both consume the same stage

@@ -2,20 +2,23 @@
 
 import { readFileSync } from "node:fs"
 import { act } from "react"
+import type { ComponentProps } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 import type { PoieoEvent, RunSummary } from "../types"
+import { shortTime } from "../when"
 
 const fetchRuns = vi.hoisted(() => vi.fn<typeof import("../api").fetchRuns>())
 const fetchRunEvents = vi.hoisted(() =>
   vi.fn<typeof import("../api").fetchRunEvents>(),
 )
+const fetchDiff = vi.hoisted(() => vi.fn<typeof import("../api").fetchDiff>())
 vi.mock("../api", () => ({
   fetchRuns,
   fetchRunEvents,
-  fetchDiff: vi.fn<typeof import("../api").fetchDiff>(async () => null),
+  fetchDiff,
   accept: vi.fn<typeof import("../api").accept>(),
   discard: vi.fn<typeof import("../api").discard>(),
   pause: vi.fn<typeof import("../api").pause>(),
@@ -34,8 +37,10 @@ beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   fetchRuns.mockReset()
   fetchRunEvents.mockReset()
+  fetchDiff.mockReset()
   fetchRuns.mockResolvedValue([])
   fetchRunEvents.mockResolvedValue([])
+  fetchDiff.mockResolvedValue(null)
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -67,13 +72,26 @@ function event(type: string, extra: Partial<PoieoEvent> = {}): PoieoEvent {
 }
 
 async function show(events: PoieoEvent[]) {
-  fetchRuns.mockResolvedValue([run])
   fetchRunEvents.mockResolvedValue(events)
+  await draw([run])
+  await press('[data-do="toggle-activity"]')
+}
+
+async function draw(
+  runs: RunSummary[] = [],
+  props: Partial<ComponentProps<typeof Drawer>> = {},
+) {
+  fetchRuns.mockResolvedValue(runs)
   await act(async () => {
-    root.render(<Drawer project="board" task="chores" onClose={() => {}} />)
+    root.render(<Drawer project="board" task="chores" onClose={() => {}} {...props} />)
   })
-  // Two chained effects: the run list resolves, which picks a run, which
-  // fetches its events.
+  await act(async () => {})
+}
+
+async function press(selector: string) {
+  await act(async () => {
+    container.querySelector<HTMLElement>(selector)!.click()
+  })
   await act(async () => {})
 }
 
@@ -82,6 +100,277 @@ const timeline = () => container.querySelector(".drawer-timeline")!.textContent 
 test("it is one of the panels on the right edge, not a third geometry", async () => {
   await show([])
   expect(container.querySelector("aside")?.classList.contains("panel")).toBe(true)
+})
+
+test("the panel is named by the task heading", async () => {
+  await draw()
+
+  const panel = container.querySelector("aside")!
+  const labelledBy = panel.getAttribute("aria-labelledby")!
+  expect(labelledBy).toBeTruthy()
+  expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe("chores")
+})
+
+test("the first glance leads with attention and the newest run", async () => {
+  const olderChange: RunSummary = {
+    ...run,
+    run_id: "older-change",
+    started_at: "2026-08-26T01:00:00Z",
+    finished_at: "2026-08-26T01:00:04Z",
+    change: {
+      base: "a",
+      head: "b",
+      files: ["hallway.md"],
+      insertions: 3,
+      deletions: 1,
+      message: "repaired the hallway",
+    },
+  }
+  const newest: RunSummary = {
+    ...run,
+    run_id: "newest",
+    said: "looked around and found nothing",
+    usage: {
+      input_tokens: 660_598,
+      output_tokens: 58_072,
+      cache_read_tokens: 633_344,
+      cache_write_tokens: 0,
+    },
+  }
+
+  await draw([newest, olderChange], { into: "main" })
+
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
+  expect(container.querySelector(".run-brief h3")?.textContent).toBe("Latest run")
+  expect(container.querySelector(".run-brief-what")?.textContent).toContain(
+    "looked around and found nothing",
+  )
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("96% cached")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("No files changed")
+  expect(container.textContent).not.toContain("repaired the hallway")
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+
+  const history = container.querySelector<HTMLButtonElement>('[data-do="toggle-runs"]')!
+  expect(history.textContent).toContain("All runs")
+  expect(history.textContent).toContain("2")
+  expect(history.getAttribute("aria-expanded")).toBe("false")
+})
+
+test("a fresher run index outranks a stale live window", async () => {
+  const staleRuns = Array.from({ length: 10 }, (_, index) => ({
+    ...run,
+    run_id: `stale-${index}`,
+    started_at: `2026-08-26T01:${String(59 - index).padStart(2, "0")}:00Z`,
+    finished_at: `2026-08-26T01:${String(59 - index).padStart(2, "0")}:04Z`,
+  }))
+  const fresh = {
+    ...run,
+    run_id: "fresh-from-index",
+    started_at: "2026-08-26T03:00:00Z",
+    finished_at: "2026-08-26T03:00:04Z",
+    said: "the newest indexed result",
+  }
+
+  await draw([fresh], { liveRuns: staleRuns })
+
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe(
+    "fresh-from-index",
+  )
+})
+
+test("an older run replaces the brief and closes the run list", async () => {
+  const older: RunSummary = {
+    ...run,
+    run_id: "older",
+    started_at: "2026-08-25T22:00:00Z",
+    finished_at: "2026-08-25T22:00:08Z",
+    said: "an older account",
+  }
+  await draw([{ ...run, run_id: "newest", said: "the latest account" }, older], {
+    into: null,
+  })
+
+  await press('[data-do="toggle-runs"]')
+  expect(container.querySelector('[data-do="toggle-runs"]')?.getAttribute("aria-expanded")).toBe(
+    "true",
+  )
+  await press('[data-run="older"] .run-open')
+
+  expect(container.querySelector('[data-do="toggle-runs"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
+  expect(container.querySelector(".run-brief h3")?.textContent).toBe("Selected run")
+  expect(container.querySelector(".run-brief-what")?.textContent).toContain("an older account")
+  expect(container.querySelector('[data-do="toggle-activity"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+})
+
+test("activity stays folded and is fetched only when opened", async () => {
+  fetchRunEvents.mockResolvedValue([
+    event("run_started"),
+    event("node_tool_call", { data: { name: "read_file", arguments: '{"path":"README.md"}' } }),
+  ])
+  await draw([run])
+
+  const toggle = container.querySelector<HTMLButtonElement>('[data-do="toggle-activity"]')!
+  expect(toggle.getAttribute("aria-expanded")).toBe("false")
+  expect(container.querySelector(".drawer-timeline")).toBeNull()
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+
+  await press('[data-do="toggle-activity"]')
+
+  expect(fetchRunEvents).toHaveBeenCalledWith("r1")
+  expect(toggle.getAttribute("aria-expanded")).toBe("true")
+  expect(toggle.textContent).toContain("1")
+  expect(container.querySelector(".drawer-timeline")?.textContent).toContain("README.md")
+})
+
+test("activity gives direction when it is empty or cannot be loaded", async () => {
+  await draw([run])
+  fetchRunEvents.mockRejectedValueOnce(new Error("offline"))
+
+  await press('[data-do="toggle-activity"]')
+  expect(container.querySelector(".activity-error")?.textContent).toContain("could not be loaded")
+
+  fetchRunEvents.mockResolvedValueOnce([])
+  await press('[data-do="retry-activity"]')
+  expect(container.querySelector(".activity-empty")?.textContent).toContain("No activity")
+  expect(fetchRunEvents).toHaveBeenCalledTimes(2)
+})
+
+test("a late activity response cannot cross into another selected run", async () => {
+  let resolveLatest!: (events: PoieoEvent[]) => void
+  fetchRunEvents.mockImplementation((runId: string) =>
+    runId === "newest"
+      ? new Promise<PoieoEvent[]>((resolve) => {
+          resolveLatest = resolve
+        })
+      : Promise.resolve([
+          { ...event("node_tool_call", { data: { name: "read_file", arguments: "older.md" } }), run_id: runId },
+        ]),
+  )
+  await draw([
+    { ...run, run_id: "newest" },
+    { ...run, run_id: "older", started_at: "2026-08-25T22:00:00Z" },
+  ])
+
+  await press('[data-do="toggle-activity"]')
+  await press('[data-do="toggle-runs"]')
+  await press('[data-run="older"] .run-open')
+  expect(container.querySelector('[data-do="toggle-activity"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
+
+  await act(async () => {
+    resolveLatest([
+      event("node_tool_call", { data: { name: "read_file", arguments: "stale.md" } }),
+    ])
+  })
+  expect(container.textContent).not.toContain("stale.md")
+
+  await press('[data-do="toggle-activity"]')
+  expect(container.querySelector(".drawer-timeline")?.textContent).toContain("older.md")
+})
+
+test("a task with no runs points to what happens next", async () => {
+  await draw()
+
+  expect(container.querySelector(".run-brief h3")?.textContent).toBe("Latest run")
+  expect(container.querySelector(".run-empty")?.textContent).toContain("Run now or wait")
+  expect(container.querySelector('[data-do="toggle-runs"]')).toBeNull()
+  expect(container.querySelector('[data-do="toggle-activity"]')).toBeNull()
+})
+
+test("a person's answer outranks every other task state", async () => {
+  await draw([{ ...run, status: "asking", said: "Ship this change?" }], {
+    status: "error",
+    pending: 2,
+    into: "main",
+    stale: "restart the daemon",
+    asking: {
+      run_id: "asking",
+      question: "Ship this change?",
+      choices: ["ship", "hold"],
+    },
+  })
+
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("Needs your answer")
+  const question = container.querySelector(".question")!
+  const control = container.querySelector(".control")!
+  expect(question.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("Ship this change?")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Asked ${shortTime(run.finished_at)}`,
+  )
+  expect(container.querySelector(".run-brief")?.getAttribute("data-outcome")).toBe("waiting")
+})
+
+test("attention names a waiting change, a restart, and a failed run", async () => {
+  await draw([run], { pending: 1, into: "main" })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("1 change to review")
+
+  await draw([run], { pending: 0, into: "main", stale: "restart the daemon" })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("Restart needed")
+
+  await draw([{ ...run, status: "failed", error: "the endpoint stopped" }], {
+    status: "error",
+    stale: null,
+  })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("Latest run failed")
+})
+
+test("routine runtime states remain no action needed", async () => {
+  await draw([run], { status: "running" })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
+
+  await draw([run], { status: "paused", enabled: false })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
+})
+
+test("a changed run brief includes its result and change size", async () => {
+  await draw([
+    {
+      ...run,
+      said: "repaired the hallway",
+      change: {
+        base: "a",
+        head: "b",
+        files: ["hallway.md"],
+        insertions: 3,
+        deletions: 1,
+        message: "repaired the hallway",
+      },
+    },
+  ])
+
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("repaired the hallway")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("+3 / -1 · 1 file")
+})
+
+test("a failed run brief includes the failure and stopped time", async () => {
+  await draw([{ ...run, status: "failed", error: "the endpoint stopped" }])
+
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("the endpoint stopped")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Stopped ${shortTime(run.finished_at)}`,
+  )
+})
+
+test("a quiet run keeps its outcome in the brief instead of duplicate machinery", async () => {
+  await draw([run], { into: "main" })
+
+  expect(container.querySelector(".diff-note")).toBeNull()
+  expect(container.querySelector(".drawer-summary")).toBeNull()
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Finished ${shortTime(run.finished_at)}`,
+  )
+})
+
+test("the card fold is named for what the reader finds there", async () => {
+  await draw()
+  expect(container.querySelector(".card-open")?.textContent).toBe("Task setup")
 })
 
 test("a step says its name and nothing about what kind of node it is", async () => {

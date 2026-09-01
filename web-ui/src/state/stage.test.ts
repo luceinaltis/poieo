@@ -57,6 +57,14 @@ test("initialStage seeds one state per task", () => {
   expect(stage.tasks["board/chores"].currentNode).toBeNull()
 })
 
+test("initialStage keeps the action state the drawer needs", () => {
+  const question = { run_id: "asking", question: "Ship it?", choices: ["ship", "hold"] }
+  const stage = initialStage([{ ...TASK_ROWS[0], pending: 2, asking: question }])
+
+  expect(stage.tasks["board/chores"].pending).toBe(2)
+  expect(stage.tasks["board/chores"].asking).toEqual(question)
+})
+
 test("a full run walks waiting -> running -> waiting", () => {
   let stage = start()
   const seen: string[] = []
@@ -157,6 +165,101 @@ test("run_failed puts the task in error", () => {
   expect(stage.tasks["board/chores"].currentNode).toBeNull()
 })
 
+test("run_asking puts the live question on the task", () => {
+  const begun = reduce(start(), {
+    run_id: "asking",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const stage = reduce(begun, {
+    run_id: "asking",
+    type: "run_asking",
+    data: { question: "Ship it?", choices: ["ship", "hold"] },
+  })
+
+  expect(stage.tasks["board/chores"].asking).toEqual({
+    run_id: "asking",
+    question: "Ship it?",
+    choices: ["ship", "hold"],
+  })
+})
+
+test("a revised completed summary clears its matching live question", () => {
+  const begun = reduce(start(), {
+    run_id: "asking",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const asked = reduce(begun, {
+    run_id: "asking",
+    type: "run_asking",
+    data: { question: "Ship it?", choices: ["ship", "hold"] },
+  })
+  const askingSummary = {
+    ...aRun("asking", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  }
+  const indexed = reduce(asked, askingSummary)
+  const answered = reduce(indexed, { ...askingSummary, status: "completed" })
+
+  expect(indexed.tasks["board/chores"].asking?.run_id).toBe("asking")
+  expect(answered.tasks["board/chores"].asking).toBeNull()
+})
+
+test("a newer asking or completed summary clears an older failure", () => {
+  const begun = reduce(start(), {
+    run_id: "failed-old",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const failed = reduce(begun, { run_id: "failed-old", type: "run_failed", data: {} })
+  const askingSummary = {
+    ...aRun("answered-new", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  }
+  const asking = reduce(failed, askingSummary)
+  const completed = reduce(asking, { ...askingSummary, status: "completed" })
+
+  expect(asking.tasks["board/chores"].status).toBe("waiting")
+  expect(completed.tasks["board/chores"].status).toBe("waiting")
+})
+
+test("an older answered summary does not stop a newer running run", () => {
+  const first = reduce(start(), {
+    run_id: "asked-old",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const asked = reduce(first, {
+    run_id: "asked-old",
+    type: "run_asking",
+    data: { question: "Ship it?", choices: ["ship", "hold"] },
+  })
+  const indexed = reduce(asked, {
+    ...aRun("asked-old", { status: "asking", said: "Ship it?" }),
+    type: "run_summary",
+  })
+  const second = reduce(indexed, {
+    run_id: "running-new",
+    type: "run_started",
+    data: { task: "chores", project: "board" },
+  })
+  const working = reduce(second, {
+    run_id: "running-new",
+    type: "node_started",
+    node_id: "work",
+    data: { step: 1 },
+  })
+  const answered = reduce(working, {
+    ...aRun("asked-old", { status: "completed", said: "shipped" }),
+    type: "run_summary",
+  })
+
+  expect(answered.tasks["board/chores"].asking).toBeNull()
+  expect(answered.tasks["board/chores"].status).toBe("running")
+  expect(answered.tasks["board/chores"].currentNode).toBe("work")
+})
+
 test("run_summary reads flat fields and fills lastRun", () => {
   const stage = reduce(replay(start(), AGENT_RUN), AGENT_SUMMARY)
   expect(stage.tasks["board/chores"].lastRun).toEqual({
@@ -230,6 +333,28 @@ test("a run summary adds to the task's recent tally", () => {
   expect(stage.tasks["board/chores"].recent.runs).toBe(1)
   // the fixture run changed nothing the store recorded, so it is a quiet run
   expect(stage.tasks["board/chores"].recent.failed).toBe(0)
+})
+
+test("a completed change updates review attention exactly once", () => {
+  const summary = {
+    ...aRun("fresh", {
+      change: {
+        base: "a",
+        head: "b",
+        files: ["README.md"],
+        insertions: 2,
+        deletions: 0,
+        message: "updated the readme",
+      },
+    }),
+    type: "run_summary",
+  }
+  const once = reduce(start(), summary)
+  const twice = reduce(once, summary)
+
+  expect(once.tasks["board/chores"].pending).toBe(1)
+  expect(twice.tasks["board/chores"].pending).toBe(1)
+  expect(twice.tasks["board/chores"].runs).toHaveLength(1)
 })
 
 test("a failed run's summary is tallied as failed", () => {
