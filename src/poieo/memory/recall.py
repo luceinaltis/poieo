@@ -342,28 +342,40 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         # One ordered list of names, and their sizes, before a single body has
         # been read: what the lookup scored, what association reached, then what
         # is left while there is room.
-        order: list[tuple[str, int, tuple[str, ...]]] = [(r.slug, r.size, r.contradicts) for r in scored]
-        placed = {slug for slug, _, _ in order}
+        #
+        # A disagreement is a veto, and **nothing** overrules it -- not a high
+        # score, not a connection, not there being room. Putting an entry and
+        # the one disputing it in front of a model together is the thing
+        # `contradicts` exists to prevent, and it used to be checked only over
+        # entries the task matched nothing in. That missed the case it is for:
+        # two entries that genuinely disagree are about one subject, so a task
+        # matching either matches both, and both went in above the check.
+        #
+        # `scored` arrives best first, so of two entries disputing each other
+        # the better-matching one is placed and the other refused. Showing
+        # neither would be the other choice, and it is worse -- it loses a
+        # lesson because somebody troubled to write down a doubt about it.
+        #
+        # Arriving by two routes is not two lessons either: shown twice it
+        # spends the budget twice for one thing said once.
+        order: list[tuple[str, int, tuple[str, ...]]] = []
+        placed: set[str] = set()
+        disputed: set[str] = set()
+
+        def admit(slug: str, size: int, says: tuple[str, ...]) -> None:
+            if slug in placed or slug in disputed or not placed.isdisjoint(says):
+                return
+            order.append((slug, size, says))
+            placed.add(slug)
+            disputed.update(says)
+
+        for found in scored:
+            admit(found.slug, found.size, found.contradicts)
         for slug in sorted(carry, key=lambda s: (-carry[s], s)):
             entry = by_slug[slug]
-            if slug not in placed:
-                order.append((slug, len(entry.body), tuple(entry.matter.links.contradicts)))
-                placed.add(slug)
-        # A disagreement is a veto, and room does not overrule it: putting an
-        # entry and the one that disputes it in front of a model together is the
-        # thing `contradicts` exists to prevent, whether it arrives by a
-        # connection or by there being space for it. Arriving by two routes is
-        # not two lessons either -- shown twice it spends the budget twice for
-        # one thing said once.
+            admit(slug, len(entry.body), tuple(entry.matter.links.contradicts))
         for found in spare:
-            if found.slug in placed:
-                continue
-            here = {slug for slug, _, _ in order}
-            disputed = {other for _, _, says in order for other in says}
-            if found.slug in disputed or set(found.contradicts) & here:
-                continue
-            order.append((found.slug, found.size, found.contradicts))
-            placed.add(found.slug)
+            admit(found.slug, found.size, found.contradicts)
 
         # One entry too big for the budget loses its own place, not everybody
         # else's: the room it could not use goes to whoever ranks below it.

@@ -464,6 +464,48 @@ def test_a_disagreeing_entry_is_never_dragged_in(tmp_path):
     assert "honestly" not in read_memory(project, task)
 
 
+def test_a_disagreement_is_vetoed_when_the_task_matches_both_sides(tmp_path):
+    """The case the veto exists for, and the one it used to miss.
+
+    Two entries that genuinely disagree are about one subject, so a task that
+    matches either matches both -- and the veto only ran over entries the task
+    matched *nothing* in. The test above passes because its disputing entry
+    shares no word with the card, which is the easy half.
+    """
+    task, project = _project(tmp_path)
+    _fact(
+        project,
+        "cap-fifty",
+        "The api rejects batch sizes over 50.",
+        matter="links:\n  contradicts: [cap-ten]",
+    )
+    _fact(project, "cap-ten", "The api rejects batch sizes over 10.")
+
+    block = read_memory(project, task)
+    assert "over 50" in block
+    assert "over 10" not in block
+
+
+def test_a_neighbour_disputing_something_already_shown_is_refused(tmp_path):
+    """`connected()` keeps association from dragging in what its own seed
+    disputes. The veto has to cover the rest: a neighbour may dispute an entry
+    that some *other* route already placed, and arriving by a connection is not
+    a way around a disagreement."""
+    task, project = _project(tmp_path)
+    _fact(project, "cap-fifty", "The api rejects batch sizes over 50.")
+    _fact(project, "header-note", "The api batch header is required. [[stray-cap]]")
+    _fact(
+        project,
+        "stray-cap",
+        "Caps sat at ten, once upon a time.",
+        matter="links:\n  contradicts: [cap-fifty]",
+    )
+
+    block = read_memory(project, task)
+    assert "over 50" in block
+    assert "once upon a time" not in block
+
+
 def test_neighbors_come_after_every_direct_hit(tmp_path):
     task, project = _project(tmp_path)
     _fact(project, "batch-cap", "The api rejects batch sizes over 50. [[folder-layout]]")
