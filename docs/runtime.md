@@ -51,6 +51,12 @@ fit is replaced with an instruction to fetch the data in pieces. Reaching a
 model's length stop without a complete answer fails the node rather than
 presenting a truncated response as success.
 
+Every offered tool also asks the model for one short, user-facing sentence
+describing what that call is meant to accomplish. The runtime removes that
+display-only sentence before execution and records it beside the bounded
+arguments and result. A model that omits it still gets to use the tool; older
+and less capable providers therefore keep working without inventing intent.
+
 ## Usage and cost
 
 Every provider response contributes its input, output, cache-read, cache-write,
