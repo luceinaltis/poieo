@@ -109,6 +109,10 @@
   border-left-color: var(--ember);
 }
 
+.run-brief[data-outcome="waiting"] {
+  border-left-color: var(--ember);
+}
+
 .run-brief[data-outcome="failed"] {
   border-left-color: var(--stop);
 }

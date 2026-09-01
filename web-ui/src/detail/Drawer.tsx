@@ -254,12 +254,12 @@ function attentionOf({
 }
 
 function briefAccountOf(run: RunSummary, tracked: boolean): string {
-  if (run.status !== "completed") return accountOf(run, tracked)
+  if (run.status !== "completed" && run.status !== "asking") return accountOf(run, tracked)
   const line = (run.said ?? "")
     .trim()
     .split(/\r?\n/)
     .find((part) => part.trim())
-  if (!line) return accountOf(run, tracked)
+  if (!line) return run.status === "asking" ? "waiting for your answer" : accountOf(run, tracked)
   return line.length > 180 ? line.slice(0, 180).trimEnd() + "…" : line
 }
 
@@ -283,13 +283,12 @@ function RunBrief({
     )
   }
 
-  const outcome = outcomeOf(run, tracked)
+  const outcome = run.status === "asking" ? "waiting" : outcomeOf(run, tracked)
   const account = briefAccountOf(run, tracked)
   const duration = durationOf(run)
   const size = sizeOf(run)
-  const meta = [
-    `${run.status === "completed" ? "Finished" : "Stopped"} ${shortTime(run.finished_at)}`,
-  ]
+  const verb = run.status === "completed" ? "Finished" : run.status === "asking" ? "Asked" : "Stopped"
+  const meta = [`${verb} ${shortTime(run.finished_at)}`]
   if (duration) meta.push(duration)
   if (outcome === "nothing" && (run.said ?? "").trim()) meta.push("No files changed")
   if (size) meta.push(size)
