@@ -74,13 +74,45 @@ function commandPurpose(command: string): string {
   if (prChecks) return `Check whether PR #${prChecks[1]} passed its checks`
   const prView = command.match(/(?:^|\s)gh\s+pr\s+view\s+(\d+)/i)
   if (prView) return `Check the status of PR #${prView[1]}`
+  if (/\b(?:pytest|vitest|npm\s+test|ruff|tsc\s+-b)(?:\s|$)/i.test(command)) {
+    return "Run the relevant verification checks"
+  }
+  if (/\bgit\s+merge-base\s+--is-ancestor\b/i.test(command)) {
+    return "Check whether the candidate includes its base"
+  }
+
+  const search = command.match(/\b(?:rg|grep)\b[^;|]*?(?:"([^"]+)"|'([^']+)')/i)
+  if (search) {
+    const pattern = (search[1] || search[2]).replaceAll("\\\"", '"')
+    return `Search the project for “${pattern.slice(0, 80)}${pattern.length > 80 ? "…" : ""}”`
+  }
+
+  const cat = command.match(/\b(?:cat|type|Get-Content)\s+(?:-[^\s]+\s+)*(?:"([^"]+)"|'([^']+)'|([^\s;|]+))/i)
+  if (cat) return `Read ${cat[1] || cat[2] || cat[3]}`
+
+  const sedSegment = command.match(/\bsed\b([^;|]*)/i)?.[1] ?? ""
+  const sedFiles = sedSegment.match(/(?:[\w.-]+[\\/])*[\w.-]+\.[A-Za-z0-9]+/g)
+  if (sedFiles?.length) return `Read ${sedFiles[sedFiles.length - 1]}`
+
+  const listing = command.match(/\b(?:ls|dir|Get-ChildItem)\s+(?:-[^\s]+\s+)*([^\s;|]+)/i)
+  if (listing) return `Look through ${listing[1]}`
+
+  const checkout = command.match(
+    /\bgit\s+(?:checkout|switch)\b(?:\s+--?[\w-]+)*\s+([^\s;|]+)/i,
+  )
+  if (checkout) return `Switch to ${checkout[1]}`
+
+  const show = command.match(/\bgit\s+show\b(?:\s+--?[\w=-]+)*\s+([^\s;|]+)/i)
+  if (show) return `Inspect ${show[1]}`
+
+  if (/\b(?:python|python3|py)\b[^;]*(?:-c|<<)/i.test(command)) {
+    return "Inspect behavior with Python"
+  }
+  if (/Independent review/i.test(command)) return "Prepare the independent review"
   if (/(?:^|\s)git\s+status(?:\s|$)/i.test(command)) return "Check the working tree"
   if (/(?:^|\s)git\s+diff(?:\s|$)/i.test(command)) return "Review the current changes"
   if (/(?:^|\s)git\s+log(?:\s|$)/i.test(command)) return "Review recent commits"
   if (/(?:^|\s)git\s+fetch(?:\s|$)/i.test(command)) return "Refresh remote branch information"
-  if (/(?:pytest|vitest|npm\s+test|ruff|tsc\s+-b)(?:\s|$)/i.test(command)) {
-    return "Run the relevant verification checks"
-  }
   return "Run a command for this task"
 }
 

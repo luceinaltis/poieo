@@ -367,9 +367,7 @@
   color: var(--dim);
   font: 0.78em/1.45 var(--mono);
   margin: 0;
-  max-height: 240px;
-  overflow: auto;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   padding: 6px 8px;
   white-space: pre-wrap;
   word-break: break-word;
