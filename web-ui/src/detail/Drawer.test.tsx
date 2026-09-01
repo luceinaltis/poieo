@@ -257,12 +257,12 @@ test("attention names a waiting change, a restart, and a failed run", async () =
   expect(container.querySelector(".drawer-state")?.textContent).toBe("Latest run failed")
 })
 
-test("a quiet run has no standalone diff or finished machinery", async () => {
+test("a quiet run keeps its outcome in the brief instead of duplicate machinery", async () => {
   await draw([run], { into: "main" })
 
   expect(container.querySelector(".diff-note")).toBeNull()
   expect(container.querySelector(".drawer-summary")).toBeNull()
-  expect(container.textContent).not.toMatch(/\bfinished\b/i)
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Finished 11:00")
 })
 
 test("the card fold is named for what the reader finds there", async () => {

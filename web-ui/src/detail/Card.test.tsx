@@ -100,6 +100,17 @@ test("shut, the card costs nothing: no fetch until somebody opens it", async () 
   expect(editor().value).toContain("tidy")
 })
 
+test("task setup exposes whether its disclosure is open", async () => {
+  await render()
+  const disclosure = container.querySelector<HTMLElement>(".card-open")!
+
+  expect(disclosure.textContent).toBe("Task setup")
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false")
+
+  await act(async () => disclosure.click())
+  expect(disclosure.getAttribute("aria-expanded")).toBe("true")
+})
+
 test("saving sends the text as it stands, and says the next run reads it", async () => {
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
   await open()
