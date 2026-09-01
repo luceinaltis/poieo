@@ -492,6 +492,9 @@ test("older shell records describe common reads, searches, checks, and revision 
     ["git checkout HEAD -- docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout --ours docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout -p docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout -2 docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout topic && echo -- later", "Switch to topic"],
+    ["git checkout -b topic main", "Run a Git checkout command for this task"],
     ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
     ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
     [
