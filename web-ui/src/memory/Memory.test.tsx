@@ -135,6 +135,7 @@ test("memory is a searchable place with three explicit modes", async () => {
   expect(container.querySelector('[data-mode="words"]')!.getAttribute("aria-pressed")).toBe("true")
   expect(container.querySelector('[data-mode="meaning"]')).not.toBeNull()
   expect(container.querySelector('[data-mode="ask"]')).not.toBeNull()
+  expect(container.textContent).toContain("relationships form regions")
 })
 
 test("word search lists evidence and opens the selected memory", async () => {

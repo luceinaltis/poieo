@@ -293,7 +293,7 @@ export function Memory({ project }: { project: string }) {
             selected={selected}
             onSelect={(slug) => void selectEntry(slug)}
           />
-          <div className="memory-hint">drag to orbit · wheel to travel · select a memory</div>
+          <div className="memory-hint">relationships form regions · drag to orbit · wheel to travel · select a memory</div>
           <div className="memory-legend" aria-label="Connection legend">
             <span data-kind="mentions">mentions</span>
             <span data-kind="depends_on">leans on</span>
