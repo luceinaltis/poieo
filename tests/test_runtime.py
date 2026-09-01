@@ -1415,7 +1415,10 @@ async def test_agent_tool_calls_record_their_purpose_without_passing_it_to_the_t
                     "tool_calls": [
                         {
                             "name": "read_file",
-                            "arguments": {"path": "brief.md", "purpose": purpose},
+                            "arguments": {
+                                "path": "brief.md",
+                                "__poieo_activity_purpose": purpose,
+                            },
                         }
                     ]
                 },
@@ -1430,8 +1433,8 @@ async def test_agent_tool_calls_record_their_purpose_without_passing_it_to_the_t
         offered = next(tool for tool in pool.get("fake").calls[0].tools if tool.name == "read_file")
 
     assert result.status == "completed"
-    assert offered.input_schema["properties"]["purpose"]["type"] == "string"
-    assert "purpose" in offered.input_schema["required"]
+    assert offered.input_schema["properties"]["__poieo_activity_purpose"]["type"] == "string"
+    assert "__poieo_activity_purpose" in offered.input_schema["required"]
     call = next(event for event in store.events if event.type == "node_tool_call")
     assert call.data["purpose"] == purpose
     assert call.data["arguments"] == '{"path": "brief.md"}'
