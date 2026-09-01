@@ -373,6 +373,9 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
   for (const key of state.seen) {
     if (key.startsWith(`${event.run_id}|`)) state.seen.delete(key)
   }
+  const anotherRunOwnsTask = Object.entries(state.runTask).some(
+    ([runId, owner]) => runId !== event.run_id && owner === task,
+  )
   const runTask = { ...state.runTask }
   delete runTask[event.run_id]
 
@@ -382,6 +385,8 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
   const runs = alreadyKnown
     ? current.runs.map((run) => (run.run_id === event.run_id ? summary : run))
     : [summary, ...current.runs]
+  const latest = runs[0]
+  const summaryOwnsTerminalState = latest?.run_id === event.run_id && !anotherRunOwnsTask
   const completedChange = event.status === "completed" && event.change !== undefined
   const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
   const countedChangeRuns = newlyCountedChange
@@ -407,16 +412,17 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
       ...state.tasks,
       [task]: {
         ...current,
-        lastRun: {
-          status: asString(event.status),
-          steps: asNumber(event.steps),
-          finished_at: asString(event.finished_at),
-        },
+        lastRun: latest
+          ? {
+              status: latest.status,
+              steps: latest.steps,
+              finished_at: latest.finished_at,
+            }
+          : current.lastRun,
         pending: current.pending + (newlyCountedChange ? 1 : 0),
         countedChangeRuns,
         asking,
-        status,
-        currentNode: null,
+        ...(summaryOwnsTerminalState ? { status, currentNode: null } : {}),
         // The frame is the summary, flattened -- so it joins the window
         // like one, at the front, and the oldest falls off the back.
         ...windowed(runs, current.tracked),
@@ -441,8 +447,16 @@ export function reduce(state: StageState, event: PoieoEvent): StageState {
   // every frame would cost more than the rendering it guards.
   state.seen.add(key)
 
-  const runTask =
-    event.type === "run_started" ? { ...state.runTask, [event.run_id]: task } : state.runTask
+  let runTask = state.runTask
+  if (event.type === "run_started") {
+    runTask = { ...state.runTask, [event.run_id]: task }
+  } else if (
+    ["run_finished", "run_asking", "run_failed", "run_aborted"].includes(event.type) &&
+    event.run_id in state.runTask
+  ) {
+    runTask = { ...state.runTask }
+    delete runTask[event.run_id]
+  }
 
   if (Object.keys(patch).length === 0 && runTask === state.runTask) return state
 

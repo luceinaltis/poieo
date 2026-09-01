@@ -47,13 +47,19 @@ export interface StageStore {
  * the feed was down published a summary nobody heard, and this is where that
  * gap closes. Live-only detail (the current node, the last turn) is kept.
  */
+function isChangedSummary(event: PoieoEvent): boolean {
+  return (
+    event.type === "run_summary" &&
+    event.status === "completed" &&
+    event.change !== undefined
+  )
+}
+
 function reflectedChangedRuns(events: PoieoEvent[]): Map<string, string[]> {
   const reflected = new Map<string, string[]>()
   for (const event of events) {
     if (
-      event.type !== "run_summary" ||
-      event.status !== "completed" ||
-      event.change === undefined ||
+      !isChangedSummary(event) ||
       typeof event.task !== "string" ||
       typeof event.project !== "string"
     ) {
@@ -142,6 +148,7 @@ export function createStageStore(api: StageApi = {
   // backwards, and dropping them loses events whose run is not known yet.
   let holding = false
   let held: PoieoEvent[] = []
+  let changedSummaryRevision = 0
 
   const listeners = new Set<() => void>()
   const announce = () => {
@@ -149,6 +156,7 @@ export function createStageStore(api: StageApi = {
   }
 
   function take(event: PoieoEvent): void {
+    if (isChangedSummary(event)) changedSummaryRevision += 1
     if (holding) {
       held.push(event)
       return
@@ -182,19 +190,43 @@ export function createStageStore(api: StageApi = {
     return next
   }
 
-  async function resync(): Promise<void> {
+  /**
+   * A changed frame seen during catch-up crosses two independent HTTP/SSE
+   * connections, so response order cannot prove which snapshot included it.
+   * Read the authoritative count again after that frame; repeat only if
+   * another changed frame crosses the follow-up read too.
+   */
+  async function refreshListingAfterChanges(): Promise<void> {
     holding = true
     held = []
-    let reflected: PoieoEvent[] = []
+    try {
+      while (true) {
+        const revisionBeforeRead = changedSummaryRevision
+        const listing = await api.fetchTasks()
+        tasks = listing.tasks
+        projects = listing.projects
+        const stable = revisionBeforeRead === changedSummaryRevision
+        stage = seed(stage, tasks, stable ? held : [])
+        if (stable) break
+      }
+    } finally {
+      const queued = held
+      holding = false
+      held = []
+      stage = replay(stage, queued)
+      announce()
+    }
+  }
+
+  async function resync(): Promise<void> {
+    const revisionBeforeRead = changedSummaryRevision
+    holding = true
+    held = []
     try {
       const listing = await api.fetchTasks()
-      // Frames received before this response are already represented by its
-      // pending count. Keep them for ordered replay, but do not count them twice.
-      reflected = held
-      held = []
       tasks = listing.tasks
       projects = listing.projects
-      stage = seed(stage, tasks, reflected)
+      stage = seed(stage, tasks)
 
       // Both reads are independent of each other; fetch everything at once
       // and fold in the same order the sequential code did.
@@ -206,11 +238,14 @@ export function createStageStore(api: StageApi = {
       stage = tallied
       for (const events of histories) stage = replay(stage, events)
     } finally {
-      const queued = [...reflected, ...held]
+      const queued = held
       holding = false
       held = []
       stage = replay(stage, queued)
       announce()
+    }
+    if (changedSummaryRevision !== revisionBeforeRead) {
+      await refreshListingAfterChanges()
     }
   }
 
