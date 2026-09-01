@@ -141,7 +141,9 @@ test("the first glance leads with attention and the newest run", async () => {
 
   expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
   expect(container.querySelector(".run-brief h3")?.textContent).toBe("Latest run")
-  expect(container.querySelector(".run-brief-what")?.textContent).toContain("nothing to do")
+  expect(container.querySelector(".run-brief-what")?.textContent).toContain(
+    "looked around and found nothing",
+  )
   expect(container.querySelector(".run-brief-meta")?.textContent).toContain("96% cached")
   expect(container.querySelector(".run-brief-meta")?.textContent).toContain("No files changed")
   expect(container.textContent).not.toContain("repaired the hallway")
@@ -215,6 +217,40 @@ test("activity gives direction when it is empty or cannot be loaded", async () =
   expect(fetchRunEvents).toHaveBeenCalledTimes(2)
 })
 
+test("a late activity response cannot cross into another selected run", async () => {
+  let resolveLatest!: (events: PoieoEvent[]) => void
+  fetchRunEvents.mockImplementation((runId: string) =>
+    runId === "newest"
+      ? new Promise<PoieoEvent[]>((resolve) => {
+          resolveLatest = resolve
+        })
+      : Promise.resolve([
+          { ...event("node_tool_call", { data: { name: "read_file", arguments: "older.md" } }), run_id: runId },
+        ]),
+  )
+  await draw([
+    { ...run, run_id: "newest" },
+    { ...run, run_id: "older", started_at: "2026-08-25T22:00:00Z" },
+  ])
+
+  await press('[data-do="toggle-activity"]')
+  await press('[data-do="toggle-runs"]')
+  await press('[data-run="older"] .run-open')
+  expect(container.querySelector('[data-do="toggle-activity"]')?.getAttribute("aria-expanded")).toBe(
+    "false",
+  )
+
+  await act(async () => {
+    resolveLatest([
+      event("node_tool_call", { data: { name: "read_file", arguments: "stale.md" } }),
+    ])
+  })
+  expect(container.textContent).not.toContain("stale.md")
+
+  await press('[data-do="toggle-activity"]')
+  expect(container.querySelector(".drawer-timeline")?.textContent).toContain("older.md")
+})
+
 test("a task with no runs points to what happens next", async () => {
   await draw()
 
@@ -255,6 +291,41 @@ test("attention names a waiting change, a restart, and a failed run", async () =
     stale: null,
   })
   expect(container.querySelector(".drawer-state")?.textContent).toBe("Latest run failed")
+})
+
+test("routine runtime states remain no action needed", async () => {
+  await draw([run], { status: "running" })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
+
+  await draw([run], { status: "paused", enabled: false })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")
+})
+
+test("a changed run brief includes its result and change size", async () => {
+  await draw([
+    {
+      ...run,
+      said: "repaired the hallway",
+      change: {
+        base: "a",
+        head: "b",
+        files: ["hallway.md"],
+        insertions: 3,
+        deletions: 1,
+        message: "repaired the hallway",
+      },
+    },
+  ])
+
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("repaired the hallway")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("+3 / -1 · 1 file")
+})
+
+test("a failed run brief includes the failure and stopped time", async () => {
+  await draw([{ ...run, status: "failed", error: "the endpoint stopped" }])
+
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe("the endpoint stopped")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Stopped 11:00")
 })
 
 test("a quiet run keeps its outcome in the brief instead of duplicate machinery", async () => {
