@@ -215,6 +215,7 @@ test("activity stays folded and is fetched only when opened", async () => {
   await draw([run])
 
   const toggle = container.querySelector<HTMLButtonElement>('[data-do="toggle-activity"]')!
+  expect(toggle.textContent).toContain("Run activity")
   expect(toggle.getAttribute("aria-expanded")).toBe("false")
   expect(container.querySelector(".drawer-timeline")).toBeNull()
   expect(fetchRunEvents).not.toHaveBeenCalled()
@@ -225,6 +226,19 @@ test("activity stays folded and is fetched only when opened", async () => {
   expect(toggle.getAttribute("aria-expanded")).toBe("true")
   expect(toggle.textContent).toContain("1")
   expect(container.querySelector(".drawer-timeline")?.textContent).toContain("README.md")
+})
+
+test("the selected run owns its activity before the run picker", async () => {
+  await draw([run])
+
+  const focused = container.querySelector(".run-focus")!
+  expect(focused.querySelector(".run-brief")).not.toBeNull()
+  expect(focused.querySelector('[data-do="toggle-activity"]')).not.toBeNull()
+  expect(focused.querySelector('[data-do="toggle-runs"]')).toBeNull()
+  expect(
+    focused.compareDocumentPosition(container.querySelector('[data-do="toggle-runs"]')!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0)
 })
 
 test("activity gives direction when it is empty or cannot be loaded", async () => {
@@ -419,6 +433,185 @@ test("a tool says what it acted on and what came back", async () => {
   expect(entry.textContent).toContain("# poieo Design")
 })
 
+test("each tool leads with its agent-written purpose and folds the raw record", async () => {
+  const purpose = "Check whether PR #343 is ready to merge."
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "run_command",
+        purpose,
+        arguments: JSON.stringify({
+          command: "gh pr view 343",
+          purpose: "native tool option",
+        }),
+        result: "exit code: 0\nstate: OPEN",
+        error: false,
+        duration_ms: 1100,
+      },
+    }),
+  ])
+
+  const details = container.querySelector<HTMLDetailsElement>(".drawer-tool")!
+  expect(details.open).toBe(false)
+  const summary = details.querySelector("summary")!
+  expect(summary.textContent).toContain(purpose)
+  expect(summary.textContent).toContain("run_command · completed · 1.1s")
+  expect(summary.hasAttribute("aria-label")).toBe(false)
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("run_command")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("gh pr view 343")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("native tool option")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("state: OPEN")
+})
+
+test("an older command gets an honest purpose from the command it recorded", async () => {
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "run_command",
+        arguments: JSON.stringify({ command: "gh pr diff 343 --patch" }),
+        result: "exit code: 0",
+        error: false,
+      },
+    }),
+  ])
+
+  expect(container.querySelector(".drawer-tool summary")?.textContent).toContain(
+    "Review the changes in PR #343",
+  )
+})
+
+test("older shell records describe common reads, searches, checks, and revision work", async () => {
+  const examples = [
+    ["cat AGENTS.md", "Read AGENTS.md"],
+    ['grep -rn "confirm" src/poieo --include=*.py', "Search the project for “confirm”"],
+    ["sed -n '60,180p' src/poieo/viewer.py", "Read src/poieo/viewer.py"],
+    ["ls docs", "Look through docs"],
+    ["sed -i 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
+    ["sed -i.bak 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
+    ["git checkout -- docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout HEAD -- docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout --ours docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout -p docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout -2 docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout topic && echo -- later", "Switch to topic"],
+    ["git checkout -b topic main", "Run a Git checkout command for this task"],
+    ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
+    ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
+    [
+      "git rev-parse HEAD; git merge-base --is-ancestor main HEAD",
+      "Check whether the candidate includes its base",
+    ],
+    ['python -c "print(1)"', "Run a Python command for this task"],
+    ["@'\n## Independent review", "Prepare the independent review"],
+  ]
+  await show(
+    examples.map(([command]) =>
+      event("node_tool_call", {
+        data: {
+          name: "run_command",
+          arguments: JSON.stringify({ command }),
+          result: "exit code: 0",
+          error: false,
+        },
+      }),
+    ),
+  )
+
+  const summaries = Array.from(container.querySelectorAll(".drawer-tool summary"))
+  expect(summaries.map((summary) => summary.textContent)).toEqual(
+    examples.map(([, purpose]) => `${purpose}run_command · completed`),
+  )
+})
+
+test("a tool turn's preamble does not duplicate the purpose entries below it", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "I will inspect both files first.", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the web guide.",
+        arguments: "docs/web.md",
+      },
+    }),
+  ])
+
+  expect(container.querySelectorAll('[data-kind="turn"]')).toHaveLength(0)
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(2)
+})
+
+test("a tool preamble remains when its promised activity records are incomplete", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "I will inspect both files first.", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="turn"]')?.textContent).toContain(
+    "I will inspect both files first.",
+  )
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
+})
+
+test("a missing tool-only record leaves an explicit gap in the activity", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "", thinking: "", tool_call_count: 2 },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="stuck"]')?.textContent).toContain(
+    "2 tool calls were not fully recorded",
+  )
+})
+
+test("a partial tool-only record reports only the calls that are missing", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "", thinking: "", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="stuck"]')?.textContent).toContain(
+    "1 tool call was not fully recorded",
+  )
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
+})
+
 test("a long tool record stays inside the drawer's event column", async () => {
   const unbroken = "x".repeat(1_000)
   await show([
@@ -442,6 +635,12 @@ test("a long tool record stays inside the drawer's event column", async () => {
     /\.drawer-entry\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\)/s,
   )
   expect(DRAWER_CSS).toMatch(/\.drawer-event\s*\{[^}]*overflow-wrap:\s*anywhere/s)
+})
+
+test("expanded tool evidence shares the drawer scroll instead of nesting another one", async () => {
+  const rule = DRAWER_CSS.match(/\.drawer-tool-part pre\s*\{([^}]*)\}/s)?.[1] ?? ""
+  expect(rule).not.toMatch(/max-height\s*:/)
+  expect(rule).not.toMatch(/overflow\s*:\s*auto/)
 })
 
 test("a tool that failed is marked failed, and error is a boolean", async () => {

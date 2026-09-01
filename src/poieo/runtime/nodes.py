@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import copy
 import json
 import re
 import time
@@ -193,6 +194,46 @@ _CUT_OFF = {"length", "max_tokens"}
 def _clip(value: Any, limit: int = 400) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     return text if len(text) <= limit else text[:limit] + "..."
+
+
+# Display metadata lives in the model-facing schema, so reserve its name: a
+# tool is otherwise allowed to have a real `purpose` argument of its own.
+_ACTIVITY_PURPOSE = "__poieo_activity_purpose"
+_ACTIVITY_PURPOSE_DESCRIPTION = (
+    "One short sentence for the person watching this run: what this call is "
+    "about to accomplish and why it helps the current task. Describe the "
+    "purpose, not the tool mechanics or private reasoning."
+)
+
+
+def _tools_with_activity_purpose(tools: list[ToolDef]) -> list[ToolDef]:
+    """Ask every tool call to carry the sentence its activity row will lead with.
+
+    The executor's definitions are shared objects, so the display-only field is
+    added to copies. It is removed again before execution; a tool should never
+    have to know how the board explains it.
+    """
+    offered: list[ToolDef] = []
+    for tool in tools:
+        schema = copy.deepcopy(tool.input_schema)
+        properties = dict(schema.get("properties") or {})
+        properties[_ACTIVITY_PURPOSE] = {
+            "type": "string",
+            "description": _ACTIVITY_PURPOSE_DESCRIPTION,
+        }
+        schema["properties"] = properties
+        required = list(schema.get("required") or [])
+        if _ACTIVITY_PURPOSE not in required:
+            required.append(_ACTIVITY_PURPOSE)
+        schema["required"] = required
+        offered.append(
+            ToolDef(
+                name=tool.name,
+                description=tool.description,
+                input_schema=schema,
+            )
+        )
+    return offered
 
 
 # How large a conversation may get before its older observations are dropped,
@@ -466,7 +507,8 @@ class _AgentLoop:
 
     def __post_init__(self) -> None:
         self.messages = [{"role": "user", "content": self.bound.prompt}]
-        self.offered_tools = self.executor.definitions() if self.executor is not None else []
+        definitions = self.executor.definitions() if self.executor is not None else []
+        self.offered_tools = _tools_with_activity_purpose(definitions)
 
         # Checked at the top of a turn rather than raced against the model
         # call: a request already sent is paid for whether its answer is kept.
@@ -618,8 +660,18 @@ class _AgentLoop:
         """Run and record one call, whoever owns the surrounding tool loop."""
         if self.executor is None:  # Hands is never built in this state.
             raise NodeError(f"node '{self.spec.id}': no executor for tool call", node_id=self.spec.id)
+        # Providers normally honor the object schema, but the executor already
+        # owns recovery when one does not. Preserve a malformed value so that
+        # recovery still produces a failed tool event instead of raising here.
+        arguments: Any = call.arguments
+        raw_purpose: Any = ""
+        if isinstance(arguments, dict):
+            arguments = dict(arguments)
+            raw_purpose = arguments.pop(_ACTIVITY_PURPOSE, "")
+        purpose = raw_purpose.strip() if isinstance(raw_purpose, str) else ""
+        executable = ToolCall(id=call.id, name=call.name, arguments=arguments)
         started = time.monotonic()
-        result = await self.executor.execute(call)
+        result = await self.executor.execute(executable)
         self.tool_call_count += 1
         self.reached_for[call.name] = self.reached_for.get(call.name, 0) + 1
         self.ctx.emit(
@@ -627,7 +679,8 @@ class _AgentLoop:
             node_id=self.spec.id,
             turn=self.turns,
             name=call.name,
-            arguments=_clip(call.arguments),
+            purpose=_clip(purpose, 240) if purpose else "",
+            arguments=_clip(arguments),
             result=_clip(result.text),
             error=result.error,
             duration_ms=round((time.monotonic() - started) * 1000),

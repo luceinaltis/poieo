@@ -51,6 +51,15 @@ fit is replaced with an instruction to fetch the data in pieces. Reaching a
 model's length stop without a complete answer fails the node rather than
 presenting a truncated response as success.
 
+Tools that execute through poieo's executor -- direct endpoint calls and the
+tools lent to Claude Code -- also ask the model for one short, user-facing
+sentence describing what that call is meant to accomplish. The runtime carries
+it in a reserved display-only field, removes it before execution, and records
+it beside the bounded arguments and result. It tolerates an omitted sentence;
+the board then falls back to a conservative description rather than inventing
+intent. Codex owns its CLI tool loop, which does not return those calls through
+the executor; its final model account remains the activity available to poieo.
+
 ## Usage and cost
 
 Every provider response contributes its input, output, cache-read, cache-write,

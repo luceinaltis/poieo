@@ -1388,6 +1388,111 @@ async def test_agent_node_emits_a_turn_event_per_model_turn(tmp_path):
     assert turns[1].data["tool_call_count"] == 0
 
 
+async def test_agent_tool_calls_record_their_purpose_without_passing_it_to_the_tool(tmp_path):
+    """The activity sentence belongs to the record, not to the tool's input."""
+    (tmp_path / "brief.md").write_text("the brief")
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "work",
+            "nodes": [
+                {
+                    "id": "work",
+                    "type": "agent",
+                    "role": "worker",
+                    "workdir": str(tmp_path),
+                    "tools": ["files"],
+                    "prompt": "go",
+                }
+            ],
+        }
+    )
+    purpose = "Read the project brief before deciding what to change."
+    binding = mock_binding(
+        {
+            "worker": [
+                {
+                    "tool_calls": [
+                        {
+                            "name": "read_file",
+                            "arguments": {
+                                "path": "brief.md",
+                                "__poieo_activity_purpose": purpose,
+                            },
+                        }
+                    ]
+                },
+                "done",
+            ]
+        }
+    )
+    store = _CapturingStore()
+
+    async with ProviderPool(binding) as pool:
+        result = await execute(graph, binding, pool, store)
+        offered = next(tool for tool in pool.get("fake").calls[0].tools if tool.name == "read_file")
+
+    assert result.status == "completed"
+    assert offered.input_schema["properties"]["__poieo_activity_purpose"]["type"] == "string"
+    assert "__poieo_activity_purpose" in offered.input_schema["required"]
+    call = next(event for event in store.events if event.type == "node_tool_call")
+    assert call.data["purpose"] == purpose
+    assert call.data["arguments"] == '{"path": "brief.md"}'
+    assert call.data["result"].endswith("the brief")
+
+
+async def test_malformed_tool_arguments_become_a_recorded_tool_failure(tmp_path, monkeypatch):
+    """Display metadata must not bypass the executor's ordinary error record."""
+    from poieo.providers.base import LLMResponse, ToolCall
+
+    graph = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "work",
+            "nodes": [
+                {
+                    "id": "work",
+                    "type": "agent",
+                    "role": "worker",
+                    "workdir": str(tmp_path),
+                    "tools": ["files"],
+                    "prompt": "go",
+                }
+            ],
+        }
+    )
+    binding = mock_binding({"worker": "unused"})
+    replies = iter(
+        [
+            LLMResponse(
+                text="",
+                model="mock-model",
+                tool_calls=[
+                    ToolCall(
+                        id="malformed",
+                        name="read_file",
+                        arguments=None,  # type: ignore[arg-type]
+                    )
+                ],
+            ),
+            LLMResponse(text="done", model="mock-model"),
+        ]
+    )
+    store = _CapturingStore()
+
+    async def complete(_request):
+        return next(replies)
+
+    async with ProviderPool(binding) as pool:
+        monkeypatch.setattr(pool.get("fake"), "complete", complete)
+        result = await execute(graph, binding, pool, store)
+
+    assert result.status == "completed"
+    call = next(event for event in store.events if event.type == "node_tool_call")
+    assert call.data["error"] is True
+    assert call.data["arguments"] == "null"
+
+
 def agent_graph_without_workdir(**node_overrides):
     node = {
         "id": "work",

@@ -97,6 +97,15 @@
   flex-basis: 100%;
 }
 
+/* The result and everything that explains it are one object. The run picker
+   follows this group instead of interrupting it, so changing runs cannot make
+   the activity below look unrelated to the summary above. */
+.run-focus {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
 .run-brief {
   border-left: 2px solid var(--line);
   display: grid;
@@ -279,22 +288,105 @@
   margin: 2px 0 0;
 }
 
-/* What a tool answered: three lines at most, because the timeline is a
-   sequence and one `cat` of a long file must not bury what came next. Dimmed,
-   because the row above it -- the tool and its subject -- is the headline. */
-.drawer-result {
-  color: var(--dim);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  margin: 2px 0 0;
-  overflow: hidden;
-  white-space: pre-wrap;
+.drawer-tool {
+  min-width: 0;
 }
 
-.drawer-entry[data-error="true"] .drawer-result {
+.drawer-tool > summary {
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  padding-left: 14px;
+  position: relative;
+}
+
+.drawer-tool > summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawer-tool > summary::before {
+  color: var(--dim);
+  content: "›";
+  font-family: var(--mono);
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.drawer-tool[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.drawer-tool-purpose {
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.drawer-tool-meta {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+}
+
+.drawer-entry[data-error="true"] .drawer-tool-purpose,
+.drawer-entry[data-error="true"] .drawer-tool-meta {
   color: var(--stop);
+}
+
+/* The command and captured result are evidence, not the headline. They stay
+   exact and copyable behind the purpose sentence, bounded by the event record
+   the daemon already keeps. */
+.drawer-tool-raw {
+  border-left: 1px solid var(--rule);
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 2px 3px;
+  min-width: 0;
+  padding-left: 10px;
+}
+
+.drawer-tool-part {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.drawer-tool-part > span {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.68em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drawer-tool-part pre {
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--dim);
+  font: 0.78em/1.45 var(--mono);
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.drawer-entry[data-error="true"] .drawer-tool-part pre {
+  color: var(--stop);
+}
+
+.drawer-tool-empty {
+  color: var(--dim);
+  font-size: 0.8em;
+  margin: 0;
+}
+
+.drawer-missing {
+  color: var(--stop);
+  font-size: 0.8em;
+  margin: 3px 0 0;
 }
 
 /* Quieter than what the model said, because it is bookkeeping about the
@@ -322,6 +414,7 @@
   .control button,
   .question-choices button,
   .drawer-disclosure,
+  .drawer-tool > summary,
   .activity-error button,
   .decide-take,
   .decide-drop {
