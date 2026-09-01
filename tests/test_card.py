@@ -12,6 +12,7 @@ import pytest
 from conftest import at
 
 from poieo.card import (
+    DEFAULT_MAX_TURNS,
     CardSpec,
     append_journal,
     expand,
@@ -234,6 +235,20 @@ def test_a_broken_task_fails_at_load(tmp_path, body, message):
     with pytest.raises(SpecError) as exc:
         load_card(path)
     assert message in str(exc.value)
+
+
+def test_a_graph_card_refuses_max_turns_even_at_its_default(tmp_path):
+    """The check reads the key, not the value it carries.
+
+    `max_turns` is the one node key with a default of its own, and a person
+    writing it out is likeliest to write that default. Comparing values let
+    exactly that number through, and the graph then ignored it in silence.
+    """
+    for value in (DEFAULT_MAX_TURNS, DEFAULT_MAX_TURNS + 1):
+        path = write_card(tmp_path, "t", f"name: t\ngraph: g.yaml\nmax_turns: {value}\n")
+        with pytest.raises(SpecError) as exc:
+            load_card(path)
+        assert "max_turns belong in the graph" in str(exc.value)
 
 
 def test_a_missing_folder_fails_at_load(tmp_path):
