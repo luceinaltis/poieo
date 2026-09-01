@@ -172,6 +172,28 @@ async def until(predicate, what="the condition", timeout=5.0):
         await asyncio.sleep(0.01)
 
 
+def method_barrier(instance, monkeypatch, method_name):
+    """Return a waiter for successful calls made in a worker thread."""
+    loop = asyncio.get_running_loop()
+    results = asyncio.Queue()
+    original = getattr(instance, method_name)
+
+    def observed(*args, **kwargs):
+        result = original(*args, **kwargs)
+        loop.call_soon_threadsafe(results.put_nowait, result)
+        return result
+
+    monkeypatch.setattr(instance, method_name, observed)
+
+    async def wait_for_call(timeout=5.0):
+        try:
+            return await asyncio.wait_for(results.get(), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise AssertionError(f"timed out waiting for {method_name}") from exc
+
+    return wait_for_call
+
+
 async def down(daemon, task):
     """Stop it and wait for the serve task, so nothing outlives the test."""
     daemon.stop()
