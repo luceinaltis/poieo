@@ -490,6 +490,8 @@ test("older shell records describe common reads, searches, checks, and revision 
     ["sed -i.bak 's/old/new/' docs/web.md", "Update docs/web.md with sed"],
     ["git checkout -- docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout HEAD -- docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout --ours docs/web.md", "Restore docs/web.md from Git"],
+    ["git checkout -p docs/web.md", "Restore docs/web.md from Git"],
     ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
     ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
     [
@@ -582,6 +584,29 @@ test("a missing tool-only record leaves an explicit gap in the activity", async 
   expect(container.querySelector('[data-kind="stuck"]')?.textContent).toContain(
     "2 tool calls were not fully recorded",
   )
+})
+
+test("a partial tool-only record reports only the calls that are missing", async () => {
+  await show([
+    event("node_turn", {
+      node_id: "work",
+      data: { turn: 1, text: "", thinking: "", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: {
+        turn: 1,
+        name: "read_file",
+        purpose: "Read the design contract.",
+        arguments: "DESIGN.md",
+      },
+    }),
+  ])
+
+  expect(container.querySelector('[data-kind="stuck"]')?.textContent).toContain(
+    "1 tool call was not fully recorded",
+  )
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
 })
 
 test("a long tool record stays inside the drawer's event column", async () => {
