@@ -28,11 +28,16 @@ const EDGE_DASH: Record<MemoryEdgeKind, number[]> = {
   supersedes: [1, 6],
 }
 
-export const NODE_LABEL_FONT_PX = 13
+export const NODE_LABEL_FONT_PX = 14
 const CURVED_EDGE_LIMIT = 1_200
+const HIGHLIGHT_LABEL_LIMIT = 8
 
 export function edgeUsesCurve(edgeCount: number): boolean {
   return edgeCount <= CURVED_EDGE_LIMIT
+}
+
+export function showHighlightedLabels(highlightedCount: number): boolean {
+  return highlightedCount <= HIGHLIGHT_LABEL_LIMIT
 }
 
 export function perspectiveForDepth(depth: number): number {
@@ -347,7 +352,7 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
           context.stroke()
         }
 
-        if (isSelected || isHovered || isHit || isCited) {
+        if (isSelected || isHovered || (isHit && showHighlightedLabels(highlighted.size)) || isCited) {
           context.globalAlpha = dimmed ? 0.3 : 0.88
           const labelX = point.x + radius + 7
           const labelY = point.y - radius - 3

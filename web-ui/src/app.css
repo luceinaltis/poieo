@@ -21,7 +21,7 @@
    for. */
 .shell-project {
   color: var(--text);
-  font-size: 0.9em;
+  font-size: 0.9375rem;
 }
 
 /* Reads as the subject of the page, not as a control: it happens to be a
@@ -33,7 +33,7 @@
   color: var(--text);
   cursor: pointer;
   font: inherit;
-  font-size: 0.9em;
+  font-size: 0.9375rem;
   padding: 0;
 }
 
@@ -49,7 +49,7 @@
 
 .shell-status {
   color: var(--dim);
-  font-size: 0.85em;
+  font-size: 0.875rem;
   margin-right: auto;
 }
 
@@ -65,7 +65,7 @@
   align-items: center;
   color: var(--dim);
   display: flex;
-  font-size: 0.85em;
+  font-size: 0.875rem;
   gap: 6px;
 }
 
@@ -101,9 +101,10 @@
   color: var(--dim);
   cursor: pointer;
   font: inherit;
-  font-size: 0.85em;
-  padding: 5px 8px;
+  font-size: 0.9375rem;
+  padding: 6px 8px;
   text-align: left;
+  white-space: nowrap;
 }
 
 .shell-rail button:hover:not(:disabled) {
@@ -200,14 +201,18 @@
     box-sizing: border-box;
     grid-auto-flow: column;
     justify-content: start;
-    gap: 4px;
+    gap: 1px;
     /* Held to the height the stage reserves rather than taking whatever the
        buttons come to. Two numbers that have to agree is how the board ends
        up under it, which is the note on `--rail-width` one line up. */
     height: var(--rail-lying-down);
-    padding: 0 10px;
+    padding: 0 4px;
     right: 0;
     width: auto;
+  }
+
+  .shell-rail button {
+    padding-inline: 4px;
   }
 
   .shell-stage {

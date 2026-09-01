@@ -6,6 +6,7 @@ import {
   fitConstellationScale,
   NODE_LABEL_FONT_PX,
   perspectiveForDepth,
+  showHighlightedLabels,
 } from "./Constellation"
 
 test("directional memory relationships get arrowheads", () => {
@@ -27,7 +28,12 @@ test("depth changes the apparent scale enough to read as three-dimensional", () 
 })
 
 test("canvas labels stay readable beside the compact interface", () => {
-  expect(NODE_LABEL_FONT_PX).toBeGreaterThanOrEqual(13)
+  expect(NODE_LABEL_FONT_PX).toBeGreaterThanOrEqual(14)
+})
+
+test("a broad search keeps the constellation labels from piling up", () => {
+  expect(showHighlightedLabels(8)).toBe(true)
+  expect(showHighlightedLabels(9)).toBe(false)
 })
 
 test("the initial view fits projected outer memories inside the canvas", () => {
