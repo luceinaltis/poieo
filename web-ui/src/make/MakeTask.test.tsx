@@ -15,9 +15,9 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const createTask = vi.hoisted(() => vi.fn())
+const createTask = vi.hoisted(() => vi.fn<typeof import("../api").createTask>())
 vi.mock("../api", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof import("../api")>()),
   createTask,
 }))
 

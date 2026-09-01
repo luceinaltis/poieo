@@ -3,12 +3,21 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const fetchModels = vi.hoisted(() => vi.fn())
-const pickModel = vi.hoisted(() => vi.fn())
-const addEngine = vi.hoisted(() => vi.fn())
-const fetchUndeclared = vi.hoisted(() => vi.fn())
+const fetchModels = vi.hoisted(() => vi.fn<typeof import("../api").fetchModels>())
+const pickModel = vi.hoisted(() => vi.fn<typeof import("../api").pickModel>())
+const addEngine = vi.hoisted(() => vi.fn<typeof import("../api").addEngine>())
+const fetchUndeclared = vi.hoisted(() =>
+  vi.fn<typeof import("../api").fetchUndeclared>(),
+)
 vi.mock("../api", () => ({ fetchModels, pickModel, addEngine, fetchUndeclared }))
 
+import type {
+  Endpoint,
+  ModelsAnswer,
+  ModelsReport,
+  ServedModel,
+  UndeclaredEngine,
+} from "../api"
 import { Models } from "./Models"
 
 const LOCAL = {
@@ -20,7 +29,7 @@ const LOCAL = {
   capabilities: ["completion", "vision"],
   price: null,
   used_by: ["default"],
-}
+} satisfies ServedModel
 
 const ROUTED = {
   id: "qwen/qwen3.8-flash",
@@ -31,7 +40,7 @@ const ROUTED = {
   capabilities: [],
   price: { input: 0.15, output: 0.47 },
   used_by: [],
-}
+} satisfies ServedModel
 
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/proj/models/default.yaml" },
@@ -62,7 +71,7 @@ const REPORT = {
       models: [ROUTED],
     },
   ],
-}
+} satisfies ModelsReport
 
 let container: HTMLDivElement
 let root: Root
@@ -86,7 +95,10 @@ afterEach(() => {
   container.remove()
 })
 
-async function render(report: unknown = REPORT, undeclared: unknown[] = []) {
+async function render(
+  report: ModelsReport | null = REPORT,
+  undeclared: UndeclaredEngine[] = [],
+) {
   fetchModels.mockResolvedValue(report)
   fetchUndeclared.mockResolvedValue(undeclared)
   await act(async () => {
@@ -189,6 +201,8 @@ test("an endpoint with nothing to ask says that, not that it is down", async () 
         label: null,
         askable: false,
         installed: false,
+        here: null,
+        host: null,
         api_key_env: null,
         api_key_set: null,
         models: [],
@@ -210,6 +224,8 @@ test("an endpoint whose key is missing says so where the models would be", async
         label: "Claude API",
         askable: true,
         installed: false,
+        here: null,
+        host: null,
         api_key_env: "ANTHROPIC_API_KEY",
         api_key_set: false,
         models: [],
@@ -429,8 +445,8 @@ test("where there is a choice, the click goes to the role that was chosen", asyn
 })
 
 test("a double click cannot post twice", async () => {
-  let release: (value: unknown) => void = () => {}
-  pickModel.mockReturnValue(new Promise((resolve) => (release = resolve)))
+  let release: (value: ModelsAnswer) => void = () => {}
+  pickModel.mockReturnValue(new Promise<ModelsAnswer>((resolve) => (release = resolve)))
   await render()
 
   const button = () => row("ollama/qwen3.5:latest")!.querySelector<HTMLElement>("[data-do='use']")!
@@ -510,7 +526,7 @@ const LMSTUDIO = [
     type: "openai_compatible",
     models: ["qwen3-4b", "gemma-3-12b"],
   },
-]
+] satisfies UndeclaredEngine[]
 
 const offer = (name: string) =>
   container.querySelector<HTMLElement>(`[data-offer="${name}"]`)
@@ -680,7 +696,7 @@ const OFFICE = {
   api_key_env: null,
   api_key_set: null,
   models: [{ ...LOCAL, id: "qwen3.5:32b", ref: "office/qwen3.5:32b", used_by: [] }],
-}
+} satisfies Endpoint
 
 const TWO_OLLAMAS = { ...REPORT, endpoints: [REPORT.endpoints[0], OFFICE] }
 

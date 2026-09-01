@@ -8,17 +8,19 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 import type { PoieoEvent, RunSummary } from "../types"
 
-const fetchRuns = vi.hoisted(() => vi.fn())
-const fetchRunEvents = vi.hoisted(() => vi.fn())
+const fetchRuns = vi.hoisted(() => vi.fn<typeof import("../api").fetchRuns>())
+const fetchRunEvents = vi.hoisted(() =>
+  vi.fn<typeof import("../api").fetchRunEvents>(),
+)
 vi.mock("../api", () => ({
   fetchRuns,
   fetchRunEvents,
-  fetchDiff: vi.fn(async () => null),
-  accept: vi.fn(),
-  discard: vi.fn(),
-  pause: vi.fn(),
-  resume: vi.fn(),
-  runNow: vi.fn(),
+  fetchDiff: vi.fn<typeof import("../api").fetchDiff>(async () => null),
+  accept: vi.fn<typeof import("../api").accept>(),
+  discard: vi.fn<typeof import("../api").discard>(),
+  pause: vi.fn<typeof import("../api").pause>(),
+  resume: vi.fn<typeof import("../api").resume>(),
+  runNow: vi.fn<typeof import("../api").runNow>(),
 }))
 
 import { Drawer } from "./Drawer"

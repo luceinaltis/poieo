@@ -1,18 +1,20 @@
 import { act } from "react"
+import type { ComponentProps } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const answer = vi.hoisted(() => vi.fn())
+const answer = vi.hoisted(() => vi.fn<typeof import("../api").answer>())
 vi.mock("../api", () => ({ answer }))
 
 import { Question } from "./Question"
+import type { Question as Asked } from "../types"
 
 const ASKED = {
   run_id: "r9",
   question: "Merge #181? It changes a public interface.",
   choices: ["merge", "hold"],
-}
+} satisfies Asked
 
 let container: HTMLDivElement
 let root: Root
@@ -30,7 +32,7 @@ afterEach(() => {
   container.remove()
 })
 
-function render(props: Record<string, unknown> = {}) {
+function render(props: Partial<ComponentProps<typeof Question>> = {}) {
   act(() => {
     root.render(
       <Question

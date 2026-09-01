@@ -13,19 +13,23 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const fetchModels = vi.hoisted(() => vi.fn())
+const fetchModels = vi.hoisted(() => vi.fn<typeof import("./api").fetchModels>())
 // The drawer reads the API directly rather than through the store, so a test
 // that opens one has to stand in for its reads too -- otherwise they reach
 // jsdom's fetch with a relative URL and land as an unhandled rejection.
-const fetchRuns = vi.hoisted(() => vi.fn(async () => []))
-const fetchRunEvents = vi.hoisted(() => vi.fn(async () => []))
+const fetchRuns = vi.hoisted(() => vi.fn<typeof import("./api").fetchRuns>(async () => []))
+const fetchRunEvents = vi.hoisted(() =>
+  vi.fn<typeof import("./api").fetchRunEvents>(async () => []),
+)
 // The panel's second read, for engines this project cannot reach. Same reason
 // as the drawer's above: unmocked it reaches jsdom's fetch with a relative URL.
-const fetchUndeclared = vi.hoisted(() => vi.fn(async () => []))
+const fetchUndeclared = vi.hoisted(() =>
+  vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
+)
 // The write below, so a warning it raises can be carried across a project switch.
-const pickModel = vi.hoisted(() => vi.fn())
+const pickModel = vi.hoisted(() => vi.fn<typeof import("./api").pickModel>())
 vi.mock("./api", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof import("./api")>()),
   fetchModels,
   fetchRuns,
   fetchRunEvents,
@@ -34,9 +38,10 @@ vi.mock("./api", async (importOriginal) => ({
 }))
 
 import App from "./App"
+import type { ModelsReport } from "./api"
 import { createStageStore } from "./shell/stageStore"
 import type { StageApi } from "./shell/stageStore"
-import type { TaskRow } from "./types"
+import type { ProjectRow, TaskRow } from "./types"
 
 const row = (name: string, project: string): TaskRow => ({
   name,
@@ -64,7 +69,7 @@ const row = (name: string, project: string): TaskRow => ({
 const PROJECTS = [
   { name: "night shift", root: "/home/k/a", keeps_copies: true },
   { name: "day job", root: "/home/k/b", keeps_copies: true },
-]
+] satisfies ProjectRow[]
 
 const REPORT = {
   binding: { name: "hybrid", path: "/home/k/a/models/default.yaml" },
@@ -76,6 +81,8 @@ const REPORT = {
       label: "Ollama",
       askable: true,
       installed: true,
+      here: true,
+      host: "localhost:11434",
       api_key_env: null,
       api_key_set: null,
       models: [
@@ -92,7 +99,7 @@ const REPORT = {
       ],
     },
   ],
-}
+} satisfies ModelsReport
 
 function api(): StageApi {
   return {

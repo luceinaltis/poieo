@@ -503,9 +503,8 @@ test("the board is placed by a transform, so nothing drawn has to know", () => {
 
 /** jsdom has pointer events but not capture, which the drag asks for. */
 function letItGrab(el: Element) {
-  const any = el as unknown as Record<string, unknown>
-  any.setPointerCapture = () => {}
-  any.releasePointerCapture = () => {}
+  el.setPointerCapture = () => {}
+  el.releasePointerCapture = () => {}
 }
 
 const transform = () => el.querySelector<HTMLElement>(".basic")!.style.transform
