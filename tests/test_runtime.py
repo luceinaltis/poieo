@@ -275,6 +275,57 @@ async def test_agent_node_runs_tools_and_finishes(tmp_path):
     assert second_call.messages[-2]["role"] == "assistant"
 
 
+class _ProviderOwnedLoop:
+    """Runs a tool inside ``complete``, as a subscription harness does."""
+
+    def __init__(self, name, spec):
+        self.name = name
+        self.spec = spec
+
+    async def complete(self, request):
+        from poieo.providers.base import LLMResponse, ToolCall
+
+        assert request.hands is not None
+        text, failed = await request.hands.run(ToolCall(id="inside", name="read_file", arguments={"path": "notes.txt"}))
+        assert not failed
+        return LLMResponse(text=text, model=request.model)
+
+    async def context_for(self, model):
+        return None
+
+    async def health(self):
+        return True, "provider-owned-loop"
+
+    async def aclose(self):
+        return
+
+
+async def test_a_provider_owned_loop_uses_the_agent_executor_and_run_log(tmp_path):
+    from poieo.providers import register
+
+    register("provider-owned-loop", _ProviderOwnedLoop)
+    (tmp_path / "notes.txt").write_text("secret-content")
+    binding = BindingSpec.model_validate(
+        {
+            "providers": {"inside": {"type": "provider-owned-loop"}},
+            "default": {"provider": "inside", "model": "harness"},
+        }
+    )
+    store = _CapturingStore()
+
+    result = await run_graph(agent_graph(tmp_path), binding, store=store)
+
+    assert result.status == "completed"
+    assert "secret-content" in result.outputs["work"]
+    tool_calls = [event for event in store.events if event.type == "node_tool_call"]
+    assert len(tool_calls) == 1
+    assert tool_calls[0].data["name"] == "read_file"
+    assert tool_calls[0].data["turn"] == 1
+    finished = next(event for event in store.events if event.type == "node_finished")
+    assert finished.data["turns"] == 1
+    assert finished.data["tool_calls"] == 1
+
+
 async def test_agent_node_survives_tool_errors(tmp_path):
     graph = agent_graph(tmp_path)
     binding = mock_binding(

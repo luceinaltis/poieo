@@ -99,8 +99,8 @@ the runtime stays unaware that containers, or journals, exist at all — see
 ## The four node types
 
 `nodes.py` has one class per `NodeSpec.type`, registered in `NODE_TYPES` —
-`agent`, `command`, `router`, `confirm`. Only the first of them calls a model,
-and two helpers hold what that takes:
+`agent`, `command`, `router`, `confirm`. Only the first of them calls a model.
+Two helpers hold the shared boundaries of a model call:
 
 - **`_prepare()`** — pick the role (`spec.role` or `graph.default_role`), resolve
   it against the binding, take the provider from the pool, render `prompt` and
@@ -128,7 +128,10 @@ above. It calls no model and runs nothing. What happens after the answer is the
 card's `then:`, one level up, reading `run.answer`; see [graph.md](graph.md) for
 why the run ends here rather than suspending.
 
-**`AgentNode`** is the loop:
+**`AgentNode`** resolves the workdir and owns the executor's lifetime;
+`_AgentLoop` owns the conversation and counters that change between turns. Its
+one tool-execution path serves both ordinary providers, which hand calls back to
+the node, and subscription harnesses, which run their own loop. The loop is:
 
 ```
 render prompt → over the cap? clear the older tool results
