@@ -200,13 +200,26 @@ test("opening the panel closes the drawer", async () => {
 
 test("closing the panel puts the board back", async () => {
   await open()
-  await act(async () => button("open-models")!.click())
+  const opener = button("open-models")!
+  opener.focus()
+  await act(async () => opener.click())
+
+  const panel = container.querySelector<HTMLElement>(".models")!
+  expect(document.activeElement).toBe(panel)
+  expect(panel.tabIndex).toBe(-1)
+  expect(
+    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+  ).toBe("true")
 
   await act(async () => {
     container.querySelector<HTMLElement>(".models-close")!.click()
   })
 
   expect(container.querySelector(".models")).toBeNull()
+  expect(document.activeElement).toBe(opener)
+  expect(
+    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+  ).toBe("false")
 })
 
 test("a warning about one project is not redrawn over the next", async () => {
