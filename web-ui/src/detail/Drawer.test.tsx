@@ -474,6 +474,40 @@ test("an older command gets an honest purpose from the command it recorded", asy
   )
 })
 
+test("older shell records describe common reads, searches, checks, and revision work", async () => {
+  const examples = [
+    ["cat AGENTS.md", "Read AGENTS.md"],
+    ['grep -rn "confirm" src/poieo --include=*.py', "Search the project for “confirm”"],
+    ["sed -n '60,180p' src/poieo/viewer.py", "Read src/poieo/viewer.py"],
+    ["ls docs", "Look through docs"],
+    ["git checkout -q --detach origin/pr-358", "Switch to origin/pr-358"],
+    ["git show origin/pr-358 --stat", "Inspect origin/pr-358"],
+    [
+      "git rev-parse HEAD; git merge-base --is-ancestor main HEAD",
+      "Check whether the candidate includes its base",
+    ],
+    ['python -c "print(1)"', "Inspect behavior with Python"],
+    ["@'\n## Independent review", "Prepare the independent review"],
+  ]
+  await show(
+    examples.map(([command]) =>
+      event("node_tool_call", {
+        data: {
+          name: "run_command",
+          arguments: JSON.stringify({ command }),
+          result: "exit code: 0",
+          error: false,
+        },
+      }),
+    ),
+  )
+
+  const summaries = Array.from(container.querySelectorAll(".drawer-tool summary"))
+  expect(summaries.map((summary) => summary.textContent)).toEqual(
+    examples.map(([, purpose]) => `${purpose}run_command · completed`),
+  )
+})
+
 test("a tool turn's preamble does not duplicate the purpose entries below it", async () => {
   await show([
     event("node_turn", {
