@@ -113,4 +113,34 @@ def test_memory_copy_has_a_readable_compact_floor():
     css = (ROOT / "web-ui" / "src" / "memory" / "memory.css").read_text(encoding="utf-8")
     rem_sizes = [float(size) for size in re.findall(r"font-size:\s*([\d.]+)rem", css)]
     assert rem_sizes
-    assert min(rem_sizes) >= 0.75
+    assert min(rem_sizes) >= 0.875
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [".shell-project", ".shell-project-pick", ".shell-status", ".shell-pick", ".shell-rail button"],
+)
+def test_primary_shell_labels_stay_at_least_fourteen_pixels(selector: str):
+    css = (ROOT / "web-ui" / "src" / "app.css").read_text(encoding="utf-8")
+    rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.S)
+    assert rule
+    size = re.search(r"font-size:\s*([\d.]+)rem", rule.group(1))
+    assert size
+    assert float(size.group(1)) >= 0.875
+
+
+def test_phone_navigation_keeps_its_larger_labels_on_one_line():
+    css = (ROOT / "web-ui" / "src" / "app.css").read_text(encoding="utf-8")
+    buttons = re.search(r"\.shell-rail button\s*\{([^}]*)\}", css, re.S)
+    assert buttons
+    assert "white-space: nowrap" in buttons.group(1)
+
+    phone = css.split("@media (max-width: 720px)", 1)[1]
+    rail = re.search(r"\.shell-rail\s*\{([^}]*)\}", phone, re.S)
+    assert rail
+    assert "gap: 1px" in rail.group(1)
+    assert "padding: 0 4px" in rail.group(1)
+
+    phone_buttons = re.search(r"\.shell-rail button\s*\{([^}]*)\}", phone, re.S)
+    assert phone_buttons
+    assert "padding-inline: 4px" in phone_buttons.group(1)

@@ -655,13 +655,15 @@ perspective and without a new rendering dependency. Stable slug positions give
 it shape, then declared relationships pull their ends into the same visual
 neighbourhood instead of leaving the graph to chance. Drag orbits, the wheel
 travels, and the evidence list is the keyboard-readable route to every search
-result; compact interface copy stays at least twelve pixels at the normal root
+result; compact interface copy stays at least fourteen pixels at the normal root
 size. Orbit redraws are coalesced to the display frame, and very dense graphs
 trade decorative curves for straight connections. Only declared memory
 relationships become lines. Search similarity dims or lights nodes; an AI
 answer lights its cited nodes and the real lines between them, never a synthetic
-"similar" edge. Directional lines end in arrowheads, and selecting a node lists
-its outgoing relationships and history. A prose mention may legitimately name
+"similar" edge. Up to eight highlighted nodes carry names; broader searches
+leave those names in the evidence list instead of piling text over the graph.
+Directional lines end in arrowheads, and selecting a node lists its outgoing
+relationships and history. A prose mention may legitimately name
 no entry yet; following one keeps the current detail in place and says that the
 named memory is unavailable. Set-aside entries remain visible as a faint outer
 shadow and can be hidden. Under 720px the search controls wrap, the
