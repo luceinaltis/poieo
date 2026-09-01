@@ -70,7 +70,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="turn">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div>
+        <div className="drawer-event">
           {text ? <RunOutput text={text} /> : null}
           {thinking ? (
             <details className="drawer-thinking">
@@ -105,7 +105,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="tool" data-error={String(failed)}>
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div>
+        <div className="drawer-event">
           <div className="drawer-label">
             {String(data.name ?? "")}
             {subject ? ` ${subject}` : ""}
@@ -127,7 +127,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="cleared">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div className="drawer-label">
+        <div className="drawer-event drawer-label">
           {`cleared ${freed.toLocaleString("en-US")} characters of older results, `}
           {`keeping the last ${kept}`}
         </div>
@@ -144,7 +144,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="stuck">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div>
+        <div className="drawer-event">
           <div className="drawer-label">
             {`the endpoint kept ${kept.toLocaleString("en-US")} of `}
             {`${before.toLocaleString("en-US")} tokens it was sent`}
@@ -168,7 +168,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="stuck">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div>
+        <div className="drawer-event">
           <div className="drawer-label">{what}</div>
           <p className="drawer-text">{String(data.error ?? "")}</p>
         </div>
@@ -182,7 +182,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="node">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <div className="drawer-label">{event.node_id}</div>
+        <div className="drawer-event drawer-label">{event.node_id}</div>
       </li>
     )
   }
@@ -191,7 +191,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     return (
       <li className="drawer-entry" data-kind="tool" data-error="true">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
-        <p className="drawer-text">{String(data.error ?? data.reason ?? "stopped")}</p>
+        <p className="drawer-event drawer-text">{String(data.error ?? data.reason ?? "stopped")}</p>
       </li>
     )
   }

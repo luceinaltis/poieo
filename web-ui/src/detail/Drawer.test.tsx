@@ -1,3 +1,6 @@
+/// <reference types="node" />
+
+import { readFileSync } from "node:fs"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
@@ -19,6 +22,8 @@ vi.mock("../api", () => ({
 }))
 
 import { Drawer } from "./Drawer"
+
+const DRAWER_CSS = readFileSync("src/detail/drawer.css", "utf8")
 
 let container: HTMLDivElement
 let root: Root
@@ -121,6 +126,31 @@ test("a tool says what it acted on and what came back", async () => {
   const entry = container.querySelector('[data-kind="tool"]')!
   expect(entry.textContent).toContain("DESIGN.md")
   expect(entry.textContent).toContain("# poieo Design")
+})
+
+test("a long tool record stays inside the drawer's event column", async () => {
+  const unbroken = "x".repeat(1_000)
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "run_command",
+        arguments: JSON.stringify({ command: unbroken }),
+        result: unbroken,
+        error: false,
+      },
+    }),
+  ])
+
+  const body = container.querySelector<HTMLElement>(".drawer-body")!
+  const entry = container.querySelector<HTMLElement>(".drawer-entry")!
+  const content = container.querySelector<HTMLElement>(".drawer-event")!
+  expect(body.contains(content)).toBe(true)
+  expect(entry.lastElementChild).toBe(content)
+  expect(content.textContent).toContain(unbroken)
+  expect(DRAWER_CSS).toMatch(
+    /\.drawer-entry\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\)/s,
+  )
+  expect(DRAWER_CSS).toMatch(/\.drawer-event\s*\{[^}]*overflow-wrap:\s*anywhere/s)
 })
 
 test("a tool that failed is marked failed, and error is a boolean", async () => {

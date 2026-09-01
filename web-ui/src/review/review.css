@@ -54,18 +54,34 @@
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 8px;
-  grid-template-columns: auto 1fr auto;
-  padding: 4px 2px;
+  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: 6px 2px;
   text-align: left;
   width: 100%;
+}
+
+.run-meta {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .run-when,
 .run-size {
   color: var(--dim);
-  font-size: 0.8em;
+  font-family: var(--mono);
+  font-size: 0.78em;
   white-space: nowrap;
+}
+
+.run-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .run-row[data-outcome="nothing"] .run-what {
@@ -185,13 +201,7 @@
 
 @media (max-width: 720px) {
   .run-open {
-    grid-template-columns: 1fr;
-    gap: 2px;
     padding: 8px 2px;
-  }
-
-  .run-size {
-    justify-self: start;
   }
 
   .diff-open {
