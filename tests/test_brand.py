@@ -101,3 +101,9 @@ def test_product_components_use_the_shared_palette_tokens():
         for path in styles
     }
     assert not {path: colours for path, colours in hardcoded.items() if colours}
+
+
+def test_memory_set_aside_control_uses_the_memory_accent():
+    css = (ROOT / "web-ui" / "src" / "memory" / "memory.css").read_text(encoding="utf-8")
+    assert "accent-color: var(--memory-highlight)" in css
+    assert "--memory-violet" not in css

@@ -96,7 +96,7 @@
 }
 
 .memory-past input {
-  accent-color: var(--memory-violet);
+  accent-color: var(--memory-highlight);
 }
 
 .memory-go {
