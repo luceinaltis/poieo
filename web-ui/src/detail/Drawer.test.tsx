@@ -8,6 +8,7 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 import type { PoieoEvent, RunSummary } from "../types"
+import { shortTime } from "../when"
 
 const fetchRuns = vi.hoisted(() => vi.fn<typeof import("../api").fetchRuns>())
 const fetchRunEvents = vi.hoisted(() =>
@@ -300,7 +301,9 @@ test("a person's answer outranks every other task state", async () => {
   const control = container.querySelector(".control")!
   expect(question.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(container.querySelector(".run-brief-what")?.textContent).toBe("Ship this change?")
-  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Asked 11:00")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Asked ${shortTime(run.finished_at)}`,
+  )
   expect(container.querySelector(".run-brief")?.getAttribute("data-outcome")).toBe("waiting")
 })
 
@@ -350,7 +353,9 @@ test("a failed run brief includes the failure and stopped time", async () => {
   await draw([{ ...run, status: "failed", error: "the endpoint stopped" }])
 
   expect(container.querySelector(".run-brief-what")?.textContent).toBe("the endpoint stopped")
-  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Stopped 11:00")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Stopped ${shortTime(run.finished_at)}`,
+  )
 })
 
 test("a quiet run keeps its outcome in the brief instead of duplicate machinery", async () => {
@@ -358,7 +363,9 @@ test("a quiet run keeps its outcome in the brief instead of duplicate machinery"
 
   expect(container.querySelector(".diff-note")).toBeNull()
   expect(container.querySelector(".drawer-summary")).toBeNull()
-  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Finished 11:00")
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(
+    `Finished ${shortTime(run.finished_at)}`,
+  )
 })
 
 test("the card fold is named for what the reader finds there", async () => {
