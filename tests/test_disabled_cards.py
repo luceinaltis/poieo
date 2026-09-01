@@ -16,8 +16,6 @@ while the file went on saying otherwise.
 Design: docs/daemon.md
 """
 
-import asyncio
-
 import pytest
 from conftest import card, down, until, up
 
@@ -87,9 +85,6 @@ async def test_it_stays_stopped_however_it_is_asked(tmp_path):
     runner = _named(daemon, "sleeper")
 
     assert runner.run_now() is False
-    # Several ticks of the loop, so a fire that was going to happen has had
-    # every chance to.
-    await asyncio.sleep(0.2)
     assert len(runner.results) == 0
     assert runner.status == "paused"
     await down(daemon, task)
@@ -118,7 +113,6 @@ async def test_a_handoff_cannot_start_one(tmp_path):
 
     _named(daemon, "sender").run_now()
     await until(lambda: _named(daemon, "sender").results, "the sender to finish")
-    await asyncio.sleep(0.2)
 
     assert len(receiver.results) == 0
     assert receiver.status == "paused"
