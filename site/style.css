@@ -41,6 +41,7 @@
   overflow-x: clip;
 
   --ground: #100e0c;      /* the board's background */
+  --hero-ground: #17120c; /* the dark tree artwork's own ground */
   --panel: #201c18;       /* a card on it */
   --well: #181513;        /* a recessed surface inside a card */
   --raised: #2e2721;      /* a button on it */
@@ -70,6 +71,7 @@
 [data-theme="light"] {
   color-scheme: light;
   --ground: #f4f0e8;
+  --hero-ground: #f4f0e8;
   --panel: #fbf8f2;
   --well: #ece5d8;
   --raised: #e4dccf;
@@ -98,13 +100,17 @@
    The tree stands whole, roots and all. */
 [data-theme="light"] .hero-art { -webkit-mask-image: none; mask-image: none; }
 
-/* On a phone, ink branches at the dark theme's opacity fight the words —
-   the light weather has to be fainter to stay weather. */
-@media (max-width: 760px) {
-  [data-theme="light"] .hero-art { opacity: 0.12; }
-}
-
 * { box-sizing: border-box; }
+
+.sr-only {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
 
 body {
   background: var(--ground);
@@ -177,24 +183,46 @@ h3 { font-size: 1.05rem; }
 
 /* --- hero ---------------------------------------------------------------- */
 
-.hero { padding: 5rem 0 4.5rem; position: relative; }
-
-/* The tree, painted into the ground: masked so its edges dissolve into the
-   page and it reads as one picture with the section, not an image in it. */
-.hero-art {
-  height: auto;
-  -webkit-mask-image: radial-gradient(68% 74% at 62% 40%, #000 40%, transparent 68%);
-  mask-image: radial-gradient(68% 74% at 62% 40%, #000 40%, transparent 68%);
-  pointer-events: none;
-  position: absolute;
-  right: -10%;
-  top: 46%;
-  transform: translateY(-52%);
-  width: min(60vw, 840px);
-  z-index: -1;
+/* The first hard edge in the page's Canopy / Workbench composition. The tree
+   owns this full-height field and stops at its boundary; product connections
+   begin only in the section below. */
+.hero {
+  background: var(--hero-ground);
+  margin-left: calc(50% - 50vw);
+  padding: 0;
+  width: 100vw;
 }
 
-.hero-copy { max-width: 35rem; position: relative; }
+.hero-inner {
+  align-items: center;
+  display: grid;
+  gap: clamp(2rem, 5vw, 6rem);
+  grid-template-columns: minmax(0, 0.82fr) minmax(28rem, 1.18fr);
+  margin: 0 auto;
+  max-width: 86rem;
+  min-height: calc(100svh - 46px);
+  padding: clamp(4rem, 9vh, 7rem) 20px clamp(3rem, 7vh, 5rem);
+}
+
+.hero-copy { max-width: 38rem; position: relative; z-index: 1; }
+
+.hero-visual {
+  align-items: center;
+  align-self: stretch;
+  display: flex;
+  min-height: 32rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-art {
+  display: block;
+  height: auto;
+  -webkit-mask-image: radial-gradient(78% 82% at 55% 50%, #000 58%, transparent 100%);
+  mask-image: radial-gradient(78% 82% at 55% 50%, #000 58%, transparent 100%);
+  max-width: none;
+  width: 120%;
+}
 
 .hero h1 {
   font-size: clamp(2.25rem, 6vw, 4.6rem);
@@ -218,6 +246,14 @@ h3 { font-size: 1.05rem; }
 }
 
 .hero-note { color: var(--faint2); font-size: 0.9rem; margin: 1.4rem 0 0; }
+
+.hero-loop {
+  color: var(--live);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  margin: 2rem 0 0;
+}
 
 .cta {
   align-items: stretch;
@@ -332,52 +368,193 @@ pre .c { color: var(--dim); }
 
 /* --- the working loop ---------------------------------------------------- */
 
-.cycle > h2 {
-  font-size: clamp(1.8rem, 4vw, 3.2rem);
-  letter-spacing: -0.035em;
-  line-height: 1.05;
-  margin: 0 0 3rem;
-  max-width: 22ch;
+.cycle {
+  --demo-ground: #100e0c;
+  --demo-panel: #201c18;
+  --demo-well: #181513;
+  --demo-rule: #332b23;
+  --demo-line: #7d7164;
+  --demo-text: #f0e7d9;
+  --demo-dim: #a0958a;
+  --demo-live: #a9b665;
+  background: var(--demo-ground);
+  border-top: 1px solid var(--demo-line);
+  color: var(--demo-text);
+  margin-left: calc(50% - 50vw);
+  padding: 0;
+  width: 100vw;
 }
 
-.cycle-steps {
+.cycle-inner {
+  margin: 0 auto;
+  max-width: 86rem;
+  padding: clamp(4rem, 8vw, 7rem) 20px clamp(4rem, 8vw, 7rem);
+}
+
+.cycle-heading {
+  align-items: end;
+  border-bottom: 1px solid var(--demo-rule);
   display: grid;
-  gap: 2rem;
-  grid-template-columns: repeat(3, 1fr);
+  gap: 3rem;
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
+  padding-bottom: clamp(2.5rem, 6vw, 4.5rem);
 }
 
-.cycle-steps article {
-  border-top: 1px solid var(--line);
-  padding-top: 1rem;
+.cycle-heading h2 {
+  font-size: clamp(2.1rem, 4.6vw, 4.3rem);
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  margin: 0;
+  max-width: 18ch;
 }
 
-.cycle-steps span {
-  color: var(--live);
+.cycle-heading > p {
+  color: var(--demo-dim);
+  margin: 0;
+  max-width: 48ch;
+}
+
+.demo-story {
+  align-items: stretch;
+  display: grid;
+  gap: clamp(3rem, 6vw, 7rem);
+  grid-template-columns: minmax(16rem, 0.68fr) minmax(0, 1.32fr);
+}
+
+.demo-step {
+  border-top: 1px solid var(--demo-rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: min(76vh, 46rem);
+  opacity: 0.38;
+  padding: clamp(3rem, 9vh, 6rem) 0;
+  transform: translateY(12px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.demo-step:first-child { border-top: 0; }
+.demo-step[aria-current="step"] { opacity: 1; transform: none; }
+
+.demo-kind {
+  color: var(--demo-live);
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.13em;
+  margin: 0 0 1.25rem;
+}
+
+.demo-step h3 {
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  letter-spacing: -0.035em;
+  margin: 0 0 1rem;
+}
+
+.demo-step > p:not(.demo-kind, .demo-route) {
+  color: var(--demo-dim);
+  margin: 0;
+  max-width: 40ch;
+}
+
+.demo-route {
+  align-items: center;
+  color: var(--demo-text);
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 0.73rem;
+  gap: 0.65rem;
+  letter-spacing: 0.04em;
+  margin: 1.5rem 0 0;
+}
+
+.demo-route b { color: var(--demo-line); font-weight: 400; }
+.demo-mobile-shot { display: none; }
+
+.demo-stage { min-width: 0; position: relative; }
+
+.demo-sticky {
+  padding-top: clamp(3rem, 9vh, 6rem);
+  position: sticky;
+  top: 46px;
+}
+
+.demo-stage-head {
+  color: var(--demo-dim);
+  display: flex;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  justify-content: space-between;
   letter-spacing: 0.12em;
+  margin-bottom: 0.8rem;
 }
 
-.cycle-steps h3 {
-  font-size: 1.05rem;
-  margin: 0.55rem 0 0.35rem;
+.demo-stage-head span:first-child { color: var(--demo-live); }
+
+.demo-frame {
+  aspect-ratio: 16 / 10;
+  background: var(--demo-well);
+  border: 1px solid var(--demo-line);
+  overflow: hidden;
+  position: relative;
 }
 
-.cycle-steps p {
-  color: var(--dim);
-  font-size: 0.95rem;
+.demo-panel {
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  transition: opacity 260ms ease;
+}
+
+.demo-panel[aria-hidden="false"] { opacity: 1; z-index: 1; }
+
+.demo-panel img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.demo-panel[data-demo-panel="1"] img { object-position: center 66%; }
+.demo-panel[data-demo-panel="2"] img { object-position: center 100%; }
+
+.demo-controls {
+  align-items: center;
+  border-bottom: 1px solid var(--demo-rule);
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 0;
+}
+
+.demo-controls[hidden] { display: none; }
+
+.demo-controls p {
+  color: var(--demo-dim);
+  font-family: var(--mono);
+  font-size: 0.72rem;
   margin: 0;
 }
 
-.cycle-proof {
-  align-items: end;
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: 5fr 8fr;
-  margin-top: 3.5rem;
+.demo-arrows { display: flex; gap: 8px; }
+
+.demo-arrows button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--demo-line);
+  color: var(--demo-text);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 1.1rem;
+  height: 2.7rem;
+  justify-content: center;
+  width: 2.7rem;
 }
 
-.cycle-review { margin-top: 4rem; }
+.demo-arrows button:hover:not(:disabled),
+.demo-arrows button:focus-visible { border-color: var(--demo-live); color: var(--demo-live); }
+.demo-arrows button:disabled { cursor: default; opacity: 0.28; }
 
 .aside { color: var(--dim); font-size: 0.95rem; margin: 1.6rem 0 0; max-width: 62ch; }
 
@@ -412,28 +589,53 @@ footer p { margin: 0.4rem 0; }
 
 /* --- one column ---------------------------------------------------------- */
 
-@media (min-width: 761px) {
-  .hero h1 { white-space: nowrap; }
+@media (max-width: 980px) {
+  .hero-inner { grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.9fr); }
+  .cycle-heading { gap: 1.5rem; grid-template-columns: 1fr; }
+  .demo-story { display: block; }
+  .demo-stage { display: none; }
+  .demo-step {
+    min-height: 0;
+    opacity: 1;
+    padding: 3.5rem 0;
+    transform: none;
+  }
+  .demo-mobile-shot {
+    border: 1px solid var(--demo-line);
+    display: block;
+    height: auto;
+    margin-top: 2rem;
+    width: 100%;
+  }
 }
 
 @media (max-width: 760px) {
   body { font-size: 16px; }
   section { padding: 3rem 0; }
-  .hero { padding: 3.5rem 0 2rem; }
-  /* On a phone the tree becomes weather behind the words rather than a
-     neighbour beside them. */
-  .hero-art {
-    -webkit-mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
-    mask-image: radial-gradient(90% 90% at 60% 40%, #000 40%, transparent 78%);
-    opacity: 0.16;
-    right: -30%;
-    width: 130vw;
+  .hero-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: auto;
+    padding: 3.5rem 20px 2.5rem;
   }
-  .steps, .cycle-steps, .cycle-proof, .why dl { grid-template-columns: 1fr; }
-  .cycle-review { margin-top: 0; }
+  .hero-copy { max-width: none; }
+  .hero-visual { min-height: 13rem; width: 100%; }
+  .hero-art {
+    margin-left: -8%;
+    width: 125%;
+  }
+  .hero-loop { line-height: 1.8; }
+  .cycle-inner { padding: 3.5rem 20px; }
+  .steps, .why dl { grid-template-columns: 1fr; }
   .cta { display: flex; width: 100%; }
   .cta code { flex: 1; }
   .bar-sub { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-panel,
+  .demo-step { transition: none; }
 }
 
 
