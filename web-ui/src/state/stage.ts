@@ -391,6 +391,14 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
     current.asking?.run_id === event.run_id && event.status !== "asking"
       ? null
       : current.asking
+  const status: TaskState["status"] =
+    event.status === "completed" || event.status === "asking"
+      ? current.held
+        ? "paused"
+        : "waiting"
+      : event.status === "failed" || event.status === "aborted"
+        ? "error"
+        : current.status
 
   return {
     ...state,
@@ -407,6 +415,8 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
         pending: current.pending + (newlyCountedChange ? 1 : 0),
         countedChangeRuns,
         asking,
+        status,
+        currentNode: null,
         // The frame is the summary, flattened -- so it joins the window
         // like one, at the front, and the oldest falls off the back.
         ...windowed(runs, current.tracked),

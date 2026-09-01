@@ -47,16 +47,46 @@ export interface StageStore {
  * the feed was down published a summary nobody heard, and this is where that
  * gap closes. Live-only detail (the current node, the last turn) is kept.
  */
-function seed(state: StageState, rows: TaskRow[]): StageState {
+function reflectedChangedRuns(events: PoieoEvent[]): Map<string, string[]> {
+  const reflected = new Map<string, string[]>()
+  for (const event of events) {
+    if (
+      event.type !== "run_summary" ||
+      event.status !== "completed" ||
+      event.change === undefined ||
+      typeof event.task !== "string" ||
+      typeof event.project !== "string"
+    ) {
+      continue
+    }
+    const task = keyOfTask(event.project, event.task)
+    reflected.set(task, [...(reflected.get(task) ?? []), event.run_id])
+  }
+  return reflected
+}
+
+function seed(state: StageState, rows: TaskRow[], reflectedEvents: PoieoEvent[] = []): StageState {
   const fresh = initialStage(rows).tasks
   const tasks: Record<string, TaskState> = {}
+  const reflected = reflectedChangedRuns(reflectedEvents)
 
   for (const [name, blank] of Object.entries(fresh)) {
     const existing = state.tasks[name]
+    const reflectedRuns = reflected.get(name) ?? []
     if (!existing) {
-      tasks[name] = blank
+      tasks[name] = {
+        ...blank,
+        countedChangeRuns: new Set(
+          [...blank.countedChangeRuns, ...reflectedRuns].slice(-REVIEW_LIMIT),
+        ),
+      }
       continue
     }
+    const listedRunClearsError =
+      (blank.lastRun?.status === "completed" || blank.lastRun?.status === "asking") &&
+      (existing.lastRun === null ||
+        existing.lastRun.status !== blank.lastRun.status ||
+        existing.lastRun.finished_at !== blank.lastRun.finished_at)
     tasks[name] = {
       ...existing,
       tracked: blank.tracked,
@@ -69,7 +99,11 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
       enabled: blank.enabled,
       pending: blank.pending,
       countedChangeRuns: new Set(
-        [...existing.countedChangeRuns, ...blank.countedChangeRuns].slice(-REVIEW_LIMIT),
+        [
+          ...existing.countedChangeRuns,
+          ...blank.countedChangeRuns,
+          ...reflectedRuns,
+        ].slice(-REVIEW_LIMIT),
       ),
       asking: blank.asking,
       lastRun: blank.lastRun ?? existing.lastRun,
@@ -77,18 +111,13 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
       // stream's: no frame is published when somebody presses pause.
       held: blank.held,
       // The listing wins except while the feed knows about a failure that its
-      // last run does not yet supersede. A newer completed run clears that old
-      // failure; the same older completed run cannot. Held reaches here from
+      // last run does not yet supersede. A newer completed or asking run clears
+      // that old failure; the same older run cannot. Held reaches here from
       // `blank`, so a pause pressed while this page was open survives the read.
       status:
         blank.status === "waiting" &&
         existing.status === "error" &&
-        !(
-          blank.lastRun?.status === "completed" &&
-          (existing.lastRun === null ||
-            existing.lastRun.status !== "completed" ||
-            existing.lastRun.finished_at !== blank.lastRun.finished_at)
-        )
+        !listedRunClearsError
           ? "error"
           : blank.status,
     }
@@ -156,11 +185,16 @@ export function createStageStore(api: StageApi = {
   async function resync(): Promise<void> {
     holding = true
     held = []
+    let reflected: PoieoEvent[] = []
     try {
       const listing = await api.fetchTasks()
+      // Frames received before this response are already represented by its
+      // pending count. Keep them for ordered replay, but do not count them twice.
+      reflected = held
+      held = []
       tasks = listing.tasks
       projects = listing.projects
-      stage = seed(stage, tasks)
+      stage = seed(stage, tasks, reflected)
 
       // Both reads are independent of each other; fetch everything at once
       // and fold in the same order the sequential code did.
@@ -172,7 +206,7 @@ export function createStageStore(api: StageApi = {
       stage = tallied
       for (const events of histories) stage = replay(stage, events)
     } finally {
-      const queued = held
+      const queued = [...reflected, ...held]
       holding = false
       held = []
       stage = replay(stage, queued)

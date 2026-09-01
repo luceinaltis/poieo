@@ -263,6 +263,13 @@ function briefAccountOf(run: RunSummary, tracked: boolean): string {
   return line.length > 180 ? line.slice(0, 180).trimEnd() + "…" : line
 }
 
+function runTime(run: RunSummary): number {
+  const finished = Date.parse(run.finished_at)
+  if (Number.isFinite(finished)) return finished
+  const started = Date.parse(run.started_at)
+  return Number.isFinite(started) ? started : Number.NEGATIVE_INFINITY
+}
+
 function RunBrief({
   run,
   latest,
@@ -377,7 +384,9 @@ export const Drawer = memo(function Drawer({
   const availableRuns = [
     ...liveRuns,
     ...runs.filter((run) => !liveRunIds.has(run.run_id)),
-  ].slice(0, 10)
+  ]
+    .sort((left, right) => runTime(right) - runTime(left))
+    .slice(0, 10)
   const latestRun = availableRuns[0] ?? null
   const selectedAvailableRun = availableRuns.find((row) => row.run_id === selectedRunId)
   const selectedRun =
