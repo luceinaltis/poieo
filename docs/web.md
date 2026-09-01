@@ -766,7 +766,10 @@ speed. Everything downstream reads `StageState` and never an event.
 takes callbacks; it never fetches, never sees a raw event, and keeps no state of
 its own beyond what it needs to draw. If a skin needs to know something,
 `StageState` is what is wrong, not the skin. `App.tsx` is the only file here that
-knows React. Adding a skin is a module and a line in `skins/registry.ts`.
+knows React. A task-selection callback carries both the task key and the control
+that was used, so the shell can return focus even when a tapped button was not
+focused by the browser. Adding a skin is a module and a line in
+`skins/registry.ts`.
 
 `mount()` is synchronous on purpose: a skin whose renderer has to be loaded
 returns its handle at once and swaps the renderer in later, as the removed 3D

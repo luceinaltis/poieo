@@ -122,8 +122,8 @@ export default function App({ store }: { store?: StageStore }) {
   // panel that was holding it has to let go -- the rail already does this for
   // its own two, and this is the third way in.
   const selectTask = useCallback(
-    (taskKey: string | null) => {
-      if (taskKey) rememberPanelOpener(document.activeElement)
+    (taskKey: string | null, opener?: HTMLElement) => {
+      if (taskKey) rememberPanelOpener(opener ?? null)
       setActivePanel((current) =>
         taskKey
           ? { kind: "task", taskKey }

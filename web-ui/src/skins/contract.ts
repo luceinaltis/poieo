@@ -15,7 +15,8 @@
 import type { StageState } from "../state/stage"
 
 export interface SkinCallbacks {
-  onSelectTask(task: string): void
+  /** The control is the place focus returns when the task panel closes. */
+  onSelectTask(task: string, opener: HTMLElement): void
 }
 
 export interface SkinHandle {

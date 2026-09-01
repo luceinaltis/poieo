@@ -133,7 +133,7 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
   // the task, exactly as a card did, and the chevron opens the box.
   const pick = element("button", "basic-pick", head)
   ;(pick as HTMLButtonElement).type = "button"
-  pick.addEventListener("click", () => callbacks.onSelectTask(task))
+  pick.addEventListener("click", () => callbacks.onSelectTask(task, pick))
   element("span", "basic-dot", pick)
   const name = element("span", "basic-name", pick)
 
