@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 
 import { NOTHING, fold, outcomeOf, rollup } from "./rollup"
-import type { RunSummary } from "../types"
+import type { Change, RunSummary } from "../types"
 
 const USAGE = {
   input_tokens: 0,
@@ -29,7 +29,7 @@ function run(over: Partial<RunSummary> = {}): RunSummary {
   }
 }
 
-function change(over = {}) {
+function change(overrides: Partial<Change> = {}): Change {
   return {
     base: "aaa",
     head: "bbb",
@@ -37,7 +37,7 @@ function change(over = {}) {
     insertions: 42,
     deletions: 11,
     message: "tidied the exports",
-    ...over,
+    ...overrides,
   }
 }
 

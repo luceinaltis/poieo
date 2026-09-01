@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const fetchDiff = vi.hoisted(() => vi.fn())
+const fetchDiff = vi.hoisted(() => vi.fn<typeof import("../api").fetchDiff>())
 vi.mock("../api", () => ({ fetchDiff }))
 
+import type { DiffReport } from "../types"
 import { Diff, splitPatch } from "./Diff"
 
 const PATCH = `diff --git a/one.py b/one.py
@@ -34,7 +35,7 @@ const REPORT = {
   ],
   patch: PATCH,
   truncated: false,
-}
+} satisfies DiffReport
 
 let container: HTMLDivElement
 let root: Root

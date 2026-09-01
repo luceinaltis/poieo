@@ -1,13 +1,15 @@
 import { act } from "react"
+import type { ComponentProps } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const pause = vi.hoisted(() => vi.fn())
-const resume = vi.hoisted(() => vi.fn())
-const runNow = vi.hoisted(() => vi.fn())
+const pause = vi.hoisted(() => vi.fn<typeof import("../api").pause>())
+const resume = vi.hoisted(() => vi.fn<typeof import("../api").resume>())
+const runNow = vi.hoisted(() => vi.fn<typeof import("../api").runNow>())
 vi.mock("../api", () => ({ pause, resume, runNow }))
 
+import type { ControlAnswer } from "../api"
 import { Control } from "./Control"
 
 let container: HTMLDivElement
@@ -28,7 +30,7 @@ afterEach(() => {
   container.remove()
 })
 
-function render(props: Record<string, unknown> = {}) {
+function render(props: Partial<ComponentProps<typeof Control>> = {}) {
   act(() => {
     root.render(<Control project="board" task="chores" status="waiting" onActed={() => {}} {...props} />)
   })
@@ -89,8 +91,8 @@ test("a refusal is shown, not swallowed", async () => {
 })
 
 test("a double click cannot post twice", async () => {
-  let release: (value: unknown) => void = () => {}
-  pause.mockReturnValue(new Promise((resolve) => (release = resolve)))
+  let release: (value: ControlAnswer) => void = () => {}
+  pause.mockReturnValue(new Promise<ControlAnswer>((resolve) => (release = resolve)))
   render()
 
   await act(async () => button("pause")!.click())

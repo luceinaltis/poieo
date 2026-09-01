@@ -9,7 +9,7 @@ import {
 } from "./fixtures"
 import { WINDOW, initialStage, reduce, replay, setRuns } from "./stage"
 import type { StageState } from "./stage"
-import type { TaskRow, PoieoEvent } from "../types"
+import type { TaskRow, PoieoEvent, RunSummary } from "../types"
 
 const TASK_ROWS: TaskRow[] = [
   {
@@ -165,7 +165,7 @@ test("run_summary reads flat fields and fills lastRun", () => {
     finished_at: AGENT_SUMMARY.finished_at,
   })
   // a summary also retires the run it describes
-  expect(stage.runTask[AGENT_SUMMARY.run_id as string]).toBeUndefined()
+  expect(stage.runTask[AGENT_SUMMARY.run_id]).toBeUndefined()
 })
 
 test("a failed run's summary still lands", () => {
@@ -239,7 +239,7 @@ test("a failed run's summary is tallied as failed", () => {
   expect(stage.tasks["board/chores"].recent.succeeded).toBe(0)
 })
 
-function aRun(run_id: string, over: Record<string, unknown> = {}) {
+function aRun(run_id: string, overrides: Partial<RunSummary> = {}): RunSummary {
   return {
     run_id,
     task: "chores",
@@ -254,8 +254,8 @@ function aRun(run_id: string, over: Record<string, unknown> = {}) {
     usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
     error: null,
     said: "did the thing",
-    ...over,
-  } as never
+    ...overrides,
+  }
 }
 
 test("setRuns seeds the window the events cannot supply", () => {

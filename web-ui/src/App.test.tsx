@@ -4,17 +4,22 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 vi.mock("./api", () => ({
-  fetchTasks: vi.fn(async () => []),
-  fetchRuns: vi.fn(async () => [
+  fetchTasks: vi.fn<typeof import("./api").fetchTasks>(async () => ({
+    projects: [],
+    tasks: [],
+  })),
+  fetchRuns: vi.fn<typeof import("./api").fetchRuns>(async () => [
     {
       run_id: "newest-but-quiet",
       task: "chores",
+      project: "board",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-22T07:30:00+00:00",
       finished_at: "2026-08-22T07:30:01+00:00",
       steps: 1,
       iteration: 2,
+      trigger: "loop",
       usage: {
         input_tokens: 0,
         output_tokens: 0,
@@ -27,12 +32,14 @@ vi.mock("./api", () => ({
     {
       run_id: "20260822T072819-98a6708d",
       task: "chores",
+      project: "board",
       graph: "agent-task",
       status: "completed",
       started_at: "2026-08-22T07:28:19.836+00:00",
       finished_at: "2026-08-22T07:28:19.845+00:00",
       steps: 1,
       iteration: 1,
+      trigger: "loop",
       usage: {
         input_tokens: 0,
         output_tokens: 0,
@@ -51,27 +58,41 @@ vi.mock("./api", () => ({
       },
     },
   ]),
-  fetchRunEvents: vi.fn(async () => AGENT_RUN),
-  fetchDiff: vi.fn(async () => ({ run_id: "20260822T072819-98a6708d", change: null })),
-  accept: vi.fn(async () => ({ ok: true, accepted: 0 })),
-  discard: vi.fn(async () => ({ ok: true, discarded: 0 })),
-  openFeed: vi.fn(() => () => {}),
-  fetchCard: vi.fn(async () => ({
+  fetchRunEvents: vi.fn<typeof import("./api").fetchRunEvents>(async () => AGENT_RUN),
+  fetchDiff: vi.fn<typeof import("./api").fetchDiff>(async () => ({
+    run_id: "20260822T072819-98a6708d",
+    change: null,
+  })),
+  accept: vi.fn<typeof import("./api").accept>(async () => ({ ok: true, accepted: 0 })),
+  discard: vi.fn<typeof import("./api").discard>(async () => ({
+    ok: true,
+    discarded: 0,
+  })),
+  openFeed: vi.fn<typeof import("./api").openFeed>(() => () => {}),
+  fetchCard: vi.fn<typeof import("./api").fetchCard>(async () => ({
     task: "chores",
     text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    plain: false,
   })),
-  rewriteCard: vi.fn(async () => ({ ok: true, task: "chores", live: true })),
-  setAside: vi.fn(async () => ({ ok: true, task: "chores" })),
-  fetchModels: vi.fn(async () => ({
+  rewriteCard: vi.fn<typeof import("./api").rewriteCard>(async () => ({
+    ok: true,
+    task: "chores",
+    live: true,
+  })),
+  setAside: vi.fn<typeof import("./api").setAside>(async () => ({
+    ok: true,
+    task: "chores",
+  })),
+  fetchModels: vi.fn<typeof import("./api").fetchModels>(async () => ({
     binding: { name: "mock", path: "x.yaml" },
     roles: ["default"],
     endpoints: [],
   })),
-  fetchUndeclared: vi.fn(async () => []),
-  fetchMemory: vi.fn(async () => ({
+  fetchUndeclared: vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
+  fetchMemory: vi.fn<typeof import("./api").fetchMemory>(async () => ({
     enabled: false,
     page: null,
     stats: null,
@@ -85,9 +106,16 @@ vi.mock("./api", () => ({
       edges_truncated: false,
     },
   })),
-  fetchMemoryEntry: vi.fn(async () => null),
-  searchMemory: vi.fn(async () => ({ ok: true, results: [] })),
-  askMemory: vi.fn(async () => ({ ok: true, citations: [], evidence: [] })),
+  fetchMemoryEntry: vi.fn<typeof import("./api").fetchMemoryEntry>(async () => null),
+  searchMemory: vi.fn<typeof import("./api").searchMemory>(async () => ({
+    ok: true,
+    results: [],
+  })),
+  askMemory: vi.fn<typeof import("./api").askMemory>(async () => ({
+    ok: true,
+    citations: [],
+    evidence: [],
+  })),
 }))
 
 import App from "./App"

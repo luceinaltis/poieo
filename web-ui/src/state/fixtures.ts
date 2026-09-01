@@ -14,7 +14,9 @@
  * was an absolute path on the capturing machine.
  */
 
-import type { PoieoEvent } from "../types"
+import type { PoieoEvent, RunSummary } from "../types"
+
+type RunSummaryEvent = PoieoEvent & RunSummary & { type: "run_summary" }
 
 /** An agent node: turns, tool calls, and captured thinking. */
 export const AGENT_RUN: PoieoEvent[] = [
@@ -408,7 +410,7 @@ export const FAILED_RUN: PoieoEvent[] = [
   }
 ]
 
-export const AGENT_SUMMARY: PoieoEvent = {
+export const AGENT_SUMMARY: RunSummaryEvent = {
   "type": "run_summary",
   "run_id": "20260822T072819-98a6708d",
   "task": "chores",
@@ -419,16 +421,18 @@ export const AGENT_SUMMARY: PoieoEvent = {
   "finished_at": "2026-08-22T07:28:19.842+00:00",
   "steps": 1,
   "iteration": 1,
+  "trigger": "loop",
   "usage": {
     "input_tokens": 0,
     "output_tokens": 6,
     "cache_read_tokens": 0,
     "cache_write_tokens": 0
   },
-  "error": null
+  "error": null,
+  "said": "Wrote TODO.md with three next steps."
 }
 
-export const FAILED_SUMMARY: PoieoEvent = {
+export const FAILED_SUMMARY: RunSummaryEvent = {
   "type": "run_summary",
   "run_id": "20260822T072805-bcbbb588",
   "task": "chores",
@@ -439,11 +443,13 @@ export const FAILED_SUMMARY: PoieoEvent = {
   "finished_at": "2026-08-22T07:28:05.868+00:00",
   "steps": 1,
   "iteration": 1,
+  "trigger": "loop",
   "usage": {
     "input_tokens": 0,
     "output_tokens": 0,
     "cache_read_tokens": 0,
     "cache_write_tokens": 0
   },
-  "error": "NodeError: node 'work': workdir does not exist: \\tmp\\fx-work"
+  "error": "NodeError: node 'work': workdir does not exist: \\tmp\\fx-work",
+  "said": ""
 }

@@ -13,15 +13,21 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const fetchModels = vi.hoisted(() => vi.fn(async () => null))
-const fetchRuns = vi.hoisted(() => vi.fn(async () => []))
-const fetchRunEvents = vi.hoisted(() => vi.fn(async () => []))
+const fetchModels = vi.hoisted(() =>
+  vi.fn<typeof import("./api").fetchModels>(async () => null),
+)
+const fetchRuns = vi.hoisted(() => vi.fn<typeof import("./api").fetchRuns>(async () => []))
+const fetchRunEvents = vi.hoisted(() =>
+  vi.fn<typeof import("./api").fetchRunEvents>(async () => []),
+)
 // The models panel's second read, for engines this project cannot reach. A
 // test that opens that panel has to stand in for it too, or it reaches jsdom's
 // fetch with a relative URL and lands as an unhandled rejection.
-const fetchUndeclared = vi.hoisted(() => vi.fn(async () => []))
+const fetchUndeclared = vi.hoisted(() =>
+  vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
+)
 vi.mock("./api", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof import("./api")>()),
   fetchModels,
   fetchRuns,
   fetchRunEvents,

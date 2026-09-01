@@ -3,9 +3,9 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const fetchCard = vi.hoisted(() => vi.fn())
-const rewriteCard = vi.hoisted(() => vi.fn())
-const setAside = vi.hoisted(() => vi.fn())
+const fetchCard = vi.hoisted(() => vi.fn<typeof import("../api").fetchCard>())
+const rewriteCard = vi.hoisted(() => vi.fn<typeof import("../api").rewriteCard>())
+const setAside = vi.hoisted(() => vi.fn<typeof import("../api").setAside>())
 
 // The reads and the two writes this file already covers are stubs; everything
 // else stays the real module, so the rename test below watches the request the
@@ -33,6 +33,7 @@ beforeEach(() => {
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    plain: false,
   })
   container = document.createElement("div")
   document.body.append(container)
@@ -296,11 +297,12 @@ test("renaming sends the new name to the card's own route, and nothing else", as
   // name and no edit inside it -- asserted on the request itself, because a
   // caller that agreed with a mock about the wrong URL is the failure that
   // left this half unbuilt.
-  const fetchStub = vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ ok: true, task: "errands", path: "cards/errands.yaml" }),
-  }))
+  const fetchStub = vi.fn<typeof fetch>(async () =>
+    new Response(
+      JSON.stringify({ ok: true, task: "errands", path: "cards/errands.yaml" }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  )
   vi.stubGlobal("fetch", fetchStub)
   await open()
 
@@ -318,10 +320,11 @@ test("renaming sends the new name to the card's own route, and nothing else", as
   })
 
   expect(fetchStub).toHaveBeenCalledTimes(1)
-  const [path, init] = fetchStub.mock.calls[0] as unknown as [string, RequestInit]
+  const [path, init] = fetchStub.mock.calls[0]
   expect(path).toBe("/api/projects/board/tasks/chores")
-  expect(init.method).toBe("PATCH")
-  expect(JSON.parse(init.body as string)).toEqual({ name: "Errands" })
+  expect(init?.method).toBe("PATCH")
+  if (typeof init?.body !== "string") throw new TypeError("expected a JSON request body")
+  expect(JSON.parse(init.body)).toEqual({ name: "Errands" })
   // The daemon's own spelling of the new name, not the one that was typed.
   expect(container.textContent).toContain("errands")
 

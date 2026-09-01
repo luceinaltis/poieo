@@ -15,7 +15,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import App from "./App"
 import { createStageStore } from "./shell/stageStore"
 import type { StageApi } from "./shell/stageStore"
-import type { TaskRow } from "./types"
+import type { ProjectRow, TaskRow } from "./types"
 
 const row = (name: string, project: string): TaskRow => ({
   name,
@@ -38,7 +38,7 @@ const row = (name: string, project: string): TaskRow => ({
 const PROJECTS = [
   { name: "night shift", root: "/home/k/a", keeps_copies: true },
   { name: "day job", root: "/home/k/b", keeps_copies: true },
-]
+] satisfies ProjectRow[]
 
 function api(): StageApi {
   return {

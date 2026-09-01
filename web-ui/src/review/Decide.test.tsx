@@ -1,12 +1,14 @@
 import { act } from "react"
+import type { ComponentProps } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const accept = vi.hoisted(() => vi.fn())
-const discard = vi.hoisted(() => vi.fn())
+const accept = vi.hoisted(() => vi.fn<typeof import("../api").accept>())
+const discard = vi.hoisted(() => vi.fn<typeof import("../api").discard>())
 vi.mock("../api", () => ({ accept, discard }))
 
+import type { Decision } from "../api"
 import { Decide } from "./Decide"
 
 let container: HTMLDivElement
@@ -26,7 +28,7 @@ afterEach(() => {
   container.remove()
 })
 
-function render(props: Record<string, unknown> = {}) {
+function render(props: Partial<ComponentProps<typeof Decide>> = {}) {
   act(() => {
     root.render(
       <Decide project="board"
@@ -58,8 +60,8 @@ test("accept posts once and reports back", async () => {
 })
 
 test("a double click cannot post twice", async () => {
-  let release: (value: unknown) => void = () => {}
-  accept.mockReturnValue(new Promise((resolve) => (release = resolve)))
+  let release: (value: Decision) => void = () => {}
+  accept.mockReturnValue(new Promise<Decision>((resolve) => (release = resolve)))
   render()
 
   await act(async () => button("accept").click())
