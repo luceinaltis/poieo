@@ -103,17 +103,29 @@ function commandPurpose(command: string): string {
     return "Run a Python command for this task"
   }
 
-  const checkoutSegment = command.match(/\bgit\s+checkout\b([^;|]*)/i)?.[1] ?? ""
-  const checkoutChangesFiles =
-    /(?:^|\s)--(?:\s|$)|(?:^|\s)(?:--ours|--theirs|-p|--patch)(?:\s|$)/i.test(
-      checkoutSegment,
+  const checkout = command.match(/\bgit\s+checkout\b([^;&|]*)/i)
+  if (checkout) {
+    const tokens = (checkout[1].match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? []).map((token) =>
+      token.replace(/^(?:"|')|(?:"|')$/g, ""),
     )
-  if (checkoutChangesFiles) {
-    const tokens = checkoutSegment.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? []
-    const last = tokens.at(-1)?.replace(/^(?:"|')|(?:"|')$/g, "") ?? ""
-    return last && !last.startsWith("-")
-      ? `Restore ${last} from Git`
-      : "Restore files from Git"
+    const changesFiles =
+      /(?:^|\s)--(?:\s|$)|(?:^|\s)(?:--ours|--theirs|-p|--patch|-2|-3)(?:\s|$)/i.test(
+        checkout[1],
+      )
+    if (changesFiles) {
+      const last = tokens.at(-1) ?? ""
+      return last && !last.startsWith("-")
+        ? `Restore ${last} from Git`
+        : "Restore files from Git"
+    }
+
+    const switchFlags = new Set(["-q", "--quiet", "--detach"])
+    const flags = tokens.filter((token) => token.startsWith("-"))
+    const operands = tokens.filter((token) => !token.startsWith("-"))
+    if (flags.every((flag) => switchFlags.has(flag)) && operands.length === 1) {
+      return `Switch to ${operands[0]}`
+    }
+    return "Run a Git checkout command for this task"
   }
 
   const sedEdit = /\bsed\b[^;|]*(?:\s-i[^\s]*|\s--in-place(?:=\S*)?)(?:\s|$)/i.test(command)
@@ -152,10 +164,16 @@ function commandPurpose(command: string): string {
   const listing = command.match(/\b(?:ls|dir|Get-ChildItem)\s+(?:-[^\s]+\s+)*([^\s;|]+)/i)
   if (listing) return `Look through ${listing[1]}`
 
-  const checkout = command.match(
-    /\bgit\s+(?:checkout|switch)\b(?:\s+--?[\w-]+)*\s+([^\s;|]+)/i,
-  )
-  if (checkout) return `Switch to ${checkout[1]}`
+  const switchCommand = command.match(/\bgit\s+switch\b([^;&|]*)/i)
+  if (switchCommand) {
+    const tokens = switchCommand[1].trim().split(/\s+/).filter(Boolean)
+    const flags = tokens.filter((token) => token.startsWith("-"))
+    const operands = tokens.filter((token) => !token.startsWith("-"))
+    if (flags.every((flag) => ["-q", "--quiet", "--detach"].includes(flag)) && operands.length === 1) {
+      return `Switch to ${operands[0]}`
+    }
+    return "Run a Git switch command for this task"
+  }
 
   const show = command.match(/\bgit\s+show\b(?:\s+--?[\w=-]+)*\s+([^\s;|]+)/i)
   if (show) return `Inspect ${show[1]}`
