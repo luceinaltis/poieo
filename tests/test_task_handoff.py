@@ -7,8 +7,6 @@ run ends -- which task wakes, what it is told, and what is refused.
 Design: docs/daemon.md
 """
 
-import asyncio
-
 import pytest
 from conftest import card, down, until, up
 
@@ -370,11 +368,14 @@ async def test_a_handoff_arriving_mid_run_waits_and_the_newest_wins(tmp_path, ca
             await until(lambda n=len(sender.results): len(sender.results) > n, "a sender run")
         # First runs, second parks, third displaces the second.
         await until(lambda: len(receiver.results) == 2, "both handoffs", timeout=8)
-        await asyncio.sleep(0.4)
 
     assert len(receiver.results) == 2
+    assert receiver.status == "waiting"
+    assert receiver._handed is None
+    assert receiver._kick is False
     assert "dropped" in " ".join(caplog.messages)
     await down(daemon, task)
+    assert len(receiver.results) == 2
 
 
 async def test_a_paused_target_is_not_woken(tmp_path, caplog):
