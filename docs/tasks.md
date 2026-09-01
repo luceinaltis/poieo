@@ -1,145 +1,86 @@
-# Tasks — the short form
+# Tasks
 
 `src/poieo/card.py`
 
-A graph plus a binding plus a daemon entry is three files. When the work is *one
-model, one folder, one instruction, on repeat*, a **task card** is one:
+A task card is the short form for recurring work. It puts one task in one YAML
+or JSON file and expands to the same `TaskSpec` and `GraphSpec` used by the
+daemon. Downstream runtime code does not know whether a graph was authored
+directly or generated from a card.
+
+For the user workflow, start with [usage.md](usage.md).
+
+## Card shape
 
 ```yaml
-name: keep improving poieo
-folder: ~/code/poieo
+name: keep this project healthy
+folder: ..
 prompt: |
-  Find one thing worth fixing, fix it, run the tests.
+  Find one worthwhile maintenance change, make it, and run the tests.
+every: 1h
+enabled: true
 ```
 
-## Sugar, not a second format
+A card requires `name` and exactly one of `prompt` or `graph`. A prompt card
+also requires `folder`, because its generated agent has tools and needs a place
+to work. Its optional fields are:
 
-**A card and a task are two things.** A card is the file a person writes
-(`CardSpec`); a task is what runs (`TaskSpec`); `expand()` is the only
-crossing, so **nothing downstream of the loader knows cards exist**. The
-expansion is visible (`poieo show`) and reversible (`poieo eject`) — the
-moment it produces something you could not have written by hand, the short
-form has become a hidden second configuration format.
+- schedule: exactly one of `every`, `at`, or a full `trigger` mapping;
+- execution: `role`, `tools`, `max_turns`, `deadline`, `binding`, `isolation`;
+- data: `input`, `input_file`;
+- flow after completion: `then`, `on_error`;
+- state: `enabled`.
 
-```
-CardSpec ──expand()──►  TaskSpec        name, graph, binding, trigger,
-                                        enabled, isolation, carry_state: true
-                    └►  GraphSpec       one `agent` node, id "work"
-```
+Unknown keys are rejected. A graph-backed card cannot also declare
+node-specific `prompt`, `role`, `tools`, `max_turns`, or `deadline`; those belong
+in the graph once it has more than one authored step.
 
-Defaults the card does not have to state: hourly (`every: 1h`), the binding's
-default role, the `files` and `shell` toolsets, 40 turns, and `carry_state:
-true` — a card is a standing job, so what it learned last night is in scope
-tonight. Hand-written tasks still opt into carrying state.
+The filename stem is the stable task id. `name` is a title and may change
+without changing stored history, journal paths, or API identity. Paths in a
+card are relative to the card file after `~` expansion.
 
-`every: loop`, `every: 30m` and `at: "0 3 * * *"` are the schedule sugar;
-`_trigger()` maps them onto the three real trigger types.
+## Expansion
 
-`role`, `tools`, `max_turns` and `prompt` describe the generated node, so a card
-that names a `graph:` of its own may not also set them — there would be nowhere
-to put them. `isolation:` is not a node key: it describes the task, so
-`poieo eject` keeps it.
+A prompt card expands to one `agent` node named `work`, with its prompt, role,
+turn and deadline limits, and a text output alias named `summary`. Omitted
+`tools` means the default `files` and `shell` toolsets; an explicit empty list
+means no tools. The generated task carries state between runs. With no schedule
+field, the card uses its interval default and runs once when residency starts.
 
-## Identity is the filename
+`poieo show` displays the expanded form and `poieo eject` writes an explicit
+graph. Expansion must remain reversible: it may add generated context, but it
+must not create behavior that cannot be expressed by a normal task and graph.
 
-`task.slug` is `source_path.stem`, never the `name:` field. The title on the card
-can be rewritten without orphaning its run history, its journal, or the notes
-other cards send it. Paths written inside a card resolve against the card file
-itself (`task.resolve()`), so a card is self-contained whether the daemon loads
-it or the CLI does.
+The task-folder loader treats every YAML or JSON document without `nodes` as a
+card. That makes a misspelled card field a validation error instead of a task
+that silently disappears. A document mixing graph and card markers is rejected
+as ambiguous.
 
-`load_tasks(folder)` reads a whole folder. Graphs live there too — `eject` writes
-one beside the card it came from — so the *document* says which is which: a card
-has `folder:` and no `nodes:`, a graph the other way round. A file answering to
-neither shape (or to both) is an error, deliberately: sorting them by trying to
-parse each as a card and taking silence for a no would turn a typo into a task
-that quietly stops running.
+## Run input and journal
 
-## The generated system prompt
+Each run starts with the card's `input`; a mapping from `input_file` is reread
+and layered over it. The harness then adds the task journal and, when enabled,
+the project memory. A note or external input written after one run is therefore
+visible to the next.
 
-`system_block()` is fixed in code because it is user-visible — `poieo show` prints
-it. It states where the work happens, then splices in three things:
+The journal is append-only at `memory/shortterm/<task>.md`. Every CLI and daemon
+run records its outcome. Prompt assembly shows new notes in oldest-first order
+before bounded older history, using the task's last successful own entry as the
+bookmark. A failed run does not advance that bookmark, because repeating a note
+is safer than losing it. Answering a question updates the run's recorded outcome
+rather than leaving a permanent `asking` record.
 
-1. the project's memory, **only if the project keeps one** (see below)
-2. `{{ input.journal }}` — supplied as run input, not baked in, because it is
-   re-read before every run: a note written at 8am is in effect at 9am
-3. the roster of cards this one may leave a note for, **only if** it took the
-   `notes` toolset and there is anyone else
+When the card includes the `notes` toolset, its system context lists the other
+task ids in the same project. `tell` may append to those journals only; it cannot
+forge the sender, wake the recipient, or send outside the fixed roster. See
+[tools.md](tools.md).
 
-Each gate is on content, not configuration. A project that never made a memory
-sees no trace of the feature — not even an empty header — and a card without
-`notes` is not even told the other cards exist.
+## Failure and extension
 
-The prompt closes by asking for one line saying what was done, or that there was
-nothing worth doing. That line is what `closing_line()` picks up.
+Card loading checks the folder, schedule shape, graph/binding paths, and
+generated task before execution. Journal, result-memory, or long-memory read
+failures warn and let the primary run continue with less context.
 
-## The journal
-
-One markdown file per card at `memory/shortterm/<slug>.md`, appended to and never
-rewritten.
-
-```
-- 2026-08-22 03:14 · did     fixed the flaky interval test on Windows
-- 2026-08-22 08:02 · you     leave prose alone, spend the night on tests
-- 2026-08-23 03:00 · task    [build-docs] rebuilt the docs; 30 links changed
-```
-
-It sits under `memory/` rather than beside the card, so the folder of
-definitions does not go dirty in git on every run.
-
-Four `kind`s write to it: `did` and `failed` (the card's own run), `you` (the
-user, via `poieo note` or an editor), and `task` (a sibling's note). The tail is
-read as text and never parsed, which is exactly what makes a hand-written line
-work like one poieo wrote.
-
-### Reading: the bookmark
-
-`read_journal()` returns two parts, cut at the card's **own last completed
-entry**:
-
-```
-New since you last worked:      everything after the bookmark, oldest first
-What you did before that:       the tail of what came before, bounded
-```
-
-The split is by *position*, not by quantity, so no volume of notes can push
-another out before it has been seen once. Only the half allowed to age out is
-bounded (`JOURNAL_LIMIT = 20`). Oldest-first in the new half matters: showing the
-newest would strand the oldest forever, since the bookmark only moves as far as
-what was shown.
-
-`_is_own_entry()` reads the kind by *structure* — a fixed field after the
-separator — so a note whose text happens to mention "did" cannot forge a
-bookmark and silently mark real notes as read. A **failed** run is deliberately
-not a bookmark: it saw what had arrived but cannot be said to have handled it,
-and repeating a note is recoverable where losing one is not.
-
-### Writing: the contract
-
-`record_run(task, result)` is the other half, and **every runner of a card must
-land there** — the daemon's `TaskRunner._remember()` and `poieo run`'s one-shot
-both do. A run that never writes a line leaves every note marked new forever and
-its own work forgotten.
-
-It writes two things: the full run record (see [memory.md](memory.md)) and one
-journal line — the model's closing sentence on success, or the failure's
-`cause` in the user's words on failure (`"the model could not be reached -- is
-the server running? ..."`), since the journal is read by a model and a person
-next run, and a sentence with an action beats an exception repr. The repr stays
-in the run record for whoever wants it. Both writes swallow their own failures:
-memory is not worth killing a night's work over.
-
-## `card_payload()`
-
-The one statement of what a card's generated graph gets beyond the user's input:
-`journal`, and `memory` when the project keeps one. There are two runners —
-`poieo run` by hand and the daemon at 3am — and they have to agree; a rule
-written twice is a rule that eventually doesn't.
-
-## Notes between cards
-
-Opt in with `tools: [files, shell, notes]`. The card then has a `tell` tool and
-its prompt lists who it may use it on. See [tools.md](tools.md) for the
-mechanism; the design rule is that a note is news rather than an instruction, and
-that it wakes nobody — it is read on the recipient's next scheduled run, so two
-cards writing to each other still run only on their own triggers.
+Add a card field only when it has one unambiguous expansion into an existing
+task or graph contract. Multi-step logical behavior belongs in a graph, model
+selection in a binding, and residency behavior in the daemon; duplicating any
+of them in the short form would create a second configuration language.

@@ -88,9 +88,9 @@ poieo daemon
 ```
 
 The board opens at <http://127.0.0.1:8484>. It shows tasks, runs, questions,
-model choices, and changes waiting for review. An ordinary task card can be
-created, renamed, edited, switched on or off, and set aside in the browser.
-Schedules, isolation, and graph wiring remain file-based settings.
+project memory, model choices, and changes waiting for review. An ordinary task
+card can be created, renamed, edited, switched on or off, and set aside in the
+browser. Schedules, isolation, and graph wiring remain file-based settings.
 
 The daemon rereads the tasks folder. Switching only `enabled` takes effect
 without restarting it. Restart after changing other loaded task settings such
@@ -216,8 +216,8 @@ the schema and credential boundary.
 
 ## Isolate model tools
 
-By default, file and shell tools run on the host inside the task folder. A task
-can instead keep their effects inside a Docker environment:
+By default, commands run on the host with the task folder as their working
+directory. A task can instead run commands in a Docker environment:
 
 ```yaml
 name: inspect dependencies
@@ -233,9 +233,10 @@ on it. `poieo reset tasks/<task>.yaml` throws away that task’s reusable
 environment without touching its project files.
 
 Isolation is a boundary for commands, not a promise that Docker is a perfect
-sandbox. The project folder is the task’s intended working surface; configure
-network access and any extra mounts narrowly. Details and platform limits are
-in [tools and isolation](tools.md).
+sandbox. File tools still operate on the host through their path fence, and the
+project folder is bind-mounted into the container so both see the same work.
+Configure network access narrowly. Details and platform limits are in [tools
+and isolation](tools.md).
 
 ## Journals and project memory
 
@@ -259,9 +260,11 @@ poieo learn
 ```
 
 `learn` reads new run records with the binding’s `learner` role and retains
-only lessons meant to stay true across tasks. Most runs should add nothing.
-The browser can search, edit, and set aside learned entries. See
-[project memory](memory.md) for budgets, recovery, and durability rules.
+only lessons meant to stay true across future runs. Most runs should add
+nothing. The board can browse and search long-term memory but does not edit it;
+`poieo memory` is also read-only, while the validated learning pass can add or
+set aside entries. See [project memory](memory.md) for search setup, selection,
+recovery, and durability rules.
 
 ## Grow a task into a graph
 
