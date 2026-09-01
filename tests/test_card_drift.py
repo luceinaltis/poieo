@@ -14,10 +14,8 @@ here, which no longer describe what is running.
 Design: docs/daemon.md
 """
 
-import asyncio
-
 import pytest
-from conftest import card, down, until, up
+from conftest import card, down, method_barrier, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
@@ -81,12 +79,13 @@ async def test_an_edited_prompt_is_not_reported(tmp_path, monkeypatch):
     value."""
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path), store=NullStore())
+    wait_for_drift = method_barrier(daemon, monkeypatch, "_note_drift")
     task = await up(daemon)
+    assert await wait_for_drift() is False
 
     card(tmp_path / "cards", "chores", "folder: .\nprompt: look somewhere else\nevery: 1h\n")
 
-    # Nothing to wait on, so wait out several scans and assert on the silence.
-    await asyncio.sleep(0.3)
+    assert await wait_for_drift() is False
     assert _named(daemon, "chores").stale is None
     await down(daemon, task)
 
@@ -131,17 +130,22 @@ async def test_the_board_is_told_to_read_again(tmp_path, monkeypatch):
     """
     monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
     daemon = Daemon(_project(tmp_path, _AT_THREE), store=BroadcastStore(NullStore()))
+    wait_for_drift = method_barrier(daemon, monkeypatch, "_note_drift")
     task = await up(daemon)
+    assert await wait_for_drift() is False
     queue = daemon.projects[0].store.subscribe()
 
     card(tmp_path / "cards", "chores", _AT_FOUR)
     await until(lambda: not queue.empty(), "the board to be told")
 
     assert queue.get_nowait()["type"] == "tasks_changed"
+    assert await wait_for_drift() is True
 
-    # And said once: a frame every five seconds over a file nobody has touched
-    # since lunch is how a reader learns to ignore the feed.
-    await asyncio.sleep(0.3)
+    # And said once, after another successful look at the unchanged file.
+    assert await wait_for_drift() is False
+    # Starting the following scan proves the watcher consumed that False and
+    # completed any announcement the preceding scan could have made.
+    assert await wait_for_drift() is False
     assert queue.empty()
     await down(daemon, task)
 
