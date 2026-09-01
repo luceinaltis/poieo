@@ -38,6 +38,16 @@ const STATUS_LABEL: Record<string, string> = {
   lost: "reconnecting",
 }
 
+type TaskFields = { name: string; folder: string; prompt: string }
+
+type PanelState =
+  | { kind: "closed" }
+  | { kind: "task"; taskKey: string }
+  | { kind: "models" }
+  | { kind: "make"; initialFields?: TaskFields }
+
+const CLOSED_PANEL: PanelState = { kind: "closed" }
+
 export default function App({ store }: { store?: StageStore }) {
   const [stageStore] = useState<StageStore>(() => store ?? createStageStore())
   const stage = useSyncExternalStore(stageStore.subscribe, stageStore.getStage)
@@ -56,15 +66,9 @@ export default function App({ store }: { store?: StageStore }) {
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
   const [skinId, setSkinId] = useState(readSkinPreference)
-  const [selectedTaskKey, setSelectedTaskKey] = useState<string | null>(null)
-  // Not remembered across reloads, unlike the skin and the project: this is a
-  // thing you open to answer a question, not a way you like the board to sit.
-  const [showModels, setShowModels] = useState(false)
-  const [showMake, setShowMake] = useState(false)
-  // What "make one like it" hands over: three fields for the panel to open
-  // on. Cleared when the panel closes, so `new task` from the rail is a
-  // blank page again -- the seed belongs to the press that asked for it.
-  const [seed, setSeed] = useState<{ name: string; folder: string; prompt: string } | null>(null)
+  // These three panels share one margin, so only one can be open at a time.
+  // Unlike the skin and project, the open panel is not remembered across reloads.
+  const [activePanel, setActivePanel] = useState<PanelState>(CLOSED_PANEL)
 
   useEffect(() => {
     void stageStore.start()
@@ -74,12 +78,14 @@ export default function App({ store }: { store?: StageStore }) {
   // The stage reserves one margin. A task picked on the board takes it, so a
   // panel that was holding it has to let go -- the rail already does this for
   // its own two, and this is the third way in.
-  const selectTask = useCallback((key: string | null) => {
-    setSelectedTaskKey(key)
-    if (key) {
-      setShowModels(false)
-      setShowMake(false)
-    }
+  const selectTask = useCallback((taskKey: string | null) => {
+    setActivePanel((current) =>
+      taskKey
+        ? { kind: "task", taskKey }
+        : current.kind === "task"
+          ? CLOSED_PANEL
+          : current,
+    )
   }, [])
 
   useEffect(() => {
@@ -115,13 +121,9 @@ export default function App({ store }: { store?: StageStore }) {
   const chooseProject = useCallback((name: string) => {
     setPreferredProjectName(name)
     remember(PROJECT_KEY, name)
-    // The drawer belongs to a task on the board that was there a moment ago.
-    setSelectedTaskKey(null)
-    // ...and so does a seeded make panel. A seed's folder means something in
-    // the project it came from; carried across, it would be offered against
-    // another project's tasks folder.
-    setShowMake(false)
-    setSeed(null)
+    // A task drawer and make form belong to the project that opened them.
+    // Models stays open and remounts for the new project below.
+    setActivePanel((current) => (current.kind === "models" ? current : CLOSED_PANEL))
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
@@ -139,43 +141,31 @@ export default function App({ store }: { store?: StageStore }) {
   const openStandaloneView = useCallback((id: string) => {
     setSkinId(id)
     writeSkinPreference(id)
-    setShowModels(false)
-    setShowMake(false)
+    setActivePanel((current) =>
+      current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
+    )
   }, [])
 
   // Stable, so the memoized drawer sees the same props while frames stream by.
-  const closeDrawer = useCallback(() => setSelectedTaskKey(null), [])
+  const closePanel = useCallback(() => setActivePanel(CLOSED_PANEL), [])
   const resyncAfterAction = useCallback(() => void stageStore.resync(), [stageStore])
 
-  // One panel on that edge at a time. Both are fixed to the right at one
-  // width, and the stage reserves one margin for whichever is open.
-  const openModels = useCallback(() => {
-    setShowModels(true)
-    setShowMake(false)
-    setSelectedTaskKey(null)
+  // Board closes a rail panel but leaves a task drawer over its underlying view.
+  const closeRailPanel = useCallback(() => {
+    setActivePanel((current) =>
+      current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
+    )
   }, [])
-  const closeModels = useCallback(() => setShowModels(false), [])
-  const openMake = useCallback(() => {
-    setSeed(null)
-    setShowMake(true)
-    setShowModels(false)
-    setSelectedTaskKey(null)
-  }, [])
-  const closeMake = useCallback(() => {
-    setShowMake(false)
-    setSeed(null)
-  }, [])
+  const openModels = useCallback(() => setActivePanel({ kind: "models" }), [])
+  const openMake = useCallback(() => setActivePanel({ kind: "make" }), [])
   const makeAlike = useCallback(
-    (fields: { name: string; folder: string; prompt: string }) => {
-      setSeed(fields)
-      setShowMake(true)
-      setShowModels(false)
-      setSelectedTaskKey(null)
-    },
+    (initialFields: TaskFields) => setActivePanel({ kind: "make", initialFields }),
     [],
   )
 
   const empty = Object.keys(projectStage.tasks).length === 0
+  const selectedTaskKey = activePanel.kind === "task" ? activePanel.taskKey : null
+  const railPanelIsOpen = activePanel.kind === "models" || activePanel.kind === "make"
   // `selectedTaskKey` is the board's key -- the project and the task -- because a
   // name alone stopped picking out one task.
   const selectedTask = selectedTaskKey
@@ -245,10 +235,9 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={showModels || showMake || standaloneViewId ? undefined : "page"}
+          aria-current={railPanelIsOpen || standaloneViewId ? undefined : "page"}
           onClick={() => {
-            closeModels()
-            closeMake()
+            closeRailPanel()
             // Coming back from a place, the board wears the rendering it was
             // left in, not a hard-coded one.
             if (standaloneViewId) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
@@ -266,7 +255,7 @@ export default function App({ store }: { store?: StageStore }) {
             type="button"
             data-do={`open-${skin.id}`}
             aria-current={
-              !showModels && !showMake && standaloneViewId === skin.id ? "page" : undefined
+              !railPanelIsOpen && standaloneViewId === skin.id ? "page" : undefined
             }
             onClick={() => openStandaloneView(skin.id)}
           >
@@ -276,7 +265,7 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-models"
-          aria-current={showModels ? "page" : undefined}
+          aria-current={activePanel.kind === "models" ? "page" : undefined}
           // Nothing to ask about until the daemon has named a project.
           disabled={!project}
           onClick={openModels}
@@ -286,7 +275,7 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-make"
-          aria-current={showMake ? "page" : undefined}
+          aria-current={activePanel.kind === "make" ? "page" : undefined}
           // A card is written into a project's tasks folder, so there has to
           // be a project before there is anywhere to write it.
           disabled={!project}
@@ -298,7 +287,7 @@ export default function App({ store }: { store?: StageStore }) {
 
       <div
         className="shell-stage"
-        data-drawer={String(Boolean(selectedTaskKey || showModels || showMake))}
+        data-drawer={String(activePanel.kind !== "closed")}
       >
         <div className="shell-board" ref={boardRef} />
         {empty ? (
@@ -316,7 +305,7 @@ export default function App({ store }: { store?: StageStore }) {
         ) : null}
       </div>
 
-      {showModels && project ? (
+      {activePanel.kind === "models" && project ? (
         // Keyed on the project, for the reason `MakeTask` below is. Everything
         // this panel holds is about one project's binding file -- the report,
         // a half-typed address, the name and key variable beside it, the role
@@ -330,19 +319,19 @@ export default function App({ store }: { store?: StageStore }) {
         // could have been carried. An empty list under a filter the reader had
         // forgotten typing reads as "this project has nothing", which is the
         // worse of the two ways to be wrong.
-        <Models key={project.name} project={project.name} onClose={closeModels} />
+        <Models key={project.name} project={project.name} onClose={closePanel} />
       ) : null}
 
-      {showMake && project ? (
+      {activePanel.kind === "make" && project ? (
         // Keyed on the project: a half-typed folder is read against *that*
         // project's tasks folder, so carrying the form across a switch would
         // post it somewhere it means something else.
         <MakeTask
           // ...and on the seed: a panel already open must take a fresh seed,
           // and a keyed remount is how a form starts over.
-          key={`${project.name}:${seed ? seed.name : ""}`}
+          key={`${project.name}:${activePanel.initialFields?.name ?? ""}`}
           project={project.name}
-          seed={seed ?? undefined}
+          seed={activePanel.initialFields}
           // A daemon too old to say is taken at its most careful: the panel
           // then promises no copy it cannot prove, which is the direction to
           // be wrong in when the sentence is about somebody's own files.
@@ -350,7 +339,7 @@ export default function App({ store }: { store?: StageStore }) {
           // The names this project's tasks are filed under -- TaskRow.name is
           // already the filename, which is what a collision is about.
           taken={tasks.filter((one) => one.project === project.name).map((one) => one.name)}
-          onClose={closeMake}
+          onClose={closePanel}
         />
       ) : null}
 
@@ -367,7 +356,7 @@ export default function App({ store }: { store?: StageStore }) {
           pending={selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
           asking={selectedTask?.asking ?? null}
-          onClose={closeDrawer}
+          onClose={closePanel}
           onDecided={resyncAfterAction}
           onAlike={makeAlike}
         />
