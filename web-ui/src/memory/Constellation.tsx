@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react"
 
-import { placeMemories } from "./layout"
+import { arrangeMemories, DEFAULT_MEMORY_PITCH, DEFAULT_MEMORY_YAW } from "./layout"
 import type { Point3 } from "./layout"
 import type { MemoryEdgeKind, MemoryGraph, MemoryNode } from "./types"
 
@@ -31,6 +31,7 @@ const EDGE_DASH: Record<MemoryEdgeKind, number[]> = {
 export const NODE_LABEL_FONT_PX = 14
 const CURVED_EDGE_LIMIT = 1_200
 const HIGHLIGHT_LABEL_LIMIT = 8
+const REGION_HAZE_LIMIT = 80
 
 export function edgeUsesCurve(edgeCount: number): boolean {
   return edgeCount <= CURVED_EDGE_LIMIT
@@ -38,6 +39,15 @@ export function edgeUsesCurve(edgeCount: number): boolean {
 
 export function showHighlightedLabels(highlightedCount: number): boolean {
   return highlightedCount <= HIGHLIGHT_LABEL_LIMIT
+}
+
+export function regionsUseHaze(regionCount: number): boolean {
+  return regionCount <= REGION_HAZE_LIMIT
+}
+
+export function nodeRadiusFor(degree: number, perspective: number, nodeCount: number): number {
+  const density = Math.max(0.56, 1 - Math.max(0, nodeCount - 160) / 600)
+  return (3 + Math.min(4.6, Math.sqrt(degree + 1) * 1.15)) * perspective * density
 }
 
 export function perspectiveForDepth(depth: number): number {
@@ -48,15 +58,9 @@ export function perspectiveForDepth(depth: number): number {
 export function fitConstellationScale(
   width: number,
   height: number,
-  points: Array<{ x: number; y: number }>,
+  _points: Array<{ x: number; y: number }>,
 ): number {
-  const natural = Math.min(width * 0.38, height * 0.36)
-  if (points.length < 2) return natural
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
-  const radiusX = Math.max(0.001, (Math.max(...xs) - Math.min(...xs)) / 2)
-  const radiusY = Math.max(0.001, (Math.max(...ys) - Math.min(...ys)) / 2)
-  return Math.min(natural, (width * 0.44) / radiusX, (height * 0.42) / radiusY)
+  return Math.min(width * 0.32, height * 0.27)
 }
 
 export function edgeHasArrow(kind: MemoryEdgeKind): boolean {
@@ -97,6 +101,27 @@ function rotate(point: Point3, yaw: number, pitch: number): Point3 {
   return { x, y: point.y * cp - z * sp, z: point.y * sp + z * cp }
 }
 
+export function projectConstellationPoints(
+  points: Point3[],
+  width: number,
+  height: number,
+  yaw = DEFAULT_MEMORY_YAW,
+  pitch = DEFAULT_MEMORY_PITCH,
+  zoom = 1,
+): Array<{ x: number; y: number; z: number; perspective: number }> {
+  const scale = fitConstellationScale(width, height, []) * zoom
+  return points.map((point) => {
+    const turned = rotate(point, yaw, pitch)
+    const perspective = perspectiveForDepth(turned.z)
+    return {
+      x: width / 2 + turned.x * perspective * scale,
+      y: height / 2 + turned.y * perspective * scale,
+      z: turned.z,
+      perspective,
+    }
+  })
+}
+
 function nearest(nodes: Projected[], x: number, y: number): Projected | null {
   let found: Projected | null = null
   let distance = Number.POSITIVE_INFINITY
@@ -112,8 +137,14 @@ function nearest(nodes: Projected[], x: number, y: number): Projected | null {
 
 export function Constellation({ graph, highlighted, cited, selected, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const positions = useMemo(() => placeMemories(graph), [graph])
-  const view = useRef({ yaw: -0.58, pitch: -0.16, zoom: 1 })
+  const slotCache = useRef(new Map<string, number>())
+  const arrangement = useMemo(() => {
+    const next = arrangeMemories(graph, slotCache.current)
+    for (const [region, slot] of next.regionSlots) slotCache.current.set(region, slot)
+    return next
+  }, [graph])
+  const { communities, positions } = arrangement
+  const view = useRef({ yaw: DEFAULT_MEMORY_YAW, pitch: DEFAULT_MEMORY_PITCH, zoom: 1 })
   const projected = useRef<Projected[]>([])
   const hover = useRef<string | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -214,44 +245,51 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       paintNebula()
       const focus = highlighted.size > 0
       const pulse = reduced ? 1 : 1 + Math.max(0, 1 - (now - began) / 1400) * 0.45 * Math.sin((now - began) / 85)
-      const shape: Array<{
-        node: MemoryNode
-        turned: Point3
-        perspective: number
-        x: number
-        y: number
-      }> = []
+      const shape: Array<{ node: MemoryNode; point: Point3 }> = []
       for (const node of graph.nodes) {
         const point = positions.get(node.slug)
         if (!point) continue
-        const turned = rotate(point, view.current.yaw, view.current.pitch)
-        const perspective = perspectiveForDepth(turned.z)
-        shape.push({
-          node,
-          turned,
-          perspective,
-          x: turned.x * perspective,
-          y: turned.y * perspective,
-        })
+        shape.push({ node, point })
       }
-      const xs = shape.map((point) => point.x)
-      const ys = shape.map((point) => point.y)
-      const centreX = shape.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 0
-      const centreY = shape.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0
-      const scale = fitConstellationScale(width, height, shape) * view.current.zoom
-      const points: Projected[] = []
-      for (const point of shape) {
-        points.push({
-          node: point.node,
-          x: width / 2 + (point.x - centreX) * scale,
-          y: height / 2 + (point.y - centreY) * scale,
-          z: point.turned.z,
-          perspective: point.perspective,
-          radius: (3 + Math.min(4.6, Math.sqrt(point.node.degree + 1) * 1.15)) * point.perspective,
-        })
-      }
+      const screen = projectConstellationPoints(
+        shape.map((entry) => entry.point),
+        width,
+        height,
+        view.current.yaw,
+        view.current.pitch,
+        view.current.zoom,
+      )
+      const points: Projected[] = shape.map((entry, index) => ({
+        node: entry.node,
+        ...screen[index],
+        radius: nodeRadiusFor(entry.node.degree, screen[index].perspective, graph.nodes.length),
+      }))
       projected.current = points
       const bySlug = new Map(points.map((point) => [point.node.slug, point]))
+
+      const regions = new Map<string, Projected[]>()
+      for (const point of points) {
+        if (!point.node.standing) continue
+        const community = communities.get(point.node.slug)
+        if (!community) continue
+        const region = regions.get(community) ?? []
+        region.push(point)
+        regions.set(community, region)
+      }
+      for (const region of regionsUseHaze(regions.size) ? regions.values() : []) {
+        if (region.length < 2) continue
+        const x = region.reduce((sum, point) => sum + point.x, 0) / region.length
+        const y = region.reduce((sum, point) => sum + point.y, 0) / region.length
+        const radius = Math.min(150, Math.max(42, ...region.map((point) => Math.hypot(point.x - x, point.y - y) + 28)))
+        const glow = context.createRadialGradient(x, y, 0, x, y, radius)
+        glow.addColorStop(0, alpha(colors.paused, 0.115))
+        glow.addColorStop(0.58, alpha(colors.paused, 0.05))
+        glow.addColorStop(1, alpha(colors.ground, 0))
+        context.fillStyle = glow
+        context.beginPath()
+        context.arc(x, y, radius, 0, Math.PI * 2)
+        context.fill()
+      }
 
       context.lineCap = "round"
       for (const edge of graph.edges) {
@@ -446,14 +484,14 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
       canvas.removeEventListener("pointercancel", pointerCancel)
       canvas.removeEventListener("wheel", wheel)
     }
-  }, [cited, graph, highlighted, positions, selected])
+  }, [cited, communities, graph, highlighted, positions, selected])
 
   return (
     <canvas
       ref={canvasRef}
       className="memory-canvas"
       role="img"
-      aria-label={`${graph.nodes.length} memories connected in a three-dimensional constellation`}
+      aria-label={`${graph.nodes.length} memories grouped by their relationships in a three-dimensional constellation`}
     />
   )
 }

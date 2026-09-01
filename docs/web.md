@@ -156,8 +156,15 @@ search evidence rather than consuming task events. While open it revalidates
 the overview every 15 seconds with an ETag and preserves the current query and
 selection across an unchanged response. Only declared memory relationships are
 drawn as edges; search scores and answer citations highlight evidence without
-inventing topology. Adding a task presentation belongs in the skin registry
-and must not add another event reducer or transport path.
+inventing topology. Those relationships also form stable three-dimensional
+regions: dense memories share a faint nebula, pair-sized islands join their
+strongest neighbour, and connected regions settle near one another while
+set-aside memory remains in the outer shadow. Region positions come from their
+own memory relationships, so an unrelated addition does not rearrange the map.
+Each region keeps a reserved screen slot while the place is open, and connected
+regions take neighbouring slots. Large graphs skip decorative haze and taper point
+size so neighbouring regions remain distinct. Adding a task presentation belongs
+in the skin registry and must not add another event reducer or transport path.
 
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).
