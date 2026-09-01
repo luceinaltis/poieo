@@ -215,6 +215,7 @@ test("activity stays folded and is fetched only when opened", async () => {
   await draw([run])
 
   const toggle = container.querySelector<HTMLButtonElement>('[data-do="toggle-activity"]')!
+  expect(toggle.textContent).toContain("Run activity")
   expect(toggle.getAttribute("aria-expanded")).toBe("false")
   expect(container.querySelector(".drawer-timeline")).toBeNull()
   expect(fetchRunEvents).not.toHaveBeenCalled()
@@ -225,6 +226,19 @@ test("activity stays folded and is fetched only when opened", async () => {
   expect(toggle.getAttribute("aria-expanded")).toBe("true")
   expect(toggle.textContent).toContain("1")
   expect(container.querySelector(".drawer-timeline")?.textContent).toContain("README.md")
+})
+
+test("the selected run owns its activity before the run picker", async () => {
+  await draw([run])
+
+  const focused = container.querySelector(".run-focus")!
+  expect(focused.querySelector(".run-brief")).not.toBeNull()
+  expect(focused.querySelector('[data-do="toggle-activity"]')).not.toBeNull()
+  expect(focused.querySelector('[data-do="toggle-runs"]')).toBeNull()
+  expect(
+    focused.compareDocumentPosition(container.querySelector('[data-do="toggle-runs"]')!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0)
 })
 
 test("activity gives direction when it is empty or cannot be loaded", async () => {
@@ -417,6 +431,64 @@ test("a tool says what it acted on and what came back", async () => {
   const entry = container.querySelector('[data-kind="tool"]')!
   expect(entry.textContent).toContain("DESIGN.md")
   expect(entry.textContent).toContain("# poieo Design")
+})
+
+test("each tool leads with its agent-written purpose and folds the raw record", async () => {
+  const purpose = "Check whether PR #343 is ready to merge."
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "run_command",
+        purpose,
+        arguments: JSON.stringify({ command: "gh pr view 343" }),
+        result: "exit code: 0\nstate: OPEN",
+        error: false,
+        duration_ms: 1100,
+      },
+    }),
+  ])
+
+  const details = container.querySelector<HTMLDetailsElement>(".drawer-tool")!
+  expect(details.open).toBe(false)
+  expect(details.querySelector("summary")?.textContent).toContain(purpose)
+  expect(details.querySelector("summary")?.textContent).toContain("1.1s")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("run_command")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("gh pr view 343")
+  expect(details.querySelector(".drawer-tool-raw")?.textContent).toContain("state: OPEN")
+})
+
+test("an older command gets an honest purpose from the command it recorded", async () => {
+  await show([
+    event("node_tool_call", {
+      data: {
+        name: "run_command",
+        arguments: JSON.stringify({ command: "gh pr diff 343 --patch" }),
+        result: "exit code: 0",
+        error: false,
+      },
+    }),
+  ])
+
+  expect(container.querySelector(".drawer-tool summary")?.textContent).toContain(
+    "Review the changes in PR #343",
+  )
+})
+
+test("a tool turn's preamble does not duplicate the purpose entries below it", async () => {
+  await show([
+    event("node_turn", {
+      data: { text: "I will inspect both files first.", tool_call_count: 2 },
+    }),
+    event("node_tool_call", {
+      data: { name: "read_file", purpose: "Read the design contract.", arguments: "DESIGN.md" },
+    }),
+    event("node_tool_call", {
+      data: { name: "read_file", purpose: "Read the web guide.", arguments: "docs/web.md" },
+    }),
+  ])
+
+  expect(container.querySelectorAll('[data-kind="turn"]')).toHaveLength(0)
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(2)
 })
 
 test("a long tool record stays inside the drawer's event column", async () => {
