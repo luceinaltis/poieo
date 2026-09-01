@@ -59,6 +59,8 @@ export interface TaskState {
   stale: string
   /** Changes waiting for accept/discard, kept live as summaries arrive. */
   pending: number
+  /** Changed summaries already reflected in `pending`, bounded to the live window. */
+  countedChangeRuns: ReadonlySet<string>
   /** The newest unanswered confirm question, if this task has one. */
   asking: Question | null
   currentNode: string | null
@@ -161,6 +163,7 @@ function createEmptyTaskState(): TaskState {
     enabled: true,
     stale: "",
     pending: 0,
+    countedChangeRuns: new Set(),
     asking: null,
     name: "",
     project: "",
@@ -240,6 +243,11 @@ export function initialStage(rows: TaskRow[]): StageState {
       enabled: row.enabled,
       stale: row.stale ?? "",
       pending: row.pending,
+      countedChangeRuns: new Set(
+        row.last_run?.status === "completed" && row.last_run.change
+          ? [row.last_run.run_id]
+          : [],
+      ),
       asking: row.asking,
       lastRun: row.last_run
         ? {
@@ -374,8 +382,15 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
   const runs = alreadyKnown
     ? current.runs.map((run) => (run.run_id === event.run_id ? summary : run))
     : [summary, ...current.runs]
-  const completedChange =
-    !alreadyKnown && event.status === "completed" && event.change !== undefined
+  const completedChange = event.status === "completed" && event.change !== undefined
+  const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
+  const countedChangeRuns = newlyCountedChange
+    ? new Set([...current.countedChangeRuns, event.run_id].slice(-WINDOW))
+    : current.countedChangeRuns
+  const asking =
+    current.asking?.run_id === event.run_id && event.status !== "asking"
+      ? null
+      : current.asking
 
   return {
     ...state,
@@ -389,7 +404,9 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
           steps: asNumber(event.steps),
           finished_at: asString(event.finished_at),
         },
-        pending: current.pending + (completedChange ? 1 : 0),
+        pending: current.pending + (newlyCountedChange ? 1 : 0),
+        countedChangeRuns,
+        asking,
         // The frame is the summary, flattened -- so it joins the window
         // like one, at the front, and the oldest falls off the back.
         ...windowed(runs, current.tracked),

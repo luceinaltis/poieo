@@ -319,7 +319,7 @@ export const Drawer = memo(function Drawer({
   pending = 0,
   into = null,
   asking = null,
-  liveRun = null,
+  liveRuns = [],
   onClose,
   onDecided,
   onAlike,
@@ -334,8 +334,8 @@ export const Drawer = memo(function Drawer({
   pending?: number
   into?: string | null
   asking?: Asked | null
-  /** The stage's newest summary, which can arrive while this drawer is open. */
-  liveRun?: RunSummary | null
+  /** The stage's live summary window, which can advance while this drawer is open. */
+  liveRuns?: RunSummary[]
   onClose(): void
   onDecided?(): void
   /** "Make one like it", passed through to the card fold. */
@@ -343,6 +343,7 @@ export const Drawer = memo(function Drawer({
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedRunSnapshot, setSelectedRunSnapshot] = useState<RunSummary | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [events, setEvents] = useState<PoieoEvent[] | null>(null)
@@ -361,9 +362,6 @@ export const Drawer = memo(function Drawer({
     void fetchRuns({ task, project, limit: 10 }).then((rows) => {
       if (!live) return
       setRuns(rows)
-      setSelectedRunId((current) =>
-        current && rows.some((row) => row.run_id === current) ? current : null,
-      )
     })
     return () => {
       live = false
@@ -375,13 +373,22 @@ export const Drawer = memo(function Drawer({
     onDecided?.()
   }
 
-  const availableRuns = liveRun
-    ? [liveRun, ...runs.filter((run) => run.run_id !== liveRun.run_id)].slice(0, 10)
-    : runs
+  const liveRunIds = new Set(liveRuns.map((run) => run.run_id))
+  const availableRuns = [
+    ...liveRuns,
+    ...runs.filter((run) => !liveRunIds.has(run.run_id)),
+  ].slice(0, 10)
   const latestRun = availableRuns[0] ?? null
+  const selectedAvailableRun = availableRuns.find((row) => row.run_id === selectedRunId)
   const selectedRun =
-    availableRuns.find((row) => row.run_id === selectedRunId) ?? latestRun
+    selectedAvailableRun ??
+    (selectedRunSnapshot?.run_id === selectedRunId ? selectedRunSnapshot : null) ??
+    latestRun
   const selectedRunKey = selectedRun?.run_id ?? null
+
+  useEffect(() => {
+    if (selectedRunId && selectedAvailableRun) setSelectedRunSnapshot(selectedAvailableRun)
+  }, [selectedAvailableRun, selectedRunId])
 
   useLayoutEffect(() => {
     activityRequest.current += 1
@@ -400,7 +407,13 @@ export const Drawer = memo(function Drawer({
 
   const selectRun = (runId: string) => {
     setHistoryOpen(false)
-    setSelectedRunId(runId === latestRun?.run_id ? null : runId)
+    if (runId === latestRun?.run_id) {
+      setSelectedRunId(null)
+      setSelectedRunSnapshot(null)
+      return
+    }
+    setSelectedRunId(runId)
+    setSelectedRunSnapshot(availableRuns.find((run) => run.run_id === runId) ?? null)
   }
 
   const loadActivity = () => {

@@ -446,7 +446,7 @@ export default function App({ store }: { store?: StageStore }) {
           pending={selectedTaskState?.pending ?? selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
-          liveRun={selectedTaskState?.runs[0] ?? null}
+          liveRuns={selectedTaskState?.runs ?? []}
           onClose={closePanel}
           onDecided={resyncAfterAction}
           onAlike={makeAlike}

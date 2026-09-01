@@ -68,17 +68,27 @@ function seed(state: StageState, rows: TaskRow[]): StageState {
       stale: blank.stale,
       enabled: blank.enabled,
       pending: blank.pending,
+      countedChangeRuns: new Set(
+        [...existing.countedChangeRuns, ...blank.countedChangeRuns].slice(-REVIEW_LIMIT),
+      ),
       asking: blank.asking,
       lastRun: blank.lastRun ?? existing.lastRun,
       // Whether a hold is on is the daemon's to say, never the event
       // stream's: no frame is published when somebody presses pause.
       held: blank.held,
-      // The listing wins on everything except a failure it has no word for --
-      // the daemon calls a task that died `waiting` again, and only the event
-      // stream saw why. Held reaches here from `blank`, so a pause pressed
-      // while this page was open survives the read that follows it.
+      // The listing wins except while the feed knows about a failure that its
+      // last run does not yet supersede. A newer completed run clears that old
+      // failure; the same older completed run cannot. Held reaches here from
+      // `blank`, so a pause pressed while this page was open survives the read.
       status:
-        blank.status === "waiting" && existing.status === "error"
+        blank.status === "waiting" &&
+        existing.status === "error" &&
+        !(
+          blank.lastRun?.status === "completed" &&
+          (existing.lastRun === null ||
+            existing.lastRun.status !== "completed" ||
+            existing.lastRun.finished_at !== blank.lastRun.finished_at)
+        )
           ? "error"
           : blank.status,
     }
