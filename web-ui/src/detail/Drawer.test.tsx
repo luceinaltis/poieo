@@ -550,6 +550,12 @@ test("a long tool record stays inside the drawer's event column", async () => {
   expect(DRAWER_CSS).toMatch(/\.drawer-event\s*\{[^}]*overflow-wrap:\s*anywhere/s)
 })
 
+test("expanded tool evidence shares the drawer scroll instead of nesting another one", async () => {
+  const rule = DRAWER_CSS.match(/\.drawer-tool-part pre\s*\{([^}]*)\}/s)?.[1] ?? ""
+  expect(rule).not.toMatch(/max-height\s*:/)
+  expect(rule).not.toMatch(/overflow\s*:\s*auto/)
+})
+
 test("a tool that failed is marked failed, and error is a boolean", async () => {
   // The daemon writes `error: bool`; the drawer used to test it for a string,
   // so a failing tool rendered exactly like one that worked.
