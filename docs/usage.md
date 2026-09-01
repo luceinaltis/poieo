@@ -1,737 +1,338 @@
 # Using poieo
 
-Every command, every key a task file takes, and the worked examples.
-[`README.md`](../README.md) is the short version; this is the whole of it, and
-`docs/` has one document per component for anyone changing the code.
+poieo keeps tasks running on models you choose and brings their changes back
+for review. A task is a YAML file with a name, a folder, and instructions. This
+guide starts with an offline mock run, then adds the parts needed for unattended
+work.
 
-Most work here is three moves: write a **task** (one small file), leave the
-daemon running, and read the diff in the morning. This manual follows that
-order — install, start a project, write a task, keep it running, review what
-it did. The long form underneath — graphs, bindings, the full wiring — comes
-after, under *When one line is not enough*.
+Run `poieo --help` or `poieo <command> --help` for the complete command and
+option reference. The component guides in [the documentation index](README.md)
+describe the contracts behind each feature.
 
 ## Install
 
+poieo requires Python 3.10 or newer.
+
 ```bash
-pip install -e .          # or: pip install anthropic pydantic pyyaml httpx typer
-poieo --help              # also runnable as: python main.py --help
+git clone https://github.com/luceinaltis/poieo
+cd poieo
+pip install .
 ```
+
+For an editable development install, use `pip install -e .` instead.
 
 ## Start a project
 
-A folder becomes a poieo project the way a folder becomes a git repository:
-one marker file, `poieo.yaml`. `poieo init` looks at the machine once — every
-local server that answers (Ollama, LM Studio, vLLM/SGLang, llama.cpp) plus a
-Claude credential if there is one — and writes what it found into ordinary
-files:
-
-```
-poieo.yaml                       store · default binding · tasks folder
-models/default.yaml              every engine found, ready for a role to name
-models/mock.yaml                 always; answers from a script, spends nothing
-tasks/hello.yaml                 a sample card, disabled; run it by hand
-memory/longterm.sqlite3          an empty page, with the rule for filling it
-.gitignore                       gains memory/cache/, runs/, worktrees/
-```
-
-**Every engine is declared, not just the one serving `default:`** — that is
-what makes `roles:` reachable, and the models each one reported are listed in
-the file so naming one is reading rather than remembering.
-
-If nothing on the machine answers, `init` says where it looked and writes
-nothing. `poieo init --mock` is the deliberate way to lay a project out and
-bind a real model later; nothing else ever picks `mock` for you.
-
-`init` happens once, and models change every month. Afterwards:
+Create a folder for the board and initialize it with the scripted mock model.
+The mock needs no network access or credentials.
 
 ```bash
-poieo config             # what this project is bound to -- reads files, opens no socket
-poieo config models      # what each declared endpoint serves right now
-poieo config use ollama/qwen3:32b                       # move the default
-poieo config use ollama/llama3.2:3b --role classifier   # give one role its own
-poieo config add         # installed an engine since init? declare it
+mkdir my-board
+cd my-board
+poieo init --mock
 ```
 
-```
-ollama      http://localhost:11434
-  qwen3:32b                                   default
-  llama3.2:3b                                 classifier
-  granite4.2:8b
-```
+Initialization writes:
 
-Asked live, because a model list written down a month ago is a list that has
-since gone wrong — and a model named from memory fails at 3am. `use` refuses a
-model the endpoint says it does not serve, and edits the binding in place,
-keeping every comment in it.
+- `poieo.yaml`, the project marker and default paths;
+- `models/`, where model endpoints and role bindings are declared;
+- `tasks/`, where tasks and their graphs live;
+- `memory/`, where task journals and optional long-term memory live;
+- `AGENTS.md`, a short operating guide for an agent working in the project.
 
-That folder is the project. Everything hangs off it, and each folder answers one
-question — `models/` which model, `tasks/` what to do, `memory/` what it
-remembers, `runs/` what happened, `worktrees/` where it works.
+It also creates gitignored `runs/` and `worktrees/` locations as they are
+needed. Running `poieo init` again does not overwrite existing files.
 
-Inside a project, commands need no flags. `poieo run tasks/hello.yaml` takes
-the project's binding (and says so), `poieo runs list` reads the project's
-store, `poieo daemon` finds the config, `poieo check` probes the project's
-providers. A flag always wins when passed; discovery only fills silence, and
-detection never runs again after init — run time reads files, nothing else.
-Existing files are never touched, so `init` in a full project changes nothing.
+To detect real local model servers and supported cloud credentials instead,
+run `poieo init` without `--mock`. It records the endpoints and environment
+variable names that answered; it never writes a secret value.
 
-## The short form: a task
+## Create and run a task
 
-When the work is *one model, one folder, one instruction, on repeat*, a task
-is one file:
+Create `tasks/keep-green.yaml`:
 
 ```yaml
-# tasks/keep-improving.yaml
-name: keep improving poieo
-folder: ~/code/poieo
+name: keep the tests green
+folder: ../the-project
 prompt: |
-  Find one thing worth fixing, fix it, run the tests.
+  Run the tests. If one fails, find out why and fix it.
 ```
 
-Point a daemon config at the folder, and every file in it becomes a task:
+Relative paths are resolved from the task file. A prompt-shaped task needs a
+real folder because its model receives file and shell tools there. With no
+schedule written, the daemon runs it at startup and then every hour. Its state
+and journal carry into later runs.
 
-```yaml
-store: runs
-binding: models/local.yaml
-tasks: tasks/
+Check the task before letting it run unattended:
+
+```bash
+poieo validate tasks/keep-green.yaml
+poieo show tasks/keep-green.yaml
+poieo run tasks/keep-green.yaml -b models/mock.yaml
 ```
 
-Everything else is defaulted. It runs hourly (`every: 30m`, `every: loop`, or
-`at: "0 3 * * *"` to change that), the model comes from the binding's default
-role, the step gets the `files` and `shell` toolsets and 40 turns, and state
-carries from one run into the next. `role`, `tools`, `max_turns`, `enabled`,
-and `binding` are there when a task outgrows the defaults.
+`validate` checks the task, graph, binding, paths, and templates. `show` prints
+the graph the short task expands into. `run` performs one run and records it;
+the explicit mock binding keeps this first pass offline.
 
-| command | does |
-|---|---|
-| `poieo tasks tasks/` | list the cards, with their schedules (a daemon config works too) |
-| `poieo show tasks/keep-improving.yaml` | render the task the task expands to |
-| `poieo run tasks/keep-improving.yaml -b models/mock.yaml` | run it once |
-| `poieo eject tasks/keep-improving.yaml` | write that task out as a real graph; the task names it from then on |
+Use `poieo tasks` to list the project’s tasks, schedules, and latest journal
+entries. It also warns when a folder is not a Git repository and its changes
+therefore cannot be reviewed or undone by poieo.
 
-The sugar is not a second configuration format: a task expands into exactly the
-task and graph you would have written by hand, `show` proves it, and `eject`
-hands it over the moment one line stops being enough. An ejected graph still
-reads `{{ input.journal }}`, which the task supplies -- run it through the task,
-or pass `--set journal=...` when running that graph on its own.
+## Keep tasks running
 
-### Run it and review the change
-
-Start the board and leave it open:
+Start the resident process from the project folder:
 
 ```bash
 poieo daemon
-# open http://127.0.0.1:8484
 ```
 
-The first screen now carries the whole product loop. The **task** is the file
-above. Each scheduled pass is a **run**, with its result and history on the
-card. When a run edits a git project, its **change** waits in a private copy:
-open the task, read the diff, then accept or discard it. Accept is the only
-moment poieo writes that work to your branch.
+The board opens at <http://127.0.0.1:8484>. It shows tasks, runs, questions,
+model choices, and changes waiting for review. An ordinary task card can be
+created, renamed, edited, switched on or off, and set aside in the browser.
+Schedules, isolation, and graph wiring remain file-based settings.
 
-That is the complete path: **task → run → change**. The sections below explain
-memory, schedules, graphs, bindings, and isolation only when you need more than
-the defaults.
+The daemon rereads the tasks folder. Switching only `enabled` takes effect
+without restarting it. Restart after changing other loaded task settings such
+as a schedule, folder, binding, isolation policy, or graph relationship. A
+prompt or graph file is read again when a new run begins.
 
-A task's identity is its **filename**, so the title on the card can be
-rewritten without orphaning its run history. Paths written inside a task file
-resolve against the task file itself.
-
-### What a task remembers
-
-Each task keeps a journal -- `memory/shortterm/keep-improving.md`, named for the
-card -- and reads it before every run. It sits with the rest of what the project
-remembers, not among the cards: a card is a thing you edit, a journal is a thing
-that grows every night, and side by side the folder of definitions went dirty in
-git on every run.
-
-```
-- 2026-08-22 03:14 . did     fixed the flaky interval test on Windows
-- 2026-08-22 08:02 . you     leave prose alone, spend the night on tests
-- 2026-08-22 09:30 . did     added two cases to test_cron
-```
-
-poieo appends a `did` line after each run that finished (the model's own
-closing sentence) and a `failed` line after one that did not. You add a `you`
-line:
+Useful variants are:
 
 ```bash
-poieo note tasks/keep-improving.yaml "leave prose alone, spend the night on tests"
+poieo daemon --once             # run every task once, then stop
+poieo daemon --task keep-green  # keep only one named task running
+poieo daemon --no-web           # run without the browser board
+poieo daemon poieo.yaml another/poieo.yaml # serve both projects
 ```
 
--- or by opening the file and typing one. The tail is read as text and never
-parsed, so a line you wrote works exactly like a line poieo wrote. The file
-keeps everything.
+Keep the default localhost binding unless the network is trusted. A board
+bound to another interface has no account or password layer.
 
-The journal reaches the prompt in two parts: everything that arrived since the
-task last worked, in full, and then the tail of what came before, bounded. The
-task's own last entry is the divide, so a note cannot be crowded out by history
-however long the journal grows -- what is new is chosen by where it is, not by
-how much of it there is.
+## Review a change
 
-This is what stops a standing task from re-doing last night's work, and it is
-where the morning review's accept and discard notes will land once the review
-screen ships.
+When a task points at a Git repository, poieo works in a private copy. A run
+can leave one change for you to inspect on the board. Accepting merges the
+run’s commits into your current branch and refuses a checkout with tracked
+edits. Discarding parks the old tip under a recoverable Git ref before resetting
+the task’s private branch.
 
-### What a project remembers
-
-The journal is short-term on purpose -- old lines age out of the prompt. Both
-halves live under `memory/`, and `longterm.sqlite3` existing is the whole
-opt-in:
-
-```
-memory/
-  shortterm/keep-improving.md     one journal per card, named for it
-  longterm.sqlite3                the page, every entry, and every change to either
-  cache/                          rebuilt from the above; delete it freely
-```
-
-One database per project, kept inside it, so two projects on this machine
-never see each other's memory. `poieo init` starts one with an empty page --
-comments only, which are stripped before any prompt sees it, so a project
-that leaves it alone runs exactly as one with no memory at all. Delete the
-file if you want none.
-
-It is a database rather than a folder of files because there is then exactly
-one copy of what the project knows, and because every change to it is kept:
-`poieo memory` shows what an entry said before, and who changed it.
-
-The page is read whole, every run, first -- put the rules there that every
-task must hold and that nothing would think to look up.
-
-The entries are **ordered** per task, not filtered down to a few: what a task
-shares words with comes first, what names the code it is working on comes above
-that, and what it matches nothing in follows while there is room. A scope
-(`global`, a task's name, or a path) is the one thing that keeps an entry out of
-a task entirely -- that is you saying who it is for. A wrong entry is not
-deleted; set it aside and it steps out of every prompt, its words and its
-history intact.
-
-Every run also leaves a full record under `runs/results/`, beside the event
-stream the same run wrote to `runs/events/` -- unclipped where
-the run log clips, so an entry's `source:` can name the run that taught it --
-anything the project claims to remember can be walked back to the work it
-came from. Ask what a task will actually see, and why:
+You can inspect recorded runs from the terminal too:
 
 ```bash
-poieo memory                             # the page, the counts, the lookup
-poieo memory tasks/keep-improving.yaml   # the exact block its next run gets
+poieo runs list
+poieo runs show <run-id>
 ```
 
-Entries can name each other. `[[name]]` in the prose means *these belong
-near each other*, and whatever a chosen entry mentions arrives beside it --
-even sharing no word with the task. Frontmatter carries the stronger claims:
-`links: {depends_on: [...]}` for what an entry leans on (brought along, one
-step, never further), and `links: {contradicts: [...]}` for a disagreement.
-A disagreement is never resolved by a machine: `poieo memory` lists the
-pair and a person settles it -- and once one side is set aside, whatever
-leaned on it is flagged for a second look.
+If a task works in a folder that is not a Git repository, its edits happen in
+that folder directly. There is no diff to accept and no automatic undo; the
+task list warns about this before the run.
 
-The project can also learn by itself. Every run already leaves a full
-record; a learning pass reads the unread ones and proposes entries, which
-poieo validates and writes with `source:` naming the runs that taught them
--- so anything learned overnight can still be walked back to the work it
-came from. Run one by hand, or let the daemon do it while nothing else is
-running:
+## Schedule and control work
+
+The short schedule forms cover the common cases. Choose `every` or `at` for a
+task; they are alternatives:
+
+```yaml
+every: 30m                  # duration, or the word "loop"
+```
+
+```yaml
+at: "0 2 * * *"            # cron expression
+```
+
+`enabled: false` keeps either task present without running it.
+
+Use a full trigger block when jitter, startup behavior, a cooldown, or a run
+limit matters:
+
+```yaml
+trigger:
+  type: interval
+  every: 2h
+  jitter: 10m
+  run_at_start: false
+  max_iterations: 5
+```
+
+The board can pause and resume a running task, or request an immediate run.
+Pause stops future work at a safe boundary; it does not kill a model or shell
+command in the middle of an operation.
+
+A graph can stop at a `confirm` node and ask you to choose before downstream
+work continues. Answer on the board, or from another terminal:
 
 ```bash
-poieo learn tasks/            # one pass, now
+poieo asking
+poieo answer <task> <choice>
 ```
+
+The daemon must still be running because it owns the waiting question.
+
+## Choose models
+
+Run these from a poieo project:
+
+```bash
+poieo config
+poieo config models
+poieo check
+poieo config add
+poieo config use <provider>/<model>
+poieo config use <provider>/<model> --role reviewer
+```
+
+`config` shows the current binding. `config models` asks declared endpoints
+what they serve. `check` probes the binding. `config add` detects endpoints
+installed since initialization, and `config use` changes the default or one
+named role while preserving the rest of the YAML file.
+
+A binding separates logical roles from physical providers:
 
 ```yaml
-learn: 1d                     # in the daemon config; needs its default binding
+name: default
+version: 1
+
+providers:
+  local:
+    type: ollama
+    base_url: http://127.0.0.1:11434
+
+default:
+  provider: local
+  model: qwen3
+
+roles:
+  reviewer:
+    provider: local
+    model: qwen3
 ```
 
-The pass keeps entries and sets entries aside; it never deletes, never
-overwrites, and never touches the constitution -- that page stays yours.
-The model that reads the night is the binding's `learner` role (unbound, it
-falls through to the default), so pointing your best model at it is one
-line. `memory/cache/learning.jsonl` says what every pass did, and an empty pass
-is a fine answer: most nights teach nothing.
+Hosted providers name a credential with `api_key_env`; put the value in that
+environment variable, never in the YAML. Provider-specific headers, query
+parameters, timeouts, retries, model parameters, context limits, and prices
+are available when needed. See [bindings and model providers](binding.md) for
+the schema and credential boundary.
 
-Connections wear in with use. When two connected entries both did real work
-in a run that succeeded -- their own words in what the run produced, not
-merely having been shown -- the path between them wears a little, and later
-retrievals carry it sooner and one step further. Wear fades on its own,
-no entry's connections can hoard it, and it lives outside git in
-`memory/cache/strength.json`: delete the file and the project forgets which paths
-were worn, relearns them by working, and loses not one word of meaning.
+## Isolate model tools
 
-And the memory keeps itself honest. `poieo memory` flags what deserves a
-second look -- an entry leaning on one that was set aside, an entry naming
-code that is gone or that changed after the entry was written (edit the
-entry after looking, and the flag clears) -- and the next pass is shown the
-same doubts, free to retire an entry with its ordinary set-aside. A
-set-aside entry drops out of every prompt but stays in its folder: nothing
-here moves or deletes what you can read, and git keeps whatever you take
-out yourself. A pass may also *suggest* one line for the constitution;
-poieo records and shows it, and only you ever edit that page.
-
-Entries the project learns are sealed to the files they were written
-about: the pass keeps the exact bytes under `memory/cache/blobs/`, so a doubt
-means the content really differs -- a merely-touched file raises nothing --
-and the original an entry was written against is always there to open.
-Keepsakes are copies, never meaning: one that nothing references anymore
-is let go after a grace long enough for you to restore the entry that named
-it, and losing one costs a precise comparison, not a word of what was
-learned.
-
-Finally, the memory answers for itself. `poieo memory` reads the recent
-run records and says how many runs actually used what they were shown, and
-names any entry shown again and again without ever being used -- dead
-weight for you to look at. It acts on none of it: numbers inform, people
-and passes decide. (Measuring use by what the model truly attended to
-needs a serving stack that can report attention; until then the judgment
-is the same words-in-the-output test the wear system trusts.)
-
-Nothing configures this. No `memory/` folder, no trace of the feature;
-everything in it is markdown you edit and git versions. A worked pair of
-cards sharing one memory lives in `examples/remembering/`.
-
-### Tasks leaving each other notes
-
-A task can write a line in another task's journal, using the same file and the
-same shape you do:
+By default, file and shell tools run on the host inside the task folder. A task
+can instead keep their effects inside a Docker environment:
 
 ```yaml
-name: build the docs
-folder: ~/src/thing
-prompt: Rebuild the docs when the source has changed.
-tools: [files, shell, notes]     # `notes` is opt-in
+name: inspect dependencies
+folder: ../the-project
+prompt: Check the dependency tree and report risky upgrades.
+isolation:
+  image: python:3.12-slim
+  network: none
 ```
 
-A card with no `tools:` line gets `files` and `shell`, because a task made from
-a prompt is meant to have hands. **`tools: []` is how a card asks for none** —
-it looks and reports and cannot touch a thing. The two were read as one until
-`examples/tasks/night-watch.yaml` needed the second.
+Validate the task while Docker is available, then try it once before relying
+on it. `poieo reset tasks/<task>.yaml` throws away that task’s reusable
+environment without touching its project files.
 
-It then has one more tool, `tell`, and its prompt lists the tasks it may use it
-on. The link checker sees the result on its next run:
+Isolation is a boundary for commands, not a promise that Docker is a perfect
+sandbox. The project folder is the task’s intended working surface; configure
+network access and any extra mounts narrowly. Details and platform limits are
+in [tools and isolation](tools.md).
 
+## Journals and project memory
+
+Each task has an append-only journal under `memory/shortterm/`. The next run
+sees recent entries, including the result of the previous run. Leave a direct
+instruction with:
+
+```bash
+poieo note tasks/keep-green.yaml "focus on the failing tests; leave prose alone"
 ```
-New since you last worked:
-- 2026-08-23 03:00 . task    [build-docs] rebuilt the docs; 30 links changed
-- 2026-08-23 08:02 . you     ignore external links
 
-What you did before that:
-- 2026-08-22 03:14 . did     checked 12 links, all fine
+Projects initialized by poieo also keep long-term memory in
+`memory/longterm.sqlite3`. That database is the source of truth for the shared
+page, learned entries, and their revision history. Read its status or preview
+what one task will receive:
+
+```bash
+poieo memory
+poieo memory tasks/keep-green.yaml
+poieo learn
 ```
 
-A note is **news, not an instruction** -- the recipient is a model reading
-text, and may ignore it exactly as it may ignore what you wrote. It carries a
-line, not data: tasks that need to hand over real output share a folder, and
-the note says there is something new there.
+`learn` reads new run records with the binding’s `learner` role and retains
+only lessons meant to stay true across tasks. Most runs should add nothing.
+The browser can search, edit, and set aside learned entries. See
+[project memory](memory.md) for budgets, recovery, and durability rules.
 
-And a note **wakes nobody**. It is read on the recipient's next scheduled run,
-which is why two tasks writing to each other still run only on their own
-triggers and cannot spin each other up.
+## Grow a task into a graph
 
-## The resident layer
+A short task expands to one agent node. When the work needs several steps,
+branching, commands, or a human decision, export that generated graph:
 
-`poieo.yaml` says where things are. It carries no list of jobs — **a job is
-one file in the tasks folder**, and dropping one in is how you add one.
+```bash
+poieo eject tasks/keep-green.yaml
+```
+
+The task then points at a neighboring graph file. Graphs have four node types:
+
+- `agent` asks a model and may give it tools;
+- `command` runs a command or script;
+- `router` chooses a branch from state;
+- `confirm` asks a person before continuing.
+
+A minimal graph looks like this:
 
 ```yaml
-# poieo.yaml
-store: runs
-binding: models/hybrid.yaml
-tasks: tasks/
-```
-
-```yaml
-# tasks/triage.yaml
 name: triage
-graph: support-triage.graph.yaml   # the long form -- see below
-trigger: {type: interval, every: 30s}
-input: {message: "…"}
-```
-
-```yaml
-# tasks/revision.yaml
-name: revision
-graph: draft-review.graph.yaml
-trigger: {type: loop, cooldown: 10s}
-```
-
-| trigger | fires |
-|---|---|
-| `interval` | every `every` (`30s`, `5m`, `2h`), on an absolute grid; a run that overruns skips missed ticks instead of queueing them |
-| `cron` | on a 5-field expression, local time — `*/5`, ranges, lists, `mon-fri`, and the standard day-of-month **or** day-of-week rule |
-| `loop` | back to back forever, pausing for `cooldown`; iterations never overlap |
-| `manual` | only when something asks |
-
-All four accept `max_iterations`. `input_file` re-reads the payload before each run, so an
-external process can feed a task. `on_error: stop` halts a task after a failed run;
-the default keeps it up.
-
-Every graph, binding, and role is validated at startup — a typo in a task that fires at 3am
-fails at launch, not at 3am. `SIGINT`/`SIGTERM` drains in-flight runs and closes clients; a
-second signal exits immediately.
-
-```bash
-poieo tasks  examples/poieo.yaml     # what would run, and when each next does
-poieo daemon examples/poieo.yaml     # stay up
-poieo daemon examples/poieo.yaml --once --task triage
-```
-
-While the daemon runs it serves a page on `http://127.0.0.1:8484` (`--port` to
-change it, `--no-web` to turn it off). It ships built, so there is nothing to
-install: open it to watch tasks move, click one to read what it did turn by
-turn, and take or throw away what it left you. The board draws the work as a
-graph — the tasks, their nodes, and the model each one calls — and the rail
-down the left also holds `runs`, the same tasks against one clock with a mark
-per run, which is where "what happened overnight" is answered.
-
-`--host` moves where it listens, and the default is this machine on
-purpose: there is no password on the board, and one of its buttons makes a
-task that runs commands here. `docs/daemon.md` has the whole of it.
-
-Everything the page reads is plain HTTP too. `GET /api/events` streams every run
-event live (SSE), `/api/tasks` and `/api/runs` answer what is running and what
-already ran, and `/api/runs/<id>/diff` shows what one run changed. Only two
-routes in the whole surface change anything, and they are the two below.
-
-To work on the page itself: `npm run build --workspace web-ui` refreshes what the
-daemon serves, `npm run dev --workspace web-ui` runs it on 5173 against a daemon
-on 8484, and `npm test --workspace web-ui` is its suite.
-
-## Work you look at in the morning
-
-A task that names a `folder` does not work in your project. It works in a
-private copy of it, and each run lands as one **change** carrying its own
-one-line summary of what it did.
-
-```yaml
-# tasks/chores.yaml
-name: chores
-graph: agent-task.graph.yaml
-folder: ../my-project       # where the work happens
-```
-
-Your project is never written to while you sleep. In the morning it is exactly
-as you left it, and the night's work is waiting:
-
-```bash
-curl     127.0.0.1:8484/api/tasks                     # how much is waiting
-curl     127.0.0.1:8484/api/runs/<id>/diff            # what one run did
-curl -X POST 127.0.0.1:8484/api/tasks/chores/accept   # take it
-curl -X POST 127.0.0.1:8484/api/tasks/chores/discard  # throw it away
-```
-
-Accepting puts the work into your project. Discarding is recoverable -- nothing
-is ever thrown away for good. A run that found nothing to do is not a failure
-and leaves nothing to review, and a run that failed keeps its half-finished work
-aside instead of mixing it in.
-
-None of this is required. A task with no `workdir` behaves exactly as it always
-has, and a folder that nothing tracks still runs -- `poieo tasks` says up
-front that its changes can't be reviewed or undone.
-
-## Run logs
-
-Every run appends a JSONL event stream under `<store>/runs/<run_id>.jsonl` plus a summary
-line in `<store>/runs/index.jsonl`.
-
-```bash
-poieo runs list --store examples/runs
-poieo runs show 20260820T130243-36ef0db5 --store examples/runs
-```
-
-Each `node_finished` event records which binding served it, the model that answered, the
-branch a router took, and token usage — enough to answer "what ran, what did it decide,
-what did it cost" without a database.
-
-## When one line is not enough
-
-poieo keeps **what the work is** and **which model does it** in two separate
-files.
-
-A *graph* describes the logical task: classify this, then branch, then draft a
-reply. It names **roles** (`classifier`, `writer`, `critic`) and never names a
-model. A *binding* maps those roles onto real endpoints — a local server, a
-cloud API. Moving a workflow from a laptop model to a frontier one is a
-`--binding` flag, not an edit.
-
-A *daemon* keeps tasks alive on triggers, so the logical task just keeps running.
-
-```
-graph (logical)          binding (physical)          daemon (resident)
-  classify   ──role──►     classifier → ollama:llama3.2:3b     interval / cron / loop
-  route                    writer     → claude:claude-opus-5
-  draft_bug
-```
-
-## Try it without spending a token
-
-The `mock` provider answers from a script in the binding file, so the wiring can be
-exercised offline.
-
-```bash
-poieo show     examples/tasks/support-triage.graph.yaml
-poieo validate examples/tasks/support-triage.graph.yaml -b examples/models/claude.yaml
-poieo run      examples/tasks/support-triage.graph.yaml -b examples/models/mock.yaml \
-               --set message="the export button crashes on 2.1"
-poieo daemon   examples/poieo.yaml --once
-```
-
-A task card that names its own `binding:` needs no flags at all --
-`poieo run tasks/card.yaml` runs it once, and `poieo daemon tasks/` keeps
-every card in the folder running.
-
-## The logical layer
-
-```yaml
-name: support-triage
+version: 1
 entry: classify
 nodes:
   - id: classify
     type: agent
-    role: classifier                 # a role, not a model
-    prompt: |
-      Classify as bug, feature, or question.
-      {{ input.message }}
-    output: {as: category}
-    next: route
+    role: classifier
+    prompt: "Classify the request: {{ input.message }}"
+    output:
+      as: category
+      into_state: category
+    next: decide
 
-  - id: route
+  - id: decide
     type: router
     branches:
-      - when: "'bug' in category.lower()"
-        to: draft_bug
-    default: draft_answer
+      - when: "state.category == 'bug'"
+        to: investigate
+    default: done
+
+  - id: investigate
+    type: agent
+    role: investigator
+    prompt: "Investigate: {{ input.message }}"
+
+  - id: done
+    type: command
+    command: "echo no investigation needed"
 ```
 
-**Node types**
+Roles stay in the graph; concrete endpoints stay in the binding. State,
+templates, retries, output destinations, task chaining, and failure policy are
+described in [graphs](graph.md), [runtime](runtime.md), and [resident
+execution](daemon.md).
 
-| type | does | keys |
-|---|---|---|
-| `agent` | renders a prompt and calls the model bound to its role; loops while the model asks for a tool | `role`, `system`, `prompt`, `output`, `retry`, `params`, `next`, and — only if it should have hands — `tools`, `workdir`, `max_turns` |
-| `command` | runs a command, or a script in a named language, through the executor seam; calls no model | `command` **or** `script` + `language`; `output`, `next`, and optionally `workdir`, `timeout`, `env` |
-| `router` | evaluates conditions in order and jumps to the first match | `branches[].when` / `.to` / `.label`, `default` |
-| `confirm` | puts a question to **you** and ends the run there; the card's `then:` waits for the answer | `prompt`, `choices` |
+## If something fails
 
-Four types, by who does the step: the model, the machine, nobody, or you.
-`confirm` is for the step before something that cannot be undone -- a push, a
-merge, a deployment, an email. poieo's other safeguard is the private copy the
-run works in, and discarding that does not unsend a message.
-**No `tools:` line means no tools** — the node calls the model once and reads
-the answer, and cannot touch a file. Hands are asked for, never defaulted.
-
-`script:` carries the code in the node itself, so the graph is readable on its
-own — `python`, `node` and `sh` go to the interpreter's stdin; `c`, `go` and
-`rust` are compiled once and cached by the hash of the code, so a second run
-skips the build. A compiled script is not templated — `{{` there is the
-language's, as in Go's `[][]int{{1,2}}` — so what varies goes in `env:`, which
-is templated and keeps the binary the same. See [graph.md](graph.md).
-
-`next: null` (or an omitted `next`) ends the run. A `to: null` branch ends it too.
-
-### Hands
-
-A node that names `tools:` gives its model hands: `files` (read/write/list/glob)
-and `shell` (run a command) toolsets, every call confined to the node's
-`workdir`.
-The node loops — model asks, poieo executes, result goes back — until the
-model answers without a tool call; `max_turns` bounds the loop. Tool failures
-are fed back to the model as text so it can correct itself. Every call is
-recorded as a `node_tool_call` event in the run log.
-
-Path confinement prevents accidents, not malice: a shell command can still
-name absolute paths. Point `workdir` only at a directory you would let a
-junior contributor loose in — or turn on isolation, below. `poieo run
-examples/tasks/agent-task.graph.yaml -b examples/models/mock.yaml --set
-workdir=/tmp/demo` exercises the loop offline.
-
-### Isolation
-
-A task can be told to keep its hands inside its folder:
-
-```yaml
-name: keep the tests green
-folder: ~/src/thing
-prompt: Run the tests and fix what fails.
-isolation:
-  image: python:3.12-slim    # must already be pulled; poieo never pulls for you
-  network: none              # the default; `bridge` if the task needs to fetch
-```
-
-Without it, poieo's file tools stay inside the folder but a command the model
-runs does not — it reaches whatever you can reach. With it, the command stays
-inside the folder too. Nothing else changes: the same task without the block
-behaves exactly as before, and a machine with no docker is never even asked.
-
-`poieo run … --isolate python:3.12-slim` does the same for a single run.
-Whether docker is present and the image is here is checked when the config
-loads, not when the trigger fires at 3am.
-
-The environment is kept between runs, so what a task installs on Monday is
-there on Tuesday, and tasks over the same folder share one. It is disposable
-state: `poieo reset <task>` throws it away and the next run rebuilds it, which
-is the first thing to try when a task starts behaving oddly. Nothing in your
-folder is touched by that.
-
-**What it does not protect.** The folder itself — that is the work, and it is
-exposed by definition; reviewing what a run changed is a separate feature.
-What reaches the model, either: prompts and file contents leave your machine
-exactly as before. And a container shares your kernel, so this is a strong
-boundary rather than an absolute one; a VM is stronger.
-
-The question it actually asks you is: *can you predict every command this
-prompt will run, overnight, with this model?* If yes, isolation buys little.
-If no, that is what it is for.
-
-**Expressions** in `{{ … }}` templates and `when:` conditions run in a sandbox: attribute
-and index access, comparisons, boolean logic, and a short list of builtins (`len`, `str`,
-`any`, `sorted`, …). Imports, lambdas, comprehensions, and dunder access are rejected when
-the graph is parsed, not when it runs.
-
-Names in scope:
-
-| name | is |
-|---|---|
-| `input` | the payload the trigger or CLI supplied |
-| `state` | mapping that survives across loop iterations |
-| `nodes.<id>` | any earlier node's output |
-| `<alias>` | an output's `as:` name, at the top level |
-| `run` | `id`, `task`, `trigger`, `iteration`, `path` |
-
-`output` shapes what a node stores: `as` names it, `format: json` parses the completion
-(tolerating a markdown fence), `path: a.b` digs into it, and `into_state: k` also writes it
-to `state` so the next iteration can read it.
-
-**Cycles are allowed.** `examples/tasks/draft-review.graph.yaml` loops draft → review → revise
-until the critic approves, counting its own attempts with `run.path.count('revise')`.
-`max_steps` bounds any graph that forgets to exit.
-
-## The physical layer
-
-```yaml
-name: hybrid
-providers:
-  ollama: {type: ollama, base_url: http://localhost:11434}
-  claude: {type: anthropic}
-
-default:
-  provider: claude
-  model: claude-opus-5
-  params: {max_tokens: 16000, effort: high}
-
-roles:
-  classifier:                       # cheap local model for one-word labels
-    provider: ollama
-    model: llama3.2:3b
-    params: {max_tokens: 16, temperature: 0}
-```
-
-Role settings layer over `default`, and `params` merge key by key. A node's own `params`
-win over both. Four bindings ship as examples: `mock`, `local`, `claude`, `hybrid`.
-
-**Providers**
-
-| type | talks to | notes |
-|---|---|---|
-| `anthropic` | Claude API | official SDK, always streams; credentials from `ANTHROPIC_API_KEY` or an `ant auth login` profile |
-| `openai_compatible` | vLLM, SGLang, llama.cpp, LM Studio, TGI | `POST {base_url}/chat/completions` |
-| `ollama` | Ollama | `POST {base_url}/api/chat`; `max_tokens`/`temperature` are folded into `options` |
-| `claude_code` | Claude Code, on a Claude plan | no key — the plan's own login. `pip install 'poieo[claude-code]'` |
-| `codex` | Codex, on a ChatGPT plan | no key — `codex login`. `npm i -g @openai/codex` |
-| `mock` | nothing | scripted replies for tests and dry runs |
-
-The last two spend a **subscription** rather than tokens, and there is no key to
-name. A key in the environment is refused rather than worked around — both
-harnesses prefer one over the login, so the run would go on the API bill
-instead. A step with `tools:` is served differently by each: Claude Code
-is handed **poieo's own tools**, so the workdir and any `isolation:` still hold
-and the run log still records every call; Codex works in **its own sandbox**
-instead, and refuses a task that asked for `isolation:` rather than pretend to
-honour it. `examples/models/subscription.yaml` is one, and `docs/binding.md`
-says why the two differ.
-
-The Anthropic provider is capability-aware: `thinking: auto` becomes adaptive thinking on
-models that support it and is omitted on ones that do not, `effort` is dropped where it is
-not accepted, and sampling parameters are stripped for models that reject them — so one
-binding can point different roles at different model generations without 400s. Unrecognized
-params pass through untouched, so a new API parameter is usable from the binding file
-without a code change.
-
-Add a backend with `poieo.providers.register("my_type", MyProvider)`; binding files may
-name it from that point on.
+Start with the narrowest check:
 
 ```bash
-poieo check -b examples/models/local.yaml      # probe every declared endpoint
+poieo validate tasks/<task>.yaml
+poieo check
+poieo run tasks/<task>.yaml --verbose
+poieo runs show <run-id>
 ```
 
-## Library use
+Specification errors name the file and rejected field. Provider failures say
+which endpoint or role failed. Recorded runs retain structured failure causes
+and the event stream even when a run does not complete.
 
-The CLI is a thin shell over the library; the web editor planned next calls the same
-functions.
-
-```python
-import asyncio
-from poieo import load_graph, load_binding, execute, ProviderPool, RunStore
-
-graph = load_graph("examples/tasks/support-triage.graph.yaml")
-binding = load_binding("examples/models/hybrid.yaml")
-
-async def main():
-    async with ProviderPool(binding) as pool:
-        result = await execute(graph, binding, pool, RunStore("runs"),
-                               input={"message": "the export button crashes"})
-        print(result.status, result.path, result.outputs)
-
-asyncio.run(main())
-```
-
-`execute` never raises for an in-run failure — the error lands on `result.error` so a daemon
-task can log it and stay up. Spec and binding problems still raise, since those mean the
-task is misconfigured rather than flaky.
-
-## Layout
-
-```
-src/poieo/
-  expr.py            sandboxed expressions + {{ }} templating
-  graph.py           logical layer: nodes, wiring, validation
-  card.py            the short form: one file expands into a task + a graph
-  binding.py         physical layer: providers, roles, param merging
-  providers/         anthropic · openai_compatible · ollama · mock
-  runtime/           context, node implementations, the graph walker
-  tools/             the hands: files, shell, notes; the isolation seam
-  daemon/            cron, triggers, task config, the resident service
-  layout.py          where a project keeps things; store.py is the run log
-  detect.py          what this machine can answer with, asked once at init
-  rebind.py          changing a binding without losing what a person wrote
-  workspace.py       the only module that knows git exists
-  memory/            the long memory; learn.py is the pass that fills it
-  web/               observation API, event fan-out, the built page
-  cli.py             command line front end
-
-web-ui/              the page's source: state, skins, review
-  src/state/         events folded into one presentation-neutral model
-  src/skins/         how that model is drawn; adding one is a module and a line
-  src/review/        last night's work: the list, the diff, accept and discard
-```
-
-`docs/` has one document per component, describing how it works and why it is
-shaped that way. Start at [architecture.md](architecture.md).
-
-## Not built yet
-
-* Everything about a card except its schedule. Making one is live (the rail's
-  `new task`, started or not), so is editing its name, folder and prompt, so is
-  switching it on and off, and so is setting one aside — the card moves whole
-  to `.set-aside/`, recoverably. A schedule, an isolation or a `then:` still
-  means editing the file, and the board says so on the card when you do.
-* The editor folded into the board. `poieo edit` is a canvas over the graph schema
-  today, and `poieo show --mermaid` draws one; the board draws the work but does
-  not let you edit it.
-* Fan-out / map steps — one node that runs its body over a list. The four node
-  types that exist are in `runtime/nodes.py`'s `NODE_TYPES` registry, which is
-  where a new one goes.
-
-## Tests
-
-```bash
-pytest -q
-```
+Before unattended use, keep task folders under version control, validate every
+edited task or graph, probe model bindings, set deadlines and spend limits
+appropriate to the machine, and exercise the exact task once. The current
+safety and non-goals are summarized in [DESIGN.md](../DESIGN.md).
