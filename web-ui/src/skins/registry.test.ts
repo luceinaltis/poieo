@@ -116,11 +116,21 @@ test("the latest thinking and tool call surface on an open task", () => {
 test("clicking a task's name selects it; the chevron is for opening", () => {
   const el = document.createElement("div")
   const picked: string[] = []
-  const handle = basic.mount(el, { onSelectTask: (task) => picked.push(task) })
+  let opener: HTMLElement | null = null
+  const handle = basic.mount(el, {
+    onSelectTask: (task, source) => {
+      picked.push(task)
+      opener = source
+    },
+  })
   handle.update(midRun())
 
-  el.querySelector<HTMLElement>('[data-task="board/revision"] .basic-pick')!.click()
+  const pick = el.querySelector<HTMLElement>(
+    '[data-task="board/revision"] .basic-pick',
+  )!
+  pick.click()
   expect(picked).toEqual(["board/revision"])
+  expect(opener).toBe(pick)
 
   handle.destroy()
 })

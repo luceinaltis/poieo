@@ -247,11 +247,21 @@ test("the hour rules are drawn once for the board, not once per lane", () => {
 
 test("clicking a lane selects that task", () => {
   const picked: string[] = []
-  const handle = runs.mount(el, { onSelectTask: (task) => picked.push(task) })
+  let opener: HTMLElement | null = null
+  const handle = runs.mount(el, {
+    onSelectTask: (task, source) => {
+      picked.push(task)
+      opener = source
+    },
+  })
   handle.update(board([]))
 
-  el.querySelector<HTMLElement>('[data-task="board/revision"] .runs-head')!.click()
+  const head = el.querySelector<HTMLElement>(
+    '[data-task="board/revision"] .runs-head',
+  )!
+  head.click()
   expect(picked).toEqual(["board/revision"])
+  expect(opener).toBe(head)
 
   handle.destroy()
 })

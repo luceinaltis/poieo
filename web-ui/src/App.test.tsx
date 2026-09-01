@@ -327,7 +327,6 @@ test("opening a different task does not show the previous one's runs", async () 
   const firstOpener = container.querySelector<HTMLElement>(
     '[data-task="board/chores"] .basic-pick',
   )!
-  firstOpener.focus()
   await act(async () => firstOpener.click())
   expect(container.querySelector(".drawer")!.getAttribute("data-task")).toBe("chores")
   const first = container.querySelector("[data-run][data-selected='true']")
@@ -335,7 +334,6 @@ test("opening a different task does not show the previous one's runs", async () 
   const secondOpener = container.querySelector<HTMLElement>(
     '[data-task="board/revision"] .basic-pick',
   )!
-  secondOpener.focus()
   await act(async () => secondOpener.click())
 
   const drawer = container.querySelector(".drawer")!
@@ -509,7 +507,6 @@ test("make one like it opens the make panel already filled in", async () => {
   const opener = container.querySelector<HTMLElement>(
     '[data-task="board/chores"] .basic-pick',
   )!
-  opener.focus()
   await act(async () => opener.click())
   await act(async () => {
     container.querySelector<HTMLElement>(".card-open")!.click()
