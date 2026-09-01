@@ -77,4 +77,6 @@ def test_multiple_graphs_render_in_one_page():
     ]
     page = render_page(graphs)
     assert page.count('<section class="graph">') == 2
-    assert "<title>2 workflows</title>" in page
+    assert "<title>2 graphs</title>" in page
+    assert page.count("<h2>Graph</h2>") == 2
+    assert "<h2>Flow</h2>" not in page
