@@ -516,9 +516,10 @@ test("a selected live run stays selected as the live window advances", async () 
     ...DRAWER_RUN,
     type: "run_summary",
     run_id: "live-first",
+    status: "asking",
     started_at: "2026-08-31T09:00:00Z",
     finished_at: "2026-08-31T09:00:05Z",
-    said: "first live result",
+    said: "Ship the first result?",
   }
   stage = reduce(stage, first)
   await act(async () => store.push(stage))
@@ -537,6 +538,9 @@ test("a selected live run stays selected as the live window advances", async () 
     container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
   })
   await act(async () => {
+    container.querySelector<HTMLElement>('[data-failed-toggle="true"]')!.click()
+  })
+  await act(async () => {
     container.querySelector<HTMLElement>('[data-run="live-first"] .run-open')!.click()
   })
 
@@ -553,7 +557,17 @@ test("a selected live run stays selected as the live window advances", async () 
   }
   await act(async () => store.push(stage))
 
+  stage = reduce(stage, {
+    ...first,
+    status: "completed",
+    said: "shipped the first result",
+  })
+  await act(async () => store.push(stage))
+
   expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("live-first")
+  expect(container.querySelector(".run-brief-what")?.textContent).toBe(
+    "shipped the first result",
+  )
   await act(async () => {
     container.querySelector<HTMLElement>('[data-do="toggle-runs"]')!.click()
   })
