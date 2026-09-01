@@ -7,6 +7,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -73,23 +74,25 @@ export default function App({ store }: { store?: StageStore }) {
   const panelWasOpenRef = useRef(false)
   const panelIsOpen = activePanel.kind !== "closed"
 
-  // The panel is the next place to read after its button, not a visual layer
-  // left behind that button in the tab order. A switch from one panel to
-  // another remembers the latest rail button; a handoff inside a panel keeps
-  // the original opener because the old panel disappears under the new one.
-  useEffect(() => {
-    if (panelIsOpen) {
-      const focused = document.activeElement
-      if (!panelWasOpenRef.current) {
-        panelOpenerRef.current = focused instanceof HTMLElement ? focused : null
-      } else if (
-        focused instanceof HTMLElement &&
-        focused !== document.body &&
-        !focused.closest(".panel")
-      ) {
-        panelOpenerRef.current = focused
-      }
+  // Capture this before opening changes the DOM: on a phone that render hides
+  // the rail and stage, and a browser is then free to drop their focus. An
+  // opener inside the current panel is deliberately ignored so a handoff such
+  // as "make one like it" still returns to the card that began the visit.
+  const rememberPanelOpener = useCallback((opener: Element | null) => {
+    if (
+      opener instanceof HTMLElement &&
+      opener !== document.body &&
+      !opener.closest(".panel")
+    ) {
+      panelOpenerRef.current = opener
+    }
+  }, [])
 
+  // The panel is the next place to read after its button, not a visual layer
+  // left behind that button in the tab order. Move focus in the same commit
+  // that hides the phone background so there is no frame between the two.
+  useLayoutEffect(() => {
+    if (panelIsOpen) {
       const panel = document.querySelector<HTMLElement>(".panel")
       if (panel) {
         panel.tabIndex = -1
@@ -118,15 +121,19 @@ export default function App({ store }: { store?: StageStore }) {
   // The stage reserves one margin. A task picked on the board takes it, so a
   // panel that was holding it has to let go -- the rail already does this for
   // its own two, and this is the third way in.
-  const selectTask = useCallback((taskKey: string | null) => {
-    setActivePanel((current) =>
-      taskKey
-        ? { kind: "task", taskKey }
-        : current.kind === "task"
-          ? CLOSED_PANEL
-          : current,
-    )
-  }, [])
+  const selectTask = useCallback(
+    (taskKey: string | null) => {
+      if (taskKey) rememberPanelOpener(document.activeElement)
+      setActivePanel((current) =>
+        taskKey
+          ? { kind: "task", taskKey }
+          : current.kind === "task"
+            ? CLOSED_PANEL
+            : current,
+      )
+    },
+    [rememberPanelOpener],
+  )
 
   useEffect(() => {
     const host = createSkinHost(boardRef.current!, { onSelectTask: selectTask })
@@ -196,8 +203,20 @@ export default function App({ store }: { store?: StageStore }) {
       current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
     )
   }, [])
-  const openModels = useCallback(() => setActivePanel({ kind: "models" }), [])
-  const openMake = useCallback(() => setActivePanel({ kind: "make" }), [])
+  const openModels = useCallback(
+    (opener: HTMLElement) => {
+      rememberPanelOpener(opener)
+      setActivePanel({ kind: "models" })
+    },
+    [rememberPanelOpener],
+  )
+  const openMake = useCallback(
+    (opener: HTMLElement) => {
+      rememberPanelOpener(opener)
+      setActivePanel({ kind: "make" })
+    },
+    [rememberPanelOpener],
+  )
   const makeAlike = useCallback(
     (initialFields: TaskFields) => setActivePanel({ kind: "make", initialFields }),
     [],
@@ -312,7 +331,7 @@ export default function App({ store }: { store?: StageStore }) {
           aria-current={activePanel.kind === "models" ? "page" : undefined}
           // Nothing to ask about until the daemon has named a project.
           disabled={!project}
-          onClick={openModels}
+          onClick={(event) => openModels(event.currentTarget)}
         >
           models
         </button>
@@ -323,7 +342,7 @@ export default function App({ store }: { store?: StageStore }) {
           // A card is written into a project's tasks folder, so there has to
           // be a project before there is anywhere to write it.
           disabled={!project}
-          onClick={openMake}
+          onClick={(event) => openMake(event.currentTarget)}
         >
           new task
         </button>
@@ -338,7 +357,7 @@ export default function App({ store }: { store?: StageStore }) {
               type="button"
               data-do="empty-new-task"
               disabled={!project}
-              onClick={openMake}
+              onClick={(event) => openMake(event.currentTarget)}
             >
               New task
             </button>
