@@ -153,9 +153,7 @@ function toolPurpose(data: Record<string, any>): string {
 function displayArguments(raw: unknown, command: string): string {
   const parsed = parsedArguments(raw)
   if (!parsed) return command ? "" : String(raw ?? "")
-  const rest = Object.fromEntries(
-    Object.entries(parsed).filter(([key]) => key !== "command" && key !== "purpose"),
-  )
+  const rest = Object.fromEntries(Object.entries(parsed).filter(([key]) => key !== "command"))
   return Object.keys(rest).length ? JSON.stringify(rest, null, 2) : ""
 }
 
