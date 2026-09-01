@@ -660,8 +660,14 @@ class _AgentLoop:
         """Run and record one call, whoever owns the surrounding tool loop."""
         if self.executor is None:  # Hands is never built in this state.
             raise NodeError(f"node '{self.spec.id}': no executor for tool call", node_id=self.spec.id)
-        arguments = dict(call.arguments)
-        raw_purpose = arguments.pop(_ACTIVITY_PURPOSE, "")
+        # Providers normally honor the object schema, but the executor already
+        # owns recovery when one does not. Preserve a malformed value so that
+        # recovery still produces a failed tool event instead of raising here.
+        arguments: Any = call.arguments
+        raw_purpose: Any = ""
+        if isinstance(arguments, dict):
+            arguments = dict(arguments)
+            raw_purpose = arguments.pop(_ACTIVITY_PURPOSE, "")
         purpose = raw_purpose.strip() if isinstance(raw_purpose, str) else ""
         executable = ToolCall(id=call.id, name=call.name, arguments=arguments)
         started = time.monotonic()

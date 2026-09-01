@@ -33,10 +33,6 @@ const MAX_INLINE_OUTPUT_LENGTH = 240
 function appearsInTimeline(event: PoieoEvent): boolean {
   if (event.type === "node_turn") {
     const data = event.data ?? {}
-    // A turn that reached for tools is the preamble to those calls. Each call
-    // now carries the useful sentence itself, so showing both makes one action
-    // read like two. Answering turns still stand on their own below.
-    if (Number(data.tool_call_count ?? 0) > 0) return false
     return Boolean(String(data.text ?? "") || String(data.thinking ?? ""))
   }
   return [
@@ -49,6 +45,29 @@ function appearsInTimeline(event: PoieoEvent): boolean {
     "run_failed",
     "run_aborted",
   ].includes(event.type)
+}
+
+function turnKey(event: PoieoEvent): string | null {
+  const turn = Number(event.data?.turn)
+  return event.node_id && Number.isFinite(turn) ? `${event.node_id}\u0000${turn}` : null
+}
+
+/** Fold a tool preamble only when every call it promised has its own record. */
+function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
+  const toolsByTurn = new Map<string, number>()
+  for (const event of events) {
+    if (event.type !== "node_tool_call") continue
+    const key = turnKey(event)
+    if (key) toolsByTurn.set(key, (toolsByTurn.get(key) ?? 0) + 1)
+  }
+  return events.filter((event) => {
+    if (event.type === "node_turn") {
+      const expected = Number(event.data?.tool_call_count ?? 0)
+      const key = turnKey(event)
+      if (expected > 0 && key && (toolsByTurn.get(key) ?? 0) >= expected) return false
+    }
+    return appearsInTimeline(event)
+  })
 }
 
 type ToolArguments = Record<string, unknown>
@@ -68,6 +87,24 @@ function parsedArguments(raw: unknown): ToolArguments | null {
 }
 
 function commandPurpose(command: string): string {
+  if (/\b(?:python|python3|py)\b[^;]*(?:-c|<<)/i.test(command)) {
+    return "Run a Python command for this task"
+  }
+
+  const checkoutRestore = command.match(
+    /\bgit\s+checkout\s+--\s+(?:"([^"]+)"|'([^']+)'|([^\s;|]+))/i,
+  )
+  if (checkoutRestore) {
+    return `Restore ${checkoutRestore[1] || checkoutRestore[2] || checkoutRestore[3]} from Git`
+  }
+
+  const sedEdit = /\bsed\b[^;|]*(?:\s-i\w*|\s--in-place(?:=\S*)?)(?:\s|$)/i.test(command)
+  if (sedEdit) {
+    const segment = command.match(/\bsed\b([^;|]*)/i)?.[1] ?? ""
+    const files = segment.match(/(?:[\w.-]+[\\/])*[\w.-]+\.[A-Za-z0-9]+/g)
+    return files?.length ? `Update ${files[files.length - 1]} with sed` : "Update files with sed"
+  }
+
   const prDiff = command.match(/(?:^|\s)gh\s+pr\s+diff\s+(\d+)/i)
   if (prDiff) return `Review the changes in PR #${prDiff[1]}`
   const prChecks = command.match(/(?:^|\s)gh\s+pr\s+checks\s+(\d+)/i)
@@ -105,9 +142,6 @@ function commandPurpose(command: string): string {
   const show = command.match(/\bgit\s+show\b(?:\s+--?[\w=-]+)*\s+([^\s;|]+)/i)
   if (show) return `Inspect ${show[1]}`
 
-  if (/\b(?:python|python3|py)\b[^;]*(?:-c|<<)/i.test(command)) {
-    return "Inspect behavior with Python"
-  }
   if (/Independent review/i.test(command)) return "Prepare the independent review"
   if (/(?:^|\s)git\s+status(?:\s|$)/i.test(command)) return "Check the working tree"
   if (/(?:^|\s)git\s+diff(?:\s|$)/i.test(command)) return "Review the current changes"
@@ -237,7 +271,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
       <li className="drawer-entry" data-kind="tool" data-error={String(failed)}>
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
         <details className="drawer-event drawer-tool">
-          <summary aria-label={`Show details: ${purpose}`}>
+          <summary>
             <span className="drawer-tool-purpose">{purpose}</span>
             <span className="drawer-tool-meta">
               {`${name || "tool"} · ${failed ? "failed" : "completed"}${slow}`}
@@ -552,7 +586,7 @@ export const Drawer = memo(function Drawer({
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
   const attention = attentionOf({ asking, pending, stale, status, latest: latestRun })
-  const timelineEvents = events?.filter(appearsInTimeline) ?? null
+  const timelineEvents = events ? visibleTimelineEvents(events) : null
   const reviewRunId =
     !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
 
