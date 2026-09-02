@@ -174,6 +174,35 @@ def build(at: Path, entries: list[tuple[str, str, str]]) -> None:
         con.commit()
 
 
+def entries_in(block_text: str) -> list[str]:
+    """The entry bodies in a block, without the page or the two headers."""
+    from poieo.memory.recall import LEARNED_HEADER
+
+    if LEARNED_HEADER not in block_text:
+        return []
+    return [part for part in block_text.split(LEARNED_HEADER, 1)[1].split(BREAK) if part.strip()]
+
+
+def judgement_key(case: "Case", bodies: list[str]) -> str:
+    """One judgement per task and candidate set, so a rerun costs nothing and
+    two runs on the same corpus give the same answer."""
+    seed = f"{case.name}|{case.prompt}|" + "|".join(sorted(bodies))
+    return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def judged(block_text: str, case: "Case", verdicts: dict[str, Any]) -> str:
+    """The block with what a judge said does not apply taken out.
+
+    No verdict means no filtering: a missing judgement must read as the
+    unjudged block rather than as an empty one.
+    """
+    bodies = entries_in(block_text)
+    kept = verdicts.get(judgement_key(case, bodies))
+    if kept is None:
+        return block_text
+    return BREAK.join(bodies[i] for i in range(len(bodies)) if str(i + 1) in {str(k) for k in kept})
+
+
 def block(at: Path, case: Case, extra: str = "") -> str:
     """What this task's next run would read. `extra` widens the task's own
     words, which is the task-side arm."""
@@ -255,6 +284,18 @@ item was given:
 
 """
 
+JUDGE = """Each task below is about to run, and has been handed lessons this project
+learned earlier. Some apply to it. Others only look as though they do: they are
+about a different system, file or service that happens to share vocabulary with
+this task, and following one would be a mistake.
+
+For each task, list the numbers of the lessons that actually apply to it.
+
+Answer with JSON only, keyed by the task number:
+{"1": [2, 5, 9], "2": [1, 4], ...}
+
+"""
+
 JOURNAL = """Each task below runs on a schedule and keeps a journal: one line per run, in
 its own words, saying what it did. Write the journal each of these would have
 after a few weeks of running -- 12 lines each, one sentence, under 300
@@ -310,6 +351,46 @@ async def _fill(
             answer = said.get(str(i + 1))
             if answer:
                 into[key] = answer
+
+
+async def write_verdicts(binding_path: Path) -> None:
+    """Ask a judge which of the candidates a task was handed actually apply.
+
+    This is the step that needs a model where nothing else here does, so it is
+    its own command: an ordinary scoring run reads what it wrote. One call per
+    class and size rather than one per task, and answers are keyed by the task
+    and its candidate set, so a rerun over an unchanged corpus asks nothing.
+    """
+    cases, data = load_cases()
+    sentences = filler_sentences()
+    verdicts: dict[str, Any] = dict(data.get("verdicts") or {})
+
+    for kind in KINDS:
+        mine = [c for c in cases if c.kind == kind]
+        for size in SIZES:
+            pool = candidates_for(kind, size, cases, data, sentences)
+            asking = []
+            for case in mine:
+                bodies = pool.get(case.slug, [])
+                if bodies and judgement_key(case, bodies) not in verdicts:
+                    asking.append((case, bodies))
+            if not asking:
+                continue
+            print(f"  judging {kind} at {size}: {len(asking)} tasks ...", flush=True)
+            body = BREAK.join(
+                f"TASK {n + 1}: {case.name} -- {case.prompt}\n"
+                + "\n".join(f"  {i + 1}. {text}" for i, text in enumerate(bodies))
+                for n, (case, bodies) in enumerate(asking)
+            )
+            said = await ask(binding_path, JUDGE + body)
+            for n, (case, bodies) in enumerate(asking):
+                answer = said.get(str(n + 1))
+                if answer is not None:
+                    verdicts[judgement_key(case, bodies)] = answer
+
+    data["verdicts"] = verdicts
+    CASES.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"wrote {len(verdicts)} judgements")
 
 
 async def write_terms(binding_path: Path) -> None:
@@ -385,6 +466,7 @@ ARMS: tuple[tuple[str, bool, str, str], ...] = (
     ("J  rarer words + both sides", True, "terms", "idf"),
     ("K  what it is about + both sides", True, "terms", "referent"),
     ("L  all three", True, "terms", "idf referent"),
+    ("M  all three, then judged", True, "terms", "idf referent judge"),
     ("E  embeddings", False, "dense", ""),
 )
 
@@ -445,6 +527,57 @@ def patch_ranking(shapes: dict[str, set[str]], referents: dict[str, set[str]], s
     return ranked
 
 
+def corpus_rows(kind: str, size: int, cases: list[Case], data: dict, sentences: list[str], with_terms: bool):
+    """One corpus: the lessons under test spread evenly through its ages, the
+    look-alikes and enough real prose to fill it. Each row is (slug, body,
+    terms).
+
+    The lessons are spread rather than heaped at one end because an entry the
+    task matches nothing in is ordered newest first, and putting them all oldest
+    or all newest would settle the answer before any arm ran.
+    """
+    mine = [c for c in cases if c.kind == kind]
+    lesson_terms = (data.get("terms") or {}).get("lesson", {})
+    traps = sorted(set(traps_for(data, mine).values()))
+    filler = [(filler_key(line), line) for line in sentences[: size - len(mine) - len(traps)]]
+
+    def row(slug: str, body: str) -> tuple[str, str, str]:
+        return (slug, body, lesson_terms.get(slug, "") if with_terms else "")
+
+    total = len(filler) + len(mine) + len(traps)
+    spread = {int(i * total / len(mine)): case for i, case in enumerate(mine)}
+    rest = iter([*traps, *filler])
+    rows = []
+    for age in range(total):
+        if age in spread:
+            rows.append(row(spread[age].slug, spread[age].lesson))
+        else:
+            slug, sentence = next(rest)
+            rows.append(row(slug, sentence))
+    return rows
+
+
+def candidates_for(kind: str, size: int, cases: list[Case], data: dict, sentences: list[str]) -> dict[str, list[str]]:
+    """What each task in this class would be shown by the best-scoring arm,
+    before any judge sees it -- so the judge is handed exactly what a run would
+    hand it."""
+    mine = [c for c in cases if c.kind == kind]
+    rows = corpus_rows(kind, size, cases, data, sentences, True)
+    referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
+    shapes = {slug: words(f"{body} {terms}") for slug, body, terms in rows}
+    task_terms = (data.get("terms") or {}).get("task", {})
+
+    at = Path(tempfile.gettempdir()) / "poieo-recall-judge"
+    build(at, rows)
+    kept = memory_recall._rank
+    memory_recall._rank = patch_ranking(shapes, referents, "idf referent")
+    try:
+        return {c.slug: entries_in(block(at, c, task_terms.get(c.slug, ""))) for c in mine}
+    finally:
+        memory_recall._rank = kept
+        shutil.rmtree(at, ignore_errors=True)
+
+
 Scored = tuple[int, int, int, float, str]
 
 
@@ -458,7 +591,7 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
     """
     mine = [c for c in cases if c.kind == kind]
     terms = data.get("terms") or {}
-    lesson_terms, task_terms = terms.get("lesson", {}), terms.get("task", {})
+    task_terms = terms.get("task", {})
     # A journal reaches the prompt as lines; as query words it is one string.
     # The short form is there to separate two explanations of a bad score:
     # a journal is noisy, and a journal is long. Only one of those is fixable
@@ -467,31 +600,13 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
     journals = {slug: " ".join(lines) for slug, lines in lines_of.items()}
     journals3 = {slug: " ".join(lines[-3:]) for slug, lines in lines_of.items()}
     aimed = traps_for(data, mine)
-    traps = sorted(set(aimed.values()))
     # What each entry says it is about, as words. The entity pass of a
     # multi-signal stack, written blind from the lesson alone.
     referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
-    filler = [(filler_key(s), s) for s in sentences[: size - len(mine) - len(traps)]]
+    verdicts = data.get("verdicts") or {}
 
     def corpus(with_terms: bool) -> list[tuple[str, str, str]]:
-        def row(slug: str, body: str) -> tuple[str, str, str]:
-            return (slug, body, lesson_terms.get(slug, "") if with_terms else "")
-
-        # The lessons under test are spread evenly through the corpus's ages
-        # rather than heaped at one end. An entry the task matches nothing in
-        # is ordered newest first, so putting them all oldest or all newest
-        # would settle the answer before any arm ran.
-        total = len(filler) + len(mine) + len(traps)
-        spread = {int(i * total / len(mine)): case for i, case in enumerate(mine)}
-        rest = iter([*traps, *filler])
-        rows = []
-        for age in range(total):
-            if age in spread:
-                rows.append(row(spread[age].slug, spread[age].lesson))
-            else:
-                slug, sentence = next(rest)
-                rows.append(row(slug, sentence))
-        return rows
+        return corpus_rows(kind, size, cases, data, sentences, with_terms)
 
     def shaped_of(with_terms: bool) -> dict[str, set[str]]:
         """Every entry's matched words, which is body plus terms when it has
@@ -519,9 +634,9 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
                     continue
                 vectors = dict(zip(bodies, got))
             # A block from `read_memory` opens with the page and two headers,
-            # which is two blank lines before the first entry; the dense arm
-            # builds its own block and has none.
-            head = 0 if widen == "dense" else 2
+            # which is two blank lines before the first entry. The dense arm
+            # and the judged one build their own block and have none.
+            head = 0 if widen == "dense" or "judge" in scoring else 2
             kept = memory_recall._rank
             if scoring:
                 memory_recall._rank = patch_ranking(shaped_of(with_terms), referents, scoring)
@@ -532,6 +647,8 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
                 else:
                     wider = {"terms": task_terms, "journal": journals, "journal3": journals3}.get(widen, {})
                     seen = block(at, case, wider.get(case.slug, ""))
+                    if "judge" in scoring:
+                        seen = judged(seen, case, verdicts)
                 if case.lesson in seen:
                     found += 1
                     places.append(seen[: seen.index(case.lesson)].count(BREAK) - head + 1)
@@ -546,10 +663,15 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write-terms", metavar="BINDING", type=Path, help="ask this binding for the terms first")
+    parser.add_argument("--judge", metavar="BINDING", type=Path, help="ask this binding which candidates apply")
     args = parser.parse_args()
 
     if args.write_terms:
         asyncio.run(write_terms(args.write_terms))
+        return
+
+    if args.judge:
+        asyncio.run(write_verdicts(args.judge))
         return
 
     cases, data = load_cases()
