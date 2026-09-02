@@ -285,20 +285,27 @@ def test_config_models_asks_every_provider_at_once(tmp_path, monkeypatch):
 
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    in_flight, overlapped = 0, False
+    in_flight, peak_in_flight = 0, 0
+    both_probes_started = asyncio.Event()
 
     async def models_for(type_, base_url=None, api_key_env=None):
-        nonlocal in_flight, overlapped
+        nonlocal in_flight, peak_in_flight
         in_flight += 1
-        overlapped = overlapped or in_flight > 1
-        await asyncio.sleep(0.02)
-        in_flight -= 1
+        peak_in_flight = max(peak_in_flight, in_flight)
+        if in_flight == 2:
+            both_probes_started.set()
+        try:
+            await asyncio.wait_for(both_probes_started.wait(), timeout=0.5)
+        except asyncio.TimeoutError:
+            pass  # a sequential implementation reaches the assertion below
+        finally:
+            in_flight -= 1
         return ()
 
     monkeypatch.setattr(detect_module, "models_for", models_for)
 
     assert runner.invoke(app, ["config", "models"]).exit_code == 0
-    assert overlapped, "providers were probed one after another"
+    assert peak_in_flight == 2, "providers were probed one after another"
 
 
 @pytest.mark.parametrize("argv", [["config"], ["config", "models"]])
