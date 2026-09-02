@@ -496,7 +496,7 @@ export function createTask(
 }
 
 /**
- * One task's card, as the file and as its three fields.
+ * One task's card, as the file and as the fields a form can show.
  *
  * The text is what the editor holds; the fields are what "make one like it"
  * prefills. Both come from the daemon because parsing YAML here would be a
@@ -509,9 +509,15 @@ export interface Card {
   folder: string | null
   prompt: string | null
   /**
-   * Whether the card can be rebuilt from the three fields alone. Plain, the
-   * board offers a form and the daemon spells the file; carrying more -- a
-   * schedule, an isolation, a comment -- it stays a file on screen, because
+   * The card's own schedule, or null when it wrote none and the daemon's
+   * interval default applies. A form input, not a label: it is the one
+   * advanced field the board can show whole.
+   */
+  every: string | number | null
+  /**
+   * Whether the card can be rebuilt from the fields the form shows. Plain,
+   * the board offers a form and the daemon spells the file; carrying more --
+   * an isolation, a `then:`, a comment -- it stays a file on screen, because
    * a form must never drop what it cannot show.
    */
   plain: boolean
@@ -543,11 +549,12 @@ export interface RewrittenCard extends Answer {
 export function rewriteCard(
   project: string,
   task: string,
-  card: string | { name: string; folder: string; prompt: string },
+  card: string | { name: string; folder: string; prompt: string; every: string },
 ): Promise<RewrittenCard> {
-  // Two spellings of one write: the raw file, or the three fields the daemon
+  // Two spellings of one write: the raw file, or the fields the daemon
   // serialises itself -- through the same dump make uses, so a person who
-  // came in through the form never touches YAML.
+  // came in through the form never touches YAML. An empty `every` is a
+  // schedule cleared; leaving the key out entirely would leave one standing.
   return withBody(
     "PUT",
     `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,

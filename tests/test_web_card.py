@@ -371,11 +371,13 @@ def test_a_three_field_card_says_it_is_plain(tmp_path):
     assert _get(client).json()["plain"] is True
 
 
-def test_a_card_carrying_more_than_the_three_fields_is_not_plain(tmp_path):
-    """A schedule, an isolation, a comment somebody wrote: a form would
+def test_a_card_carrying_more_than_the_form_can_show_is_not_plain(tmp_path):
+    """An isolation, a `then:`, a comment somebody wrote: a form would
     silently drop them on save, so such a card stays a file on screen."""
     client, cards = _client(tmp_path)
-    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n", encoding="utf-8")
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\nisolation: {image: sandbox}\n", encoding="utf-8"
+    )
     assert _get(client).json()["plain"] is False
 
     (cards / "already.yaml").write_text(
@@ -383,6 +385,26 @@ def test_a_card_carrying_more_than_the_three_fields_is_not_plain(tmp_path):
         encoding="utf-8",
     )
     assert _get(client).json()["plain"] is False
+
+
+def test_a_card_whose_only_extra_is_a_schedule_keeps_the_form(tmp_path):
+    """The common case: a card that runs on a timer is otherwise make's three
+    fields, and the form can show every one of them -- so it gets the form,
+    with the schedule read back beside the rest."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 1d\n", encoding="utf-8")
+
+    body = _get(client).json()
+    assert body["plain"] is True
+    assert body["every"] == "1d"
+    assert (body["name"], body["folder"], body["prompt"]) == ("Already", "../work", "x")
+
+
+def test_a_card_without_a_schedule_reads_its_every_back_as_nothing(tmp_path):
+    """No schedule is a value the form has to be able to show, and `null` is
+    how it says one -- not the interval default, which is the daemon's."""
+    client, cards = _client(tmp_path)
+    assert _get(client).json()["every"] is None
 
 
 def test_fields_rewrite_a_plain_card_through_the_same_dump_make_uses(tmp_path):
@@ -417,10 +439,62 @@ def test_fields_take_the_same_folder_fence_as_text(tmp_path):
     assert (cards / "already.yaml").read_text(encoding="utf-8") == before
 
 
+def test_fields_write_the_schedule_the_form_was_given(tmp_path):
+    """The schedule is the one advanced field the form shows, so it is the one
+    it may write -- through the same dump, in the card's own order."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 1d\n", encoding="utf-8")
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper words", "every": "6h"},
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == yaml.safe_dump(
+        {"name": "Already", "folder": "../work", "prompt": "sharper words", "every": "6h"},
+        allow_unicode=True,
+        sort_keys=False,
+    )
+
+
+def test_a_field_save_that_says_nothing_about_the_schedule_keeps_it(tmp_path):
+    """Absent from the body is unchanged, not gone -- the same rule `enabled`
+    takes. A caller sending three fields is editing three fields, and dropping
+    a schedule here would silently stop a task somebody relies on."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 1d\n", encoding="utf-8")
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "y"},
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert "every: 1d\n" in (cards / "already.yaml").read_text(encoding="utf-8")
+
+
+def test_a_field_save_clears_the_schedule_when_it_is_emptied(tmp_path):
+    """An input the form can write is an input the form can empty, and an
+    empty one means no schedule -- the card back to the daemon's default."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 1d\n", encoding="utf-8")
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "x", "every": ""},
+    )
+
+    assert answer.status_code == 200, answer.text
+    assert "every" not in (cards / "already.yaml").read_text(encoding="utf-8")
+
+
 def test_fields_refuse_a_card_that_is_not_plain(tmp_path):
     """The one thing a form must never do is drop what it cannot show."""
     client, cards = _client(tmp_path)
-    kept = "name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n"
+    kept = "name: Already\nfolder: ../work\nprompt: x\nisolation: {image: sandbox}\n"
     (cards / "already.yaml").write_text(kept, encoding="utf-8")
 
     answer = client.put(

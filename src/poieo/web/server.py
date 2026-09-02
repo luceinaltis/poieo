@@ -844,16 +844,17 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         return project, spec, None
 
     def _plain(text: str) -> bool:
-        """Whether a card can be rebuilt from the three fields alone.
+        """Whether a card can be rebuilt from the fields the form shows.
 
-        A form must never drop what it cannot show, so anything beyond
-        make's three keys -- a schedule, an isolation, a `then:` -- keeps the
-        card a file on screen. `enabled` is the fourth the form *can* show:
-        the panel has a switch for it, and make writes it, so a card carrying
-        one is still a card the form can rebuild without losing anything. A `#` anywhere counts too: comments live in
-        the bytes, not the parse, and the dump would silently lose them. The
-        cost of being wrong here is asymmetric on purpose -- a false "not
-        plain" is a raw editor, a false "plain" is somebody's schedule gone.
+        A form must never drop what it cannot show, so anything beyond them --
+        an isolation, a `then:`, an `input_file:` -- keeps the card a file on
+        screen. Make's three are the core; `enabled` and `every` are the two
+        beyond it the form *can* show, each with an input of its own, so a
+        card carrying them is still one the dump rebuilds whole. A `#`
+        anywhere counts too: comments live in the bytes, not the parse, and
+        the dump would silently lose them. The cost of being wrong here is
+        asymmetric on purpose -- a false "not plain" is a raw editor, a false
+        "plain" is somebody's schedule gone.
         """
         if "#" in text:
             return False
@@ -863,7 +864,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return False
         if not isinstance(data, dict):
             return False
-        return set(data) <= {"name", "folder", "prompt", "enabled"}
+        return set(data) <= {"name", "folder", "prompt", "enabled", "every"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -878,6 +879,19 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except Exception:
             return True
         return not isinstance(data, dict) or data.get("enabled", True) is not False
+
+    def _schedule(text: str) -> Any:
+        """The `every:` the card on disk carries, or None for no schedule.
+
+        Read from the bytes for the same reason `_switch` is: a save that says
+        nothing about the schedule must leave the one already written alone,
+        and the daemon's copy has had the interval default folded in.
+        """
+        try:
+            data = yaml.safe_load(text)
+        except Exception:
+            return None
+        return data.get("every") if isinstance(data, dict) else None
 
     async def project_task_card(request: Request) -> JSONResponse:
         """One task's card: the file read back, or rewritten in place.
@@ -934,6 +948,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
                     "enabled": fresh.enabled,
+                    # The card's own `every:`, not the interval the daemon
+                    # falls back to: null here means "no schedule written",
+                    # which is what an input has to be able to show and clear.
+                    "every": fresh.every,
                     "plain": _plain(text),
                 }
             )
@@ -967,11 +985,20 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     },
                     status_code=409,
                 )
+            # Absent means unchanged here too, and for the sharper reason: a
+            # caller sending the three fields is editing three fields, and
+            # dropping the schedule would silently stop a task on a save that
+            # never mentioned it. An `every` that *is* sent, empty, is a
+            # person clearing the input -- no schedule, the daemon's default.
+            every = body.get("every", _schedule(current))
             text = yaml.safe_dump(
                 {
                     "name": str(body.get("name") or spec.slug),
                     "folder": str(body.get("folder") or ""),
                     "prompt": str(body.get("prompt") or ""),
+                    # The card's own order, so a schedule sits where a hand
+                    # would have written it rather than after the switch.
+                    **({} if every is None or every == "" else {"every": every}),
                     # Written only when off, as make writes it: a card saying
                     # `enabled: true` says nothing a card without it does not.
                     #

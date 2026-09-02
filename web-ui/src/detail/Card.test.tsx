@@ -33,6 +33,7 @@ beforeEach(() => {
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    every: null,
     plain: false,
   })
   container = document.createElement("div")
@@ -253,6 +254,7 @@ test("a plain card opens as the three fields, not as a file", async () => {
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    every: null,
     plain: true,
   })
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
@@ -284,17 +286,64 @@ test("a plain card opens as the three fields, not as a file", async () => {
     name: "Chores",
     folder: "../work",
     prompt: "sharper",
+    every: "",
   })
   expect(container.textContent).toContain("next run")
 })
 
-test("a card carrying more than the three fields still opens as a file", async () => {
+test("a scheduled card shows its schedule in the form and saves an edit to it", async () => {
+  // The commonest card on a board runs on a timer, and the schedule is the one
+  // advanced field the form can show whole -- so an hour is changed here
+  // rather than by sending a person to raw YAML for it.
   fetchCard.mockResolvedValue({
     task: "chores",
-    text: "name: Chores\nfolder: ../work\nprompt: tidy\nevery: 15m\n",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nevery: 1d\n",
     name: "Chores",
     folder: "../work",
     prompt: "tidy",
+    every: "1d",
+    plain: true,
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
+  await open()
+
+  const every = container.querySelector<HTMLInputElement>(".card-field-every")!
+  expect(every.value).toBe("1d")
+
+  // Nothing changed, nothing to save -- the schedule joins that rule.
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(save().disabled).toBe(true)
+
+  await act(async () => {
+    const write = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!
+    write.call(every, "6h")
+    every.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    every: "6h",
+  })
+  // A schedule is not live, and the card says so rather than letting the
+  // reader believe the new hour is already armed.
+  expect(container.textContent).toContain("daemon restarts")
+})
+
+test("a card carrying more than the form can show still opens as a file", async () => {
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nisolation:\n  image: sandbox\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    every: null,
     plain: false,
   })
   await open()
