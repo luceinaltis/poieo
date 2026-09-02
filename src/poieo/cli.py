@@ -1472,6 +1472,18 @@ def eject(
         kept["every"] = task.every
     if task.at is not None:
         kept["at"] = task.at
+    if task.trigger is not None:
+        kept["trigger"] = task.trigger
+    # What the task is handed and what runs next describe the task, not the one
+    # node that became the graph -- dropping them here stopped a chain dead.
+    if task.input:
+        kept["input"] = task.input
+    if task.input_file is not None:
+        kept["input_file"] = task.input_file
+    if task.then:
+        kept["then"] = [branch.model_dump(mode="json", exclude_none=True) for branch in task.then]
+    if task.on_error != "continue":
+        kept["on_error"] = task.on_error
     if task.binding:
         kept["binding"] = task.binding
     if not task.enabled:
