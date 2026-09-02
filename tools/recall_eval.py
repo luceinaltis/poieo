@@ -31,7 +31,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -39,8 +39,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+import poieo.memory.recall as memory_recall  # noqa: E402
 from poieo.memory import frontmatter, read_memory, start_memory, write_entry, write_page  # noqa: E402
-from poieo.memory.entries import _shaped  # noqa: E402
+from poieo.memory.entries import _shaped, words  # noqa: E402
 from poieo.memory.recall import ENTRIES_BUDGET  # noqa: E402
 
 CASES = HERE / "recall_eval_cases.json"
@@ -50,6 +51,7 @@ FILLER = ROOT / "docs"
 # Both sizes are real prose. The larger one is close to what docs/ yields, so a
 # third and larger size would have to repeat sentences -- see `main`.
 SIZES = (120, 410)
+KINDS = ("same-words", "different-words", "different-subject")
 EMBED_MODEL = "nomic-embed-text"
 EMBED_URL = "http://localhost:11434/api/embed"
 # What separates one entry from the next in a block, and so how a place in it
@@ -241,6 +243,18 @@ the number each item was given:
 
 """
 
+REFERENT = """You keep a project's durable lessons. For each lesson below, name the one thing
+it is about -- the particular system, file, service or object it concerns, not
+the subject area it belongs to. "the nginx access logs", not "logging". If two
+lessons in a project were about different things in the same area, this is the
+line that would tell them apart.
+
+2-5 words each, lowercase. Answer with JSON only, keyed by the number each
+item was given:
+{"1": "<the thing>", "2": "<the thing>", ...}
+
+"""
+
 JOURNAL = """Each task below runs on a schedule and keeps a journal: one line per run, in
 its own words, saying what it did. Write the journal each of these would have
 after a few weeks of running -- 12 lines each, one sentence, under 300
@@ -305,9 +319,13 @@ async def write_terms(binding_path: Path) -> None:
     cases, data = load_cases()
     sentences = filler_sentences()[: max(SIZES)]
 
-    lessons = {c.slug: c.lesson for c in cases}
-    lessons |= {t["id"]: t["lesson"] for t in data.get("traps", [])}
-    lessons |= {filler_key(s): s for s in sentences}
+    # Grouped so that no batch holds two wordings of one lesson. The same
+    # lesson appears here twice, once in the task's words and once not, and
+    # generating them together let the model read one and answer for the other
+    # -- a paraphrase that never says "postgres" came back named after it.
+    groups = [[(c.slug, c.lesson) for c in cases if c.kind == kind] for kind in KINDS]
+    groups.append([(t["id"], t["lesson"]) for t in data.get("traps", [])])
+    groups += [[(filler_key(line), line) for line in sentences[at : at + 60]] for at in range(0, len(sentences), 60)]
     tasks = {c.slug: f"{c.name}: {c.prompt}" for c in cases}
 
     # Only what is missing. Adding a case should cost one small call, not a
@@ -315,10 +333,19 @@ async def write_terms(binding_path: Path) -> None:
     known = data.get("terms") or {}
     lesson_terms: dict[str, str] = dict(known.get("lesson") or {})
     task_terms: dict[str, str] = dict(known.get("task") or {})
-    items = [pair for pair in lessons.items() if pair[0] not in lesson_terms]
     tasks = {k: v for k, v in tasks.items() if k not in task_terms}
-    await _fill(binding_path, "lesson-side terms", LESSON_SIDE, items, 60, lesson_terms)
+    for group in groups:
+        want = [g for g in group if g[0] not in lesson_terms]
+        await _fill(binding_path, "lesson-side terms", LESSON_SIDE, want, 60, lesson_terms)
     await _fill(binding_path, "task-side terms", TASK_SIDE, list(tasks.items()), 60, task_terms)
+
+    # What each entry is about, for the entity pass. Written from the lesson
+    # alone, like its terms, and for the filler too or the pass is only scoring
+    # the cases.
+    referents: dict[str, Any] = dict(data.get("referents") or {})
+    for group in groups:
+        await _fill(binding_path, "referents", REFERENT, [g for g in group if g[0] not in referents], 60, referents)
+    data["referents"] = referents
 
     # A stand-in, and the weakest thing here: a real journal is written by the
     # runs themselves and carries their failures and the notes people left. One
@@ -342,16 +369,80 @@ async def write_terms(binding_path: Path) -> None:
 # words: nothing, terms a model wrote for that prompt, or the card's journal --
 # its own account of what it has been doing, which costs no model and cannot
 # go stale against a prompt somebody edits.
-ARMS: tuple[tuple[str, bool, str], ...] = (
-    ("A  words, as it is today", False, ""),
-    ("B  lesson-side terms", True, ""),
-    ("C  task-side terms", False, "terms"),
-    ("D  both sides", True, "terms"),
-    ("F  the card's own journal", False, "journal"),
-    ("G  lesson terms + journal", True, "journal"),
-    ("H  lesson terms + last 3 lines", True, "journal3"),
-    ("E  embeddings", False, "dense"),
+# label, whether entries carry written terms, what widens the task's words, and
+# how a shared word is counted. The last two are what the multi-signal stacks
+# call the keyword pass and the entity pass; the third pass is meaning, and it
+# is arm E.
+ARMS: tuple[tuple[str, bool, str, str], ...] = (
+    ("A  words, as it is today", False, "", ""),
+    ("B  lesson-side terms", True, "", ""),
+    ("C  task-side terms", False, "terms", ""),
+    ("D  both sides", True, "terms", ""),
+    ("F  the card's own journal", False, "journal", ""),
+    ("G  lesson terms + journal", True, "journal", ""),
+    ("H  lesson terms + last 3 lines", True, "journal3", ""),
+    ("I  rarer words count more", False, "", "idf"),
+    ("J  rarer words + both sides", True, "terms", "idf"),
+    ("K  what it is about + both sides", True, "terms", "referent"),
+    ("L  all three", True, "terms", "idf referent"),
+    ("E  embeddings", False, "dense", ""),
 )
+
+
+# A shared word is worth its rarity, scaled to whole numbers because a rank
+# carries one. Ten keeps a whole block's worth of matches well under the anchor
+# boost, which must stay the largest thing a score can hold.
+_RARITY = 10
+# What naming the same thing is worth, in shared words. Untuned: it is here to
+# see whether the signal separates anything at all, not to find its best value.
+_SAME_THING = 3
+
+
+def rarity(entries: dict[str, set[str]]) -> dict[str, float]:
+    """How much each word is worth: the fewer entries hold it, the more.
+
+    The standard inverse document frequency. Over a few hundred short entries
+    it is a coarse statistic and over twenty it is nearly none, which is the
+    first thing to doubt if this arm disappoints.
+    """
+    total = len(entries) or 1
+    seen: dict[str, int] = {}
+    for shaped in entries.values():
+        for word in shaped:
+            seen[word] = seen.get(word, 0) + 1
+    return {w: math.log(1 + (total - n + 0.5) / (n + 0.5)) for w, n in seen.items()}
+
+
+def patch_ranking(shapes: dict[str, set[str]], referents: dict[str, set[str]], scoring: str):
+    """Score the same candidates differently, and change nothing else.
+
+    Wraps the ranking rather than replacing recall, so scope, anchors,
+    association, the disagreement rule and the budget all still decide what
+    they decide. An anchored entry keeps its boost: the wrapper can see it in
+    the score it is handed and puts it back.
+    """
+    original = memory_recall._rank
+    weights = rarity(shapes) if "idf" in scoring else {}
+
+    def ranked(con, seed, use_index, where):
+        out = []
+        for found in original(con, seed, use_index, where):
+            anchored = found.score >= memory_recall._ANCHOR_BOOST
+            shared = seed & shapes.get(found.slug, set())
+            if weights:
+                score = round(_RARITY * sum(weights.get(word, 0.0) for word in shared))
+                unit = _RARITY
+            else:
+                score = len(shared)
+                unit = 1
+            if "referent" in scoring and seed & referents.get(found.slug, set()):
+                score += _SAME_THING * unit
+            if anchored:
+                score += memory_recall._ANCHOR_BOOST
+            out.append(replace(found, score=score))
+        return out
+
+    return ranked
 
 
 Scored = tuple[int, int, int, float, str]
@@ -377,6 +468,9 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
     journals3 = {slug: " ".join(lines[-3:]) for slug, lines in lines_of.items()}
     aimed = traps_for(data, mine)
     traps = sorted(set(aimed.values()))
+    # What each entry says it is about, as words. The entity pass of a
+    # multi-signal stack, written blind from the lesson alone.
+    referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
     filler = [(filler_key(s), s) for s in sentences[: size - len(mine) - len(traps)]]
 
     def corpus(with_terms: bool) -> list[tuple[str, str, str]]:
@@ -399,6 +493,11 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
                 rows.append(row(slug, sentence))
         return rows
 
+    def shaped_of(with_terms: bool) -> dict[str, set[str]]:
+        """Every entry's matched words, which is body plus terms when it has
+        them -- the same text the lookup was given."""
+        return {slug: words(f"{body} {terms}") for slug, body, terms in corpus(with_terms)}
+
     at = Path(tempfile.gettempdir()) / "poieo-recall-eval"
     others = {c.slug: c.lesson for c in mine}
     out: dict[str, Scored] = {}
@@ -410,7 +509,7 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
     # rebuild, and rebuilding is most of what this costs.
     for with_terms in (False, True):
         build(at, corpus(with_terms))
-        for arm, needs_terms, widen in ARMS:
+        for arm, needs_terms, widen, scoring in ARMS:
             if needs_terms is not with_terms:
                 continue
             if widen == "dense":
@@ -423,6 +522,9 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
             # which is two blank lines before the first entry; the dense arm
             # builds its own block and has none.
             head = 0 if widen == "dense" else 2
+            kept = memory_recall._rank
+            if scoring:
+                memory_recall._rank = patch_ranking(shaped_of(with_terms), referents, scoring)
             found, crowded, sprung, places = 0, 0, 0, []
             for case in mine:
                 if widen == "dense":
@@ -435,9 +537,10 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
                     places.append(seen[: seen.index(case.lesson)].count(BREAK) - head + 1)
                 crowded += sum(1 for slug, body in others.items() if slug != case.slug and body in seen)
                 sprung += 1 if case.slug in aimed and aimed[case.slug][1] in seen else 0
+            memory_recall._rank = kept
             out[arm] = (found, crowded, sprung, sum(places) / len(places) if places else 0.0, "")
     shutil.rmtree(at, ignore_errors=True)
-    return {label: out[label] for label, _, _ in ARMS if label in out}
+    return {label: out[label] for label, _, _, _ in ARMS if label in out}
 
 
 def main() -> None:
@@ -469,7 +572,7 @@ def main() -> None:
     print("A larger corpus was dropped, not silently capped: every entry needs its own written")
     print(f"terms for the lesson-side arm to be fair, and past {max(SIZES)} that costs more than it settles.\n")
 
-    for kind in ("same-words", "different-words", "different-subject"):
+    for kind in KINDS:
         mine = [c for c in cases if c.kind == kind]
         print(f"--- {kind} ({len(mine)} cases) ---")
         aimed = traps_for(data, mine)
