@@ -99,6 +99,16 @@ def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) ->
             meta.append(_chip("state", node.output.into_state))
         if node.retry.attempts > 1:
             meta.append(_chip("retry", f"{node.retry.attempts}x"))
+        # The ceilings: what bounds this node once it runs. A card that omits
+        # them draws a node with hands the same as one without.
+        if node.workdir:
+            meta.append(_chip("workdir", node.workdir))
+        if node.tools:
+            meta.append(_chip("tools", ", ".join(node.tools)))
+        if node.max_turns != type(node).model_fields["max_turns"].default:
+            meta.append(_chip("max turns", str(node.max_turns)))
+        if node.deadline:
+            meta.append(_chip("deadline", f"{node.deadline:g}s"))
         parts.append(f'<div class="chips">{"".join(meta)}</div>')
 
         if node.system:
