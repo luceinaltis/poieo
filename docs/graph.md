@@ -86,6 +86,10 @@ A router evaluates `branches` in order and chooses the first true `when`.
 `default` is used when none match. It calls no model and has no `next`; its
 selected target is the successor.
 
+Selecting nothing is how a graph stops on a condition, so both ways of doing it
+end the run: a matched branch with no `to`, and no branch matching when there is
+no `default`.
+
 ### `confirm`
 
 A confirm node renders a question and presents at least two distinct fixed
