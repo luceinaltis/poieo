@@ -1,9 +1,12 @@
+import re
+from pathlib import Path
+
 import pytest
 from conftest import EXAMPLES
 from pydantic import ValidationError
 
 from poieo.errors import SpecError
-from poieo.graph import GraphSpec, load_graph
+from poieo.graph import Branch, GraphSpec, load_graph
 
 
 def test_loads_example_graphs():
@@ -474,3 +477,16 @@ def test_a_confirm_node_refuses_the_model_keys():
     is read by a person rather than sent anywhere."""
     with pytest.raises(ValidationError, match="it calls no model"):
         GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}))
+
+
+def test_the_router_documentation_names_every_branch_key():
+    """A graph author writes branches from `docs/graph.md`, so a key the model
+    accepts and the document never names is a key nobody writes. The example
+    and the `router` prose together are the whole of what they read."""
+    doc = (Path(__file__).resolve().parents[1] / "docs" / "graph.md").read_text(encoding="utf-8")
+    example = re.search(r"^\s*branches:\n(.*?)^\s*default:", doc, re.M | re.S)
+    section = re.search(r"^### `router`$(.*?)^#", doc, re.M | re.S)
+    assert example and section, "docs/graph.md lost its router example or section"
+    named = set(re.findall(r"(\w+):", example.group(1))) | set(re.findall(r"`(\w+)`", section.group(1)))
+    missing = sorted(key for key in Branch.model_fields if key not in named)
+    assert not missing, f"docs/graph.md does not document branch keys: {missing}"

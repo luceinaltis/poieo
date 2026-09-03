@@ -82,9 +82,14 @@ on the numeric exit code.
 
 ### `router`
 
-A router evaluates `branches` in order and chooses the first true `when`.
-`default` is used when none match. It calls no model and has no `next`; its
-selected target is the successor.
+A router evaluates `branches` in order and chooses the first true `when`, and
+jumps to that branch's `to`. `default` is used when none match. It calls no
+model and has no `next`; its selected target is the successor.
+
+A branch may also carry an optional `label`: the short name the wiring is drawn
+with. The graph viewer and the editor put it on the edge and on the router's
+output port, falling back to the `when` expression when it is absent — so a
+condition too long to read on a diagram is worth labelling.
 
 ### `confirm`
 
