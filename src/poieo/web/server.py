@@ -1291,6 +1291,20 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except Exception:
             body = {}
         role = str((body or {}).get("role") or "default")
+        # `default`, and the roles the file names -- the same list the panel
+        # offers. `rebind` would happily *create* any other one, and a role
+        # nothing resolves is the `role: classifer` typo docs/binding.md warns
+        # about, written into a file somebody keeps. 400 and not 409: the
+        # argument is wrong, not the state.
+        offered = ["default", *sorted(spec.roles)]
+        if role not in offered:
+            return JSONResponse(
+                {
+                    "error": f"this project declares no role '{role}'",
+                    "roles": offered,
+                },
+                status_code=400,
+            )
         try:
             provider, model = split_ref(str((body or {}).get("target", "")))
         except BindingError as exc:
