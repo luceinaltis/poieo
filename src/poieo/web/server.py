@@ -1542,7 +1542,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         )
 
     def runs(request: Request) -> JSONResponse:
-        limit = int(request.query_params.get("limit", "20"))
+        try:
+            limit = int(request.query_params.get("limit", "20"))
+        except ValueError:
+            return JSONResponse({"error": "limit must be a number"}, status_code=400)
+        # The same bound memory search uses: a caller asking for everything
+        # gets a page, not the whole index.
+        limit = min(50, max(1, limit))
         task = request.query_params.get("task")
         # Both, for the same reason a control route takes both: `?task=chores`
         # alone would answer with every project's chores mixed together.

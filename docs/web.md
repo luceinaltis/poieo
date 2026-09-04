@@ -16,7 +16,7 @@ the project's display name; task parameters use the card filename stem.
 | request | response |
 |---|---|
 | `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, graph, trigger, status, hold, enabled/stale state, current and last run, review state, pending question, handoffs, and graph shape |
-| `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined |
+| `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
 | `GET /api/runs/{run_id}` | `{run_id, events}` or 404 |
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
