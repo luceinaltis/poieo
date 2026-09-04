@@ -154,7 +154,7 @@ class NodeSpec(_Spec):
     # Keys that only mean something when a model is being called. A node that
     # calls none must refuse them: a key that does nothing is worse than one
     # that is missing, because it reads as configured.
-    _MODEL_KEYS = ("role", "system", "prompt", "params", "tools")
+    _MODEL_KEYS = ("role", "system", "prompt", "params", "tools", "deadline")
 
     def _refuse_model_keys(self, keep: str = "") -> None:
         """``keep`` names the one key this type does use for something else --

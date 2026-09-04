@@ -201,9 +201,12 @@ def test_a_command_node_needs_a_command():
 
 
 def test_a_command_node_refuses_the_model_keys():
-    """`role`, `system`, `prompt`, `params`, `retry`, `max_turns` and `tools`
-    are all about calling a model, and this node calls none. A key that does
-    nothing is worse than one that is missing: it reads as configured."""
+    """`role`, `system`, `prompt`, `params`, `retry`, `max_turns`, `deadline`
+    and `tools` are all about calling a model, and this node calls none. A key
+    that does nothing is worse than one that is missing: it reads as
+    configured. `deadline` bounds a model step's turn loop and nothing else, so
+    on a command node it is a limit no one enforces -- `timeout` is the one
+    that stops a command."""
     for key, value in [
         ("role", "writer"),
         ("system", "be terse"),
@@ -211,6 +214,7 @@ def test_a_command_node_refuses_the_model_keys():
         ("params", {"temperature": 0}),
         ("tools", ["shell"]),
         ("max_turns", 3),
+        ("deadline", 30),
     ]:
         with pytest.raises(ValidationError, match="does not take"):
             GraphSpec.model_validate(_graph({"type": "command", "command": "true", key: value}))
@@ -474,3 +478,6 @@ def test_a_confirm_node_refuses_the_model_keys():
     is read by a person rather than sent anywhere."""
     with pytest.raises(ValidationError, match="it calls no model"):
         GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}))
+    # A confirm node waits on a person, who is not on a clock the run keeps.
+    with pytest.raises(ValidationError, match="it calls no model"):
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "deadline": 30}))
