@@ -461,6 +461,23 @@ def test_using_a_model_for_one_role_leaves_the_default_alone(tmp_path, monkeypat
     assert 'model: "qwen3.5:latest"' in text
 
 
+def test_a_role_the_binding_never_names_is_refused_and_the_file_is_untouched(tmp_path, monkeypatch):
+    """The panel only offers `default` plus the roles the file declares, so a
+    role arriving from anywhere else is a typo or a hand-written request -- and
+    writing it would create the `role: classifer` block docs/binding.md spends a
+    page warning about. 400 and not 409: the argument is wrong, not the state."""
+    _asks(monkeypatch, {"ollama": Catalogue((Served(id="llama3.2:3b"),))})
+    client = _client(tmp_path, binding=_BLOCK, tasks=False)
+    before = (tmp_path / "b.yaml").read_bytes()
+
+    reply = _use(client, "local/llama3.2:3b", role="classifer")
+
+    assert reply.status_code == 400
+    assert "classifer" in reply.json()["error"]
+    assert reply.json()["roles"] == ["default", "reader"]
+    assert (tmp_path / "b.yaml").read_bytes() == before
+
+
 def test_a_reference_without_a_slash_is_refused_in_the_products_voice(tmp_path, monkeypatch):
     """400 and not 409: the argument is malformed, not the state."""
     _asks(monkeypatch)
