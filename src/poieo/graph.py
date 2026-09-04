@@ -167,13 +167,20 @@ class NodeSpec(_Spec):
         if named:
             raise ValueError(f"{self.type} node '{self.id}' does not take {'/'.join(named)}: it calls no model")
 
+    # Keys that only mean something for a step that starts a process. A node
+    # of another type must refuse them, for the reason `_MODEL_KEYS` exists:
+    # `timeout` on an agent read as a budget and bounded nothing.
+    _COMMAND_KEYS = ("command", "script", "language", "timeout", "env")
+
     @model_validator(mode="after")
     def _check_shape(self) -> NodeSpec:
-        if self.type != "command" and self.command is not None:
-            raise ValueError(
-                f"{self.type} node '{self.id}' does not take a command. Change "
-                f"`type` to `command` for a step that runs one without a model"
-            )
+        if self.type != "command":
+            stray = [key for key in self._COMMAND_KEYS if getattr(self, key)]
+            if stray:
+                raise ValueError(
+                    f"{self.type} node '{self.id}' does not take {'/'.join(stray)}. "
+                    f"Change `type` to `command` for a step that runs one without a model"
+                )
         if self.type == "command":
             for name, value in self.env.items():
                 # `env` is rendered like a command and a prompt, so it is

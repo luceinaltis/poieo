@@ -70,9 +70,10 @@ A command node declares exactly one of:
 - a one-line `command`; or
 - `script` plus a known `language`.
 
-It may also set `timeout`, `env`, `workdir`, output, and `next`. Commands and
-scripts go through the same [executor](tools.md) used by model tools, so task
-isolation cannot be bypassed. Interpreted scripts are rendered as templates.
+It may also set `timeout`, `env`, `workdir`, output, and `next`. `command`,
+`script`, `language`, `timeout` and `env` mean nothing on any other node type,
+so loading refuses them there. Commands and scripts go through the same
+[executor](tools.md) used by model tools, so task isolation cannot be bypassed. Interpreted scripts are rendered as templates.
 Compiled script source is the build-cache key and is therefore not templated;
 varying input belongs in `env`.
 
