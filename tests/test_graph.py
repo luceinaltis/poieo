@@ -246,6 +246,23 @@ def test_an_agent_node_may_not_carry_a_command():
         GraphSpec.model_validate(_graph({"type": "agent", "prompt": "hi", "command": "pytest"}))
 
 
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("script", "print(1)"),
+        ("language", "python"),
+        ("timeout", 30),
+        ("env", {"CI": "1"}),
+    ],
+)
+def test_an_agent_node_may_not_carry_the_command_only_keys(key, value):
+    """`script`, `language`, `timeout` and `env` describe a process this node
+    never starts. They loaded clean on an agent and did nothing, which reads as
+    configured -- the same reason a stray `command` is refused."""
+    with pytest.raises(ValidationError, match=key):
+        GraphSpec.model_validate(_graph({"type": "agent", "prompt": "hi", key: value}))
+
+
 def test_a_commands_workdir_is_a_template_like_an_agents():
     with pytest.raises(ValidationError):
         GraphSpec.model_validate(_graph({"type": "command", "command": "true", "workdir": "{{ 1 + }}"}))
