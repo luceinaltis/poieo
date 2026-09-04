@@ -830,3 +830,101 @@ def test_a_switched_off_task_says_which_kind_of_stopped_it_is(tmp_path):
     row = client.get("/api/tasks").json()["tasks"][0]
     assert row["status"] == "paused"
     assert row["enabled"] is False
+
+
+# -- reading one graph file ---------------------------------------------------
+#
+# The board draws a graph from the shape that rides on `/api/tasks`, which is a
+# summary of a *resident* task. A graph file nothing runs yet has no such row,
+# and a view that wants to draw one -- or a card about to name it -- has to be
+# able to ask for the file itself.
+
+GRAPH_FILE = """\
+name: nightly
+entry: look
+nodes:
+  - id: look
+    type: agent
+    prompt: look around
+    next: report
+  - id: report
+    type: agent
+    prompt: write it down
+"""
+
+
+def test_a_graph_file_is_served_parsed(tmp_path):
+    """Parsed here rather than in the page: the graph schema is pydantic's, it
+    refuses a file poieo would refuse, and a second parser in the browser would
+    be a second thing to keep honest against it."""
+    (tmp_path / "nightly.yaml").write_text(GRAPH_FILE, encoding="utf-8")
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    answer = client.get(f"/api/projects/{tmp_path.name}/graphs/nightly.yaml")
+
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["name"] == "nightly"
+    assert body["entry"] == "look"
+    # The nodes and the arrows between them: what a drawing is made of.
+    assert [(node["id"], node["type"], node["next"]) for node in body["nodes"]] == [
+        ("look", "agent", "report"),
+        ("report", "agent", None),
+    ]
+
+
+def test_a_graph_that_is_not_there_is_404(tmp_path):
+    """A path is asked for by hand here, unlike a task id off the board, so
+    naming one that has never existed is an ordinary answer."""
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    answer = client.get(f"/api/projects/{tmp_path.name}/graphs/gone.yaml")
+    assert answer.status_code == 404, answer.text
+    # A path can also name a folder -- `graphs/` with nothing after it names
+    # the project root -- and reading a directory is a 500, not an answer.
+    assert client.get(f"/api/projects/{tmp_path.name}/graphs/").status_code == 404
+
+
+def test_a_graph_outside_the_project_is_refused(tmp_path):
+    """The fence, and the whole reason this route takes a path at all: read is
+    still reach. Without it one request reads any file on the machine whose name
+    happens to parse, over a port every page in the browser can reach."""
+    project = tmp_path / "here"
+    project.mkdir()
+    (tmp_path / "secret.yaml").write_text(GRAPH_FILE.replace("nightly", "s3cret"), encoding="utf-8")
+    daemon = stub_daemon(project)
+    client = TestClient(create_app(daemon))
+
+    # A plain `../` is not among these: httpx removes dot segments before the
+    # request leaves, as a browser does, so the escape that reaches this route
+    # is the encoded one -- and an absolute path, which nothing normalises away.
+    for attempt in ("%2E%2E/secret.yaml", "/etc/passwd", "%2E%2E/%2E%2E/secret.yaml"):
+        answer = client.get(f"/api/projects/here/graphs/{attempt}")
+        assert answer.status_code == 400, (attempt, answer.status_code, answer.text)
+        assert "s3cret" not in answer.text
+
+
+def test_a_graph_file_poieo_would_refuse_says_what_is_wrong(tmp_path):
+    """The same sentence `poieo run` would print. A file on disk that does not
+    load is a state the request cannot help, so it is 409 and not a 500 -- and
+    the reader gets the line that says which node is wrong."""
+    (tmp_path / "broken.yaml").write_text("name: broken\nentry: nowhere\nnodes: []\n", encoding="utf-8")
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    answer = client.get(f"/api/projects/{tmp_path.name}/graphs/broken.yaml")
+    assert answer.status_code == 409, answer.text
+    assert "nowhere" in answer.json()["error"]
+
+
+def test_a_graph_of_a_project_the_daemon_never_started_is_404(tmp_path):
+    """The project is the fence's anchor, so an unknown one is answered before
+    any path is resolved at all."""
+    (tmp_path / "nightly.yaml").write_text(GRAPH_FILE, encoding="utf-8")
+    daemon = stub_daemon(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    answer = client.get("/api/projects/elsewhere/graphs/nightly.yaml")
+    assert answer.status_code == 404, answer.text

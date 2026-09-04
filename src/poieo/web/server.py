@@ -45,6 +45,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError
+from ..graph import load_graph
 from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
 from ..memory.ask import ask_memory
 from ..memory.browse import entry_document, graph_snapshot, keyword_search
@@ -676,6 +677,65 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 ]
             }
         )
+
+    async def project_graph(request: Request) -> JSONResponse:
+        """One graph file, parsed, for anything that has to draw it.
+
+        The board already receives a graph's wiring, but only as `shape` on a
+        *resident* task: a summary of something the daemon is running. A graph
+        file that no card names yet has no such row, and it is exactly the one a
+        reader wants to look at before pointing a card at it.
+
+        Parsed here rather than in the page. The schema is pydantic's, it
+        refuses what `poieo run` would refuse, and a YAML parser in the browser
+        would be a second thing to keep honest against this one.
+
+        **The whole document crosses, prompts included.** That is the opposite
+        of what `_shape` does, and for the reason `_shape` gives: that body
+        rides out to every browser watching on every board paint, and this is a
+        file a person asked for by name -- the same line the models panel sits
+        on. Nothing here is resolved against a binding, so no credential is
+        anywhere near it.
+
+        Its fence is the project: read is still reach, and without one this
+        route reads any file on the machine that happens to parse as a graph,
+        over a port every page in the browser can reach.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        root = Path(project.config.base_dir).resolve()
+        # No expanduser: unlike a card's `folder`, this is a URL path, and a
+        # `~` in one is the name of a directory rather than a home to expand.
+        asked = Path(request.path_params["path"])
+        where = (root / asked).resolve()
+        if root != where and root not in where.parents:
+            return JSONResponse(
+                {"error": f"a graph read here lives inside this project; {where} is outside {root}"},
+                status_code=400,
+            )
+
+        def _read() -> Any:
+            # Asked before the load, and in the same thread as it: a URL path
+            # can name a folder -- `graphs/` with nothing after it names the
+            # project root -- and `load_graph` would try to read a directory.
+            if not where.is_file():
+                raise FileNotFoundError(where)
+            return load_graph(where)
+
+        try:
+            graph = await asyncio.to_thread(_read)
+        except FileNotFoundError:
+            # Also the answer to a file deleted between that check and the
+            # read, which is the same thing one moment later.
+            return JSONResponse({"error": f"no graph at '{asked.as_posix()}' in this project"}, status_code=404)
+        except PoieoError as exc:
+            # It is there and it does not load. Not this request's fault and
+            # not a 500: the sentence names the node, which is the fix.
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        # `source_path` is excluded from the dump: it is an absolute path on
+        # this machine, and the caller named the relative one it already knows.
+        return JSONResponse(graph.model_dump(mode="json"))
 
     def _slug(title: str) -> str:
         """A filename from a title, or "" if nothing usable is left.
@@ -1982,6 +2042,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # nothing is listening on costs a full timeout, and the catalogue must
         # not wait on its own footnote.
         Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
+        # A graph file, read straight off disk. `:path` because a graph lives
+        # wherever the card that names it says, which may be a folder or two
+        # down; the handler's fence is what keeps that inside the project.
+        Route("/api/projects/{project}/graphs/{path:path}", project_graph),
         # Models: the fourth kind. They write the project's binding file and
         # nothing else, and never accept or return a credential. `add` declares
         # an endpoint; `use` chooses among the models of one already declared.

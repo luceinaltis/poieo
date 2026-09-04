@@ -23,8 +23,16 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
 | `GET /api/projects/{project}/memory` | long-term-memory page, upkeep statistics, search capabilities, and a bounded relationship graph; supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, and write history, or 404 |
+| `GET /api/projects/{project}/graphs/{path}` | one graph file, parsed and validated, as the whole document: name, entry, nodes and their wiring |
 | `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
 | `GET /api/events?task=` | server-sent stored events and `tasks_changed` notifications |
+
+The graph read takes a path relative to the project root and must stay inside
+it; an absolute or escaping path is 400, a missing file 404, and a file that
+does not validate is 409 carrying the same sentence `poieo run` would print.
+Unlike the graph shape on `/api/tasks`, which rides on every board paint, this
+is one file a caller asked for by name and so returns the whole document,
+prompts included; nothing in it is resolved against a binding.
 
 Model metadata is whatever the endpoint reports. Unknown context, size,
 quantization, capability, or price remains null. The undeclared-engine probe is
