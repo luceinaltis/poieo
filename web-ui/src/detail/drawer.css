@@ -581,6 +581,17 @@
   margin: 0;
 }
 
+/* A folder poieo cannot protect. Red, not amber: nothing here is waiting for a
+   restart -- this task's edits have already landed in the reader's own files
+   and there is nothing to accept or throw away. The make panel says the same
+   thing before the button that creates such a task. */
+.drawer-undo {
+  color: var(--stop);
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 0;
+}
+
 /* A task its own card switched off. Said where the pause and run-now buttons
    would be, because that is where a reader goes to start something and the
    honest answer is that they cannot start it from here. */
