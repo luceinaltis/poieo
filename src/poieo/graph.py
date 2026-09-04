@@ -292,6 +292,10 @@ class NodeSpec(_Spec):
                 raise ValueError(f"router node '{self.id}' requires at least one branch")
             if self.prompt or self.role:
                 raise ValueError(f"router node '{self.id}' does not call a model; drop prompt/role")
+            # It picks a branch by evaluating expressions, so the rest of the
+            # model keys are as empty here as on a command node -- and were
+            # loaded in silence, which reads as configured.
+            self._refuse_model_keys()
             if self.next:
                 raise ValueError(f"router node '{self.id}' routes via branches/default, not next")
         if self.type != "confirm" and self.choices:

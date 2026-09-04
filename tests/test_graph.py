@@ -165,6 +165,21 @@ def test_a_router_takes_no_workdir_or_tools():
         GraphSpec.model_validate(spec)
 
 
+@pytest.mark.parametrize("key,value", [("system", "you are a router"), ("max_turns", 3)])
+def test_a_router_refuses_the_model_keys(key, value):
+    """A router picks a branch by evaluating expressions; nothing is sent to a
+    model. `system`, `params`, `max_turns` and `retry` were loaded in silence,
+    which reads as configured and is not."""
+    spec = {
+        "name": "g",
+        "entry": "a",
+        "nodes": [{"id": "a", "type": "router", "branches": [{"when": "true", "to": None}], key: value}],
+    }
+
+    with pytest.raises(ValidationError, match="it calls no model"):
+        GraphSpec.model_validate(spec)
+
+
 def test_a_model_node_may_have_no_tools_and_no_workdir():
     """What `type: llm` used to be, said with the tools line instead."""
     graph = GraphSpec.model_validate(
