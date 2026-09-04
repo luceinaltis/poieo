@@ -366,6 +366,18 @@ def test_runs_index_and_detail_and_404(tmp_path):
     assert client.get("/api/runs/nope").status_code == 404
 
 
+def test_runs_limit_is_validated_and_clamped(tmp_path):
+    daemon = stub_daemon(tmp_path)
+    for i in range(60):
+        daemon.store.record_summary({"run_id": f"r{i}", "task": "t", "status": "completed"})
+    client = TestClient(create_app(daemon))
+
+    # A limit that is not a number is bad input, not a crash.
+    assert client.get("/api/runs?limit=abc").status_code == 400
+    # And an unbounded one is capped where memory search caps its own.
+    assert len(client.get("/api/runs?limit=999999").json()["runs"]) == 50
+
+
 def test_root_serves_fallback_without_built_ui(tmp_path, monkeypatch):
     # Point away from the checked-in build so this covers a fresh checkout
     # rather than whatever `npm run build` last left in the package.
