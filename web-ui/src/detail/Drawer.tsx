@@ -554,6 +554,7 @@ export const Drawer = memo(function Drawer({
   pending = 0,
   into = null,
   asking = null,
+  keepsCopies,
   liveRuns = [],
   onClose,
   onDecided,
@@ -562,6 +563,10 @@ export const Drawer = memo(function Drawer({
   project: string
   task: string
   status?: string
+  /** Whether this task's project works in a private copy. Not optional: a
+      caller that forgot would silently drop the one sentence about somebody's
+      own files, so the answer is asked for. */
+  keepsCopies: boolean
   /** Whether the card file lets this task run at all. */
   enabled?: boolean
   /** Why the card file and the running task disagree, or null. */
@@ -728,6 +733,18 @@ export const Drawer = memo(function Drawer({
             {stale}
           </p>
         ) : null}
+
+        {/* Above the buttons that start a run, for the same reason the make
+            panel says it above the button that saves one: this is the last
+            thing read before somebody's own files change. Said on every read
+            rather than once at creation -- a task made yesterday, or by hand
+            in the tasks folder, never passed that panel. */}
+        {keepsCopies ? null : (
+          <p className="drawer-undo" role="status">
+            This project is not a git repository, so this task changes its folder
+            directly — its edits have no review or undo.
+          </p>
+        )}
 
         <Control
           project={project}

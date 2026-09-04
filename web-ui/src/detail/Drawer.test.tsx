@@ -83,7 +83,9 @@ async function draw(
 ) {
   fetchRuns.mockResolvedValue(runs)
   await act(async () => {
-    root.render(<Drawer project="board" task="chores" onClose={() => {}} {...props} />)
+    root.render(
+      <Drawer project="board" task="chores" keepsCopies onClose={() => {}} {...props} />,
+    )
   })
   await act(async () => {})
 }
@@ -109,6 +111,21 @@ test("the panel is named by the task heading", async () => {
   const labelledBy = panel.getAttribute("aria-labelledby")!
   expect(labelledBy).toBeTruthy()
   expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe("chores")
+})
+
+test("a task in a folder that cannot be protected says so, every time it is read", async () => {
+  await draw([run], { keepsCopies: false })
+
+  // The make panel says this once, at the moment the task is created. A task
+  // made yesterday -- or by somebody else, or by hand in the tasks folder --
+  // never passed that panel, and this is where its reader finds out.
+  expect(container.textContent).toContain("no review or undo")
+})
+
+test("a task whose project keeps copies is not warned about its own files", async () => {
+  await draw([run], { keepsCopies: true })
+
+  expect(container.textContent).not.toContain("no review or undo")
 })
 
 test("the first glance leads with attention and the newest run", async () => {
@@ -770,7 +787,9 @@ test("a card the daemon will not adopt says why, in the daemon's own words", asy
   const why = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
   fetchRuns.mockResolvedValue([])
   await act(async () => {
-    root.render(<Drawer project="board" task="chores" stale={why} onClose={() => {}} />)
+    root.render(
+      <Drawer project="board" task="chores" keepsCopies stale={why} onClose={() => {}} />,
+    )
   })
   await act(async () => {})
 

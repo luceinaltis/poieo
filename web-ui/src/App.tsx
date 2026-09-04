@@ -446,6 +446,13 @@ export default function App({ store }: { store?: StageStore }) {
           pending={selectedTaskState?.pending ?? selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
+          // Read from the drawer's own task rather than the selected project:
+          // the key names both, and the task is the one whose folder changes.
+          // A daemon too old to say is taken at its most careful, as the make
+          // panel takes it -- the sentence is about somebody's own files.
+          keepsCopies={
+            projects.find((one) => one.name === selectedTask?.project)?.keeps_copies ?? false
+          }
           liveRuns={selectedTaskState?.runs ?? []}
           onClose={closePanel}
           onDecided={resyncAfterAction}

@@ -144,7 +144,9 @@ working with a newer daemon.
 panel: task detail, models, task creation, or closed. It shows one project's
 stage at a time and keeps only view preferences in local storage. The task
 drawer leads with whether the reader must act and the latest or selected run's
-result, time, duration, change, or usage. That run owns its lazily fetched
+result, time, duration, change, or usage. A task in a project that keeps no
+copies says its edits have no review or undo, above the controls that start a
+run, as the creation panel does before saving one. That run owns its lazily fetched
 activity before the full-history picker: each tool call leads with the model's
 short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from
