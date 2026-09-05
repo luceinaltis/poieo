@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import tempfile
 from collections import Counter
 from dataclasses import dataclass
@@ -101,6 +102,13 @@ class Corpus:
 
 def _key(prefix: str, text: str) -> str:
     return prefix + hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _clean(slug: str) -> str:
+    """An entry name the memory will take: lowercase letters, digits, dashes.
+    A LongMemEval question id carries an underscore, and the judge died on the
+    first of those a quarter of the way in."""
+    return re.sub(r"[^a-z0-9-]", "-", slug.lower())
 
 
 # -- Entity-Collision ---------------------------------------------------------
@@ -234,7 +242,7 @@ class LongMemEval(Corpus):
             self._cases[kind] = []
             self._aimed[kind] = {}
             for n, q in enumerate(picked):
-                slug = f"lme-{q['question_id']}"
+                slug = _clean(f"lme-{q['question_id']}")
                 rows, gold, trap = self._turns(q, slug)
                 if gold is None:
                     continue
@@ -267,6 +275,17 @@ class LongMemEval(Corpus):
             if others:
                 trap = max(others, key=lambda pair: len(pair[1]))
         return rows, gold, trap
+
+    def load_store(self) -> dict[str, Any]:
+        # Terms and referents were written under the unclean names; read them
+        # back under the clean ones so nothing generated is lost to a dash.
+        data = super().load_store()
+        for table in (data.get("terms") or {}).values():
+            for key in list(table):
+                table[_clean(key)] = table.pop(key)
+        for key in list(data.get("referents") or {}):
+            data["referents"][_clean(key)] = data["referents"].pop(key)
+        return data
 
     def kinds(self) -> list[str]:
         return list(self._cases)
