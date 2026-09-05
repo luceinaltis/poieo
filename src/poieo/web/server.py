@@ -45,6 +45,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError
+from ..layout import layout_for
 from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
 from ..memory.ask import ask_memory
 from ..memory.browse import entry_document, graph_snapshot, keyword_search
@@ -1196,6 +1197,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         name's runner is still armed against a file that has moved, and the
         watched folder now holds the new one -- without the hold the same work
         would fire twice until a restart.
+
+        The journal goes with the card: it is named for the task, so a rename
+        that left it behind would hand the task back its own history as
+        "nothing yet".
         """
         project, spec, missing = _asked_card(request)
         if missing is not None:
@@ -1243,6 +1248,20 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     {"error": f"the card could not be moved; task '{spec.slug}' may already be gone"},
                     status_code=409,
                 )
+            # The journal is named for the card, so it moves with it or the
+            # renamed task wakes up with no history at all. Never onto one that
+            # exists: a journal already at the new name is some other task's
+            # night, and overwriting it would be the loss this move prevents --
+            # so the old one stays where a person can still find it.
+            was = spec.journal_path()
+            now = layout_for(spec.dir).journal(slug)
+            if was.exists() and not now.exists():
+                try:
+                    os.replace(was, now)
+                except OSError:
+                    # The card has moved already; a journal that would not follow
+                    # is not worth undoing the rename over.
+                    pass
             return None
 
         refused = await asyncio.to_thread(_move)
