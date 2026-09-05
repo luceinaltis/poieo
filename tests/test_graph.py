@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import pytest
 from conftest import EXAMPLES
 from pydantic import ValidationError
 
 from poieo.errors import SpecError
-from poieo.graph import GraphSpec, load_graph
+from poieo.graph import GraphSpec, NodeSpec, load_graph
 
 
 def test_loads_example_graphs():
@@ -474,3 +476,28 @@ def test_a_confirm_node_refuses_the_model_keys():
     is read by a person rather than sent anywhere."""
     with pytest.raises(ValidationError, match="it calls no model"):
         GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}))
+
+
+# The keys `NodeSpec` takes whatever a node's type is. Named here and checked
+# against the schema below, so a rename in graph.py fails this file rather than
+# leaving docs/graph.md quietly wrong.
+COMMON_NODE_FIELDS = ("description", "output", "next", "ui")
+
+
+def _common_fields_section() -> str:
+    """What `docs/graph.md` says under `## Node contracts` before the first type."""
+    doc = (Path(__file__).resolve().parents[1] / "docs" / "graph.md").read_text(encoding="utf-8")
+    return doc.split("## Node contracts", 1)[1].split("\n### ", 1)[0]
+
+
+def test_the_fields_common_to_all_nodes_are_still_in_the_schema():
+    missing = [name for name in COMMON_NODE_FIELDS if name not in NodeSpec.model_fields]
+    assert not missing, f"NodeSpec no longer takes {missing}; docs/graph.md still lists them"
+
+
+def test_docs_graph_lists_every_field_common_to_all_nodes():
+    """A key the loader accepts and the contract never names can only be found
+    by reading graph.py, which is what the document is there to spare."""
+    section = _common_fields_section()
+    missing = [name for name in COMMON_NODE_FIELDS if f"`{name}`" not in section]
+    assert not missing, f"docs/graph.md does not list {missing} among the fields common to all nodes"
