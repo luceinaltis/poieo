@@ -325,6 +325,17 @@ class NodeSpec(_Spec):
                 validate_template(self.prompt)
             except ExpressionError as exc:
                 raise ValueError(f"node '{self.id}': {exc}") from exc
+        # `default` says "none of the branches matched", and only a router has
+        # branches. Elsewhere it was accepted and never read -- and the graph's
+        # reachability walk followed it anyway, so a node reachable through
+        # nothing but a stray `default` passed the unreachable-node check. A
+        # confirm node is told the same thing in its own words, above.
+        if self.type != "router" and self.default is not None:
+            raise ValueError(
+                f"{self.type} node '{self.id}' does not take a default: only a "
+                f"router chooses between targets. A node with one successor "
+                f"names it with `next`"
+            )
         return self
 
 
