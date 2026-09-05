@@ -474,3 +474,15 @@ def test_a_confirm_node_refuses_the_model_keys():
     is read by a person rather than sent anywhere."""
     with pytest.raises(ValidationError, match="it calls no model"):
         GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "role": "r"}))
+
+
+def test_a_confirm_node_takes_no_workdir():
+    """Nothing runs at the question: a person reads it and the run ends. A
+    workdir there configures nothing, exactly as it does on a router."""
+    with pytest.raises(ValidationError, match="workdir"):
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "workdir": "/tmp"}))
+
+
+def test_a_confirm_node_without_a_workdir_still_loads():
+    graph = GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"]}))
+    assert graph.node("n").workdir is None
