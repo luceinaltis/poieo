@@ -303,6 +303,8 @@ class NodeSpec(_Spec):
             # It calls no model and runs nothing: it puts a question to the
             # person and the run ends there.
             self._refuse_model_keys(keep="prompt")
+            if self.workdir:
+                raise ValueError(f"confirm node '{self.id}' does not take a workdir: nothing runs there")
             if not self.prompt:
                 raise ValueError(f"confirm node '{self.id}' has nothing to ask; give it a prompt")
             if self.branches or self.default:
