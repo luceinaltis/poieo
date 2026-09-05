@@ -146,6 +146,12 @@ harness validates and writes:
   existing body;
 - the pass may suggest a page sentence, but only a person can write the page.
 
+Before the pass, the same schedule gives terms to any entry that has none --
+what was written before entries carried any, or by a pass whose model left
+them out. Forty lessons a completion, the body and everything else the entry
+says about itself passed back as they were, through the one door, so the
+history says a pass did it. An entry the model cannot answer for stays bare.
+
 The bookmark advances only after a successful pass. A failed pass records its
 failure and rereads the same records next time. An empty proposal is valid.
 Daemon-scheduled learning waits until no armed task is busy and cannot stop the
