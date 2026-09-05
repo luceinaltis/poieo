@@ -86,6 +86,47 @@ def test_landing_headline_can_wrap_on_a_narrow_screen():
     assert "white-space: nowrap" not in base_rule.group(1)
 
 
+def test_landing_keeps_the_brand_tree_out_of_the_product_demo():
+    source = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    hero = re.search(r'<section class="hero".*?</section>', source, re.S)
+    demo = re.search(r'<section class="cycle".*?</section>', source, re.S)
+    assert hero
+    assert demo
+    assert "hero-art" in hero.group(0)
+    assert "data-demo-panel" not in hero.group(0)
+    assert "hero-art" not in demo.group(0)
+    assert "data-demo-panel" in demo.group(0)
+
+
+def test_landing_demo_has_three_scroll_examples_and_arrow_controls():
+    source = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    assert len(re.findall(r"data-demo-step=", source)) == 3
+    assert len(re.findall(r"data-demo-panel=", source)) == 3
+    assert "data-demo-prev" in source
+    assert "data-demo-next" in source
+    assert 'aria-live="polite"' in source
+    assert '<script src="landing.js" defer></script>' in source
+
+
+def test_landing_demo_has_motion_and_small_screen_fallbacks():
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    script = (ROOT / "site" / "landing.js").read_text(encoding="utf-8")
+    assert "prefers-reduced-motion: reduce" in css
+    assert "prefers-reduced-motion: reduce" in script
+    assert "IntersectionObserver" in script
+    assert "scrollIntoView" in script
+    assert ".demo-mobile-shot" in css
+
+
+def test_landing_demo_stays_readable_and_keyboard_stable_at_the_edges():
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    script = (ROOT / "site" / "landing.js").read_text(encoding="utf-8")
+    assert "opacity: 0.38" not in css
+    assert "max-height: 650px" in css
+    assert 'setAttribute("aria-disabled"' in script
+    assert ".disabled =" not in script
+
+
 def test_running_tasks_use_live_green_not_the_review_accent():
     css = (ROOT / "web-ui" / "src" / "skins" / "basic" / "basic.css").read_text(encoding="utf-8")
     running = re.findall(r'\.basic-task\[data-status="running"\][^{]*\{([^}]+)\}', css)

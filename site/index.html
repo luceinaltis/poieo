@@ -9,6 +9,7 @@
 <link rel="canonical" href="https://luceinaltis.github.io/poieo/">
 <meta name="theme-color" content="#100e0c">
 <script src="theme.js"></script>
+<script src="landing.js" defer></script>
 
 <meta property="og:site_name" content="poieo">
 <meta property="og:title" content="poieo — Your models, at work.">
@@ -61,59 +62,103 @@
 <main>
 
 <section class="hero">
-  <!-- The tree is the hero's weather, not its exhibit: masked into the ground
-       so it reads as one painting with the page rather than a framed image. -->
-  <img class="hero-art" src="img/tree.jpg" width="1408" height="768" aria-hidden="true" alt="">
-  <div class="hero-copy">
-    <h1>Your models, at work.</h1>
-    <p class="descriptor">An autonomous task board for the models you choose.</p>
-    <p class="lead">Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.</p>
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <h1>Your models, at work.</h1>
+      <p class="descriptor">An autonomous task board for the models you choose.</p>
+      <p class="lead">Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.</p>
 
-    <div class="cta">
-      <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp;
+      <div class="cta">
+        <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp;
   pip install .</code>
-      <button type="button" data-copy="install" hidden>copy</button>
-    </div>
+        <button type="button" data-copy="install" hidden>copy</button>
+      </div>
 
-    <p class="buttons">
-      <a class="button primary" href="#sixty">Get started</a>
-      <a class="button" href="docs.html">Read the docs</a>
-    </p>
-    <p class="hero-note">Local or cloud, chosen per step. Your tasks stay on your machine; every change waits for you.</p>
+      <p class="buttons">
+        <a class="button primary" href="#sixty">Get started</a>
+        <a class="button" href="docs.html">Read the docs</a>
+      </p>
+      <p class="hero-loop" aria-hidden="true">WRITE THE TASK&nbsp;&nbsp;·&nbsp;&nbsp;LET IT RUN&nbsp;&nbsp;·&nbsp;&nbsp;REVIEW THE CHANGE</p>
+      <p class="hero-note">Local or cloud, chosen per step. Your tasks stay on your machine; every change waits for you.</p>
+    </div>
+    <!-- Brand picture and product proof are deliberately separate. The tree
+         stops here; the board below keeps its own graph language. -->
+    <div class="hero-visual" aria-hidden="true">
+      <img class="hero-art" src="img/tree.jpg" width="1408" height="768" alt="">
+    </div>
   </div>
 </section>
 
 <section class="cycle" aria-labelledby="cycle-title">
-  <p class="proof-label">THE WORKING LOOP</p>
-  <h2 id="cycle-title">Write the task. Let it run. Review the change.</h2>
-  <div class="cycle-steps">
-    <article>
-      <span>task</span>
-      <h3>Write the task</h3>
-      <p>A name, a folder, and a prompt. One plain file is enough.</p>
-    </article>
-    <article>
-      <span>run</span>
-      <h3>Let it run</h3>
-      <p>Pick the models that fit. poieo keeps the task moving on its schedule.</p>
-    </article>
-    <article>
-      <span>change</span>
-      <h3>Review the change</h3>
-      <p>Read the result and the diff. Accept it or discard it; you stay in control.</p>
-    </article>
-  </div>
-  <div class="cycle-proof">
-    <figure class="shot">
-      <img src="img/board.png" width="820" height="900"
-           alt="Five task cards on the poieo board, with one change waiting">
-      <figcaption>Tasks keep moving without becoming a wall of chats.</figcaption>
-    </figure>
-    <figure class="shot cycle-review">
-      <img src="img/task.png" width="1440" height="900"
-           alt="A task opened on the board, showing its runs and a change ready to review">
-      <figcaption>Every change comes back with its history and diff.</figcaption>
-    </figure>
+  <div class="cycle-inner">
+    <div class="cycle-heading">
+      <div>
+        <p class="proof-label">THE WORKING LOOP</p>
+        <h2 id="cycle-title">Write the task. Let it run. Review the change.</h2>
+      </div>
+      <p>One board can keep very different work moving. Scroll through three tasks; the product stays put while the models, schedule, and result change.</p>
+    </div>
+
+    <div class="demo-story" data-demo-story>
+      <div class="demo-steps">
+        <article class="demo-step" data-demo-step="0" aria-current="step">
+          <p class="demo-kind">EVERY 30 MINUTES</p>
+          <h3>Keep tests green</h3>
+          <p>Run the suite. A fast model finds the failure, a coding model fixes it, and a critic checks the change before it reaches you.</p>
+          <p class="demo-route"><span>watch</span><b>→</b><span>work</span><b>→</b><span>verify</span></p>
+          <img class="demo-mobile-shot" src="img/task.png" width="1440" height="900" loading="lazy"
+               alt="The keep-tests-green task running, with its change open for review">
+        </article>
+
+        <article class="demo-step" data-demo-step="1">
+          <p class="demo-kind">AFTER EACH CHANGE</p>
+          <h3>Tidy as you go</h3>
+          <p>Look for the small cleanup recent work left behind. A local model finds it; the model you choose leaves one focused change.</p>
+          <p class="demo-route"><span>notice</span><b>→</b><span>tidy</span><b>→</b><span>hold</span></p>
+          <img class="demo-mobile-shot" src="img/board.png" width="820" height="900" loading="lazy"
+               alt="The task board with tidy-as-you-go waiting for its next run">
+        </article>
+
+        <article class="demo-step" data-demo-step="2">
+          <p class="demo-kind">EVERY FRIDAY</p>
+          <h3>Write the week’s digest</h3>
+          <p>Gather the week’s accepted work, draft the digest, and let a second model tighten it. The finished change still waits for your decision.</p>
+          <p class="demo-route"><span>gather</span><b>→</b><span>draft</span><b>→</b><span>review</span></p>
+          <img class="demo-mobile-shot" src="img/board.png" width="820" height="900" loading="lazy"
+               alt="The task board with the weekly digest task ready for its schedule">
+        </article>
+      </div>
+
+      <div class="demo-stage">
+        <div class="demo-sticky">
+          <div class="demo-stage-head">
+            <span>THE BOARD, LIVE</span>
+            <span data-demo-title>Keep tests green</span>
+          </div>
+          <div class="demo-frame">
+            <figure class="demo-panel" data-demo-panel="0" aria-hidden="false">
+              <img src="img/task.png" width="1440" height="900" alt="">
+              <figcaption class="sr-only">The keep-tests-green task running, with its change open for review.</figcaption>
+            </figure>
+            <figure class="demo-panel" data-demo-panel="1" aria-hidden="true">
+              <img src="img/board.png" width="820" height="900" alt="">
+              <figcaption class="sr-only">The task board focused on tidy-as-you-go.</figcaption>
+            </figure>
+            <figure class="demo-panel" data-demo-panel="2" aria-hidden="true">
+              <img src="img/board.png" width="820" height="900" alt="">
+              <figcaption class="sr-only">The task board focused on the weekly digest.</figcaption>
+            </figure>
+          </div>
+          <div class="demo-controls" data-demo-controls hidden>
+            <p data-demo-status aria-live="polite">Example 1 of 3 — Keep tests green</p>
+            <div class="demo-arrows">
+              <button type="button" data-demo-prev aria-label="Previous example" aria-disabled="true">←</button>
+              <button type="button" data-demo-next aria-label="Next example" aria-disabled="false">→</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 

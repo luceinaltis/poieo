@@ -86,6 +86,17 @@ Explain the product in the order a person experiences it: **Write the task →
 Let it run → Review the change.** Night and morning may illustrate a use case,
 but they are not the brand promise.
 
+## Landing composition
+
+The landing page has two deliberately separate fields. The **Canopy** belongs
+to the brand: the tree and promise introduce work that keeps growing. The
+**Workbench** belongs to the product: a real board shows tasks, runs, and
+changes without borrowing branches or buds from the tree.
+
+Three concrete examples move through one fixed product frame as the reader
+scrolls. Previous and next arrows follow the same order; on small screens the
+examples stack instead, and reduced-motion preferences remove transitions.
+
 ## Registers — reference images
 
 Three generations kept here set the range of the voice. Keep their qualities,
