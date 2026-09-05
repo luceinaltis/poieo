@@ -25,8 +25,9 @@ database's full-text tables are derived and may be dropped and rebuilt; one
 indexes the shaped words used by autonomous recall and another indexes the raw
 Unicode text used by a person's search. Everything under `memory/cache/` is
 also derived: connection strength, anchored-file blobs, learning progress,
-compiled build artifacts, and `embeddings.sqlite3` may be recreated or lost
-without changing what the project knows.
+what else each task could be called, compiled build artifacts, and
+`embeddings.sqlite3` may be recreated or lost without changing what the
+project knows.
 
 The database is not a cache. Schema changes migrate rows forward in order.
 Opening a database written by a newer schema is refused rather than guessed at;
@@ -80,6 +81,12 @@ An anchor covering the task's folder receives priority. Direct mentions and
 `depends_on` links can bring neighboring entries with a chosen one; learned
 connection strength affects ordering but never changes the authored meaning.
 A `contradicts` link is a veto against showing both sides together.
+
+Recall asks with the card's name, prompt and folder, and with what else the
+card could be called when a learning pass has written that: other words for
+the same work, kept under `memory/cache/` stamped with the card text they were
+written for. A card edited since is asked with its own words alone until the
+next pass; nothing waits for that, and nothing is written into the card.
 
 Matching controls order, not admission. In-scope entries with no match fill
 remaining room after supported entries. Selection stops on whole-entry
@@ -139,6 +146,11 @@ harness validates and writes:
 - the pass may add an entry or set one aside, but never overwrite or delete an
   existing body;
 - the pass may suggest a page sentence, but only a person can write the page.
+
+Before the pass, the same schedule writes what else each card could be called,
+for any card whose words are missing or were written for other card text: one
+completion for all of them, none when nothing is stale, and a card the model
+cannot answer for stays as it was.
 
 The bookmark advances only after a successful pass. A failed pass records its
 failure and rereads the same records next time. An empty proposal is valid.
