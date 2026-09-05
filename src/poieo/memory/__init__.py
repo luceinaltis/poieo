@@ -34,6 +34,9 @@ from .entries import (
     write_entry,
     write_page,
 )
+from .judgements import candidates as judge_candidates
+from .judgements import is_stale as judgement_is_stale
+from .judgements import remember as remember_judgement
 from .recall import read_memory
 from .results import results_dir, used_in, write_result
 from .upkeep import doubts, memory_report, overview_watch_paths
@@ -45,6 +48,8 @@ __all__ = [
     "entry_named",
     "frontmatter",
     "history_of",
+    "judge_candidates",
+    "judgement_is_stale",
     "keeps_memory",
     "memory_report",
     "overview_watch_paths",
@@ -53,6 +58,7 @@ __all__ = [
     "read_memory",
     "read_page",
     "readable_entries",
+    "remember_judgement",
     "results_dir",
     "set_aside",
     "start_memory",

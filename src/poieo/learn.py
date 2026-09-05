@@ -28,11 +28,14 @@ from .memory import (
     Entry,
     doubts,
     frontmatter,
+    judge_candidates,
+    judgement_is_stale,
     keeps_memory,
     open_memory,
     page_written_at,
     read_page,
     readable_entries,
+    remember_judgement,
     results_dir,
     set_aside,
     used_in,
@@ -124,6 +127,83 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     result.let_go = _let_go(project_dir)
     _record(project_dir, result)
     return result
+
+
+# -- which of the candidates actually apply -----------------------------------
+
+_JUDGE = """Each task below is about to run, and has been handed lessons this project
+learned earlier. Some apply to it. Others only look as though they do: they are
+about a different system, file or service that happens to share vocabulary with
+this task, and following one would be a mistake.
+
+For each task, list the numbers of the lessons that actually apply to it.
+
+Answer with JSON only, keyed by the task number:
+{"1": [2, 5, 9], "2": [1, 4], ...}
+
+"""
+
+# Tasks per completion. A verdict is one line per task, and ten tasks of two
+# dozen short lessons is a page, not a book.
+_JUDGE_BATCH = 10
+
+
+async def refresh_judgements(
+    project_dir: Path, cards: list[Any], binding: BindingSpec, pool: ProviderPool
+) -> list[str]:
+    """For every card whose verdict is missing or was given over other text or
+    other candidates, put what it would be shown to a judge and keep what the
+    judge kept. Rides the learning schedule so a run never waits for it.
+
+    Returns the slugs judged. A model that does not answer usably writes
+    nothing; a verdict that would keep nothing at all is not believed either --
+    it is more likely a misread than a finding, and the block it would empty
+    is the one a run reads.
+    """
+    project_dir = Path(project_dir)
+    if not keeps_memory(project_dir):
+        return []
+    wanting = []
+    for card in cards:
+        shown = judge_candidates(project_dir, card)
+        if shown and judgement_is_stale(project_dir, card, shown):
+            wanting.append((card, shown))
+    if not wanting:
+        return []
+
+    resolved = binding.resolve(LEARNER_ROLE)
+    written: list[str] = []
+    for at in range(0, len(wanting), _JUDGE_BATCH):
+        batch = wanting[at : at + _JUDGE_BATCH]
+        body = "\n\n".join(
+            f"TASK {n + 1}: {card.name} -- {' '.join((card.prompt or '').split())}\n"
+            + "\n".join(f"  {i + 1}. {' '.join(entry.body.split())}" for i, entry in enumerate(shown))
+            for n, (card, shown) in enumerate(batch)
+        )
+        request = LLMRequest(
+            model=resolved.model,
+            messages=[{"role": "user", "content": _JUDGE + body}],
+            system=None,
+            params=dict(resolved.params),
+            role=LEARNER_ROLE,
+        )
+        try:
+            response = await pool.get(resolved.provider_name).complete(request)
+            said = _parse(response.text)
+        except Exception as exc:
+            log.warning("could not judge what the tasks are shown: %s: %s", type(exc).__name__, exc)
+            continue
+        for n, (card, shown) in enumerate(batch):
+            answer = said.get(str(n + 1))
+            if not isinstance(answer, list):
+                continue
+            keep = [shown[i - 1].slug for i in answer if isinstance(i, int) and 1 <= i <= len(shown)]
+            if not keep:
+                log.warning("the judge kept nothing for %s; not believed, and judged again next pass", card.slug)
+                continue
+            remember_judgement(project_dir, card, shown, keep)
+            written.append(card.slug)
+    return written
 
 
 # -- what has not been read yet ----------------------------------------------

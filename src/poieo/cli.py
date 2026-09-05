@@ -58,7 +58,7 @@ from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion
+from .learn import last_suggestion, refresh_judgements
 from .learn import learn as run_learning_pass
 from .memory import keeps_memory, memory_report, read_memory
 from .project import (
@@ -1424,6 +1424,10 @@ def learn(
 
     async def _go():
         async with ProviderPool(spec) as pool:
+            # Which of what each card would be shown actually applies, judged
+            # again for any card whose text or candidates changed; a run
+            # never waits for this.
+            await refresh_judgements(project, load_cards(project), spec, pool)
             return await run_learning_pass(project, spec, pool)
 
     result = asyncio.run(_go())

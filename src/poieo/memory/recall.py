@@ -29,6 +29,7 @@ from typing import Any
 from ..layout import layout_for
 from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
 from .index import narrow
+from .judgements import judgement
 
 # Budget for the learned entries that follow the page. Cut on whole-entry
 # boundaries, best first -- half a lesson is worse than none.
@@ -275,8 +276,13 @@ def _neighbours(con: sqlite3.Connection, slugs: set[str]) -> list[Entry]:
     return _fetch(con, sorted(reached - slugs))
 
 
-def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
-    """The entries this task earned, ranked, in budget. Never the page's room."""
+def recall(project_dir: Path, task: Any, use_index: bool = True, judge: bool = True) -> list[Entry]:
+    """The entries this task earned, ranked, in budget. Never the page's room.
+
+    ``judge`` applies a verdict a learning pass has left for this card over
+    exactly this candidate set -- which of them a model said actually apply --
+    and is off only for the pass that is about to write one.
+    """
     if not keeps_memory(project_dir):
         return []
     seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
@@ -379,7 +385,14 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
         have = {slug: entry for slug, entry in told.items()} | by_slug
         missing = [slug for slug in chosen if slug not in have]
         have |= {entry.slug: entry for entry in _fetch(con, missing)}
-    return [have[slug] for slug in chosen if slug in have]
+    shown = [have[slug] for slug in chosen if slug in have]
+    if not judge:
+        return shown
+    # A verdict left for this card over exactly these candidates drops what a
+    # judge said does not apply. No verdict, no filtering: the block is what it
+    # always was, and a run never waits for one.
+    keep = judgement(project_dir, task, shown)
+    return shown if keep is None else [entry for entry in shown if entry.slug in keep]
 
 
 def _also(where: "_Where", entry: Entry) -> bool:
