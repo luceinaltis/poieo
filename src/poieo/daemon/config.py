@@ -164,6 +164,9 @@ class LoadedTask(BaseModel):
     def read_input(self, config: DaemonConfig) -> dict[str, Any]:
         payload = dict(self.spec.input)
         if self.spec.input_file:
+            # Absolute already when the task came from a card, which resolved
+            # it against the card file; this stays for a path that arrived
+            # relative, and reads it the project's way.
             path = config.resolve_path(self.spec.input_file)
             if not path.exists():
                 raise SpecError(f"task '{self.spec.name}': input_file not found: {path}")

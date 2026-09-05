@@ -314,7 +314,11 @@ def expand(task: CardSpec, roster: list[str] | None = None) -> tuple[TaskSpec, G
             # none works on no folder, and has none to keep a copy of.
             workdir=str(task.folder_path()) if task.folder else None,
             input=dict(task.input),
-            input_file=task.input_file,
+            # Against the card too, for the reason `binding` gives above: a
+            # card names files from where it sits, and the daemon resolving
+            # this one against the project read a different file -- or none --
+            # than the card's author was pointing at.
+            input_file=str(task.resolve(task.input_file)) if task.input_file else None,
             then=list(task.then),
             on_error=task.on_error,
             # A task is a standing job, so what it learned last night is in
