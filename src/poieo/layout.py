@@ -63,6 +63,12 @@ class Layout:
     def learning_log(self) -> Path:
         return self.cache() / "learning.jsonl"
 
+    def judgements(self) -> Path:
+        """Which of the entries each task would be shown actually apply,
+        keyed to the card text and the candidate set they were judged over.
+        Derived: delete it and the next learning pass writes it again."""
+        return self.cache() / "judgements.json"
+
     # -- what a run leaves behind --------------------------------------------
     def runs(self) -> Path:
         return self.runs_override or self.root / "runs"

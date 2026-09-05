@@ -25,8 +25,9 @@ database's full-text tables are derived and may be dropped and rebuilt; one
 indexes the shaped words used by autonomous recall and another indexes the raw
 Unicode text used by a person's search. Everything under `memory/cache/` is
 also derived: connection strength, anchored-file blobs, learning progress,
-compiled build artifacts, and `embeddings.sqlite3` may be recreated or lost
-without changing what the project knows.
+which of its candidates each task was judged to need, compiled build
+artifacts, and `embeddings.sqlite3` may be recreated or lost without changing
+what the project knows.
 
 The database is not a cache. Schema changes migrate rows forward in order.
 Opening a database written by a newer schema is refused rather than guessed at;
@@ -86,6 +87,14 @@ remaining room after supported entries. Selection stops on whole-entry
 boundaries within a fixed prompt budget; an oversized entry is skipped rather
 than crowding out every entry below it.
 
+Last, a verdict a learning pass left for the card is applied: which of exactly
+these candidates a model said apply, kept under `memory/cache/` and keyed to
+the card's text and to each candidate's name and last change. It drops the
+look-alike -- a lesson about a neighbouring system with the opposite advice,
+which shares the task's words by construction and which no word-scoring
+separates. A card edited since, or a candidate set that has changed since, has
+no verdict and is shown as it always was; a run never waits for one.
+
 A memory read that fails during a run logs a warning and returns less context.
 Forgetting optional context is preferable to losing the primary work. Load-time
 schema and cross-entry errors remain configuration failures.
@@ -139,6 +148,14 @@ harness validates and writes:
 - the pass may add an entry or set one aside, but never overwrite or delete an
   existing body;
 - the pass may suggest a page sentence, but only a person can write the page.
+
+Before the pass, the same schedule judges what each card would be shown, for
+any card whose verdict is missing or was given over other text or other
+candidates: the candidates go to the model with the card, ten cards a
+completion, and what it rejects is dropped at recall. A model that cannot
+answer leaves the card unjudged, and a verdict that would keep nothing is not
+believed -- it is more likely a misread than a finding, and the block it would
+empty is the one a run reads.
 
 The bookmark advances only after a successful pass. A failed pass records its
 failure and rereads the same records next time. An empty proposal is valid.

@@ -1598,6 +1598,13 @@ class Daemon:
         config = project.config
         folder = config.resolve_path(config.cards)
         try:
+            # Which of what each card would be shown actually applies, judged
+            # again for any card whose text or candidates changed. Rides this
+            # schedule so a run never waits for it.
+            from ..card import load_cards
+            from ..learn import refresh_judgements
+
+            await refresh_judgements(folder, load_cards(folder), spec, pool)
             result = await learn_pass(folder, spec, pool)
         except Exception as exc:
             log.warning("the learning pass failed: %s", exc)
