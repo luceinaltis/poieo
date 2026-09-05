@@ -280,6 +280,25 @@ def test_every_card_in_the_folder_becomes_a_job(tmp_path):
     assert sorted(f.name for f in config.tasks) == ["one", "two"]
 
 
+def test_input_file_is_read_from_beside_the_card(tmp_path):
+    """A card names its input the way it names everything else: from where it
+    sits. Both files exist here, so reading the project's one is a wrong
+    answer rather than a missing file.
+
+    The mapping lives one folder down because the tasks folder itself holds
+    only cards and graphs -- a bare `data.yaml` beside the card would be read
+    as a card with a typo."""
+    write_card(tmp_path, "one", "name: one\nprompt: go\ninput_file: inputs/data.yaml\n")
+    for root, topic in ((tmp_path / "tasks", "beside the card"), (tmp_path, "beside the project")):
+        (root / "inputs").mkdir()
+        (root / "inputs" / "data.yaml").write_text(f"topic: {topic}\n", encoding="utf-8")
+
+    config = load_config(_config(tmp_path))
+    task = load_tasks(config)[0]
+
+    assert task.read_input(config)["topic"] == "beside the card"
+
+
 def test_a_missing_tasks_folder_fails_at_load(tmp_path):
     config = tmp_path / "poieo.yaml"
     config.write_text(
