@@ -80,3 +80,31 @@ def test_multiple_graphs_render_in_one_page():
     assert "<title>2 graphs</title>" in page
     assert page.count("<h2>Graph</h2>") == 2
     assert "<h2>Flow</h2>" not in page
+
+
+def test_a_confirm_card_shows_the_question_and_every_choice():
+    """A confirm node asks a person something and offers a fixed set of
+    answers. Drawn as a branch list it said neither: the question was dropped
+    and the only row was a `default` the node does not have."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "c",
+            "entry": "a",
+            "nodes": [
+                {"id": "a", "type": "agent", "prompt": "draft it", "next": "gate"},
+                {
+                    "id": "gate",
+                    "type": "confirm",
+                    "prompt": "Ship the release?",
+                    "choices": ["ship", "hold"],
+                },
+            ],
+        }
+    )
+    page = render_page([graph])
+
+    assert "Ship the release?" in page
+    assert '<code class="choice">ship</code><span class="hop">&rarr;</span><code>end</code>' in page
+    assert '<code class="choice">hold</code><span class="hop">&rarr;</span><code>end</code>' in page
+    # The run ends at the question, so there is no default arm to name.
+    assert 'class="fallback">default' not in page
