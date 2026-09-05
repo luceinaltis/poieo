@@ -71,8 +71,31 @@ def drop_lookup(con: sqlite3.Connection) -> None:
     it is derived, and a memory with no lookup reads every piece instead."""
     for trigger in (*_TRIGGERS, *_TEXT_TRIGGERS):
         con.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+    con.execute("DROP TABLE IF EXISTS pieces_vocab")
     con.execute("DROP TABLE IF EXISTS pieces_fts")
     con.execute("DROP TABLE IF EXISTS pieces_text_fts")
+
+
+def document_frequency(con: sqlite3.Connection, shapes: set[str]) -> dict[str, int] | None:
+    """How many pieces hold each of these shaped words, or None when there is
+    no lookup to ask -- the caller then counts by reading every shape, which
+    is the same answer at the slower path's usual price.
+
+    `fts5vocab` is a view over the lookup's own index: nothing is stored twice
+    and nothing can drift, and it goes when the lookup goes.
+    """
+    if not shapes or not ensure_lookup(con):
+        return None
+    try:
+        if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'pieces_vocab'").fetchone() is None:
+            con.execute("CREATE VIRTUAL TABLE pieces_vocab USING fts5vocab(pieces_fts, 'row')")
+            con.commit()
+        holes = ",".join("?" * len(shapes))
+        rows = con.execute(f"SELECT term, doc FROM pieces_vocab WHERE term IN ({holes})", sorted(shapes)).fetchall()
+    except sqlite3.Error as exc:
+        log.warning("memory word counts unavailable (%s); reading every piece instead", exc)
+        return None
+    return {term: int(doc) for term, doc in rows}
 
 
 @lru_cache(maxsize=None)

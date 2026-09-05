@@ -47,6 +47,26 @@ def test_the_entry_a_task_matches_comes_first(tmp_path):
     assert block.index("batch sizes over 50") < block.index("deploy pipeline")
 
 
+def test_a_rare_shared_word_outranks_two_common_ones(tmp_path):
+    """A shared word is worth its rarity across the memory, not one point.
+
+    Counting every shared word alike let an entry that shares two words the
+    whole memory uses outrank one that shares the single word only the task
+    and it use -- and that single word is the one that says what the entry is
+    about. Measured on three external corpora before it was built: the change
+    matched embeddings on recall and beat them on putting the right entry
+    first, at no cost in models.
+    """
+    task, project = _project(tmp_path)
+    _fact(project, "rare", "The importer chokes on an empty list.")
+    _fact(project, "common", "The api batch header is optional.")
+    for i in range(8):
+        _fact(project, f"filler-{i}", f"Note {i} about the api batch queue and nothing else.")
+
+    block = read_memory(project, task) or ""
+    assert block.index("chokes on an empty list") < block.index("header is optional")
+
+
 def test_room_left_over_goes_to_entries_the_task_matches_nothing_in(tmp_path):
     """The budget is what says no. Below it, an entry in scope is shown --
     dropping one to leave the room empty helps nobody."""

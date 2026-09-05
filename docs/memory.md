@@ -74,8 +74,10 @@ What earlier work here has learned:
 ```
 
 Recall first admits entries whose scope covers the task and excludes entries
-that are set aside. It narrows and ranks them by shared distinctive words, with
-the same conservative plural normalization on the task and the stored pieces.
+that are set aside. It narrows and ranks them by shared distinctive words, each
+worth more the fewer pieces hold it, with the same conservative plural
+normalization on the task and the stored pieces. Word counts come from the
+derived lookup when it exists and from reading every piece when it does not.
 An anchor covering the task's folder receives priority. Direct mentions and
 `depends_on` links can bring neighboring entries with a chosen one; learned
 connection strength affects ordering but never changes the authored meaning.
