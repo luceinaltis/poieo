@@ -126,6 +126,67 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     return result
 
 
+# -- terms for what was written before there were any ------------------------
+
+_ENTRY_TERMS = """You keep the long memory of a project of scheduled tasks. For each lesson
+below, write the words somebody would be using while doing the work this lesson
+applies to -- the vocabulary of the TASK, not of the lesson's own wording. You
+are not shown the tasks and must not guess at any particular one.
+
+8-12 words each, lowercase, space separated. Answer with JSON only, keyed by
+the number each lesson was given:
+{"1": "<words>", "2": "<words>", ...}
+
+"""
+
+# Lessons per completion. A lesson is a sentence or two; forty of them is a
+# page, and a model that answers by number keeps forty straight.
+_TERMS_BATCH = 40
+
+
+async def refresh_entry_terms(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> list[str]:
+    """Give terms to every entry that has none -- what was written before
+    entries carried any, or by a pass whose model left them out. Rides the
+    learning schedule, so nothing waits on it; an entry it cannot answer for
+    stays as it was, which is today's behaviour for that entry.
+
+    Rewrites the entry through the one door, so the history says a pass did
+    it and the piece the lookup matches on is rebuilt. The body and everything
+    an entry says about itself are passed back exactly as they were.
+    """
+    project_dir = Path(project_dir)
+    if not keeps_memory(project_dir):
+        return []
+    bare = [entry for entry in readable_entries(project_dir) if not entry.terms]
+    if not bare:
+        return []
+
+    resolved = binding.resolve(LEARNER_ROLE)
+    written: list[str] = []
+    for at in range(0, len(bare), _TERMS_BATCH):
+        batch = bare[at : at + _TERMS_BATCH]
+        body = "\n".join(f"{i + 1}: {' '.join(entry.body.split())}" for i, entry in enumerate(batch))
+        request = LLMRequest(
+            model=resolved.model,
+            messages=[{"role": "user", "content": _ENTRY_TERMS + body}],
+            system=None,
+            params=dict(resolved.params),
+            role=LEARNER_ROLE,
+        )
+        try:
+            response = await pool.get(resolved.provider_name).complete(request)
+            said = _parse(response.text)
+        except Exception as exc:
+            log.warning("could not write terms for the entries without any: %s: %s", type(exc).__name__, exc)
+            continue
+        for i, entry in enumerate(batch):
+            terms = said.get(str(i + 1))
+            if isinstance(terms, str) and terms.strip():
+                write_entry(project_dir, entry.slug, entry.body, entry.matter, writer="pass", terms=terms)
+                written.append(entry.slug)
+    return written
+
+
 # -- what has not been read yet ----------------------------------------------
 
 

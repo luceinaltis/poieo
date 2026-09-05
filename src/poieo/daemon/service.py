@@ -1598,6 +1598,11 @@ class Daemon:
         config = project.config
         folder = config.resolve_path(config.cards)
         try:
+            # Entries written before there were terms are given them here,
+            # ahead of the pass. Rides this schedule so a run never waits.
+            from ..learn import refresh_entry_terms
+
+            await refresh_entry_terms(folder, spec, pool)
             result = await learn_pass(folder, spec, pool)
         except Exception as exc:
             log.warning("the learning pass failed: %s", exc)
