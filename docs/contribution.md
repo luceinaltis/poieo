@@ -49,6 +49,12 @@ run needs no binding and repeats exactly. Nothing inside the repository is
 written. Run it when recall changes, and add a case when a real project turns
 out to hold a lesson it could not find.
 
+`--corpus entity`, `--corpus longmemeval` and `--corpus scifact` run the same
+arms on data nobody here wrote, to tell a real ordering from one the cases were
+shaped to produce. Those datasets and everything generated for them land in a
+temp folder and are never checked in; `tools/recall_eval_adapters.py` says what
+each is, and what it is not shaped like.
+
 ## Stacked branches after a squash merge
 
 A child branch may depend on an unmerged parent. Record that parent and its tip

@@ -740,7 +740,8 @@
       "trap-bill-usage": "call volume metrics retries attempts dedupe aggregation support tickets billing agent minutes",
       "trap-check-certs": "certificate expiry monitoring tls renewal alert threshold days self signed internal ca",
       "trap-import-feeds": "api batch request chunking pagination bulk upload archive payload size split loop",
-      "trap-publish-digest": "changelog release notes ordering sort entries version list display markdown newest"
+      "trap-publish-digest": "changelog release notes ordering sort entries version list display markdown newest",
+      "filler-75ef49283609": "eval dataset benchmark adapter recall fixtures download output artifacts gitignore tmp scratch"
     },
     "task": {
       "backup-db-same": "database dump backup postgres nightly cron offsite copy restore snapshot archive retention storage",
@@ -1700,7 +1701,8 @@
     "trap-bill-usage": "support call totals",
     "trap-check-certs": "internal certificates",
     "trap-import-feeds": "the archive api batch call",
-    "trap-publish-digest": "the changelog ordering"
+    "trap-publish-digest": "the changelog ordering",
+    "filler-75ef49283609": "the recall eval datasets"
   },
   "verdicts": {
     "5a040c82d545ab49": [
@@ -1977,6 +1979,153 @@
       16,
       26,
       30
+    ],
+    "64fe65eb405e9174": [
+      1
+    ],
+    "4806eab26d193220": [
+      1
+    ],
+    "c7929f4db9aeff4b": [
+      1
+    ],
+    "40261799d309f595": [
+      1
+    ],
+    "a3280ec5df2d1cdb": [
+      1
+    ],
+    "78f1c18d94d1a394": [
+      1
+    ],
+    "d171716589611c37": [
+      1
+    ],
+    "5419f92432494216": [
+      1
+    ],
+    "ef036661fa6916dc": [
+      1
+    ],
+    "f455b087c6e8854c": [
+      1
+    ],
+    "c95e2ae320712193": [
+      1
+    ],
+    "eff031a4134de331": [
+      1
+    ],
+    "71f968d22a9f1c60": [
+      4
+    ],
+    "7fa1e59fc755f119": [
+      24
+    ],
+    "2f3f62385362a8e0": [
+      1
+    ],
+    "de711cb1109dff5e": [
+      5
+    ],
+    "403fedfec4b87bfe": [
+      17
+    ],
+    "2aa643f84e73a98f": [
+      4,
+      32
+    ],
+    "19560ec079078587": [
+      1,
+      2,
+      3,
+      4,
+      9,
+      17,
+      24
+    ],
+    "bafaf61d7da4f0d3": [
+      1,
+      7,
+      8,
+      11,
+      13
+    ],
+    "bf8776044cfc38d2": [
+      5,
+      10,
+      17
+    ],
+    "da003af608490435": [
+      1,
+      4,
+      5,
+      8,
+      18
+    ],
+    "ab6b57c69b287dc0": [
+      1,
+      7,
+      8,
+      17
+    ],
+    "589adaa346775292": [
+      2,
+      4,
+      21,
+      32,
+      33,
+      34
+    ],
+    "eea7fffa06b9dc17": [
+      2,
+      8,
+      24
+    ],
+    "d7757bbe7e06da16": [
+      9,
+      12,
+      14,
+      15,
+      16,
+      21,
+      26
+    ],
+    "52c86507043d08f9": [
+      2,
+      7,
+      8,
+      16
+    ],
+    "b6c963947547bdc4": [
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      9,
+      10,
+      14,
+      15,
+      29
+    ],
+    "493b61b9b809cf49": [
+      1,
+      11
+    ],
+    "be66d82ae56b2c30": [
+      1,
+      5,
+      6,
+      15,
+      17,
+      27
     ]
+  },
+  "calls": {
+    "lesson-side terms": 1,
+    "referents": 1,
+    "verdicts": 6
   }
 }

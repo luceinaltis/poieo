@@ -5,14 +5,18 @@ differently from the task that needs it is never shown. This measures the
 candidate fixes against that baseline, on one yardstick: the block a run
 actually reads, through the same `read_memory` door a run goes through.
 
-    python tools/recall_eval.py                  # score every arm
-    python tools/recall_eval.py --write-terms    # ask a model for the terms first
+    python tools/recall_eval.py                          # score every arm
+    python tools/recall_eval.py --corpus scifact         # on data nobody here wrote
+    python tools/recall_eval.py --write-terms <binding>  # ask a model for the terms first
+    python tools/recall_eval.py --judge <binding>        # ask a model which candidates apply
 
-Not part of the gate. `--write-terms` needs a binding that answers, and the
-embedding arm needs a local ollama; both are skipped with a note rather than a
-crash. Everything it builds lives in a throwaway folder outside the repo.
+Not part of the gate. `--write-terms` and `--judge` need a binding that answers,
+and the embedding arm needs a local ollama; both are skipped with a note rather
+than a crash. Everything it builds lives in a throwaway folder outside the repo.
 
-Cases and generated terms: tools/recall_eval_cases.json.
+Cases and generated terms: tools/recall_eval_cases.json. External corpora and
+their generated inputs live in a temp folder and are never checked in:
+tools/recall_eval_adapters.py.
 Design: docs/memory.md
 """
 
@@ -31,13 +35,16 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(HERE))
+
+from recall_eval_adapters import Case, Corpus, Row, corpus_named  # noqa: E402
 
 import poieo.memory.recall as memory_recall  # noqa: E402
 from poieo.memory import frontmatter, read_memory, start_memory, write_entry, write_page  # noqa: E402
@@ -57,9 +64,12 @@ EMBED_URL = "http://localhost:11434/api/embed"
 # What separates one entry from the next in a block, and so how a place in it
 # is counted.
 BREAK = "\n\n"
+# The longest entry a corpus cut at top-N may hold. Adapters cap bodies here,
+# so N times this is room for exactly N entries and recall stops reading.
+LONGEST = 2500
 
 
-# -- the corpus -------------------------------------------------------------
+# -- the hand-written cases ---------------------------------------------------
 
 
 def filler_key(sentence: str) -> str:
@@ -91,35 +101,6 @@ def filler_sentences() -> list[str]:
     return found
 
 
-@dataclass
-class Case:
-    slug: str
-    kind: str
-    name: str
-    prompt: str
-    lesson: str
-
-
-@dataclass
-class Stub:
-    """What recall asks of a task, and nothing more."""
-
-    slug: str
-    name: str
-    prompt: str
-    folder: str
-    root: Path
-
-    def folder_path(self) -> Path:
-        return self.root / self.folder
-
-
-def load_cases() -> tuple[list[Case], dict]:
-    data = json.loads(CASES.read_text(encoding="utf-8"))
-    cases = [Case(c["id"], c["class"], c["task"]["name"], c["task"]["prompt"], c["lesson"]) for c in data["cases"]]
-    return cases, data
-
-
 def traps_for(data: dict, mine: list[Case]) -> dict[str, tuple[str, str]]:
     """The hard negative aimed at each of these tasks, by task id.
 
@@ -136,10 +117,88 @@ def traps_for(data: dict, mine: list[Case]) -> dict[str, tuple[str, str]]:
     return aimed
 
 
+class Cases(Corpus):
+    """The thirty hand-written tasks, their look-alikes, and real prose from
+    docs/ to fill the memory around them. What every number before the
+    external corpora came from."""
+
+    name = "cases"
+    cut = None
+    shared_rows = True
+    journals = True
+    store = CASES
+
+    def __init__(self) -> None:
+        self.data = json.loads(CASES.read_text(encoding="utf-8"))
+        self._cases = [
+            Case(c["id"], c["class"], c["task"]["name"], c["task"]["prompt"], c["lesson"]) for c in self.data["cases"]
+        ]
+        self.sentences = filler_sentences()
+
+    def kinds(self) -> list[str]:
+        return list(KINDS)
+
+    def cases(self, kind: str) -> list[Case]:
+        return [c for c in self._cases if c.kind == kind]
+
+    def sizes(self, kind: str) -> list[int]:
+        return list(SIZES)
+
+    def rows(self, kind, size, case, lesson_terms, with_terms) -> list[Row]:
+        """One corpus: the lessons under test spread evenly through its ages,
+        the look-alikes and enough real prose to fill it.
+
+        The lessons are spread rather than heaped at one end because an entry
+        the task matches nothing in is ordered newest first, and putting them
+        all oldest or all newest would settle the answer before any arm ran.
+        """
+        mine = self.cases(kind)
+        traps = sorted(set(self.aimed(kind).values()))
+        filler = [(filler_key(line), line) for line in self.sentences[: size - len(mine) - len(traps)]]
+
+        def row(slug: str, body: str) -> Row:
+            return (slug, body, lesson_terms.get(slug, "") if with_terms else "")
+
+        total = len(filler) + len(mine) + len(traps)
+        spread = {int(i * total / len(mine)): c for i, c in enumerate(mine)}
+        rest = iter([*traps, *filler])
+        out = []
+        for age in range(total):
+            if age in spread:
+                out.append(row(spread[age].slug, spread[age].lesson))
+            else:
+                slug, sentence = next(rest)
+                out.append(row(slug, sentence))
+        return out
+
+    def aimed(self, kind: str) -> dict[str, tuple[str, str]]:
+        return traps_for(self.data, self.cases(kind))
+
+    def lesson_groups(self) -> list[list[tuple[str, str]]]:
+        # Grouped so that no batch holds two wordings of one lesson. The same
+        # lesson appears here twice, once in the task's words and once not, and
+        # generating them together let the model read one and answer for the
+        # other -- a paraphrase that never says "postgres" came back named
+        # after it.
+        sentences = self.sentences[: max(SIZES)]
+        groups = [[(c.slug, c.lesson) for c in self.cases(kind)] for kind in KINDS]
+        groups.append([(t["id"], t["lesson"]) for t in self.data.get("traps", [])])
+        groups += [
+            [(filler_key(line), line) for line in sentences[at : at + 60]] for at in range(0, len(sentences), 60)
+        ]
+        return groups
+
+    def load_store(self) -> dict[str, Any]:
+        return self.data
+
+    def save_store(self, data: dict[str, Any]) -> None:
+        CASES.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 # -- building one throwaway project ----------------------------------------
 
 
-def build(at: Path, entries: list[tuple[str, str, str]]) -> None:
+def build(at: Path, entries: list[Row]) -> None:
     """A project holding these entries, oldest first. Each is (slug, body, terms).
 
     Terms go into the *piece* -- the part of an entry retrieval matches on,
@@ -164,7 +223,7 @@ def build(at: Path, entries: list[tuple[str, str, str]]) -> None:
         for age, (slug, _, terms) in enumerate(entries):
             con.execute(
                 "UPDATE entries SET updated_at = ? WHERE slug = ?",
-                (f"2020-01-01T00:{age // 60:02d}:{age % 60:02d}+00:00", slug),
+                (f"2020-01-01T{age // 3600:02d}:{age // 60 % 60:02d}:{age % 60:02d}+00:00", slug),
             )
             if terms:
                 con.execute(
@@ -175,22 +234,29 @@ def build(at: Path, entries: list[tuple[str, str, str]]) -> None:
 
 
 def entries_in(block_text: str) -> list[str]:
-    """The entry bodies in a block, without the page or the two headers."""
+    """The entry bodies in a block, without the page or the two headers.
+
+    A block cut at top-N or already judged has been rebuilt without its
+    headers and is entries only; reading that as "no header, so no entries"
+    handed the judge an empty candidate list for every long-document task.
+    """
     from poieo.memory.recall import LEARNED_HEADER
 
-    if LEARNED_HEADER not in block_text:
-        return []
-    return [part for part in block_text.split(LEARNED_HEADER, 1)[1].split(BREAK) if part.strip()]
+    if LEARNED_HEADER in block_text:
+        block_text = block_text.split(LEARNED_HEADER, 1)[1]
+    elif block_text.startswith(memory_recall.PAGE_HEADER):
+        return []  # a page and nothing learned
+    return [part for part in block_text.split(BREAK) if part.strip()]
 
 
-def judgement_key(case: "Case", bodies: list[str]) -> str:
+def judgement_key(case: Case, bodies: list[str]) -> str:
     """One judgement per task and candidate set, so a rerun costs nothing and
     two runs on the same corpus give the same answer."""
     seed = f"{case.name}|{case.prompt}|" + "|".join(sorted(bodies))
     return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
 
 
-def judged(block_text: str, case: "Case", verdicts: dict[str, Any]) -> str:
+def judged(block_text: str, case: Case, verdicts: dict[str, Any]) -> str:
     """The block with what a judge said does not apply taken out.
 
     No verdict means no filtering: a missing judgement must read as the
@@ -200,17 +266,57 @@ def judged(block_text: str, case: "Case", verdicts: dict[str, Any]) -> str:
     kept = verdicts.get(judgement_key(case, bodies))
     if kept is None:
         return block_text
-    return BREAK.join(bodies[i] for i in range(len(bodies)) if str(i + 1) in {str(k) for k in kept})
+    keep = {str(k) for k in kept}
+    return BREAK.join(bodies[i] for i in range(len(bodies)) if str(i + 1) in keep)
 
 
-def block(at: Path, case: Case, extra: str = "") -> str:
+def block(at: Path, case: Case, extra: str = "", cut: int | None = None) -> str:
     """What this task's next run would read. `extra` widens the task's own
-    words, which is the task-side arm."""
-    task = Stub(case.slug, case.name, f"{case.prompt} {extra}".strip(), "work", at)
-    return read_memory(at, task) or ""
+    words, which is the task-side arm.
+
+    A corpus of long documents is cut at the top N by rank instead of the
+    character budget, which would show two abstracts and mean nothing. Done by
+    lifting the budget for the read and keeping the first N, so every other
+    rule recall applies still applies.
+    """
+    from recall_eval_adapters import Case as _Case
+
+    class Stub(_Case):
+        def __init__(self, root: Path, **kw: Any) -> None:
+            super().__init__(**kw)
+            self.folder = "work"
+            self._root = root
+
+        def folder_path(self) -> Path:
+            return self._root / self.folder
+
+    task = Stub(at, slug=case.slug, kind=case.kind, name=case.name, prompt=f"{case.prompt} {extra}".strip(), lesson="")
+    if cut is None:
+        return read_memory(at, task) or ""
+    # Room for N of the longest entries, not for everything: with the budget
+    # lifted outright, recall read every body in the corpus for every task and
+    # a thousand abstracts times three hundred claims did not finish.
+    kept = memory_recall.ENTRIES_BUDGET
+    memory_recall.ENTRIES_BUDGET = cut * LONGEST
+    try:
+        text = read_memory(at, task) or ""
+    finally:
+        memory_recall.ENTRIES_BUDGET = kept
+    return BREAK.join(entries_in(text)[:cut])
 
 
 # -- the embedding arm ------------------------------------------------------
+
+
+def ollama_up() -> bool:
+    """Asked once per scoring run. A server that is listening but not
+    answering made every embedding call wait out its timeout, and a run with
+    six hundred of them never finished."""
+    try:
+        urllib.request.urlopen(EMBED_URL.rsplit("/", 2)[0] + "/api/tags", timeout=3).read()
+        return True
+    except (urllib.error.URLError, OSError):
+        return False
 
 
 def embed(texts: list[str]) -> list[list[float]] | None:
@@ -219,7 +325,7 @@ def embed(texts: list[str]) -> list[list[float]] | None:
         body = json.dumps({"model": EMBED_MODEL, "input": texts[at : at + 64]}).encode()
         req = urllib.request.Request(EMBED_URL, data=body, headers={"Content-Type": "application/json"})
         try:
-            out += json.loads(urllib.request.urlopen(req, timeout=300).read())["embeddings"]
+            out += json.loads(urllib.request.urlopen(req, timeout=60).read())["embeddings"]
         except (urllib.error.URLError, OSError, KeyError):
             return None
     return out
@@ -230,22 +336,26 @@ def cosine(a: list[float], b: list[float]) -> float:
     return dot / (math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b)) + 1e-9)
 
 
-def dense_block(case: Case, corpus: dict[str, str], vectors: dict[str, list[float]]) -> str:
+def dense_block(
+    case: Case, corpus: dict[str, str], vectors: dict[str, list[float]], cut: int | None, seeds: dict[str, list[float]]
+) -> str:
     """The same cut applied to a different order: nearest first, whole entries,
     the same character budget. Everything else recall does -- scope, anchors,
     association, the disagreement rule -- is missing here, and that asymmetry
     is stated in the output rather than hidden."""
-    seed = embed([f"{case.name} {case.prompt} work"])
+    seed = seeds.get(case.slug)
     if seed is None:
         return ""
-    order = sorted(corpus, key=lambda slug: -cosine(seed[0], vectors[slug]))
+    order = sorted(corpus, key=lambda slug: -cosine(seed, vectors[slug]))
+    if cut is not None:
+        return BREAK.join(corpus[slug] for slug in order[:cut])
     chosen, spent = [], 0
     for slug in order:
         if spent + len(corpus[slug]) > ENTRIES_BUDGET:
             continue
         chosen.append(corpus[slug])
         spent += len(corpus[slug])
-    return "\n\n".join(chosen)
+    return BREAK.join(chosen)
 
 
 # -- writing the terms, blind ----------------------------------------------
@@ -329,11 +439,21 @@ async def ask(binding_path: Path, prompt: str) -> dict[str, Any]:
             )
         )
     text = answer.text
-    return json.loads(text[text.index("{") : text.rindex("}") + 1])
+    # The first complete object, not the span from the first brace to the
+    # last: a model that adds a second object or a braced remark after its
+    # answer turned that span into "extra data" nine calls into a run.
+    found, _ = json.JSONDecoder().raw_decode(text[text.index("{") :])
+    return found
 
 
 async def _fill(
-    binding: Path, what: str, prompt: str, items: list[tuple[str, str]], per: int, into: dict[str, Any]
+    binding: Path,
+    what: str,
+    prompt: str,
+    items: list[tuple[str, str]],
+    per: int,
+    into: dict[str, Any],
+    calls: dict[str, int],
 ) -> None:
     """Ask for what is missing, a batch at a time, and file the answers.
 
@@ -346,99 +466,110 @@ async def _fill(
     for at in range(0, len(items), per):
         batch = items[at : at + per]
         print(f"  {what} {at + len(batch)}/{len(items)} ...", flush=True)
-        said = await ask(binding, prompt + "\n".join(f"{i + 1}: {text}" for i, (_, text) in enumerate(batch)))
+        body = prompt + "\n".join(f"{i + 1}: {text}" for i, (_, text) in enumerate(batch))
+        said: dict[str, Any] = {}
+        # One retry, then move on: a two-hundred-call run must not die on
+        # the ninth, and a batch that is skipped reads as entries with no
+        # terms, which the scorer counts and says.
+        for attempt in (1, 2):
+            try:
+                said = await ask(binding, body)
+                calls[what] = calls.get(what, 0) + 1
+                break
+            except Exception as exc:  # noqa: BLE001 -- a provider hiccup must not end a long run either
+                print(f"  {what}: attempt {attempt} failed ({type(exc).__name__}: {str(exc)[:120]})", flush=True)
         for i, (key, _) in enumerate(batch):
             answer = said.get(str(i + 1))
             if answer:
                 into[key] = answer
 
 
-async def write_verdicts(binding_path: Path) -> None:
+async def write_verdicts(corpus: Corpus, binding_path: Path) -> None:
     """Ask a judge which of the candidates a task was handed actually apply.
 
     This is the step that needs a model where nothing else here does, so it is
     its own command: an ordinary scoring run reads what it wrote. One call per
-    class and size rather than one per task, and answers are keyed by the task
-    and its candidate set, so a rerun over an unchanged corpus asks nothing.
+    ten tasks rather than one per task, and answers are keyed by the task and
+    its candidate set, so a rerun over an unchanged corpus asks nothing.
     """
-    cases, data = load_cases()
-    sentences = filler_sentences()
+    data = corpus.load_store()
     verdicts: dict[str, Any] = dict(data.get("verdicts") or {})
+    calls: dict[str, int] = dict(data.get("calls") or {})
+    per = 5 if corpus.cut else 10  # long documents: fewer tasks per call
 
-    for kind in KINDS:
-        mine = [c for c in cases if c.kind == kind]
-        for size in SIZES:
-            pool = candidates_for(kind, size, cases, data, sentences)
-            asking = []
-            for case in mine:
-                bodies = pool.get(case.slug, [])
-                if bodies and judgement_key(case, bodies) not in verdicts:
-                    asking.append((case, bodies))
-            if not asking:
-                continue
-            print(f"  judging {kind} at {size}: {len(asking)} tasks ...", flush=True)
-            body = BREAK.join(
-                f"TASK {n + 1}: {case.name} -- {case.prompt}\n"
-                + "\n".join(f"  {i + 1}. {text}" for i, text in enumerate(bodies))
-                for n, (case, bodies) in enumerate(asking)
-            )
-            said = await ask(binding_path, JUDGE + body)
-            for n, (case, bodies) in enumerate(asking):
-                answer = said.get(str(n + 1))
-                if answer is not None:
-                    verdicts[judgement_key(case, bodies)] = answer
+    for kind in corpus.kinds():
+        for size in corpus.sizes(kind):
+            pool = candidates_for(corpus, kind, size, data)
+            asking = [(c, pool[c.slug]) for c in corpus.cases(kind) if pool.get(c.slug)]
+            asking = [(c, bodies) for c, bodies in asking if judgement_key(c, bodies) not in verdicts]
+            for at in range(0, len(asking), per):
+                batch = asking[at : at + per]
+                print(f"  judging {kind} at {size}: {at + len(batch)}/{len(asking)} ...", flush=True)
+                body = BREAK.join(
+                    f"TASK {n + 1}: {c.name} -- {c.prompt}\n"
+                    + "\n".join(f"  {i + 1}. {text}" for i, text in enumerate(bodies))
+                    for n, (c, bodies) in enumerate(batch)
+                )
+                said = await ask(binding_path, JUDGE + body)
+                calls["verdicts"] = calls.get("verdicts", 0) + 1
+                for n, (c, bodies) in enumerate(batch):
+                    answer = said.get(str(n + 1))
+                    if answer is not None:
+                        verdicts[judgement_key(c, bodies)] = answer
+                data["verdicts"], data["calls"] = verdicts, calls
+                corpus.save_store(data)  # after every call: a long pass may not finish
 
-    data["verdicts"] = verdicts
-    CASES.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    data["verdicts"], data["calls"] = verdicts, calls
+    corpus.save_store(data)
     print(f"wrote {len(verdicts)} judgements")
 
 
-async def write_terms(binding_path: Path) -> None:
+async def write_terms(corpus: Corpus, binding_path: Path) -> None:
     """Each side is written from its own text alone. Neither generator sees the
     other side, the corpus, or which lesson belongs to which task -- a score
     from terms written with both halves in view would mean nothing."""
-    cases, data = load_cases()
-    sentences = filler_sentences()[: max(SIZES)]
-
-    # Grouped so that no batch holds two wordings of one lesson. The same
-    # lesson appears here twice, once in the task's words and once not, and
-    # generating them together let the model read one and answer for the other
-    # -- a paraphrase that never says "postgres" came back named after it.
-    groups = [[(c.slug, c.lesson) for c in cases if c.kind == kind] for kind in KINDS]
-    groups.append([(t["id"], t["lesson"]) for t in data.get("traps", [])])
-    groups += [[(filler_key(line), line) for line in sentences[at : at + 60]] for at in range(0, len(sentences), 60)]
-    tasks = {c.slug: f"{c.name}: {c.prompt}" for c in cases}
+    data = corpus.load_store()
+    calls: dict[str, int] = dict(data.get("calls") or {})
+    groups = corpus.lesson_groups()
+    per = 30 if corpus.cut else 60  # long documents: fewer per call
 
     # Only what is missing. Adding a case should cost one small call, not a
     # rewrite of every set of terms already checked in and reviewed.
     known = data.get("terms") or {}
     lesson_terms: dict[str, str] = dict(known.get("lesson") or {})
     task_terms: dict[str, str] = dict(known.get("task") or {})
-    tasks = {k: v for k, v in tasks.items() if k not in task_terms}
+    tasks = [(k, v) for k, v in corpus.tasks() if k not in task_terms]
     for group in groups:
         want = [g for g in group if g[0] not in lesson_terms]
-        await _fill(binding_path, "lesson-side terms", LESSON_SIDE, want, 60, lesson_terms)
-    await _fill(binding_path, "task-side terms", TASK_SIDE, list(tasks.items()), 60, task_terms)
+        await _fill(binding_path, "lesson-side terms", LESSON_SIDE, want, per, lesson_terms, calls)
+        data["terms"], data["calls"] = {"lesson": lesson_terms, "task": task_terms}, calls
+        corpus.save_store(data)
+    await _fill(binding_path, "task-side terms", TASK_SIDE, tasks, 60, task_terms, calls)
+    data["terms"], data["calls"] = {"lesson": lesson_terms, "task": task_terms}, calls
+    corpus.save_store(data)
 
     # What each entry is about, for the entity pass. Written from the lesson
     # alone, like its terms, and for the filler too or the pass is only scoring
     # the cases.
     referents: dict[str, Any] = dict(data.get("referents") or {})
     for group in groups:
-        await _fill(binding_path, "referents", REFERENT, [g for g in group if g[0] not in referents], 60, referents)
-    data["referents"] = referents
+        want = [g for g in group if g[0] not in referents]
+        await _fill(binding_path, "referents", REFERENT, want, per, referents, calls)
+        data["referents"], data["calls"] = referents, calls
+        corpus.save_store(data)
 
     # A stand-in, and the weakest thing here: a real journal is written by the
     # runs themselves and carries their failures and the notes people left. One
     # a model imagines is tidier than that however hard the prompt leans on it,
     # so this arm is measured optimistically and the output says so.
     journals: dict[str, Any] = dict(data.get("journals") or {})
-    unwritten = [(c.slug, f"{c.name}: {c.prompt}") for c in cases if c.slug not in journals]
-    await _fill(binding_path, "journals", JOURNAL, unwritten, 10, journals)
+    if corpus.journals:
+        unwritten = [(k, v) for k, v in corpus.tasks() if k not in journals]
+        await _fill(binding_path, "journals", JOURNAL, unwritten, 10, journals, calls)
     data["journals"] = journals
 
-    data["terms"] = {"lesson": lesson_terms, "task": task_terms}
-    CASES.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    data["terms"], data["calls"] = {"lesson": lesson_terms, "task": task_terms}, calls
+    corpus.save_store(data)
     print(
         f"wrote {len(lesson_terms)} lesson-side and {len(task_terms)} task-side term sets, and {len(journals)} journals"
     )
@@ -446,10 +577,6 @@ async def write_terms(binding_path: Path) -> None:
 
 # -- scoring ----------------------------------------------------------------
 
-# label, whether entries carry written terms, and what widens the task's own
-# words: nothing, terms a model wrote for that prompt, or the card's journal --
-# its own account of what it has been doing, which costs no model and cannot
-# go stale against a prompt somebody edits.
 # label, whether entries carry written terms, what widens the task's words, and
 # how a shared word is counted. The last two are what the multi-signal stacks
 # call the keyword pass and the entity pass; the third pass is meaning, and it
@@ -470,6 +597,20 @@ ARMS: tuple[tuple[str, bool, str, str], ...] = (
     ("E  embeddings", False, "dense", ""),
 )
 
+# What each arm needs written before it can run, in model calls at build time.
+# Nothing needs a model at read time except a judge with a cold cache.
+NEEDS: dict[str, tuple[str, ...]] = {
+    "B": ("lesson-side terms",),
+    "C": ("task-side terms",),
+    "D": ("lesson-side terms", "task-side terms"),
+    "F": ("journals",),
+    "G": ("lesson-side terms", "journals"),
+    "H": ("lesson-side terms", "journals"),
+    "J": ("lesson-side terms", "task-side terms"),
+    "K": ("lesson-side terms", "task-side terms", "referents"),
+    "L": ("lesson-side terms", "task-side terms", "referents"),
+    "M": ("lesson-side terms", "task-side terms", "referents", "verdicts"),
+}
 
 # A shared word is worth its rarity, scaled to whole numbers because a rank
 # carries one. Ten keeps a whole block's worth of matches well under the anchor
@@ -527,71 +668,61 @@ def patch_ranking(shapes: dict[str, set[str]], referents: dict[str, set[str]], s
     return ranked
 
 
-def corpus_rows(kind: str, size: int, cases: list[Case], data: dict, sentences: list[str], with_terms: bool):
-    """One corpus: the lessons under test spread evenly through its ages, the
-    look-alikes and enough real prose to fill it. Each row is (slug, body,
-    terms).
-
-    The lessons are spread rather than heaped at one end because an entry the
-    task matches nothing in is ordered newest first, and putting them all oldest
-    or all newest would settle the answer before any arm ran.
-    """
-    mine = [c for c in cases if c.kind == kind]
-    lesson_terms = (data.get("terms") or {}).get("lesson", {})
-    traps = sorted(set(traps_for(data, mine).values()))
-    filler = [(filler_key(line), line) for line in sentences[: size - len(mine) - len(traps)]]
-
-    def row(slug: str, body: str) -> tuple[str, str, str]:
-        return (slug, body, lesson_terms.get(slug, "") if with_terms else "")
-
-    total = len(filler) + len(mine) + len(traps)
-    spread = {int(i * total / len(mine)): case for i, case in enumerate(mine)}
-    rest = iter([*traps, *filler])
-    rows = []
-    for age in range(total):
-        if age in spread:
-            rows.append(row(spread[age].slug, spread[age].lesson))
-        else:
-            slug, sentence = next(rest)
-            rows.append(row(slug, sentence))
-    return rows
+def _with_ranking(shapes, referents, scoring):
+    kept = memory_recall._rank
+    if scoring:
+        memory_recall._rank = patch_ranking(shapes, referents, scoring)
+    return kept
 
 
-def candidates_for(kind: str, size: int, cases: list[Case], data: dict, sentences: list[str]) -> dict[str, list[str]]:
+def candidates_for(corpus: Corpus, kind: str, size: int, data: dict) -> dict[str, list[str]]:
     """What each task in this class would be shown by the best-scoring arm,
     before any judge sees it -- so the judge is handed exactly what a run would
-    hand it."""
-    mine = [c for c in cases if c.kind == kind]
-    rows = corpus_rows(kind, size, cases, data, sentences, True)
-    referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
-    shapes = {slug: words(f"{body} {terms}") for slug, body, terms in rows}
+    hand it. A task whose entries carry no written terms is judged over the
+    rarer-words candidates instead, and the output says which."""
+    lesson_terms = (data.get("terms") or {}).get("lesson", {})
     task_terms = (data.get("terms") or {}).get("task", {})
+    referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
+    # One folder per corpus: two corpora scored at once shared one and the
+    # second's rebuild pulled the first's database out from under it.
+    at = Path(tempfile.gettempdir()) / f"poieo-recall-judge-{corpus.name}"
+    out: dict[str, list[str]] = {}
+    built: list[Row] | None = None
+    for case in corpus.cases(kind):
+        rows = corpus.rows(kind, size, case, lesson_terms, True)
+        bare = sum(1 for _, _, t in rows if not t)
+        covered = any(body == case.lesson and t for _, body, t in rows) and bare <= len(rows) // 20
+        if not covered:
+            rows = corpus.rows(kind, size, case, lesson_terms, False)
+        if rows != built:
+            build(at, rows)
+            built = rows
+        shapes = {slug: words(f"{body} {terms}") for slug, body, terms in rows}
+        kept = _with_ranking(shapes, referents, "idf referent" if covered else "idf")
+        try:
+            out[case.slug] = entries_in(block(at, case, task_terms.get(case.slug, "") if covered else "", corpus.cut))
+        finally:
+            memory_recall._rank = kept
+    shutil.rmtree(at, ignore_errors=True)
+    return out
 
-    at = Path(tempfile.gettempdir()) / "poieo-recall-judge"
-    build(at, rows)
-    kept = memory_recall._rank
-    memory_recall._rank = patch_ranking(shapes, referents, "idf referent")
-    try:
-        return {c.slug: entries_in(block(at, c, task_terms.get(c.slug, ""))) for c in mine}
-    finally:
-        memory_recall._rank = kept
-        shutil.rmtree(at, ignore_errors=True)
+
+Scored = tuple[int, int, int, float, int, int, str]  # found, crowded, sprung, place, covered, first, note
 
 
-Scored = tuple[int, int, int, float, str]
-
-
-def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[str]) -> dict[str, Scored]:
+def score(corpus: Corpus, kind: str, size: int, data: dict) -> dict[str, Scored]:
     """Every arm on one corpus: found, crowded out, and how deep in the block.
 
     `crowded out` counts other cases' lessons that took budget -- an arm that
     finds more by dragging in near-misses has not won, it has spent the same
     24 slots worse. `deep` is the mean place a found lesson sat, so a lesson
-    that only just made the cut is visible as one.
+    that only just made the cut is visible as one. `covered` is how many tasks
+    the arm could run on at all: one needing written terms skips a task whose
+    entries have none rather than scoring the baseline under another name.
     """
-    mine = [c for c in cases if c.kind == kind]
+    mine = corpus.cases(kind)
     terms = data.get("terms") or {}
-    task_terms = terms.get("task", {})
+    lesson_terms, task_terms = terms.get("lesson", {}), terms.get("task", {})
     # A journal reaches the prompt as lines; as query words it is one string.
     # The short form is there to separate two explanations of a bad score:
     # a journal is noisy, and a journal is long. Only one of those is fixable
@@ -599,126 +730,188 @@ def score(kind: str, size: int, cases: list[Case], data: dict, sentences: list[s
     lines_of = data.get("journals") or {}
     journals = {slug: " ".join(lines) for slug, lines in lines_of.items()}
     journals3 = {slug: " ".join(lines[-3:]) for slug, lines in lines_of.items()}
-    aimed = traps_for(data, mine)
+    aimed = corpus.aimed(kind)
     # What each entry says it is about, as words. The entity pass of a
     # multi-signal stack, written blind from the lesson alone.
     referents = {slug: words(text) for slug, text in (data.get("referents") or {}).items()}
     verdicts = data.get("verdicts") or {}
-
-    def corpus(with_terms: bool) -> list[tuple[str, str, str]]:
-        return corpus_rows(kind, size, cases, data, sentences, with_terms)
-
-    def shaped_of(with_terms: bool) -> dict[str, set[str]]:
-        """Every entry's matched words, which is body plus terms when it has
-        them -- the same text the lookup was given."""
-        return {slug: words(f"{body} {terms}") for slug, body, terms in corpus(with_terms)}
-
-    at = Path(tempfile.gettempdir()) / "poieo-recall-eval"
     others = {c.slug: c.lesson for c in mine}
+    at = Path(tempfile.gettempdir()) / f"poieo-recall-eval-{corpus.name}"
     out: dict[str, Scored] = {}
-    bodies = {slug: body for slug, body, _ in corpus(False)}
-    vectors: dict[str, list[float]] = {}
 
     # Two corpora, not one per arm: the arms differ in whether entries carry
     # written terms, and in what the task asks with. Only the first needs a
-    # rebuild, and rebuilding is most of what this costs.
+    # rebuild, and rebuilding is most of what this costs. A corpus that is one
+    # per task rebuilds per task instead.
     for with_terms in (False, True):
-        build(at, corpus(with_terms))
-        for arm, needs_terms, widen, scoring in ARMS:
-            if needs_terms is not with_terms:
+        built: list[Row] | None = None
+        bodies: dict[str, str] = {}
+        shapes: dict[str, set[str]] = {}
+        vectors: dict[str, list[float]] = {}
+        seeds: dict[str, list[float]] = {}
+        arms = [a for a in ARMS if a[1] is with_terms and (corpus.journals or "journal" not in a[2])]
+        # found, crowded, sprung, places, covered, first -- "first" is the
+        # gold at the head of the block, which is what the protocol papers
+        # call hit@1 and the only number their floors compare to.
+        tallies = {label: [0, 0, 0, [], 0, 0] for label, _, _, _ in arms}
+        for case in mine:
+            rows = corpus.rows(kind, size, case, lesson_terms, with_terms)
+            # Covered means the lesson under test carries terms and nearly
+            # every entry around it does. A batch a model refused -- thirty
+            # biomedical abstracts tripped a safety filter -- leaves a few
+            # entries bare; they behave as today's baseline, which is stated,
+            # rather than voiding every task in the corpus.
+            bare = sum(1 for _, _, t in rows if not t) if with_terms else 0
+            gold_has = any(body == case.lesson and t for _, body, t in rows)
+            covered = not with_terms or (gold_has and bare <= len(rows) // 20)
+            if with_terms and not covered:
                 continue
-            if widen == "dense":
-                got = embed(list(bodies.values()))
-                if got is None:
-                    out[arm] = (-1, -1, -1, 0.0, f"no {EMBED_MODEL} on this machine")
-                    continue
-                vectors = dict(zip(bodies, got))
-            # A block from `read_memory` opens with the page and two headers,
-            # which is two blank lines before the first entry. The dense arm
-            # and the judged one build their own block and have none.
-            head = 0 if widen == "dense" or "judge" in scoring else 2
-            kept = memory_recall._rank
-            if scoring:
-                memory_recall._rank = patch_ranking(shaped_of(with_terms), referents, scoring)
-            found, crowded, sprung, places = 0, 0, 0, []
-            for case in mine:
+            if rows != built:
+                build(at, rows)
+                built = rows
+                bodies = {slug: body for slug, body, _ in rows}
+                shapes = {slug: words(f"{body} {t}") for slug, body, t in rows}
+                vectors = {}
+            for label, _, widen, scoring in arms:
                 if widen == "dense":
-                    seen = dense_block(case, bodies, vectors)
+                    if not ollama_up():
+                        out[label] = (-1, -1, -1, 0.0, 0, 0, f"{EMBED_MODEL}'s server is not answering")
+                        continue
+                    if not vectors:
+                        got = embed(list(bodies.values()))
+                        if got is None:
+                            out[label] = (-1, -1, -1, 0.0, 0, 0, f"no {EMBED_MODEL} on this machine")
+                            continue
+                        vectors = dict(zip(bodies, got))
+                    if case.slug not in seeds:
+                        got = embed([f"{case.name} {case.prompt} work"])
+                        if got is None:
+                            continue
+                        seeds[case.slug] = got[0]
+                    seen = dense_block(case, bodies, vectors, corpus.cut, seeds)
+                    head = 0
                 else:
                     wider = {"terms": task_terms, "journal": journals, "journal3": journals3}.get(widen, {})
-                    seen = block(at, case, wider.get(case.slug, ""))
+                    kept = _with_ranking(shapes, referents, scoring)
+                    try:
+                        seen = block(at, case, wider.get(case.slug, ""), corpus.cut)
+                    finally:
+                        memory_recall._rank = kept
+                    # A block from `read_memory` opens with the page and two
+                    # headers, two blank lines before the first entry; a
+                    # judged or top-N block is rebuilt without them.
+                    head = 0 if "judge" in scoring or corpus.cut is not None else 2
                     if "judge" in scoring:
                         seen = judged(seen, case, verdicts)
+                tally = tallies[label]
+                tally[4] += 1
                 if case.lesson in seen:
-                    found += 1
-                    places.append(seen[: seen.index(case.lesson)].count(BREAK) - head + 1)
-                crowded += sum(1 for slug, body in others.items() if slug != case.slug and body in seen)
-                sprung += 1 if case.slug in aimed and aimed[case.slug][1] in seen else 0
-            memory_recall._rank = kept
-            out[arm] = (found, crowded, sprung, sum(places) / len(places) if places else 0.0, "")
+                    tally[0] += 1
+                    place = seen[: seen.index(case.lesson)].count(BREAK) - head + 1
+                    tally[3].append(place)
+                    tally[5] += place == 1
+                tally[1] += sum(1 for slug, body in others.items() if slug != case.slug and body in seen)
+                tally[2] += 1 if case.slug in aimed and aimed[case.slug][1] in seen else 0
+        for label, (found, crowded, sprung, places, covered, first) in tallies.items():
+            if label not in out:
+                deep = sum(places) / len(places) if places else 0.0
+                out[label] = (found, crowded, sprung, deep, covered, first, "")
     shutil.rmtree(at, ignore_errors=True)
     return {label: out[label] for label, _, _, _ in ARMS if label in out}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--corpus", default="cases", help="cases (default), entity, longmemeval or scifact")
     parser.add_argument("--write-terms", metavar="BINDING", type=Path, help="ask this binding for the terms first")
     parser.add_argument("--judge", metavar="BINDING", type=Path, help="ask this binding which candidates apply")
     args = parser.parse_args()
+    corpus: Corpus = Cases() if args.corpus == "cases" else corpus_named(args.corpus)
 
     if args.write_terms:
-        asyncio.run(write_terms(args.write_terms))
+        asyncio.run(write_terms(corpus, args.write_terms))
         return
 
     if args.judge:
-        asyncio.run(write_verdicts(args.judge))
+        asyncio.run(write_verdicts(corpus, args.judge))
         return
 
-    cases, data = load_cases()
+    data = corpus.load_store()
     terms = data.get("terms") or {}
     if not terms.get("lesson"):
-        print("no terms written yet: run with --write-terms <binding.yaml> first")
-        return
-    sentences = filler_sentences()
+        if isinstance(corpus, Cases):
+            print("no terms written yet: run with --write-terms <binding.yaml> first")
+            return
+        # An external corpus still has its model-free arms to show; the ones
+        # that need terms report zero coverage rather than a borrowed number.
+        print("no terms written yet for this corpus: only the arms needing no model can score\n")
 
-    # Loud, not silent: an arm whose entries have no terms is measuring the
-    # baseline while wearing another name.
-    want = [filler_key(line) for line in sentences[: max(SIZES)]] + [c.slug for c in cases]
-    missing = [key for key in want if key not in terms.get("lesson", {})]
-    if missing:
-        print(f"{len(missing)} of {len(want)} corpus entries have no written terms.")
-        print(f"Run --write-terms before believing any arm but A. First: {missing[0]}")
-        print()
+    if isinstance(corpus, Cases):
+        sentences = corpus.sentences
+        # Loud, not silent: an arm whose entries have no terms is measuring the
+        # baseline while wearing another name.
+        want = [filler_key(line) for line in sentences[: max(SIZES)]] + [c.slug for c in corpus._cases]
+        missing = [key for key in want if key not in terms.get("lesson", {})]
+        if missing:
+            print(f"{len(missing)} of {len(want)} corpus entries have no written terms.")
+            print(f"Run --write-terms before believing any arm but A. First: {missing[0]}")
+            print()
+        n = len(corpus._cases)
+        print(f"{n} cases over {len(sentences)} real sentences from docs/; budget {ENTRIES_BUDGET} characters")
+        print("A larger corpus was dropped, not silently capped: every entry needs its own written")
+        print(f"terms for the lesson-side arm to be fair, and past {max(SIZES)} that costs more than it settles.\n")
+    else:
+        print(corpus.blurb)
+        print("Not lesson-shaped like this project; each of these tests one claim, and the")
+        print("arms, scoring and cut are the ones the hand-written cases ran through.")
+        cut = f"top {corpus.cut} by rank" if corpus.cut else f"budget {ENTRIES_BUDGET} characters"
+        print(f"cut: {cut}\n")
 
-    print(f"{len(cases)} cases over {len(sentences)} real sentences from docs/; budget {ENTRIES_BUDGET} characters")
-    print("A larger corpus was dropped, not silently capped: every entry needs its own written")
-    print(f"terms for the lesson-side arm to be fair, and past {max(SIZES)} that costs more than it settles.\n")
-
-    for kind in KINDS:
-        mine = [c for c in cases if c.kind == kind]
+    for kind in corpus.kinds():
+        mine = corpus.cases(kind)
         print(f"--- {kind} ({len(mine)} cases) ---")
-        aimed = traps_for(data, mine)
-        for size in SIZES:
-            got = score(kind, size, cases, data, sentences)
-            print(f"  {size} entries in memory:")
-            for arm, (found, crowded, sprung, deep, note) in got.items():
+        aimed = corpus.aimed(kind)
+        for size in corpus.sizes(kind):
+            got = score(corpus, kind, size, data)
+            print(f"  {size} entries in memory:" if corpus.shared_rows else "  one memory per task:")
+            for arm, (found, crowded, sprung, deep, covered, first, note) in got.items():
                 if note:
                     print(f"     {arm:<26} skipped: {note}")
-                else:
-                    # No trap is aimed at a class, no number for it: a bare 0
-                    # there would read as an arm keeping look-alikes out.
-                    trap = f"{sprung}/{len(mine)}" if aimed else "  n/a"
-                    print(
-                        f"     {arm:<26} found {found}/{len(mine)}   look-alike shown {trap}"
-                        f"   other lessons in the way {crowded}   mean place {deep:.1f}"
-                    )
+                    continue
+                # No trap is aimed at a class, no number for it: a bare 0
+                # there would read as an arm keeping look-alikes out.
+                n = covered if covered else len(mine)
+                trap = f"{sprung}/{n}" if aimed else "  n/a"
+                line = (
+                    f"     {arm:<26} found {found}/{n}   first {first}/{n}   look-alike shown {trap}"
+                    f"   other lessons in the way {crowded}   mean place {deep:.1f}"
+                )
+                if not isinstance(corpus, Cases):
+                    if covered < len(mine):
+                        line += f"   [covered {covered} of {len(mine)} tasks]"
+                    if arm.startswith("M") and "L  all three" in got:
+                        line += f"   judge dropped {got['L  all three'][0] - found} right answers"
+                    anchor = corpus.anchor(kind, arm)
+                    if anchor:
+                        line += f"   ({anchor})"
+                print(line)
         print()
 
-    print("What each costs, which decides as much as the scores:")
-    print("  B  one pass over every existing entry, then one per new entry. Nothing at recall time.")
-    print("  C  one pass per task, when it is created or edited. Nothing at recall time.")
-    print("  E  an embedding model on the machine. Anthropic has no embeddings endpoint, so a")
-    print("     project bound to Claude alone cannot do this without sending its memory elsewhere.")
+    if isinstance(corpus, Cases):
+        print("What each costs, which decides as much as the scores:")
+        print("  B  one pass over every existing entry, then one per new entry. Nothing at recall time.")
+        print("  C  one pass per task, when it is created or edited. Nothing at recall time.")
+        print("  E  an embedding model on the machine. Anthropic has no embeddings endpoint, so a")
+        print("     project bound to Claude alone cannot do this without sending its memory elsewhere.")
+    else:
+        calls = data.get("calls") or {}
+        print("Model calls it took to build this corpus's inputs, and what each arm needs:")
+        for what, n in sorted(calls.items()):
+            print(f"  {what:<18} {n} calls")
+        for label, _, _, _ in ARMS:
+            needs = NEEDS.get(label[0], ())
+            print(f"  {label:<34} {', '.join(needs) if needs else 'nothing -- no model at build or read time'}")
+        print("  Nothing needs a model at read time except a judge whose answer is not cached yet.")
 
 
 if __name__ == "__main__":
