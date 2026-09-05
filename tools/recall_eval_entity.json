@@ -1,0 +1,507 @@
+{
+  "about": "Vocabulary of the Entity-Collision protocol (Youwang Deng, arXiv:2605.29630; github.com/youwangd/engram, Apache-2.0), vendored as data so tools/recall_eval.py can rebuild the same corpus. Each tag: a memory template, a query template, and (discriminator, synonym, answer) triples; the query uses the synonym so a word match cannot see the discriminator.",
+  "entities": [
+    "alice",
+    "bob",
+    "carol",
+    "dave",
+    "eve",
+    "frank",
+    "grace",
+    "henry",
+    "ivy",
+    "jack",
+    "kate",
+    "leo",
+    "mia",
+    "noah",
+    "olivia",
+    "peter",
+    "quinn",
+    "rachel",
+    "sam",
+    "tina",
+    "uma",
+    "victor",
+    "wendy",
+    "xavier",
+    "yara",
+    "zach",
+    "amelia",
+    "bruno",
+    "clara",
+    "diego",
+    "elena",
+    "felix"
+  ],
+  "distractors": [
+    "Daily standup: discussed sprint priorities and blockers.",
+    "Reviewed PR with minor style nits, approved.",
+    "Coffee break — chatted about weekend plans.",
+    "Read article on distributed consensus, took notes.",
+    "Lunch meeting moved from Tuesday to Thursday.",
+    "Reorganized inbox, archived 200 messages."
+  ],
+  "specs": {
+    "preference": {
+      "memory": "User {entity} prefers {answer} when {disc}.",
+      "query": "what does {entity} like while {disc_syn}?",
+      "variants": [
+        "User {entity} prefers {answer} when {disc}.",
+        "While {disc}, {entity} tends to reach for {answer}.",
+        "{entity}'s go-to during {disc} is {answer}.",
+        "When {disc}, the choice {entity} usually makes is {answer}."
+      ],
+      "discs": [
+        [
+          "debugging",
+          "troubleshooting",
+          "JSON logs"
+        ],
+        [
+          "reviewing",
+          "auditing",
+          "inline comments"
+        ],
+        [
+          "designing",
+          "architecting",
+          "whiteboard sketches"
+        ],
+        [
+          "deploying",
+          "shipping",
+          "canary rollouts"
+        ],
+        [
+          "documenting",
+          "writing up",
+          "diataxis structure"
+        ],
+        [
+          "oncall",
+          "paged",
+          "runbook links"
+        ],
+        [
+          "planning",
+          "roadmapping",
+          "OKR alignment"
+        ],
+        [
+          "interviewing",
+          "screening",
+          "system-design rubrics"
+        ],
+        [
+          "refactoring",
+          "restructuring",
+          "small reversible diffs"
+        ],
+        [
+          "benchmarking",
+          "profiling",
+          "flamegraph traces"
+        ],
+        [
+          "pairing",
+          "collaborating live",
+          "shared tmux sessions"
+        ],
+        [
+          "estimating",
+          "sizing tickets",
+          "T-shirt sizes"
+        ],
+        [
+          "retrospecting",
+          "looking back",
+          "blameless format"
+        ],
+        [
+          "learning",
+          "studying",
+          "annotated notebooks"
+        ],
+        [
+          "commuting",
+          "travelling to work",
+          "podcast queues"
+        ],
+        [
+          "focusing",
+          "concentrating",
+          "noise-cancelling headphones"
+        ]
+      ]
+    },
+    "service": {
+      "memory": "{entity}'s account on {answer} is used for {disc}.",
+      "query": "which provider does {entity} use to {disc_syn}?",
+      "variants": [
+        "{entity}'s account on {answer} is used for {disc}.",
+        "For {disc}, {entity} relies on their {answer} account.",
+        "{entity} runs {disc} through {answer}.",
+        "The provider {entity} has set up for {disc} is {answer}."
+      ],
+      "discs": [
+        [
+          "payments",
+          "charge customers",
+          "stripe"
+        ],
+        [
+          "alerts",
+          "page on incidents",
+          "pagerduty"
+        ],
+        [
+          "monitoring",
+          "watch service health",
+          "datadog"
+        ],
+        [
+          "source control",
+          "host code",
+          "github"
+        ],
+        [
+          "infrastructure",
+          "run servers",
+          "aws"
+        ],
+        [
+          "messaging",
+          "broadcast updates",
+          "slack"
+        ],
+        [
+          "dns",
+          "resolve domains",
+          "cloudflare"
+        ],
+        [
+          "auth",
+          "verify identity",
+          "okta"
+        ],
+        [
+          "ci",
+          "build pipelines",
+          "circleci"
+        ],
+        [
+          "error tracking",
+          "capture exceptions",
+          "sentry"
+        ],
+        [
+          "feature flags",
+          "gate rollouts",
+          "launchdarkly"
+        ],
+        [
+          "analytics",
+          "measure usage",
+          "amplitude"
+        ],
+        [
+          "email",
+          "send transactional mail",
+          "sendgrid"
+        ],
+        [
+          "storage",
+          "keep object blobs",
+          "s3"
+        ],
+        [
+          "cdn",
+          "cache assets globally",
+          "fastly"
+        ],
+        [
+          "video",
+          "stream meetings",
+          "zoom"
+        ]
+      ]
+    },
+    "project": {
+      "memory": "Project {answer} owned by {entity} targets {disc}.",
+      "query": "which initiative of {entity} aims to {disc_syn}?",
+      "variants": [
+        "Project {answer} owned by {entity} targets {disc}.",
+        "{entity} leads project {answer}, which is focused on {disc}.",
+        "The {disc} effort under {entity} is project {answer}.",
+        "{answer}, run by {entity}, has the goal of {disc}."
+      ],
+      "discs": [
+        [
+          "latency reduction",
+          "cut response time",
+          "atlas"
+        ],
+        [
+          "cost reduction",
+          "lower spend",
+          "borealis"
+        ],
+        [
+          "reliability",
+          "improve uptime",
+          "cipher"
+        ],
+        [
+          "security hardening",
+          "tighten access",
+          "delta"
+        ],
+        [
+          "developer experience",
+          "speed up engineers",
+          "echo"
+        ],
+        [
+          "data quality",
+          "clean up records",
+          "foxtrot"
+        ],
+        [
+          "user growth",
+          "acquire customers",
+          "golf"
+        ],
+        [
+          "mobile parity",
+          "match desktop features",
+          "hotel"
+        ],
+        [
+          "accessibility",
+          "support assistive tech",
+          "india"
+        ],
+        [
+          "internationalization",
+          "ship localized strings",
+          "juliet"
+        ],
+        [
+          "observability",
+          "expose service signals",
+          "kilo"
+        ],
+        [
+          "billing accuracy",
+          "fix invoice drift",
+          "lima"
+        ],
+        [
+          "schema migration",
+          "evolve table layouts",
+          "mike"
+        ],
+        [
+          "onboarding flow",
+          "guide new signups",
+          "november"
+        ],
+        [
+          "compliance",
+          "meet audit requirements",
+          "oscar"
+        ],
+        [
+          "offline support",
+          "work without network",
+          "papa"
+        ]
+      ]
+    },
+    "tool": {
+      "memory": "{entity} uses {answer} for {disc}.",
+      "query": "what does {entity} rely on to {disc_syn}?",
+      "variants": [
+        "{entity} uses {answer} for {disc}.",
+        "For {disc}, {entity} reaches for {answer}.",
+        "{entity}'s tool of choice when doing {disc} is {answer}.",
+        "When it comes to {disc}, {entity} sticks with {answer}."
+      ],
+      "discs": [
+        [
+          "version control",
+          "track code revisions",
+          "git"
+        ],
+        [
+          "text editing",
+          "edit source files",
+          "vim"
+        ],
+        [
+          "terminal multiplexing",
+          "manage shell panes",
+          "tmux"
+        ],
+        [
+          "containerization",
+          "package services",
+          "docker"
+        ],
+        [
+          "orchestration",
+          "schedule containers",
+          "kubernetes"
+        ],
+        [
+          "database",
+          "persist relational data",
+          "postgres"
+        ],
+        [
+          "cache layer",
+          "speed up reads",
+          "redis"
+        ],
+        [
+          "search engine",
+          "index documents",
+          "elasticsearch"
+        ],
+        [
+          "message broker",
+          "pass async events",
+          "rabbitmq"
+        ],
+        [
+          "build automation",
+          "compile artifacts",
+          "bazel"
+        ],
+        [
+          "package management",
+          "install dependencies",
+          "poetry"
+        ],
+        [
+          "http server",
+          "serve web traffic",
+          "nginx"
+        ],
+        [
+          "reverse proxy",
+          "route frontend calls",
+          "envoy"
+        ],
+        [
+          "secret store",
+          "keep credentials safe",
+          "vault"
+        ],
+        [
+          "object store",
+          "hold large blobs",
+          "minio"
+        ],
+        [
+          "workflow engine",
+          "chain pipeline steps",
+          "airflow"
+        ]
+      ]
+    },
+    "technical": {
+      "memory": "{entity}'s service handles {disc} via {answer}.",
+      "query": "what does {entity}'s service use to {disc_syn}?",
+      "variants": [
+        "{entity}'s service handles {disc} via {answer}.",
+        "For {disc}, {entity}'s service relies on {answer}.",
+        "{entity}'s system implements {disc} using {answer}.",
+        "Inside {entity}'s service, {disc} is implemented through {answer}."
+      ],
+      "discs": [
+        [
+          "rate limiting",
+          "throttle traffic",
+          "token bucket"
+        ],
+        [
+          "caching",
+          "memoize hot reads",
+          "lru cache"
+        ],
+        [
+          "queueing",
+          "buffer async jobs",
+          "kafka topics"
+        ],
+        [
+          "sharding",
+          "split data horizontally",
+          "consistent hashing"
+        ],
+        [
+          "replication",
+          "duplicate writes",
+          "raft consensus"
+        ],
+        [
+          "compression",
+          "shrink payload size",
+          "zstd"
+        ],
+        [
+          "encryption",
+          "secure data at rest",
+          "aes-gcm"
+        ],
+        [
+          "hashing",
+          "fingerprint records",
+          "blake3"
+        ],
+        [
+          "indexing",
+          "accelerate lookups",
+          "b-tree"
+        ],
+        [
+          "deduplication",
+          "drop repeated entries",
+          "bloom filter"
+        ],
+        [
+          "scheduling",
+          "order pending tasks",
+          "priority heap"
+        ],
+        [
+          "backpressure",
+          "slow upstream producers",
+          "credit-based flow"
+        ],
+        [
+          "retry",
+          "recover transient errors",
+          "exponential backoff"
+        ],
+        [
+          "tracing",
+          "follow request paths",
+          "opentelemetry"
+        ],
+        [
+          "authentication",
+          "establish user identity",
+          "jwt tokens"
+        ],
+        [
+          "serialization",
+          "encode messages on the wire",
+          "protobuf"
+        ]
+      ]
+    }
+  }
+}
