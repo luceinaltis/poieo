@@ -2,7 +2,7 @@ from conftest import EXAMPLES
 
 from poieo.binding import load_binding
 from poieo.graph import GraphSpec, load_graph
-from poieo.viewer import mermaid_source, render_page
+from poieo.viewer import _node_card, mermaid_source, render_page
 
 
 def test_each_terminal_branch_gets_its_own_end_node():
@@ -80,3 +80,84 @@ def test_multiple_graphs_render_in_one_page():
     assert "<title>2 graphs</title>" in page
     assert page.count("<h2>Graph</h2>") == 2
     assert "<h2>Flow</h2>" not in page
+
+
+def _card(graph: GraphSpec, node_id: str) -> str:
+    node = next(node for node in graph.nodes if node.id == node_id)
+    return _node_card(node, graph, None)
+
+
+def test_command_card_shows_the_command_and_its_successor():
+    graph = GraphSpec.model_validate(
+        {
+            "name": "c",
+            "entry": "build",
+            "nodes": [
+                {
+                    "id": "build",
+                    "type": "command",
+                    "command": "make test",
+                    "timeout": 30,
+                    "next": "report",
+                },
+                {"id": "report", "type": "agent", "prompt": "say how it went"},
+            ],
+        }
+    )
+    card = _card(graph, "build")
+
+    assert "make test" in card
+    assert "<code>report</code>" in card
+    # A command node does not branch, so it has no fallback arm to draw.
+    assert "default" not in card
+    assert "timeout" in card
+
+
+def test_command_card_shows_a_script_with_its_language():
+    graph = GraphSpec.model_validate(
+        {
+            "name": "c",
+            "entry": "count",
+            "nodes": [
+                {
+                    "id": "count",
+                    "type": "command",
+                    "script": "print(1)",
+                    "language": "python",
+                }
+            ],
+        }
+    )
+    card = _card(graph, "count")
+
+    assert "print(1)" in card
+    assert "python" in card
+    assert "script" in card
+    assert "default" not in card
+    # Nothing follows it, so the run ends here.
+    assert "<code>end</code>" in card
+
+
+def test_confirm_card_shows_the_question_and_its_choices():
+    graph = GraphSpec.model_validate(
+        {
+            "name": "c",
+            "entry": "ask",
+            "nodes": [
+                {
+                    "id": "ask",
+                    "type": "confirm",
+                    "prompt": "Ship it?",
+                    "choices": ["ship", "hold"],
+                }
+            ],
+        }
+    )
+    card = _card(graph, "ask")
+
+    assert "Ship it?" in card
+    assert "ship" in card
+    assert "hold" in card
+    # It names no successor: the card's `then:` reads the answer.
+    assert "default" not in card
+    assert "next &rarr;" not in card
