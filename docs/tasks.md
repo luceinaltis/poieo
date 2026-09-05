@@ -49,6 +49,9 @@ field, the card uses its interval default and runs once when residency starts.
 `poieo show` displays the expanded form and `poieo eject` writes an explicit
 graph. Expansion must remain reversible: it may add generated context, but it
 must not create behavior that cannot be expressed by a normal task and graph.
+Only the node keys move into that graph. Every key that describes the task
+itself, including its schedule, its `input` and its `then` handoffs, is written
+back onto the rewritten card. Comments in the card are not preserved.
 
 The task-folder loader treats every YAML or JSON document without `nodes` as a
 card. That makes a misspelled card field a validation error instead of a task
