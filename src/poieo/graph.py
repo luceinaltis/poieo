@@ -37,6 +37,18 @@ class OutputSpec(_Spec):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    @model_validator(mode="after")
+    def _path_needs_json(self) -> OutputSpec:
+        """`path` reaches into parsed JSON, so a text output leaves it doing
+        nothing -- and a key that does nothing reads as configured, which is
+        what `_refuse_model_keys` stops one level up."""
+        if self.path is not None and self.format != "json":
+            raise ValueError(
+                f"output path '{self.path}' needs `format: json`: a text output "
+                f"is not parsed, so there is nothing to select from"
+            )
+        return self
+
 
 class UiSpec(_Spec):
     """Canvas coordinates. Written by the editor, ignored by the runtime."""
