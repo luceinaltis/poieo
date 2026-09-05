@@ -16,6 +16,7 @@ from poieo.card import (
     append_journal,
     expand,
     is_card_document,
+    is_card_file,
     load_card,
     load_cards,
     read_journal,
@@ -692,6 +693,20 @@ def test_a_graph_is_still_a_graph():
     """`nodes:` outranks everything, and a file with neither is neither."""
     assert not is_card_document({"name": "g", "entry": "a", "nodes": [{"id": "a"}]})
     assert not is_card_document({"name": "proj", "store": "runs", "binding": "b.yaml"})
+
+
+def test_a_file_named_on_the_command_line_answers_to_both_shapes_the_same_way(tmp_path):
+    """Same rule, one answer. Named on the command line, a file with `nodes:`
+    and card keys used to be read as a plain graph -- silently running the very
+    document the task folder refuses as ambiguous."""
+    path = tmp_path / "both.yaml"
+    path.write_text("name: both\nfolder: .\nnodes:\n  - {id: a, type: agent}\n", encoding="utf-8")
+    with pytest.raises(SpecError) as caught:
+        is_card_file(path)
+    assert "folder" in str(caught.value) and "nodes" in str(caught.value)
+    # The document alone says as much, without a file to name.
+    with pytest.raises(SpecError):
+        is_card_document({"name": "both", "prompt": "go", "nodes": [{"id": "a"}]})
 
 
 # -- the shipped chain --------------------------------------------------------

@@ -219,7 +219,17 @@ _CARD_KEYS = {
 }
 
 
-def is_card_document(data: dict[str, Any]) -> bool:
+def _ambiguous(data: dict[str, Any], source: str | Path | None = None) -> SpecError:
+    """Both shapes at once. Reading it as a graph would make the task vanish
+    without a word, which is the one outcome a typo must never have."""
+    where = f"{source}: " if source is not None else ""
+    return SpecError(
+        f"{where}this answers to both shapes -- it has `nodes:` like a "
+        f"graph and {', '.join(sorted(_CARD_KEYS & set(data)))} like a card"
+    )
+
+
+def is_card_document(data: dict[str, Any], source: str | Path | None = None) -> bool:
     """A card says what to do; a graph says what the steps are.
 
     `nodes:` is the graph's word and no card has one; everything else in the
@@ -231,15 +241,25 @@ def is_card_document(data: dict[str, Any]) -> bool:
     a `poieo.yaml` has no `nodes:` either, and is not a card. Inside the tasks
     folder `load_cards` is laxer on purpose: there, a file with `promt:` is a
     card with a typo, and saying so beats deciding it was never a card.
+
+    A document carrying both words is refused here exactly as `load_cards`
+    refuses it -- one rule cannot give two answers depending on whether the
+    file was found in the folder or named on the command line, and the answer
+    reached by naming it was the silent one.
     """
-    return "nodes" not in data and bool(_CARD_KEYS & set(data))
+    if "nodes" in data:
+        if _CARD_KEYS & set(data):
+            raise _ambiguous(data, source)
+        return False
+    return bool(_CARD_KEYS & set(data))
 
 
 def is_card_file(path: str | Path) -> bool:
     try:
-        return is_card_document(load_document(path))
+        data = load_document(path)
     except SpecError:
         return False
+    return is_card_document(data, path)
 
 
 def _trigger(task: CardSpec) -> Any:
@@ -349,13 +369,7 @@ def load_cards(folder: str | Path) -> list[CardSpec]:
         elif not _CARD_KEYS & set(data):
             continue  # a graph: a card names it, and that is how it is reached
         else:
-            # Both shapes at once. Reading it as a graph would make it vanish
-            # from the board without a word, which is the one outcome a typo
-            # must never have.
-            raise SpecError(
-                f"{path}: this answers to both shapes -- it has `nodes:` like a "
-                f"graph and {', '.join(sorted(_CARD_KEYS & set(data)))} like a card"
-            )
+            raise _ambiguous(data, path)
     return tasks
 
 

@@ -53,7 +53,8 @@ must not create behavior that cannot be expressed by a normal task and graph.
 The task-folder loader treats every YAML or JSON document without `nodes` as a
 card. That makes a misspelled card field a validation error instead of a task
 that silently disappears. A document mixing graph and card markers is rejected
-as ambiguous.
+as ambiguous -- whether it was found in the folder or named on the command line,
+since one rule cannot give two answers.
 
 ## Run input and journal
 
