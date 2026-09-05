@@ -76,7 +76,7 @@ with its run and may start a task handoff.
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?}`; creates one card and returns its task id and path |
-| `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?}`; atomically validates and replaces one card, returning whether the edit is live |
+| `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, every?, enabled?}`; atomically validates and replaces one card, returning whether the edit is live |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
 
@@ -89,7 +89,10 @@ Browser-created and browser-edited cards are confined to the project's task
 folder, and their work folder or explicit graph must stay inside the project.
 Names are converted to safe filenames and never overwrite an existing card.
 Structured editing is offered only when it can reproduce every field and
-comment; otherwise the client edits the raw file. Set-aside and rename place an
+comment; the form covers `name`, `folder`, `prompt`, `every` and `enabled`, and
+any other key or a comment sends the client to the raw file. An omitted `every`
+or `enabled` in a structured write leaves the one on disk alone, while an empty
+`every` clears the schedule. Set-aside and rename place an
 immediate hold on the old runner, while the folder scan or next restart
 reconciles the resident roster.
 

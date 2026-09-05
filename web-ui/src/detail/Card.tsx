@@ -1,9 +1,10 @@
 /**
  * The card behind a task, loaded only when opened and rewritable in place.
  *
- * Plain cards keep the form used to create them. Richer YAML stays as text so
- * comments and fields the form cannot represent survive. Renaming moves the
- * identity file without rewriting its contents.
+ * Plain cards keep the form used to create them, plus the schedule they run
+ * on -- the one advanced field the form can show whole. Richer YAML stays as
+ * text so comments and fields the form cannot represent survive. Renaming
+ * moves the identity file without rewriting its contents.
  */
 
 import { useState } from "react"
@@ -29,10 +30,12 @@ export function Card({
   const [isOpen, setIsOpen] = useState(false)
   const [originalText, setOriginalText] = useState<string | null>(null)
   const [cardFields, setCardFields] = useState<CardFields | null>(null)
-  /** The form's three values, alive only for a plain card. */
+  /** The form's values, alive only for a plain card. */
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
   const [prompt, setPrompt] = useState("")
+  /** The schedule, as written; "" is a card that never wrote one. */
+  const [every, setEvery] = useState("")
   const [text, setText] = useState("")
   const [isMissing, setIsMissing] = useState(false)
   const [saveResult, setSaveResult] = useState<RewrittenCard | null>(null)
@@ -59,6 +62,7 @@ export function Card({
     setName(card.name)
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
+    setEvery(card.every === null || card.every === undefined ? "" : String(card.every))
   }
 
   const setCardAside = () =>
@@ -91,7 +95,10 @@ export function Card({
   const isUnchanged = isPlainCard
     ? name === cardFields.name &&
       folder === (cardFields.folder ?? "") &&
-      prompt === (cardFields.prompt ?? "")
+      prompt === (cardFields.prompt ?? "") &&
+      every === (cardFields.every === null || cardFields.every === undefined
+        ? ""
+        : String(cardFields.every))
     : text === originalText
 
   const saveCard = () =>
@@ -99,11 +106,11 @@ export function Card({
       const answer = await rewriteCard(
         project,
         task,
-        isPlainCard ? { name, folder, prompt } : text,
+        isPlainCard ? { name, folder, prompt, every } : text,
       )
       if (answer.ok) {
         if (isPlainCard && cardFields) {
-          setCardFields({ ...cardFields, name, folder, prompt })
+          setCardFields({ ...cardFields, name, folder, prompt, every })
         } else {
           setOriginalText(text)
         }
@@ -132,7 +139,7 @@ export function Card({
             /* The person filled a form to make this card; handing them YAML
                to edit it would be giving the form and then taking it away.
                Values only -- the daemon owns the spelling, through the same
-               dump make uses. A card carrying more than the three fields
+               dump make uses. A card carrying more than these fields
                falls through to the file below, because a form must never
                drop what it cannot show. */
             <div className="card-form">
@@ -173,6 +180,23 @@ export function Card({
                     setPrompt(event.target.value)
                     setSaveResult(null)
                     // Reaching for the words is deciding to keep the task.
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+              </label>
+              {/* The schedule the daemon reads, in the daemon's own words --
+                  `1h`, `30m`, `2d`. Empty is no schedule written, which is
+                  the interval default, and emptying it clears the line. */}
+              <label className="card-field">
+                every
+                <input
+                  className="card-field-every"
+                  value={every}
+                  placeholder="1h"
+                  disabled={busy}
+                  onChange={(event) => {
+                    setEvery(event.target.value)
+                    setSaveResult(null)
                     setIsSetAsideArmed(false)
                   }}
                 />
