@@ -843,6 +843,28 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return None, None, JSONResponse({"error": f"no task '{slug}' in this project"}, status_code=404)
         return project, spec, None
 
+    def _commented(text: str) -> bool:
+        """Whether a real comment token lives in these bytes.
+
+        Not `"#" in text`: a `#` inside a quoted or plain scalar is part of
+        somebody's prompt, and the dump carries that value through whole. What
+        the dump loses is comments, and those are exactly the `#` that no token
+        covers -- between the scanner's tokens lie only indentation, line
+        breaks and comments -- so PyYAML's own lexer answers this rather than a
+        second one written here. Unscannable bytes count as commented: this is
+        the conservative side, and the parse below refuses them anyway.
+        """
+        try:
+            spans = [(token.start_mark.index, token.end_mark.index) for token in yaml.scan(text)]
+        except Exception:
+            return True
+        gaps, cursor = [], 0
+        for start, end in spans:
+            gaps.append(text[cursor:start])
+            cursor = max(cursor, end)
+        gaps.append(text[cursor:])
+        return any("#" in gap for gap in gaps)
+
     def _plain(text: str) -> bool:
         """Whether a card can be rebuilt from the three fields alone.
 
@@ -850,12 +872,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         make's three keys -- a schedule, an isolation, a `then:` -- keeps the
         card a file on screen. `enabled` is the fourth the form *can* show:
         the panel has a switch for it, and make writes it, so a card carrying
-        one is still a card the form can rebuild without losing anything. A `#` anywhere counts too: comments live in
-        the bytes, not the parse, and the dump would silently lose them. The
-        cost of being wrong here is asymmetric on purpose -- a false "not
-        plain" is a raw editor, a false "plain" is somebody's schedule gone.
+        one is still a card the form can rebuild without losing anything. A
+        comment counts too: it lives in the bytes, not the parse, and the dump
+        would silently lose it. The cost of being wrong here is asymmetric on
+        purpose -- a false "not plain" is a raw editor, a false "plain" is
+        somebody's schedule gone.
         """
-        if "#" in text:
+        if _commented(text):
             return False
         try:
             data = yaml.safe_load(text)
