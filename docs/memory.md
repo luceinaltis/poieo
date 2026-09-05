@@ -40,9 +40,15 @@ advisory budget because an oversized standing rule should be visible, but must
 not become a way to stop every task.
 
 An entry has a lowercase dash-separated slug, body, update time, and typed
-metadata:
+metadata. It may also carry terms: the words somebody would be using while
+doing the work it applies to, in the task's vocabulary rather than the
+lesson's. Terms join the body in what recall matches on and in nothing else --
+a prompt never shows them, a person's search does not read them, and they
+spend no budget. They are how a lesson worded differently from the task that
+needs it is found.
 
 ```yaml
+terms: invoice email pdf attachment send billing
 scope: [global]                 # global, task ids, or project path prefixes
 anchors: [src/poieo/card.py]   # path or path::symbol, never line numbers
 source: [<run-id>]             # records that taught it; empty means a person

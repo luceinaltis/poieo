@@ -204,6 +204,8 @@ def _prompt(
         "",
         "Answer with JSON only, no prose:",
         '{"entries": [{"slug": "kebab-case", "body": "one durable statement",',
+        ' "terms": "8-12 words somebody would use while doing the work this applies to,',
+        " the task's vocabulary rather than the lesson's -- matched, never shown\",",
         ' "scope": ["global"], "anchors": [], "from": ["record ids that taught it"],',
         ' "links": {"depends_on": [], "contradicts": []}}],',
         ' "set_aside": [{"entry": "slug that no longer holds", "because": "slug that replaces it"}]}',
@@ -307,6 +309,8 @@ def _vet_entry(raw: Any, taken: set[str]) -> str | None:
         value = raw.get(key)
         if value is not None and not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             return f"'{slug}': '{key}' must be a list of strings"
+    if raw.get("terms") is not None and not isinstance(raw["terms"], str):
+        return f"'{slug}': 'terms' must be one string of words"
     links = raw.get("links")
     if links is not None:
         if not isinstance(links, dict) or set(links) - {"depends_on", "contradicts"}:
@@ -357,7 +361,7 @@ def _write_entry(project_dir: Path, raw: dict[str, Any], shown: list[str], resul
             "links": {kind: value for kind, value in (raw.get("links") or {}).items() if value},
         }
     )
-    write_entry(project_dir, raw["slug"], raw["body"], matter, writer="pass")
+    write_entry(project_dir, raw["slug"], raw["body"], matter, writer="pass", terms=raw.get("terms") or "")
 
 
 def _strengthen(project_dir: Path, entries: list[Entry], records: list[dict[str, Any]]) -> None:
