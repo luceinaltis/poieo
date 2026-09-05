@@ -33,8 +33,10 @@ from .memory import (
     page_written_at,
     read_page,
     readable_entries,
+    remember_task_terms,
     results_dir,
     set_aside,
+    stale_task_terms,
     used_in,
     write_entry,
 )
@@ -124,6 +126,63 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     result.let_go = _let_go(project_dir)
     _record(project_dir, result)
     return result
+
+
+# -- what else each task could be called ------------------------------------
+
+_TASK_TERMS = """You keep the long memory of a project of scheduled tasks. For each task below,
+write the other words the same work could be described with -- what a lesson
+about it might call the things it touches. You are not shown the lessons and
+must not guess at any particular one.
+
+8-12 words each, lowercase, space separated. Answer with JSON only, keyed by
+the number each task was given:
+{"1": "<words>", "2": "<words>", ...}
+
+"""
+
+
+async def refresh_task_terms(
+    project_dir: Path, cards: list[Any], binding: BindingSpec, pool: ProviderPool
+) -> list[str]:
+    """Write terms for every card whose terms are missing or were written for
+    other text. One completion for all of them, none when there is nothing
+    stale, and never a wait a run could feel: this rides the learning
+    schedule, and a run finds fresh terms next time or plain words now.
+
+    Returns the slugs written. A model that does not answer usably writes
+    nothing and is logged -- the cards stay bare, which is today's behaviour.
+    """
+    project_dir = Path(project_dir)
+    if not keeps_memory(project_dir):
+        return []
+    wanting = stale_task_terms(project_dir, cards)
+    if not wanting:
+        return []
+
+    resolved = binding.resolve(LEARNER_ROLE)
+    body = "\n".join(f"{i + 1}: {card.name}: {' '.join((card.prompt or '').split())}" for i, card in enumerate(wanting))
+    request = LLMRequest(
+        model=resolved.model,
+        messages=[{"role": "user", "content": _TASK_TERMS + body}],
+        system=None,
+        params=dict(resolved.params),
+        role=LEARNER_ROLE,
+    )
+    try:
+        response = await pool.get(resolved.provider_name).complete(request)
+        said = _parse(response.text)
+    except Exception as exc:
+        log.warning("could not write what the tasks could be called: %s: %s", type(exc).__name__, exc)
+        return []
+
+    written = []
+    for i, card in enumerate(wanting):
+        terms = said.get(str(i + 1))
+        if isinstance(terms, str) and terms.strip():
+            remember_task_terms(project_dir, card, terms)
+            written.append(card.slug)
+    return written
 
 
 # -- what has not been read yet ----------------------------------------------

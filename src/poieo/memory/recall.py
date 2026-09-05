@@ -29,6 +29,7 @@ from typing import Any
 from ..layout import layout_for
 from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
 from .index import narrow
+from .task_terms import task_terms
 
 # Budget for the learned entries that follow the page. Cut on whole-entry
 # boundaries, best first -- half a lesson is worse than none.
@@ -279,7 +280,9 @@ def recall(project_dir: Path, task: Any, use_index: bool = True) -> list[Entry]:
     """The entries this task earned, ranked, in budget. Never the page's room."""
     if not keeps_memory(project_dir):
         return []
-    seed = words(f"{task.name} {task.prompt or ''} {task.folder}")
+    # What the card says, and what else it could be called -- the latter only
+    # while the card still reads as it did when those words were written.
+    seed = words(f"{task.name} {task.prompt or ''} {task.folder} {task_terms(project_dir, task)}")
     where = _Where(task, project_dir)
 
     from ..strength import STRONG_FLOOR, strengths

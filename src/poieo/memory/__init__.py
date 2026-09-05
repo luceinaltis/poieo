@@ -36,6 +36,9 @@ from .entries import (
 )
 from .recall import read_memory
 from .results import results_dir, used_in, write_result
+from .task_terms import remember as remember_task_terms
+from .task_terms import stale as stale_task_terms
+from .task_terms import task_terms
 from .upkeep import doubts, memory_report, overview_watch_paths
 
 __all__ = [
@@ -51,6 +54,9 @@ __all__ = [
     "open_memory",
     "page_written_at",
     "read_memory",
+    "remember_task_terms",
+    "stale_task_terms",
+    "task_terms",
     "read_page",
     "readable_entries",
     "results_dir",

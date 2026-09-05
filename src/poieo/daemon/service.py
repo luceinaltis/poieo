@@ -1598,6 +1598,14 @@ class Daemon:
         config = project.config
         folder = config.resolve_path(config.cards)
         try:
+            # What each card could also be called, refreshed for any card
+            # edited since it was last written. Rides this schedule so a run
+            # never waits for it; a card edited an hour ago runs on plain
+            # words until then, which is what it did before.
+            from ..card import load_cards
+            from ..learn import refresh_task_terms
+
+            await refresh_task_terms(folder, load_cards(folder), spec, pool)
             result = await learn_pass(folder, spec, pool)
         except Exception as exc:
             log.warning("the learning pass failed: %s", exc)

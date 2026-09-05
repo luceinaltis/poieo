@@ -63,6 +63,12 @@ class Layout:
     def learning_log(self) -> Path:
         return self.cache() / "learning.jsonl"
 
+    def task_terms(self) -> Path:
+        """What else each task could be called, stamped with the card text it
+        was written for. Derived: delete it and the next learning pass
+        writes it again."""
+        return self.cache() / "task-terms.json"
+
     # -- what a run leaves behind --------------------------------------------
     def runs(self) -> Path:
         return self.runs_override or self.root / "runs"
