@@ -21,6 +21,7 @@ Design: docs/memory.md
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,13 +29,46 @@ from typing import Any
 
 from ..layout import layout_for
 from .entries import Entry, entry_of, keeps_memory, open_memory, read_page, words
-from .index import narrow
+from .index import document_frequency, narrow
 
 # Budget for the learned entries that follow the page. Cut on whole-entry
 # boundaries, best first -- half a lesson is worse than none.
 ENTRIES_BUDGET = 4_000
 # An entry anchored where the task works beats any merely-similar one.
 _ANCHOR_BOOST = 1_000
+# A shared word is worth its rarity, scaled to whole numbers because a rank
+# carries one. Ten keeps a whole block's worth of matches under the anchor
+# boost, which must stay the largest thing a score can hold.
+_RARITY = 10
+
+
+def _rarity(con: sqlite3.Connection, seed: set[str], use_index: bool) -> dict[str, float]:
+    """What each of the task's words is worth: the fewer pieces hold it, the
+    more. The standard inverse document frequency.
+
+    Counting every shared word alike let an entry sharing two words the whole
+    memory uses outrank one sharing the single word only the task and it use
+    -- and that word is the one that says what the entry is about. Measured on
+    three external corpora before this was built: it matched embeddings on
+    recall and beat them on putting the right entry first, at no model.
+
+    Over twenty entries the statistic is nearly none and every word is worth
+    about the same, which is today's behaviour; it earns its keep as the memory
+    grows. Counts come from the lookup's own index when there is one and from a
+    read of every shape when there is not, so both paths rank alike.
+    """
+    if not seed:
+        return {}
+    total = con.execute("SELECT count(*) FROM pieces").fetchone()[0] or 1
+    held = document_frequency(con, seed) if use_index else None
+    if held is None:
+        held = {}
+        for (shape,) in con.execute("SELECT shape FROM pieces"):
+            for word in seed & set(shape.split()):
+                held[word] = held.get(word, 0) + 1
+    return {word: math.log(1 + (total - held.get(word, 0) + 0.5) / (held.get(word, 0) + 0.5)) for word in seed}
+
+
 # How many entries association spreads from. A neighbour's claim is its seed's
 # divided by the seed's rank, so the hundredth-ranked entry contributes a
 # hundredth of a claim to something that is ranked after every direct hit
@@ -200,11 +234,14 @@ def _rank(con: sqlite3.Connection, seed: set[str], use_index: bool, where: "_Whe
     read rather than a full one.
     """
     hits = narrow(con, seed) if use_index else None
+    worth = _rarity(con, seed, use_index)
 
     def rank(row: "sqlite3.Row") -> "_Ranked | None":
         if row["superseded_by"] is not None or not where.in_scope(row["scope"]):
             return None
-        score = len(seed & set(row["shape"].split()))
+        # Summed in a fixed order: a set iterates by hash, hashes differ per
+        # process, and a float sum that lands on .5 would then round two ways.
+        score = round(_RARITY * sum(worth[word] for word in sorted(seed & set(row["shape"].split()))))
         if where.anchors(row["anchors"]):
             score += _ANCHOR_BOOST
         return _Ranked(row["slug"], score, row["size"], row["at"], _tuple(row["contradicts"]))
