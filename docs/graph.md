@@ -102,7 +102,9 @@ selected by `then`; discarding the earlier workspace is not a substitute.
 
 An output rule may name an alias with `as`, parse the value as `text` or `json`,
 select a dotted `path` inside parsed JSON, and place the result under a key in
-persistent `state`. `path` does not write a file. Aliases make later templates
+persistent `state`. `path` does not write a file, and needs `format: json` — a
+text output is never parsed, so a `path` beside it is refused at load rather
+than ignored at run time. Aliases make later templates
 and expressions concise; state is the data that may be carried into the task's
 next run.
 
