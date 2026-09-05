@@ -20,9 +20,10 @@ as one.
 Design: docs/web.md
 """
 
-from conftest import card
+from conftest import at, card
 from starlette.testclient import TestClient
 
+from poieo.card import append_journal, read_journal
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web import create_app
@@ -362,6 +363,40 @@ def test_a_renamed_task_stops_firing_under_its_old_name(tmp_path, monkeypatch):
 
     assert answer.status_code == 200, answer.text
     assert held == [True]
+
+
+def test_a_rename_carries_the_journal_to_the_new_name(tmp_path):
+    """The journal is named for the card, so a card that moves without it
+    leaves the renamed task reading "nothing yet" -- its whole history stranded
+    under a name no task answers to any more."""
+    client, cards = _client(tmp_path)
+    old = at(tmp_path).journal("already")
+    append_journal(old, "did", "swept the porch", title="Already")
+
+    answer = _patch(client, "renamed")
+
+    assert answer.status_code == 200, answer.text
+    moved = at(tmp_path).journal("renamed")
+    assert not old.exists()
+    assert "swept the porch" in read_journal(moved)
+
+
+def test_a_rename_leaves_a_journal_the_new_name_already_has(tmp_path):
+    """A journal at the new name belongs to some other history -- a task set
+    aside, or one deleted by hand. Overwriting it would be the same loss this
+    move exists to stop, so the card moves and both journals stay put."""
+    client, cards = _client(tmp_path)
+    old = at(tmp_path).journal("already")
+    append_journal(old, "did", "swept the porch", title="Already")
+    stale = at(tmp_path).journal("renamed")
+    append_journal(stale, "did", "someone else's night", title="Renamed")
+    before = stale.read_text(encoding="utf-8")
+
+    answer = _patch(client, "renamed")
+
+    assert answer.status_code == 200, answer.text
+    assert stale.read_text(encoding="utf-8") == before
+    assert "swept the porch" in old.read_text(encoding="utf-8")
 
 
 def test_a_three_field_card_says_it_is_plain(tmp_path):

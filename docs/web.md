@@ -77,7 +77,7 @@ with its run and may start a task handoff.
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?}`; creates one card and returns its task id and path |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?}`; atomically validates and replaces one card, returning whether the edit is live |
-| `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
+| `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames the card file, and therefore the task id, carrying its journal to the new name |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
 
 Model routes write only the project's default binding and never accept or return
