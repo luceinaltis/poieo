@@ -86,6 +86,10 @@ A router evaluates `branches` in order and chooses the first true `when`.
 `default` is used when none match. It calls no model and has no `next`; its
 selected target is the successor.
 
+`default` is a router's key alone. Any other node carrying it is refused at
+load: nothing would read it, and the reachability walk followed it, so a node
+reachable through nothing but a stray `default` looked wired up.
+
 ### `confirm`
 
 A confirm node renders a question and presents at least two distinct fixed

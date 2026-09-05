@@ -179,6 +179,24 @@ def test_roles_includes_agent_nodes():
     assert graph.roles() == {"worker"}
 
 
+def test_only_a_router_takes_a_default():
+    """`default` means "none of the branches matched", and only a router has
+    branches. Anywhere else the key was accepted and never read -- worse, the
+    reachability walk followed it, so a node reachable through nothing but a
+    stray `default` passed the check docs/graph.md promises."""
+    spec = {
+        "name": "g",
+        "entry": "work",
+        "nodes": [
+            {"id": "work", "type": "agent", "prompt": "p", "default": "other"},
+            {"id": "other", "type": "agent", "prompt": "p"},
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="agent node 'work' does not take a default"):
+        GraphSpec.model_validate(spec)
+
+
 def test_a_graph_that_still_says_llm_is_told_what_to_do():
     """`Literal` would answer "Input should be 'agent' or 'router'" -- true, and
     no help at all to someone holding a graph that worked last week."""
