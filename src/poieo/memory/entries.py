@@ -37,7 +37,7 @@ log = logging.getLogger("poieo.memory")
 # which is what the old derived index could afford.
 #   2: pieces carry the shape they are matched by, so the lookup and the
 #      scoring after it agree about what a word is.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Advisory budget (~3k tokens) for the always-present page: the page is the
 # user's to trim, and refusing to run over it would make the memory a way to
@@ -150,6 +150,10 @@ class Entry(BaseModel):
     slug: str
     body: str
     matter: _Frontmatter
+    # The words somebody would be using while doing the work this applies to.
+    # Matched by the lookup beside the body, never shown in a prompt: a lesson
+    # worded differently from the task that needs it is found by these.
+    terms: str = ""
     # When the entry itself last changed. Doubt compares an anchor's file
     # against this, which is what makes "edit the entry after looking" clear
     # the flag -- it took the place of the file's mtime.
@@ -179,6 +183,9 @@ CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE entries(
     slug          TEXT PRIMARY KEY,
     body          TEXT NOT NULL,
+    -- The words somebody would be using while doing the work this entry
+    -- applies to. Matched by the lookup like the body; never shown.
+    terms         TEXT NOT NULL DEFAULT '',
     scope         TEXT NOT NULL,
     anchors       TEXT NOT NULL,
     source        TEXT NOT NULL,
@@ -304,6 +311,16 @@ def _migrate(con: sqlite3.Connection, path: Path) -> None:
         for piece_id, text in con.execute("SELECT id, text FROM pieces").fetchall():
             con.execute("UPDATE pieces SET shape = ? WHERE id = ?", (_shaped(text), piece_id))
         _drop_lookup(con)
+    if 0 < was < 3:
+        # An entry gained the words somebody would be using when it applies,
+        # matched beside its body and never shown. Nothing written before has
+        # any, so nothing here is worth rebuilding: the column is empty until
+        # a pass or a person fills it. Asked of the table, not the version: a
+        # memory whose tables were laid out by hand ahead of its version stamp
+        # already has the column, and adding it twice is an error.
+        columns = {row[1] for row in con.execute("PRAGMA table_info(entries)")}
+        if "terms" not in columns:
+            con.execute("ALTER TABLE entries ADD COLUMN terms TEXT NOT NULL DEFAULT ''")
     con.execute(
         "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -336,6 +353,7 @@ def entry_of(row: sqlite3.Row) -> Entry:
         slug=row["slug"],
         body=row["body"],
         matter=matter,
+        terms=row["terms"],
         updated_at=datetime.fromisoformat(row["updated_at"]),
         mentions=_mentions(row["body"]),
     )
@@ -453,11 +471,17 @@ def write_entry(
     matter: _Frontmatter | None = None,
     *,
     writer: str = "person",
+    terms: str = "",
 ) -> Entry:
     """Write one entry, and the line of history that says so.
 
     The only door in. A slug that could escape a folder is refused here rather
     than sanitised, which is the check the learning pass has always leaned on.
+
+    ``terms`` are the words somebody would be using while doing the work this
+    entry applies to. They join the body in what the lookup matches on and in
+    nothing else: a prompt never sees them, a person's search never finds by
+    them, and they spend no budget.
     """
     if writer not in WRITERS:
         raise ValueError(f"unknown writer '{writer}'")
@@ -466,22 +490,26 @@ def write_entry(
     body = body.strip()
     if not body:
         raise SpecError(f"'{slug}': an entry needs something to say")
+    terms = " ".join(terms.split())
     matter = matter or _Frontmatter()
 
     with open_memory(project_dir, create=True) as con:
         row = con.execute("SELECT * FROM entries WHERE slug = ?", (slug,)).fetchone()
-        before = {"body": row["body"]} if row else None
+        # History names terms only where there are any: an entry that has none
+        # leaves the line it always left, and one that has them says so.
+        before = ({"body": row["body"]} | ({"terms": row["terms"]} if row["terms"] else {})) if row else None
         now = _now()
         con.execute(
-            "INSERT INTO entries(slug, body, scope, anchors, source, valid_from, superseded_by,"
-            " depends_on, contradicts, sealed, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
-            " ON CONFLICT(slug) DO UPDATE SET body=excluded.body, scope=excluded.scope,"
+            "INSERT INTO entries(slug, body, terms, scope, anchors, source, valid_from, superseded_by,"
+            " depends_on, contradicts, sealed, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(slug) DO UPDATE SET body=excluded.body, terms=excluded.terms, scope=excluded.scope,"
             " anchors=excluded.anchors, source=excluded.source, valid_from=excluded.valid_from,"
             " superseded_by=excluded.superseded_by, depends_on=excluded.depends_on,"
             " contradicts=excluded.contradicts, sealed=excluded.sealed, updated_at=excluded.updated_at",
             (
                 slug,
                 body,
+                terms,
                 json.dumps(matter.scope),
                 json.dumps(matter.anchors),
                 json.dumps(matter.source),
@@ -494,9 +522,12 @@ def write_entry(
             ),
         )
         con.execute("DELETE FROM pieces WHERE slug = ?", (slug,))
+        # The piece's text is the body alone -- it is what a person's search
+        # reads. Its shape, the only thing recall's lookup reads, is the body
+        # and the terms together: that is the whole of how terms find an entry.
         con.executemany(
             "INSERT INTO pieces(slug, ord, text, shape) VALUES(?,?,?,?)",
-            [(slug, i, text, _shaped(text)) for i, text in enumerate(_pieces_of(body))],
+            [(slug, i, text, _shaped(f"{text} {terms}")) for i, text in enumerate(_pieces_of(body))],
         )
         con.execute("DELETE FROM links WHERE slug = ?", (slug,))
         con.executemany(
@@ -505,9 +536,16 @@ def write_entry(
             + [(slug, "depends_on", t) for t in matter.links.depends_on]
             + [(slug, "contradicts", t) for t in matter.links.contradicts],
         )
-        _record(con, writer, "wrote", slug, before, {"body": body})
+        _record(con, writer, "wrote", slug, before, {"body": body} | ({"terms": terms} if terms else {}))
 
-    return Entry(slug=slug, body=body, matter=matter, updated_at=datetime.fromisoformat(now), mentions=_mentions(body))
+    return Entry(
+        slug=slug,
+        body=body,
+        matter=matter,
+        terms=terms,
+        updated_at=datetime.fromisoformat(now),
+        mentions=_mentions(body),
+    )
 
 
 def set_aside(project_dir: Path, slug: str, because: str, *, writer: str = "person") -> None:

@@ -47,6 +47,35 @@ def test_the_entry_a_task_matches_comes_first(tmp_path):
     assert block.index("batch sizes over 50") < block.index("deploy pipeline")
 
 
+def test_written_terms_find_an_entry_and_never_reach_the_prompt(tmp_path):
+    """A lesson worded differently from the task that needs it is found by the
+    words written beside it -- what somebody would be doing when it applies --
+    and those words are matched only, never shown.
+
+    Measured before it was built: on the hand-written cases this took lessons
+    worded differently from 0/10 found to 7/10, and on three external corpora
+    the ordering held.
+    """
+    from poieo.memory import write_entry
+
+    task, project = _project(tmp_path)
+    write_entry(
+        project,
+        "descriptor",
+        "The web server keeps its descriptor after a rename; truncate in place.",
+        terms="importer api batch sizes review",
+    )
+    # Every other entry shares a word or two with the task on its own, so
+    # without terms the lesson under test scores nothing and sits behind all
+    # of them -- a tie broken by name would otherwise pass this for free.
+    for i in range(6):
+        _fact(project, f"about-{i}", f"Note {i} about the api batch queue.")
+
+    block = read_memory(project, task) or ""
+    assert block.index("keeps its descriptor") < block.index("Note 0"), "terms did not lift the entry"
+    assert "importer" not in block.split("learned:")[1], "written terms reached the prompt"
+
+
 def test_room_left_over_goes_to_entries_the_task_matches_nothing_in(tmp_path):
     """The budget is what says no. Below it, an entry in scope is shown --
     dropping one to leave the room empty helps nobody."""

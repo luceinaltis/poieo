@@ -154,7 +154,7 @@ def test_a_memory_of_the_older_shape_is_moved_forward_not_rebuilt(tmp_path):
     version = con.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()[0]
     con.close()
     assert "feed" in shape.split()  # the entry said "feeds"; the shape is what it matches by
-    assert version == "2"
+    assert version == "3"  # and it was carried all the way forward, past the terms column too
 
 
 def test_an_entry_is_one_piece_today(tmp_path):
