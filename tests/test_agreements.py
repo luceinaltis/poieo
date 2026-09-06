@@ -26,6 +26,10 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)#]+?)(?:#[^)]*)?\)")
 DESIGN = re.compile(r"^Design:\s*(\S+)", re.M)
 DATED = re.compile(r"^\d{4}-\d{2}-\d{2}-")
 
+# DESIGN.md's standalone viewer/editor promise, and the module that keeps it.
+EDITOR_PROMISE = "The standalone graph viewer and editor operate on the same graph schema."
+EDITOR_MODULE = "editor.py"
+
 
 def _markdown() -> list[Path]:
     return [p for p in ROOT.rglob("*.md") if not SKIP & set(p.relative_to(ROOT).parts) and "examples" not in p.parts]
@@ -67,6 +71,24 @@ def test_the_index_names_the_code_each_document_covers():
         if not (ROOT / "src" / "poieo" / item.rstrip("/")).exists() and not (ROOT / item.rstrip("/")).exists()
     ]
     assert not gone, f"docs/README.md names code that is not there: {gone}"
+
+
+def test_the_standalone_editor_has_a_document_in_the_index():
+    """A promise in DESIGN.md is kept by a module, and `docs/README.md` promises
+    one document per component. The editor is where those two met and nothing
+    was written: the page a user saves a graph through said only what its source
+    said."""
+    design = " ".join((ROOT / "DESIGN.md").read_text(encoding="utf-8").split())
+    assert EDITOR_PROMISE in design, "DESIGN.md no longer promises the standalone editor"
+
+    index = (DOCS / "README.md").read_text(encoding="utf-8")
+    row = re.search(
+        r"^\|\s*\[[^\]]+\]\(([^)]+)\)\s*\|[^|]*\|[^|]*`" + re.escape(EDITOR_MODULE) + r"`[^|]*\|",
+        index,
+        re.M,
+    )
+    assert row, f"docs/README.md's component table names no document for `{EDITOR_MODULE}`"
+    assert (DOCS / row.group(1)).exists(), f"the table points at docs/{row.group(1)}, which is not there"
 
 
 def test_every_module_points_at_a_design_document_that_exists():

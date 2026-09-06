@@ -39,6 +39,7 @@ Then read the document for the component you are changing:
 | [memory.md](memory.md) | long-term project memory and learning | `memory/`, `learn.py`, `strength.py`, `blob.py` |
 | [storage.md](storage.md) | project layout, run records and detection | `layout.py`, `project.py`, `detect.py`, `store.py` |
 | [web.md](web.md) | the HTTP/SSE API and browser interface | `web/`, `web-ui/` |
+| [editor.md](editor.md) | the standalone graph canvas and its save adapters | `editor.py` |
 | [cli.md](cli.md) | command-line behavior and project discovery | `cli.py` |
 
 ## Documentation contract

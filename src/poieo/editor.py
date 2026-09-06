@@ -12,6 +12,8 @@ Saving needs somewhere to put the file. Two adapters:
 ``jupyter``  PUT through a running Jupyter server's contents API. Useful where
              the only reachable port already belongs to Jupyter.
 ``none``     No backend: the page offers a download and a copy button.
+
+Design: docs/editor.md
 """
 
 from __future__ import annotations
