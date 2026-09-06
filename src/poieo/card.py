@@ -528,3 +528,35 @@ def append_journal(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"{opening}- {stamp} · {kind:<8}{one_line}\n")
+
+
+def set_aside_journal(path: Path) -> Path | None:
+    """Move a set-aside task's journal in beside its card, and say where.
+
+    The journal is named for the card's filename, so a card set aside and a
+    new one made under the freed name would hand the new task a dead one's
+    history -- silently, since nobody looks in `memory/shortterm/` for a task
+    that is gone. It moves to `.set-aside/` under the same folder, mirroring
+    where the card itself goes, so putting the card back is putting its
+    history back too.
+
+    Nothing there is overwritten, for set aside's own reason: the numbered
+    sibling keeps every life of a reused name. Returns None when the task
+    never wrote a journal, or when the move failed -- the card is already
+    aside by then, and a stranded journal is worth less than the answer.
+    """
+    if not path.exists():
+        return None
+    rest = path.parent / ".set-aside"
+    kept = rest / path.name
+    n = 2
+    try:
+        rest.mkdir(parents=True, exist_ok=True)
+        while kept.exists():
+            kept = rest / f"{path.stem}.{n}{path.suffix}"
+            n += 1
+        path.replace(kept)
+    except OSError as exc:
+        log.warning("could not set aside the journal %s: %s", path, exc)
+        return None
+    return kept

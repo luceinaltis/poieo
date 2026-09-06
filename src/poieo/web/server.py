@@ -43,7 +43,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 
 from .. import detect as engines
 from ..binding import load_binding, split_ref
-from ..card import expand, load_card
+from ..card import expand, load_card, set_aside_journal
 from ..errors import BindingError, PoieoError
 from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
 from ..memory.ask import ask_memory
@@ -1134,6 +1134,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         back is putting the task back. Nothing is ever overwritten there: a
         task set aside, remade and set aside again is two files.
 
+        The task's journal goes the same way, into `.set-aside/` under
+        `memory/shortterm/`: it is named for the card's filename, so leaving
+        it behind would hand a later card of the same name a dead task's
+        history, which nothing on the board would show.
+
         Two halves with two lifetimes, said plainly in the answer: the move
         outlives a restart (the daemon will not load the card again), and the
         schedule stops now, with the same hold the pause button takes --
@@ -1147,6 +1152,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         config = project.config
         path = spec.source_path
         rest = config.resolve_path(config.cards) / ".set-aside"
+        journal = spec.journal_path()
 
         def _move() -> Path | None:
             rest.mkdir(exist_ok=True)
@@ -1161,6 +1167,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 os.replace(path, kept)
             except OSError:
                 return None
+            # The journal is named for the card's filename, so it goes with
+            # the card: a new task made under the freed name must not inherit
+            # this one's history.
+            set_aside_journal(journal)
             return kept
 
         kept = await asyncio.to_thread(_move)

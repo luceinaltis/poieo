@@ -40,6 +40,7 @@ task; the daemon extends it when it intends to run them.
   models/                        bindings
   memory/
     shortterm/<task>.md          task journals
+    shortterm/.set-aside/        journals of cards that were set aside
     longterm.sqlite3             long-term memory source of truth
     cache/                       derived blobs, strengths, learning log, builds
   runs/                          or the explicit store path

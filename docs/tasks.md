@@ -67,7 +67,9 @@ run records its outcome. Prompt assembly shows new notes in oldest-first order
 before bounded older history, using the task's last successful own entry as the
 bookmark. A failed run does not advance that bookmark, because repeating a note
 is safer than losing it. Answering a question updates the run's recorded outcome
-rather than leaving a permanent `asking` record.
+rather than leaving a permanent `asking` record. Setting a card aside moves its
+journal to `memory/shortterm/.set-aside/<task>.md`, so a later card reusing the
+freed name starts with an empty journal and the old history is still readable.
 
 When the card includes the `notes` toolset, its system context lists the other
 task ids in the same project. `tell` may append to those journals only; it cannot

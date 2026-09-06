@@ -23,6 +23,7 @@ Design: docs/web.md
 from conftest import card
 from starlette.testclient import TestClient
 
+from poieo.card import load_card, read_journal
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
 from poieo.web import create_app
@@ -250,6 +251,63 @@ def test_set_aside_twice_keeps_both_files(tmp_path):
     assert again.status_code == 200, again.text
     rested = {p.name for p in (cards / ".set-aside").iterdir()}
     assert rested == {"already.yaml", "already.2.yaml"}
+
+
+def test_set_aside_takes_the_journal_with_the_card(tmp_path):
+    """The journal is named for the card's filename, so a card set aside and
+    a new one made under the same name would inherit a dead task's history.
+    The journal travels with the card into a dotted folder of its own."""
+    client, cards = _client(tmp_path)
+    journal = tmp_path / "memory" / "shortterm" / "already.md"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("# Already\n\n- 2026-01-01 09:00 · did the old work\n", encoding="utf-8")
+    before = journal.read_text(encoding="utf-8")
+
+    answer = client.delete("/api/projects/board/tasks/already")
+    assert answer.status_code == 200, answer.text
+    assert not journal.exists()
+    kept = tmp_path / "memory" / "shortterm" / ".set-aside" / "already.md"
+    assert kept.read_text(encoding="utf-8") == before
+
+    # A new card under the freed name starts with nothing behind it.
+    made = client.post(
+        "/api/projects/board/tasks",
+        json={"name": "already", "folder": "../work", "prompt": "second life"},
+    )
+    assert made.status_code == 200, made.text
+    assert read_journal(load_card(cards / "already.yaml").journal_path()) == "nothing yet"
+
+
+def test_a_set_aside_task_with_no_journal_is_still_set_aside(tmp_path):
+    """A task that never ran has no journal, and that is not a failure."""
+    client, cards = _client(tmp_path)
+    answer = client.delete("/api/projects/board/tasks/already")
+
+    assert answer.status_code == 200, answer.text
+    assert not (tmp_path / "memory" / "shortterm" / ".set-aside").exists()
+
+
+def test_a_second_set_aside_journal_does_not_overwrite_the_first(tmp_path):
+    """Nothing set aside is ever overwritten -- the journal follows the card's
+    own numbered-sibling rule."""
+    client, cards = _client(tmp_path)
+    journal = tmp_path / "memory" / "shortterm" / "already.md"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("first life\n", encoding="utf-8")
+    client.delete("/api/projects/board/tasks/already")
+
+    client.post(
+        "/api/projects/board/tasks",
+        json={"name": "already", "folder": "../work", "prompt": "second life"},
+    )
+    journal.write_text("second life\n", encoding="utf-8")
+    again = client.delete("/api/projects/board/tasks/already")
+
+    assert again.status_code == 200, again.text
+    rest = tmp_path / "memory" / "shortterm" / ".set-aside"
+    assert {p.name for p in rest.iterdir()} == {"already.md", "already.2.md"}
+    assert (rest / "already.md").read_text(encoding="utf-8") == "first life\n"
+    assert (rest / "already.2.md").read_text(encoding="utf-8") == "second life\n"
 
 
 def test_a_set_aside_task_stops_scheduling_now(tmp_path, monkeypatch):
