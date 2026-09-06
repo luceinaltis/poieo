@@ -86,7 +86,8 @@ keeping a write and reports separately whether the resident daemon accepted the
 new binding.
 
 Browser-created and browser-edited cards are confined to the project's task
-folder, and their work folder or explicit graph must stay inside the project.
+folder, and every path they name — work folder, explicit graph, `binding:`,
+`input_file:` — must stay inside the project.
 Names are converted to safe filenames and never overwrite an existing card.
 Structured editing is offered only when it can reproduce every field and
 comment; otherwise the client edits the raw file. Set-aside and rename place an

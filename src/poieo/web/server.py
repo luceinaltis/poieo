@@ -1064,6 +1064,34 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                             False,
                         )
 
+                # The other two paths a card writes. `binding:` and
+                # `input_file:` are named with no folder and no graph in
+                # sight, so neither fence above ever sees them -- and a card
+                # that reads a file reaches it exactly as far as one that
+                # works in a folder. Same fence, so a single unprivileged PUT
+                # cannot point an edit at a file anywhere on the machine.
+                # Existence is left to the run: unlike a folder or a graph,
+                # these are read when the task fires, not when it is saved.
+                for field, named in (("binding", fresh.binding), ("input_file", fresh.input_file)):
+                    if not named:
+                        continue
+                    asked = Path(os.path.expanduser(named))
+                    reads = (asked if asked.is_absolute() else cards / asked).resolve()
+                    root = Path(config.base_dir).resolve()
+                    if root != reads and root not in reads.parents:
+                        return (
+                            JSONResponse(
+                                {
+                                    "error": (
+                                        f"a task edited here names a {field} inside this "
+                                        f"project; {reads} is outside {root}"
+                                    )
+                                },
+                                status_code=400,
+                            ),
+                            False,
+                        )
+
                 # `live`: would the daemon adopt this without a restart? The
                 # same comparison `_reread_graph` makes -- against the spec the
                 # daemon is actually running, not against the file. After a
