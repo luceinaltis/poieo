@@ -62,6 +62,26 @@ def test_rejects_duplicate_ids():
         )
 
 
+@pytest.mark.parametrize("node_id", ["café", "١node"])
+def test_rejects_non_ascii_node_ids(node_id):
+    """`str.isalnum()` is true of any letter or digit in Unicode.
+
+    An id is written into paths, logs and expressions, where 'café' and
+    'café' are two names for one node. The contract in docs/graph.md
+    is ASCII, so both of these ids belong to the alphanumeric rule --
+    '١node' trips the leading-digit rule today, which says nothing about
+    the three ASCII letters that follow.
+    """
+    with pytest.raises(Exception, match="must be alphanumeric"):
+        GraphSpec.model_validate(_spec(entry=node_id, nodes=[{"id": node_id, "type": "agent", "prompt": "hi"}]))
+
+
+def test_accepts_ascii_id_with_dash_and_underscore():
+    node = {"id": "my-node_2", "type": "agent", "prompt": "hi"}
+    graph = GraphSpec.model_validate(_spec(entry="my-node_2", nodes=[node]))
+    assert graph.node("my-node_2").type == "agent"
+
+
 def test_rejects_bad_template_at_load_time():
     with pytest.raises(Exception, match="syntax error"):
         GraphSpec.model_validate(_spec(nodes=[{"id": "a", "type": "agent", "prompt": "{{ 1 + }}"}]))

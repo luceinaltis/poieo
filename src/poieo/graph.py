@@ -145,7 +145,12 @@ class NodeSpec(_Spec):
     @field_validator("id")
     @classmethod
     def _valid_id(cls, value: str) -> str:
-        if not value or not value.replace("_", "").replace("-", "").isalnum():
+        # `str.isalnum()` would accept 'café' and '١node': it is true of every
+        # letter and digit in Unicode. An id names a node in paths, logs and
+        # expressions, where two spellings of one accented word are two
+        # different nodes, so the rule is ASCII, as docs/graph.md says.
+        bare = value.replace("_", "").replace("-", "")
+        if not value or not bare.isascii() or not bare.isalnum():
             raise ValueError(f"node id {value!r} must be alphanumeric (- and _ allowed)")
         if value[0].isdigit():
             raise ValueError(f"node id {value!r} must not start with a digit")
