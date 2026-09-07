@@ -236,6 +236,15 @@ def test_a_broken_task_fails_at_load(tmp_path, body, message):
     assert message in str(exc.value)
 
 
+@pytest.mark.parametrize("declared", ["deadline: 40", "deadline: 41", "max_turns: 40"])
+def test_a_graph_card_refuses_a_node_key_whatever_its_value(tmp_path, declared):
+    # Declaring the key is the offence, not the value: `deadline: 40` has
+    # nowhere to go once the task names a graph, exactly like `deadline: 41`.
+    path = write_card(tmp_path, "t", f"name: t\ngraph: g.yaml\n{declared}\n")
+    with pytest.raises(SpecError, match="belong in the graph"):
+        load_card(path)
+
+
 def test_a_missing_folder_fails_at_load(tmp_path):
     (tmp_path / "tasks").mkdir()
     path = tmp_path / "tasks" / "t.yaml"

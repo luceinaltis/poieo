@@ -153,7 +153,10 @@ class CardSpec(BaseModel):
         if self.prompt and not self.folder:
             raise ValueError("a task with a prompt needs a folder to work in")
         if self.graph:
-            named = [k for k in _NODE_KEYS if getattr(self, k) not in (None, DEFAULT_MAX_TURNS)]
+            # What the card *said*, not what it holds: `max_turns` has a
+            # default, so comparing values let one value of one key through --
+            # `deadline: 40` was accepted where `deadline: 41` was refused.
+            named = [k for k in _NODE_KEYS if k in self.model_fields_set]
             if named:
                 raise ValueError(f"{', '.join(named)} belong in the graph once a task names one")
         named = [k for k in ("every", "at", "trigger") if getattr(self, k) is not None]
