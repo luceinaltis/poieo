@@ -515,6 +515,8 @@ export interface Card {
    * a form must never drop what it cannot show.
    */
   plain: boolean
+  /** False when the card is switched off: on the board, written, not running. */
+  enabled: boolean
 }
 
 export async function fetchCard(project: string, task: string): Promise<Card | null> {
@@ -543,7 +545,7 @@ export interface RewrittenCard extends Answer {
 export function rewriteCard(
   project: string,
   task: string,
-  card: string | { name: string; folder: string; prompt: string },
+  card: string | { name: string; folder: string; prompt: string; enabled?: boolean },
 ): Promise<RewrittenCard> {
   // Two spellings of one write: the raw file, or the three fields the daemon
   // serialises itself -- through the same dump make uses, so a person who

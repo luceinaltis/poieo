@@ -76,6 +76,7 @@ vi.mock("./api", () => ({
     folder: "../work",
     prompt: "tidy",
     plain: false,
+    enabled: true,
   })),
   rewriteCard: vi.fn<typeof import("./api").rewriteCard>(async () => ({
     ok: true,
