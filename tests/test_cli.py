@@ -512,6 +512,25 @@ def test_edit_refuses_a_task_and_points_at_eject(tmp_path):
     assert "eject" in result.stderr
 
 
+def test_edit_refuses_an_unknown_save_via(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "edit",
+            str(EXAMPLES / "tasks/support-triage.graph.yaml"),
+            "-o",
+            str(tmp_path / "e.html"),
+            "--save-via",
+            "bogus",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "bogus" in result.stderr
+    for accepted in ("auto", "jupyter", "none"):
+        assert accepted in result.stderr
+    assert not (tmp_path / "e.html").exists()
+
+
 def test_tasks_accepts_the_folder_itself(tmp_path):
     _task(tmp_path)
     result = runner.invoke(app, ["tasks", str(tmp_path / "tasks")])
