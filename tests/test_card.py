@@ -5,6 +5,8 @@ that equality is the whole safety argument for the sugar.
 """
 
 import asyncio
+import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from conftest import at
 from poieo.card import (
     CardSpec,
     append_journal,
+    card_payload,
     expand,
     is_card_document,
     load_card,
@@ -569,6 +572,22 @@ def test_a_hand_written_line_after_the_bookmark_is_new(tmp_path):
 
 def test_an_unreadable_journal_still_lets_the_run_proceed(tmp_path):
     assert read_journal(tmp_path / "does-not-exist.md") == "nothing yet"
+
+
+def test_card_payload_warns_and_continues_when_memory_read_fails(tmp_path, monkeypatch, caplog):
+    """Memory that cannot be read costs the run its memory, never the run."""
+    task = _card(tmp_path, "check-links")
+
+    def explode(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("poieo.card.read_memory", explode)
+    with caplog.at_level(logging.WARNING, logger="poieo.card"):
+        payload = card_payload(task)
+
+    assert "memory" not in payload
+    assert payload["journal"] == "nothing yet"
+    assert any("memory" in record.getMessage().lower() for record in caplog.records)
 
 
 def test_a_note_cannot_forge_a_bookmark(tmp_path):

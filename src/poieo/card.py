@@ -15,6 +15,7 @@ Design: docs/tasks.md
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -466,7 +467,13 @@ def card_payload(task: CardSpec) -> dict[str, Any]:
     left at 8am is in effect at 9am.
     """
     payload: dict[str, Any] = {"journal": read_journal(task.journal_path())}
-    memory = read_memory(task.dir, task)
+    try:
+        memory = read_memory(task.dir, task)
+    except (sqlite3.Error, SpecError, OSError) as exc:
+        # Forgetting beats failing, same as the journal above: a run with less
+        # in mind beats no run at all.
+        log.warning("could not read this project's memory: %s; running without it", exc)
+        memory = None
     if memory is not None:
         payload["memory"] = memory
     return payload
