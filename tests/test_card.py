@@ -14,6 +14,7 @@ from conftest import at
 from poieo.card import (
     CardSpec,
     append_journal,
+    card_payload,
     expand,
     is_card_document,
     load_card,
@@ -383,6 +384,31 @@ def test_the_generated_prompt_puts_memory_before_the_journal(tmp_path):
     # The stable part of the prompt stays stable: always-true rules come
     # before recent history.
     assert system.index("{{ input.memory }}") < system.index("{{ input.journal }}")
+
+
+def test_card_payload_degrades_when_recall_fails(tmp_path, monkeypatch, caplog):
+    """A memory that will not be read costs the run context, not the run.
+
+    The journal already forgets out loud when its file cannot be read; the
+    long memory sits behind the same promise, and reached the run as an
+    exception from the one place that said it never would.
+    """
+    import poieo.memory.recall as memory_recall
+
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
+    write_page(tmp_path / "tasks", "Never push to main.")
+
+    def blow_up(*args, **kwargs):
+        raise RuntimeError("the memory would not open")
+
+    monkeypatch.setattr(memory_recall, "recall", blow_up)
+
+    with caplog.at_level("WARNING", logger="poieo.card"):
+        payload = card_payload(task)  # must not raise
+
+    assert payload["journal"] == "nothing yet"
+    assert "memory" not in payload
+    assert any("could not read the memory" in message for message in caplog.messages)
 
 
 def test_a_task_backed_flow_reads_its_journal_before_every_run(tmp_path):

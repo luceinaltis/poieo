@@ -466,7 +466,13 @@ def card_payload(task: CardSpec) -> dict[str, Any]:
     left at 8am is in effect at 9am.
     """
     payload: dict[str, Any] = {"journal": read_journal(task.journal_path())}
-    memory = read_memory(task.dir, task)
+    try:
+        memory = read_memory(task.dir, task)
+    except Exception as exc:
+        # Forgetting beats failing, as with the journal: a memory that cannot
+        # be read costs the run context, not the run.
+        log.warning("task '%s': could not read the memory: %s", task.slug, exc)
+        memory = None
     if memory is not None:
         payload["memory"] = memory
     return payload
