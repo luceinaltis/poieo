@@ -426,9 +426,10 @@ def _entries(path: Path) -> list[str]:
     """Every journal line, as text -- never parsed."""
     try:
         raw = path.read_text(encoding="utf-8") if path.exists() else ""
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         # Forgetting beats failing, but say so: a task that cannot read its
-        # journal repeats itself silently.
+        # journal repeats itself silently. A file saved in another encoding
+        # is unreadable in the same way a missing permission is.
         log.warning("could not read the journal %s: %s", path, exc)
         raw = ""
     return [line.rstrip() for line in raw.splitlines() if line.strip() and not line.startswith("#")]
