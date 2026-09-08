@@ -7,12 +7,19 @@ from typing import Any, Iterator
 
 from ..store import Event, RunStore
 
+# Handed to a subscriber that has just been dropped, and to nobody else. It
+# wakes the reader from ``queue.get()`` so it can end its response; a dropped
+# queue is fed nothing again, and a reader parked on one never reconnects.
+# Compared by identity, so no real event can be mistaken for it.
+CLOSED: dict[str, Any] = {"type": "_closed"}
+
 
 class BroadcastStore(RunStore):
     """Wraps a RunStore: writes go through, and live subscribers see them too.
 
     Never waits on a subscriber -- a full queue means the browser stopped
-    reading, so it is evicted and EventSource reconnects on its own.
+    reading, so it is evicted and handed :data:`CLOSED` to end its response,
+    and EventSource reconnects on its own.
 
     Subclasses RunStore to *be* one where one is expected, but **every method
     routes to ``_inner``, reads included**: inheriting the reads would answer
@@ -55,6 +62,11 @@ class BroadcastStore(RunStore):
                 queue.put_nowait(record)
             except asyncio.QueueFull:
                 self._subscribers.discard(queue)
+                # Room for the sentinel: the queue is full by definition, and
+                # this reader has already lost the frame being published, so
+                # the oldest one it is holding goes. It resyncs on reconnect.
+                queue.get_nowait()
+                queue.put_nowait(CLOSED)
 
     def announce(self, record: dict[str, Any]) -> None:
         """Push one frame that is not a run event, and store nothing.
