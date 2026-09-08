@@ -66,8 +66,9 @@ state is 409.
 | `POST /api/tasks/{project}/{task}/answer` | `{choice}`; completes the persisted pending question or returns the currently offered choices |
 
 Accept and discard are the only routes that may change the user's checked-out
-branch. Pause, resume, and run-now change daemon state only. An answer persists
-with its run and may start a task handoff.
+branch, so a run id given to either must belong to the task in the path; one
+recorded under another project or task is 404. Pause, resume, and run-now change
+daemon state only. An answer persists with its run and may start a task handoff.
 
 ### Models and cards
 
