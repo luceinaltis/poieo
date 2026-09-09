@@ -398,6 +398,42 @@ async def test_event_stream_yields_and_filters(tmp_path):
     await stream.aclose()
 
 
+async def test_event_stream_filters_by_project_and_task(tmp_path):
+    """Two projects' `chores` are two tasks, so a stream sees only its own."""
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    watching_a = _event_stream(store, task="chores", project="A")
+    watching_b = _event_stream(store, task="chores", project="B")
+
+    from_a = asyncio.create_task(watching_a.__anext__())
+    from_b = asyncio.create_task(watching_b.__anext__())
+    await asyncio.sleep(0)  # let the generators subscribe
+
+    store.append(Event(run_id="a1", type="run_started", data={"task": "chores", "project": "A"}))
+    assert '"run_id": "a1"' in await asyncio.wait_for(from_a, timeout=2)
+    # B's reader is still waiting: the first frame it ever sees is B's own, so
+    # A's identically-named task never reached it.
+    store.append(Event(run_id="b1", type="run_started", data={"task": "chores", "project": "B"}))
+    assert '"run_id": "b1"' in await asyncio.wait_for(from_b, timeout=2)
+
+    await watching_a.aclose()
+    await watching_b.aclose()
+
+
+def test_events_route_reads_both_names(tmp_path, monkeypatch):
+    """`/api/events` narrows by the pair, the way `/api/runs` does."""
+    asked: dict[str, str | None] = {}
+
+    async def fake_stream(store, task=None, project=None):
+        asked.update(task=task, project=project)
+        yield sse_frame({"type": "tasks_changed"})
+
+    monkeypatch.setattr(server, "_event_stream", fake_stream)
+    client = TestClient(create_app(stub_daemon(tmp_path)))
+
+    assert client.get("/api/events?project=B&task=chores").status_code == 200
+    assert asked == {"task": "chores", "project": "B"}
+
+
 def test_built_ui_is_served_from_static(tmp_path, monkeypatch):
     static = tmp_path / "static"
     (static / "assets").mkdir(parents=True)

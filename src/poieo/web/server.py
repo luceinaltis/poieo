@@ -61,18 +61,29 @@ def sse_frame(record: dict[str, Any]) -> str:
     return f"data: {json.dumps(record, ensure_ascii=False)}\n\n"
 
 
-async def _event_stream(store: BroadcastStore, task: str | None = None) -> AsyncIterator[str]:
+async def _event_stream(
+    store: BroadcastStore,
+    task: str | None = None,
+    project: str | None = None,
+) -> AsyncIterator[str]:
     queue = store.subscribe()
     try:
         while True:
             record = await queue.get()
-            # `?task=` narrows the *runs* a reader is watching. A frame that
-            # belongs to no run says the listing itself changed, which is true
-            # of whichever task they are watching too -- filtered out, a reader
-            # following one task would be the only one never told.
-            if task and record.get("type") != "tasks_changed":
-                run_flow = record.get("task") or store.run_tasks.get(record.get("run_id", ""))
-                if run_flow != task:
+            # `?task=` and `?project=` narrow the *runs* a reader is watching,
+            # and they narrow together for the reason `/api/runs` takes both:
+            # two projects may each have a `chores`, and a name-only filter
+            # hands one reader both. A frame that belongs to no run says the
+            # listing itself changed, which is true of whichever task they are
+            # watching too -- filtered out, a reader following one task would
+            # be the only one never told.
+            if (task or project) and record.get("type") != "tasks_changed":
+                run_id = record.get("run_id", "")
+                run_flow = record.get("task") or store.run_tasks.get(run_id)
+                run_project = record.get("project") or store.run_projects.get(run_id)
+                if task and run_flow != task:
+                    continue
+                if project and run_project != project:
                     continue
             yield sse_frame(record)
     finally:
@@ -1954,8 +1965,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")
+        # Both, for the same reason `runs` takes both: `?task=chores` alone
+        # would mix another project's chores into this reader's feed.
+        project = request.query_params.get("project")
         return StreamingResponse(
-            _event_stream(daemon.store, task),
+            _event_stream(daemon.store, task, project),
             media_type="text/event-stream",
             headers={"cache-control": "no-cache"},
         )
