@@ -47,7 +47,10 @@ means no tools. The generated task carries state between runs. With no schedule
 field, the card uses its interval default and runs once when residency starts.
 
 `poieo show` displays the expanded form and `poieo eject` writes an explicit
-graph. Expansion must remain reversible: it may add generated context, but it
+graph. Ejecting rewrites the card to name that graph, keeping every field that
+is not a node key -- schedule, `binding`, `enabled`, `input`, `input_file`,
+`then`, `on_error`, and `isolation` -- because the graph has nowhere to carry
+them. Expansion must remain reversible: it may add generated context, but it
 must not create behavior that cannot be expressed by a normal task and graph.
 
 The task-folder loader treats every YAML or JSON document without `nodes` as a

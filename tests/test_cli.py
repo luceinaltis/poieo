@@ -1,5 +1,6 @@
 import json
 
+import yaml
 from conftest import EXAMPLES, at, card
 from test_workspace import make_repo
 from typer.testing import CliRunner
@@ -436,6 +437,47 @@ def test_eject_writes_the_graph_beside_the_card(tmp_path):
     after = runner.invoke(app, ["show", str(path)])
     assert after.exit_code == 0
     assert "agent" in after.stdout
+
+
+def test_eject_keeps_everything_that_is_not_a_node_key(tmp_path):
+    """Ejecting moves the node out; what describes the *task* stays on the card.
+
+    Dropping any of these is silent: the card still loads, and an isolation
+    block that vanished puts the task's commands back on the host.
+    """
+    path = _task(
+        tmp_path,
+        body=(
+            "name: tidy\n"
+            "prompt: go\n"
+            "trigger:\n"
+            "  type: interval\n"
+            "  every: 30m\n"
+            "  max_iterations: 3\n"
+            "input:\n"
+            "  channel: ops\n"
+            "input_file: seed.json\n"
+            "then:\n"
+            "  - when: 'true'\n"
+            "    to: sweep\n"
+            "on_error: stop\n"
+            "isolation:\n"
+            "  image: builder:1\n"
+            "  network: bridge\n"
+        ),
+    )
+    assert runner.invoke(app, ["eject", str(path)]).exit_code == 0
+
+    kept = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert kept["trigger"] == {"type": "interval", "every": "30m", "max_iterations": 3}
+    assert kept["input"] == {"channel": "ops"}
+    assert kept["input_file"] == "seed.json"
+    assert kept["then"] == [{"when": "true", "to": "sweep"}]
+    assert kept["on_error"] == "stop"
+    assert kept["isolation"] == {"image": "builder:1", "network": "bridge"}
+
+    # And the rewritten card is still a card the loader accepts.
+    assert runner.invoke(app, ["show", str(path)]).exit_code == 0
 
 
 def test_an_ejected_graph_does_not_become_a_second_task(tmp_path):
