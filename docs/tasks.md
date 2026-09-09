@@ -64,7 +64,9 @@ since one rule cannot give two answers.
 Each run starts with the card's `input`; a mapping from `input_file` is reread
 and layered over it. The harness then adds the task journal and, when enabled,
 the project memory. A note or external input written after one run is therefore
-visible to the next.
+visible to the next. `poieo run` builds the same payload and puts `--input` and
+`--set` on top of it, resolving a relative `input_file` against the card, since
+by hand there is no project config to resolve it against.
 
 The journal is append-only at `memory/shortterm/<task>.md`. Every CLI and daemon
 run records its outcome. Prompt assembly shows new notes in oldest-first order

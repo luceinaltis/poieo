@@ -151,6 +151,33 @@ class DaemonConfig(ProjectSpec):
         return self.resolve_path(self.binding).resolve() if self.binding else None
 
 
+def declared_input(name: str, static: dict[str, Any], input_file: Path | None) -> dict[str, Any]:
+    """What a job says it is handed: its static ``input``, then its file.
+
+    One statement of the rule, shared by the two runners -- `poieo run` and the
+    daemon -- the way :func:`~poieo.card.card_payload` already is. The caller
+    resolves the path, because what a relative one is relative to is the
+    caller's question: the daemon's config file, or the card itself.
+
+    Re-read on every call: an external process writing the file between two
+    runs is the point of ``input_file``.
+    """
+    payload = dict(static)
+    if input_file is None:
+        return payload
+    if not input_file.exists():
+        raise SpecError(f"task '{name}': input_file not found: {input_file}")
+    try:
+        text = input_file.read_text(encoding="utf-8")
+        data = json.loads(text) if input_file.suffix == ".json" else load_document(input_file)
+    except json.JSONDecodeError as exc:
+        raise SpecError(f"task '{name}': {input_file}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SpecError(f"task '{name}': {input_file} must contain a mapping")
+    payload.update(data)
+    return payload
+
+
 class LoadedTask(BaseModel):
     """A task with its graph and binding parsed and cross-checked."""
 
@@ -162,22 +189,14 @@ class LoadedTask(BaseModel):
     binding_key: str
 
     def read_input(self, config: DaemonConfig) -> dict[str, Any]:
-        payload = dict(self.spec.input)
-        if self.spec.input_file:
-            # Absolute already when the task came from a card, which resolved
-            # it against the card file; this stays for a path that arrived
-            # relative, and reads it the project's way.
-            path = config.resolve_path(self.spec.input_file)
-            if not path.exists():
-                raise SpecError(f"task '{self.spec.name}': input_file not found: {path}")
-            try:
-                text = path.read_text(encoding="utf-8")
-                data = json.loads(text) if path.suffix == ".json" else load_document(path)
-            except json.JSONDecodeError as exc:
-                raise SpecError(f"task '{self.spec.name}': {path}: {exc}") from exc
-            if not isinstance(data, dict):
-                raise SpecError(f"task '{self.spec.name}': {path} must contain a mapping")
-            payload.update(data)
+        # Absolute already when the task came from a card, which resolved
+        # it against the card file; the project-relative fallback stays
+        # for a path that arrived relative.
+        payload = declared_input(
+            self.spec.name,
+            self.spec.input,
+            config.resolve_path(self.spec.input_file) if self.spec.input_file else None,
+        )
         task = config.cards_by_task.get(self.spec.name)
         if task is not None:
             payload.update(card_payload(task))
