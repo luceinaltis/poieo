@@ -1121,10 +1121,14 @@ class Daemon:
                     except Exception as exc:
                         log.warning("the tasks could not be checked against their cards: %s", exc)
                         moved = False
-                    if moved:
+                    if appeared or moved:
                         # The board does not poll, and no frame is published
                         # when a file changes under it. Without this a reader
-                        # who edited a card learns nothing until they reconnect.
+                        # who edited a card -- or wrote a new one, from the
+                        # browser or by hand -- learns nothing until they
+                        # reconnect. Both halves of the scan are the same news,
+                        # and both say it once: a card is new at one look only,
+                        # and drift answers "changed" only when it changed.
                         self._announce(project, "tasks_changed")
         finally:
             # Together, not one after another: the caller gives this whole loop
