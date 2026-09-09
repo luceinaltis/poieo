@@ -88,7 +88,10 @@ path fence. The task work directory is bind-mounted at `/work`, so both sides
 see the same bytes. The image must already be present: startup checks that
 Docker answers and every enabled task's image exists, and never pulls an image
 implicitly. Failure to provide requested isolation is fatal to task preflight;
-poieo never falls back to the host.
+poieo never falls back to the host. That holds for `poieo run` as much as for
+the daemon: a card's `isolation:` is honoured without any flag. `--isolate`
+names an image for a card that asked for none, or redirects one that did while
+keeping the network and user it set.
 
 `network: none` is the default. `bridge` grants the container Docker's normal
 network access. The work directory remains deliberately exposed, containers
