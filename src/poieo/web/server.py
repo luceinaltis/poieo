@@ -808,7 +808,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             sort_keys=False,
         )
 
-        def _write() -> bool:
+        def _write() -> tuple[str, int] | None:
+            """None once the card is on disk, or the refusal and its status."""
             # Exclusive create, so the check above and the write are one act:
             # two requests naming the same card in the same second would both
             # answer ok, and the second would overwrite the first in silence.
@@ -816,14 +817,19 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 with open(path, "x", encoding="utf-8") as handle:
                     handle.write(payload)
             except FileExistsError:
-                return False
-            return True
+                return f"this project already has a task called '{slug}'", 409
+            except OSError as exc:
+                # A name the filesystem itself refuses -- a title long enough
+                # that its slug passes the filename limit is the ordinary way
+                # in. That is malformed input, which this route answers 400,
+                # and nothing was written by an open that did not succeed.
+                return f"'{slug}' is not a usable filename: {exc.strerror or exc}", 400
+            return None
 
-        if not await asyncio.to_thread(_write):
-            return JSONResponse(
-                {"error": f"this project already has a task called '{slug}'"},
-                status_code=409,
-            )
+        refused = await asyncio.to_thread(_write)
+        if refused is not None:
+            message, status = refused
+            return JSONResponse({"error": message}, status_code=status)
         # No reload here: the daemon watches this folder and will find it, the
         # same way it finds one written by a hand. One door, not two.
         return JSONResponse({"ok": True, "task": slug, "path": str(path)})

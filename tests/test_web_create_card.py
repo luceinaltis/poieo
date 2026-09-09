@@ -218,3 +218,17 @@ def test_switching_a_card_on_through_the_form_is_promised_as_live(tmp_path):
     assert answer.status_code == 200, answer.text
     assert answer.json()["live"] is True
     assert "enabled" not in cards.joinpath("already.yaml").read_text(encoding="utf-8")
+
+
+def test_a_name_the_filesystem_will_not_take_is_refused(tmp_path):
+    """A slug longer than the filesystem allows for one filename. The route
+    promises 400 for malformed input, and the length of a typed title is
+    ordinary user input -- so the failed `open` is a refusal to answer, not an
+    exception out of the handler and a 500."""
+    client, cards = _client(tmp_path)
+
+    answer = _make(client, {"name": "a" * 300, "folder": "../work", "prompt": "x"})
+
+    assert answer.status_code == 400, answer.text
+    assert answer.json()["error"]
+    assert sorted(p.name for p in cards.iterdir()) == ["already.yaml"]
