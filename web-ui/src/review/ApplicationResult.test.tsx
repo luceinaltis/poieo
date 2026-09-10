@@ -6,7 +6,8 @@ import { ApplicationResult, applicationLabel } from "./ApplicationResult"
 
 test("identical work and undone work have distinct recorded outcomes", () => {
   expect(applicationLabel({ status: "applied", accepted: 2, unchanged: true })).toBe("Already included")
-  expect(applicationLabel({ status: "undone" })).toBe("Undone · task paused")
+  expect(applicationLabel({ status: "undone" })).toBe("Undone")
+  expect(applicationLabel({ status: "applied", undo_of: "old-run" })).toBe("Undo applied")
 })
 
 test("applied changes show the commands and the recorded verification result", () => {
