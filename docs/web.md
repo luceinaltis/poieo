@@ -121,8 +121,10 @@ are immutable.
 
 `BroadcastStore` writes through to the durable store and publishes the same
 event dictionary to a bounded queue for each subscriber. A slow subscriber is
-dropped rather than blocking a run. `run_started` establishes project/task
-identity for later frames; the final summary is sent as a flat `run_summary`.
+dropped rather than blocking a run, and its queue receives a close sentinel so
+its SSE response ends instead of waiting on a queue nothing feeds again.
+`run_started` establishes project/task identity for later frames; the final
+summary is sent as a flat `run_summary`.
 `tasks_changed` belongs to no run and tells clients to reread the listing.
 
 `EventSource` reconnects automatically, but events sent while disconnected are

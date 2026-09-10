@@ -1,7 +1,12 @@
 """BroadcastStore: events go to the file store and to live subscribers."""
 
+import asyncio
+
+import pytest
+
 from poieo.store import Event, NullStore, RunStore
 from poieo.web.events import BroadcastStore
+from poieo.web.server import _event_stream
 
 
 def make_store(tmp_path):
@@ -52,6 +57,25 @@ async def test_slow_subscriber_is_evicted_not_blocking(tmp_path):
     store.append(Event(run_id="r1", type="node_started", data={"step": 9}))
     assert slow.qsize() == 2  # no longer receiving
     assert fast.get_nowait()["data"]["step"] == 9
+
+
+async def test_full_subscriber_queue_closes_stream(tmp_path):
+    """Dropping the reader is only half of the recovery: its SSE response has
+    to end too, so `EventSource` reconnects and resyncs from the history. A
+    dropped reader used to stay parked on a queue nothing would feed again --
+    the one client that lost events was the one that never recovered."""
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"), queue_limit=2)
+    stream = _event_stream(store)
+    first = asyncio.create_task(stream.__anext__())
+    await asyncio.sleep(0)  # let the generator subscribe and block on the queue
+
+    for i in range(3):  # one more than the queue can hold, with nobody reading
+        store.append(Event(run_id="r1", type="node_started", data={"step": i}))
+
+    frame = await asyncio.wait_for(first, timeout=2)
+    assert "_closed" not in frame  # the sentinel is ours, not the browser's
+    with pytest.raises(StopAsyncIteration):
+        await asyncio.wait_for(stream.__anext__(), timeout=2)
 
 
 async def test_reads_answer_from_the_wrapped_store(tmp_path, monkeypatch):

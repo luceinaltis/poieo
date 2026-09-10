@@ -52,7 +52,7 @@ from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
 from ..workspace import usable as git_keeps_copies
-from .events import BroadcastStore
+from .events import CLOSED, BroadcastStore
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -70,6 +70,11 @@ async def _event_stream(
     try:
         while True:
             record = await queue.get()
+            if record is CLOSED:
+                # The store dropped this reader for falling behind. Ending the
+                # response lets EventSource reconnect and resync from history;
+                # waiting on a queue nobody feeds any more would not.
+                return
             # `?task=` and `?project=` narrow the *runs* a reader is watching,
             # and they narrow together for the reason `/api/runs` takes both:
             # two projects may each have a `chores`, and a name-only filter
