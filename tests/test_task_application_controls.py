@@ -1,12 +1,11 @@
 """Decisions and parallel entry points keep one task's work and history intact."""
 
 import asyncio
-import json
 
 import pytest
 import yaml
 from test_task_application import CHECK_MADE, policy_config, run_once
-from test_workspace import do_run, git, make_repo, workspace
+from test_workspace import git, make_repo, workspace
 from typer.testing import CliRunner
 
 from poieo.card import load_card
@@ -21,8 +20,9 @@ def test_cli_cannot_open_a_copy_another_runner_is_still_working_in(tmp_path):
     point.prepare()
     (point.worktree / "README.md").write_text("unfinished work")
     with point.exclusive_run():
-        result = CliRunner().invoke(app, ["run", str(tmp_path / "cards" / "chores.yaml"),
-            "--binding", str(tmp_path / "b.yaml"), "--json"])
+        result = CliRunner().invoke(
+            app, ["run", str(tmp_path / "cards" / "chores.yaml"), "--binding", str(tmp_path / "b.yaml"), "--json"]
+        )
     assert result.exit_code == 1
     assert (point.worktree / "README.md").read_text() == "unfinished work"
 
@@ -83,16 +83,19 @@ async def test_removing_the_last_file_in_the_task_folder_still_has_a_check_direc
 
 
 async def test_cancelling_a_shell_stops_orphaned_descendants_before_returning(tmp_path):
-    from poieo.tools.shell import run_here, _POSIX_SHELL
+    from poieo.tools.shell import _POSIX_SHELL, run_here
 
     if not _POSIX_SHELL and __import__("os").name == "nt":
         pytest.skip("this reproduction uses POSIX job syntax")
-    command = '(python -c "import time; from pathlib import Path; Path(\'started\').touch(); time.sleep(4); Path(\'escaped\').touch()" &)'
+    command = (
+        "(python -c \"import time; from pathlib import Path; Path('started').touch(); "
+        "time.sleep(4); Path('escaped').touch()\" &)"
+    )
     running = asyncio.create_task(run_here(tmp_path, command))
     from conftest import until
 
     await until(lambda: (tmp_path / "started").exists(), "child started")
-    await asyncio.sleep(.1)
+    await asyncio.sleep(0.1)
     running.cancel()
     started = asyncio.get_running_loop().time()
     with pytest.raises(asyncio.CancelledError):

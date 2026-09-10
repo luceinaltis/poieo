@@ -1671,6 +1671,8 @@ def eject(
         kept["on_error"] = task.on_error
     if task.isolation is not None:
         kept["isolation"] = task.isolation.model_dump(mode="json", exclude_none=True)
+    if "apply" in task.model_fields_set:
+        kept["apply"] = task.apply.model_dump(mode="json")
     try:
         named = Path(os.path.relpath(target, task.dir)).as_posix()
     except ValueError:  # a different drive on Windows: no relative path exists

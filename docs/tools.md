@@ -4,6 +4,14 @@ Cancelling a host shell command kills its process tree and waits for it to exit,
 as a timeout does. This lets application verification stop before its temporary
 working folder is removed.
 
+Windows commands start suspended and are assigned to a Job Object before their
+first thread resumes. Timeout and cancellation terminate that job, so an exited
+shell cannot leave orphaned descendants holding stdout or the work directory.
+Normal completion preserves existing background-command behavior. POSIX commands
+use their session's process group id directly, including after the shell exits.
+The Windows implementation follows [AssignProcessToJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)
+and [thread enumeration](https://learn.microsoft.com/en-us/windows/win32/toolhelp/traversing-the-thread-list).
+
 `src/poieo/tools/`
 
 Agent nodes receive named toolsets. Every tool call goes through an `Executor`,

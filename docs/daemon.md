@@ -61,6 +61,10 @@ A blocked result asks a persisted `apply_changes` question and holds only that
 task, including after restart. Retry schedules another run; pause leaves it held.
 Pending work is checked even when a retry produces no new file edits.
 
+Manual acceptance or discard records the decision for every affected run and
+clears its persisted application question. A discarded result uses status
+`discarded`. Accepting a held change resumes the task's schedule.
+
 Application settings alone are read at the next run without rebuilding the
 schedule. Permission is read again immediately before automatic application;
 an edit, removal or disabling of the card prevents the earlier permission from

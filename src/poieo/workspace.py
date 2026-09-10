@@ -14,6 +14,7 @@ Design: docs/workspace.md
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import shutil
 import subprocess
@@ -122,20 +123,37 @@ _LOCKS_GUARD = threading.Lock()
 
 
 @contextmanager
-def _repository_lock(repo: Path) -> Iterator[None]:
+def _repository_lock(repo: Path, *, task: str | None = None) -> Iterator[None]:
     """Serialize poieo's writes across tasks, threads, and daemon processes."""
     common = Path(_git(repo, "rev-parse", "--git-common-dir").strip())
     common = (repo / common).resolve() if not common.is_absolute() else common.resolve()
-    key = os.path.normcase(str(common))
+    name = "poieo-accept.lock" if task is None else f"poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
+    key = os.path.normcase(str(common / name))
+    busy = (
+        "another poieo process is still applying a change; try again"
+        if task is None
+        else "this task is already running in another process"
+    )
     with _LOCKS_GUARD:
         local = _LOCKS.setdefault(key, threading.Lock())
-    with local, (common / "poieo-accept.lock").open("a+b") as handle:
+    if not local.acquire(timeout=60 if task is None else 0):
+        raise WorkspaceError(busy)
+    try:
+        with _locked_file(common / name, wait=60 if task is None else 0, busy=busy):
+            yield
+    finally:
+        local.release()
+
+
+@contextmanager
+def _locked_file(path: Path, *, wait: float, busy: str) -> Iterator[None]:
+    with path.open("a+b") as handle:
         handle.seek(0, os.SEEK_END)
         if handle.tell() == 0:
             handle.write(b"\0")
             handle.flush()
         handle.seek(0)
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + wait
         while True:
             try:
                 if os.name == "nt":
@@ -151,7 +169,7 @@ def _repository_lock(repo: Path) -> Iterator[None]:
                 if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
                     raise WorkspaceError(f"could not coordinate changes: {exc}") from exc
                 if time.monotonic() >= deadline:
-                    raise WorkspaceError("another poieo process is still applying a change; try again") from exc
+                    raise WorkspaceError(busy) from exc
                 time.sleep(0.05)
         try:
             yield
@@ -249,6 +267,28 @@ class Workspace:
         return self.worktrees / self.task
 
     # -- inspection ---------------------------------------------------------
+
+    @contextmanager
+    def exclusive_run(self) -> Iterator[None]:
+        """Keep another runner from resetting or committing this task's copy."""
+        if not self.available():
+            yield
+            return
+        with _repository_lock(self.repo, task=self.task):
+            yield
+
+    def applied(self, commit: str) -> bool:
+        return self._is_ancestor(commit, "HEAD")
+
+    def run_ids(self, commits: Sequence[str]) -> list[str]:
+        wanted = set(commits)
+        refs = _git(self.repo, "for-each-ref", "--format=%(objectname) %(refname)", "refs/poieo/runs")
+        return [
+            ref.rsplit("/", 1)[-1]
+            for line in refs.splitlines()
+            for commit, ref in [line.split(" ", 1)]
+            if commit in wanted
+        ]
 
     def available(self) -> bool:
         """git on PATH, and the workdir actually inside a repository."""
@@ -443,7 +483,11 @@ class Workspace:
     def check_folder(self, prepared: PreparedChange) -> Path:
         """The task's chosen folder inside the combined copy."""
         root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
-        return prepared.path / self.repo.resolve().relative_to(root)
+        folder = prepared.path / self.repo.resolve().relative_to(root)
+        if not folder.resolve().is_relative_to(prepared.path.resolve()):
+            raise WorkspaceError("the task folder moved outside its private copy")
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
 
     def outside_scope(self, prepared: PreparedChange, paths: list[str], protected: Sequence[Path] = ()) -> list[str]:
         """Changed paths outside the user's grant, including both sides of a rename."""

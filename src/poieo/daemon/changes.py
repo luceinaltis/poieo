@@ -101,7 +101,7 @@ async def _check_and_apply(
                         finally:
                             stopping.cancel()
                             await asyncio.gather(stopping, return_exceptions=True)
-                    except PoieoError as exc:
+                    except (PoieoError, OSError) as exc:
                         checks.append({"command": command, "exit_code": None, "output": str(exc)})
                         return {"status": "blocked", "error": "verification failed", "checks": checks}
                     checks.append({"command": command, "exit_code": checked.exit_code, "output": checked.output})
