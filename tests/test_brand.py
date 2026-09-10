@@ -81,7 +81,7 @@ def test_model_selection_is_explicit_and_accuracy_is_a_goal():
 def test_public_pages_offer_a_direct_route_to_model_setup():
     for name in ("index.html", "docs.html"):
         source = (ROOT / "site" / name).read_text(encoding="utf-8")
-        assert 'docs.html#usage/choose-models' in source
+        assert "docs.html#usage/choose-models" in source
 
 
 @pytest.mark.parametrize("path", DARK_BRAND_ASSETS, ids=lambda path: path.name)

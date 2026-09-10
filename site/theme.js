@@ -1,6 +1,4 @@
-/* Theme: the bar's choice, remembered in localStorage; otherwise the OS's.
-   Loaded synchronously in <head> so the right tokens are in place before
-   first paint — no flash of the wrong ground. */
+/* Apply a saved preference before first paint, falling back to the OS. */
 (function () {
   var pick = null;
   try { pick = localStorage.getItem("poieo.theme"); } catch (e) {}
@@ -8,22 +6,25 @@
     pick = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   apply(pick);
 
-  function apply(t) {
-    document.documentElement.dataset.theme = t;
+  function apply(theme) {
+    document.documentElement.dataset.theme = theme;
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = t === "light" ? "#f4f0e8" : "#14120f";
-    var b = document.getElementById("theme-flip");
-    if (b) b.textContent = t === "light" ? "☾" : "☀";
+    if (meta) meta.content = theme === "light" ? "#f3f5f2" : "#14221b";
+    var button = document.getElementById("theme-flip");
+    if (button) {
+      button.textContent = theme === "light" ? "Dark" : "Light";
+      button.setAttribute("aria-label", "Switch to " + (theme === "light" ? "dark" : "light") + " theme");
+    }
   }
 
   addEventListener("DOMContentLoaded", function () {
     apply(document.documentElement.dataset.theme);
-    var b = document.getElementById("theme-flip");
-    if (!b) return;
-    b.addEventListener("click", function () {
-      var t = document.documentElement.dataset.theme === "light" ? "dark" : "light";
-      try { localStorage.setItem("poieo.theme", t); } catch (e) {}
-      apply(t);
+    var button = document.getElementById("theme-flip");
+    if (!button) return;
+    button.addEventListener("click", function () {
+      var theme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+      try { localStorage.setItem("poieo.theme", theme); } catch (e) {}
+      apply(theme);
     });
   });
 })();
