@@ -18,6 +18,21 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+@pytest.mark.parametrize("restart", [False, True])
+async def test_a_decision_does_not_mark_unread_user_direction_as_consumed(tmp_path, restart):
+    from poieo.card import append_journal, read_journal
+    from poieo.daemon import Daemon
+
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    daemon, _ = await run_once(config)
+    journal = config.cards_by_task["chores"].journal_path()
+    append_journal(journal, "you", "Keep the heading next time")
+    driver = Daemon(config)._runners()[0] if restart else daemon.runners[0]
+    await driver.accept_changes()
+    fresh = read_journal(journal).split("What you did before that:")[0]
+    assert "Keep the heading next time" in fresh
+
+
 async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch):
     from conftest import until
 
