@@ -239,7 +239,7 @@
   }
 
   /* And the rail lies down. Two words down the side cost 92px of a 393px
-     phone -- a quarter of the screen, permanently, for a list that is two
+     phone -- a quarter of the screen, permanently, for a list that is three
      items long. Across the top it costs a line. */
   .shell-rail {
     align-content: center;
@@ -261,6 +261,16 @@
 
   .shell-rail button {
     padding-inline: 4px;
+  }
+
+  /* Four words on a 393px bar: the project's name is the one that can be
+     long, so it is the one that gives. */
+  .shell-project,
+  .shell-project-pick {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .shell-stage {

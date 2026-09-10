@@ -114,6 +114,8 @@ test("making one is offered on the board, not on the rail", async () => {
 
   await act(async () => button("open-runs")!.click())
   expect(button("open-make")).toBeNull()
+  await act(async () => button("open-memory")!.click())
+  expect(button("open-make")).toBeNull()
   await act(async () => button("open-board")!.click())
   expect(button("open-make")).not.toBeNull()
 })

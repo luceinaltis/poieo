@@ -231,7 +231,7 @@ test("closing the panel restores the control that opened it", async () => {
   ).toBe("false")
 })
 
-test("switching rail panels restores the latest control", async () => {
+test("switching from the bar's panel to the board's restores the latest control", async () => {
   await open()
   await act(async () => button("open-models")!.click())
 

@@ -254,6 +254,20 @@ test("no tasks renders the invitation, not an error", async () => {
   expect(container.querySelector('.make[aria-label="New task"]')).not.toBeNull()
 })
 
+test("the first task made from the invitation hands focus to the board's corner button", async () => {
+  // The invitation unmounts the moment the board has a task, while the make
+  // panel is still open. Closing it then has no opener to go back to, and
+  // focus used to drop to the page itself.
+  const store = await render(initialStage([]))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="empty-new-task"]')!.click())
+  await act(async () => store.push(initialStage(TASK_ROWS)))
+  expect(container.querySelector('[data-do="empty-new-task"]')).toBeNull()
+
+  await act(async () => container.querySelector<HTMLElement>(".make-close")!.click())
+
+  expect(document.activeElement).toBe(container.querySelector('[data-do="open-make"]'))
+})
+
 test("the shell carries the approved poieo lockup", async () => {
   await render(initialStage([]))
 

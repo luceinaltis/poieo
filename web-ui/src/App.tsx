@@ -106,11 +106,14 @@ export default function App({ store }: { store?: StageStore }) {
       // A rail or board click has already put focus exactly where the reader
       // asked to go. Restore only when closing removed the focused panel and
       // the browser fell back to the page itself.
-      if (
-        document.activeElement === document.body &&
-        panelOpenerRef.current?.isConnected
-      ) {
-        panelOpenerRef.current.focus()
+      if (document.activeElement === document.body) {
+        // The opener may have gone: the first task made from the bare board's
+        // invitation replaces that invitation with the board while the panel
+        // is still open. The corner button is where that act now lives.
+        const opener = panelOpenerRef.current?.isConnected
+          ? panelOpenerRef.current
+          : document.querySelector<HTMLElement>('[data-do="open-make"]')
+        opener?.focus()
       }
       panelOpenerRef.current = null
     }
@@ -406,9 +409,6 @@ export default function App({ store }: { store?: StageStore }) {
             className="shell-make"
             data-do="open-make"
             aria-expanded={activePanel.kind === "make"}
-            // A card is written into a project's tasks folder, so there has
-            // to be a project before there is anywhere to write it.
-            disabled={!project}
             onClick={(event) => openMake(event.currentTarget)}
           >
             new task
