@@ -1,61 +1,51 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Docs — poieo</title>
-<meta name="description" content="The poieo manual: write a task, let it run, and review every change. Contributor reference is available when you need the internals.">
-<link rel="canonical" href="https://luceinaltis.github.io/poieo/docs.html">
-<meta name="theme-color" content="#100e0c">
-<script src="theme.js"></script>
-<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentation — poieo</title>
+  <meta name="description" content="Start a task, choose small and large models for its steps, and review the results. The poieo manual and contributor reference.">
+  <meta name="theme-color" content="#f3f5f2">
+  <link rel="canonical" href="https://luceinaltis.github.io/poieo/docs.html">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
-
+<body class="docs-page">
 <header class="bar">
-  <a class="wordmark" aria-label="poieo — home" href="./">
-    <img class="logo-mark" src="img/mark.svg" alt="" width="24" height="24">
-    <img class="logo-word" src="img/wordmark.svg" alt="poieo" height="20">
-  </a>
-  <span class="bar-sub">docs</span>
-  <nav>
+  <a class="wordmark" aria-label="poieo home" href="./"><img class="brand-logo" src="img/lockup-light.svg" alt="poieo" width="160" height="42"></a>
+  <nav aria-label="Main navigation">
     <a href="./">Home</a>
+    <a href="docs.html" aria-current="page">Docs</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
-    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch between light and dark">☀</button>
+    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch theme">Theme</button>
   </nav>
 </header>
 
-<!-- No copies: the sidebar picks a document and docs.js fetches it from the
-     main branch, so what merges is what this page shows. -->
+<!-- Documents keep their source in the repository; docs.js loads main. -->
 <div class="docs-layout">
-  <details class="doc-nav-fold">
-    <summary>All documents</summary>
-  </details>
-  <aside class="doc-nav" aria-label="documents">
-    <nav id="doc-nav"></nav>
+  <details class="doc-nav-fold"><summary>All documents</summary></details>
+  <aside class="doc-nav" aria-label="Documents">
+    <nav class="doc-nav-intro" aria-label="Start here">
+      <p>Make it work for you.</p>
+      <a href="docs.html#usage/install">Install poieo</a>
+      <a href="docs.html#usage/create-and-run-a-task">Start your first task</a>
+      <a href="docs.html#usage/choose-models">Choose your models</a>
+    </nav>
+    <nav id="doc-nav" aria-label="All documents"></nav>
   </aside>
-  <details id="doc-toc" class="doc-toc" aria-label="on this page">
-    <summary>On this page</summary>
-    <nav></nav>
-  </details>
-  <article id="doc" class="doc-body">
-    <noscript><p class="doc-state">This viewer fetches each document from the
-      repository, which needs JavaScript — or read them straight
-      <a href="https://github.com/luceinaltis/poieo/tree/main/docs">on GitHub</a>.</p></noscript>
+  <details id="doc-toc" class="doc-toc" aria-label="On this page"><summary>On this page</summary><nav></nav></details>
+  <article id="doc" class="doc-body" aria-label="Documentation">
+    <noscript><p class="doc-state">Read the <a href="https://github.com/luceinaltis/poieo/blob/main/docs/usage.md">poieo manual on GitHub</a>. This page needs JavaScript to load documents.</p></noscript>
   </article>
 </div>
 
-<footer>
-  <p>
-    <a href="./">Home</a> ·
-    <a href="https://github.com/luceinaltis/poieo">Source</a> ·
-    <a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT</a>
-  </p>
-  <p class="quiet">poieo is Greek <i lang="el">ποιέω</i>, “to make” — say it <i>poy-eh-oh</i>.</p>
+<footer class="footer">
+  <div><img class="brand-logo" src="img/lockup-light.svg" alt="poieo" width="160" height="42"><p>A personal tool for work that keeps going.</p></div>
+  <nav aria-label="Footer navigation"><a href="./">Home</a><a href="https://github.com/luceinaltis/poieo">Source on GitHub</a><a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT license</a></nav>
+  <p class="footer-note">From the Greek <i lang="el">ποιέω</i>, “to make.”</p>
 </footer>
-
 <script src="docs.js"></script>
 </body>
 </html>

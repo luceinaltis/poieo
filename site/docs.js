@@ -254,7 +254,7 @@ async function show(id, anchor) {
   document.title = `${title} — poieo docs`
 
   const cached = sessionStorage.getItem("poieo.doc." + path)
-  if (!cached) article.innerHTML = `<p class="doc-state">Fetching ${path} from main…</p>`
+  if (!cached) article.innerHTML = `<p class="doc-state">Loading ${title}…</p>`
 
   let md = cached
   if (!md) {
@@ -275,7 +275,7 @@ async function show(id, anchor) {
   const group = DOCS.get(id).group
   article.innerHTML =
     `<p class="doc-meta"><span class="doc-crumb">${group}</span>` +
-    `<a href="${BLOB + path}">Edit on GitHub</a> · served from <code>main</code></p>` +
+    `<a href="${BLOB + path}">Edit on GitHub</a></p>` +
     render(md, toc) +
     pager(id)
   paintToc(id, toc)

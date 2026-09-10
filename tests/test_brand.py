@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-HEADLINE = "Your models, at work."
-DESCRIPTOR = "An autonomous task board for the models you choose."
+HEADLINE = "The right intelligence, in the right place."
+DESCRIPTOR = "Small and large models, working together."
 EXPLANATION = (
-    "Write a task once. poieo keeps it running on the models you choose—on your machine, "
-    "on your schedule—and brings every change back for your approval."
+    "Give routine work to a small model and demanding steps to a larger one. "
+    "poieo keeps your tasks running, carries their context forward, and records the results."
 )
 ACTIVE_SURFACES = [ROOT / "README.md", ROOT / "brand" / "README.md", ROOT / "site" / "index.html"]
 CORE_TOKENS = {"ground", "panel", "well", "raised", "rule", "line", "text", "dim", "ember", "live", "stop"}
@@ -59,12 +59,29 @@ def _dark_tokens(path: Path) -> dict[str, str]:
     return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", root.group(1)))
 
 
-def test_site_and_product_share_the_core_dark_palette():
+def test_site_and_product_keep_the_core_palette_roles():
     product = _dark_tokens(ROOT / "web-ui" / "src" / "index.css")
     site = _dark_tokens(ROOT / "site" / "style.css")
     assert CORE_TOKENS <= product.keys()
     assert CORE_TOKENS <= site.keys()
-    assert {name: site[name] for name in CORE_TOKENS} == {name: product[name] for name in CORE_TOKENS}
+    brand = (ROOT / "brand" / "README.md").read_text(encoding="utf-8").lower()
+    assert all(colour.lower() in brand for colour in site.values())
+    for page in ("index.html", "docs.html", "social.html"):
+        assert 'href="style.css"' in (ROOT / "site" / page).read_text(encoding="utf-8")
+
+
+def test_model_selection_is_explicit_and_accuracy_is_a_goal():
+    for path in ACTIVE_SURFACES:
+        text = path.read_text(encoding="utf-8")
+        assert "You choose the model for each step" in text
+        assert "accuracy" in text.lower()
+        assert "guaranteed accuracy" not in text.lower()
+
+
+def test_public_pages_offer_a_direct_route_to_model_setup():
+    for name in ("index.html", "docs.html"):
+        source = (ROOT / "site" / name).read_text(encoding="utf-8")
+        assert "docs.html#usage/choose-models" in source
 
 
 @pytest.mark.parametrize("path", DARK_BRAND_ASSETS, ids=lambda path: path.name)

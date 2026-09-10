@@ -1,9 +1,12 @@
 # Using poieo
 
-poieo keeps tasks running on models you choose and brings their changes back
-for review. A task is a YAML file with a name, a folder, and instructions. This
-guide starts with an offline mock run, then adds the parts needed for unattended
-work.
+poieo keeps your work running with the models you choose. Start with one task,
+then give its routine steps to a small model and demanding steps to a larger
+one. Use checks and review to judge the result.
+
+This guide starts with an offline mock run, then covers model choices,
+schedules, and review. A task is a YAML file with a name, a folder, and
+instructions.
 
 Run `poieo --help` or `poieo <command> --help` for the complete command and
 option reference. The component guides in [the documentation index](README.md)
@@ -171,6 +174,11 @@ The daemon must still be running because it owns the waiting question.
 
 ## Choose models
 
+You choose the model for each step through its role. A small model can handle
+routine reading or classification, while a larger one can take on demanding
+writing or review. Begin with your actual task and compare the results against
+your checks; model size alone does not establish accuracy.
+
 Run these from a poieo project:
 
 ```bash
@@ -213,6 +221,17 @@ environment variable, never in the YAML. Provider-specific headers, query
 parameters, timeouts, retries, model parameters, context limits, and prices
 are available when needed. See [bindings and model providers](binding.md) for
 the schema and credential boundary.
+
+For a task with several model steps, assign each a role such as `reader`,
+`builder`, or `reviewer`, then choose a model for each role with
+`poieo config use <provider>/<model> --role <role>`. The model names must be
+ones your configured endpoints serve. Changing an assignment preserves the
+task's graph. A basic prompt task uses its default role until you give it one.
+
+These are explicit assignments, not automatic model selection. Add command
+steps for tests or other checks in a [larger graph](#grow-a-task-into-a-graph)
+when the task needs them. Inspect run records for usage and for cost when the
+provider reports it or your model settings declare prices.
 
 ## Isolate model tools
 
