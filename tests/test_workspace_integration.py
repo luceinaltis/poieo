@@ -1,6 +1,12 @@
 """A change is checked against the current project before it reaches the user."""
 
+import os
+import subprocess
+import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from test_workspace import clean, do_run, git, head, make_repo, workspace
 
@@ -150,3 +156,41 @@ def test_user_edits_made_during_verification_are_preserved(tmp_path):
         assert not (repo / "task.txt").exists()
     finally:
         point.release_prepared(prepared)
+
+
+def test_another_process_can_finish_a_slow_application(tmp_path):
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "task.txt", "work")
+    ready, release = tmp_path / "ready", tmp_path / "release"
+    script = """
+import sys, time
+from pathlib import Path
+from poieo.workspace import _repository_lock
+with _repository_lock(Path(sys.argv[1])):
+    Path(sys.argv[2]).touch()
+    while not Path(sys.argv[3]).exists():
+        time.sleep(0.02)
+"""
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(repo), str(ready), str(release)],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")},
+    )
+    timer = None
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists():
+            assert process.poll() is None
+            assert time.monotonic() < deadline
+            time.sleep(0.02)
+        # Windows' LK_LOCK stops retrying after about nine seconds. A real
+        # independent owner held beyond that point must still hand over safely.
+        timer = threading.Timer(10.2, release.touch)
+        timer.start()
+        assert point.accept() == {"accepted": 1}
+        assert (repo / "task.txt").read_text() == "work"
+    finally:
+        release.touch()
+        if timer is not None:
+            timer.cancel()
+        process.wait(timeout=10)
