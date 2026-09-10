@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from ..layout import layout_for
-from .entries import Entry, keeps_memory, words
+from .entries import Entry, keeps_memory, read_page, words
 from .recall import recall
 
 log = logging.getLogger("poieo.memory")
@@ -99,8 +99,18 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     try:
         # Recomputed rather than passed in, and emphasis-grade: it may fail
         # without costing the record, let alone the run.
+        from ..card import read_journal  # late: card imports this package
+
+        chosen = recall(task.dir, task) if keeps_memory(task.dir) else []
         if keeps_memory(task.dir):
-            record["shown"] = [entry.slug for entry in recall(task.dir, task)]
+            record["shown"] = [entry.slug for entry in chosen]
+        # What the prompt was made of, in characters: the page and the chosen
+        # entries against their budgets, and the journal beside them.
+        record["prompt"] = {
+            "page_chars": len(read_page(task.dir) or ""),
+            "memory_chars": sum(len(entry.body) for entry in chosen),
+            "journal_chars": len(read_journal(task.journal_path())),
+        }
     except Exception as exc:
         log.warning("task '%s': could not record what was shown: %s", task.slug, exc)
     try:

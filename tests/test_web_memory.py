@@ -144,6 +144,7 @@ def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
         "page_text": "",
         "suggestion": None,
         "stats": None,
+        "learner": None,
         "capabilities": {"words": False, "meaning": False, "ask": False},
         "graph": {
             "nodes": [],
@@ -482,6 +483,7 @@ def test_a_run_says_which_memory_it_was_shown_and_which_it_used(tmp_path):
             # An entry the memory no longer holds cannot be judged or shown.
             {"slug": "long-gone", "used": None, "preview": None},
         ],
+        "prompt": None,
     }
 
 
@@ -613,3 +615,50 @@ def test_a_task_can_be_asked_what_it_will_be_shown(tmp_path):
     assert "Never push to main." in body["block"]
     assert "batches over 50" in body["block"]
     assert client.get("/api/projects/board/tasks/nobody/memory").status_code == 404
+
+
+# -- how much room memory takes ----------------------------------------------
+
+
+def test_the_overview_sizes_the_learners_next_question(tmp_path):
+    body = _client(tmp_path).get("/api/projects/board/memory").json()
+
+    learner = body["learner"]
+    assert learner["entries"] == 2
+    assert learner["prompt_chars"] > 0
+    assert learner["model"] == "local/chat"
+    assert learner["context"] is None  # the binding names no window
+    (tmp_path / "bare").mkdir()
+    assert _client(tmp_path / "bare", memory=False).get("/api/projects/board/memory").json()["learner"] is None
+
+
+def test_a_run_says_how_its_prompt_was_made_up_against_each_budget(tmp_path):
+    import json
+
+    from conftest import at
+
+    client = _client(tmp_path)
+    folder = at(tmp_path).results()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "20260824T010000-aaaaaaaa.json").write_text(
+        json.dumps(
+            {
+                "run_id": "20260824T010000-aaaaaaaa",
+                "task": "importer",
+                "status": "completed",
+                "summary": "",
+                "outputs": {},
+                "shown": [],
+                "prompt": {"page_chars": 19, "memory_chars": 0, "journal_chars": 120},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    body = client.get("/api/runs/20260824T010000-aaaaaaaa/memory").json()
+
+    assert body["prompt"] == {
+        "page": {"chars": 19, "budget": 12_000},
+        "memory": {"chars": 0, "budget": 4_000},
+        "journal": {"chars": 120},
+    }

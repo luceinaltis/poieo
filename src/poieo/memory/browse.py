@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from ..strength import strengths
-from .entries import Entry, entry_named, history_of, keeps_memory, open_memory, readable_entries
+from .entries import PAGE_BUDGET, Entry, entry_named, history_of, keeps_memory, open_memory, readable_entries
 from .index import search_text
+from .recall import ENTRIES_BUDGET
 from .results import read_record, used_in
 from .upkeep import doubts
 
@@ -228,6 +229,19 @@ def entry_document(project_dir: Path, slug: str) -> dict[str, Any] | None:
     }
 
 
+def _prompt_of(record: dict[str, Any]) -> dict[str, Any] | None:
+    """What the run's prompt was made of, each part beside its budget. None
+    for a record written before runs measured this."""
+    raw = record.get("prompt")
+    if not isinstance(raw, dict):
+        return None
+    return {
+        "page": {"chars": raw.get("page_chars"), "budget": PAGE_BUDGET},
+        "memory": {"chars": raw.get("memory_chars"), "budget": ENTRIES_BUDGET},
+        "journal": {"chars": raw.get("journal_chars")},
+    }
+
+
 def run_document(project_dir: Path, run_id: str) -> dict[str, Any] | None:
     """What one run was shown from memory, and whether it used it.
 
@@ -244,11 +258,12 @@ def run_document(project_dir: Path, run_id: str) -> dict[str, Any] | None:
         return None
     shown = record.get("shown")
     if not isinstance(shown, list):
-        return {"run_id": record["run_id"], "task": record.get("task"), "shown": None}
+        return {"run_id": record["run_id"], "task": record.get("task"), "shown": None, "prompt": _prompt_of(record)}
     by_slug = {entry.slug: entry for entry in readable_entries(project_dir)} if keeps_memory(project_dir) else {}
     return {
         "run_id": record["run_id"],
         "task": record.get("task"),
+        "prompt": _prompt_of(record),
         "shown": [
             {
                 "slug": slug,

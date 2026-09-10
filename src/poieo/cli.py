@@ -60,7 +60,7 @@ from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion, recent_passes, settle_suggestion
+from .learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from .learn import learn as run_learning_pass
 from .memory import frontmatter as memory_frontmatter
 from .memory import keep_entry, keeps_memory, memory_report, page_text, put_back, read_memory, set_aside, write_page
@@ -1415,6 +1415,17 @@ def memory(
     typer.echo(f"page       {report['page_chars']} characters (budget {report['page_budget']})")
     typer.echo(f"learned    {report['kept']} kept, {report['set_aside']} set aside")
     typer.echo(f"lookup     {report['lookup']}")
+    # The learner's next question, sized now: the first thing a growing
+    # memory breaks. The binding is best-effort here; this report is read-only.
+    spec = None
+    try:
+        binding, _ = _find_binding(None, task, path.parent if path is not None else None)
+        spec = load_binding(binding) if binding is not None else None
+    except PoieoError:
+        spec = None
+    load = learner_load(project, spec)
+    window = f" of a {load['context']:,}-token window ({load['model']})" if load["context"] else ""
+    typer.echo(f"learner    {load['prompt_chars']:,} characters in its next question{window}")
     for one, other in report["disagreements"]:
         typer.echo(f"disagree     {one} <-> {other}")
     for item in report["second_look"]:

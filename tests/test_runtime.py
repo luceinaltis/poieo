@@ -962,6 +962,9 @@ async def test_a_turn_says_how_big_it_was(tmp_path):
     turns = [e for e in store.events if e.type == "node_turn"]
     assert len(turns) > 2
     assert all(t.data["input_tokens"] > 0 for t in turns)
+    # Each turn also says how big the window was, so a reader can put the
+    # count against it; None when neither the binding nor the endpoint said.
+    assert all("window" in t.data for t in turns)
     # And the conversation grows, so the input does too -- which is the shape
     # the question is about.
     sizes = [t.data["input_tokens"] for t in turns]

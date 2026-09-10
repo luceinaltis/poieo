@@ -226,6 +226,12 @@ export interface RunMemory {
   run_id: string
   task: string | null
   shown: ShownMemory[] | null
+  /** What the prompt was made of, each part beside its budget; null for a record written before runs measured this. */
+  prompt?: {
+    page: { chars: number | null; budget: number }
+    memory: { chars: number | null; budget: number }
+    journal: { chars: number | null }
+  } | null
 }
 
 export interface DiffFile {

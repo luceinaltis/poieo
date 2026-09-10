@@ -503,6 +503,9 @@ class _AgentLoop:
     sent_tokens: int = field(init=False, default=0)
     retried_smaller: bool = field(init=False, default=False)
     context_shrank: bool = field(init=False, default=False)
+    # The window this node's turns are measured against, once `run` has
+    # asked; None until then and when nobody could say.
+    window: int | None = field(init=False, default=None)
     expires_at: float | None = field(init=False)
 
     def __post_init__(self) -> None:
@@ -642,6 +645,7 @@ class _AgentLoop:
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             cache_read_tokens=response.usage.cache_read_tokens,
+            window=self.window,
         )
 
     def _require_another_turn(self) -> None:
@@ -711,6 +715,7 @@ class _AgentLoop:
         window = self.bound.resolved.context
         if window is None:
             window = await self.bound.provider.context_for(self.bound.resolved.model)
+        self.window = window
 
         while True:
             self._start_turn()

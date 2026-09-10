@@ -52,6 +52,10 @@ initialization detects reachable models once; mock initialization gives a
 non-billing scripted path. Detection later happens only through an explicit
 catalogue or add command.
 
+`memory` also sizes the learner's next question against the window the binding
+declares, because that question is shown every entry and is the first thing a
+growing memory breaks.
+
 `keep`, `set-aside`, and `page` are the only memory writes a person has. They
 call the same doors as the learning pass, record the writer as a person, and
 refuse a typed connection, replacement, or anchor that names nothing, so a typo

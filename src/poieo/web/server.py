@@ -45,7 +45,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError, SpecError
-from ..learn import last_suggestion, recent_passes, settle_suggestion
+from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
     frontmatter,
@@ -1888,6 +1888,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "page_text": "",
                     "suggestion": None,
                     "stats": None,
+                    "learner": None,
                     "capabilities": capabilities,
                     "graph": {
                         "nodes": [],
@@ -1902,7 +1903,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 headers=cache_headers,
             )
 
-        def read_memory() -> tuple[Any, Any, Any, Any, Any, Any]:
+        try:
+            spec = _models_of(project)
+        except PoieoError:
+            spec = None
+
+        def read_memory() -> tuple[Any, Any, Any, Any, Any, Any, Any]:
             # The first open after an upgrade may build derived indexes. Keep
             # the database reads sequential so they cannot race that work.
             return (
@@ -1912,9 +1918,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 memory_report(root),
                 graph_snapshot(root),
                 recent_passes(root),
+                learner_load(root, spec),
             )
 
-        page, as_written, suggestion, stats, graph, passes = await asyncio.to_thread(read_memory)
+        page, as_written, suggestion, stats, graph, passes, learner = await asyncio.to_thread(read_memory)
         return JSONResponse(
             {
                 "enabled": True,
@@ -1922,6 +1929,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "page_text": as_written,
                 "suggestion": suggestion,
                 "stats": stats,
+                "learner": learner,
                 "capabilities": capabilities,
                 "graph": graph,
                 # What learning did lately, newest first: the pass log was
