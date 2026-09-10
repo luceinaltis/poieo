@@ -18,6 +18,52 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+@pytest.mark.parametrize("choice", ["retry", "pause"])
+async def test_answering_an_application_question_keeps_unread_direction(tmp_path, choice):
+    from poieo.card import append_journal, read_journal
+
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    daemon, _ = await run_once(config)
+    journal = config.cards_by_task["chores"].journal_path()
+    append_journal(journal, "you", "Keep the heading next time")
+    assert daemon.runners[0].answer(choice)
+    assert "Keep the heading next time" in read_journal(journal).split("What you did before that:")[0]
+
+
+async def test_cancelling_a_save_parks_the_work_away_from_future_application(tmp_path, monkeypatch):
+    from conftest import until
+    from test_task_workspace import WRITES_NOTHING
+
+    from poieo.daemon import Daemon
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+    daemon = Daemon(config)
+    driver = daemon._runners()[0]
+    entered, release = threading.Event(), threading.Event()
+    commit = driver.workspace.commit
+
+    def delayed(*args, **kwargs):
+        entered.set()
+        assert release.wait(10)
+        return commit(*args, **kwargs)
+
+    monkeypatch.setattr(driver.workspace, "commit", delayed)
+    running = asyncio.create_task(driver.run_once({}))
+    await until(entered.is_set, "save started")
+    running.cancel()
+    release.set()
+    result = await running
+    assert result.status == "aborted"
+    assert driver.workspace.pending() == []
+    assert git(repo, "rev-parse", f"refs/poieo/failed/{result.run_id}").strip() == result.change["head"]
+    from test_task_workspace import BINDING
+
+    (tmp_path / "b.yaml").write_text(BINDING.format(responses=WRITES_NOTHING))
+    restarted = Daemon(config)._runners()[0]
+    await restarted.run_once({})
+    assert not (repo / "made.txt").exists()
+
+
 @pytest.mark.parametrize("restart", [False, True])
 async def test_a_decision_does_not_mark_unread_user_direction_as_consumed(tmp_path, restart):
     from poieo.card import append_journal, read_journal
