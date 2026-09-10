@@ -574,6 +574,49 @@ def test_a_task_run_reads_its_journal(tmp_path):
     assert "only touch the tests" in written
 
 
+def test_run_layers_the_flag_over_what_the_card_declares(tmp_path, monkeypatch):
+    """One card, one payload, whichever runner started it.
+
+    The daemon reads a task's `input` and then its `input_file`; `poieo run`
+    read neither, so the same card was handed different things by hand than it
+    was at 3am.
+    """
+    from poieo.runtime.executor import execute as run_it
+
+    path = _task(
+        tmp_path,
+        body=("name: tidy\nprompt: go\ninput:\n  topic: from the card\n  tone: dry\ninput_file: brief.json\n"),
+    )
+    (path.parent / "brief.json").write_text('{"topic": "from the file", "depth": 2}', encoding="utf-8")
+
+    seen: dict = {}
+
+    async def watched(*args, **kwargs):
+        seen.update(kwargs["input"])
+        return await run_it(*args, **kwargs)
+
+    monkeypatch.setattr("poieo.cli.execute", watched)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(path),
+            "-b",
+            str(EXAMPLES / "models/mock.yaml"),
+            "--store",
+            str(tmp_path / "logs"),
+            "--input",
+            '{"topic": "from the flag"}',
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["tone"] == "dry"  # the card's own input
+    assert seen["depth"] == 2  # re-read from its input_file
+    assert seen["topic"] == "from the flag"  # the flag wins over both
+    assert "journal" in seen  # and card_payload still arrives
+
+
 def test_view_renders_a_task(tmp_path):
     out = tmp_path / "v.html"
     result = runner.invoke(app, ["view", str(_task(tmp_path)), "-o", str(out)])

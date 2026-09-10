@@ -54,6 +54,7 @@ from .daemon.config import (
     TaskSpec,
     check_isolation,
     config_for_tasks_folder,
+    declared_input,
 )
 from .editor import render_editor
 from .errors import BindingError, PoieoError
@@ -655,8 +656,17 @@ def run(
     if workdir is None and task is not None and task.folder:
         workdir = task.folder_path()
 
+    # The daemon's order, so one card is handed one payload whichever runner
+    # started it: what the card declares, then what its journal and memory say,
+    # then the flags. A relative `input_file` is read against the card, the way
+    # `binding:` and `graph:` are -- there is no project config here to anchor it.
+    declared = (
+        declared_input(task.slug, task.input, task.resolve(task.input_file) if task.input_file else None)
+        if task is not None
+        else {}
+    )
     card_input = card_payload(task) if task is not None else {}
-    payload = {**card_input, **_parse_input(input_json, set_)}
+    payload = {**declared, **card_input, **_parse_input(input_json, set_)}
     if store is None:
         # Asked from the card's own folder, not the cwd: a card run by hand and
         # the same card run by the daemon write one history, not two.
