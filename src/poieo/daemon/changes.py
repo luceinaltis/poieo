@@ -173,6 +173,9 @@ async def _check_and_apply(
                         failure = {"status": "blocked", "error": "verification failed", "checks": checks}
                         break
             if failure:
+                invalid = await asyncio.to_thread(point.validate_prepared, prepared)
+                if invalid:
+                    return {"status": "blocked", **invalid, "checks": checks}
                 if await attempt_repair(prepared, failure):
                     through = prepared.target
                     continue
