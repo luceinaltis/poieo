@@ -15,6 +15,7 @@ from conftest import at
 
 from poieo.card import (
     DEFAULT_MAX_TURNS,
+    OWN_KINDS,
     CardSpec,
     append_journal,
     card_payload,
@@ -364,6 +365,19 @@ def test_an_entry_is_one_line_however_the_model_answers(tmp_path):
     written = task.journal_path().read_text(encoding="utf-8")
     assert len([line for line in written.splitlines() if line.startswith("- ")]) == 1
     assert "first line second line" in written
+
+
+def test_the_writer_documents_the_kinds_that_move_the_bookmark():
+    """The docstring names the same kinds `OWN_KINDS` does.
+
+    A reader picking a kind trusts the sentence beside the function, not the
+    tuple two screens up; a docstring that names a different set is a bug.
+    """
+    doc = append_journal.__doc__ or ""
+
+    for kind in OWN_KINDS:
+        assert kind in doc
+    assert "failed" not in doc  # a failed run is deliberately not a bookmark
 
 
 def test_reading_an_absent_journal_says_so(tmp_path):

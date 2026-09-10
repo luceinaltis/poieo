@@ -541,9 +541,9 @@ def append_journal(
 ) -> None:
     """Add one line.
 
-    ``kind`` is what wrote it: ``did`` or ``failed`` for a run of this task,
-    ``you`` for the user, ``task`` for a note from a sibling. Only the first
-    two count as the task's own; see OWN_KINDS.
+    ``kind`` is what wrote it: a run of this task says how it went, ``you`` is
+    the user, ``task`` is a note from a sibling. Only ``did`` and ``nothing``
+    count as the task's own, and so move the bookmark; see OWN_KINDS.
     """
     one_line = " ".join(str(text).split()) or "(nothing said)"
     if len(one_line) > JOURNAL_WIDTH:
