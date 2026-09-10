@@ -1627,8 +1627,16 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         run_id = (body or {}).get(key)
         target = None
         if run_id:
-            summary = await asyncio.to_thread(daemon.store.summary, run_id)
-            change = (summary or {}).get("change")
+            summary = await asyncio.to_thread(daemon.store.summary, run_id) or {}
+            # These are the only two routes that move the user's own branch, so
+            # the run named has to be this task's. Another task's head is
+            # reachable whenever they share a repository, and accepting through
+            # it would check out work nobody reviewed here. A record from before
+            # the project field was written carries None, which is not another
+            # project's -- the same tolerance the diff route gives those.
+            if summary and (summary.get("task") != task or summary.get("project") not in (None, project)):
+                return JSONResponse({"error": f"run '{run_id}' is not from task '{task}'"}, status_code=404)
+            change = summary.get("change")
             if not change:
                 return JSONResponse({"error": f"run '{run_id}' has no change"}, status_code=404)
             target = change["head"]

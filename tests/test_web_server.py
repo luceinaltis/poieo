@@ -655,6 +655,107 @@ def test_getting_the_mutation_routes_is_not_allowed(tmp_path):
     assert client.get(f"/api/tasks/{daemon.config.display_name}/chores/discard").status_code == 405
 
 
+def daemon_with_a_chores_task_in_two_projects(tmp_path):
+    """Two projects, each with a `chores` task holding a change of its own."""
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    made = {}
+
+    for name, run_id in (("alpha", "a1"), ("beta", "b1")):
+        home = tmp_path / name
+        home.mkdir()
+        repo = make_repo(home)
+        point = Workspace(repo, "chores", home / "worktrees")
+        point.prepare()
+        (point.worktree / f"{name}.py").write_text("print(1)" + chr(10), encoding="utf-8")
+        change = point.commit(run_id, f"wrote {name}.py")
+        store.record_summary(
+            {
+                "run_id": run_id,
+                "project": name,
+                "task": "chores",
+                "status": "completed",
+                "change": change.as_dict(),
+            }
+        )
+        runner = stub_runner(name="chores", workspace=point)
+        runner.config = stub_project(home, name)
+        made[name] = SimpleNamespace(repo=repo, runner=runner, change=change)
+
+    daemon = SimpleNamespace(
+        runners=[made["alpha"].runner, made["beta"].runner],
+        store=store,
+        config=made["alpha"].runner.config,
+        projects=[SimpleNamespace(config=made[name].runner.config, store=store) for name in made],
+    )
+    return daemon, made
+
+
+def test_accept_refuses_a_run_id_belonging_to_another_project(tmp_path):
+    # These routes move the user's own branch, so a run id from another
+    # project's `chores` must not decide where this one's branch points.
+    daemon, made = daemon_with_a_chores_task_in_two_projects(tmp_path)
+    before = head(made["alpha"].repo, "main")
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/tasks/alpha/chores/accept", json={"through_run_id": "b1"})
+
+    assert response.status_code == 404
+    assert head(made["alpha"].repo, "main") == before
+    assert not (made["alpha"].repo / "beta.py").exists()
+
+
+def test_accept_refuses_a_run_id_belonging_to_a_sibling_task(tmp_path):
+    """One repository, two tasks: the foreign head is reachable, so without the
+    check the user's branch really does move to work they never reviewed."""
+    repo = make_repo(tmp_path)
+    project = stub_project(tmp_path, "alpha")
+    store = BroadcastStore(RunStore(tmp_path / ".poieo"))
+    runners = []
+
+    for task, name in (("chores", "one.py"), ("docs", "two.py")):
+        point = Workspace(repo, task, tmp_path / "worktrees")
+        point.prepare()
+        (point.worktree / name).write_text("print(1)" + chr(10), encoding="utf-8")
+        change = point.commit(f"r-{task}", f"wrote {name}")
+        store.record_summary(
+            {
+                "run_id": f"r-{task}",
+                "project": "alpha",
+                "task": task,
+                "status": "completed",
+                "change": change.as_dict(),
+            }
+        )
+        runner = stub_runner(name=task, workspace=point)
+        runner.config = project
+        runners.append(runner)
+
+    daemon = SimpleNamespace(
+        runners=runners,
+        store=store,
+        config=project,
+        projects=[SimpleNamespace(config=project, store=store)],
+    )
+    before = head(repo, "main")
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/tasks/alpha/docs/accept", json={"through_run_id": "r-chores"})
+
+    assert response.status_code == 404
+    assert head(repo, "main") == before
+    assert not (repo / "one.py").exists()
+
+
+def test_discard_refuses_a_run_id_belonging_to_another_project(tmp_path):
+    daemon, made = daemon_with_a_chores_task_in_two_projects(tmp_path)
+    client = TestClient(create_app(daemon))
+
+    response = client.post("/api/tasks/alpha/chores/discard", json={"from_run_id": "b1"})
+
+    assert response.status_code == 404
+    assert head(made["alpha"].repo, "poieo/chores") == made["alpha"].change.head
+
+
 def test_accept_survives_a_missing_body(tmp_path):
     daemon, _, _ = daemon_with_two_changes(tmp_path)
     client = TestClient(create_app(daemon))
