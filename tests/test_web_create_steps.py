@@ -68,7 +68,7 @@ async def test_a_saved_condition_selects_the_step_in_an_actual_run(tmp_path):
         {"entry": "missing"},
         {"nodes": []},
         {"nodes": [{"id": "read", "type": "agent", "prompt": ""}]},
-        {"nodes": [{"id": "read", "type": "agent", "prompt": "{{ broken"}]},
+        {"nodes": [{"id": "read", "type": "agent", "prompt": "{{ result + }}"}]},
         {"nodes": [{"id": "read", "type": "agent", "prompt": "x", "next": "missing"}]},
         {"nodes": [{"id": "read", "type": "router", "branches": [{"when": "result =="}]}]},
         {"unknown": True},
