@@ -2,9 +2,29 @@ import { expect, test } from "vitest"
 
 import {
   BOX, ZOOM, backWire, centreOn, corner, exits, fit, looking, loops, minimap,
-  place, walk, wire,
+  place, readingView, walk, wire,
 } from "./wiring"
 import type { GraphShape } from "../types"
+
+test("the first view of a tall board keeps cards readable and starts at its top", () => {
+  const view = readingView({ width: BOX.width, height: 2000 }, { width: 688, height: 900 })
+  expect(view.zoom).toBe(0.85)
+  expect(view.y).toBe(24)
+  expect(view.x).toBeCloseTo((688 - BOX.width * 0.85) / 2)
+})
+
+test("a narrow first view still fits one entire card across the screen", () => {
+  const view = readingView({ width: BOX.width, height: 2000 }, { width: 280, height: 800 })
+  expect(view.x).toBeGreaterThanOrEqual(0)
+  expect(view.x + BOX.width * view.zoom).toBeLessThanOrEqual(280)
+  expect(view.zoom).toBeGreaterThan(0.7)
+})
+
+test("a board that fits at reading size keeps the ordinary centred view", () => {
+  const board = { width: 800, height: 600 }
+  const host = { width: 1000, height: 900 }
+  expect(readingView(board, host)).toEqual(fit(board, host))
+})
 
 const LINE: GraphShape = {
   entry: "draft",

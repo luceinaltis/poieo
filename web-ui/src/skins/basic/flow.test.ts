@@ -108,3 +108,30 @@ test("scrolling the steps belongs to the card and does not zoom the board", () =
   expect(inside.scrollTop).toBe(80)
   expect(step("revise").dataset.here).toBe("true")
 })
+
+test("live updates keep the step being read and its text selection", () => {
+  const before = step("review")
+  const selection = window.getSelection()!
+  const range = document.createRange()
+  range.selectNodeContents(before.querySelector(".basic-node-name")!)
+  selection.removeAllRanges()
+  selection.addRange(range)
+
+  const running = initialStage([task])
+  running.tasks["demo/Review a draft"].status = "running"
+  running.tasks["demo/Review a draft"].currentNode = "decide"
+  handle.update(running)
+  expect(step("review")).toBe(before)
+  expect(selection.toString()).toBe("Review")
+  expect(step("decide").dataset.here).toBe("true")
+  selection.removeAllRanges()
+})
+
+test("changed connections replace the old destinations and lay out the board again", () => {
+  const before = host.querySelector(".basic-speck")
+  const changed = structuredClone(task)
+  changed.shape.nodes[0].next = "revise"
+  handle.update(initialStage([changed]))
+  expect(step("review").querySelector(".basic-step-output")?.textContent).toBe("NextRevise")
+  expect(host.querySelector(".basic-speck")).not.toBe(before)
+})
