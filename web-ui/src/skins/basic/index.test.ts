@@ -717,3 +717,18 @@ test("a card its own file switched off is not drawn as one somebody paused", () 
   expect(held.textContent).toBe("paused")
   handle.destroy()
 })
+
+test("the board is magnified exactly as far as the page's type is", () => {
+  // The page's root type follows the screen's width. A board fitted at 1 on
+  // a screen whose type is at 20px would be the one small thing on it.
+  document.documentElement.style.fontSize = "20px"
+  try {
+    const handle = basic.mount(el, { onSelectTask: vi.fn() })
+    handle.update(initialStage(TASK_ROWS))
+
+    expect(transform()).toMatch(/scale\(1\.25\)$/)
+    handle.destroy()
+  } finally {
+    document.documentElement.style.fontSize = ""
+  }
+})

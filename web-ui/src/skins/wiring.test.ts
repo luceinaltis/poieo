@@ -320,3 +320,20 @@ test("clicking the minimap puts that part of the board in the middle", () => {
   expect(view.x).toBe(400 - 300)
   expect(view.y).toBe(200 - 100)
 })
+
+test("a board smaller than the window may grow as far as the type around it", () => {
+  // On a wide screen the page's type grows a little; a board that stayed at
+  // 1 beside it would be the one small thing on the page. It grows by the
+  // same factor and no further -- still never blown up to fill the window.
+  const view = fit({ width: 600, height: 300 }, { width: 1000, height: 700 }, 24, 1.25)
+
+  expect(view.zoom).toBe(1.25)
+  expect(view.x).toBe(125)
+  expect(view.y).toBe(162.5)
+})
+
+test("a board that must shrink to fit ignores how far it could have grown", () => {
+  const view = fit({ width: 1904, height: 100 }, { width: 1000, height: 700 }, 24, 1.25)
+
+  expect(view.zoom).toBe(0.5)
+})
