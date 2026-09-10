@@ -64,7 +64,7 @@ export interface MemoryOverview {
     set_aside: number
     lookup: string
     disagreements: string[][]
-    second_look: string[]
+    second_look: Array<{ slug: string; reason: string }>
   } | null
   capabilities: { words: boolean; meaning: boolean; ask: boolean }
   graph: MemoryGraph

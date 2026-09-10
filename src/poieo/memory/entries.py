@@ -578,8 +578,8 @@ def keep_entry(
 
     The pass settles its links to a fixpoint before it writes; a person writes
     one entry at a time, so a typed claim naming nothing is refused here
-    rather than found at 3am. Anchors must name a file that exists and are
-    sealed against it, as the pass seals its own. Rewriting an entry without
+    rather than found at 3am. Anchors must name a path that exists; files
+    are sealed against their content, as the pass seals its own. Rewriting an entry without
     saying anything about it keeps what it already said about itself.
 
     No body at all means "I looked, and it still holds": the words stay, the
@@ -605,12 +605,15 @@ def keep_entry(
                 raise SpecError(f"'{slug}': {kind} names '{target}', and no such entry exists")
     anchored = {anchor.split("::", 1)[0]: anchor for anchor in matter.anchors}
     for part, anchor in anchored.items():
-        if not (Path(project_dir) / part).is_file():
-            raise SpecError(f"'{slug}': anchors names {anchor}, and there is no such file")
+        if not (Path(project_dir) / part).exists():
+            raise SpecError(f"'{slug}': anchors names {anchor}, and there is no such path")
     # Only once every anchor is known to exist: a refusal must leave no copy
-    # behind that no entry names.
+    # behind that no entry names. A folder is a legal anchor and is judged by
+    # its clock; only a file has bytes to seal.
     sealed: dict[str, str] = {}
     for part in anchored:
+        if not (Path(project_dir) / part).is_file():
+            continue
         name = blob.store(project_dir, Path(project_dir) / part)
         if name is None:
             log.warning("'%s': could not keep a copy of %s; doubt will go by its clock", slug, part)

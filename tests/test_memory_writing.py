@@ -227,7 +227,7 @@ def test_a_person_typed_claim_must_name_an_entry_now_not_at_3am(tmp_path):
     assert readable_entries(project) == []
 
 
-def test_a_person_anchor_must_name_a_file_and_is_sealed(tmp_path):
+def test_a_person_anchor_must_name_a_path_and_a_file_is_sealed(tmp_path):
     project = _project(tmp_path)
     start_memory(project)
     (project / "notebook").mkdir()
@@ -236,10 +236,12 @@ def test_a_person_anchor_must_name_a_file_and_is_sealed(tmp_path):
     with pytest.raises(SpecError, match="nowhere.md"):
         keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/nowhere.md"]}))
 
-    keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/feeds.md::title"]}))
+    keep_entry(
+        project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/feeds.md::title", "notebook"]})
+    )
     entry = entry_named(project, "feeds")
-    assert entry.matter.anchors == ["notebook/feeds.md::title"]
-    assert set(entry.matter.sealed) == {"notebook/feeds.md"}
+    assert entry.matter.anchors == ["notebook/feeds.md::title", "notebook"]
+    assert set(entry.matter.sealed) == {"notebook/feeds.md"}  # a folder has no bytes to seal
 
 
 def test_rewriting_an_entry_without_saying_more_keeps_what_it_said_about_itself(tmp_path):

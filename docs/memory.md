@@ -59,8 +59,8 @@ sealed:
 the shape and append history in the same transaction. A person reaches them
 through `poieo keep`, `poieo set-aside`, and `poieo page`, or the board's memory
 view, which calls the same doors over HTTP; the person's entry
-door additionally requires typed targets and anchored files to exist now,
-seals anchors, and keeps an entry's existing metadata when a rewrite says
+door additionally requires typed targets and anchored paths to exist now,
+seals anchored files, and keeps an entry's existing metadata when a rewrite says
 nothing new about it. A replacement named by `set_aside` must exist and differ
 from the entry, or a sentence saying why nothing replaces it: a name-shaped value
 is a claim about another entry, a sentence is not. Setting an entry aside marks
