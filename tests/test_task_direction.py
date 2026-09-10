@@ -11,6 +11,20 @@ from poieo.daemon import Daemon
 from poieo.web.server import create_app
 
 
+async def test_an_unavailable_task_lease_is_recorded_without_running_the_task(tmp_path):
+    from test_task_workspace import LLM_GRAPH, WRITES_NOTHING
+
+    _, config = policy_config(tmp_path, {"mode": "review"}, workdir=False, graph=LLM_GRAPH, responses=WRITES_NOTHING)
+    config.layout().worktrees().write_text("existing user file")
+    driver = Daemon(config)._runners()[0]
+    result = await driver.run_once({})
+    assert result.status == "asking"
+    assert "could not coordinate" in result.application["error"]
+    assert driver.store.summary(result.run_id)["status"] == "asking"
+    assert result.steps == 0
+    assert config.layout().worktrees().read_text() == "existing user file"
+
+
 @pytest.mark.parametrize("folder", [None, "plain"])
 async def test_unprotected_tasks_keep_direction_until_a_run_can_read_it(tmp_path, monkeypatch, folder):
     import yaml
