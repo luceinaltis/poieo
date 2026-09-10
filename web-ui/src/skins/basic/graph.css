@@ -2,6 +2,7 @@
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 12px;
+  box-sizing: border-box;
   color: var(--text);
   height: min(760px, calc(100dvh - 32px));
   max-height: calc(100dvh - 32px);
