@@ -82,6 +82,9 @@ application question. A no-edit retry is resolved when none of its pending work
 remains. The private copy stays exclusively owned until every started write and
 its decision record finish. Decisions reread questions created by another entry
 point; a resolved run record prevents an older question from returning on restart.
+Older live runners adopt that recorded decision before answering or accepting,
+so a stale question cannot replace the applied history. Answers take the same
+task ownership as runs and decisions.
 Older run summaries without a project field remain decidable; recording the
 decision fills that field so subsequent history and undo use the current project.
 A caller disconnecting does not interrupt that recording. A discarded result uses status

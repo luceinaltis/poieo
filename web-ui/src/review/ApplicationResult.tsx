@@ -3,8 +3,8 @@ import "../application.css"
 
 export function applicationLabel(result?: Application): string {
   if (!result) return ""
-  if (result.status === "applied") return result.unchanged || result.accepted === 0 ? "Already included" : result.undo_of ? "Undo applied · task paused" : "Applied to project"
-  if (result.status === "undone") return "Undone · task paused"
+  if (result.status === "applied") return result.unchanged || result.accepted === 0 ? "Already included" : result.undo_of ? "Undo applied" : "Applied to project"
+  if (result.status === "undone") return "Undone"
   if (result.status === "blocked") return "Needs your decision"
   if (result.status === "discarded") return "Discarded"
   return "Ready for review"
