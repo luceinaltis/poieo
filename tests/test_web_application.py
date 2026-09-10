@@ -1,8 +1,40 @@
 """The task form stores the same application permission the runner enforces."""
 
+import pytest
 import yaml
 from test_web_create_card import _client, _make
 from test_workspace import git
+
+
+@pytest.mark.parametrize("missing_project", [False, True])
+@pytest.mark.parametrize(
+    "action,key,status", [("accept", "through_run_id", "applied"), ("discard", "from_run_id", "discarded")]
+)
+async def test_legacy_changes_remain_decidable_and_their_history_is_updated(
+    tmp_path, missing_project, action, key, status
+):
+    import httpx
+    from test_task_application import CHECK_MADE, policy_config, run_once
+
+    from poieo.web.server import create_app
+
+    _, config = policy_config(tmp_path, {"mode": "review", "checks": [CHECK_MADE]})
+    daemon, result = await run_once(config)
+    row = daemon.store.summary(result.run_id)
+    row["project"] = None
+    if missing_project:
+        row.pop("project")
+    daemon.store.record_summary(row)
+    # A board started later must reconstruct history from the legacy row.
+    daemon.runners[0].results.clear()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
+    ) as client:
+        reply = await client.post(f"/api/tasks/{config.display_name}/chores/{action}", json={key: result.run_id})
+    assert reply.status_code == 200, reply.text
+    recorded = daemon.store.summary(result.run_id)
+    assert recorded["application"]["status"] == status
+    assert recorded["project"] == config.display_name
 
 
 async def test_the_applied_diff_includes_the_verified_repair(tmp_path):
