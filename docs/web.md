@@ -169,10 +169,10 @@ short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
-The selected run also says what it started with from memory: one sentence
-with the count and how many shaped the answer, then one row per entry with
-its opening words and what became of it, the ones that shaped the answer
-first; each opens the memory place on that entry. Shared action
+Inside the run's own box, one closed line says what it started with from
+memory: the count and how many shaped the answer. Opening it lists one row
+per entry with its opening words and what became of it, the ones that shaped
+the answer first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
 

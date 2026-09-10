@@ -503,11 +503,16 @@ function RunBrief({
   latest,
   tracked,
   headingId,
+  memory,
+  onMemory,
 }: {
   run: RunSummary | null
   latest: boolean
   tracked: boolean
   headingId: string
+  /** What this run started with from memory, once it has been read. */
+  memory?: RunMemory | null
+  onMemory?(slug: string): void
 }) {
   if (!run) {
     return (
@@ -539,6 +544,7 @@ function RunBrief({
       <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
       <p className="run-brief-what">{account}</p>
       <p className="run-brief-meta">{meta.join(" · ")}</p>
+      {memory && memory.run_id === run.run_id ? <ShownMemory memory={memory} onMemory={onMemory} /> : null}
     </section>
   )
 }
@@ -548,50 +554,53 @@ function RunBrief({
  *
  * The record says which entries recall put in front of the model and which
  * of them surfaced in what it wrote back -- the same judgement `poieo
- * memory` makes when it says how many runs used what they were shown. Drawn
- * as one sentence and then one row per entry: the slug alone was a list of
- * names a reader had to open to understand, so each row carries the entry's
- * own opening words and a plain word for what became of it. The ones that
- * shaped the answer come first, because that is the news.
+ * memory` makes when it says how many runs used what they were shown.
+ *
+ * One sentence, inside the run's own box under its time line, and the rows
+ * folded behind it. It sat below the box first, and read as a fact about
+ * the task rather than about this run; the sentence starts with "This run"
+ * for the same reason. Each row carries the entry's own opening words and a
+ * plain word for what became of it, because a slug alone was a name a reader
+ * had to open to understand. The ones that shaped the answer come first.
  *
  * Nothing is drawn when the record says nothing about memory (the project
- * kept none when this ran). An empty list is different, and says so: memory
- * had entries and chose none for this task.
+ * kept none when this ran). An empty list is different, and says so -- as a
+ * sentence, since there is nothing to unfold.
  */
 function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: string): void }) {
   if (!memory.shown) return null
   const shown = memory.shown
+  if (!shown.length) {
+    return <p className="run-memory-lead">This run started with nothing from memory.</p>
+  }
   const used = shown.filter((one) => one.used === true)
   const rows = [...used, ...shown.filter((one) => one.used !== true)]
   const count = `${shown.length} memor${shown.length === 1 ? "y" : "ies"}`
-  const lead = !shown.length
-    ? "Started with nothing from memory."
-    : `Started with ${count}; ${used.length ? used.length : "none"} shaped the answer.`
   const became = (one: ShownMemory) =>
     one.used === true ? "shaped the answer" : one.used === false ? "seen, not used" : "seen; no longer in memory"
   return (
-    <section className="run-memory" aria-label="What this run started with">
-      <p className="run-memory-lead">{lead}</p>
-      {rows.length ? (
-        <ul className="run-memory-list">
-          {rows.map((one) => (
-            <li key={one.slug} data-used={one.used === null ? "unknown" : String(one.used)}>
-              <button
-                type="button"
-                className="run-memory-open"
-                data-memory={one.slug}
-                disabled={!onMemory}
-                onClick={() => onMemory?.(one.slug)}
-              >
-                {one.slug}
-              </button>
-              {one.preview ? <span className="run-memory-preview">{one.preview}</span> : null}
-              <span className="run-memory-became">{became(one)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
+    <details className="run-memory">
+      <summary className="run-memory-lead">
+        {`This run started with ${count}; ${used.length ? used.length : "none"} shaped the answer.`}
+      </summary>
+      <ul className="run-memory-list">
+        {rows.map((one) => (
+          <li key={one.slug} data-used={one.used === null ? "unknown" : String(one.used)}>
+            <button
+              type="button"
+              className="run-memory-open"
+              data-memory={one.slug}
+              disabled={!onMemory}
+              onClick={() => onMemory?.(one.slug)}
+            >
+              {one.slug}
+            </button>
+            {one.preview ? <span className="run-memory-preview">{one.preview}</span> : null}
+            <span className="run-memory-became">{became(one)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
@@ -835,13 +844,11 @@ export const Drawer = memo(function Drawer({
             latest={selectedIsLatest}
             tracked={tracked}
             headingId={briefId}
+            memory={memory}
+            onMemory={onMemory}
           />
 
           {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}
-
-          {memory && memory.run_id === selectedRunKey ? (
-            <ShownMemory memory={memory} onMemory={onMemory} />
-          ) : null}
 
           {selectedRun ? (
             <section className="drawer-fold activity-fold">

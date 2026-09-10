@@ -804,10 +804,15 @@ test("the selected run says what it started with, what it says, and what shaped 
   await draw([run], { onMemory })
 
   expect(fetchRunMemory).toHaveBeenCalledWith("r1")
-  const shown = container.querySelector(".run-memory")!
-  // One plain sentence first: a reader should not have to decode a label.
+  // Inside the run's own box, under its time line: a list floating below
+  // the brief read as a fact about the task rather than about this run.
+  const shown = container.querySelector<HTMLDetailsElement>(".run-brief .run-memory")!
+  expect(shown).not.toBeNull()
+  expect(shown.tagName).toBe("DETAILS")
+  expect(shown.open).toBe(false)
+  // One plain sentence is the whole first screen; the rows are a click away.
   expect(shown.querySelector(".run-memory-lead")?.textContent).toBe(
-    "Started with 3 memories; 1 shaped the answer.",
+    "This run started with 3 memories; 1 shaped the answer.",
   )
   // The one that mattered comes first, and every row says what it says
   // and what became of it.
@@ -833,7 +838,7 @@ test("a run that used none of its memory says so in the sentence", async () => {
   await draw([run])
 
   expect(container.querySelector(".run-memory-lead")?.textContent).toBe(
-    "Started with 1 memory; none shaped the answer.",
+    "This run started with 1 memory; none shaped the answer.",
   )
 })
 
@@ -848,7 +853,10 @@ test("a run memory chose nothing for says so rather than vanishing", async () =>
   fetchRunMemory.mockResolvedValue({ run_id: "r1", task: "chores", shown: [] })
   await draw([run])
 
-  expect(container.querySelector(".run-memory-lead")?.textContent).toBe("Started with nothing from memory.")
+  // Nothing to unfold, so it is a sentence and not a closed triangle.
+  const lead = container.querySelector(".run-brief .run-memory-lead")!
+  expect(lead.textContent).toBe("This run started with nothing from memory.")
+  expect(lead.closest("details")).toBeNull()
 })
 
 test("a run named on arrival is selected even when it left the short history", async () => {

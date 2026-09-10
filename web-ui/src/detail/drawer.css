@@ -164,21 +164,46 @@
   margin: 0;
 }
 
-/* What the run knew when it started: part of the result, so it sits with
-   the brief and the change, not folded under the picker. A sentence first,
-   then one row per entry -- its name, its opening words, and what became of
-   it -- so nothing here has to be opened to be understood. */
+/* What the run knew when it started, inside the run's own box so the rule
+   down its left says whose it is. One sentence on the first screen; the rows
+   -- name, opening words, what became of it -- unfold behind it. */
 .run-memory {
-  display: grid;
-  gap: 6px;
   min-width: 0;
-  padding-left: 14px;
 }
 
 .run-memory-lead {
-  font-size: 0.9em;
-  line-height: 1.4;
-  margin: 0;
+  color: var(--dim);
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 2px 0 0;
+}
+
+.run-memory > summary {
+  cursor: pointer;
+  list-style: none;
+  padding-left: 14px;
+  position: relative;
+}
+
+.run-memory > summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-memory > summary::before {
+  content: "›";
+  font-family: var(--mono);
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.run-memory[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.run-memory > .run-memory-list {
+  margin-top: 8px;
+  padding-left: 14px;
 }
 
 .run-memory-list {
