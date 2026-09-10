@@ -552,3 +552,33 @@ test("with no window declared the learner's question is shown as it was measured
   expect(learner.textContent).toContain("1,550 chars")
   expect(learner.querySelector(".gauge-track")).toBeNull()
 })
+
+test("once a pass has counted, the learner's question is converted at that pass's own ratio", async () => {
+  vi.mocked(fetchMemory).mockResolvedValue({
+    ...OVERVIEW,
+    learner: { prompt_chars: 3_000, entries: 12, model: "local/learner", context: 8_000 },
+    learning: [
+      {
+        at: "2026-09-10T03:00:00+00:00",
+        read: 3,
+        upto: "c",
+        kept: [],
+        set_aside: [],
+        dropped: [],
+        error: null,
+        page: null,
+        let_go: [],
+        prompt_chars: 1_500,
+        prompt_tokens: 500,
+        context: 8_000,
+      },
+    ],
+  })
+  await render()
+
+  const learner = container.querySelector<HTMLElement>('[data-gauge="learner"]')!
+  // Three characters a token, as that pass measured: 3,000 characters is about 1,000 tokens.
+  expect(learner.textContent).toContain("≈1,000 / 8,000 tokens")
+  expect(learner.dataset.level).toBe("ok")
+  expect(learner.getAttribute("title")).toContain("as the last pass counted")
+})
