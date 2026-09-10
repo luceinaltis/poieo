@@ -106,11 +106,14 @@ export default function App({ store }: { store?: StageStore }) {
       // A rail or board click has already put focus exactly where the reader
       // asked to go. Restore only when closing removed the focused panel and
       // the browser fell back to the page itself.
-      if (
-        document.activeElement === document.body &&
-        panelOpenerRef.current?.isConnected
-      ) {
-        panelOpenerRef.current.focus()
+      if (document.activeElement === document.body) {
+        // The opener may have gone: the first task made from the bare board's
+        // invitation replaces that invitation with the board while the panel
+        // is still open. The corner button is where that act now lives.
+        const opener = panelOpenerRef.current?.isConnected
+          ? panelOpenerRef.current
+          : document.querySelector<HTMLElement>('[data-do="open-make"]')
+        opener?.focus()
       }
       panelOpenerRef.current = null
     }
@@ -265,7 +268,6 @@ export default function App({ store }: { store?: StageStore }) {
 
   const empty = Object.keys(projectStage.tasks).length === 0
   const selectedTaskKey = activePanel.kind === "task" ? activePanel.taskKey : null
-  const railPanelIsOpen = activePanel.kind === "models" || activePanel.kind === "make"
   // `selectedTaskKey` is the board's key -- the project and the task -- because a
   // name alone stopped picking out one task.
   const selectedTask = selectedTaskKey
@@ -300,6 +302,22 @@ export default function App({ store }: { store?: StageStore }) {
             {project.name}
           </span>
         ) : null}
+        {/* Beside the project's name, because that is what it is about: which
+            models this project can reach. It opens a panel over whatever is
+            on the stage rather than taking the reader somewhere, so it is a
+            control on the bar and not an item on the rail -- the rail says
+            where you are, and a panel over the board is still the board. */}
+        <button
+          type="button"
+          className="shell-models"
+          data-do="open-models"
+          aria-expanded={activePanel.kind === "models"}
+          // Nothing to ask about until the daemon has named a project.
+          disabled={!project}
+          onClick={(event) => openModels(event.currentTarget)}
+        >
+          models
+        </button>
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
         </span>
@@ -327,11 +345,13 @@ export default function App({ store }: { store?: StageStore }) {
         )}
       </header>
 
-      {/* What the page is for, rather than what one task is doing -- so it is
-          nav down the side and not a control on the bar, and it is where the
-          next view lands beside `models`. `board` is the page with no panel
-          over it: a rail item rather than a close box, because closing is not
-          a place you can be. */}
+      {/* Where the reader can *be*: the places that take the whole stage, and
+          nothing else. Models and new task used to sit here too, and pressing
+          one moved the "you are here" mark onto a panel while the board went
+          on showing behind it. A panel is over a place, not a place, so those
+          two live where they act -- the bar and the board -- and the mark
+          stays on the stage. `board` is the page with no panel over it: a
+          rail item rather than a close box, because closing is not a place. */}
       <nav
         className="shell-rail"
         aria-label="Views"
@@ -340,7 +360,7 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-board"
-          aria-current={railPanelIsOpen || standaloneViewId || memoryOpen ? undefined : "page"}
+          aria-current={standaloneViewId || memoryOpen ? undefined : "page"}
           onClick={() => {
             setShowMemory(false)
             remember(MEMORY_PLACE_KEY, "false")
@@ -361,11 +381,7 @@ export default function App({ store }: { store?: StageStore }) {
             key={skin.id}
             type="button"
             data-do={`open-${skin.id}`}
-            aria-current={
-              !railPanelIsOpen && !memoryOpen && standaloneViewId === skin.id
-                ? "page"
-                : undefined
-            }
+            aria-current={!memoryOpen && standaloneViewId === skin.id ? "page" : undefined}
             onClick={() => openStandaloneView(skin.id)}
           >
             {skin.id}
@@ -374,36 +390,30 @@ export default function App({ store }: { store?: StageStore }) {
         <button
           type="button"
           data-do="open-memory"
-          aria-current={!railPanelIsOpen && memoryOpen ? "page" : undefined}
+          aria-current={memoryOpen ? "page" : undefined}
           disabled={!project}
           onClick={openMemory}
         >
           memory
         </button>
-        <button
-          type="button"
-          data-do="open-models"
-          aria-current={activePanel.kind === "models" ? "page" : undefined}
-          // Nothing to ask about until the daemon has named a project.
-          disabled={!project}
-          onClick={(event) => openModels(event.currentTarget)}
-        >
-          models
-        </button>
-        <button
-          type="button"
-          data-do="open-make"
-          aria-current={activePanel.kind === "make" ? "page" : undefined}
-          // A card is written into a project's tasks folder, so there has to
-          // be a project before there is anywhere to write it.
-          disabled={!project}
-          onClick={(event) => openMake(event.currentTarget)}
-        >
-          new task
-        </button>
       </nav>
 
       <div className="shell-stage" data-drawer={String(panelIsOpen)}>
+        {/* On the board and only there: a task is made onto the board, not
+            onto runs or memory, so the button goes where the act lands and
+            leaves with it. The bare board carries its own, in the invitation,
+            and two on one screen would be one too many. */}
+        {!standaloneViewId && !memoryOpen && !empty ? (
+          <button
+            type="button"
+            className="shell-make"
+            data-do="open-make"
+            aria-expanded={activePanel.kind === "make"}
+            onClick={(event) => openMake(event.currentTarget)}
+          >
+            new task
+          </button>
+        ) : null}
         <div className="shell-board" data-hidden={String(memoryOpen)} ref={boardRef} />
         {memoryOpen && project ? (
           <Memory key={project.name} project={project.name} focus={memoryFocus} onOpenRun={openRun} />

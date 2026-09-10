@@ -47,6 +47,34 @@
   color: var(--text);
 }
 
+/* A quiet word beside the project's name. Same size as the status so the bar
+   reads as one line about the project; brightens when open, since the panel
+   it opened is now the thing beside it. */
+.shell-models {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 3px 7px;
+}
+
+.shell-models:hover:not(:disabled),
+.shell-models[aria-expanded="true"] {
+  color: var(--text);
+}
+
+.shell-models[aria-expanded="true"] {
+  background: var(--raised);
+}
+
+.shell-models:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .shell-status {
   color: var(--dim);
   font-size: 0.875rem;
@@ -78,9 +106,10 @@
   padding: 3px 6px;
 }
 
-/* Down the side, because these are what the page is *for* -- a list that grows
-   as views are added, where the bar's controls are a fixed handful about the
-   board already on screen. Narrow on purpose: it is navigation, not content. */
+/* Down the side, because these are the places the page has -- a list that
+   grows as views are added, where the bar's controls are a fixed handful
+   about the project already on screen. Narrow on purpose: it is navigation,
+   not content. */
 .shell-rail {
   border-right: 1px solid var(--rule);
   bottom: 0;
@@ -138,6 +167,25 @@
   position: absolute;
 }
 
+/* On the board's top right, over it: the one thing a reader does *to* the
+   board rather than with a task on it. Above the skin so a card drawn under
+   that corner cannot take the click. */
+.shell-make {
+  border-color: var(--ember);
+  color: var(--text);
+  padding: 5px 11px;
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  z-index: 2;
+}
+
+.shell-make:hover:not(:disabled),
+.shell-make[aria-expanded="true"] {
+  background: var(--ember);
+  color: var(--ground);
+}
+
 .shell-board[data-hidden="true"] {
   pointer-events: none;
   visibility: hidden;
@@ -191,7 +239,7 @@
   }
 
   /* And the rail lies down. Two words down the side cost 92px of a 393px
-     phone -- a quarter of the screen, permanently, for a list that is two
+     phone -- a quarter of the screen, permanently, for a list that is three
      items long. Across the top it costs a line. */
   .shell-rail {
     align-content: center;
@@ -213,6 +261,16 @@
 
   .shell-rail button {
     padding-inline: 4px;
+  }
+
+  /* Four words on a 393px bar: the project's name is the one that can be
+     long, so it is the one that gives. */
+  .shell-project,
+  .shell-project-pick {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .shell-stage {
