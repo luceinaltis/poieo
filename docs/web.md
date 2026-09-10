@@ -1,5 +1,18 @@
 # Web API and board
 
+New task and Task setup expose an optional Changes section. Review is the
+default; automatic application requires explicit selection and verification
+commands. The form also supports file/folder scope. Card reads expose `apply`
+and `keeps_copies`; creation and rewrites validate application settings before
+writing. Editing only the prompt preserves an existing permission. Comments
+and advanced fields continue to use the file editor. Application-only edits
+take effect at the next run.
+
+Run history labels applied, pending and blocked changes and shows each command,
+exit code and output on demand. Applied changes do not add to the review count.
+An application question immediately marks the affected task paused in the event
+stream. Refusals explain scope, stale work and verification-modified files.
+
 Acceptance on a running task goes through the runner's application checks.
 Accept/discard refuse while that task is working, and a selected run must belong
 to the requested project and task. Refusals also include stale candidates,

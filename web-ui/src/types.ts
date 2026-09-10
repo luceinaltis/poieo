@@ -23,6 +23,27 @@ export interface Change {
   message: string
 }
 
+export interface ApplySpec {
+  mode: "review" | "auto"
+  paths: string[]
+  checks: string[]
+  timeout: number
+}
+
+export interface Application {
+  status: "review" | "applied" | "blocked" | "discarded"
+  checks?: { command: string; exit_code: number | null; output: string }[]
+  accepted?: number
+  before?: string
+  after?: string
+  error?: string
+  conflict?: string[]
+  dirty?: string[]
+  outside_scope?: string[]
+  verification_changed?: string[]
+  stale?: string
+}
+
 export interface RunSummary {
   run_id: string
   task: string | null
@@ -42,6 +63,7 @@ export interface RunSummary {
   said: string
   /** Absent when the run altered nothing -- which is not the same as null. */
   change?: Change
+  application?: Application
 }
 
 /**

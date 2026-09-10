@@ -44,7 +44,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
-from ..errors import BindingError, PoieoError, SpecError
+from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
@@ -66,6 +66,7 @@ from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
+from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
 from .events import CLOSED, BroadcastStore
 from .steps import publish_steps, validate_steps
@@ -769,6 +770,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # if switching it on means restarting the daemon, and so arrived with
         # the scan that adopts the switch.
         enabled = body.get("enabled", True) is not False
+        try:
+            application = ApplySpec.model_validate(body.get("apply", {}))
+        except ValueError as exc:
+            return JSONResponse({"error": describe_invalid(exc)}, status_code=400)
 
         # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
         # is a spelling; "../escape" becoming "escape" is a different request
@@ -800,6 +805,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 {"error": f"the folder it would work in is not there: {where}"},
                 status_code=400,
             )
+
+        if application.mode == "auto" and not await asyncio.to_thread(git_keeps_copies, where):
+            return JSONResponse({"error": "automatic application needs a folder protected by Git"}, status_code=400)
 
         # **Inside this project, and nowhere else.** A card takes the files and
         # shell toolsets and fires within seconds of being written, so without
@@ -849,6 +857,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "folder": folder,
                 **({"graph": f"{slug}.graph.yaml"} if graph is not None else {"prompt": prompt}),
                 **({} if enabled else {"enabled": False}),
+                **({"apply": application.model_dump()} if "apply" in body else {}),
             },
             allow_unicode=True,
             sort_keys=False,
@@ -916,7 +925,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return False
         if not isinstance(data, dict):
             return False
-        return set(data) <= {"name", "folder", "prompt", "enabled"}
+        return set(data) <= {"name", "folder", "prompt", "enabled", "apply"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -987,6 +996,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
                     "enabled": fresh.enabled,
+                    "apply": fresh.apply.model_dump(),
+                    "keeps_copies": bool(
+                        fresh.folder_path() and await asyncio.to_thread(git_keeps_copies, fresh.folder_path())
+                    ),
                     "plain": _plain(text),
                 }
             )
@@ -1033,6 +1046,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # defaulting to on here would have a prompt tweak silently
                     # start a task somebody had switched off.
                     **({} if body.get("enabled", _switch(current)) is not False else {"enabled": False}),
+                    **(
+                        {"apply": body["apply"]}
+                        if "apply" in body
+                        else {"apply": yaml.safe_load(current)["apply"]}
+                        if "apply" in yaml.safe_load(current)
+                        else {}
+                    ),
                 },
                 allow_unicode=True,
                 sort_keys=False,
@@ -1068,6 +1088,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 # folder fence below cannot see -- and the graph is a path
                 # exactly as capable of leaving the project. Same refusals,
                 # resolved the way the card itself will resolve it.
+                if fresh.apply.mode == "auto" and (
+                    fresh.folder_path() is None or not git_keeps_copies(fresh.folder_path())
+                ):
+                    return JSONResponse(
+                        {"error": "automatic application needs a folder protected by Git"}, status_code=400
+                    ), False
                 if fresh.graph:
                     graph_asked = Path(os.path.expanduser(fresh.graph))
                     graph_at = (graph_asked if graph_asked.is_absolute() else cards / graph_asked).resolve()
@@ -1161,7 +1187,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # comparison ignores it, and a switch flipped here is
                     # honestly promised rather than sent away for a restart.
                     def _same(old: Any, new: Any) -> bool:
-                        return old.model_copy(update={"enabled": new.enabled}) == new
+                        return old.model_copy(update={"enabled": new.enabled, "apply": new.apply}) == new
 
                     if loaded is not None:
                         live = _same(loaded.spec, new_spec)

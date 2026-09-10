@@ -27,6 +27,7 @@
 import { useState } from "react"
 
 import { createTask } from "../api"
+import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { MadeTask } from "../api"
 import { Refusal } from "../Refusal"
 import { slugOf } from "./slug"
@@ -73,6 +74,7 @@ export function MakeTask({
   const [folder, setFolder] = useState(seed?.folder ?? "")
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [steps, setSteps] = useState<StepDraft[] | null>(null)
+  const [application, setApplication] = useState(draftOf())
   const [made, setMade] = useState<string | null>(null)
   // Which of the two presses made it, so the confirmation says which happened.
   // The whole reason the second button exists is that "it starts on its own"
@@ -85,11 +87,13 @@ export function MakeTask({
   // "chores" exactly as it would on disk.
   const collides = taken.includes(slugOf(name))
   const problems = steps ? stepProblems(steps) : []
-  const ready = Boolean(name.trim() && folder.trim() && (steps ? steps.length && !problems.length : prompt.trim())) && !collides
+  const ready = Boolean(name.trim() && folder.trim() && (steps ? steps.length && !problems.length : prompt.trim())) && !collides && applicationReady(application)
 
   const send = (enabled: boolean) => () =>
     void act(async () => {
-      const answer = await createTask(project, name.trim(), folder.trim(), steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled)
+      const configured = JSON.stringify(application) !== JSON.stringify(draftOf())
+      const args = [project, name.trim(), folder.trim(), steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled] as const
+      const answer = configured ? await createTask(...args, applicationOf(application)) : await createTask(...args)
       // `ok` alone is not enough: a 2xx whose body did not parse arrives as
       // {ok: true} with no task, and treating that as made would clear the
       // form over a card that may not exist -- and a second press would
@@ -107,6 +111,7 @@ export function MakeTask({
         setFolder("")
         setPrompt("")
         setSteps(null)
+        setApplication(draftOf())
         setStarted(enabled)
       }
       return answer
@@ -168,6 +173,8 @@ export function MakeTask({
         {problems.map(problem => <li key={problem}>{problem}</li>)}
       </ul>}
 
+      <ApplySettings value={application} onChange={setApplication} disabled={busy} keepsCopies={keepsCopies} />
+
       {/* The one thing this panel says out loud. Everything else about a run
           is machinery and stays hidden; this is not, because it is the reader's
           own files.
@@ -192,7 +199,9 @@ export function MakeTask({
             // Said even though it is the good news: without it the other
             // wording reads as boilerplate about files rather than as the one
             // project where the morning cannot help.
-            <>Its work is kept in a private copy for you to accept or throw away.</>
+            application.mode === "auto"
+              ? <>Its work is checked, then applied automatically within your allowed files.</>
+              : <>Its work is kept in a private copy for you to accept or throw away.</>
           ) : (
             <strong className="make-undo">
               This project is not a git repository, so there is no copy — it changes your files

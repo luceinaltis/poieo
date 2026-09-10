@@ -9,6 +9,7 @@
 import { useState } from "react"
 
 import { fetchCard, renameCard, rewriteCard, setAside } from "../api"
+import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { Card as CardFields, RenamedCard, RewrittenCard, SetAside } from "../api"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
@@ -33,6 +34,7 @@ export function Card({
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
   const [prompt, setPrompt] = useState("")
+  const [application, setApplication] = useState(draftOf())
   const [text, setText] = useState("")
   const [isMissing, setIsMissing] = useState(false)
   const [saveResult, setSaveResult] = useState<RewrittenCard | null>(null)
@@ -59,6 +61,7 @@ export function Card({
     setName(card.name)
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
+    setApplication(draftOf(card.apply))
   }
 
   const setCardAside = () =>
@@ -91,7 +94,8 @@ export function Card({
   const isUnchanged = isPlainCard
     ? name === cardFields.name &&
       folder === (cardFields.folder ?? "") &&
-      prompt === (cardFields.prompt ?? "")
+      prompt === (cardFields.prompt ?? "") &&
+      JSON.stringify(application) === JSON.stringify(draftOf(cardFields.apply))
     : text === originalText
 
   const saveCard = () =>
@@ -99,11 +103,13 @@ export function Card({
       const answer = await rewriteCard(
         project,
         task,
-        isPlainCard ? { name, folder, prompt } : text,
+        isPlainCard ? { name, folder, prompt,
+          ...(cardFields?.apply || JSON.stringify(application) !== JSON.stringify(draftOf())
+            ? { apply: applicationOf(application) } : {}) } : text,
       )
       if (answer.ok) {
         if (isPlainCard && cardFields) {
-          setCardFields({ ...cardFields, name, folder, prompt })
+          setCardFields({ ...cardFields, name, folder, prompt, apply: applicationOf(application) })
         } else {
           setOriginalText(text)
         }
@@ -177,6 +183,8 @@ export function Card({
                   }}
                 />
               </label>
+              <ApplySettings value={application} onChange={(value) => { setApplication(value); setSaveResult(null) }}
+                disabled={busy} keepsCopies={cardFields?.keeps_copies ?? true} />
             </div>
           ) : (
             <textarea
@@ -260,7 +268,7 @@ export function Card({
               type="button"
               className="card-save"
               data-do="save-card"
-              disabled={busy || isUnchanged || isCardMoved}
+              disabled={busy || isUnchanged || isCardMoved || (isPlainCard && !applicationReady(application))}
               onClick={saveCard}
             >
               {busy ? "saving…" : "save"}

@@ -340,7 +340,8 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
 
     case "run_asking":
       return {
-        status: taskState.held ? "paused" : "waiting",
+        status: taskState.held || data.node === "apply_changes" ? "paused" : "waiting",
+        ...(data.node === "apply_changes" ? { held: true } : {}),
         currentNode: null,
         asking: {
           run_id: event.run_id,
@@ -387,7 +388,8 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
     : [summary, ...current.runs]
   const latest = runs[0]
   const summaryOwnsTerminalState = latest?.run_id === event.run_id && !anotherRunOwnsTask
-  const completedChange = event.status === "completed" && event.change !== undefined
+  const completedChange = (event.status === "completed" || summary.application?.status === "blocked") &&
+    event.change !== undefined && !["applied", "discarded"].includes(summary.application?.status ?? "")
   const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
   const countedChangeRuns = newlyCountedChange
     ? new Set([...current.countedChangeRuns, event.run_id].slice(-WINDOW))
@@ -419,7 +421,11 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
               finished_at: latest.finished_at,
             }
           : current.lastRun,
-        pending: current.pending + (newlyCountedChange ? 1 : 0),
+        pending: Math.max(0, current.pending - (
+          summary.application?.status === "applied" &&
+          current.runs.find((run) => run.run_id === event.run_id)?.application?.status !== "applied"
+            ? summary.application.accepted ?? 0 : 0
+        )) + (newlyCountedChange ? 1 : 0),
         countedChangeRuns,
         asking,
         ...(summaryOwnsTerminalState ? { status, currentNode: null } : {}),
