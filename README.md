@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="site/img/readme-dark.svg">
-  <img src="site/img/readme.svg" alt="poieo — small and large models, connected by the work" width="1200">
+  <source media="(prefers-color-scheme: dark)" srcset="site/img/lockup.svg">
+  <img src="site/img/lockup-light.svg" alt="poieo — the tree with its golden fruit and original wordmark" width="460">
 </picture>
 
 # The right intelligence, in the right place.
