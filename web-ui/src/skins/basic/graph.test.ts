@@ -118,3 +118,22 @@ test("a final step says it ends the run even when it also edits files", () => {
   expect(finalStep.textContent).toContain("Edits files")
   expect(finalStep.textContent).toContain("Ends this run")
 })
+
+test("fit includes a long graph even when a narrow screen needs less than 25 percent", () => {
+  const long = structuredClone(task)
+  long.shape.nodes = Array.from({ length: 8 }, (_, index) => ({
+    ...task.shape.nodes[0], id: `step_${index + 1}`, next: index < 7 ? `step_${index + 2}` : null,
+  }))
+  handle.update(initialStage([long]))
+  button(host, "View steps in Review a draft").click()
+  const dialog = host.querySelector<HTMLDialogElement>("dialog[open]")!
+  Object.defineProperties(dialog.querySelector('[role="region"]'), {
+    clientWidth: { value: 320 }, clientHeight: { value: 480 },
+  })
+
+  button(dialog, "Fit all steps").click()
+  const percentage = parseInt(dialog.querySelector('[role="status"]')!.textContent!)
+  expect(percentage).toBeGreaterThan(0)
+  expect(percentage).toBeLessThan(25)
+  expect(parseFloat(dialog.querySelector<HTMLElement>(".graph-world")!.style.width)).toBeLessThanOrEqual(320)
+})
