@@ -461,7 +461,9 @@ class TaskRunner:
                     cancel=self.cancel,
                     authorized=self._may_auto_apply,
                     protected=protected,
-                    repair=lambda prepared, failure: repair_change(self, result, prepared, failure, repairs),
+                    repair=lambda prepared, failure, stopped: repair_change(
+                        self, result, prepared, failure, repairs, stopped
+                    ),
                 )
             except PoieoError as exc:
                 result.application = {"status": "blocked", "error": str(exc)}

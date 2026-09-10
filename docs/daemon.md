@@ -176,6 +176,7 @@ learning pass may run at its interval only while no armed task is busy. Its
 failure is logged and never stops scheduled work. See [memory.md](memory.md).
 
 Shutdown stops accepting new firings, signals active work cooperatively, closes
+the active repair and its tools using the same application cancellation signal,
 providers and containers, and closes the web service. Blocking file and Git
 operations use worker threads, while container subprocesses are awaited
 asynchronously, so one slow operation does not freeze every task or event

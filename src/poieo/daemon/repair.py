@@ -18,7 +18,12 @@ from .changes import finish_write
 
 
 async def repair_change(
-    driver: Any, parent: RunResult, prepared: PreparedChange, failure: dict, records: list[RunResult]
+    driver: Any,
+    parent: RunResult,
+    prepared: PreparedChange,
+    failure: dict,
+    records: list[RunResult],
+    cancel: asyncio.Event,
 ) -> dict:
     """Reuse an executed file worker's permission; do not repeat the workflow."""
     if driver._over_budget(additional_cost=parent.usage.get("cost") or 0):
@@ -80,13 +85,18 @@ async def repair_change(
         task=driver.name,
         project=driver.config.display_name,
         trigger=f"repair change from {parent.run_id}",
-        cancel=driver.cancel,
+        cancel=cancel,
         workdir=await asyncio.to_thread(driver.workspace.check_folder, prepared),
         tool_context=context,
     )
     records.append(result)
     answer = result.outputs.get("repair")
-    ready = result.status == "completed" and isinstance(answer, dict) and answer.get("decision") == "ready"
+    ready = (
+        result.status == "completed"
+        and not cancel.is_set()
+        and isinstance(answer, dict)
+        and answer.get("decision") == "ready"
+    )
     reason = answer.get("summary") if isinstance(answer, dict) else result.error
     if isinstance(answer, dict):
         result.outputs["repair"] = str(answer.get("summary") or "Repair finished")
