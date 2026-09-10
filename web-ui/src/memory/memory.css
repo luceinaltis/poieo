@@ -146,6 +146,7 @@
 }
 
 .memory-caption,
+.memory-gauges,
 .memory-hint,
 .memory-legend,
 .memory-truncated {
@@ -158,20 +159,28 @@
 .memory-caption {
   color: var(--dim);
   display: flex;
-  flex-wrap: wrap;
   font-size: 0.875rem;
-  gap: 6px 13px;
+  gap: 13px;
   left: 13px;
   letter-spacing: 0.04em;
-  right: 13px;
   top: 12px;
+}
+
+/* The two sizes on their own line under the counts, above the hint. */
+.memory-gauges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  left: 13px;
+  right: 13px;
+  top: 36px;
 }
 
 .memory-hint {
   color: var(--line);
   font-size: 0.875rem;
   left: 13px;
-  top: 39px;
+  top: 62px;
 }
 
 .memory-legend {
@@ -483,6 +492,7 @@
     overflow: visible;
   }
   .memory-caption { flex-wrap: wrap; }
+  .memory-gauges { top: 58px; }
   .memory-legend { gap: 8px; right: 10px; }
   .memory-hint { display: none; }
 }

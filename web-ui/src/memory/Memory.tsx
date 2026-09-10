@@ -454,6 +454,8 @@ export function Memory({
             <span>{kept} kept</span>
             <span>{past} set aside</span>
             <span>{visibleGraph.edges.length} connections</span>
+          </div>
+          <div className="memory-gauges">
             {overview.stats ? (
               <Gauge label="page" used={overview.stats.page_chars} limit={overview.stats.page_budget} unit="chars" />
             ) : null}
