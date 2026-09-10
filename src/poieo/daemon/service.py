@@ -1057,7 +1057,10 @@ class TaskRunner:
                 result.answer = row.get("answer")
         if self._asking and self._asking.run_id == run_id:
             self._asking = None
-            self.resume()
+            if applied["status"] == "undone":
+                self.pause()
+            else:
+                self.resume()
         return True
 
     def _keep_question(self) -> None:
