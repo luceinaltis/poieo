@@ -397,6 +397,25 @@ async def test_removing_the_last_file_in_the_task_folder_still_has_a_check_direc
     assert not (repo / "docs" / "old.txt").exists()
 
 
+async def test_adopting_an_undo_keeps_an_older_runner_paused(tmp_path):
+    from poieo.daemon import Daemon
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    stale, other = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
+    result = await stale.run_once({})
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = ['python -c "pass"']
+    path.write_text(yaml.safe_dump(data))
+    assert (await other.accept_changes())["status"] == "applied"
+    assert (await other.undo_changes(result.run_id))["status"] == "applied"
+    assert (await stale.accept_changes())["accepted"] == 0
+    assert stale.last_result.application["status"] == "undone"
+    assert stale.asking() is None
+    assert stale.holding
+    assert not (repo / "made.txt").exists()
+
+
 async def test_cancelling_a_shell_stops_orphaned_descendants_before_returning(tmp_path):
     from poieo.tools.shell import _POSIX_SHELL, run_here
 
