@@ -561,3 +561,35 @@ def test_docs_graph_lists_every_field_common_to_all_nodes():
     section = _common_fields_section()
     missing = [name for name in COMMON_NODE_FIELDS if f"`{name}`" not in section]
     assert not missing, f"docs/graph.md does not list {missing} among the fields common to all nodes"
+
+
+def test_an_output_path_without_json_is_refused_at_load(tmp_path):
+    """`path` reaches into parsed JSON, so a text output has nothing to reach
+    into and the key does nothing. A key that does nothing reads as configured,
+    which is the same hole the model-key rules close one level up."""
+    path = tmp_path / "g.yaml"
+    path.write_text(
+        "name: g\nentry: a\nnodes:\n"
+        '  - {id: a, type: agent, prompt: go, output: {format: text, path: "$.result", as: out}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SpecError) as caught:
+        load_graph(path)
+
+    message = str(caught.value)
+    assert "path" in message
+    assert "format" in message
+
+
+def test_an_output_path_with_json_still_loads(tmp_path):
+    path = tmp_path / "g.yaml"
+    path.write_text(
+        "name: g\nentry: a\nnodes:\n"
+        '  - {id: a, type: agent, prompt: go, output: {format: json, path: "result.score", as: out}}\n',
+        encoding="utf-8",
+    )
+
+    graph = load_graph(path)
+
+    assert graph.node("a").output.path == "result.score"
