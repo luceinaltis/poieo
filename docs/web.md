@@ -21,7 +21,7 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
-| `GET /api/projects/{project}/memory` | long-term-memory page, upkeep statistics, search capabilities, and a bounded relationship graph; supports `If-None-Match` and 304 |
+| `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics, search capabilities, and a bounded relationship graph; supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, and write history, or 404 |
 | `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
 | `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
@@ -39,6 +39,20 @@ not change source memory:
 |---|---|
 | `POST /api/projects/{project}/memory/search` | `{query, mode: "words" | "meaning", limit?, include_set_aside?}`; returns ranked entry previews and the embedding model when used |
 | `POST /api/projects/{project}/memory/ask` | `{question, include_set_aside?}`; returns a cited answer, ranked evidence, model usage, and any word-only degradation notice |
+
+A person's four memory writes call the same doors as the terminal's `keep`,
+`set-aside`, and `page`. Each is refused with 409 while the project keeps no
+memory, and only what a person may say travels: never a source or a seal.
+
+| request | body and result |
+|---|---|
+| `PUT /api/projects/{project}/memory/page` | `{text}`; replaces the page as written |
+| `POST /api/projects/{project}/memory/suggestion` | `{accept}`; lands the last learning pass's page line or lets it go by rewriting the page unchanged; 409 when nothing is suggested |
+| `PUT /api/projects/{project}/memory/{slug}` | `{body, scope?, anchors?, links?}`; keeps an entry, rewriting one that exists; 400 for a bad name or shape, 409 for a connection or anchor that names nothing |
+| `POST /api/projects/{project}/memory/{slug}/set-aside` | `{because}`; retires the entry for its replacement; 404 for an unknown entry, 409 for an unknown replacement |
+
+The fixed names `page`, `suggestion`, `search`, and `ask` are routed before the
+entry slug, so a PUT to the page cannot be read as an entry called `page`.
 
 Queries are non-empty strings of at most 2,000 characters; result limits are
 clamped from 1 to 50. Meaning search returns 409 unless the binding explicitly
@@ -162,7 +176,10 @@ provides the task board and a standalone runs view; both consume the same stage
 state. Memory is a separate project view because it fetches its own graph and
 search evidence rather than consuming task events. While open it revalidates
 the overview every 15 seconds with an ETag and preserves the current query and
-selection across an unchanged response. Only declared memory relationships are
+selection across an unchanged response. The evidence pane is also where a person
+writes: the page, a new memory, a set-aside for the selected one, and the last
+learning pass's suggestion; a refused write stays visible as a result, and a
+successful one rereads the overview at once. Only declared memory relationships are
 drawn as edges; search scores and answer citations highlight evidence without
 inventing topology. Those relationships also form stable three-dimensional
 regions: dense memories share a faint nebula, pair-sized islands join their

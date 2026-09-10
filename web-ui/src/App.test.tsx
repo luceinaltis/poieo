@@ -96,6 +96,8 @@ vi.mock("./api", () => ({
   fetchMemory: vi.fn<typeof import("./api").fetchMemory>(async () => ({
     enabled: false,
     page: null,
+    page_text: "",
+    suggestion: null,
     stats: null,
     capabilities: { words: false, meaning: false, ask: false },
     graph: {

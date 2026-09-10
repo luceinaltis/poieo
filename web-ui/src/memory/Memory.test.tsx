@@ -3,7 +3,16 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { beforeEach, afterEach, expect, test, vi } from "vitest"
 
-import { askMemory, fetchMemory, fetchMemoryEntry, searchMemory } from "../api"
+import {
+  askMemory,
+  fetchMemory,
+  fetchMemoryEntry,
+  keepMemory,
+  putMemoryPage,
+  searchMemory,
+  setAsideMemory,
+  settleMemorySuggestion,
+} from "../api"
 import { MEMORY_REFRESH_MS, Memory } from "./Memory"
 import type { MemoryOverview } from "./types"
 
@@ -12,6 +21,10 @@ vi.mock("../api", () => ({
   fetchMemoryEntry: vi.fn(),
   searchMemory: vi.fn(),
   askMemory: vi.fn(),
+  keepMemory: vi.fn(),
+  putMemoryPage: vi.fn(),
+  setAsideMemory: vi.fn(),
+  settleMemorySuggestion: vi.fn(),
 }))
 
 vi.mock("./Constellation", () => ({
@@ -26,6 +39,8 @@ const OVERVIEW: MemoryOverview = {
   revision: '"memory-one"',
   enabled: true,
   page: "Keep tests portable.",
+  page_text: "<!-- trim -->\nKeep tests portable.",
+  suggestion: null,
   stats: {
     page_chars: 20,
     page_budget: 4000,
@@ -117,6 +132,15 @@ afterEach(() => {
 async function render() {
   await act(async () => root.render(<Memory project="board" />))
   await act(async () => {})
+}
+
+async function fill(selector: string, value: string) {
+  const field = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!
+  const proto = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(field, value)
+    field.dispatchEvent(new Event("input", { bubbles: true }))
+  })
 }
 
 async function enter(value: string) {
@@ -312,6 +336,8 @@ test("a project with no long memory explains the empty place", async () => {
   vi.mocked(fetchMemory).mockResolvedValue({
     enabled: false,
     page: null,
+    page_text: "",
+    suggestion: null,
     stats: null,
     capabilities: { words: false, meaning: false, ask: false },
     graph: {
@@ -327,4 +353,78 @@ test("a project with no long memory explains the empty place", async () => {
 
   expect(container.textContent).toContain("This project keeps no long memory")
   expect(container.querySelector("form")).toBeNull()
+})
+
+// -- a person's writes ---------------------------------------------------------
+
+test("a person edits the page as written and the place rereads itself", async () => {
+  vi.mocked(putMemoryPage).mockResolvedValue({ ok: true })
+  await render()
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="edit-page"]')!.click())
+  expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Page"]')!.value).toBe(
+    "<!-- trim -->\nKeep tests portable.",
+  )
+  await fill('[aria-label="Page"]', "Keep tests portable.\nDates are ISO.")
+  await act(async () => container.querySelector<HTMLFormElement>("form.memory-page-edit")!.requestSubmit())
+
+  expect(putMemoryPage).toHaveBeenCalledWith("board", "Keep tests portable.\nDates are ISO.")
+  expect(fetchMemory).toHaveBeenCalledTimes(2)
+  expect(container.querySelector('[aria-label="Page"]')).toBeNull()
+})
+
+test("the last pass's suggestion can land on the page or be let go", async () => {
+  vi.mocked(fetchMemory).mockResolvedValue({ ...OVERVIEW, suggestion: "Require ISO dates." })
+  vi.mocked(settleMemorySuggestion).mockResolvedValue({ ok: true, suggestion: "Require ISO dates." })
+  await render()
+
+  expect(container.textContent).toContain("Require ISO dates.")
+  await act(async () => container.querySelector<HTMLElement>('[data-do="accept-suggestion"]')!.click())
+  expect(settleMemorySuggestion).toHaveBeenCalledWith("board", true)
+  await act(async () => container.querySelector<HTMLElement>('[data-do="dismiss-suggestion"]')!.click())
+  expect(settleMemorySuggestion).toHaveBeenLastCalledWith("board", false)
+  expect(fetchMemory).toHaveBeenCalledTimes(3)
+})
+
+test("a person keeps a memory from the board and it opens", async () => {
+  vi.mocked(keepMemory).mockResolvedValue({ ok: true, slug: "feeds-order" })
+  await render()
+
+  await fill('[aria-label="Memory name"]', "feeds-order")
+  await fill('[aria-label="What stays true"]', "Feeds are imported oldest first.")
+  await act(async () => container.querySelector<HTMLFormElement>("form.memory-keep")!.requestSubmit())
+
+  expect(keepMemory).toHaveBeenCalledWith("board", "feeds-order", "Feeds are imported oldest first.")
+  expect(fetchMemory).toHaveBeenCalledTimes(2)
+  expect(fetchMemoryEntry).toHaveBeenCalledWith("board", "feeds-order")
+  expect(container.querySelector<HTMLInputElement>('[aria-label="Memory name"]')!.value).toBe("")
+})
+
+test("a standing memory can be set aside for its replacement", async () => {
+  vi.mocked(setAsideMemory).mockResolvedValue({ ok: true })
+  await render()
+  await act(async () => container.querySelector<HTMLElement>('[data-testid="constellation"]')!.click())
+
+  await fill('[aria-label="Replaced by"]', "portable-shell")
+  await act(async () => container.querySelector<HTMLFormElement>("form.memory-set-aside")!.requestSubmit())
+
+  expect(setAsideMemory).toHaveBeenCalledWith("board", "windows-shell", "portable-shell")
+  expect(fetchMemoryEntry).toHaveBeenLastCalledWith("board", "windows-shell")
+  expect(fetchMemory).toHaveBeenCalledTimes(2)
+})
+
+test("a refused write stays visible as a result and rereads nothing", async () => {
+  vi.mocked(keepMemory).mockResolvedValue({
+    ok: false,
+    error: "'leaner': depends_on names 'ghost', and no such entry exists",
+  })
+  await render()
+
+  await fill('[aria-label="Memory name"]', "leaner")
+  await fill('[aria-label="What stays true"]', "Leans on air.")
+  await act(async () => container.querySelector<HTMLFormElement>("form.memory-keep")!.requestSubmit())
+
+  expect(container.textContent).toContain("no such entry exists")
+  expect(fetchMemory).toHaveBeenCalledTimes(1)
+  expect(container.querySelector<HTMLInputElement>('[aria-label="Memory name"]')!.value).toBe("leaner")
 })
