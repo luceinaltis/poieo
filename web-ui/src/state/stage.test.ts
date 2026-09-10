@@ -401,6 +401,16 @@ function aRun(run_id: string, overrides: Partial<RunSummary> = {}): RunSummary {
   }
 }
 
+test("one applied group cannot subtract its change count for every run", () => {
+  let stage = initialStage([{ ...TASK_ROWS[0], pending: 3 }])
+  for (const run_id of ["one", "two", "one"]) {
+    stage = reduce(stage, { type: "run_summary", ...aRun(run_id, {
+      application: { status: "applied", accepted: 2, pending: 1 },
+    }) })
+    expect(stage.tasks["board/chores"].pending).toBe(1)
+  }
+})
+
 test("setRuns seeds the window the events cannot supply", () => {
   const seeded = setRuns(start(), "board/chores", [
     aRun("a", { change: { base: "x", head: "y", files: ["f"], insertions: 40, deletions: 2, message: "did" } }),
