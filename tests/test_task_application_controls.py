@@ -1,6 +1,8 @@
 """Decisions and parallel entry points keep one task's work and history intact."""
 
 import asyncio
+import json
+import threading
 
 import pytest
 import yaml
@@ -12,6 +14,71 @@ from poieo.card import load_card
 from poieo.cli import app
 from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
+
+
+async def test_cancelled_discard_holds_its_copy_until_the_write_and_history_finish(tmp_path, monkeypatch):
+    from conftest import until
+
+    from poieo.workspace import WorkspaceError
+
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    daemon, result = await run_once(config)
+    driver = daemon.runners[0]
+    entered, release = threading.Event(), threading.Event()
+    discard = driver.workspace.discard
+
+    def delayed(since):
+        entered.set()
+        assert release.wait(10)
+        return discard(since)
+
+    monkeypatch.setattr(driver.workspace, "discard", delayed)
+    decision = asyncio.create_task(driver.discard_changes())
+    await until(entered.is_set, "discard started")
+    decision.cancel()
+    await asyncio.sleep(0.05)
+    try:
+        with pytest.raises(WorkspaceError, match="already running"):
+            with driver.workspace.exclusive_run():
+                pass
+    finally:
+        release.set()
+        await asyncio.gather(decision, return_exceptions=True)
+    assert daemon.store.summary(result.run_id)["application"]["status"] == "discarded"
+
+
+async def test_accepting_older_work_resolves_the_no_edit_retry_question(tmp_path):
+    from test_task_workspace import WRITES_NOTHING
+    from test_workspace import do_run
+
+    repo, config = policy_config(
+        tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']}, responses=WRITES_NOTHING
+    )
+    do_run(Workspace(repo, "chores", config.layout().worktrees()), "older", "made.txt", "hi")
+    daemon, result = await run_once(config)
+    assert result.change is None
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = [CHECK_MADE]
+    path.write_text(yaml.safe_dump(data))
+    driver = daemon.runners[0]
+    assert (await driver.accept_changes())["status"] == "applied"
+    assert driver.asking() is None
+    assert not driver.holding
+    assert daemon.store.summary(result.run_id)["application"]["status"] == "applied"
+
+
+async def test_accepting_after_a_restart_revises_the_full_result_record(tmp_path):
+    from poieo.daemon import Daemon
+    from poieo.memory import results_dir
+
+    _, config = policy_config(tmp_path, {"mode": "review", "checks": [CHECK_MADE]})
+    _, result = await run_once(config)
+    restarted = Daemon(config)
+    assert (await restarted._runners()[0].accept_changes())["status"] == "applied"
+    record = json.loads((results_dir(config.cards_by_task["chores"].dir) / f"{result.run_id}.json").read_text())
+    assert record["application"]["status"] == "applied"
+    assert record["outputs"] == result.outputs
 
 
 def test_cli_cannot_open_a_copy_another_runner_is_still_working_in(tmp_path):
