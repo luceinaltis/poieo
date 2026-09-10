@@ -593,3 +593,15 @@ def test_an_output_path_with_json_still_loads(tmp_path):
     graph = load_graph(path)
 
     assert graph.node("a").output.path == "result.score"
+
+
+def test_a_confirm_node_takes_no_workdir():
+    """Nothing runs at the question: a person reads it and the run ends. A
+    workdir there configures nothing, exactly as it does on a router."""
+    with pytest.raises(ValidationError, match="workdir"):
+        GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"], "workdir": "/tmp"}))
+
+
+def test_a_confirm_node_without_a_workdir_still_loads():
+    graph = GraphSpec.model_validate(_graph({"type": "confirm", "prompt": "?", "choices": ["a", "b"]}))
+    assert graph.node("n").workdir is None
