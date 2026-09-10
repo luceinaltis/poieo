@@ -66,6 +66,7 @@ from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
 from ..workspace import usable as git_keeps_copies
 from .events import CLOSED, BroadcastStore
+from .steps import publish_steps, validate_steps
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -727,15 +728,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         did not exist. Its effect outlives the process, which is not control;
         nothing a run wrote is involved, which is not review.
 
-        Its own fence: **one card, in this project's tasks folder, and nothing
-        else.** No graph, no binding, and no path that leaves that folder --
-        the name is turned into a filename here rather than taken as one.
-
-        Three fields and no more, which is DESIGN.md's second principle: a
-        name, the folder it works in, and its prompt. The folder is required on
-        purpose. It is the one thing the model's hands will touch, and filling
-        it in by default would fill in the single moment the user is meant to
-        see.
+        A prompt creates one card; explicit steps also create its neighboring
+        graph. Both filenames come from the title, never a supplied path. The
+        folder is required, and every step uses that folder or its private copy.
 
         Every refusal is decided before the file is opened, so a request that
         will be refused never leaves a half-written card in a folder the daemon
@@ -760,7 +755,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             body = await request.json()
         except Exception:
             body = {}
-        body = body or {}
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "a task needs a name, folder, and prompt or steps"}, status_code=400)
         title = str(body.get("name") or "").strip()
         prompt = str(body.get("prompt") or "").strip()
         folder = str(body.get("folder") or "").strip()
@@ -779,7 +775,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         slug = _slug(title)
         if not slug:
             return JSONResponse({"error": "a task needs a name that can be a filename"}, status_code=400)
-        if not prompt:
+        has_steps = "graph" in body
+        if has_steps and "prompt" in body:
+            return JSONResponse({"error": "choose a prompt or steps, not both"}, status_code=400)
+        if not prompt and not has_steps:
             return JSONResponse({"error": "a task needs a prompt"}, status_code=400)
         if not folder:
             return JSONResponse(
@@ -828,11 +827,26 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 status_code=409,
             )
 
+        graph = None
+        if has_steps:
+            try:
+                binding = await asyncio.to_thread(_models_of, project)
+                if binding is None:
+                    return JSONResponse({"error": "the project's models file could not be read"}, status_code=409)
+                graph = validate_steps(body["graph"], binding, where)
+            except (PoieoError, OSError) as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+
         payload = yaml.safe_dump(
             # `enabled` only when it is the unusual one. A card carrying
             # `enabled: true` says nothing a card without it does not, and the
             # three fields are the whole of the short form.
-            {"name": title, "folder": folder, "prompt": prompt, **({} if enabled else {"enabled": False})},
+            {
+                "name": title,
+                "folder": folder,
+                **({"graph": f"{slug}.graph.yaml"} if graph is not None else {"prompt": prompt}),
+                **({} if enabled else {"enabled": False}),
+            },
             allow_unicode=True,
             sort_keys=False,
         )
@@ -842,15 +856,22 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             # two requests naming the same card in the same second would both
             # answer ok, and the second would overwrite the first in silence.
             try:
-                with open(path, "x", encoding="utf-8") as handle:
-                    handle.write(payload)
+                if graph is not None:
+                    publish_steps(path, payload, graph)
+                else:
+                    with open(path, "x", encoding="utf-8") as handle:
+                        handle.write(payload)
             except FileExistsError:
                 return False
             return True
 
-        if not await asyncio.to_thread(_write):
+        try:
+            written = await asyncio.to_thread(_write)
+        except OSError as exc:
+            return JSONResponse({"error": f"the task could not be saved: {exc}"}, status_code=400)
+        if not written:
             return JSONResponse(
-                {"error": f"this project already has a task called '{slug}'"},
+                {"error": f"this project already has a task or steps called '{slug}'"},
                 status_code=409,
             )
         # No reload here: the daemon watches this folder and will find it, the

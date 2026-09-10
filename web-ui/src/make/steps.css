@@ -1,0 +1,46 @@
+.step-editor { display: grid; gap: 14px; min-width: 0; }
+.step-intro, .step-hint { color: var(--dim); font-size: .85em; line-height: 1.5; margin: 0; }
+.step-list { display: grid; gap: 18px; list-style: none; margin: 0; padding: 0; }
+.step-item { border-left: 2px solid var(--line); display: grid; gap: 10px; min-width: 0; padding: 0 0 0 12px; }
+.step-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.step-head > div { flex: 1; min-width: 0; }
+.step-number { color: var(--ember); font-size: 1.3em; font-weight: 600; }
+.step-kind { color: var(--dim); display: block; font-size: .74em; }
+.step-editor input:not([type="checkbox"]), .step-editor textarea, .step-editor select {
+  background: var(--well); border: 1px solid var(--rule); border-radius: 4px;
+  box-sizing: border-box; color: var(--text); font: inherit; min-width: 0;
+  padding: 7px 8px; width: 100%;
+}
+.step-editor textarea { line-height: 1.5; resize: vertical; }
+.step-editor .step-title { background: transparent; border-color: transparent; font-size: 1em; font-weight: 600; padding: 2px 0; }
+.step-editor .step-title:hover { border-color: var(--rule); }
+.step-remove { background: none; border: 0; color: var(--dim); font-size: .72em; max-width: 85px; padding: 4px; }
+.step-remove:hover:not(:disabled) { color: var(--stop); }
+.step-field { color: var(--dim); display: grid; gap: 5px; font-size: .86em; min-width: 0; }
+.step-next { align-items: center; grid-template-columns: auto minmax(0, 1fr); }
+.step-results { display: flex; flex-wrap: wrap; gap: 5px; }
+.step-results > span { color: var(--dim); font-size: .78em; width: 100%; }
+.step-results button { font-size: .74em; }
+.step-options { color: var(--dim); font-size: .85em; }
+.step-options summary { cursor: pointer; margin-bottom: 8px; }
+.step-check { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.step-condition { background: var(--well); border: 1px solid var(--rule); border-radius: 4px; display: grid; gap: 8px; margin: 0; min-width: 0; padding: 10px; }
+.step-condition legend { color: var(--ember); padding: 0 5px; }
+.step-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.step-add-condition { justify-self: start; }
+.step-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.step-add button { min-height: 32px; }
+.step-start { align-self: flex-start; color: var(--ember); margin: 0 0 6px; }
+.step-problems { color: var(--stop); font-size: .84em; line-height: 1.5; margin: 0; padding-left: 20px; }
+.step-editor :is(button, input, textarea, select, summary):focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
+@media (max-width: 400px) { .step-comparison { grid-template-columns: minmax(0, 1fr); } }
+:root:has(.step-editor) { --panel-width: min(720px, calc(100vw - var(--rail-width))); }
+.make:has(.step-editor) .make-head {
+  background: var(--panel); border-bottom: 1px solid var(--rule); padding: 12px 0;
+  position: sticky; top: -12px; z-index: 1;
+}
+.make:has(.step-editor) .make-actions {
+  background: var(--panel); border-top: 1px solid var(--rule); bottom: -12px;
+  padding: 12px 0; position: sticky;
+}
+@media (max-width: 720px) { :root:has(.step-editor) { --panel-width: 100vw; } }

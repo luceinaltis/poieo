@@ -117,8 +117,9 @@ somebody that.
 The graph, the models, the daemon, the model's hands, the private copy and the
 undo, container isolation, the memory a project keeps, and the board you watch
 it all on are built and in use. The browser can create, edit, rename, switch off
-and set aside ordinary task cards; advanced schedules, isolation and graph
-wiring still live in their files. `DESIGN.md` has the remaining roadmap.
+and set aside ordinary task cards, and create tasks with several steps and
+conditions without YAML. Advanced schedules, isolation and editing existing
+graphs still use their files. `DESIGN.md` has the remaining roadmap.
 
 poieo is one person's machine running one person's work: no accounts, no
 server, no team features, and no plan to have them.

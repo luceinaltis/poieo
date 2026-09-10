@@ -2,8 +2,8 @@
 
 The **fifth kind** of write here: it makes a file that did not exist, in the
 folder the daemon watches, and a card that appears there starts running. Its
-own fence is that it may write one card into the project's tasks folder and
-nothing else -- not a graph, not a binding, and never outside that folder.
+own fence is that it may write one card, and optionally that task's graph,
+into the project's tasks folder. It never writes a binding or a supplied path.
 
 DESIGN.md asks for three things and no more: a name, the folder it works in,
 and its prompt. The folder stays explicit on purpose -- it is the one thing the

@@ -90,7 +90,23 @@ poieo daemon
 The board opens at <http://127.0.0.1:8484>. It shows tasks, runs, questions,
 project memory, model choices, and changes waiting for review. An ordinary task
 card can be created, renamed, edited, switched on or off, and set aside in the
-browser. Schedules, isolation, and graph wiring remain file-based settings.
+browser.
+
+For a new task with several steps, choose **Write as steps** below the prompt.
+The words already written become the first step. Add model instructions, a
+command, a condition, or a question for a person. Each step chooses what runs
+next, including returning to an earlier step or ending the run.
+
+Use **Insert result from…** to include an earlier answer in later instructions.
+For a condition, select a result, a comparison and a value, then choose the
+next step. Conditions are checked in order; **Otherwise** handles no match.
+Command exit codes are numbers: zero usually means success. A human question
+ends the run and waits for an answer on the board. Every run is limited to 100
+steps including repeats.
+
+**Save without starting** lets you inspect the new task before switching it on.
+The board writes the normal task and graph files for you. Existing graph edits,
+advanced schedules, isolation, and handoffs between tasks still use those files.
 
 The daemon rereads the tasks folder. Switching only `enabled` takes effect
 without restarting it. Restart after changing other loaded task settings such

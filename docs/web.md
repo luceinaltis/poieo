@@ -91,7 +91,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 |---|---|
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
-| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?}`; creates one card and returns its task id and path |
+| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?}` or `{name, folder, graph, enabled?}` with a graph document; creates one card, optionally its neighboring graph, and returns its task id and path |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?}`; atomically validates and replaces one card, returning whether the edit is live |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
@@ -105,6 +105,14 @@ Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
 `input_file:` — must stay inside the project.
 Names are converted to safe filenames and never overwrite an existing card.
+Step creation uses the existing graph schema and preflight to check node fields,
+templates, conditions, connections, and model roles before writing. Every step
+uses the explicitly chosen task folder; node-specific `workdir` is refused.
+The server derives `<task>.graph.yaml` beside the card. Complete files are
+published without replacement, graph first and card last, so the task scan sees
+the complete task. A failed card publication removes the new graph. An existing
+graph is never overwritten, and no binding or credential is changed.
+
 Structured editing is offered only when it can reproduce every field and
 comment; otherwise the client edits the raw file. Set-aside and rename place an
 immediate hold on the old runner, while the folder scan or next restart
@@ -175,6 +183,20 @@ per entry with its opening words and what became of it, the ones that shaped
 the answer first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
+
+The new-task form starts with name, folder, and prompt. `Write as steps` keeps
+the prompt as the first step and adds model instructions, commands, conditions,
+or a question for a person. Results can be inserted into later instructions;
+conditions choose an earlier answer or command result, a comparison, a value,
+and a destination, with a separate fallback. Conditions keep their first-match
+order. A question ends the run; task-level handoffs still belong in the card.
+New model steps use the ordinary 40-turn limit and include journal and memory
+input. Each graph limits a run to 100 steps including repeats.
+
+The form checks empty instructions, unreachable steps, removed results, and
+result reads that could occur before their writer. Server validation remains
+authoritative. Failed saves retain the whole draft; successful saves clear it.
+This form creates new tasks; editing existing graphs remains file-based.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently
 provides the task board and a standalone runs view; both consume the same stage
