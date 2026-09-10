@@ -95,8 +95,9 @@ async def _docker(*args: str, timeout: float = _PROBE_TIMEOUT, stdin: str | None
     )
     try:
         stdout, _ = await asyncio.wait_for(process.communicate(stdin.encode() if stdin is not None else None), timeout)
-    except asyncio.TimeoutError:
-        process.kill()
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        if process.returncode is None:
+            process.kill()
         await process.communicate()
         raise
     return process.returncode or 0, decode_output(stdout)
@@ -154,8 +155,8 @@ class Container:
     """One task's isolated environment, kept between that task's runs.
 
     *Derived state*: removing it is always allowed and the next run rebuilds
-    it. Owned by whatever outlives a run; executors borrow it and must never
-    remove it.
+    it. Owned by whatever outlives a run; an interrupted borrower removes it
+    before releasing the mounted files, and the next run rebuilds it.
     """
 
     def __init__(self, key: str, workdir: Path, isolation: Isolation):
@@ -245,8 +246,8 @@ class DockerExecutor(Executor):
         self.workdir = _resolved(workdir)
         self.isolation = Isolation(image=image, network=network, user=user)
         self.labels = dict(labels or {})
-        # Handed a container, this executor borrows it and must not remove it; the
-        # owner outlives the run. Without one it creates and destroys its own,
+        # Handed a container, this executor keeps it after normal work; cancellation
+        # removes it so a detached command cannot continue writing. Without one it creates and destroys its own,
         # which is the one-shot `poieo run` path.
         self.container = container
         self.container_id: str | None = None
@@ -264,13 +265,15 @@ class DockerExecutor(Executor):
             self.container_id = await _start(self.workdir, self.isolation, self.labels)
         return self
 
-    async def __aexit__(self, *_exc_info: Any) -> None:
+    async def __aexit__(self, exc_type: Any, *_exc_info: Any) -> None:
         container_id, self.container_id = self.container_id, None
-        # A borrowed container outlives this run; removing it here would be the
-        # borrower destroying the lender's object, and every single-run test
-        # would still pass.
-        if container_id and self.container is None:
-            await _remove(container_id)
+        # Normal exits keep the environment. Cancellation must also stop the
+        # process inside it: killing only the docker client leaves exec running.
+        if container_id:
+            if self.container is not None and exc_type is asyncio.CancelledError:
+                await self.container.remove()
+            elif self.container is None:
+                await _remove(container_id)
 
     # -- execution -----------------------------------------------------------
     # execute() and definitions() are inherited: the contract is identical, and
