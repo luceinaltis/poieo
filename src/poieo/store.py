@@ -172,9 +172,9 @@ class RunStore:
     def spent_since(self, cutoff: str, project: str | None = None) -> float:
         """What the runs finishing after `cutoff` are known to have cost.
 
-        Read backwards and stopped at the first run older than the cutoff --
-        the index grows for the daemon's lifetime and this is asked before
-        every fire, so it must not walk the whole of it.
+        Revisions can append an old run after recent spending. Deduplicate
+        before filtering and scan past older timestamps so decisions cannot
+        hide newer costs or bring back a superseded revision.
 
         **A run that never said what it cost counts as nothing.** For a local
         model that is exactly right. For a paid endpoint that was not asked it
@@ -185,15 +185,15 @@ class RunStore:
         total = 0.0
         seen: set[str] = set()
         for row in self._index_backwards():
-            finished = str(row.get("finished_at") or "")
-            if finished and finished < cutoff:
-                break
-            if project and row.get("project") != project:
-                continue
             run_id = str(row.get("run_id", ""))
             if run_id in seen:
                 continue
             seen.add(run_id)
+            finished = str(row.get("finished_at") or "")
+            if finished and finished < cutoff:
+                continue
+            if project and row.get("project") != project:
+                continue
             cost = (row.get("usage") or {}).get("cost")
             if isinstance(cost, (int, float)):
                 total += float(cost)

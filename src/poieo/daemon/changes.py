@@ -56,7 +56,16 @@ async def check_and_apply(
     protected: Sequence[Path] = (),
 ) -> dict:
     """Finish any in-flight Git write before releasing its copy or returning."""
-    stopped = cancel if cancel is not None else asyncio.Event()
+    stopped = asyncio.Event()
+    if cancel is not None and cancel.is_set():
+        stopped.set()
+
+    async def forward_stop() -> None:
+        if cancel is not None:
+            await cancel.wait()
+            stopped.set()
+
+    forwarding = asyncio.create_task(forward_stop())
     job = asyncio.create_task(
         _check_and_apply(
             point,
@@ -69,15 +78,19 @@ async def check_and_apply(
             protected=protected,
         )
     )
-    while True:
-        try:
-            return await asyncio.shield(job)
-        except asyncio.CancelledError:
-            # Cancelling to_thread does not stop its worker. Let it reach the
-            # next cancellation boundary, including recording a write that won.
-            stopped.set()
-            if job.cancelled():
-                raise
+    try:
+        while True:
+            try:
+                return await asyncio.shield(job)
+            except asyncio.CancelledError:
+                # Cancelling to_thread does not stop its worker. Let it reach the
+                # next cancellation boundary, including recording a write that won.
+                stopped.set()
+                if job.cancelled():
+                    raise
+    finally:
+        forwarding.cancel()
+        await asyncio.gather(forwarding, return_exceptions=True)
 
 
 async def _check_and_apply(

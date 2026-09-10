@@ -91,7 +91,9 @@ reads backward only until it has enough project/task matches; it does not parse
 the entire lifetime of the daemon.
 
 `spent_since` sums the newest revision of runs whose known cost falls inside a
-window. Missing cost contributes nothing rather than an estimate. `NullStore`
+window. Revisions can append old runs after recent spending, so the spending
+reader scans past old timestamps and deduplicates before filtering the window.
+Missing cost contributes nothing rather than an estimate. `NullStore`
 drops both writes and reads for explicit no-log runs and tests.
 
 The web layer wraps stores rather than changing their contract:
