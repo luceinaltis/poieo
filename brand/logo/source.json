@@ -1,0 +1,46 @@
+{
+  "source": "../../docs/assets/branding/logo-persimmon-concept.png",
+  "source_sha256": "559abcb7e40d16b109f586da8c4826f57ae20a42f314984a9a12626982c5ddad",
+  "source_region": {
+    "left": 220,
+    "top": 200,
+    "right": 1300,
+    "bottom": 590
+  },
+  "method": "Trace the large horizontal lockup in the approved source as two flat colour layers. Derive every export from the same outlined paths.",
+  "tracer": "VTracer, installed Python package 0.6.15",
+  "tracer_reference": "https://github.com/visioncortex/vtracer",
+  "settings": {
+    "mode": "spline",
+    "filter_speckle": 8,
+    "corner_threshold": 60,
+    "length_threshold": 4.0,
+    "max_iterations": 10,
+    "splice_threshold": 45,
+    "path_precision": 3
+  },
+  "palette": {
+    "ink": "#221e18",
+    "gold": "#d8a657",
+    "reversed_ink": "#f0e7d9"
+  },
+  "files": [
+    "poieo.svg",
+    "poieo-reversed.svg",
+    "poieo-mono.svg",
+    "symbol.svg",
+    "symbol-reversed.svg",
+    "symbol-mono.svg",
+    "wordmark.svg",
+    "wordmark-reversed.svg"
+  ],
+  "source_generation": {
+    "tool": "ChatGPT Image (built-in image_gen)",
+    "prompt": "Use case: precise-object-edit\nAsset type: poieo logo exploration, a clean landscape identity proof sheet.\nInput image 1 is the edit target. Keep its canvas, near-white warm ivory paper background, generous negative space, exact typography and spelling of the lowercase wordmark \"poieo\" (p-o-i-e-o), relative wordmark scale, and restrained ink-black/gold palette. Keep the elegant Latin serif lettering with the subtle e-to-o connection. Do not change the lettering in any specimen.\nPrimary request: replace ONLY the tree symbol, in the large horizontal lockup and its small repeats, with the species described below. The new symbol must feel informed by spare Korean Joseon ink painting but resolved as a clear, compact, modern brand mark, with confident tapered brush shapes and very little texture. This is a usable symbol study, not a detailed botanical painting.\nComposition: same large tree-plus-poieo lockup across the upper-middle area, then the same bottom row of three specimens: standalone colored symbol, wordmark alone, and a monochrome tree-plus-wordmark. Repeat the SAME species design in every specimen, with the accent rendered in ink in the monochrome version.\nPalette: warm ink #221e18, muted flat ochre gold #d8a657, near-white ivory #f8f5ef. No green. Gold is a tiny flat accent without metallic shine.\nConstraints: preserve the reference wordmark and proof-sheet layout. A natural, calmly asymmetric tree silhouette, not a coiled bonsai. No scenery, pot, mountains, circles around the logo, frame, decorative stamp, extra text, labels, slogan, gradients, shadows or shiny gold. Crisp contours, few strong shapes, readable at modest size.\n\nTree replacement: a Korean courtyard persimmon tree distilled to one gently bending upright trunk, two or three open branches, and exactly three broad oval leaves with softly pointed tips and smooth edges. Leave visible air between the foliage and branch forks. From one short naturally downward-curving stem hangs ONE small muted golden persimmon, slightly flattened and softly squared rather than a perfect circle. Give it a tiny dark four-lobed calyx at the stem so it reads as a persimmon, not a citrus fruit. The fruit should be an accent, not oversize relative to the leaves. Warm, quiet, familiar; the feeling of a sparse late-autumn ink painting. Keep the sparse asymmetry of the reference while replacing the stiff cut-stump base with a graceful tapered trunk. No needles, no flowers, no additional fruit.",
+    "reference_note": "The earlier brush logo reference is retained in git history."
+  },
+  "trace_layers": {
+    "ink": "Rec. 709 luminance below 115; remove connected speckles smaller than 8 pixels.",
+    "gold": "R > 145, G > 100, B < 155, R - G > 25, G - B > 35; remove connected speckles smaller than 8 pixels."
+  }
+}

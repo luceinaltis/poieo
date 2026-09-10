@@ -3,7 +3,7 @@
 브랜드의 목적, 문장, 색, 심벌을 함께 판단하기 위한 작업 문서다.
 사용자가 정한 전제와 제안을 구분한다. **화면은 2안 ‘담채와 열매’의 영문 시안,
 로고는 1안 ‘감나무’의 심벌과 세리프 워드마크를 선택했다.
-벡터 원본 제작과 랜딩·문서 페이지·README 적용은 아직 남아 있다.**
+선택한 로고의 SVG 원본을 제작했으며, 랜딩·문서 페이지·README 적용은 남아 있다.**
 제품의 실제 동작과 한계는 [DESIGN.md](../DESIGN.md)를 따른다.
 
 ## 정해진 전제
@@ -116,54 +116,52 @@ DM Mono는 코드와 정확한 수치에 우선 유지한다. 워드마크를 �
 
 ![담채와 열매 영문 시안: Less spend. Better work.](assets/branding/joseon-wash-english.png)
 
-비교용 원본: [먹과 여백](assets/branding/joseon-ink-concept.png),
-[담채와 열매 한글 시안](assets/branding/joseon-wash-concept.png).
-
 참고 자료는 국립중앙박물관의 [김정희 《세한도》 해설](https://www.museum.go.kr/MUSEUM/contents/M0501000000.do?relicRecommendId=623104&schM=view)과
 [조선 후기 수묵·담채 화조화 해설](https://www.museum.go.kr/MUSEUM/contents/M0501000000.do?relicRecommendId=269064&schM=view)이다.
 여백, 먹의 농담, 옅은 채색을 현대 화면에 적용한 해석이며 특정 작품을 복제한 것은 아니다.
 
 이미지는 ChatGPT Image로 만든 **방향 검토용 이미지**다. 생성 과정에서
-로고의 세부나 글자 모양이 달라질 수 있으므로 최종 로고는 별도의 벡터 원본으로 정리한다.
+로고의 세부나 글자 모양이 달라질 수 있으므로 실제 로고는 아래의 SVG 원본을 사용한다.
 종이 질감과 붓 느낌은 그림에 한정하고, docs의 본문 배경과 버튼은 깨끗하게 만든다.
 담채의 분위기, 가운데 정렬, 영문 문구는 선택한 시안을 기준으로 한다.
 실제 사용할 제목 글꼴은 아직 선택하지 않았다.
 
 ## 선택한 로고와 워드마크 · 감나무
 
-사용자는 세 수종 가운데 **1안 감나무**를 선택했다. 아래 이미지의 큰 가로 조합을
-심벌과 워드마크 제작의 기준으로 삼는다. 휘어진 줄기, 넓은 잎 세 장,
+사용자는 세 수종 가운데 **1안 감나무**를 선택했다. 선택한 시안의 큰 가로 조합에서
+심벌과 글씨의 윤곽을 따 SVG 원본으로 만들었다. 휘어진 줄기, 넓은 잎 세 장,
 꼭지가 있는 금빛 감 한 알이 담백하고 친숙한 인상을 만든다.
 
 워드마크는 선택한 시안의 라틴 세리프와 부드럽게 이어지는 e·o의 흐름을 유지한다.
 이름 **poieo**의 다섯 글자가 분명하게 읽혀야 한다. 글자를 일반 본문 서체로
 바꾸거나, 나무의 수종과 금빛 열매를 임의로 바꾸지 않는다.
 
-![선택한 감나무 로고: 넓은 잎 세 장과 금빛 감 한 알, 세리프 poieo 워드마크](assets/branding/logo-persimmon-concept.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../brand/logo/poieo-reversed.svg">
+  <img src="../brand/logo/poieo.svg" alt="선택한 감나무 로고: 넓은 잎 세 장과 금빛 감 한 알, 세리프 poieo 워드마크" width="720">
+</picture>
 
-시안은 ChatGPT Image의 기본 이미지 생성 도구로 만들었다.
-참조 이미지와 전체 프롬프트는 [생성 기록](assets/branding/logo-tree-prompts.json)에 남긴다.
+**[가로 로고](../brand/logo/poieo.svg), [심벌](../brand/logo/symbol.svg),
+[워드마크](../brand/logo/wordmark.svg)를 벡터로 저장했다.**
+밝은 바탕·어두운 바탕·단색 조합은 같은 경로에서 만들었다.
+배경은 투명하고 글씨까지 모두 경로이므로 별도의 폰트가 필요하지 않다.
+파일 목록과 사용 기준은 [브랜드 자산 안내](../brand/README.md),
+조합과 작은 크기의 모습은 [로고 미리보기](../brand/logo/preview.html)에서 확인한다.
 
-**로고 선택은 확정했으며, 실제 배포할 벡터 원본은 아직 제작하지 않았다.**
-시트 하단의 분리형·단색 표시는 조합을 살펴보기 위한 생성 시안으로,
-위의 큰 로고를 정확히 축소한 파일은 아니다. 큰 가로 조합을 충실하게 벡터로
-정리한 뒤 심벌, 워드마크, 가로 조합, 단색 조합을 동일한 원본에서 만든다.
-작은 크기의 가독성과 두 테마의 대비를 확인한다.
+ChatGPT Image로 만든 [선택 시안](assets/branding/logo-persimmon-concept.png)은
+추적 원본으로 보관한다. 생성 프롬프트와 벡터 변환 설정은
+[원본 기록](../brand/logo/source.json)에 남겼다. 시안 하단의 작은 로고를
+따로 추적하지 않고, 큰 가로 조합에서 파생한 SVG를 사용한다.
 
 담채 화면의 옅은 가지와 열매도 감나무에 맞춘다. 앞서 선택한 영문 화면 시안에
 그려진 헤더 로고는 화면 분위기를 위한 참고이며, 실제 적용 때는 감나무 로고를 쓴다.
 
-### 비교 기록
-
-- [매화](assets/branding/logo-plum-concept.png): 성긴 가지와 금빛 꽃으로 섬세한 인상을 제안한 대안.
-- [느티나무](assets/branding/logo-zelkova-concept.png): 넓게 펼쳐진 가지와 금빛 잎으로 든든한 인상을 제안한 대안.
-- [A · 단정한 필선](assets/branding/logo-refined-concept.png): 정돈한 나무 실루엣과 짧게 벌어지는 세리프.
-- [B · 붓의 리듬](assets/branding/logo-brush-concept.png): 휘어진 줄기와 가늘어지는 획, 부드럽게 이어지는 글자 모양.
-- [소나무의 필선](assets/branding/logo-pine-concept.png): 시안이 어색하다는 피드백을 받아 현재 비교 대상에서 제외했다.
+선택하지 않은 비교 이미지와 이전 로고의 래스터 원본은 정리했다.
+이전 시안은 git 기록에서 확인할 수 있다.
 
 ## 적용 상태
 
-화면 방향과 감나무 로고 선택은 확정했다. 현재 공개 페이지는 기존 로고,
+화면 방향과 감나무 로고 선택을 확정하고 SVG 원본을 저장했다. 현재 공개 페이지는 기존 로고,
 긴 문구와 녹색 팔레트를 사용하며, 선택한 브랜드 방향의 적용은 남아 있다.
 [brand/README.md](../brand/README.md)는 현재 시안과 자산을 기록한다.
 선택한 브랜드 방향으로 화면을 수정할 때 이 문서, 자산 안내, 랜딩, docs,
