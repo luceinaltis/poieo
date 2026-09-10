@@ -166,3 +166,25 @@ async def test_identical_work_is_reported_as_already_included(tmp_path):
     assert result["status"] == "applied"
     assert result["unchanged"] is True
     assert point.pending() == []
+
+
+async def test_a_failed_check_cannot_smuggle_its_edits_into_a_repair(tmp_path):
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+
+    async def repair(prepared, failure):
+        raise AssertionError("a check must not edit the proposed change")
+
+    result = await check_and_apply(
+        point,
+        ApplySpec(
+            mode="auto",
+            checks=[
+                "python -c \"from pathlib import Path; Path('made.txt').write_text('changed'); raise SystemExit(1)\""
+            ],
+        ),
+        repair=repair,
+    )
+    assert result["verification_changed"] == ["made.txt"]
+    assert not (repo / "made.txt").exists()
