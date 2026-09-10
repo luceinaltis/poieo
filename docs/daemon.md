@@ -61,8 +61,11 @@ A blocked result asks a persisted `apply_changes` question and holds only that
 task, including after restart. Retry schedules another run; pause leaves it held.
 Pending work is checked even when a retry produces no new file edits.
 
-Manual acceptance or discard records the decision for every affected run and
-clears its persisted application question. A discarded result uses status
+Manual acceptance or discard records the decision for every affected run,
+including full records from before a restart, and clears its persisted
+application question. A no-edit retry is resolved when none of its pending work
+remains. The private copy stays exclusively owned until every started write and
+its decision record finish, even if the caller disconnects. A discarded result uses status
 `discarded`. Accepting a held change resumes the task's schedule.
 
 Application settings alone are read at the next run without rebuilding the

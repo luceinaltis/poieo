@@ -9,13 +9,25 @@ import asyncio
 import logging
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Awaitable, Callable, Sequence, TypeVar
 
 from ..errors import PoieoError
 from ..tools import ToolContext, make_executor
 from ..workspace import ApplySpec, Workspace
 
 log = logging.getLogger("poieo.daemon")
+T = TypeVar("T")
+
+
+async def finish_write(work: Awaitable[T]) -> T:
+    """Keep ownership until a started write and its record have finished."""
+    job = asyncio.ensure_future(work)
+    while True:
+        try:
+            return await asyncio.shield(job)
+        except asyncio.CancelledError:
+            if job.cancelled():
+                raise
 
 
 async def check_and_apply(

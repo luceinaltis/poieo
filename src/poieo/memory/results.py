@@ -1,6 +1,6 @@
 """What a run leaves behind when it is over.
 
-One file per run in ``runs/results/``, written once and never rewritten,
+One file per run in ``runs/results/``, revised when its question or change is decided,
 sharing a run id with the events the same run wrote to ``runs/events/``.
 
 The harness writes these, never the model: there is no tool for it, so nothing
@@ -68,10 +68,8 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     Returns the path written, or None when nothing was -- already recorded, or
     unwritable. Memory is not worth killing a night's work over.
 
-    ``replace`` is for the one thing that legitimately arrives after a run has
-    already been recorded: the answer to a question it ended by asking. Without
-    it that record would say `asking` for good -- a run that never finished,
-    about a decision somebody made.
+    ``replace`` records a later answer or application decision. Without it a
+    finished decision would remain open in the task's memory.
     """
     from ..card import closing_line  # late: task.py imports this package
 
@@ -125,3 +123,23 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
         log.warning("task '%s': could not write the result: %s", task.slug, exc)
         return None
     return path
+
+
+def revise_application(task: Any, run_id: str, outcome: dict) -> None:
+    """Revise an older run without losing outputs that are no longer in memory."""
+    from ..card import append_journal
+
+    path = results_dir(task.dir) / f"{run_id}.json"
+    try:
+        if not path.exists():
+            return
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("task") != task.slug or record.get("run_id") != run_id:
+            return
+        record.update(status="completed", application=outcome)
+        if (record.get("asked") or {}).get("node") == "apply_changes":
+            record["answer"] = "accept" if outcome["status"] == "applied" else "discard"
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        append_journal(task.journal_path(), "did", f"{outcome['status']} the change from {run_id}", title=task.name)
+    except (OSError, ValueError, TypeError) as exc:
+        log.warning("task '%s': could not revise the application record: %s", task.slug, exc)

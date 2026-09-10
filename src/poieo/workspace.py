@@ -343,6 +343,8 @@ class Workspace:
             _git(self.repo, "branch", self.branch, user_head)
         self._ensure_worktree()
 
+        self.working_folder()
+
         # Follow the user forward only while there is nothing to review:
         # rebasing unread work out from under them would lose it.
         if not self.pending():
@@ -477,16 +479,21 @@ class Workspace:
 
     def working_folder(self) -> Path:
         """The chosen task folder in its private copy, including a subfolder."""
-        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
-        return self.worktree / self.repo.resolve().relative_to(root)
+        return self._folder_in(self.worktree)
 
     def check_folder(self, prepared: PreparedChange) -> Path:
         """The task's chosen folder inside the combined copy."""
+        return self._folder_in(prepared.path)
+
+    def _folder_in(self, copy: Path) -> Path:
         root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
-        folder = prepared.path / self.repo.resolve().relative_to(root)
-        if not folder.resolve().is_relative_to(prepared.path.resolve()):
+        folder = copy / self.repo.resolve().relative_to(root)
+        if not folder.resolve().is_relative_to(copy.resolve()):
             raise WorkspaceError("the task folder moved outside its private copy")
-        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise WorkspaceError(f"the task folder could not be opened: {exc}") from exc
         return folder
 
     def outside_scope(self, prepared: PreparedChange, paths: list[str], protected: Sequence[Path] = ()) -> list[str]:

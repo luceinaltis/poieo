@@ -22,6 +22,7 @@ from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory
+from ..memory.results import revise_application
 from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
@@ -29,7 +30,7 @@ from ..store import Event, RunStore, utcnow
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
-from .changes import check_and_apply
+from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
@@ -359,6 +360,10 @@ class TaskRunner:
             if self.task.spec.apply.mode == "auto":
                 raise WorkspaceError("automatic application needs a folder protected by Git")
             return None
+        if point.worktree.exists():
+            # Refuse a redirected folder before even preparing the next run.
+            # This must not enter the legacy untracked-work fallback below.
+            await asyncio.to_thread(point.working_folder)
         try:
             if self.task.spec.apply.mode == "auto" and any(node.workdir for node in self.task.graph.nodes):
                 raise WorkspaceError("automatic application uses the task folder; remove step-specific folders")
@@ -371,7 +376,7 @@ class TaskRunner:
                 )
                 log.warning("task '%s': %s", self.name, self._untracked)
                 return point.repo
-            await asyncio.to_thread(point.prepare)
+            await finish_write(asyncio.to_thread(point.prepare))
         except WorkspaceError as exc:
             if self.task.spec.apply.mode == "auto":
                 raise
@@ -400,11 +405,13 @@ class TaskRunner:
                 )
             return
         try:
-            change = await asyncio.to_thread(
-                self.workspace.commit,
-                result.run_id,
-                _change_message(result, self.name),
-                failed=result.status != "completed",
+            change = await finish_write(
+                asyncio.to_thread(
+                    self.workspace.commit,
+                    result.run_id,
+                    _change_message(result, self.name),
+                    failed=result.status != "completed",
+                )
             )
         except WorkspaceError as exc:
             # The work ran; only the record of it failed. That is not a reason
@@ -480,7 +487,7 @@ class TaskRunner:
                 tool_context=self.tool_context,
             )
             if "accepted" in outcome:
-                await self._record_decision(outcome, pending)
+                await finish_write(self._record_decision(outcome, pending))
             return outcome
 
     async def discard_changes(self, since: str | None = None) -> dict:
@@ -490,9 +497,9 @@ class TaskRunner:
             return {"error": "this task is still working; try again when it finishes"}
         async with self._change_lock, self._private_copy():
             pending = await asyncio.to_thread(self.workspace.pending)
-            outcome = await asyncio.to_thread(self.workspace.discard, since)
+            outcome = await finish_write(asyncio.to_thread(self.workspace.discard, since))
             if "discarded" in outcome:
-                await self._record_decision({"status": "discarded", **outcome}, pending)
+                await finish_write(self._record_decision({"status": "discarded", **outcome}, pending))
             return outcome
 
     @asynccontextmanager
@@ -501,21 +508,17 @@ class TaskRunner:
             yield
             return
         gate = self.workspace.exclusive_run()
-        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        await finish_write(asyncio.to_thread(gate.__enter__))
         try:
-            await asyncio.shield(entered)
             yield
         finally:
-            try:
-                await entered
-            except BaseException:
-                pass
-            else:
-                await asyncio.to_thread(gate.__exit__, None, None, None)
+            await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
 
     async def _record_decision(self, outcome: dict, pending: list[str]) -> None:
         remaining = set(await asyncio.to_thread(self.workspace.pending))
         run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
+        if not remaining and self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
+            run_ids = list(dict.fromkeys([*run_ids, self._asking.run_id]))
         for run_id in run_ids:
             result = next((run for run in self.results if run.run_id == run_id), None)
             if self._asking and self._asking.run_id == run_id:
@@ -535,6 +538,9 @@ class TaskRunner:
                 row = result.summary()
             else:
                 row = {**row, "status": "completed", "application": outcome}
+                card = self.config.cards_by_task.get(self.name)
+                if card:
+                    revise_application(card, run_id, outcome)
             self.store.record_summary(row)
             if (
                 self._asking
@@ -544,6 +550,8 @@ class TaskRunner:
                 self._asking = None
                 self._keep_question()
                 self.resume()
+                if outcome["status"] == "applied" and self.handoff is not None and self.task.spec.then:
+                    self.handoff(self, result, self._asking_depth)
 
     def _may_auto_apply(self) -> bool:
         """Permission revoked while a task runs must take effect before application."""
