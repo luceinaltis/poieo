@@ -71,6 +71,25 @@ function harness(overrides: Partial<StageApi> = {}) {
   return { api, store: createStageStore(api), feed: () => handlers! }
 }
 
+test("older application frames cannot overwrite the count in a fresh listing", async () => {
+  let calls = 0
+  const { store, feed } = harness({
+    fetchTasks: vi.fn(async () => {
+      const n = calls++
+      if (n === 1 || n === 2) feed().onEvent({ type: "run_summary", ...CHANGED_RUN,
+        run_id: `older-${n}`, application: { status: "applied", accepted: 2, pending: 0 } })
+      return listing([{ ...CHORES, pending: n >= 2 ? 1 : 2, last_run: n >= 2 ? CHANGED_RUN : null }])
+    }),
+  })
+  await store.start()
+  await store.resync()
+  expect(store.getTasks()[0].pending).toBe(1)
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  feed().onEvent({ type: "run_summary", ...CHANGED_RUN })
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  store.stop()
+})
+
 test("seeds from the task list, then subscribes", async () => {
   const { api, store } = harness()
   await store.start()
