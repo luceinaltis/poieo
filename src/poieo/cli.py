@@ -534,6 +534,9 @@ def edit(
     host: str = typer.Option("127.0.0.1", "--host"),
 ) -> None:
     """Open a graph in the drag-and-drop canvas editor."""
+    if save_via not in ("auto", "jupyter", "none"):
+        # Anything else used to fall through to the no-save path in silence.
+        _fail(f"unknown --save-via '{save_via}'; use one of: auto, jupyter, none")
     if is_card_file(graph_path):
         # The editor saves back over what it opened, and a task is not a graph.
         _fail(f"{graph_path} is a task; run 'poieo eject' first, then edit the graph")
