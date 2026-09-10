@@ -561,6 +561,9 @@ class TaskRunner:
             await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
 
     async def _record_decision(self, outcome: dict, pending: list[str], current_id: str | None = None) -> None:
+        # Another entry point may have parked work after this runner started.
+        # The caller owns the task, so adopt that question before resolving it.
+        self._restore_question()
         remaining = set(await asyncio.to_thread(self.workspace.pending))
         outcome["pending"] = len(remaining)
         run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
@@ -1014,6 +1017,11 @@ class TaskRunner:
         try:
             kept = json.loads(path.read_text(encoding="utf-8"))
             depth = kept.pop("depth", 0)
+            if (kept.get("asked") or {}).get("node") == "apply_changes":
+                run_id = kept.get("run_id")
+                row = self.store.summary(run_id) if isinstance(run_id, str) else None
+                if row and (row.get("application") or {}).get("status") in {"applied", "discarded", "undone"}:
+                    return  # An older process may have left an already-resolved question.
             self._asking, self._asking_depth = RunResult(**kept), int(depth)
         except (OSError, ValueError, TypeError) as exc:
             log.warning("task '%s': could not read the question left at %s: %s", self.name, path, exc)
