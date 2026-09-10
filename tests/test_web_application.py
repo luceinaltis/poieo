@@ -76,6 +76,15 @@ def test_editing_the_prompt_keeps_the_existing_application_permission(tmp_path):
     assert yaml.safe_load(path.read_text())["apply"] == policy
 
 
+def test_multiline_verification_keeps_the_card_in_the_file_editor(tmp_path):
+    client, cards = _client(tmp_path)
+    path = cards / "already.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"] = {"mode": "review", "checks": ["python - <<'PY'\nassert 1 == 1\nPY"]}
+    path.write_text(yaml.safe_dump(data))
+    assert client.get("/api/projects/board/tasks/already").json()["plain"] is False
+
+
 def test_switching_application_mode_is_live_without_rewriting_other_settings(tmp_path):
     client, cards = _client(tmp_path)
     git(tmp_path / "work", "init")
