@@ -104,6 +104,12 @@ test("a missing instruction blocks saving and explains which step needs it", asy
   expect(createTask).not.toHaveBeenCalled()
 })
 
+test("adding a step puts the cursor in its instructions", async () => {
+  await start()
+  await click("Add step")
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Instructions for Step 2")
+})
+
 test("removing a result used by a condition requires fixing the condition", async () => {
   await start()
   await click("Add command")
