@@ -168,9 +168,9 @@ async def test_review_does_not_report_a_check_that_rewrote_the_candidate_as_veri
     repo = make_repo(tmp_path)
     point = workspace(tmp_path, repo)
     do_run(point, "r1", "made.txt", "hi")
-    result = await check_and_apply(point, ApplySpec(checks=[
-        "python -c \"from pathlib import Path; Path('made.txt').write_text('different')\""
-    ]))
+    result = await check_and_apply(
+        point, ApplySpec(checks=["python -c \"from pathlib import Path; Path('made.txt').write_text('different')\""])
+    )
     assert result["status"] == "blocked"
     assert result["verification_changed"] == ["made.txt"]
 
@@ -179,8 +179,10 @@ async def test_automatic_work_never_falls_back_to_editing_the_original(tmp_path,
     from poieo.workspace import Workspace, WorkspaceError
 
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+
     def broken_copy(self):
         raise WorkspaceError("could not prepare a private copy")
+
     monkeypatch.setattr(Workspace, "prepare", broken_copy)
     daemon, result = await run_once(config)
     assert not (repo / "made.txt").exists()
@@ -195,4 +197,94 @@ async def test_manual_application_still_obeys_the_tasks_checks(tmp_path):
     outcome = await daemon.runners[0].accept_changes(result.change["head"])
     assert outcome["status"] == "blocked"
     assert "accepted" not in outcome
+    assert not (repo / "made.txt").exists()
+
+
+async def test_cancelling_preparation_waits_for_its_copy_and_cleans_it_up(tmp_path, monkeypatch):
+    import threading
+
+    from poieo.daemon.changes import check_and_apply
+    from poieo.workspace import ApplySpec
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+    started, release = threading.Event(), threading.Event()
+    prepare = point.prepare_accept
+
+    def slow_prepare(through=None):
+        prepared = prepare(through)
+        started.set()
+        assert release.wait(5)
+        return prepared
+
+    monkeypatch.setattr(point, "prepare_accept", slow_prepare)
+    job = asyncio.create_task(check_and_apply(point, ApplySpec(mode="auto", checks=[CHECK_MADE])))
+    assert await asyncio.to_thread(started.wait, 5)
+    job.cancel()
+    release.set()
+    result = await asyncio.wait_for(job, 5)
+    assert result["status"] == "blocked"
+    assert not (repo / "made.txt").exists()
+    assert not list(point.worktrees.glob(".review-*"))
+
+
+async def test_stop_interrupts_an_active_verification_command(tmp_path):
+    from conftest import until
+
+    from poieo.daemon.changes import check_and_apply
+    from poieo.workspace import ApplySpec
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+    cancel = asyncio.Event()
+    check = "python -c \"from pathlib import Path; import time; Path('checking').touch(); time.sleep(60)\""
+    job = asyncio.create_task(check_and_apply(point, ApplySpec(mode="auto", checks=[check]), cancel=cancel))
+    await until(lambda: any(point.worktrees.glob(".review-*/checking")), "verification started")
+    cancel.set()
+    result = await asyncio.wait_for(job, 5)
+    assert result["status"] == "blocked"
+    assert not (repo / "made.txt").exists()
+    assert not list(point.worktrees.glob(".review-*"))
+
+
+async def test_application_rechecks_when_another_task_finishes_first(tmp_path, monkeypatch):
+    from poieo.daemon.changes import check_and_apply
+    from poieo.workspace import ApplySpec
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+    apply = point.apply_prepared
+    calls = []
+
+    def competing_apply(prepared):
+        calls.append(prepared.base)
+        if len(calls) == 1:
+            (repo / "other.txt").write_text("another task")
+            git(repo, "add", "other.txt")
+            git(repo, "commit", "-m", "another task finished first")
+        return apply(prepared)
+
+    monkeypatch.setattr(point, "apply_prepared", competing_apply)
+    result = await check_and_apply(point, ApplySpec(mode="auto", checks=[CHECK_MADE]))
+    assert result["status"] == "applied"
+    assert len(calls) == 2 and calls[0] != calls[1]
+    assert (repo / "other.txt").read_text() == "another task"
+
+
+def test_cli_uses_the_same_automatic_verification_before_touching_the_project(tmp_path):
+    import json
+
+    from typer.testing import CliRunner
+
+    from poieo.cli import app
+
+    repo, _ = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    result = CliRunner().invoke(app, ["run", str(tmp_path / "cards" / "chores.yaml"),
+        "--binding", str(tmp_path / "b.yaml"), "--json"])
+    assert result.exit_code == 1
+    record = json.loads(result.stdout)
+    assert record["application"]["status"] == "blocked"
     assert not (repo / "made.txt").exists()
