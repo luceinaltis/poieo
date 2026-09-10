@@ -47,7 +47,7 @@ scope: [global]                 # global, task ids, or project path prefixes
 anchors: [src/poieo/card.py]   # path or path::symbol, never line numbers
 source: [<run-id>]             # records that taught it; empty means a person
 valid_from: 2026-08-24
-superseded_by: replacement
+superseded_by: replacement     # the entry that replaces it, or a sentence saying why nothing does
 links:
   depends_on: [another-entry]
   contradicts: [disputed-entry]
@@ -62,10 +62,13 @@ view, which calls the same doors over HTTP; the person's entry
 door additionally requires typed targets and anchored files to exist now,
 seals anchors, and keeps an entry's existing metadata when a rewrite says
 nothing new about it. A replacement named by `set_aside` must exist and differ
-from the entry. Setting an entry aside marks `superseded_by`; it does not delete
-or rewrite the body. Startup validation requires typed targets to exist and
-sealed paths to be anchors. Free-form `[[mentions]]` may name an entry that has
-not been written yet.
+from the entry, or a sentence saying why nothing replaces it: a name-shaped value
+is a claim about another entry, a sentence is not. Setting an entry aside marks
+`superseded_by`; it does not delete or rewrite the body, and `put_back` clears the
+mark again. Keeping an entry with no new body records `looked` and reseals its
+anchors, which is the gesture that clears a second look. Startup validation
+requires typed targets to exist and sealed paths to be anchors. Free-form
+`[[mentions]]` may name an entry that has not been written yet.
 
 ## Recall
 

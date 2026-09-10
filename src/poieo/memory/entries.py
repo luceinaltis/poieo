@@ -135,7 +135,10 @@ class _Frontmatter(BaseModel):
     source: list[str] = Field(default_factory=list)
     # Event time only; the history says when every line was written.
     valid_from: date | None = None
-    # Set this instead of deleting: the row stays, recall moves on.
+    # Set this instead of deleting: the row stays, recall moves on. The
+    # entry that replaces it, or -- when nothing does -- a sentence saying
+    # why. A name-shaped value is a claim about another entry and must
+    # name one; a sentence is not.
     superseded_by: str | None = None
     links: _Links = Field(default_factory=_Links)
     # Anchor path -> digest of the content the entry was written against.
@@ -464,6 +467,7 @@ def write_entry(
     matter: _Frontmatter | None = None,
     *,
     writer: str = "person",
+    did: str = "wrote",
 ) -> Entry:
     """Write one entry, and the line of history that says so.
 
@@ -516,7 +520,7 @@ def write_entry(
             + [(slug, "depends_on", t) for t in matter.links.depends_on]
             + [(slug, "contradicts", t) for t in matter.links.contradicts],
         )
-        _record(con, writer, "wrote", slug, before, {"body": body})
+        _record(con, writer, did, slug, before, {"body": body})
 
     return Entry(slug=slug, body=body, matter=matter, updated_at=datetime.fromisoformat(now), mentions=_mentions(body))
 
@@ -524,17 +528,27 @@ def write_entry(
 def set_aside(project_dir: Path, slug: str, because: str, *, writer: str = "person") -> None:
     """Mark an entry superseded. The body stays exactly what its author wrote:
     setting aside is the strongest thing a pass may do to an existing entry,
-    and the history is what makes it reversible."""
+    and the history is what makes it reversible.
+
+    ``because`` is the entry that replaces it or, when nothing does, a
+    sentence saying why. A name-shaped value must name an entry -- the same
+    rule the load applies, applied here so a typo cannot wait for 3am. The
+    pass settles its replacements before calling and never passes a sentence.
+    """
+    because = because.strip()
+    if not because:
+        raise SpecError(f"'{slug}': say what replaces it, or why it no longer holds")
     if because == slug:
         raise SpecError(f"'{slug}' cannot be set aside for itself")
     with open_memory(project_dir) as con:
         row = con.execute("SELECT superseded_by FROM entries WHERE slug = ?", (slug,)).fetchone()
         if row is None:
             raise SpecError(f"no entry called '{slug}'")
-        # The same rule the load applies, applied here, so a typo cannot
-        # wait for 3am. The pass settles its replacements before calling.
-        if con.execute("SELECT 1 FROM entries WHERE slug = ?", (because,)).fetchone() is None:
-            raise SpecError(f"'{slug}' cannot be set aside for '{because}': no such entry")
+        if SLUG.match(because) and con.execute("SELECT 1 FROM entries WHERE slug = ?", (because,)).fetchone() is None:
+            raise SpecError(
+                f"'{slug}' cannot be set aside for '{because}': no such entry. "
+                "To set it aside with nothing replacing it, say why in a sentence"
+            )
         con.execute(
             "UPDATE entries SET superseded_by = ?, updated_at = ? WHERE slug = ?",
             (because, _now(), slug),
@@ -542,10 +556,22 @@ def set_aside(project_dir: Path, slug: str, because: str, *, writer: str = "pers
         _record(con, writer, "set aside", slug, {"superseded_by": row["superseded_by"]}, {"superseded_by": because})
 
 
+def put_back(project_dir: Path, slug: str, *, writer: str = "person") -> None:
+    """Undo a set-aside: the entry stands again, and the history says so."""
+    with open_memory(project_dir) as con:
+        row = con.execute("SELECT superseded_by FROM entries WHERE slug = ?", (slug,)).fetchone()
+        if row is None:
+            raise SpecError(f"no entry called '{slug}'")
+        if row["superseded_by"] is None:
+            raise SpecError(f"'{slug}' is not set aside")
+        con.execute("UPDATE entries SET superseded_by = NULL, updated_at = ? WHERE slug = ?", (_now(), slug))
+        _record(con, writer, "put back", slug, {"superseded_by": row["superseded_by"]}, {"superseded_by": None})
+
+
 def keep_entry(
     project_dir: Path,
     slug: str,
-    body: str,
+    body: str | None = None,
     matter: _Frontmatter | None = None,
 ) -> Entry:
     """A person's entry, checked now the way the daemon checks at load.
@@ -555,11 +581,20 @@ def keep_entry(
     rather than found at 3am. Anchors must name a file that exists and are
     sealed against it, as the pass seals its own. Rewriting an entry without
     saying anything about it keeps what it already said about itself.
+
+    No body at all means "I looked, and it still holds": the words stay, the
+    anchors are sealed against their files as they are now, and the history
+    says ``looked`` -- the gesture that clears a second look.
     """
     if not keeps_memory(project_dir):
         raise SpecError(f"{layout_for(project_dir).longterm()}: this project keeps no long memory")
+    existing = entry_named(project_dir, slug)
+    looked = body is None and matter is None
+    if body is None:
+        if existing is None:
+            raise SpecError(f"no entry called '{slug}' to keep as it is")
+        body = existing.body
     if matter is None:
-        existing = entry_named(project_dir, slug)
         matter = existing.matter if existing is not None else _Frontmatter()
     known = {entry.slug for entry in readable_entries(project_dir)}
     for kind, targets in (("depends_on", matter.links.depends_on), ("contradicts", matter.links.contradicts)):
@@ -582,7 +617,7 @@ def keep_entry(
         else:
             sealed[part] = name
     matter = matter.model_copy(update={"sealed": sealed})
-    return write_entry(project_dir, slug, body, matter, writer="person")
+    return write_entry(project_dir, slug, body, matter, writer="person", did="looked" if looked else "wrote")
 
 
 def write_page(project_dir: Path, text: str, *, writer: str = "person") -> None:
@@ -624,7 +659,7 @@ def check_memory(project_dir: Path) -> None:
         claims = [("depends_on", target) for target in entry.matter.links.depends_on] + [
             ("contradicts", target) for target in entry.matter.links.contradicts
         ]
-        if entry.matter.superseded_by is not None:
+        if entry.matter.superseded_by is not None and SLUG.match(entry.matter.superseded_by):
             claims.append(("superseded_by", entry.matter.superseded_by))
         for kind, target in claims:
             if target not in known:

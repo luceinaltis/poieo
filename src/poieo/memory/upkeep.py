@@ -72,7 +72,7 @@ def memory_report(project_dir: Path) -> dict[str, Any] | None:
         "set_aside": len(entries) - len(standing),
         "lookup": "fast" if fts_available() else "one piece at a time",
         "disagreements": disagreements,
-        "second_look": [reason for _, reason in doubts(project_dir, entries)],
+        "second_look": [{"slug": slug, "reason": reason} for slug, reason in doubts(project_dir, entries)],
         "accounting": accounting(project_dir, entries),
     }
 

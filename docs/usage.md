@@ -283,6 +283,8 @@ nothing. `poieo memory` is read-only; a person writes with three commands:
 poieo page --edit                                      # the rules every run reads
 poieo keep batch-cap "The api rejects batches over 50."  # one thing that stays true
 poieo set-aside old-cap --because batch-cap            # retire one for its replacement
+poieo set-aside old-cap --because "The cap was lifted."  # or for a reason; --put-back undoes it
+poieo keep batch-cap                                   # looked, still holds
 ```
 
 `keep` takes `--scope`, `--anchor`, `--leans-on`, and `--disagrees-with`; `page`

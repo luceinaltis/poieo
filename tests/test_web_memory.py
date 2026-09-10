@@ -131,7 +131,7 @@ def test_an_anchor_change_changes_the_overview_revision(tmp_path):
 
     assert response.status_code == 200
     assert response.headers["etag"] != first.headers["etag"]
-    assert any("guide.md" in reason for reason in response.json()["stats"]["second_look"])
+    assert any("guide.md" in item["reason"] for item in response.json()["stats"]["second_look"])
 
 
 def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
@@ -550,3 +550,66 @@ def test_the_overview_carries_recent_passes_and_a_new_pass_moves_the_revision(tm
     passes = response.json()["learning"]
     assert passes[0]["kept"] == ["windows-shell"]
     assert passes[0]["dropped"] == ["'bad slug': not a plain slug"]
+
+
+# -- upkeep from the board ----------------------------------------------------
+
+
+def test_an_entry_is_set_aside_for_a_reason_or_put_back_from_the_board(tmp_path):
+    from poieo.memory import entry_named
+
+    client = _client(tmp_path)
+    aside = client.post("/api/projects/board/memory/windows-shell/set-aside", json={"because": "Runs use bash now."})
+    assert aside.status_code == 200
+    assert entry_named(tmp_path, "windows-shell").matter.superseded_by == "Runs use bash now."
+
+    back = client.post("/api/projects/board/memory/windows-shell/put-back")
+    assert back.status_code == 200
+    assert entry_named(tmp_path, "windows-shell").matter.superseded_by is None
+    assert client.post("/api/projects/board/memory/windows-shell/put-back").status_code == 409
+    assert client.post("/api/projects/board/memory/nobody/put-back").status_code == 404
+
+
+def test_a_put_without_a_body_means_looked_and_it_still_holds(tmp_path):
+    client = _client(tmp_path)
+    response = client.put("/api/projects/board/memory/windows-shell", json={})
+
+    assert response.status_code == 200
+    history = client.get("/api/projects/board/memory/windows-shell").json()["history"]
+    assert history[0]["did"] == "looked"
+    assert client.put("/api/projects/board/memory/nobody", json={}).status_code == 409
+
+
+def test_the_overview_names_who_needs_a_second_look(tmp_path):
+    client = _client(tmp_path)
+    remember(tmp_path, "leaner", "---\nlinks:\n  depends_on: [command-env]\n---\nLeans on the env rule.")
+    client.post("/api/projects/board/memory/command-env/set-aside", json={"because": "Gone."})
+
+    stats = client.get("/api/projects/board/memory").json()["stats"]
+    assert stats["second_look"] == [{"slug": "leaner", "reason": "leaner leans on command-env, which is set aside"}]
+
+
+def test_a_task_can_be_asked_what_it_will_be_shown(tmp_path):
+    from conftest import card
+
+    from poieo.memory import write_page
+
+    (tmp_path / "models.yaml").write_text(_BINDING, encoding="utf-8")
+    (tmp_path / "work").mkdir()
+    card(tmp_path / "cards", "importer", "name: importer\nfolder: ../work\nprompt: review the api batches\n")
+    marker = tmp_path / "poieo.yaml"
+    marker.write_text("name: board\ntasks: cards\nbinding: models.yaml\n", encoding="utf-8")
+    start_memory(tmp_path)
+    write_page(tmp_path, "Never push to main.")
+    remember(tmp_path, "batch-cap", "The api rejects batches over 50.")
+    daemon = Daemon(load_config(marker), store=NullStore())
+    client = TestClient(create_app(daemon))
+
+    response = client.get("/api/projects/board/tasks/importer/memory")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["task"] == "importer"
+    assert "Never push to main." in body["block"]
+    assert "batches over 50" in body["block"]
+    assert client.get("/api/projects/board/tasks/nobody/memory").status_code == 404
