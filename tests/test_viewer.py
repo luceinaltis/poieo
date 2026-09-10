@@ -62,6 +62,34 @@ def test_prompt_text_is_escaped():
     assert "&lt;script&gt;" in page
 
 
+def test_agent_card_shows_the_ceilings_the_node_declares():
+    """workdir, tools, max_turns and deadline bound what a node may do; a card
+    that omits them draws a node with hands as one without."""
+    graph = GraphSpec.model_validate(
+        {
+            "name": "x",
+            "entry": "a",
+            "nodes": [
+                {
+                    "id": "a",
+                    "type": "agent",
+                    "prompt": "go",
+                    "workdir": "src/poieo",
+                    "tools": ["files", "shell"],
+                    "max_turns": 12,
+                    "deadline": 90,
+                }
+            ],
+        }
+    )
+    card = render_page([graph]).split('<article class="card agent"')[1]
+
+    assert "src/poieo" in card
+    assert "files, shell" in card
+    assert "max turns</span>12" in card
+    assert "90s" in card
+
+
 def test_fragment_mode_omits_the_document_shell_and_cdn():
     graph = load_graph(EXAMPLES / "tasks/support-triage.graph.yaml")
     page = render_page([graph], embed_mermaid_script=False, full_document=False)
