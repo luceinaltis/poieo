@@ -62,6 +62,26 @@ async def test_a_saved_condition_selects_the_step_in_an_actual_run(tmp_path):
     assert result.path == ["read", "choose", "finish"]
 
 
+async def test_command_output_can_be_tested_and_passed_to_the_next_step(tmp_path):
+    client, cards = _client(tmp_path)
+    steps = graph()
+    steps["nodes"][0] = {
+        "id": "read", "type": "command", "command": "echo ready", "output": {"as": "result"}, "next": "choose"
+    }
+    steps["nodes"][1]["branches"][0]["when"] = '"ready" in result.output'
+    steps["nodes"][2]["prompt"] = "Summarize {{ result.output }}"
+    answer = make_steps(client, steps, enabled=False)
+    assert answer.status_code == 200, answer.text
+    binding = load_binding(tmp_path / "b.yaml")
+    async with ProviderPool(binding) as pool:
+        result = await execute(
+            load_graph(cards / "review.graph.yaml"), binding, pool, NullStore(), workdir=tmp_path / "work"
+        )
+    assert result.status == "completed", result.error
+    assert result.path == ["read", "choose", "finish"]
+    assert "ready" in result.outputs["read"]["output"]
+
+
 @pytest.mark.parametrize(
     "change",
     [

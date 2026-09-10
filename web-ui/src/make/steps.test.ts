@@ -1,5 +1,10 @@
 import { expect, test } from "vitest"
-import { appendStep, graphOf, newStep, stepProblems } from "./steps"
+import { appendStep, graphOf, newStep, resultsFrom, stepProblems } from "./steps"
+
+test("a command offers the output field recorded by the runtime", () => {
+  const step = newStep([], "command", "echo ready")
+  expect(resultsFrom([step])).toContainEqual({ value: "step_1.output", label: "Step 1 — output" })
+})
 
 test("conditions cannot read an answer from a step the run may have skipped", () => {
   let steps = [newStep([], "agent", "draft")]

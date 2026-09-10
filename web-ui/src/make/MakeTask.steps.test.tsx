@@ -96,6 +96,18 @@ test("command success compares the numeric exit code, not the output text", asyn
   }), false)
 })
 
+test("inserting command output uses the field the runtime records", async () => {
+  await start()
+  await click("Add command")
+  fill('[aria-label="Command for Step 2"]', "echo ready")
+  await click("Add step")
+  await click("Insert result from Step 2")
+  await click("save without starting")
+  expect(createTask).toHaveBeenCalledWith("board", "review", "../work", expect.objectContaining({
+    nodes: expect.arrayContaining([expect.objectContaining({ id: "step_3", prompt: "{{ step_2.output }}" })]),
+  }), false)
+})
+
 test("a missing instruction blocks saving and explains which step needs it", async () => {
   await start()
   await click("Add step")
