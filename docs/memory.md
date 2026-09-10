@@ -140,7 +140,9 @@ indexes and caches may be updated.
 
 The harness writes one full record under `runs/results/<run-id>.json` for every
 card run. It includes status, outputs, summary, usage, and which entries were
-shown. A pending question is the one legitimate
+shown, and `prompt`, what the prompt was made of in characters: the page, the
+chosen entries, and the journal, each measured when the record is written. A
+pending question is the one legitimate
 late revision: its record is replaced after the fixed answer completes the run.
 Models have no tool for writing these records.
 
@@ -160,6 +162,13 @@ A person lands a page suggestion with `poieo page --accept`, which adds it as a
 line, or lets it go with `--dismiss`, which rewrites the page unchanged: the
 same look-then-touch gesture that already hides a suggestion once the page is
 edited after the pass.
+
+Every pass also records how big its question was (`prompt_chars`, and
+`prompt_tokens` when the endpoint counted) and the window the learner declared
+(`context`, null when the binding names none). The question grows with every
+entry, since a pass is shown all of them, so this size is the first thing a
+growing memory breaks; `learner_load` sizes the next question without asking
+anything, and the board and `poieo memory` show it.
 
 The bookmark advances only after a successful pass. A failed pass records its
 failure and rereads the same records next time. An empty proposal is valid.

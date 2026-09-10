@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .binding import BindingSpec
-from .errors import SpecError
+from .errors import BindingError, SpecError
 from .layout import layout_for
 from .memory import (
     Entry,
@@ -70,6 +70,12 @@ class PassResult:
     # never applied by anything but a person's editor.
     page: str | None = None
     let_go: list[str] = field(default_factory=list)
+    # How big the question was, and the window it faced: the first thing that
+    # breaks as a memory grows, so every pass writes it down. None where the
+    # endpoint or the binding did not say.
+    prompt_chars: int | None = None
+    prompt_tokens: int | None = None
+    context: int | None = None
 
 
 async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> PassResult | None:
@@ -93,20 +99,19 @@ async def learn(project_dir: Path, binding: BindingSpec, pool: ProviderPool) -> 
     )
 
     resolved = binding.resolve(LEARNER_ROLE)
+    question = _prompt(read_page(project_dir), entries, records, doubtful)
+    result.prompt_chars = len(question)
+    result.context = resolved.context
     request = LLMRequest(
         model=resolved.model,
-        messages=[
-            {
-                "role": "user",
-                "content": _prompt(read_page(project_dir), entries, records, doubtful),
-            }
-        ],
+        messages=[{"role": "user", "content": question}],
         system=None,
         params=dict(resolved.params),
         role=LEARNER_ROLE,
     )
     try:
         response = await pool.get(resolved.provider_name).complete(request)
+        result.prompt_tokens = response.usage.input_tokens or None
         data = _parse(response.text)
     except Exception as exc:
         # One attempt per pass; the next pass is the retry, on the same
@@ -483,6 +488,26 @@ def settle_suggestion(project_dir: Path, accept: bool) -> str:
 # How many passes a reader is shown. A pass is one line a night, so this is
 # about a working week -- enough to see a run of failures, not the archive.
 RECENT_PASSES = 5
+
+
+def learner_load(project_dir: Path, binding: BindingSpec | None) -> dict[str, Any]:
+    """How big the next pass's question would be, and the window it will face.
+
+    Sized without asking anything: the question is rebuilt from the page and
+    every entry, as a pass would build it, with no records. The window is what
+    the binding declares for the learner; None when it declares nothing or the
+    role cannot resolve, and a reader shows the size alone.
+    """
+    entries = readable_entries(project_dir)
+    question = _prompt(read_page(project_dir), entries, [], doubts(project_dir, entries))
+    model = context = None
+    if binding is not None:
+        try:
+            resolved = binding.resolve(LEARNER_ROLE)
+            model, context = resolved.ref, resolved.context
+        except BindingError:
+            pass
+    return {"prompt_chars": len(question), "entries": len(entries), "model": model, "context": context}
 
 
 def recent_passes(project_dir: Path, limit: int = RECENT_PASSES) -> list[dict[str, Any]]:

@@ -792,7 +792,63 @@ def test_an_older_pass_line_reads_with_the_full_shape(tmp_path):
             "dropped": [],
             "error": None,
             "page": None,
+            "prompt_chars": None,
+            "prompt_tokens": None,
+            "context": None,
             "let_go": [],
         }
     ]
     assert recent_passes(tmp_path / "nowhere") == []
+
+
+# -- how big the question is --------------------------------------------------
+
+
+async def test_a_pass_records_how_big_its_question_was_and_the_window_it_faced(tmp_path):
+    """The size of the learner's question is the first thing that breaks as a
+    memory grows, so every pass writes it down beside what it did."""
+    project = _project(tmp_path)
+    _entry(project, "batch-cap", "Batches stop at 50.")
+    _episode(project, "r1")
+    binding = BindingSpec.model_validate(
+        {
+            "name": "test",
+            "providers": {"fake": {"type": "mock", "options": {"responses": {"learner": _proposal()}}}},
+            "default": {"provider": "fake", "model": "mock-model", "context": 8_000},
+        }
+    )
+    async with ProviderPool(binding) as pool:
+        result = await learn(project, binding, pool)
+
+    assert result.prompt_chars > 0
+    assert result.prompt_tokens > 0
+    assert result.context == 8_000
+    line = learning.recent_passes(project)[0]
+    assert (line["prompt_chars"], line["prompt_tokens"], line["context"]) == (
+        result.prompt_chars,
+        result.prompt_tokens,
+        8_000,
+    )
+
+
+async def test_the_next_question_can_be_sized_without_asking(tmp_path):
+    project = _project(tmp_path)
+    _entry(project, "batch-cap", "Batches stop at 50.")
+    binding = BindingSpec.model_validate(
+        {
+            "name": "test",
+            "providers": {"fake": {"type": "mock"}},
+            "default": {"provider": "fake", "model": "mock-model", "context": 8_000},
+        }
+    )
+
+    load = learning.learner_load(project, binding)
+
+    assert load["entries"] == 1
+    assert load["prompt_chars"] == len(learning._prompt(read_page(project), readable_entries(project), [], []))
+    assert load["model"] == "fake/mock-model"
+    assert load["context"] == 8_000
+    # No binding, or one whose learner cannot resolve, still sizes the question.
+    bare = learning.learner_load(project, None)
+    assert bare["prompt_chars"] == load["prompt_chars"]
+    assert bare["model"] is None and bare["context"] is None

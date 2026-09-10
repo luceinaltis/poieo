@@ -559,3 +559,28 @@ def test_a_record_is_not_rewritten_by_default(tmp_path):
 
     kept = json.loads(_record_file(task, _result()).read_text(encoding="utf-8"))
     assert kept["status"] == "completed"
+
+
+def test_an_episode_records_how_much_of_the_prompt_was_page_memory_and_journal(tmp_path):
+    from poieo.card import append_journal
+    from poieo.memory import read_page
+
+    task, result = _task(tmp_path), _result()
+    project = _remember(tmp_path)
+    _learn(tmp_path, "tidy-order", "Tidy the project one file at a time.")
+    append_journal(task.journal_path(), "you", "focus on the failing tests", title=task.name)
+
+    record_run(task, result)
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
+    assert data["prompt"]["page_chars"] == len(read_page(project))
+    assert data["prompt"]["memory_chars"] == len("Tidy the project one file at a time.")
+    assert data["prompt"]["journal_chars"] > 0
+
+
+def test_a_memoryless_episode_still_measures_its_journal(tmp_path):
+    task, result = _task(tmp_path), _result()
+    record_run(task, result)
+
+    data = json.loads(_record_file(task, result).read_text(encoding="utf-8"))
+    # The journal is never empty in a prompt: an unwritten one reads "nothing yet".
+    assert data["prompt"] == {"page_chars": 0, "memory_chars": 0, "journal_chars": len("nothing yet")}

@@ -44,6 +44,10 @@ export interface LearningPass {
   dropped: string[]
   error: string | null
   page: string | null
+  /** How big the question was and the window it faced; null where nobody said. */
+  prompt_chars?: number | null
+  prompt_tokens?: number | null
+  context?: number | null
   let_go: string[]
 }
 
@@ -70,6 +74,13 @@ export interface MemoryOverview {
   graph: MemoryGraph
   /** The last few passes, newest first. Absent from an older daemon. */
   learning?: LearningPass[]
+  /** The learner's next question, sized now, against the window it will face. */
+  learner?: {
+    prompt_chars: number
+    entries: number
+    model: string | null
+    context: number | null
+  } | null
 }
 
 export interface MemoryResult {
