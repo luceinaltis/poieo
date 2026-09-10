@@ -618,6 +618,19 @@ def test_accept_through_a_run_stops_there(tmp_path):
     assert not (repo / "two.py").exists()
 
 
+def test_a_stale_acceptance_is_a_refusal(tmp_path, monkeypatch):
+    daemon, repo, _ = daemon_with_two_changes(tmp_path)
+    point = daemon.runners[0].workspace
+    monkeypatch.setattr(point, "accept", lambda _target: {"stale": "the project changed during verification"})
+    client = TestClient(create_app(daemon))
+
+    response = client.post(f"/api/tasks/{daemon.config.display_name}/chores/accept", json={})
+
+    assert response.status_code == 409
+    assert "stale" in response.json()
+    assert not (repo / "one.py").exists()
+
+
 def test_accept_refuses_a_dirty_checkout(tmp_path):
     daemon, repo, _ = daemon_with_two_changes(tmp_path)
     before = head(repo, "main")

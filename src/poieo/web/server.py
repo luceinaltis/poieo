@@ -1730,7 +1730,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except PoieoError as exc:
             return JSONResponse({"error": str(exc)}, status_code=409)
 
-        refused = "dirty" in outcome or "conflict" in outcome
+        refused = ("accepted" if action == "accept" else "discarded") not in outcome
         return JSONResponse(outcome, status_code=409 if refused else 200)
 
     async def flow_accept(request: Request) -> JSONResponse:
