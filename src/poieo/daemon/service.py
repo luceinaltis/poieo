@@ -21,7 +21,7 @@ from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
 from ..learn import learn as learn_pass
-from ..memory import keeps_memory
+from ..memory import keeps_memory, write_result
 from ..memory.results import revise_application
 from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
@@ -436,6 +436,8 @@ class TaskRunner:
             return
         if interrupted.is_set():
             result.status, result.error = "aborted", "cancelled while recording the change"
+            if change is not None:
+                await finish_write(asyncio.to_thread(self.workspace.park_failed, change, result.run_id))
         if change is not None:
             result.change = change.as_dict()
             self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
@@ -1075,12 +1077,21 @@ class TaskRunner:
         # for something that has already been decided. The index is
         # append-only; another row for the same run is how it is revised.
         self.store.record_summary(result.summary())
-        self._remember(result, replace=True)
         if (result.asked or {}).get("node") == "apply_changes":
+            card = self.config.cards_by_task.get(self.name)
+            if card:
+                write_result(card, result, replace=True)
+                try:
+                    append_journal(
+                        card.journal_path(), "change", f"{choice} requested for {result.run_id}", title=card.name
+                    )
+                except OSError as exc:
+                    log.warning("could not record the application answer: %s", exc)
             if choice == "retry":
                 self.resume()
                 self.run_now()
             return True
+        self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:
             self.handoff(self, result, self._asking_depth)
         return True
