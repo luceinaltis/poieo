@@ -925,6 +925,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return False
         if not isinstance(data, dict):
             return False
+        policy = data.get("apply") or {}
+        if isinstance(policy, dict) and any("\n" in str(command) for command in policy.get("checks") or []):
+            return False
         return set(data) <= {"name", "folder", "prompt", "enabled", "apply"}
 
     def _switch(text: str) -> bool:

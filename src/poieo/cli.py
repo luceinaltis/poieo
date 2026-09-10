@@ -666,7 +666,8 @@ def run(
         else {}
     )
     card_input = card_payload(task) if task is not None else {}
-    payload = {**declared, **card_input, **_parse_input(input_json, set_)}
+    overrides = _parse_input(input_json, set_)
+    payload = {**declared, **card_input, **overrides}
     if store is None:
         # Asked from the card's own folder, not the cwd: a card run by hand and
         # the same card run by the daemon write one history, not two.
@@ -700,7 +701,7 @@ def run(
                 config.cards_by_task = {task.slug: task}
                 loaded = LoadedTask(spec=task_spec, graph=graph, binding=spec, binding_key=str(binding))
                 driver = TaskRunner(loaded, config, pool, run_store, asyncio.Event(), tool_context=tool_context)
-                return await driver.run_once(payload)
+                return await driver.run_once(lambda: {**declared, **card_payload(task), **overrides})
             return await execute(
                 graph,
                 spec,

@@ -52,11 +52,11 @@ export function ApplySettings({ value, onChange, disabled = false, keepsCopies =
             Review before applying
           </label>
           <label className="apply-choice">
-            <input type="radio" name={id} value="auto" checked={value.mode === "auto"} disabled={!keepsCopies}
+            <input type="radio" name={id} value="auto" checked={value.mode === "auto"}
               onChange={() => onChange({ ...value, mode: "auto" })} />
             Apply automatically
           </label>
-          {!keepsCopies ? <p>This folder needs Git before changes can be applied automatically.</p> : null}
+          {!keepsCopies ? <p>Automatic application needs Git in the selected task folder. This is checked when you save.</p> : null}
           <p>{value.mode === "auto"
             ? "Apply within the allowed files when every check passes. If work cannot be combined, this task pauses for you."
             : "Keep each change for you to accept. The task continues working on its private copy."}</p>

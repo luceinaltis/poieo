@@ -103,8 +103,11 @@ forge the sender, wake the recipient, or send outside the fixed roster. See
 
 The board's optional direction is stored before acknowledging it. Notes arriving
 during a run wait under `runs/notes/<task>/`, then join the journal after that run's
-bookmark. A restart delivers queued notes before the next input is read. Saving
-direction never starts a run or requires the user to approve anything. Delivery
+bookmark. A restart delivers queued notes before the next input is read.
+All delivery, input construction and the closing journal entry use the same task
+ownership as file changes, including command-line runs. Idle board requests only
+queue notes, so they cannot mark direction read by a separate active process.
+Saving direction never starts a run or requires the user to approve anything. Delivery
 appends before removing its queue file, so recovery may repeat a note but cannot
 silently lose it. The board accepts up to 4000 characters per note.
 
