@@ -23,13 +23,13 @@ CHECK_MADE = 'python -c "from pathlib import Path; assert Path(\'made.txt\').rea
 
 
 def test_automatic_application_requires_a_real_verification_command(tmp_path):
-    with pytest.raises(SpecError, match="verification"):
+    with pytest.raises(SpecError, match="needs at least one verification command"):
         policy_config(tmp_path, {"mode": "auto"})
 
 
 @pytest.mark.parametrize("path", ["../outside", "/outside", "C:/outside", ".git/config", "docs/../../outside"])
 def test_allowed_paths_cannot_escape_the_task_folder(tmp_path, path):
-    with pytest.raises(SpecError, match="path"):
+    with pytest.raises(SpecError, match="allowed path must"):
         policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE], "paths": [path]})
 
 
