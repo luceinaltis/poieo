@@ -18,6 +18,51 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch):
+    from conftest import until
+
+    from poieo.daemon import Daemon
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+    driver = Daemon(config)._runners()[0]
+    entered, release = threading.Event(), threading.Event()
+    prepare = driver.workspace.prepare
+
+    def delayed():
+        entered.set()
+        assert release.wait(10)
+        return prepare()
+
+    monkeypatch.setattr(driver.workspace, "prepare", delayed)
+    running = asyncio.create_task(driver.run_once({}))
+    await until(entered.is_set, "prepare started")
+    running.cancel()
+    release.set()
+    await asyncio.gather(running, return_exceptions=True)
+    assert not (repo / "made.txt").exists()
+    assert not (driver.workspace.worktree / "made.txt").exists()
+
+
+def test_a_redirected_private_copy_cannot_reset_the_users_work(tmp_path):
+    from poieo.workspace import WorkspaceError
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    point.prepare()
+    (repo / "README.md").write_text("unsaved work")
+    point.worktree.rename(point.worktrees / "old-copy")
+    if os.name == "nt":
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(point.worktree), str(repo)], check=True, capture_output=True)
+    else:
+        point.worktree.symlink_to(repo, target_is_directory=True)
+    try:
+        with pytest.raises(WorkspaceError, match="private copy"):
+            point.prepare()
+        assert (repo / "README.md").read_text() == "unsaved work"
+    finally:
+        point.worktree.rmdir() if os.name == "nt" else point.worktree.unlink()
+
+
 @pytest.mark.parametrize("pending", [False, True])
 def test_task_subfolder_cannot_redirect_work_outside_the_private_copy(tmp_path, pending):
     from poieo.workspace import WorkspaceError
