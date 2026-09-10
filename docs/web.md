@@ -216,16 +216,24 @@ result reads that could occur before their writer. Server validation remains
 authoritative. Failed saves retain the whole draft; successful saves clear it.
 This form creates new tasks; editing existing graphs remains file-based.
 
-The board shows a compact graph on each task card. **View steps** opens a native
-dialog outside the board's pan/zoom transform, with an independent scrollable
-canvas, zoom controls, fit, and a 100% reading size. Nodes use authored
-descriptions, an entry marker, model assignments and explicit endings. Dagre
-lays both views out from left to right, reserves space for wrapped conditions,
-and retains a separate edge for each branch even when destinations coincide.
+Each task card shows its step connections at reading size. Every step names
+where it comes **From** and where it goes **Next**, with **Start** and **End run**
+spelled out. These are execution connections, not data inputs or result values.
+Conditions keep their order and destinations, even when two choose the same
+step. Return paths name the earlier step. Names and conditions wrap within the
+card; repeated descriptions include IDs to distinguish their destinations.
+Steps appear once in entry-first reading order, with a vertically scrollable
+region for long tasks. Scrolling that region does not zoom the board.
+
+**View steps** opens a native dialog outside the board's pan/zoom transform,
+with an independent scrollable canvas, zoom controls, fit, and a 100% reading
+size. Nodes use authored descriptions, an entry marker, model assignments and
+explicit endings. Dagre lays this graph out from left to right, reserves space
+for wrapped conditions, and retains a separate edge for each branch.
 The router's otherwise path is always drawn, including an omitted default that
 ends the run; return paths retain their arrows. Conditional paths are amber.
-Running-step updates highlight both views without rebuilding the dialog or
-resetting its zoom and scroll. Removing the task closes the dialog, and closing
+Running-step updates highlight both views without rebuilding their steps or
+resetting their scroll or the chosen zoom. Removing the task closes the dialog, and closing
 restores focus to its opener. Narrow screens use the full viewport.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently

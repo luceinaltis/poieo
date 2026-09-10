@@ -342,168 +342,118 @@
   }
 }
 
-/* The steps, as the graph they are: `dagre` places them and routes the lines,
-   and each pill is put on its own centre. It was a wrapping CSS grid with an
-   arrow drawn before each pill -- which read as a sequence, but left a
-   router's arms *implied* by which row they landed on and drew no way back
-   out of a loop at all. */
+/* Card-width connections keep both ends readable without shrinking the type. */
 .basic-inside {
-  position: relative;
-  /* **A recessed well, not the card's own face.** The card's border already
-     means something here -- an arrow crossing it is a new run -- so the graph
-     should read as held by it rather than floating on it. It is also what
-     gives a wire something to be light against: a stroke on the card measured
-     1.83 against its ground and a stroke on this measures 3.82. */
   background: var(--well);
   border: 1px solid var(--rule);
   border-radius: 6px;
-  padding: 8px 10px;
   margin: 1px 0 2px;
-  /* A long run is wider than a border. It scrolls rather than spilling across
-     the board -- and rather than being clipped, which would hide steps while
-     looking complete. */
-  overflow-x: auto;
-  overflow-y: hidden;
+  padding: 4px 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: var(--rule) transparent;
+  scrollbar-color: var(--line) var(--well);
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  user-select: text;
+  cursor: auto;
 }
 
-/* Laid out, not overlaid: an overlay bar fades away, and a run that continues
-   past the border would then look like a run that ends there. */
-.basic-inside::-webkit-scrollbar {
-  height: 5px;
-}
-
-.basic-inside::-webkit-scrollbar-thumb {
-  background: var(--rule);
-  border-radius: 3px;
-}
-
-/* Everything the layout placed, moved as one. A graph wider than its border is
-   scaled here rather than per pill, so the lines and the steps stay together. */
-.basic-steps-group {
-  position: relative;
-  transform-origin: 0 0;
-}
-
-/* Under the pills, and never in the way of a pointer. */
-.basic-steps {
-  position: absolute;
-  left: 0;
-  top: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.basic-step-wire {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 1.3;
-}
-
-.basic-step-tip {
-  fill: var(--line);
-}
-
-/* The word that chooses an arm. Haloed with the border's own background so
-   the line runs up to it rather than through it. */
-.basic-step-word {
-  fill: var(--ember);
-  font-family: var(--mono);
-  /* Was 9.5px, which is not a size anybody reads -- it was chosen to fit a
-     gap, and the gap is dagre's to widen once it is told the true width. */
-  font-size: 11px;
-  font-weight: 500;
-  text-anchor: middle;
-  paint-order: stroke;
-  /* Haloed with the well it sits on, so the line runs up to the word and stops
-     rather than through it. */
-  stroke: var(--well);
-  stroke-width: 3.5px;
-}
-
-/* Where a run can end. One per arm: two different ways of ending are two
-   different facts, and sharing a mark would say there is one. */
-/* Where a run can end. Filled with the well and ringed, so it reads as a
-   stopper on the line rather than a speck the line happens to pass. */
-.basic-step-stop {
-  fill: var(--well);
-  stroke: var(--line);
-  stroke-width: 1.4;
+.basic-inside:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
 }
 
 .basic-node {
-  align-items: center;
-  background: var(--raised);
-  border: 1px solid var(--rule);
-  border-radius: 5px;
   color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.basic-node + .basic-node {
+  border-top: 1px solid var(--rule);
+}
+
+.basic-node-head {
   display: flex;
-  font-size: 0.82em;
-  gap: 6px;
-  padding: 4px 9px;
-  /* Placed by its own top-left, worked out from the centre dagre answered
-     with: a `translate` would move the paint and leave the layout box behind,
-     and the well would scroll for room nothing is using. */
-  position: absolute;
-  white-space: nowrap;
-}
-
-/* A step the run can stop on. Dashed for the same reason the terminal beside
-   a branch is hollow: an ending is drawn, never left as an absence. */
-.basic-node[data-ends="true"] {
-  border-style: dashed;
-}
-
-/* Which kind of step this is, in the one place a reader is already looking.
-   A shape rather than a word: there are four kinds and they recur on every
-   card, so the name would be read a hundred times to be learned once. The
-   `title` says it in words for anyone who wants them. */
-.basic-node::after {
-  content: "";
-  order: -1;
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  background: var(--line);
-}
-
-/* the model does it */
-.basic-node[data-type="agent"]::after { border-radius: 50%; }
-/* the machine does it, exactly as written */
-.basic-node[data-type="command"]::after { border-radius: 1px; }
-/* nobody does it -- it only decides */
-.basic-node[data-type="router"]::after { transform: rotate(45deg); }
-/* you do it */
-.basic-node[data-type="confirm"]::after {
-  border-radius: 50%;
-  background: none;
-  box-shadow: inset 0 0 0 1.5px var(--ember);
-}
-
-/* What actually runs this step, when the task's steps do not agree. Dimmer
-   than the id: the reader is looking for the step and then reading the model,
-   not the other way round. */
-.basic-node-model {
-  color: var(--dim);
-  font-size: 0.9em;
-  max-width: 130px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 7px;
+  margin: 3px 0 3px 10px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--line);
+  background: var(--raised);
+  border-radius: 0 4px 4px 0;
 }
 
 .basic-node-name {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14px;
 }
 
-/* Which steps can reach the folder. Brighter than the model rather than
-   dimmer, and that is the whole point of the colour: the model is a detail the
-   reader goes looking for, and this is one they need to find without looking. */
+.basic-node-model {
+  color: var(--dim);
+  font-size: 12px;
+}
+
 .basic-node-hands {
   color: var(--ember);
-  font-size: 0.9em;
+  font-size: 12px;
+}
+
+.basic-step-input,
+.basic-step-output {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 2px 7px;
+  align-items: baseline;
+}
+
+.basic-step-output + .basic-step-output {
+  margin-top: 7px;
+}
+
+.basic-step-label {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.basic-step-source {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.basic-step-destination {
+  position: relative;
+  padding-left: 17px;
+}
+
+.basic-step-destination::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--ember);
+}
+
+.basic-step-destination[data-end="true"] {
+  font-weight: 600;
+}
+
+.basic-step-output[data-conditional="true"] .basic-step-label {
+  grid-column: 1 / -1;
+  color: var(--ember);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+}
+
+.basic-step-output[data-conditional="true"] .basic-step-destination {
+  grid-column: 2;
 }
 
 /* The step a run is on **right now**. The one piece of motion on the board, on
@@ -511,12 +461,12 @@
    before anything is read. The keyframe is the status dot's, which already
    stands still for a reader who asked for that. */
 @media (prefers-reduced-motion: no-preference) {
-  .basic-node[data-here="true"] {
+  .basic-node[data-here="true"] .basic-node-head {
     animation: basic-alive 1.6s ease-in-out infinite;
   }
 }
 
-.basic-node[data-here="true"] {
+.basic-node[data-here="true"] .basic-node-head {
   background: var(--raised);
   border-color: var(--ember);
   color: var(--text);

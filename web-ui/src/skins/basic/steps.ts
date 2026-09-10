@@ -3,7 +3,7 @@
  *
  * Dagre ranks steps, separates branches, and routes return paths around nodes.
  * Each condition retains its own edge, including paths that end the run.
- * The board overview and the full reading view share that topology.
+ * The card connections and the full reading view share the same ways out.
  */
 
 import dagre from "@dagrejs/dagre"
@@ -60,7 +60,7 @@ const stopId = (from: string, index: number): string => `${from} stop${index}`
  * `default` does: it is the arm taken when no condition matched, and a reader
  * who cannot tell it from a chosen one is reading a different graph.
  */
-function waysOut(node: NodeShape): { to: string | null; label: string; fallback: boolean }[] {
+export function waysOut(node: NodeShape): { to: string | null; label: string; fallback: boolean }[] {
   const out: { to: string | null; label: string; fallback: boolean }[] = []
   if (node.next) out.push({ to: node.next, label: "", fallback: false })
   for (const branch of node.branches) out.push({ to: branch.to, label: branch.label, fallback: false })
