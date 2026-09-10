@@ -312,6 +312,25 @@ def _find_binding(
     return None, None
 
 
+def _run_isolation(task: "CardSpec | None", isolate: "str | None") -> "Isolation | None":
+    """Where this run's commands may go: what the card asked for, then the flag.
+
+    Unlike the binding chain above, the flag does not simply win. A card's
+    ``isolation:`` is a safety statement -- tools.md promises isolation never
+    silently falls back to the host -- so a card that opted into a container
+    keeps it whether or not the person running it by hand remembered
+    ``--isolate``. What the flag does is name an image: it boxes a run the card
+    left open, or points an already-boxed one somewhere else while keeping the
+    network and user settings, which the flag has no way to say.
+    """
+    wanted = task.isolation if task is not None else None
+    if isolate is None:
+        return wanted
+    if wanted is None:
+        return Isolation(image=isolate)
+    return wanted.model_copy(update={"image": isolate})
+
+
 def _project_file(named: "Path | None") -> Path:
     """The config to work from: the one the user named, or the project's.
 
@@ -645,11 +664,11 @@ def run(
     # A build cache for compiled scripts, in the project if there is one --
     # `LocalExecutor` falls back to the OS temp dir when there is not.
     here = find_project()
+    isolation = _run_isolation(task, isolate)
     tool_context = ToolContext(
-        isolation=Isolation(image=isolate) if isolate else None,
+        isolation=isolation,
         build_cache=(here.layout().cache() / "builds") if here else None,
     )
-    isolation = tool_context.isolation if tool_context else None
     if isolation is not None:
         # The daemon's preflight, for the same reason: better here than eight
         # turns in. No container is kept -- a one-shot run has no next run.

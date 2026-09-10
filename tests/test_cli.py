@@ -5,9 +5,13 @@ from conftest import EXAMPLES, at, card
 from test_workspace import make_repo
 from typer.testing import CliRunner
 
+from poieo import cli
 from poieo.cli import AFTER, BOARD, SETUP, app
 from poieo.graph import load_document
 from poieo.layout import layout_for
+from poieo.runtime.context import RunResult
+from poieo.tools import Isolation, make_executor
+from poieo.tools.docker import DockerExecutor
 
 runner = CliRunner()
 
@@ -650,6 +654,39 @@ def test_the_listing_never_names_the_machinery(tmp_path):
 # -- one-shot isolation, and the escape hatch --------------------------------
 
 
+def _boxed_run(monkeypatch, tmp_path):
+    """A card asking for a container, a docker that says yes, and a stood-in run.
+
+    The tests below are about the `ToolContext` `poieo run` builds, so `execute`
+    is replaced: running the graph for real would start the container that
+    context asks for. Returns the folder and a dict that holds the context once
+    the command has been invoked.
+    """
+    monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (True, ""))
+    monkeypatch.setattr("poieo.tools.docker.image_present", lambda image: True)
+    folder = _card(tmp_path, "isolation:\n  image: python:3.12-slim\n  network: bridge\n")
+    seen = {}
+
+    async def spy(*args, **kwargs):
+        seen["context"] = kwargs["tool_context"]
+        return RunResult(
+            run_id="r1",
+            task="boxed",
+            graph="boxed",
+            status="completed",
+            started_at="",
+            finished_at="",
+            steps=0,
+            path=[],
+            usage={"input_tokens": 0, "output_tokens": 0},
+            outputs={},
+            state={},
+        )
+
+    monkeypatch.setattr(cli, "execute", spy)
+    return folder, seen
+
+
 def test_run_isolate_preflights_before_the_first_model_call(tmp_path, monkeypatch):
     """A bad image must fail here, not eight turns into a run."""
     monkeypatch.setattr("poieo.tools.docker.docker_available", lambda: (False, "docker is not on PATH"))
@@ -689,6 +726,44 @@ def test_run_without_isolate_never_touches_docker(tmp_path, monkeypatch):
         ],
     )
     assert result.exit_code == 0
+
+
+def test_run_honors_card_isolation(tmp_path, monkeypatch):
+    """A card that asked for a container is not run on the host by a missing flag.
+
+    `--isolate` is the one-shot escape hatch, not the only way in: the card's
+    own `isolation:` is a safety statement the daemon already keeps, and a run
+    by hand must keep it too.
+    """
+    folder, seen = _boxed_run(monkeypatch, tmp_path)
+    result = runner.invoke(
+        app,
+        ["run", str(folder / "card.yaml"), "-b", str(EXAMPLES / "models/mock.yaml"), "--no-log"],
+    )
+    assert result.exit_code == 0
+    context = seen["context"]
+    assert context.isolation == Isolation(image="python:3.12-slim", network="bridge")
+    # Carrying the setting is half of it; the point is that the host is refused.
+    assert isinstance(make_executor(folder / "work", ["shell"], context), DockerExecutor)
+
+
+def test_run_isolate_overrides_the_image_the_card_named(tmp_path, monkeypatch):
+    """The flag redirects a boxed run; the settings it cannot name survive."""
+    folder, seen = _boxed_run(monkeypatch, tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(folder / "card.yaml"),
+            "-b",
+            str(EXAMPLES / "models/mock.yaml"),
+            "--no-log",
+            "--isolate",
+            "node:22-slim",
+        ],
+    )
+    assert result.exit_code == 0
+    assert seen["context"].isolation == Isolation(image="node:22-slim", network="bridge")
 
 
 def test_reset_says_the_folder_was_not_touched(tmp_path, monkeypatch):
