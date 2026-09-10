@@ -482,6 +482,15 @@
 .basic-node-model {
   color: var(--dim);
   font-size: 0.9em;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.basic-node-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Which steps can reach the folder. Brighter than the model rather than

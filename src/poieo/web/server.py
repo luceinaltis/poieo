@@ -398,11 +398,11 @@ def _model(task: Any, node: Any) -> str | None:
 
 
 def _shape(task: Any) -> dict[str, Any]:
-    """A graph's wiring: enough to draw it, and nothing else.
+    """A graph's wiring and authored descriptions for the board's step views.
 
     Not the whole GraphSpec, and not the whole binding: this rides on every
-    board paint to every browser watching, so a graph's prompts stay home and
-    only the bare model id crosses.
+    board paint to every browser watching. Prompts and system messages stay
+    home; model assignments include only the bare model id.
 
     Takes the task rather than the graph because a role resolves against a
     binding, and the binding hangs off the task.
@@ -414,6 +414,7 @@ def _shape(task: Any) -> dict[str, Any]:
             {
                 "id": node.id,
                 "type": node.type,
+                **({"description": node.description} if node.description else {}),
                 "next": node.next,
                 "default": node.default,
                 "branches": _branches(node.branches),

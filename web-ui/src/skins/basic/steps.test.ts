@@ -144,3 +144,43 @@ test("one step is a graph of one, not an empty box", () => {
   expect(laid.edges).toHaveLength(0)
   expect(laid.width).toBeGreaterThan(0)
 })
+
+test("different conditions that choose the same step remain separate paths", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", default: "work", branches: [
+      { to: "work", label: "approved" }, { to: "work", label: "needs review" },
+    ] }),
+    step("work"),
+  ] }, () => ({ width: 80, height: 24 }))
+
+  expect(laid.edges.map(edge => edge.label)).toEqual(["approved", "needs review", "default"])
+  expect(new Set(laid.edges.map(edge => JSON.stringify(edge.points))).size).toBe(3)
+})
+
+test("a router with no fallback draws the otherwise path to the end", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", branches: [{ to: "work", label: "approved" }] }),
+    step("work"),
+  ] }, () => ({ width: 80, height: 24 }))
+
+  expect(laid.edges).toEqual(expect.arrayContaining([
+    expect.objectContaining({ from: "gate", to: null, label: "default" }),
+  ]))
+})
+
+test("a condition named default keeps its authored label beside the otherwise path", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", default: "work", branches: [{ to: "work", label: "default" }] }),
+    step("work"),
+  ] }, () => ({ width: 208, height: 112 }), true)
+
+  expect(laid.edges.map(edge => edge.lines)).toEqual([["default"], ["Otherwise"]])
+})
+
+test("condition labels wrap at a space before splitting a result name", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", branches: [{ to: null, label: '"approved" in result.output' }] }),
+  ] }, () => ({ width: 208, height: 112 }), true)
+
+  expect(laid.edges[0].lines).toEqual(['"approved" in', "result.output"])
+})

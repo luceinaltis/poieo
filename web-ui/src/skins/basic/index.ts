@@ -22,7 +22,8 @@ import { zoom as d3zoom, zoomIdentity } from "d3-zoom"
 import type { D3ZoomEvent } from "d3-zoom"
 
 import { changedTasks } from "../changed"
-import { layOutSteps } from "./steps"
+import { layOutSteps, stepName } from "./steps"
+import { createGraphDialog, edgePath } from "./graph"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
@@ -45,6 +46,9 @@ interface Box {
   toggle: HTMLElement
   when: HTMLElement
   now: HTMLElement
+  graphHead: HTMLElement
+  graphCount: HTMLElement
+  viewSteps: HTMLElement
   inside: HTMLElement
   steps: HTMLElement
   said: HTMLElement
@@ -119,8 +123,9 @@ function describeWhen(taskState: TaskState): string {
   return `${taskState.trigger} · ${models.length === 1 ? models[0] : `${models.length} models`}`
 }
 
-function buildBox(task: string, callbacks: SkinCallbacks): Box {
+function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLElement) => void): Box {
   let inside: HTMLElement
+  let graphHead: HTMLElement
   const root = document.createElement("div")
   root.className = "basic-task"
   root.dataset.task = task
@@ -141,7 +146,7 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
   ;(toggle as HTMLButtonElement).type = "button"
   toggle.textContent = "▾"
 
-  return {
+  const box: Box = {
     root,
     toggle,
     when: element("div", "basic-when", root),
@@ -159,6 +164,9 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     // to the board with, and the graph is the answer to the next one.
     name,
     now: element("div", "basic-now", root),
+    graphHead: (graphHead = element("div", "basic-graph-head", root)),
+    graphCount: element("span", "", graphHead),
+    viewSteps: element("button", "basic-view-steps", graphHead),
     // Both, in order: the group is what a too-wide graph is scaled by, and it
     // has to be inside the part that scrolls when scaling has hit its floor.
     inside: (inside = element("div", "basic-inside", root)),
@@ -167,6 +175,10 @@ function buildBox(task: string, callbacks: SkinCallbacks): Box {
     tools: element("ul", "basic-tools", root),
     tally: element("div", "basic-tally", root),
   }
+  box.viewSteps.textContent = "View steps"
+  box.viewSteps.setAttribute("type", "button")
+  box.viewSteps.addEventListener("click", () => onView(box.viewSteps))
+  return box
 }
 
 /**
@@ -198,7 +210,8 @@ function describeNow(taskState: TaskState): string {
     return taskState.enabled ? "paused" : "switched off in its card"
   }
   if (taskState.status !== "running") return "waiting for its next turn"
-  const parts = [taskState.currentNode ?? "starting"]
+  const current = taskState.shape.nodes.find(node => node.id === taskState.currentNode)
+  const parts = [current ? stepName(current) : taskState.currentNode ?? "starting"]
   if (taskState.turn > 1) parts.push(`turn ${taskState.turn}`)
   return parts.join(" · ")
 }
@@ -275,7 +288,8 @@ function fillInside(box: Box, taskState: TaskState): void {
     pill.className = "basic-node"
     pill.dataset.node = spec.id
     pill.dataset.type = spec.type
-    pill.append(spec.id)
+    element("span", "basic-node-name", pill).textContent = stepName(spec)
+    pill.title = `${stepName(spec)} (${spec.id})`
     // A router has no model because it calls none, and the gap is itself
     // information: it is why branching is free.
     if (differ && spec.model) {
@@ -296,12 +310,13 @@ function fillInside(box: Box, taskState: TaskState): void {
     pills.set(spec.id, pill)
   }
 
+  box.steps.replaceChildren(...pills.values())
   const laid = layOutSteps(taskState.shape, (spec) => {
     const pill = pills.get(spec.id)
     // `offsetWidth` is zero where nothing lays anything out -- jsdom, and a
     // border not yet on the page. The estimate keeps the shape of the graph
     // right there rather than collapsing every step onto one point.
-    const width = pill?.offsetWidth || 22 + spec.id.length * 6.5 + (spec.tools.length ? 62 : 0)
+    const width = pill?.offsetWidth || 22 + Math.min(stepName(spec).length, 23) * 6.5 + (spec.tools.length ? 62 : 0)
     return { width, height: pill?.offsetHeight || 24 }
   })
 
@@ -312,7 +327,7 @@ function fillInside(box: Box, taskState: TaskState): void {
   for (const edge of laid.edges) {
     const line = document.createElementNS(SVG, "path")
     line.setAttribute("class", "basic-step-wire")
-    line.setAttribute("d", through(edge.points))
+    line.setAttribute("d", edgePath(edge.points))
     svg.append(line)
     const last = edge.points[edge.points.length - 1]
     const before = edge.points[edge.points.length - 2] ?? last
@@ -321,8 +336,15 @@ function fillInside(box: Box, taskState: TaskState): void {
       const word = document.createElementNS(SVG, "text")
       word.setAttribute("class", "basic-step-word")
       word.setAttribute("x", String(edge.at.x))
-      word.setAttribute("y", String(edge.at.y))
-      word.textContent = edge.label
+      word.setAttribute("y", String(edge.at.y - (edge.lines.length - 1) * 7.5))
+      edge.lines.forEach((text, index) => {
+        const line = document.createElementNS(SVG, "tspan")
+        line.setAttribute("x", String(edge.at!.x))
+        line.setAttribute("dy", index ? "15" : "0")
+        line.textContent = text
+        word.append(line)
+      })
+      word.append(title(edge.label))
       svg.append(word)
     }
   }
@@ -368,7 +390,7 @@ function fillInside(box: Box, taskState: TaskState): void {
     box.inside.clientWidth - (parseFloat(pad.paddingLeft) || 0) - (parseFloat(pad.paddingRight) || 0) ||
     BOX.width - 54
   const shrink = laid.width > room ? Math.max(0.66, room / laid.width) : 1
-  box.inside.style.height = `${Math.ceil(laid.height * shrink)}px`
+  box.inside.style.removeProperty("height")
   // The **scaled** size, not the laid-out one. A transform changes what is
   // painted and not the box it is painted in, so a group left at its full
   // width goes on asking the border to scroll for room that is no longer used
@@ -378,11 +400,6 @@ function fillInside(box: Box, taskState: TaskState): void {
   box.steps.style.transform = shrink === 1 ? "" : `scale(${shrink})`
   box.steps.replaceChildren(svg, ...pills.values())
   box.inside.replaceChildren(box.steps)
-}
-
-/** A path through dagre's points for an edge. */
-function through(points: { x: number; y: number }[]): string {
-  return points.map((at, index) => `${index ? "L" : "M"}${at.x} ${at.y}`).join(" ")
 }
 
 /** The arrowhead, pointed the way the line arrives. */
@@ -420,9 +437,13 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   // who just saved the file needs.
   box.stale.title = taskState.stale
   box.now.textContent = describeNow(taskState)
+  const count = taskState.shape.nodes.length
+  box.graphHead.hidden = count === 0
+  box.graphCount.textContent = `${count} ${count === 1 ? "step" : "steps"}`
+  box.viewSteps.setAttribute("aria-label", `View steps in ${taskState.name}`)
 
-  for (const pill of Array.from(box.inside.children) as HTMLElement[]) {
-    pill.dataset.here = String(pill.dataset.node === taskState.currentNode)
+  for (const pill of box.steps.querySelectorAll<HTMLElement>("[data-node]")) {
+    pill.dataset.here = String(taskState.status === "running" && pill.dataset.node === taskState.currentNode)
   }
 
   const thinking = !taskState.lastText && Boolean(taskState.lastThinking)
@@ -580,6 +601,7 @@ export const basic: Skin = {
   label: "Basic",
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
+    const graphDialog = createGraphDialog(el)
     // The board hangs in a viewport that fills the host. The board is sized by
     // its own layout and cannot place itself; the viewport is the window it is
     // seen through, and one transform on the board decides what is on screen.
@@ -834,7 +856,10 @@ export const basic: Skin = {
         for (const [task, taskState] of changedTasks(stage.tasks, painted)) {
           let box = boxes.get(task)
           if (box === undefined) {
-            box = buildBox(task, callbacks)
+            box = buildBox(task, callbacks, opener => {
+              const current = last?.tasks[task]
+              if (current) graphDialog.open(task, current, opener)
+            })
             box.toggle.addEventListener("click", () => {
               byHand.set(task, !isOpen(task, painted.get(task) ?? taskState))
               const now = painted.get(task)
@@ -857,6 +882,7 @@ export const basic: Skin = {
           }
         }
         last = stage
+        graphDialog.update(stage)
         const fresh = wiringKey(stage, isOpen)
         if (moved || fresh !== key) {
           key = fresh
@@ -865,6 +891,7 @@ export const basic: Skin = {
       },
 
       destroy() {
+        graphDialog.destroy()
         watching?.disconnect()
         boxes.clear()
         viewport.remove()

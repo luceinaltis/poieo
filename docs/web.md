@@ -28,6 +28,11 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/projects/{project}/tasks/{task}/memory` | `{task, block}`: what the task will be shown on its next run, read without leaving a trace |
 | `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
 
+Each task's graph shape includes node IDs, types, connections, model IDs and
+tools. An authored node `description` is included when non-empty; prompts and
+system messages are omitted. Clients fall back to node IDs when descriptions
+are absent, including responses from older daemons.
+
 Model metadata is whatever the endpoint reports. Unknown context, size,
 quantization, capability, or price remains null. The undeclared-engine probe is
 a separate request so a closed candidate port does not delay the main catalogue.
@@ -200,6 +205,18 @@ The form checks empty instructions, unreachable steps, removed results, and
 result reads that could occur before their writer. Server validation remains
 authoritative. Failed saves retain the whole draft; successful saves clear it.
 This form creates new tasks; editing existing graphs remains file-based.
+
+The board shows a compact graph on each task card. **View steps** opens a native
+dialog outside the board's pan/zoom transform, with an independent scrollable
+canvas, zoom controls, fit, and a 100% reading size. Nodes use authored
+descriptions, an entry marker, model assignments and explicit endings. Dagre
+lays both views out from left to right, reserves space for wrapped conditions,
+and retains a separate edge for each branch even when destinations coincide.
+The router's otherwise path is always drawn, including an omitted default that
+ends the run; return paths retain their arrows. Conditional paths are amber.
+Running-step updates highlight both views without rebuilding the dialog or
+resetting its zoom and scroll. Removing the task closes the dialog, and closing
+restores focus to its opener. Narrow screens use the full viewport.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently
 provides the task board and a standalone runs view; both consume the same stage
