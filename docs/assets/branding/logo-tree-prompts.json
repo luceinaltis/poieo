@@ -1,6 +1,7 @@
 {
   "tool": "ChatGPT Image (built-in image_gen)",
-  "purpose": "Exploratory poieo logo concepts; no final species or logo selected.",
+  "purpose": "Comparative poieo logo concepts. The persimmon symbol and wordmark are selected; production vector masters remain to be made.",
+  "selected_output": "logo-persimmon-concept.png",
   "reference_image": "logo-brush-concept.png",
   "variants": [
     {
