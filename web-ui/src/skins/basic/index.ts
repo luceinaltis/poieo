@@ -627,6 +627,8 @@ export const basic: Skin = {
       chosen = fit(
         { width: board.offsetWidth, height: board.offsetHeight },
         { width: viewport.clientWidth, height: viewport.clientHeight },
+        24,
+        typeScale(),
       )
       show()
     })
@@ -725,7 +727,6 @@ export const basic: Skin = {
         readingView(
           { width: board.offsetWidth, height: board.offsetHeight },
           { width: viewport.clientWidth, height: viewport.clientHeight },
-          24,
           // As far as the page's type has grown, and no further: the board
           // keeps pace with the bar and the drawer beside it.
           typeScale(),

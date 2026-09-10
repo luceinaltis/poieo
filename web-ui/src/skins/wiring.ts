@@ -258,9 +258,9 @@ export function fit(board: Size, host: Size, margin = 24, ceiling = 1): View {
 }
 
 /** Start at readable size; the minimap and dragging reach the rest of a large board. */
-export function readingView(board: Size, host: Size): View {
-  const fitted = fit(board, host)
-  const readable = Math.min(0.85, Math.max(0, host.width - 32) / BOX.width)
+export function readingView(board: Size, host: Size, ceiling = 1): View {
+  const fitted = fit(board, host, 24, ceiling)
+  const readable = Math.min(0.85 * ceiling, Math.max(0, host.width - 32) / BOX.width)
   if (fitted.zoom >= readable) return fitted
   return {
     x: Math.max(16, (host.width - board.width * readable) / 2),

@@ -177,8 +177,9 @@ working with a newer daemon.
 
 The page's root type size follows the window's width, 16px up to a laptop's
 and 22px from a large desktop's, and the bar, rail, panels and buttons are
-sized in em or rem so they follow it. The board's fit magnifies by the same
-factor and no further; it still shrinks to fit a wide graph.
+sized in em or rem so they follow it. The board magnifies by the same factor
+and no further. Its initial view keeps a readable lower limit; fitting the
+whole board can shrink a wider or taller graph further.
 
 `App.tsx` owns project selection, the memory place, and the single active side
 panel: task detail, models, task creation, or closed. It shows one project's
