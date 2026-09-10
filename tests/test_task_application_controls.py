@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import subprocess
 import threading
 
 import pytest
@@ -14,6 +16,39 @@ from poieo.card import load_card
 from poieo.cli import app
 from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_task_subfolder_cannot_redirect_work_outside_the_private_copy(tmp_path, pending):
+    from poieo.workspace import WorkspaceError
+
+    repo = make_repo(tmp_path)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "old.txt").write_text("old")
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "docs")
+    point = workspace(tmp_path, repo / "docs")
+    point.prepare()
+    if pending:
+        (point.worktree / "docs" / "old.txt").write_text("pending")
+        point.commit("r1", "pending")
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "old.txt").write_text("keep my work")
+    link = point.worktree / "docs"
+    link.rename(point.worktree / "old-docs")
+    if os.name == "nt":
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(external)], check=True, capture_output=True)
+    else:
+        link.symlink_to(external, target_is_directory=True)
+    try:
+        with pytest.raises(WorkspaceError, match="outside its private copy"):
+            point.working_folder()
+        with pytest.raises(WorkspaceError, match="outside its private copy"):
+            point.prepare()
+        assert (external / "old.txt").read_text() == "keep my work"
+    finally:
+        link.rmdir() if os.name == "nt" else link.unlink()
 
 
 async def test_cancelled_discard_holds_its_copy_until_the_write_and_history_finish(tmp_path, monkeypatch):
