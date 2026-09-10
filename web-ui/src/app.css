@@ -167,9 +167,11 @@
   position: absolute;
 }
 
-/* On the board's top right, over it: the one thing a reader does *to* the
-   board rather than with a task on it. Above the skin so a card drawn under
-   that corner cannot take the click. */
+/* Reserve the control's row so a card at reading size cannot sit underneath. */
+.shell-make + .shell-board {
+  top: 52px;
+}
+
 .shell-make {
   border-color: var(--ember);
   color: var(--text);

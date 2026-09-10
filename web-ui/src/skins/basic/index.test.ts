@@ -392,17 +392,13 @@ test("a task that reports no model at all leaves the trigger line alone", () => 
 })
 
 
-test("the steps are drawn as a graph, with a line for every way the run can go", () => {
+test("the steps name every connection and where the run ends", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
-  // classify -> route, and route's default -> draft. Lines, not a connector
-  // hung off each pill: an arm was a row position before, and a reader had to
-  // be told that two pills sharing a column were alternatives rather than a
-  // sequence. `steps.test.ts` says which lines; this says they reach the page.
   const inside = el.querySelector('[data-task="board/chores"] .basic-inside')!
-  expect(inside.querySelectorAll(".basic-step-wire")).toHaveLength(2)
-  expect(inside.querySelectorAll(".basic-step-tip")).toHaveLength(2)
+  expect([...inside.querySelectorAll(".basic-step-output")].map(el => el.textContent))
+    .toEqual(["Nextroute", "Otherwisedraft", "NextEnd run"])
   handle.destroy()
 })
 

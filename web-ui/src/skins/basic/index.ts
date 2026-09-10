@@ -1,9 +1,9 @@
 /**
  * The plain view: the work as a graph, with one noun on screen.
  *
- * Everything drawn here is a node. A task is a node too -- shut it is a box
- * with a name, open it is that box with its graph's nodes inside. There is no
- * mode to be in and nothing to remember about where you are; some nodes open.
+ * Each task carries readable step connections, including incoming paths and
+ * explicit destinations. Opening the border adds the live text and tool calls;
+ * View steps opens the spatial graph at an independent reading size.
  *
  * One rule reads the whole picture: **an arrow that crosses a border ends one
  * run and starts another.** Inside a border is the next step, immediately,
@@ -22,14 +22,14 @@ import { zoom as d3zoom, zoomIdentity } from "d3-zoom"
 import type { D3ZoomEvent } from "d3-zoom"
 
 import { changedTasks } from "../changed"
-import { layOutSteps, stepName } from "./steps"
-import { createGraphDialog, edgePath } from "./graph"
+import { stepName, waysOut } from "./steps"
+import { createGraphDialog } from "./graph"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
-  place, typeScale, wire,
+  place, readingView, typeScale, walk, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -41,6 +41,7 @@ const SVG = "http://www.w3.org/2000/svg"
 const MAP = { width: 200, height: 140 }
 
 interface Box {
+  structure: string
   root: HTMLElement
   name: HTMLElement
   toggle: HTMLElement
@@ -147,6 +148,7 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
   toggle.textContent = "▾"
 
   const box: Box = {
+    structure: "",
     root,
     toggle,
     when: element("div", "basic-when", root),
@@ -167,8 +169,6 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
     graphHead: (graphHead = element("div", "basic-graph-head", root)),
     graphCount: element("span", "", graphHead),
     viewSteps: element("button", "basic-view-steps", graphHead),
-    // Both, in order: the group is what a too-wide graph is scaled by, and it
-    // has to be inside the part that scrolls when scaling has hit its floor.
     inside: (inside = element("div", "basic-inside", root)),
     steps: element("div", "basic-steps-group", inside),
     said: element("p", "basic-said", root),
@@ -259,165 +259,74 @@ function describeStale(taskState: TaskState): string {
   return taskState.stale ? "edited — restart the daemon for it to take" : ""
 }
 
-/**
- * The graph inside a border, drawn once: it moves only when a file does.
- *
- * **Drawn on a shut border, not only an open one.** That is what makes the
- * board worth being a canvas: the work is readable at a glance, and a handoff
- * arrow between two borders lands beside the steps it leaves from. It costs
- * nothing to hold still, because what a task walks is structure -- it changes
- * when a file does, never between one frame and the next.
- *
- * A task of one step draws that step. It drew nothing while the steps were
- * hidden until asked for, when a lone pill named `work` was noise somebody
- * had opened a border to find; with every other task showing its steps
- * unasked, the same blank reads as broken instead.
- */
-function fillInside(box: Box, taskState: TaskState): void {
-  // Only when they differ. A task on one model has already said so on the
-  // header, and repeating it four times would be noise for one answer.
+/** Connections at card width. Structure stays put while run state changes. */
+function fillInside(box: Box, taskState: TaskState): boolean {
+  const structure = JSON.stringify([taskState.name, taskState.shape])
+  if (box.structure === structure) return false
+  box.structure = structure
+  const shape = taskState.shape
   const differ = modelsOf(taskState).length > 1
-
-  // Built first and measured, then placed: how wide a step is drawn depends on
-  // its label and on whether it carries a model or a pair of hands, and the
-  // layout cannot rank what it cannot size. Off-screen rather than hidden --
-  // `display: none` has no width to read.
-  const pills = new Map<string, HTMLElement>()
-  for (const spec of taskState.shape.nodes) {
-    const pill = document.createElement("span")
-    pill.className = "basic-node"
-    pill.dataset.node = spec.id
-    pill.dataset.type = spec.type
-    element("span", "basic-node-name", pill).textContent = stepName(spec)
-    pill.title = `${stepName(spec)} (${spec.id})`
-    // A router has no model because it calls none, and the gap is itself
-    // information: it is why branching is free.
-    if (differ && spec.model) {
-      element("span", "basic-node-model", pill).textContent = spec.model
+  const nodes = new Map(shape.nodes.map(node => [node.id, node]))
+  const names = new Map<string, number>()
+  for (const node of shape.nodes) names.set(stepName(node), (names.get(stepName(node)) ?? 0) + 1)
+  const nameOf = (id: string): string => {
+    const node = nodes.get(id)
+    if (!node) return id
+    const name = stepName(node)
+    return names.get(name)! > 1 ? `${name} (${id})` : name
+  }
+  const incoming = new Map(shape.nodes.map(node => [node.id, new Set<string>()]))
+  for (const node of shape.nodes) {
+    for (const way of waysOut(node)) {
+      if (way.to !== null) incoming.get(way.to)?.add(node.id)
     }
-    // Unconditional, unlike the model above: two steps on one model say it
-    // once on the header, but "this one can rewrite the project" is never
-    // answered by another step having said it. Named rather than drawn: a
-    // glyph would be one more thing to learn, and this is read by people who
-    // have learned nothing yet. Said as what happens rather than as "hands",
-    // which is the word the design documents use among themselves. Which
-    // toolsets is the detail, and hangs off it.
+  }
+
+  const steps = walk(shape).map(id => {
+    const spec = nodes.get(id)!
+    const step = document.createElement("section")
+    step.className = "basic-node"
+    step.dataset.node = id
+    step.dataset.type = spec.type
+    step.setAttribute("aria-label", nameOf(id))
+
+    const input = element("div", "basic-step-input", step)
+    element("span", "basic-step-label", input).textContent = "From"
+    const sources = [...incoming.get(id)!].map(nameOf)
+    if (id === shape.entry) sources.unshift("Start")
+    element("span", "basic-step-source", input).textContent = sources.join(" · ") || "No previous step"
+
+    const heading = element("div", "basic-node-head", step)
+    const name = element("span", "basic-node-name", heading)
+    name.textContent = nameOf(id)
+    name.title = `${stepName(spec)} (${id})`
+    if (differ && spec.model) element("span", "basic-node-model", heading).textContent = spec.model
     if (spec.tools.length > 0) {
-      const hands = element("span", "basic-node-hands", pill)
+      const hands = element("span", "basic-node-hands", heading)
       hands.textContent = "edits files"
       hands.title = spec.tools.join(", ")
     }
-    pills.set(spec.id, pill)
-  }
 
-  box.steps.replaceChildren(...pills.values())
-  const laid = layOutSteps(taskState.shape, (spec) => {
-    const pill = pills.get(spec.id)
-    // `offsetWidth` is zero where nothing lays anything out -- jsdom, and a
-    // border not yet on the page. The estimate keeps the shape of the graph
-    // right there rather than collapsing every step onto one point.
-    const width = pill?.offsetWidth || 22 + Math.min(stepName(spec).length, 23) * 6.5 + (spec.tools.length ? 62 : 0)
-    return { width, height: pill?.offsetHeight || 24 }
+    const ways = waysOut(spec)
+    // A leaf still has an explicit destination: ending this run.
+    if (ways.length === 0) ways.push({ to: null, label: "", fallback: false })
+    for (const way of ways) {
+      const output = element("div", "basic-step-output", step)
+      output.dataset.conditional = String(Boolean(way.label) && !way.fallback)
+      element("span", "basic-step-label", output).textContent =
+        way.fallback ? "Otherwise" : way.label ? `If ${way.label}` : "Next"
+      const destination = element("span", "basic-step-destination", output)
+      destination.textContent = way.to === null ? "End run" : nameOf(way.to)
+      destination.dataset.end = String(way.to === null)
+    }
+    return step
   })
-
-  const svg = document.createElementNS(SVG, "svg")
-  svg.setAttribute("class", "basic-steps")
-  svg.setAttribute("width", String(laid.width))
-  svg.setAttribute("height", String(laid.height))
-  for (const edge of laid.edges) {
-    const line = document.createElementNS(SVG, "path")
-    line.setAttribute("class", "basic-step-wire")
-    line.setAttribute("d", edgePath(edge.points))
-    svg.append(line)
-    const last = edge.points[edge.points.length - 1]
-    const before = edge.points[edge.points.length - 2] ?? last
-    svg.append(head(last, before))
-    if (edge.label && edge.at) {
-      const word = document.createElementNS(SVG, "text")
-      word.setAttribute("class", "basic-step-word")
-      word.setAttribute("x", String(edge.at.x))
-      word.setAttribute("y", String(edge.at.y - (edge.lines.length - 1) * 7.5))
-      edge.lines.forEach((text, index) => {
-        const line = document.createElementNS(SVG, "tspan")
-        line.setAttribute("x", String(edge.at!.x))
-        line.setAttribute("dy", index ? "15" : "0")
-        line.textContent = text
-        word.append(line)
-      })
-      word.append(title(edge.label))
-      svg.append(word)
-    }
-  }
-
-  for (const step of laid.steps) {
-    if (step.stop) {
-      const stop = document.createElementNS(SVG, "circle")
-      stop.setAttribute("class", "basic-step-stop")
-      stop.setAttribute("cx", String(step.x))
-      stop.setAttribute("cy", String(step.y))
-      stop.setAttribute("r", "4")
-      // Where a run can end. Its own mark per arm, because two different ways
-      // of ending are two different facts and must not collapse into one.
-      stop.append(title("the run ends here"))
-      svg.append(stop)
-      continue
-    }
-    const pill = pills.get(step.id)
-    if (pill === undefined) continue
-    // Its own top-left, worked out from the centre dagre answered with, rather
-    // than the centre plus a `translate(-50%, -50%)`. Layout ignores a
-    // transform, so a pill placed that way had a *layout* box reaching half its
-    // own width past where it was drawn -- and the well went on scrolling for
-    // room nothing occupied, clipping the last step in every branching graph.
-    pill.style.left = `${step.x - step.width / 2}px`
-    pill.style.top = `${step.y - step.height / 2}px`
-    if (step.ends) pill.dataset.ends = "true"
-  }
-
-  // A graph wider than the border it lives in is shrunk to fit rather than
-  // scrolled out of sight: a step you have to go looking for is a step you do
-  // not know is there, and the whole point of drawing this unasked is that it
-  // is read at a glance. There is a floor -- past it the type stops being type
-  // -- and below that the border scrolls, which is why the overflow rule stays.
-  // Measured, not guessed from `BOX.width`: the graph sits in a well with its
-  // own padding and border, inside a border with its own padding, and a
-  // constant here went stale the moment the well was added. `clientWidth`
-  // counts the padding, so it is taken off -- that twenty pixels is exactly
-  // what was clipping the last step of every branching graph. The fallback is
-  // for a border not yet laid out, and for jsdom.
-  const pad = getComputedStyle(box.inside)
-  const room =
-    box.inside.clientWidth - (parseFloat(pad.paddingLeft) || 0) - (parseFloat(pad.paddingRight) || 0) ||
-    BOX.width - 54
-  const shrink = laid.width > room ? Math.max(0.66, room / laid.width) : 1
-  box.inside.style.removeProperty("height")
-  // The **scaled** size, not the laid-out one. A transform changes what is
-  // painted and not the box it is painted in, so a group left at its full
-  // width goes on asking the border to scroll for room that is no longer used
-  // -- a scrollbar under a graph that is wholly visible.
-  box.steps.style.width = `${Math.ceil(laid.width * shrink)}px`
-  box.steps.style.height = `${Math.ceil(laid.height * shrink)}px`
-  box.steps.style.transform = shrink === 1 ? "" : `scale(${shrink})`
-  box.steps.replaceChildren(svg, ...pills.values())
-  box.inside.replaceChildren(box.steps)
-}
-
-/** The arrowhead, pointed the way the line arrives. */
-function head(at: { x: number; y: number }, from: { x: number; y: number }): SVGElement {
-  const turn = (Math.atan2(at.y - from.y, at.x - from.x) * 180) / Math.PI
-  const tip = document.createElementNS(SVG, "path")
-  tip.setAttribute("class", "basic-step-tip")
-  // Bigger than it was: at five pixels the head vanished before the line did,
-  // and the head is what says which way a run goes.
-  tip.setAttribute("d", "M0 0 L-7 3.4 L-7 -3.4 Z")
-  tip.setAttribute("transform", `translate(${at.x} ${at.y}) rotate(${turn})`)
-  return tip
-}
-
-function title(said: string): SVGElement {
-  const node = document.createElementNS(SVG, "title")
-  node.textContent = said
-  return node
+  box.inside.hidden = steps.length === 0
+  box.inside.tabIndex = 0
+  box.inside.setAttribute("role", "region")
+  box.inside.setAttribute("aria-label", `Step connections in ${taskState.name}`)
+  box.steps.replaceChildren(...steps)
+  return true
 }
 
 /** What moves: which node is lit, and what the task has been saying. */
@@ -616,6 +525,8 @@ export const basic: Skin = {
     // panned or scaled along with what it is describing.
     const map = element("div", "basic-minimap", viewport)
     const seen = element("div", "basic-seen", map)
+    const help = element("div", "basic-move-help", viewport)
+    help.textContent = "Drag to see more tasks. Double-click to fit."
     // What the minimap is drawn at, kept from the last relayout so `show` can
     // place the rectangle without measuring the board again on every frame.
     let mapped = { zoom: 1, width: 0, height: 0 }
@@ -641,10 +552,9 @@ export const basic: Skin = {
     // view, and `show` stops fitting.
     let chosen: View | null = null
 
-    // A box's own controls are buttons, and a press on one of those is a click
-    // on the box rather than a grab of the board behind it.
+    // Controls and the scrollable steps keep their own mouse/touch gestures.
     const grabbable = (event: Event): boolean =>
-      !(event.target as HTMLElement | null)?.closest("button")
+      !(event.target as HTMLElement | null)?.closest("button, .basic-inside")
 
     map.addEventListener("pointerdown", (event) => {
       event.stopPropagation()
@@ -714,7 +624,12 @@ export const basic: Skin = {
     // recoverable by reloading the page.
     viewport.addEventListener("dblclick", (event) => {
       if (!grabbable(event)) return
-      chosen = null
+      chosen = fit(
+        { width: board.offsetWidth, height: board.offsetHeight },
+        { width: viewport.clientWidth, height: viewport.clientHeight },
+        24,
+        typeScale(),
+      )
       show()
     })
 
@@ -809,10 +724,9 @@ export const basic: Skin = {
     function where(): View {
       return (
         chosen ??
-        fit(
+        readingView(
           { width: board.offsetWidth, height: board.offsetHeight },
           { width: viewport.clientWidth, height: viewport.clientHeight },
-          24,
           // As far as the page's type has grown, and no further: the board
           // keeps pace with the bar and the drawer beside it.
           typeScale(),
@@ -837,6 +751,7 @@ export const basic: Skin = {
       // minimap of something wholly visible is a second, smaller copy of it.
       const all = patch.width >= mapped.width - 1 && patch.height >= mapped.height - 1
       map.dataset.needed = String(!all && mapped.width > 0)
+      help.hidden = all || mapped.width <= 0
     }
 
     /**
@@ -874,7 +789,7 @@ export const basic: Skin = {
             board.append(box.root)
             moved = true
           }
-          fillInside(box, taskState)
+          if (fillInside(box, taskState)) moved = true
           paint(box, taskState, isOpen(task, taskState))
         }
         for (const [task, box] of boxes) {
