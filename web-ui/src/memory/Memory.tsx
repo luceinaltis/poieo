@@ -10,7 +10,9 @@ import {
   setAsideMemory,
   settleMemorySuggestion,
 } from "../api"
+import { Gauge } from "../Gauge"
 import { Constellation } from "./Constellation"
+import { learnerLoad } from "./load"
 import type {
   LearningPass,
   MemoryAskReply,
@@ -379,6 +381,7 @@ export function Memory({
     )
   }
 
+  const load = learnerLoad(overview)
   const kept = overview.stats?.kept ?? visibleGraph.nodes.filter((node) => node.standing).length
   const past = overview.stats?.set_aside ?? visibleGraph.nodes.filter((node) => !node.standing).length
   const placeholder = mode === "ask" ? "Ask what this project knows" : "Search memory"
@@ -451,6 +454,24 @@ export function Memory({
             <span>{kept} kept</span>
             <span>{past} set aside</span>
             <span>{visibleGraph.edges.length} connections</span>
+            {overview.stats ? (
+              <Gauge label="page" used={overview.stats.page_chars} limit={overview.stats.page_budget} unit="chars" />
+            ) : null}
+            {load ? (
+              <Gauge
+                label="learner"
+                used={load.tokens ?? load.chars}
+                limit={load.context}
+                unit={load.tokens === null ? "chars" : "tokens"}
+                estimate={load.tokens !== null}
+                title={
+                  `the learner's next question: ${load.chars.toLocaleString("en-US")} characters over ${load.entries} memories` +
+                  (load.context === null
+                    ? `${load.model ? `; ${load.model}` : ""} names no window`
+                    : `, about ${(load.tokens as number).toLocaleString("en-US")} of ${load.context.toLocaleString("en-US")} tokens (${load.measured ? "as the last pass counted" : "assuming four characters a token"}) on ${load.model}`)
+                }
+              />
+            ) : null}
           </div>
           <Constellation
             graph={visibleGraph}

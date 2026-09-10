@@ -233,7 +233,13 @@ provides the task board and a standalone runs view; both consume the same stage
 state. Memory is a separate project view because it fetches its own graph and
 search evidence rather than consuming task events. While open it revalidates
 the overview every 15 seconds with an ETag and preserves the current query and
-selection across an unchanged response. The evidence pane is also where a person
+selection across an unchanged response. Its caption puts two sizes against their
+limits with one shared gauge: the page against its character budget, and the
+learner's next question against the window the binding declares for the learner,
+in tokens estimated from the last pass that counted (four characters a token
+before one has); with no window declared the question is shown in characters and
+no bar is drawn, since an unknown limit is not a limit of zero. The fill's colour
+and a word both say when a value is near or over its limit. The evidence pane is also where a person
 writes: the page, a new memory, a set-aside for the selected one, and the last
 learning pass's suggestion; a refused write stays visible as a result, and a
 successful one rereads the overview at once. Only declared memory relationships are

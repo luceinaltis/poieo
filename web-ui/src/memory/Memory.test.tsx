@@ -41,6 +41,7 @@ const OVERVIEW: MemoryOverview = {
   page: "Keep tests portable.",
   page_text: "<!-- trim -->\nKeep tests portable.",
   suggestion: null,
+  learner: { prompt_chars: 1_550, entries: 2, model: "local/chat", context: null },
   stats: {
     page_chars: 20,
     page_budget: 4000,
@@ -520,4 +521,34 @@ test("recent learning says what each pass kept, set aside, let go, or why it fai
 test("a memory with no passes yet draws no learning section", async () => {
   await render()
   expect(container.querySelector(".memory-learning")).toBeNull()
+})
+
+
+// -- how much room memory takes ---------------------------------------------
+
+test("the caption puts the page and the learner's next question against their limits", async () => {
+  vi.mocked(fetchMemory).mockResolvedValue({
+    ...OVERVIEW,
+    stats: { ...OVERVIEW.stats!, page_chars: 3_300, page_budget: 4_000 },
+    learner: { prompt_chars: 26_000, entries: 40, model: "local/learner", context: 8_000 },
+  })
+  await render()
+
+  const page = container.querySelector<HTMLElement>('[data-gauge="page"]')!
+  expect(page.dataset.level).toBe("near")
+  expect(page.textContent).toContain("3,300 / 4,000 chars")
+  const learner = container.querySelector<HTMLElement>('[data-gauge="learner"]')!
+  // Four characters a token until a pass has counted: 26,000 characters is about 6,500 tokens.
+  expect(learner.textContent).toContain("≈6,500 / 8,000 tokens")
+  expect(learner.dataset.level).toBe("near")
+  expect(learner.getAttribute("title")).toContain("assuming four characters a token")
+})
+
+test("with no window declared the learner's question is shown as it was measured", async () => {
+  await render()
+
+  const learner = container.querySelector<HTMLElement>('[data-gauge="learner"]')!
+  expect(learner.dataset.level).toBe("unbounded")
+  expect(learner.textContent).toContain("1,550 chars")
+  expect(learner.querySelector(".gauge-track")).toBeNull()
 })

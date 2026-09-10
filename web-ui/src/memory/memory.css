@@ -158,10 +158,12 @@
 .memory-caption {
   color: var(--dim);
   display: flex;
+  flex-wrap: wrap;
   font-size: 0.875rem;
-  gap: 13px;
+  gap: 6px 13px;
   left: 13px;
   letter-spacing: 0.04em;
+  right: 13px;
   top: 12px;
 }
 
