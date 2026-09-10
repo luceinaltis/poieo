@@ -56,6 +56,20 @@
  * is three times what a hairline needs to be seen, and the bar's full-width
  * border read as a bright stripe across the top of the page.
  */
+/* The one size everything else is measured from.
+ *
+ * Every panel, label and button here is in em or rem, and the shell's fixed
+ * dimensions below are in rem, so this is the one number that decides how big
+ * the page is. 16px was right for a laptop and wrong for a 2000px screen at
+ * 100%, where the same board sat in the middle of a field of nothing with
+ * buttons a reader had to squint at. So it follows the width: 16px up to a
+ * laptop's, 20px at a 2000px desktop, 22px from a large one, and a straight
+ * line between -- never smaller than 16, which is the size a phone will not
+ * zoom on. */
+html {
+  font-size: clamp(16px, 0.6vw + 8px, 22px);
+}
+
 :root {
   color-scheme: dark;
 
@@ -80,17 +94,17 @@
   font-family: var(--sans);
   /* One source of truth: the drawer starts where the bar ends, so the skin
      picker in the bar's right corner stays reachable with the drawer open. */
-  --bar-height: 42px;
+  --bar-height: 2.625rem;
   /* The rail is fixed, so the stage has to reserve exactly its width; spelling
      it twice is how the board ends up under it by a pixel. */
-  --rail-width: 92px;
+  --rail-width: 5.75rem;
   /* What it takes across the top instead, on a screen too narrow to give it a
      quarter of the width. Same reason to name it: the stage reserves it. */
-  --rail-lying-down: 38px;
+  --rail-lying-down: 2.375rem;
   /* How wide the aside on the right edge is. Named for the same reason as the
      two above: `.shell-stage` reserves exactly this much margin, so the panel
      and the space kept for it are one number or the board slides under it. */
-  --panel-width: min(440px, 100vw);
+  --panel-width: min(27.5rem, 100vw);
 }
 
 /* Every small bordered button on the page -- close, pause, run now, accept,
@@ -104,8 +118,10 @@ button {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 0.85em;
-  padding: 3px 8px;
+  font-size: 0.9em;
+  /* In em, so a button grows with the type it sits beside rather than
+     staying a 3px-padded sliver on a screen where everything else grew. */
+  padding: 0.3em 0.7em;
 }
 
 button:disabled {

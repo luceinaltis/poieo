@@ -224,23 +224,30 @@ export interface View {
 /**
  * The view that puts the whole board on screen at once.
  *
- * Scaled down only, never up: four boxes magnified to fill a wide screen would
- * shout at a reader who asked to see a board, and the type sizes were chosen
- * to be read at 1. So a board that already fits is simply centred.
+ * Never blown up to fill a wide screen: four boxes magnified to the window's
+ * edges would shout at a reader who asked to see a board. But not held at 1
+ * either, when the page around it is not: the root type grows a little with
+ * the screen, and a board fitted at 1 beside 20px type is the one small thing
+ * on the page. `ceiling` is how far the type has grown, and the board may grow
+ * exactly that far -- the sizes on it were chosen to be read at 1 *of the
+ * page's type*. A board that already fits under that is simply centred.
  *
  * `margin` is kept clear on every side, which is why it is subtracted before
  * the ratio rather than after -- fitting to the full width and then insetting
  * would push the edges back out past it.
  */
-export function fit(board: Size, host: Size, margin = 24): View {
+export function fit(board: Size, host: Size, margin = 24, ceiling = 1): View {
   const room = {
     width: Math.max(0, host.width - margin * 2),
     height: Math.max(0, host.height - margin * 2),
   }
+  // A side with no size constrains nothing: the fit is then the ceiling. It
+  // was 1 here, which quietly capped every fit at 1 wherever a board has not
+  // been measured -- a test's window, and the first frame of a real one.
   const zoom = Math.min(
-    1,
-    board.width > 0 ? room.width / board.width : 1,
-    board.height > 0 ? room.height / board.height : 1,
+    ceiling,
+    board.width > 0 ? room.width / board.width : Infinity,
+    board.height > 0 ? room.height / board.height : Infinity,
   )
   return {
     x: (host.width - board.width * zoom) / 2,
@@ -258,6 +265,18 @@ export function fit(board: Size, host: Size, margin = 24): View {
  * the board. The ceiling stops a board becoming one box and a lot of felt.
  */
 export const ZOOM = { min: 0.1, max: 4 }
+
+/**
+ * How far the page's type has grown past the 16px the board was drawn at.
+ *
+ * The root size follows the screen's width (index.css), and this is the one
+ * number the board needs from that: a fit may magnify this far and no more.
+ * 1 when the size cannot be read, which is what a test's window says.
+ */
+export function typeScale(): number {
+  const size = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  return Number.isFinite(size) && size > 0 ? size / 16 : 1
+}
 
 /* Sliding and scaling a view by hand is `d3-zoom`'s, not this module's. Both
    were four lines of arithmetic here and correct for a mouse; what they did

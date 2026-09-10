@@ -175,6 +175,11 @@ turn, recent model text and tool calls, recent runs, reviewability, schedule,
 handoffs, and graph shape. Unknown events are ignored so an older bundle keeps
 working with a newer daemon.
 
+The page's root type size follows the window's width, 16px up to a laptop's
+and 22px from a large desktop's, and the bar, rail, panels and buttons are
+sized in em or rem so they follow it. The board's fit magnifies by the same
+factor and no further; it still shrinks to fit a wide graph.
+
 `App.tsx` owns project selection, the memory place, and the single active side
 panel: task detail, models, task creation, or closed. It shows one project's
 stage at a time and keeps only view preferences in local storage. The rail down

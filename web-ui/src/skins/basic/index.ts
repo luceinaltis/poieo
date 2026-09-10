@@ -29,7 +29,7 @@ import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
-  place, wire,
+  place, typeScale, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -812,6 +812,10 @@ export const basic: Skin = {
         fit(
           { width: board.offsetWidth, height: board.offsetHeight },
           { width: viewport.clientWidth, height: viewport.clientHeight },
+          24,
+          // As far as the page's type has grown, and no further: the board
+          // keeps pace with the bar and the drawer beside it.
+          typeScale(),
         )
       )
     }
