@@ -465,7 +465,41 @@ class Workspace:
             if permitted is not None and not permitted():
                 return {"revoked": True}
             _git(self.repo, "merge", "--ff-only", prepared.head)
-            return {"accepted": prepared.count, "before": prepared.base, "after": prepared.head}
+            unchanged = not _git(self.repo, "diff", "--name-only", prepared.base, prepared.head).strip()
+            return {
+                "accepted": prepared.count,
+                "before": prepared.base,
+                "after": prepared.head,
+                **({"unchanged": True} if unchanged else {}),
+            }
+
+    def save_repair(self, prepared: PreparedChange, run_id: str, message: str) -> Change | None:
+        """Keep a repaired combination on the task's copy for verification or review."""
+        if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
+            raise WorkspaceError("the repair changed its history unexpectedly")
+        for name in prepared.conflict:
+            path = prepared.path / name
+            if path.is_file() and any(
+                line.startswith((b"<<<<<<< ", b"=======", b">>>>>>> ")) for line in path.read_bytes().splitlines()
+            ):
+                raise WorkspaceError("the repair left unresolved conflict markers")
+        base = prepared.head
+        _git(prepared.path, "add", "-A")
+        if not prepared.conflict and not _git(prepared.path, "diff", "--cached", "--name-only").strip():
+            return None
+        _git(prepared.path, "commit", "-m", message)
+        head = _git(prepared.path, "rev-parse", "HEAD").strip()
+        if not self._is_ancestor(prepared.base, head) or not self._is_ancestor(prepared.target, head):
+            raise WorkspaceError("the repair lost work from the project or task")
+        _git(self.repo, "update-ref", f"refs/poieo/runs/{run_id}", head)
+        # This copy stays inspectable even when the next check fails. It also
+        # becomes the source of a fresh combination if the project moves again.
+        _git(self.worktree, "merge", "--ff-only", head)
+        prepared.head = prepared.target = head
+        prepared.conflict = []
+        prepared.count = len(_git(self.repo, "rev-list", f"{prepared.base}..{head}").split())
+        files, insertions, deletions = _parse_numstat(_git(self.repo, "diff", "--numstat", base, head))
+        return Change(base, head, files, insertions, deletions, message)
 
     def validate_prepared(self, prepared: PreparedChange) -> dict[str, object]:
         """A check is valid only for the unchanged candidate it was given."""
@@ -520,7 +554,15 @@ class Workspace:
         }
         changed = filter(
             None,
-            _git(prepared.path, "diff", "--name-only", "--no-renames", "-z", prepared.base, prepared.head).split("\0"),
+            _git(
+                prepared.path,
+                "diff",
+                "--name-only",
+                "--no-renames",
+                "-z",
+                prepared.base,
+                *([] if prepared.conflict else [prepared.head]),
+            ).split("\0"),
         )
         return [
             name
