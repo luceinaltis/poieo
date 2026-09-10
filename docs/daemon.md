@@ -23,6 +23,7 @@ A `TaskSpec` contains:
 | `input_file` | mapping reread before every run |
 | `carry_state` | carry ending graph state into the next run |
 | `isolation` | requested command environment |
+| `apply` | review or automatic application, allowed paths and required checks |
 | `on_error` | continue scheduling or stop after a failure |
 | `then` | first-match handoff branches |
 
@@ -37,6 +38,43 @@ listable but do not require live credentials or an installed isolation image.
 
 A daemon may load several projects. Project display names must be unique, while
 task identity is the pair `(project, task)`.
+
+## Applying completed work
+
+`changes.check_and_apply()` prepares a disposable combination with the latest
+project, checks the authorized file scope, runs each authored verification
+command through the task's executor, then applies the exact checked result.
+Review mode performs configured checks but keeps the work pending. Manual
+acceptance uses the same checks and current task settings. Applying or discarding
+a task's work while that task is running is refused.
+
+A competing project update causes preparation and verification to restart, at
+most three attempts. Cancellation terminates active verification commands and
+waits for an in-flight Git operation to finish before cleaning up. A write that
+finished before cancellation still reports its actual result. Disposable checks
+use disposable containers and do not reuse a container mounted on a deleted copy.
+
+Each result carries optional `application` data: `status` (`review`, `applied`, or
+`blocked`), check commands, exit codes and bounded output, refusal details, and
+the before/after commits for an applied result. `run_application` publishes it.
+A blocked result asks a persisted `apply_changes` question and holds only that
+task, including after restart. Retry schedules another run; pause leaves it held.
+Pending work is checked even when a retry produces no new file edits.
+
+Manual acceptance or discard records the decision for every affected run,
+including full records from before a restart, and clears its persisted
+application question. A no-edit retry is resolved when none of its pending work
+remains. The private copy stays exclusively owned until every started write and
+its decision record finish, even if the caller disconnects. A discarded result uses status
+`discarded`. Accepting a held change resumes the task's schedule.
+
+Application settings alone are read at the next run without rebuilding the
+schedule. Permission is read again immediately before automatic application;
+an edit, removal or disabling of the card prevents the earlier permission from
+being used. A task cannot automatically apply edits to its control files.
+
+`TaskRunner.run_once()` also serves task cards run by the CLI, with the same
+private copies, application rules, result records and journal.
 
 ## Triggers
 

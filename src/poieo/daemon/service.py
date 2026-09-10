@@ -9,6 +9,7 @@ import logging
 import signal
 import socket
 from collections import deque
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,14 +21,16 @@ from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
 from ..learn import learn as learn_pass
-from ..memory import keeps_memory
+from ..memory import keeps_memory, write_result
+from ..memory.results import revise_application
 from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
-from ..store import Event, RunStore
+from ..store import Event, RunStore, utcnow
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
+from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
@@ -148,7 +151,7 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
         spec, graph = expand(load_card(card.source_path), roster=roster)
     except PoieoError as exc:
         return None, str(exc)
-    if spec != task.spec:
+    if spec != task.spec.model_copy(update={"apply": spec.apply}):
         return None, STALE_CARD
     return graph, None
 
@@ -337,6 +340,7 @@ class TaskRunner:
         # Where this task's tools work. Built by the daemon, because the container
         # keeper is shared across tasks and the roster is only known there.
         self.tool_context = tool_context
+        self._change_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -345,33 +349,43 @@ class TaskRunner:
     async def _open_change(self) -> Path | None:
         """Give the run a private copy of the project to work in.
 
-        Two ways this ends without one, and both leave the run untracked: a
-        folder that is not a repository at all, and a repository that will not
-        make a worktree. Neither stops the work -- 3am is no time to stop --
-        but neither can be quiet either, so the reason is kept for
-        `_close_change` to say once there is a run to hang it on.
+        Review-mode tasks can run untracked when their folder cannot keep a
+        copy, with a recorded warning. Automatic tasks stop before tools run
+        whenever the copy or the chosen folder cannot be protected.
         """
         point = self.workspace
         self._tracking = False
         self._untracked = None
         if point is None:
+            if self.task.spec.apply.mode == "auto":
+                raise WorkspaceError("automatic application needs a folder protected by Git")
             return None
+        if point.worktree.exists():
+            # Refuse a redirected folder before even preparing the next run.
+            # This must not enter the legacy untracked-work fallback below.
+            await asyncio.to_thread(point.working_folder)
         try:
+            if self.task.spec.apply.mode == "auto" and any(node.workdir for node in self.task.graph.nodes):
+                raise WorkspaceError("automatic application uses the task folder; remove step-specific folders")
             if not await asyncio.to_thread(point.available):
+                if self.task.spec.apply.mode == "auto":
+                    raise WorkspaceError("automatic application needs a folder protected by Git")
                 self._untracked = (
                     f"{point.repo} is not a repository -- the work happens there "
                     f"directly and cannot be reviewed or undone"
                 )
                 log.warning("task '%s': %s", self.name, self._untracked)
                 return point.repo
-            await asyncio.to_thread(point.prepare)
+            await finish_write(asyncio.to_thread(point.prepare), propagate_cancel=True)
         except WorkspaceError as exc:
+            if self.task.spec.apply.mode == "auto":
+                raise
             # A repository we cannot use is not a reason to stop working at 3am.
             self._untracked = str(exc)
             log.error("task '%s': %s", self.name, exc)
             return point.repo
         self._tracking = True
-        return point.worktree
+        return await asyncio.to_thread(point.working_folder)
 
     async def _close_change(self, result: RunResult) -> None:
         """Land the run's work as one change, or leave the branch alone."""
@@ -390,12 +404,16 @@ class TaskRunner:
                     )
                 )
             return
+        interrupted = asyncio.Event()
         try:
-            change = await asyncio.to_thread(
-                self.workspace.commit,
-                result.run_id,
-                _change_message(result, self.name),
-                failed=result.status != "completed",
+            change = await finish_write(
+                asyncio.to_thread(
+                    self.workspace.commit,
+                    result.run_id,
+                    _change_message(result, self.name),
+                    failed=result.status != "completed",
+                ),
+                cancelled=interrupted,
             )
         except WorkspaceError as exc:
             # The work ran; only the record of it failed. That is not a reason
@@ -413,12 +431,150 @@ class TaskRunner:
                     data={"error": str(exc)},
                 )
             )
+            if self.task.spec.apply.mode == "auto":
+                self._record_application(result, {"status": "blocked", "error": str(exc)})
             return
-        if change is None:
-            return  # nothing to do is not nothing done
+        if interrupted.is_set() and result.status == "completed":
+            result.status, result.error = "aborted", "cancelled while recording the change"
+            if change is not None:
+                await finish_write(asyncio.to_thread(self.workspace.park_failed, change, result.run_id))
+        if change is not None:
+            result.change = change.as_dict()
+            self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
+        policy = self.task.spec.apply
+        if result.status == "completed" and (policy.mode == "auto" or policy.checks):
+            protected = [card.source_path for card in self.config.cards_by_task.values() if card.source_path]
+            if self.config.cards:
+                protected.append(self.config.resolve_path(self.config.cards))
+            if self.config.source_path:
+                protected.append(self.config.source_path)
+            protected.append(Path(self.task.binding_key))
+            try:
+                result.application = await check_and_apply(
+                    self.workspace,
+                    policy,
+                    through=change.head if change else None,
+                    tool_context=self.tool_context,
+                    cancel=self.cancel,
+                    authorized=self._may_auto_apply,
+                    protected=protected,
+                )
+            except PoieoError as exc:
+                result.application = {"status": "blocked", "error": str(exc)}
+            self._record_application(result, result.application)
 
-        result.change = change.as_dict()
-        self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
+    def _record_application(self, result: RunResult, outcome: dict) -> None:
+        result.application = outcome
+        self.store.append(Event(run_id=result.run_id, type="run_application", data=outcome))
+        if outcome["status"] == "blocked":
+            result.status = "asking"
+            result.asked = {
+                "node": "apply_changes",
+                "question": "This change could not be applied. Check the result, then retry or keep the task paused.",
+                "choices": ["retry", "pause"],
+            }
+            self.store.append(Event(run_id=result.run_id, type="run_asking", data=result.asked))
+
+    async def accept_changes(self, through: str | None = None) -> dict:
+        """The board and CLI accept through the same checks as automatic work."""
+        if self.workspace is None:
+            return {"status": "blocked", "error": "this task keeps no reviewable copy"}
+        if self._change_lock.locked():
+            return {"status": "blocked", "error": "this task is still working; try again when it finishes"}
+        async with self._change_lock, self._private_copy():
+            card = self.config.cards_by_task.get(self.name)
+            policy = load_card(card.source_path).apply if card and card.source_path else self.task.spec.apply
+            pending = await asyncio.to_thread(self.workspace.pending)
+            outcome = await check_and_apply(
+                self.workspace,
+                policy,
+                through=through,
+                manual=True,
+                tool_context=self.tool_context,
+                cancel=self.cancel,
+            )
+            if "accepted" in outcome:
+                await finish_write(self._record_decision(outcome, pending))
+            return outcome
+
+    async def discard_changes(self, since: str | None = None) -> dict:
+        if self.workspace is None:
+            return {"error": "this task keeps no reviewable copy"}
+        if self._change_lock.locked():
+            return {"error": "this task is still working; try again when it finishes"}
+        async with self._change_lock, self._private_copy():
+            pending = await asyncio.to_thread(self.workspace.pending)
+            outcome = await finish_write(asyncio.to_thread(self.workspace.discard, since))
+            if "discarded" in outcome:
+                await finish_write(self._record_decision({"status": "discarded", **outcome}, pending))
+            return outcome
+
+    @asynccontextmanager
+    async def _private_copy(self):
+        if self.workspace is None:
+            yield
+            return
+        gate = self.workspace.exclusive_run()
+        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        try:
+            await asyncio.shield(entered)
+        except asyncio.CancelledError:
+            await finish_write(entered)
+            await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
+            raise
+        try:
+            yield
+        finally:
+            await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
+
+    async def _record_decision(self, outcome: dict, pending: list[str]) -> None:
+        remaining = set(await asyncio.to_thread(self.workspace.pending))
+        run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
+        if not remaining and self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
+            run_ids = list(dict.fromkeys([*run_ids, self._asking.run_id]))
+        for run_id in run_ids:
+            result = next((run for run in self.results if run.run_id == run_id), None)
+            if self._asking and self._asking.run_id == run_id:
+                result = self._asking
+            row = self.store.summary(run_id)
+            if row is None and result is None:
+                continue
+            if row and (row.get("task") != self.name or row.get("project") != self.config.display_name):
+                continue
+            self.store.append(Event(run_id=run_id, type="run_application", data=outcome))
+            if result:
+                result.application = outcome
+                result.status = "completed"
+                if (result.asked or {}).get("node") == "apply_changes":
+                    result.answer = "accept" if outcome["status"] == "applied" else "discard"
+                row = result.summary()
+            else:
+                row = {**row, "status": "completed", "application": outcome}
+            card = self.config.cards_by_task.get(self.name)
+            if card:
+                revise_application(card, run_id, outcome)
+            self.store.record_summary(row)
+            if (
+                self._asking
+                and self._asking.run_id == run_id
+                and (self._asking.asked or {}).get("node") == "apply_changes"
+            ):
+                self._asking = None
+                self._keep_question()
+                self.resume()
+                if outcome["status"] == "applied" and self.handoff is not None and self.task.spec.then:
+                    self.handoff(self, result, self._asking_depth)
+
+    def _may_auto_apply(self) -> bool:
+        """Permission revoked while a task runs must take effect before application."""
+        card = self.config.cards_by_task.get(self.name)
+        if card is None or card.source_path is None:
+            return self.armed and self.task.spec.apply.mode == "auto"
+        try:
+            current = load_card(card.source_path)
+            return current.enabled and current.apply == self.task.spec.apply and current.apply.mode == "auto"
+        except PoieoError:
+            return False
 
     @property
     def last_result(self) -> RunResult | None:
@@ -607,6 +763,20 @@ class TaskRunner:
         )
 
     async def _one_run(self, fire: Firing) -> bool:
+        async with self._change_lock:
+            return await self._run_locked(fire)
+
+    async def run_once(self, payload: dict[str, Any]) -> RunResult:
+        """Run a card from the CLI with the daemon's change and history rules."""
+        async with self._change_lock:
+            await self._run_locked(
+                Firing(iteration=1, at=datetime.now(timezone.utc), reason="run now"), payload=payload
+            )
+            if self.last_result is None:
+                raise SpecError(f"task '{self.name}' could not run: {self.status}")
+            return self.last_result
+
+    async def _run_locked(self, fire: Firing, payload: dict[str, Any] | None = None) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
@@ -619,7 +789,7 @@ class TaskRunner:
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
         try:
-            payload = self.task.read_input(self.config)
+            payload = self.task.read_input(self.config) if payload is None else payload
         except PoieoError as exc:
             log.error("task '%s': %s", self.name, exc)
             return self.task.spec.on_error != "stop"
@@ -644,6 +814,15 @@ class TaskRunner:
                     exc,
                 )
 
+        card = self.config.cards_by_task.get(self.name)
+        if card and card.source_path:
+            try:
+                fresh, _ = expand(load_card(card.source_path), roster=list(self.config.cards_by_task))
+                if fresh == self.task.spec.model_copy(update={"apply": fresh.apply}):
+                    self.task.spec.apply = fresh.apply
+            except PoieoError:
+                pass  # The current permission is checked again before applying.
+
         log.info(
             "task '%s' firing (iteration %d, %s)",
             self.name,
@@ -652,27 +831,59 @@ class TaskRunner:
         )
         run_id = new_run_id()
         self.status, self.current_run_id = "running", run_id
-        workdir = await self._open_change()
         try:
-            result = await execute(
-                self.task.graph,
-                self.task.binding,
-                self.pool,
-                self.store,
-                input=payload,
-                state=dict(self.state) if self.task.spec.carry_state else None,
+            async with self._private_copy():
+                workdir = await self._open_change()
+                result = await execute(
+                    self.task.graph,
+                    self.task.binding,
+                    self.pool,
+                    self.store,
+                    input=payload,
+                    state=dict(self.state) if self.task.spec.carry_state else None,
+                    task=self.name,
+                    project=self.config.display_name,
+                    trigger=fire.reason,
+                    iteration=fire.iteration,
+                    run_id=run_id,
+                    cancel=self.cancel,
+                    workdir=workdir,
+                    tool_context=self.tool_context,
+                    finalize=self._close_change,
+                )
+        except WorkspaceError as exc:
+            now = utcnow()
+            result = RunResult(
+                run_id=run_id,
                 task=self.name,
+                graph=self.task.graph.name,
+                status="asking",
+                started_at=now,
+                finished_at=now,
+                steps=0,
+                path=[],
+                usage={"input_tokens": 0, "output_tokens": 0},
+                outputs={},
+                state=dict(self.state),
                 project=self.config.display_name,
-                # What actually fired this run, not the schedule it may not
-                # have used.
                 trigger=fire.reason,
                 iteration=fire.iteration,
-                run_id=run_id,
-                cancel=self.cancel,
-                workdir=workdir,
-                tool_context=self.tool_context,
-                finalize=self._close_change,
             )
+            self.store.append(
+                Event(
+                    run_id=run_id,
+                    type="run_started",
+                    data={
+                        "task": self.name,
+                        "project": self.config.display_name,
+                        "graph": self.task.graph.name,
+                        "trigger": fire.reason,
+                        "iteration": fire.iteration,
+                    },
+                )
+            )
+            self._record_application(result, {"status": "blocked", "error": str(exc)})
+            self.store.record_summary(result.summary())
         finally:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
@@ -764,6 +975,9 @@ class TaskRunner:
             self.name,
             (self._asking.asked or {}).get("question", ""),
         )
+        if (self._asking.asked or {}).get("node") == "apply_changes":
+            self._hold = True
+            self.status = "paused"
 
     def _keep_question(self) -> None:
         """Write the outstanding question down, or forget it once answered."""
@@ -803,6 +1017,9 @@ class TaskRunner:
                 (self._asking.asked or {}).get("question", ""),
             )
         self._asking, self._asking_depth = result, self._depth
+        if (result.asked or {}).get("node") == "apply_changes":
+            self._hold = True
+            self.status = "paused"
         self._keep_question()
         log.info(
             "task '%s' run %s is waiting on you: %s [%s]",
@@ -861,6 +1078,20 @@ class TaskRunner:
         # for something that has already been decided. The index is
         # append-only; another row for the same run is how it is revised.
         self.store.record_summary(result.summary())
+        if (result.asked or {}).get("node") == "apply_changes":
+            card = self.config.cards_by_task.get(self.name)
+            if card:
+                write_result(card, result, replace=True)
+                try:
+                    append_journal(
+                        card.journal_path(), "change", f"{choice} requested for {result.run_id}", title=card.name
+                    )
+                except OSError as exc:
+                    log.warning("could not record the application answer: %s", exc)
+            if choice == "retry":
+                self.resume()
+                self.run_now()
+            return True
         self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:
             self.handoff(self, result, self._asking_depth)

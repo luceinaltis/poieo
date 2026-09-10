@@ -150,6 +150,7 @@ class RunResult:
     project: str = ""
     # Set after the run by the daemon when the task keeps a private copy.
     change: dict[str, Any] | None = None
+    application: dict[str, Any] | None = None
     # The question a confirm node put to a person: {node, question, choices}.
     asked: dict[str, Any] | None = None
     # What they answered, once they have. Until then the run is `asking` and
@@ -193,6 +194,8 @@ class RunResult:
         # and the difference matters to the card that reads this.
         if self.change is not None:
             summary["change"] = self.change
+        if self.application is not None:
+            summary["application"] = self.application
         if self.cause is not None:
             summary["cause"] = self.cause
         return summary

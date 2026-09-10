@@ -1723,10 +1723,16 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             change = summary.get("change")
             if not change:
                 return JSONResponse({"error": f"run '{run_id}' has no change"}, status_code=404)
+            if summary.get("task") != task or summary.get("project", project) != project:
+                return JSONResponse({"error": "this run belongs to another task"}, status_code=409)
             target = change["head"]
 
         try:
-            outcome = await asyncio.to_thread(getattr(point, action), target)
+            decide = getattr(runner, f"{action}_changes", None)
+            if decide is not None:
+                outcome = await decide(target)
+            else:
+                outcome = await asyncio.to_thread(getattr(point, action), target)
         except PoieoError as exc:
             return JSONResponse({"error": str(exc)}, status_code=409)
 

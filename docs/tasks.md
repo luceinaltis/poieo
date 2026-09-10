@@ -28,7 +28,8 @@ to work. Its optional fields are:
 - execution: `role`, `tools`, `max_turns`, `deadline`, `binding`, `isolation`;
 - data: `input`, `input_file`;
 - flow after completion: `then`, `on_error`;
-- state: `enabled`.
+- state: `enabled`;
+- applying changes: `apply`, described below.
 
 Unknown keys are rejected. A graph-backed card cannot also declare
 node-specific `prompt`, `role`, `tools`, `max_turns`, or `deadline`; those belong
@@ -37,6 +38,24 @@ in the graph once it has more than one authored step.
 The filename stem is the stable task id. `name` is a title and may change
 without changing stored history, journal paths, or API identity. Paths in a
 card are relative to the card file after `~` expansion.
+
+## Applying changes
+
+`apply.mode` defaults to `review`. `auto` authorizes checked changes to reach the
+project without a per-run decision. `apply.checks` is a list of shell commands;
+automatic mode requires at least one. Each must exit zero, with a per-command
+`timeout` of 120 seconds by default (up to 600).
+
+`apply.paths` lists files or folder prefixes relative to the task folder. Empty
+means the whole task folder. Absolute paths, parent traversal, wildcard patterns
+and `.git` are rejected. Both sides of a rename count toward scope. Automatic
+application excludes task configuration, the project marker and its selected
+binding, so a task cannot apply a change to its own permissions.
+
+These settings are adopted at the next run when no other structural setting
+changed. Revoking or altering an automatic permission during verification leaves
+the current change for review. Command execution keeps the task's isolation;
+path scope limits what is applied, not what a host shell can access.
 
 ## Expansion
 

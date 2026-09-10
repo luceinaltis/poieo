@@ -6,6 +6,12 @@ The runtime executes one validated graph against one binding and returns one
 `RunResult`. Scheduling, task-card expansion, journals, workspaces, and daemon
 residency are supplied by callers and remain outside this package.
 
+The caller may attach optional `RunResult.application` data during finalization.
+It is included in the persisted summary. Its status and verification details
+describe whether a file change was applied, kept for review, or blocked; this is
+separate from the model's output. Application can change a completed walk to a
+persisted question before the final summary is written.
+
 ## Run context
 
 `RunContext` holds the graph, binding, provider pool, run store, input, graph

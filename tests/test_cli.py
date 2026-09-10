@@ -595,7 +595,7 @@ def test_run_layers_the_flag_over_what_the_card_declares(tmp_path, monkeypatch):
         seen.update(kwargs["input"])
         return await run_it(*args, **kwargs)
 
-    monkeypatch.setattr("poieo.cli.execute", watched)
+    monkeypatch.setattr("poieo.daemon.service.execute", watched)
     result = runner.invoke(
         app,
         [
@@ -731,6 +731,7 @@ def _boxed_run(monkeypatch, tmp_path):
         )
 
     monkeypatch.setattr(cli, "execute", spy)
+    monkeypatch.setattr("poieo.daemon.service.execute", spy)
     return folder, seen
 
 
