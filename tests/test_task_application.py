@@ -272,13 +272,13 @@ async def test_application_rechecks_when_another_task_finishes_first(tmp_path, m
     apply = point.apply_prepared
     calls = []
 
-    def competing_apply(prepared):
+    def competing_apply(prepared, **kwargs):
         calls.append(prepared.base)
         if len(calls) == 1:
             (repo / "other.txt").write_text("another task")
             git(repo, "add", "other.txt")
             git(repo, "commit", "-m", "another task finished first")
-        return apply(prepared)
+        return apply(prepared, **kwargs)
 
     monkeypatch.setattr(point, "apply_prepared", competing_apply)
     result = await check_and_apply(point, ApplySpec(mode="auto", checks=[CHECK_MADE]))

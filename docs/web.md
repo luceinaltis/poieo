@@ -1,5 +1,11 @@
 # Web API and board
 
+Acceptance on a running task goes through the runner's application checks.
+Accept/discard refuse while that task is working, and a selected run must belong
+to the requested project and task. Refusals also include stale candidates,
+changed verification files, out-of-scope files and failed commands; absence of
+the expected `accepted`/`discarded` result makes the HTTP response 409.
+
 `src/poieo/web/`, `web-ui/`
 
 The daemon serves the board at `http://127.0.0.1:8484` by default. `--port`

@@ -27,6 +27,7 @@ from .graph import Branch, GraphSpec, NodeSpec, OutputSpec, load_document, load_
 from .layout import layout_for
 from .memory import read_memory, write_result
 from .tools import DEFAULT_TOOLSETS, Isolation
+from .workspace import ApplySpec
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .daemon.config import TaskSpec
@@ -139,6 +140,7 @@ class CardSpec(BaseModel):
     # Where this task's commands may run. Absent means the host, as before.
     # Not a node key: it describes the task, so `poieo eject` keeps it.
     isolation: Isolation | None = None
+    apply: ApplySpec = Field(default_factory=ApplySpec)
 
     # Populated by load_card; not part of the authored document.
     source_path: Path | None = Field(default=None, exclude=True)
@@ -210,6 +212,7 @@ def load_card(path: str | Path) -> CardSpec:
 # a graph and the reader was told `'graph' is not a setting here` about the very
 # key that made it a card.
 _CARD_KEYS = {
+    "apply",
     "prompt",
     "graph",
     "trigger",
@@ -333,6 +336,7 @@ def expand(task: CardSpec, roster: list[str] | None = None) -> tuple[TaskSpec, G
             trigger=_trigger(task),
             enabled=task.enabled,
             isolation=task.isolation,
+            apply=task.apply,
             # The folder is what turns the private copy on. A task that names
             # none works on no folder, and has none to keep a copy of.
             workdir=str(task.folder_path()) if task.folder else None,

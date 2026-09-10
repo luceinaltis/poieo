@@ -24,10 +24,11 @@ from ..memory import keeps_memory
 from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
-from ..store import Event, RunStore
+from ..store import Event, RunStore, utcnow
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
+from .changes import check_and_apply
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
@@ -148,7 +149,7 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
         spec, graph = expand(load_card(card.source_path), roster=roster)
     except PoieoError as exc:
         return None, str(exc)
-    if spec != task.spec:
+    if spec != task.spec.model_copy(update={"apply": spec.apply}):
         return None, STALE_CARD
     return graph, None
 
@@ -337,6 +338,7 @@ class TaskRunner:
         # Where this task's tools work. Built by the daemon, because the container
         # keeper is shared across tasks and the roster is only known there.
         self.tool_context = tool_context
+        self._change_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -355,9 +357,15 @@ class TaskRunner:
         self._tracking = False
         self._untracked = None
         if point is None:
+            if self.task.spec.apply.mode == "auto":
+                raise WorkspaceError("automatic application needs a folder protected by Git")
             return None
         try:
+            if self.task.spec.apply.mode == "auto" and any(node.workdir for node in self.task.graph.nodes):
+                raise WorkspaceError("automatic application uses the task folder; remove step-specific folders")
             if not await asyncio.to_thread(point.available):
+                if self.task.spec.apply.mode == "auto":
+                    raise WorkspaceError("automatic application needs a folder protected by Git")
                 self._untracked = (
                     f"{point.repo} is not a repository -- the work happens there "
                     f"directly and cannot be reviewed or undone"
@@ -366,12 +374,14 @@ class TaskRunner:
                 return point.repo
             await asyncio.to_thread(point.prepare)
         except WorkspaceError as exc:
+            if self.task.spec.apply.mode == "auto":
+                raise
             # A repository we cannot use is not a reason to stop working at 3am.
             self._untracked = str(exc)
             log.error("task '%s': %s", self.name, exc)
             return point.repo
         self._tracking = True
-        return point.worktree
+        return await asyncio.to_thread(point.working_folder)
 
     async def _close_change(self, result: RunResult) -> None:
         """Land the run's work as one change, or leave the branch alone."""
@@ -413,12 +423,81 @@ class TaskRunner:
                     data={"error": str(exc)},
                 )
             )
+            if self.task.spec.apply.mode == "auto":
+                self._record_application(result, {"status": "blocked", "error": str(exc)})
             return
-        if change is None:
-            return  # nothing to do is not nothing done
+        if change is not None:
+            result.change = change.as_dict()
+            self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
+        policy = self.task.spec.apply
+        if result.status == "completed" and (policy.mode == "auto" or policy.checks):
+            protected = [card.source_path for card in self.config.cards_by_task.values() if card.source_path]
+            if self.config.cards:
+                protected.append(self.config.resolve_path(self.config.cards))
+            if self.config.source_path:
+                protected.append(self.config.source_path)
+            protected.append(Path(self.task.binding_key))
+            try:
+                result.application = await check_and_apply(
+                    self.workspace,
+                    policy,
+                    through=change.head if change else None,
+                    tool_context=self.tool_context,
+                    cancel=self.cancel,
+                    authorized=self._may_auto_apply,
+                    protected=protected,
+                )
+            except PoieoError as exc:
+                result.application = {"status": "blocked", "error": str(exc)}
+            self._record_application(result, result.application)
 
-        result.change = change.as_dict()
-        self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
+    def _record_application(self, result: RunResult, outcome: dict) -> None:
+        result.application = outcome
+        self.store.append(Event(run_id=result.run_id, type="run_application", data=outcome))
+        if outcome["status"] == "blocked":
+            result.status = "asking"
+            result.asked = {
+                "node": "apply_changes",
+                "question": "This change could not be applied. Check the result, then retry or keep the task paused.",
+                "choices": ["retry", "pause"],
+            }
+            self.store.append(Event(run_id=result.run_id, type="run_asking", data=result.asked))
+
+    async def accept_changes(self, through: str | None = None) -> dict:
+        """The board and CLI accept through the same checks as automatic work."""
+        if self.workspace is None:
+            return {"status": "blocked", "error": "this task keeps no reviewable copy"}
+        if self._change_lock.locked():
+            return {"status": "blocked", "error": "this task is still working; try again when it finishes"}
+        async with self._change_lock:
+            card = self.config.cards_by_task.get(self.name)
+            policy = load_card(card.source_path).apply if card and card.source_path else self.task.spec.apply
+            return await check_and_apply(
+                self.workspace,
+                policy,
+                through=through,
+                manual=True,
+                tool_context=self.tool_context,
+            )
+
+    async def discard_changes(self, since: str | None = None) -> dict:
+        if self.workspace is None:
+            return {"error": "this task keeps no reviewable copy"}
+        if self._change_lock.locked():
+            return {"error": "this task is still working; try again when it finishes"}
+        async with self._change_lock:
+            return await asyncio.to_thread(self.workspace.discard, since)
+
+    def _may_auto_apply(self) -> bool:
+        """Permission revoked while a task runs must take effect before application."""
+        card = self.config.cards_by_task.get(self.name)
+        if card is None or card.source_path is None:
+            return self.armed and self.task.spec.apply.mode == "auto"
+        try:
+            current = load_card(card.source_path)
+            return current.enabled and current.apply == self.task.spec.apply and current.apply.mode == "auto"
+        except PoieoError:
+            return False
 
     @property
     def last_result(self) -> RunResult | None:
@@ -607,6 +686,20 @@ class TaskRunner:
         )
 
     async def _one_run(self, fire: Firing) -> bool:
+        async with self._change_lock:
+            return await self._run_locked(fire)
+
+    async def run_once(self, payload: dict[str, Any]) -> RunResult:
+        """Run a card from the CLI with the daemon's change and history rules."""
+        async with self._change_lock:
+            await self._run_locked(
+                Firing(iteration=1, at=datetime.now(timezone.utc), reason="run now"), payload=payload
+            )
+            if self.last_result is None:
+                raise SpecError(f"task '{self.name}' could not run: {self.status}")
+            return self.last_result
+
+    async def _run_locked(self, fire: Firing, payload: dict[str, Any] | None = None) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
@@ -619,7 +712,7 @@ class TaskRunner:
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
         try:
-            payload = self.task.read_input(self.config)
+            payload = self.task.read_input(self.config) if payload is None else payload
         except PoieoError as exc:
             log.error("task '%s': %s", self.name, exc)
             return self.task.spec.on_error != "stop"
@@ -644,6 +737,15 @@ class TaskRunner:
                     exc,
                 )
 
+        card = self.config.cards_by_task.get(self.name)
+        if card and card.source_path:
+            try:
+                fresh, _ = expand(load_card(card.source_path), roster=list(self.config.cards_by_task))
+                if fresh == self.task.spec.model_copy(update={"apply": fresh.apply}):
+                    self.task.spec.apply = fresh.apply
+            except PoieoError:
+                pass  # The current permission is checked again before applying.
+
         log.info(
             "task '%s' firing (iteration %d, %s)",
             self.name,
@@ -652,8 +754,8 @@ class TaskRunner:
         )
         run_id = new_run_id()
         self.status, self.current_run_id = "running", run_id
-        workdir = await self._open_change()
         try:
+            workdir = await self._open_change()
             result = await execute(
                 self.task.graph,
                 self.task.binding,
@@ -673,6 +775,39 @@ class TaskRunner:
                 tool_context=self.tool_context,
                 finalize=self._close_change,
             )
+        except WorkspaceError as exc:
+            now = utcnow()
+            result = RunResult(
+                run_id=run_id,
+                task=self.name,
+                graph=self.task.graph.name,
+                status="asking",
+                started_at=now,
+                finished_at=now,
+                steps=0,
+                path=[],
+                usage={"input_tokens": 0, "output_tokens": 0},
+                outputs={},
+                state=dict(self.state),
+                project=self.config.display_name,
+                trigger=fire.reason,
+                iteration=fire.iteration,
+            )
+            self.store.append(
+                Event(
+                    run_id=run_id,
+                    type="run_started",
+                    data={
+                        "task": self.name,
+                        "project": self.config.display_name,
+                        "graph": self.task.graph.name,
+                        "trigger": fire.reason,
+                        "iteration": fire.iteration,
+                    },
+                )
+            )
+            self._record_application(result, {"status": "blocked", "error": str(exc)})
+            self.store.record_summary(result.summary())
         finally:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
@@ -764,6 +899,9 @@ class TaskRunner:
             self.name,
             (self._asking.asked or {}).get("question", ""),
         )
+        if (self._asking.asked or {}).get("node") == "apply_changes":
+            self._hold = True
+            self.status = "paused"
 
     def _keep_question(self) -> None:
         """Write the outstanding question down, or forget it once answered."""
@@ -803,6 +941,9 @@ class TaskRunner:
                 (self._asking.asked or {}).get("question", ""),
             )
         self._asking, self._asking_depth = result, self._depth
+        if (result.asked or {}).get("node") == "apply_changes":
+            self._hold = True
+            self.status = "paused"
         self._keep_question()
         log.info(
             "task '%s' run %s is waiting on you: %s [%s]",
@@ -862,6 +1003,11 @@ class TaskRunner:
         # append-only; another row for the same run is how it is revised.
         self.store.record_summary(result.summary())
         self._remember(result, replace=True)
+        if (result.asked or {}).get("node") == "apply_changes":
+            if choice == "retry":
+                self.resume()
+                self.run_now()
+            return True
         if self.handoff is not None and self.task.spec.then:
             self.handoff(self, result, self._asking_depth)
         return True

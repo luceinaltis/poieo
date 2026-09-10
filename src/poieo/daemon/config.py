@@ -17,6 +17,7 @@ from ..layout import find_project_file
 from ..memory import check_memory, keeps_memory
 from ..project import ProjectSpec, load_project
 from ..tools import Isolation
+from ..workspace import ApplySpec, usable
 from .triggers import TriggerSpec
 
 log = logging.getLogger("poieo.daemon")
@@ -47,6 +48,7 @@ class TaskSpec(BaseModel):
     carry_state: bool = False
     # Where this task's commands may run. Absent means the host, as before.
     isolation: Isolation | None = None
+    apply: ApplySpec = Field(default_factory=ApplySpec)
     on_error: Literal["continue", "stop"] = "continue"
 
     # Which task should work next: the router's own when/to/label, one level
@@ -425,6 +427,8 @@ def load_tasks(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
         workdir = config.workdir_path(task)
         if workdir is not None and not workdir.is_dir():
             raise SpecError(f"task '{task.name}': workdir does not exist: {workdir}")
+        if task.enabled and task.apply.mode == "auto" and (workdir is None or not usable(workdir)):
+            raise SpecError(f"task '{task.name}': automatic application needs a folder protected by Git")
 
         generated = config.card_graphs.get(task.name)
         if generated is None:
@@ -434,6 +438,10 @@ def load_tasks(config: DaemonConfig, *, enabled_only: bool = True) -> list[Loade
             generated = graphs[graph_path]
 
         graph, binding = generated, bindings[binding_path]
+        if task.enabled and task.apply.mode == "auto" and any(node.workdir for node in graph.nodes):
+            raise SpecError(
+                f"task '{task.name}': automatic application uses the task folder; remove step-specific folders"
+            )
         try:
             preflight(graph, binding, workdir=workdir)
             # Reads the environment, not a server, so it belongs at load time.

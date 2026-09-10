@@ -46,11 +46,11 @@ from .card import (
     load_card,
     load_cards,
     read_journal,
-    record_run,
 )
 from .daemon import Daemon, load_config
 from .daemon.config import (
     DaemonConfig,
+    LoadedTask,
     TaskSpec,
     check_isolation,
     config_for_tasks_folder,
@@ -688,6 +688,19 @@ def run(
 
     async def _go():
         async with ProviderPool(spec) as pool:
+            if task is not None:
+                from .daemon.service import TaskRunner
+
+                task_spec, _ = expand(task)
+                task_spec = task_spec.model_copy(update={"workdir": str(workdir.resolve()) if workdir else None})
+                project = find_project(task.dir)
+                config = DaemonConfig.model_validate(project.model_dump()) if project else DaemonConfig()
+                config.source_path = project.source_path if project else task.dir / MARKER
+                config.binding = str(binding.resolve())
+                config.cards_by_task = {task.slug: task}
+                loaded = LoadedTask(spec=task_spec, graph=graph, binding=spec, binding_key=str(binding))
+                driver = TaskRunner(loaded, config, pool, run_store, asyncio.Event(), tool_context=tool_context)
+                return await driver.run_once(payload)
             return await execute(
                 graph,
                 spec,
@@ -699,11 +712,6 @@ def run(
             )
 
     result = asyncio.run(_go())
-    if task is not None:
-        # The journal contract: every run of a task leaves a line, or the
-        # next run redoes this one's work and notes are never consumed.
-        record_run(task, result)
-
     if as_json:
         typer.echo(json.dumps(result.__dict__, indent=2, ensure_ascii=False, default=str))
     else:

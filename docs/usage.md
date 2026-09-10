@@ -47,6 +47,27 @@ To detect real local model servers and supported cloud credentials instead,
 run `poieo init` without `--mock`. It records the endpoints and environment
 variable names that answered; it never writes a secret value.
 
+## Let a task apply its work
+
+Changes wait for review by default. To let a Git-backed task apply verified work
+automatically, add this to its task card:
+
+```yaml
+apply:
+  mode: auto
+  paths: [src, tests]
+  checks:
+    - python -m pytest -q
+```
+
+Paths are files or folders relative to the task folder; omit `paths` to allow the
+whole folder. Verification commands run on the combination with the latest
+project. All must pass. A conflict, failed check or change outside the allowed
+paths leaves the work saved and pauses that task for your decision. Other tasks
+continue. Use `mode: review` to require a decision again. Application settings
+alone take effect on the next run; revoking permission also stops an application
+that is still being checked. The run history keeps the checks and their result.
+
 ## Create and run a task
 
 Create `tasks/keep-green.yaml`:
