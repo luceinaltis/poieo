@@ -65,7 +65,9 @@ task working in a Git repository uses a private copy. Its edits become one
 change that the user accepts or discards. A task can also apply changes under
 an explicit permission: allowed files or folders and verification commands.
 Changes are checked against the latest project together, then applied one at a
-time. A failed check or conflict pauses the affected task and preserves its work.
+time. Compatible conflicts or failed checks receive one bounded repair and fresh
+checks. Unresolved or incompatible work pauses the affected task and preserves
+its history.
 
 ### Use three product words
 
