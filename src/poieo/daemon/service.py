@@ -608,7 +608,7 @@ class TaskRunner:
         outcome["run_ids"] = run_ids
         for run_id in run_ids:
             result = next((run for run in self.results if run.run_id == run_id), None)
-            if self._asking and self._asking.run_id == run_id:
+            if result is None and self._asking and self._asking.run_id == run_id:
                 result = self._asking
             row = self.store.summary(run_id)
             if row is None and result is None:
@@ -1071,6 +1071,8 @@ class TaskRunner:
         derived from a run that already happened, and the recovery is the same
         one the user has anyway.
         """
+        if self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
+            self._restore_decision(self._asking.run_id)
         path = self._asking_path()
         if path is None or not path.exists():
             return
@@ -1079,10 +1081,13 @@ class TaskRunner:
             depth = kept.pop("depth", 0)
             if (kept.get("asked") or {}).get("node") == "apply_changes":
                 run_id = kept.get("run_id")
-                row = self.store.summary(run_id) if isinstance(run_id, str) else None
-                if row and (row.get("application") or {}).get("status") in {"applied", "discarded", "undone"}:
+                if isinstance(run_id, str) and self._restore_decision(run_id):
                     return  # An older process may have left an already-resolved question.
-            self._asking, self._asking_depth = RunResult(**kept), int(depth)
+            saved = RunResult(**kept)
+            self._asking = next(
+                (result for result in [*self.results, self._asking] if result and result.run_id == saved.run_id), saved
+            )
+            self._asking_depth = int(depth)
         except (OSError, ValueError, TypeError) as exc:
             log.warning("task '%s': could not read the question left at %s: %s", self.name, path, exc)
             return
@@ -1095,6 +1100,25 @@ class TaskRunner:
             self._hold = True
             self.status = "paused"
             self.held_because = _application_hold(self._asking)
+
+    def _restore_decision(self, run_id: str) -> bool:
+        """Bring an older runner up to a decision made by another entry point."""
+        row = self.store.summary(run_id)
+        if not row or row.get("task") != self.name or row.get("project") not in (None, self.config.display_name):
+            return False
+        applied = row.get("application") or {}
+        if applied.get("status") not in {"applied", "discarded", "undone"}:
+            return False
+        for result in [*self.results, self._asking]:
+            if result is not None and result.run_id == run_id:
+                result.application = applied
+                result.status = row["status"]
+                result.project = self.config.display_name
+                result.answer = row.get("answer")
+        if self._asking and self._asking.run_id == run_id:
+            self._asking = None
+            self.resume()
+        return True
 
     def _keep_question(self) -> None:
         """Write the outstanding question down, or forget it once answered."""
@@ -1159,6 +1183,15 @@ class TaskRunner:
         node exists to replace, and it would be read here rather than by the
         person who typed it.
         """
+        try:
+            with task_run_lock(self.config.layout().worktrees(), self.name):
+                self._restore_question()
+                return self._answer_locked(choice)
+        except WorkspaceError as exc:
+            log.warning("task '%s': %s", self.name, exc)
+            return False
+
+    def _answer_locked(self, choice: str) -> bool:
         result = self._asking
         if result is None:
             log.warning("task '%s' is not waiting on an answer", self.name)
