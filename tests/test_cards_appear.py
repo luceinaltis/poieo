@@ -16,7 +16,7 @@ from conftest import card, down, method_barrier, until, up
 
 from poieo.daemon import Daemon, load_config
 from poieo.store import NullStore
-from poieo.web import create_app
+from poieo.web import BroadcastStore, create_app
 
 pytestmark = pytest.mark.usefixtures("daemon_lifecycle")
 
@@ -64,6 +64,39 @@ async def test_a_card_written_while_the_daemon_runs_starts_running(tmp_path, mon
     assert added.run_now() is True
     await until(lambda: len(added.results) == 1, "the new card's first run")
     assert added.results[-1].status == "completed"
+
+    await down(daemon, task)
+
+
+async def test_the_board_is_told_a_card_appeared(tmp_path, monkeypatch):
+    """Noticed by the daemon is not the same as visible to a reader. The board
+    reads `/api/tasks` when it opens and when the feed reconnects, and nothing
+    else, so a task created from the browser -- or dropped into the folder by
+    hand -- ran for hours without ever reaching an open page. The scan already
+    says "ask again" for a card that was *edited*; a card that arrived is the
+    same news.
+
+    Every card here is on a manual trigger, so the only thing that can be on
+    the feed is the announcement itself.
+    """
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path), store=BroadcastStore(NullStore()))
+    task = await up(daemon)
+    queue = daemon.projects[0].store.subscribe()
+
+    card(tmp_path / "cards", "second", "graph: ../g.yaml\ntrigger: {type: manual}\n")
+    await until(lambda: not queue.empty(), "the board to be told")
+
+    assert queue.get_nowait() == {"type": "tasks_changed", "project": daemon.config.display_name}
+    assert _named(daemon, "second") is not None
+
+    # And said once. The card is not new at the next look, and a frame every
+    # scan forever is the thing `_note_drift` already refuses to send.
+    wait_for_appearances = method_barrier(daemon, monkeypatch, "_appeared")
+    assert await wait_for_appearances() == []
+    # The following scan starting proves the one before it finished announcing.
+    assert await wait_for_appearances() == []
+    assert queue.empty()
 
     await down(daemon, task)
 
