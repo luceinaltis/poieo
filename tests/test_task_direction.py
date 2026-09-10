@@ -11,6 +11,45 @@ from poieo.daemon import Daemon
 from poieo.web.server import create_app
 
 
+@pytest.mark.parametrize("folder", [None, "plain"])
+async def test_unprotected_tasks_keep_direction_until_a_run_can_read_it(tmp_path, monkeypatch, folder):
+    import yaml
+    from test_task_workspace import LLM_GRAPH, WRITES_NOTHING
+
+    from poieo.daemon import load_config
+
+    _, config = policy_config(tmp_path, {"mode": "review"}, workdir=False, graph=LLM_GRAPH, responses=WRITES_NOTHING)
+    if folder:
+        (tmp_path / folder).mkdir()
+        path = tmp_path / "cards" / "chores.yaml"
+        card = yaml.safe_load(path.read_text())
+        card["folder"] = f"../{folder}"
+        path.write_text(yaml.safe_dump(card))
+        config = load_config(tmp_path / "d.yaml")
+    active, second = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = active._open_change
+
+    async def waiting():
+        entered.set()
+        await release.wait()
+        return await original()
+
+    monkeypatch.setattr(active, "_open_change", waiting)
+    running = asyncio.create_task(active.run_once({}))
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        second.leave_note("Keep the heading next time")
+        refused = await second.run_once({})
+        assert refused.status == "asking"
+        assert "already running" in refused.application["error"]
+    finally:
+        release.set()
+        await running
+    fresh = read_journal(config.cards_by_task["chores"].journal_path()).split("What you did before that:")[0]
+    assert "Keep the heading next time" in fresh
+
+
 async def test_a_second_runner_cannot_deliver_direction_into_an_active_runs_bookmark(tmp_path, monkeypatch):
     _, config = policy_config(tmp_path, {"mode": "review"})
     active, board = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
