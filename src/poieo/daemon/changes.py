@@ -35,6 +35,10 @@ async def finish_write(
                 cancelled.set()
             if job.cancelled():
                 raise
+        except Exception:
+            if interrupted and propagate_cancel:
+                raise asyncio.CancelledError from None
+            raise
     if interrupted and propagate_cancel:
         raise asyncio.CancelledError
     return result
