@@ -51,10 +51,21 @@ const TASK_ROWS: TaskRow[] = [
 const start = () => initialStage(TASK_ROWS)
 
 test("automatically applied runs do not become changes waiting for review", () => {
-  const event = { ...AGENT_SUMMARY, type: "run_summary", application: { status: "applied", accepted: 1 } }
+  const event = { ...AGENT_SUMMARY, type: "run_summary",
+    change: { base: "a", head: "b", files: ["note.txt"], insertions: 1, deletions: 0, message: "added a note" },
+    application: { status: "applied", accepted: 1 } }
   const stage = reduce(start(), event as unknown as PoieoEvent)
   expect(stage.tasks["board/chores"].pending).toBe(0)
   expect(stage.tasks["board/chores"].runs[0]).toMatchObject({ application: { status: "applied" } })
+})
+
+test("an application question visibly pauses only the affected task", () => {
+  let stage = reduce(start(), AGENT_RUN[0])
+  stage = reduce(stage, { type: "run_asking", run_id: AGENT_RUN[0].run_id,
+    at: "2026-08-22T07:29:00Z", data: { node: "apply_changes", question: "retry?", choices: ["retry", "pause"] } })
+  expect(stage.tasks["board/chores"].status).toBe("paused")
+  expect(stage.tasks["board/chores"].held).toBe(true)
+  expect(stage.tasks["board/revision"].status).toBe("waiting")
 })
 
 test("initialStage seeds one state per task", () => {
