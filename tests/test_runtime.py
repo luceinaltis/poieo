@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 import pytest
 from conftest import EXAMPLES
@@ -47,6 +48,47 @@ async def test_router_falls_through_to_default():
     binding = mock_binding({"classifier": "question", "writer": "answer"})
     result = await run_graph(graph, binding, input={"message": "how do I log in?"})
     assert result.path[-1] == "draft_answer"
+
+
+def _router_section() -> str:
+    """The `### router` part of docs/graph.md, up to the next heading."""
+    text = (Path(__file__).resolve().parents[1] / "docs" / "graph.md").read_text(encoding="utf-8")
+    body = text.split("### `router`", 1)[1]
+    return body.split("\n### ", 1)[0]
+
+
+async def test_a_router_ends_the_run_the_two_ways_the_docs_promise():
+    """Selecting nothing is a termination, and the document has to say so.
+
+    A router names its successor, so the two ways of naming none end the run:
+    a matched arm with no `to`, and no arm matching with no `default`. Graphs
+    here stop on a condition that way, and a reader who has only read
+    graph.md's router section would not know a run can end there at all.
+    """
+    stops_on_a_match = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "route",
+            "nodes": [{"id": "route", "type": "router", "branches": [{"when": "1 == 1", "label": "stop"}]}],
+        }
+    )
+    stops_on_no_match = GraphSpec.model_validate(
+        {
+            "name": "g",
+            "entry": "route",
+            "nodes": [{"id": "route", "type": "router", "branches": [{"when": "1 == 2", "to": "route"}]}],
+        }
+    )
+
+    for graph in (stops_on_a_match, stops_on_no_match):
+        result = await run_graph(graph, mock_binding({}))
+        assert result.status == "completed"
+        assert result.path == ["route"]
+
+    section = _router_section()
+    assert "no `to`" in section, "graph.md does not say a matched branch without `to` ends the run"
+    assert "no `default`" in section, "graph.md does not say an unmatched router without `default` ends the run"
+    assert "end the run" in section, "graph.md's router section does not call either of those a termination"
 
 
 async def test_cycle_exits_when_the_critic_approves():
