@@ -792,7 +792,7 @@ test("a memory named in the drawer opens the memory place at that entry", async 
   vi.mocked(fetchRunMemory).mockResolvedValue({
     run_id: "newest-but-quiet",
     task: "chores",
-    shown: [{ slug: "windows-shell", used: true }],
+    shown: [{ slug: "windows-shell", used: true, preview: "Windows tests need a POSIX shell." }],
   })
   vi.mocked(fetchMemory).mockResolvedValue({
     enabled: true,

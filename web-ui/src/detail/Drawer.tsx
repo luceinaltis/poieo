@@ -16,7 +16,7 @@ import { Diff } from "../review/Diff"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
-import type { PoieoEvent, Question as Asked, RunMemory, RunSummary } from "../types"
+import type { PoieoEvent, Question as Asked, RunMemory, RunSummary, ShownMemory } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
 
@@ -544,9 +544,15 @@ function RunBrief({
 }
 
 /**
- * What the run was shown from the project's long memory, and which of it
- * showed up in the run's own output -- the same judgement `poieo memory`
- * makes when it says how many runs used what they were shown.
+ * What the run knew when it started, said the way a reader would ask it.
+ *
+ * The record says which entries recall put in front of the model and which
+ * of them surfaced in what it wrote back -- the same judgement `poieo
+ * memory` makes when it says how many runs used what they were shown. Drawn
+ * as one sentence and then one row per entry: the slug alone was a list of
+ * names a reader had to open to understand, so each row carries the entry's
+ * own opening words and a plain word for what became of it. The ones that
+ * shaped the answer come first, because that is the news.
  *
  * Nothing is drawn when the record says nothing about memory (the project
  * kept none when this ran). An empty list is different, and says so: memory
@@ -554,12 +560,21 @@ function RunBrief({
  */
 function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: string): void }) {
   if (!memory.shown) return null
+  const shown = memory.shown
+  const used = shown.filter((one) => one.used === true)
+  const rows = [...used, ...shown.filter((one) => one.used !== true)]
+  const count = `${shown.length} memor${shown.length === 1 ? "y" : "ies"}`
+  const lead = !shown.length
+    ? "Started with nothing from memory."
+    : `Started with ${count}; ${used.length ? used.length : "none"} shaped the answer.`
+  const became = (one: ShownMemory) =>
+    one.used === true ? "shaped the answer" : one.used === false ? "seen, not used" : "seen; no longer in memory"
   return (
-    <section className="run-memory" aria-label="Memory shown to this run">
-      <h3>Memory shown to this run</h3>
-      {memory.shown.length ? (
+    <section className="run-memory" aria-label="What this run started with">
+      <p className="run-memory-lead">{lead}</p>
+      {rows.length ? (
         <ul className="run-memory-list">
-          {memory.shown.map((one) => (
+          {rows.map((one) => (
             <li key={one.slug} data-used={one.used === null ? "unknown" : String(one.used)}>
               <button
                 type="button"
@@ -570,13 +585,12 @@ function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: 
               >
                 {one.slug}
               </button>
-              {one.used ? <span className="run-memory-used">used</span> : null}
+              {one.preview ? <span className="run-memory-preview">{one.preview}</span> : null}
+              <span className="run-memory-became">{became(one)}</span>
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="run-memory-none">Memory had nothing to show this run.</p>
-      )}
+      ) : null}
     </section>
   )
 }

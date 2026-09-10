@@ -19,7 +19,7 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
 | `GET /api/runs/{run_id}` | `{run_id, summary, events}` or 404; `summary` is the index row, null while the run is in flight |
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |
-| `GET /api/runs/{run_id}/memory` | `{run_id, task, shown}` from the run's record; `shown` lists each memory entry the run was shown with `used` (true, false, or null for an entry the memory no longer holds), and is null when the record says nothing about memory; 404 for a run nobody recorded |
+| `GET /api/runs/{run_id}/memory` | `{run_id, task, shown}` from the run's record; `shown` lists each memory entry the run was shown with `used` (true, false, or null for an entry the memory no longer holds) and its `preview` (the entry's opening words, null for the same), and is null when the record says nothing about memory; 404 for a run nobody recorded |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
 | `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics, search capabilities, a bounded relationship graph, and `learning`, the last few learning passes newest first; supports `If-None-Match` and 304 |
@@ -169,8 +169,10 @@ short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
-The selected run also lists the memory entries it was shown, marking the ones
-its output used; each opens the memory place on that entry. Shared action
+The selected run also says what it started with from memory: one sentence
+with the count and how many shaped the answer, then one row per entry with
+its opening words and what became of it, the ones that shaped the answer
+first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
 

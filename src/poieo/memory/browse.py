@@ -235,7 +235,9 @@ def run_document(project_dir: Path, run_id: str) -> dict[str, Any] | None:
     nothing to say about memory -- written while the project kept none --
     which is not the same as an empty list, where memory chose nothing.
     `used` is the same judgement the accounting makes, and None for an entry
-    the memory no longer holds, which cannot be judged either way.
+    the memory no longer holds, which cannot be judged either way. The
+    preview is the same one the graph carries, so a reader can tell what
+    an entry says without opening it; None for the same vanished entry.
     """
     record = read_record(project_dir, run_id)
     if record is None:
@@ -248,7 +250,11 @@ def run_document(project_dir: Path, run_id: str) -> dict[str, Any] | None:
         "run_id": record["run_id"],
         "task": record.get("task"),
         "shown": [
-            {"slug": slug, "used": used_in(by_slug[slug], record) if slug in by_slug else None}
+            {
+                "slug": slug,
+                "used": used_in(by_slug[slug], record) if slug in by_slug else None,
+                "preview": _preview(by_slug[slug].body) if slug in by_slug else None,
+            }
             for slug in shown
             if isinstance(slug, str)
         ],

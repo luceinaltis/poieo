@@ -164,39 +164,43 @@
   margin: 0;
 }
 
-/* What the run was shown from memory: part of the result, so it sits with
-   the brief and the change, not folded under the picker. Each name is a way
-   into the memory place. */
+/* What the run knew when it started: part of the result, so it sits with
+   the brief and the change, not folded under the picker. A sentence first,
+   then one row per entry -- its name, its opening words, and what became of
+   it -- so nothing here has to be opened to be understood. */
 .run-memory {
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   padding-left: 14px;
 }
 
-.run-memory h3 {
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 0.7em;
-  font-weight: 500;
-  letter-spacing: 0.11em;
+.run-memory-lead {
+  font-size: 0.9em;
+  line-height: 1.4;
   margin: 0;
-  text-transform: uppercase;
 }
 
 .run-memory-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+  display: grid;
+  gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .run-memory-list li {
-  align-items: baseline;
-  display: flex;
-  gap: 5px;
+  border-left: 2px solid var(--rule);
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+/* The ones that shaped the answer wear the colour a change wears: they are
+   what memory did for this run. */
+.run-memory-list li[data-used="true"] {
+  border-left-color: var(--ember);
 }
 
 .run-memory-open {
@@ -205,6 +209,7 @@
   color: var(--paused-text);
   font-family: var(--mono);
   font-size: 0.85em;
+  justify-self: start;
   padding: 0;
   text-decoration: underline;
   text-decoration-color: var(--paused-rule);
@@ -216,24 +221,29 @@
   text-decoration: none;
 }
 
-/* Shown and not used is the ordinary case, so it is the quiet one. */
-.run-memory-list li[data-used="false"] .run-memory-open,
 .run-memory-list li[data-used="unknown"] .run-memory-open {
   color: var(--dim);
 }
 
-.run-memory-used {
-  color: var(--ember);
-  font-family: var(--mono);
-  font-size: 0.68em;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.run-memory-none {
+.run-memory-preview {
   color: var(--dim);
   font-size: 0.85em;
-  margin: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.run-memory-became {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+}
+
+.run-memory-list li[data-used="true"] .run-memory-became {
+  color: var(--ember);
 }
 
 /* History and audit are available without owning the first screen. A single

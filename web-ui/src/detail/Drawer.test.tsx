@@ -790,28 +790,51 @@ test("a card nobody edited says nothing about restarts", async () => {
   expect(container.querySelector(".drawer-stale")).toBeNull()
 })
 
-test("the selected run lists the memory it was shown and marks what it used", async () => {
+test("the selected run says what it started with, what it says, and what shaped the answer", async () => {
   const onMemory = vi.fn()
   fetchRunMemory.mockResolvedValue({
     run_id: "r1",
     task: "chores",
     shown: [
-      { slug: "windows-shell", used: true },
-      { slug: "batch-cap", used: false },
-      { slug: "long-gone", used: null },
+      { slug: "batch-cap", used: false, preview: "The api rejects batches over 50." },
+      { slug: "windows-shell", used: true, preview: "Windows tests need a POSIX shell." },
+      { slug: "long-gone", used: null, preview: null },
     ],
   })
   await draw([run], { onMemory })
 
   expect(fetchRunMemory).toHaveBeenCalledWith("r1")
   const shown = container.querySelector(".run-memory")!
-  expect(shown.textContent).toContain("Memory shown to this run")
-  expect(shown.querySelector('[data-memory="windows-shell"]')?.closest("li")?.getAttribute("data-used")).toBe("true")
-  expect(shown.querySelector('[data-memory="batch-cap"]')?.closest("li")?.getAttribute("data-used")).toBe("false")
-  expect(shown.querySelector('[data-memory="long-gone"]')?.closest("li")?.getAttribute("data-used")).toBe("unknown")
+  // One plain sentence first: a reader should not have to decode a label.
+  expect(shown.querySelector(".run-memory-lead")?.textContent).toBe(
+    "Started with 3 memories; 1 shaped the answer.",
+  )
+  // The one that mattered comes first, and every row says what it says
+  // and what became of it.
+  const rows = Array.from(shown.querySelectorAll("li"))
+  expect(rows.map((row) => row.getAttribute("data-used"))).toEqual(["true", "false", "unknown"])
+  expect(rows[0].textContent).toContain("windows-shell")
+  expect(rows[0].textContent).toContain("Windows tests need a POSIX shell.")
+  expect(rows[0].textContent).toContain("shaped the answer")
+  expect(rows[1].textContent).toContain("The api rejects batches over 50.")
+  expect(rows[1].textContent).toContain("seen, not used")
+  expect(rows[2].textContent).toContain("no longer in memory")
 
   await press('[data-memory="windows-shell"]')
   expect(onMemory).toHaveBeenCalledWith("windows-shell")
+})
+
+test("a run that used none of its memory says so in the sentence", async () => {
+  fetchRunMemory.mockResolvedValue({
+    run_id: "r1",
+    task: "chores",
+    shown: [{ slug: "batch-cap", used: false, preview: "The api rejects batches over 50." }],
+  })
+  await draw([run])
+
+  expect(container.querySelector(".run-memory-lead")?.textContent).toBe(
+    "Started with 1 memory; none shaped the answer.",
+  )
 })
 
 test("a run recorded while the project kept no memory shows no memory section", async () => {
@@ -825,7 +848,7 @@ test("a run memory chose nothing for says so rather than vanishing", async () =>
   fetchRunMemory.mockResolvedValue({ run_id: "r1", task: "chores", shown: [] })
   await draw([run])
 
-  expect(container.querySelector(".run-memory")?.textContent).toContain("nothing")
+  expect(container.querySelector(".run-memory-lead")?.textContent).toBe("Started with nothing from memory.")
 })
 
 test("a run named on arrival is selected even when it left the short history", async () => {

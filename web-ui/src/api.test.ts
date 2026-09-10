@@ -356,7 +356,7 @@ test("a frame saying the listing changed asks for a resync, not a fold", () => {
 test("a run's memory and its summary are read by id", async () => {
   const fetchStub = stubFetch({
     "/api/runs/r1/memory": {
-      body: { run_id: "r1", task: "chores", shown: [{ slug: "windows-shell", used: true }] },
+      body: { run_id: "r1", task: "chores", shown: [{ slug: "windows-shell", used: true, preview: "Windows tests need a POSIX shell." }] },
     },
     "/api/runs/r1": {
       body: { run_id: "r1", summary: { run_id: "r1", status: "completed" }, events: [] },
@@ -366,7 +366,7 @@ test("a run's memory and its summary are read by id", async () => {
   expect(await fetchRunMemory("r1")).toEqual({
     run_id: "r1",
     task: "chores",
-    shown: [{ slug: "windows-shell", used: true }],
+    shown: [{ slug: "windows-shell", used: true, preview: "Windows tests need a POSIX shell." }],
   })
   expect(await fetchRunSummary("r1")).toEqual({ run_id: "r1", status: "completed" })
   expect(fetchStub).toHaveBeenCalledWith("/api/runs/r1/memory")

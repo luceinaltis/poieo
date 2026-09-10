@@ -471,10 +471,16 @@ def test_a_run_says_which_memory_it_was_shown_and_which_it_used(tmp_path):
         "run_id": "20260824T010000-aaaaaaaa",
         "task": "importer",
         "shown": [
-            {"slug": "windows-shell", "used": True},
-            {"slug": "command-env", "used": False},
-            # An entry the memory no longer holds cannot be judged.
-            {"slug": "long-gone", "used": None},
+            # The preview is what lets a reader know what the entry says
+            # without opening it.
+            {
+                "slug": "windows-shell",
+                "used": True,
+                "preview": "Windows 테스트에서는 POSIX 셸을 우선한다. [[command-env]]",
+            },
+            {"slug": "command-env", "used": False, "preview": "환경 변수는 명령 문자열과 분리한다."},
+            # An entry the memory no longer holds cannot be judged or shown.
+            {"slug": "long-gone", "used": None, "preview": None},
         ],
     }
 

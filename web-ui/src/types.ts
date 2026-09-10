@@ -208,6 +208,8 @@ export interface PoieoEvent {
 export interface ShownMemory {
   slug: string
   used: boolean | null
+  /** The entry's opening words, so a row means something before it is opened. Null with `used`. */
+  preview: string | null
 }
 
 /**
