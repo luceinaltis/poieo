@@ -94,3 +94,19 @@ async def test_undo_refuses_unsaved_user_edits_and_another_tasks_run(tmp_path):
     assert (repo / "README.md").read_text() == "unsaved"
     daemon.store.record_summary({**result.summary(), "task": "someone-else"})
     assert "another task" in (await driver.undo_changes(result.run_id))["error"]
+
+
+async def test_undo_updates_every_run_including_an_automatic_repair(tmp_path):
+    responses = """          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: old}}
+          - wrote made.txt
+          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: hi}}
+          - '{"decision":"ready","summary":"Fixed made.txt"}'
+"""
+    check = "python -c \"from pathlib import Path; p=Path('made.txt'); assert not p.exists() or p.read_text()=='hi'\""
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": [check]}, responses=responses)
+    daemon, result = await run_once(config)
+    repaired_id = result.application["repair"]["run_id"]
+    assert (await daemon.runners[0].undo_changes(result.run_id))["status"] == "applied"
+    assert daemon.store.summary(repaired_id)["application"]["status"] == "undone"
