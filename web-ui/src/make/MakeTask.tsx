@@ -1,10 +1,9 @@
 /**
  * Writing a task, from the board.
  *
- * Three fields and no fourth: a name, the folder it works in, and its prompt.
- * That is DESIGN.md's second principle, and everything else -- which model,
- * how often, where output lands -- stays on a default until somebody opens the
- * file to change it.
+ * A name, the folder it works in, and a prompt remain the ordinary form.
+ * "Write as steps" grows that prompt into connected instructions and
+ * conditions, saved as the same graph the runtime reads from a file.
  *
  * **Two presses, though, and no third field.** Saving a card starts a
  * shell-capable agent over the reader's own files within seconds -- that is
@@ -32,6 +31,9 @@ import type { MadeTask } from "../api"
 import { Refusal } from "../Refusal"
 import { slugOf } from "./slug"
 import { useAct } from "../useAct"
+import { StepEditor } from "./StepEditor"
+import { graphOf, newStep, stepProblems } from "./steps"
+import type { StepDraft } from "./steps"
 import "./make.css"
 
 export function MakeTask({
@@ -70,6 +72,7 @@ export function MakeTask({
   const [name, setName] = useState(seed?.name ?? "")
   const [folder, setFolder] = useState(seed?.folder ?? "")
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
+  const [steps, setSteps] = useState<StepDraft[] | null>(null)
   const [made, setMade] = useState<string | null>(null)
   // Which of the two presses made it, so the confirmation says which happened.
   // The whole reason the second button exists is that "it starts on its own"
@@ -81,11 +84,12 @@ export function MakeTask({
   // In the daemon's own spelling of the filename, so "Chores!" collides with
   // "chores" exactly as it would on disk.
   const collides = taken.includes(slugOf(name))
-  const ready = Boolean(name.trim() && folder.trim() && prompt.trim()) && !collides
+  const problems = steps ? stepProblems(steps) : []
+  const ready = Boolean(name.trim() && folder.trim() && (steps ? steps.length && !problems.length : prompt.trim())) && !collides
 
   const send = (enabled: boolean) => () =>
     void act(async () => {
-      const answer = await createTask(project, name.trim(), folder.trim(), prompt.trim(), enabled)
+      const answer = await createTask(project, name.trim(), folder.trim(), steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled)
       // `ok` alone is not enough: a 2xx whose body did not parse arrives as
       // {ok: true} with no task, and treating that as made would clear the
       // form over a card that may not exist -- and a second press would
@@ -102,6 +106,7 @@ export function MakeTask({
         setName("")
         setFolder("")
         setPrompt("")
+        setSteps(null)
         setStarted(enabled)
       }
       return answer
@@ -143,6 +148,7 @@ export function MakeTask({
         />
       </label>
 
+      {steps ? <StepEditor steps={steps} onChange={setSteps} disabled={busy} /> : <>
       <label className="make-field">
         prompt
         <textarea
@@ -154,6 +160,13 @@ export function MakeTask({
           onChange={(event) => setPrompt(event.target.value)}
         />
       </label>
+      <button type="button" className="step-start" disabled={busy}
+        onClick={() => setSteps([newStep([], "agent", prompt)])}>Write as steps</button>
+      </>}
+
+      {problems.length > 0 && <ul className="step-problems" aria-label="Steps to fix">
+        {problems.map(problem => <li key={problem}>{problem}</li>)}
+      </ul>}
 
       {/* The one thing this panel says out loud. Everything else about a run
           is machinery and stays hidden; this is not, because it is the reader's

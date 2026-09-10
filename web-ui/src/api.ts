@@ -518,9 +518,8 @@ export function addEngine(project: string, what: EngineToAdd): Promise<ModelsAns
 /**
  * Making a task: the only call here that creates a file that did not exist.
  *
- * Three things and no fourth, which is what DESIGN.md says a task cannot do
- * without. The folder is not optional and has no default -- it is the one
- * thing the model's hands will touch.
+ * A prompt or a graph document describes the work. The folder is not optional
+ * and has no default: it is the place every step may work.
  */
 export interface MadeTask extends Answer {
   task?: string
@@ -531,14 +530,14 @@ export function createTask(
   project: string,
   name: string,
   folder: string,
-  prompt: string,
+  prompt: string | import("./make/steps").TaskGraph,
   /** False makes the card switched off: written, on the board, not running. */
   enabled = true,
 ): Promise<MadeTask> {
   return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
     name,
     folder,
-    prompt,
+    ...(typeof prompt === "string" ? { prompt } : { graph: prompt }),
     enabled,
   })
 }
