@@ -68,7 +68,10 @@ async def test_verification_artifacts_never_become_part_of_a_repair(tmp_path):
         point.save_repair(prepared, "repair1", "meet the check")
         return {"ready": True}
 
-    command = "python -c \"from pathlib import Path; Path('test-report.txt').write_text('report'); assert Path('made.txt').read_text() == 'hi'\""
+    command = (
+        "python -c \"from pathlib import Path; Path('test-report.txt').write_text('report'); "
+        "assert Path('made.txt').read_text() == 'hi'\""
+    )
     result = await check_and_apply(point, ApplySpec(mode="auto", checks=[command]), repair=repair)
     assert result["status"] == "applied"
     assert (repo / "made.txt").read_text() == "hi"
