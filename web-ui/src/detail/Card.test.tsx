@@ -34,6 +34,7 @@ beforeEach(() => {
     folder: "../work",
     prompt: "tidy",
     plain: false,
+    enabled: true,
   })
   container = document.createElement("div")
   document.body.append(container)
@@ -254,6 +255,7 @@ test("a plain card opens as the three fields, not as a file", async () => {
     folder: "../work",
     prompt: "tidy",
     plain: true,
+    enabled: true,
   })
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
   await open()
@@ -296,6 +298,7 @@ test("a card carrying more than the three fields still opens as a file", async (
     folder: "../work",
     prompt: "tidy",
     plain: false,
+    enabled: true,
   })
   await open()
 

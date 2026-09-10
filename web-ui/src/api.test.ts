@@ -2,6 +2,7 @@ import { beforeEach, expect, test, vi } from "vitest"
 
 import {
   askMemory,
+  fetchCard,
   fetchMemory,
   fetchRunEvents,
   fetchRuns,
@@ -9,6 +10,7 @@ import {
   openFeed,
   pause,
   resume,
+  rewriteCard,
   runNow,
   searchMemory,
 } from "./api"
@@ -197,6 +199,43 @@ test("the control verbs post to their routes and unwrap the answer", async () =>
   for (const call of fetchStub.mock.calls) {
     expect(call[1]).toEqual({ method: "POST" })
   }
+})
+
+test("a card's switch survives both directions of the transport", async () => {
+  // The daemon already returns `enabled` on the card and accepts it on the
+  // write; the client is the only place the field was being dropped.
+  const fetchStub = stubFetch({
+    "/api/projects/board/tasks/chores": {
+      body: {
+        task: "chores",
+        text: "name: Chores\n",
+        name: "Chores",
+        folder: "/home/k/chores",
+        prompt: "tidy up",
+        plain: true,
+        enabled: false,
+      },
+    },
+  })
+
+  expect((await fetchCard("board", "chores"))?.enabled).toBe(false)
+
+  await rewriteCard("board", "chores", {
+    name: "Chores",
+    folder: "/home/k/chores",
+    prompt: "tidy up",
+    enabled: false,
+  })
+  expect(fetchStub).toHaveBeenLastCalledWith("/api/projects/board/tasks/chores", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Chores",
+      folder: "/home/k/chores",
+      prompt: "tidy up",
+      enabled: false,
+    }),
+  })
 })
 
 test("a refused run comes back as an answer, not a throw", async () => {
