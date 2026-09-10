@@ -1,0 +1,56 @@
+.graph-dialog {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  color: var(--text);
+  height: min(760px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  padding: 0;
+  width: 1120px;
+}
+.graph-dialog[open] { display: flex; flex-direction: column; }
+.graph-dialog::backdrop { background: #000a; }
+.graph-header { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; padding: 22px 24px 16px; }
+.graph-heading { min-width: 0; }
+.graph-title { font-size: 1.3rem; font-weight: 600; line-height: 1.3; margin: 0; overflow-wrap: anywhere; }
+.graph-context { color: var(--dim); font-size: .86rem; margin: 6px 0 0; }
+.graph-close { background: none; border: 0; color: var(--dim); }
+.graph-toolbar { align-items: center; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 24px; }
+.graph-hint { color: var(--dim); font-size: .8rem; margin: 0; }
+.graph-controls { align-items: center; display: flex; gap: 5px; }
+.graph-controls button { min-height: 32px; min-width: 34px; }
+.graph-zoom { color: var(--dim); font-family: var(--mono); font-size: .78rem; min-width: 48px; text-align: center; }
+.graph-window { background: var(--ground); border-top: 1px solid var(--rule); flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-color: var(--line) var(--ground); touch-action: auto; }
+.graph-world { overflow: hidden; position: relative; }
+.graph-scene { position: absolute; transform-origin: 0 0; }
+.graph-edges { inset: 0; overflow: visible; pointer-events: none; position: absolute; }
+.graph-edge { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.graph-arrow { fill: var(--line); }
+.graph-edge.graph-branch { stroke: var(--ember); }
+.graph-arrow.graph-branch { fill: var(--ember); }
+.graph-edge-label { dominant-baseline: middle; fill: var(--ember); font: 12px var(--mono); paint-order: stroke; stroke: var(--ground); stroke-width: 5px; text-anchor: middle; }
+.graph-node { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-sizing: border-box; padding: 11px 14px; position: absolute; }
+.graph-node-kind { align-items: center; color: var(--dim); display: flex; font-size: 11px; gap: 7px; justify-content: space-between; line-height: 14px; }
+.graph-node[data-type="router"] { border-color: var(--ember); }
+.graph-node[data-type="router"] .graph-node-kind { color: var(--ember); }
+.graph-entry { border: 1px solid var(--rule); border-radius: 4px; color: var(--text); padding: 0 5px; }
+.graph-node-name { -webkit-box-orient: vertical; -webkit-line-clamp: 2; display: -webkit-box; font-size: 15px; font-weight: 600; line-height: 18px; margin: 5px 0 3px; overflow: hidden; overflow-wrap: anywhere; }
+.graph-node-meta { color: var(--dim); font: 10px var(--mono); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-node-footer { bottom: 8px; display: flex; font-size: 10px; gap: 10px; left: 14px; position: absolute; }
+.graph-node-tools { color: var(--ember); }
+.graph-node-finish { color: var(--dim); }
+.graph-node[data-here="true"] { border-color: var(--ember); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 25%, transparent); }
+.graph-node[data-here="true"] .graph-node-name { color: var(--ember); }
+.graph-end { align-items: center; border: 1px dashed var(--line); border-radius: 18px; box-sizing: border-box; color: var(--dim); display: flex; font-size: 11px; justify-content: center; position: absolute; }
+.graph-dialog :is(button, [tabindex]):focus-visible { outline: 2px solid var(--ember); outline-offset: -2px; }
+.basic-graph-head { align-items: center; color: var(--dim); display: flex; font-size: .76em; justify-content: space-between; }
+.basic-graph-head[hidden] { display: none; }
+.basic-view-steps { background: none; border: 0; color: var(--ember); font: inherit; padding: 2px 0 2px 12px; }
+@media (max-width: 600px) {
+  .graph-dialog { border-radius: 0; height: 100dvh; max-height: 100dvh; max-width: 100vw; width: 100vw; }
+  .graph-header { padding: 16px; }
+  .graph-toolbar { padding: 10px 16px; }
+  .graph-controls { width: 100%; }
+}

@@ -1,19 +1,9 @@
 /**
  * A task's own steps, laid out as the graph they are.
  *
- * They were a wrapping grid with an arrow drawn before each pill: a column per
- * step from the entry, a row per arm. It read as a sequence, which is most of
- * what a reader wants -- but a router's arms were *implied* by which row a
- * pill landed on, and the way back out of a loop was not drawn at all. A graph
- * with lines you can follow says both without being explained.
- *
- * `dagre` does the layout, which is the part with an answer capable of being
- * wrong and the part nobody should write twice: ranking a directed graph,
- * ordering within a rank to cross as few lines as possible, and routing an
- * edge that runs backwards around the boxes rather than through them.
- *
- * What stays poieo's is what the picture *means* -- which ways out a step has,
- * which word chooses each of them, and where a run can stop.
+ * Dagre ranks steps, separates branches, and routes return paths around nodes.
+ * Each condition retains its own edge, including paths that end the run.
+ * The board overview and the full reading view share that topology.
  */
 
 import dagre from "@dagrejs/dagre"
@@ -45,9 +35,9 @@ export interface LaidEdge {
   to: string | null
   /** The word that chooses this way, or "" when there is nothing to choose. */
   label: string
-  /** Where the word goes -- dagre's own answer, being the room it kept for it.
-   *  Guessing the middle of the line instead put the word where the layout had
-   *  not reserved anything, and it landed over a step or off the picture. */
+  fallback: boolean
+  lines: string[]
+  /** The position dagre reserved for the condition label. */
   at: { x: number; y: number } | null
   points: { x: number; y: number }[]
 }
@@ -70,12 +60,28 @@ const stopId = (from: string, index: number): string => `${from} stop${index}`
  * `default` does: it is the arm taken when no condition matched, and a reader
  * who cannot tell it from a chosen one is reading a different graph.
  */
-function waysOut(node: NodeShape): { to: string | null; label: string }[] {
-  const out: { to: string | null; label: string }[] = []
-  if (node.next) out.push({ to: node.next, label: "" })
-  for (const branch of node.branches) out.push({ to: branch.to, label: branch.label })
-  if (node.default) out.push({ to: node.default, label: "default" })
+function waysOut(node: NodeShape): { to: string | null; label: string; fallback: boolean }[] {
+  const out: { to: string | null; label: string; fallback: boolean }[] = []
+  if (node.next) out.push({ to: node.next, label: "", fallback: false })
+  for (const branch of node.branches) out.push({ to: branch.to, label: branch.label, fallback: false })
+  if (node.type === "router") out.push({ to: node.default, label: "default", fallback: true })
   return out
+}
+
+export const stepName = (node: NodeShape): string => node.description?.trim() || node.id
+
+/** Keep long conditions readable without letting one label stretch the whole graph. */
+function wrapLabel(text: string, width: number): string[] {
+  const lines: string[] = []
+  let remaining = text
+  while (remaining.length > width) {
+    const space = remaining.lastIndexOf(" ", width)
+    const cut = space > width / 2 ? space : width
+    lines.push(remaining.slice(0, cut))
+    remaining = remaining.slice(cut).trimStart()
+  }
+  if (remaining) lines.push(remaining)
+  return lines
 }
 
 /**
@@ -85,42 +91,36 @@ function waysOut(node: NodeShape): { to: string | null; label: string }[] {
  * is drawn depends on its label and on whether it carries a model or a pair of
  * hands -- things this module cannot see and the caller has already rendered.
  */
-export function layOutSteps(shape: GraphShape, sizeOf: (node: NodeShape) => Size): LaidSteps {
-  const graph = new dagre.graphlib.Graph()
-  graph.setGraph({ rankdir: "LR", nodesep: 8, ranksep: 30, marginx: 3, marginy: 8 })
+export function layOutSteps(shape: GraphShape, sizeOf: (node: NodeShape) => Size, full = false): LaidSteps {
+  const graph = new dagre.graphlib.Graph({ multigraph: true })
+  graph.setGraph({ rankdir: "LR", nodesep: full ? 36 : 12, ranksep: full ? 56 : 30, marginx: full ? 32 : 3, marginy: full ? 32 : 8 })
   graph.setDefaultEdgeLabel(() => ({}))
 
   const known = new Map(shape.nodes.map((node) => [node.id, node]))
   for (const node of shape.nodes) graph.setNode(node.id, sizeOf(node))
 
   const stops = new Set<string>()
-  const words = new Map<string, string>()
+  const words = new Map<string, { label: string; fallback: boolean; lines: string[] }>()
   for (const node of shape.nodes) {
     waysOut(node).forEach((way, index) => {
       let to = way.to
       if (to === null) {
         to = stopId(node.id, index)
         stops.add(to)
-        graph.setNode(to, { width: 7, height: 7 })
+        graph.setNode(to, full ? { width: 84, height: 30 } : { width: 7, height: 7 })
       } else if (!known.has(to)) {
-        // A target the board never heard of. `GraphSpec` refuses one, so this
-        // is an older daemon rather than a graph -- and dropping the line
-        // silently would draw a step as an ending.
+        // GraphSpec rejects unknown targets; tolerate an incomplete older payload.
         return
       }
-      // The word is handed to dagre as a thing with a size, not written on
-      // afterwards: told about it, dagre keeps the ranks far enough apart to
-      // hold it and puts it where it kept the room. Written over a layout that
-      // did not know, it lands across a step or off the end of the picture.
+      // Reserve label space before routing, using DM Mono's approximate advance.
+      const lines = wrapLabel(full && way.fallback ? "Otherwise" : way.label, full ? 26 : 22)
       graph.setEdge(
         node.id,
         to,
-        // 11px DM Mono is 0.6em to the character, so ~6.6px, and dagre is told
-        // the true width or it keeps the wrong amount of room and the word
-        // lands across a step.
-        way.label ? { width: way.label.length * 6.6 + 8, height: 13, labelpos: "c" } : {},
+        way.label ? { width: Math.max(...lines.map(line => line.length)) * (full ? 7.2 : 6.6) + 12, height: lines.length * 15 + 4, labelpos: "c" } : {},
+        String(index),
       )
-      words.set(`${node.id} ${to}`, way.label)
+      words.set(`${node.id} ${index}`, { label: way.label, fallback: way.fallback, lines })
     })
   }
 
@@ -142,11 +142,13 @@ export function layOutSteps(shape: GraphShape, sizeOf: (node: NodeShape) => Size
 
   const edges: LaidEdge[] = graph.edges().map((at) => {
     const drawn = graph.edge(at)
-    const label = words.get(`${at.v} ${at.w}`) ?? ""
+    const { label, fallback, lines } = words.get(`${at.v} ${at.name}`)!
     return {
       from: at.v,
       to: stops.has(at.w) ? null : at.w,
       label,
+      fallback,
+      lines,
       at: label && drawn.x !== undefined ? { x: drawn.x, y: drawn.y } : null,
       points: drawn.points,
     }

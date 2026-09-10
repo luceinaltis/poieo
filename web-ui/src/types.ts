@@ -61,6 +61,8 @@ export interface Arrow {
 /** One node of a graph, as much of it as a drawing needs. */
 export interface NodeShape {
   id: string
+  /** Authored step name or note; older daemons may omit it. */
+  description?: string
   type: string
   next: string | null
   default: string | null

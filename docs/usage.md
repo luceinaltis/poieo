@@ -108,6 +108,12 @@ steps including repeats.
 The board writes the normal task and graph files for you. Existing graph edits,
 advanced schedules, isolation, and handoffs between tasks still use those files.
 
+Choose **View steps** on a task card to read its whole flow. Follow the arrows
+from **Start**; amber lines show conditions, **Otherwise** is the path when no
+condition matches, and a returning line repeats earlier work. **End run** and
+**Ends this run** mark the endings. Use **Fit** for the overview, **100%** to read
+the labels, and scroll to explore. The step currently running stays highlighted.
+
 The daemon rereads the tasks folder. Switching only `enabled` takes effect
 without restarting it. Restart after changing other loaded task settings such
 as a schedule, folder, binding, isolation policy, or graph relationship. A
