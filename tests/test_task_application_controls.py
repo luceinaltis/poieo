@@ -86,12 +86,13 @@ async def test_a_decision_does_not_mark_unread_user_direction_as_consumed(tmp_pa
 
 
 @pytest.mark.parametrize("failed", [False, True])
-async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch, failed):
+@pytest.mark.parametrize("mode", ["review", "auto"])
+async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch, failed, mode):
     from conftest import until
 
     from poieo.daemon import Daemon
 
-    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+    repo, config = policy_config(tmp_path, {"mode": mode, "checks": [CHECK_MADE]})
     driver = Daemon(config)._runners()[0]
     entered, release = threading.Event(), threading.Event()
     prepare = driver.workspace.prepare
@@ -110,7 +111,8 @@ async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_pat
     await until(entered.is_set, "prepare started")
     running.cancel()
     release.set()
-    await asyncio.gather(running, return_exceptions=True)
+    outcome = await asyncio.gather(running, return_exceptions=True)
+    assert isinstance(outcome[0], asyncio.CancelledError)
     assert not (repo / "made.txt").exists()
     assert not (driver.workspace.worktree / "made.txt").exists()
 
