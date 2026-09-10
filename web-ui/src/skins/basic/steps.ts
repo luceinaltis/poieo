@@ -76,7 +76,7 @@ function wrapLabel(text: string, width: number): string[] {
   let remaining = text
   while (remaining.length > width) {
     const space = remaining.lastIndexOf(" ", width)
-    const cut = space > width / 2 ? space : width
+    const cut = space > 0 ? space : width
     lines.push(remaining.slice(0, cut))
     remaining = remaining.slice(cut).trimStart()
   }
