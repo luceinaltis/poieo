@@ -581,17 +581,18 @@ class TaskRunner:
             row = self.store.summary(run_id)
             if row is None and result is None:
                 continue
-            if row and (row.get("task") != self.name or row.get("project") != self.config.display_name):
+            if row and (row.get("task") != self.name or row.get("project") not in (None, self.config.display_name)):
                 continue
             self.store.append(Event(run_id=run_id, type="run_application", data=outcome))
             if result:
                 result.application = outcome
                 result.status = "completed"
+                result.project = self.config.display_name
                 if (result.asked or {}).get("node") == "apply_changes":
                     result.answer = "accept" if outcome["status"] == "applied" else "discard"
                 row = result.summary()
             else:
-                row = {**row, "status": "completed", "application": outcome}
+                row = {**row, "project": self.config.display_name, "status": "completed", "application": outcome}
             card = self.config.cards_by_task.get(self.name)
             if card:
                 revise_application(card, run_id, outcome)
