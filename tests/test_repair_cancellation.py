@@ -5,7 +5,7 @@ import asyncio
 from test_task_application import CHECK_MADE, policy_config
 
 from poieo.daemon import Daemon
-from poieo.tools import CommandResult, LocalExecutor
+from poieo.tools import CommandResult, shell
 
 
 async def test_cancelling_a_running_repair_stops_tools_and_does_not_save_it(tmp_path, monkeypatch):
@@ -19,7 +19,7 @@ async def test_cancelling_a_running_repair_stops_tools_and_does_not_save_it(tmp_
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]}, responses=responses)
     driver = Daemon(config)._runners()[0]
     entered, release, stopped = asyncio.Event(), asyncio.Event(), asyncio.Event()
-    original = LocalExecutor.run_command
+    original = shell.run_here
 
     async def command(executor, text, **kwargs):
         if text != "wait-for-test":
@@ -31,7 +31,7 @@ async def test_cancelling_a_running_repair_stops_tools_and_does_not_save_it(tmp_
             stopped.set()
         return CommandResult(0, "finished")
 
-    monkeypatch.setattr(LocalExecutor, "run_command", command)
+    monkeypatch.setattr(shell, "run_here", command)
     running = asyncio.create_task(driver.run_once({}))
     await asyncio.wait_for(entered.wait(), 8)
     running.cancel()
