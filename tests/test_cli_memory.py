@@ -686,3 +686,41 @@ def test_a_pass_that_learned_nothing_says_so_in_one_line(tmp_path):
 
     assert "last pass    2026-08-21T03:00:00+00:00, read 1 record, kept nothing" in result.stdout
     assert "  kept" not in result.stdout
+
+
+# -- setting aside for a reason, putting back, and looking ------------------
+
+
+def test_set_aside_takes_a_sentence_when_nothing_replaces_the_entry(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["set-aside", "batch-cap", "--because", "The cap was lifted.", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert entry_named(project, "batch-cap").matter.superseded_by == "The cap was lifted."
+
+
+def test_set_aside_put_back_undoes_it(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["set-aside", "old-cap", "--put-back", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "put back old-cap" in result.stdout
+    assert entry_named(project, "old-cap").matter.superseded_by is None
+    both = runner.invoke(app, ["set-aside", "old-cap", "--put-back", "--because", "x", "--in", str(project)])
+    assert both.exit_code == 1
+    neither = runner.invoke(app, ["set-aside", "old-cap", "--in", str(project)])
+    assert neither.exit_code == 1
+    assert "--because" in neither.output
+
+
+def test_keep_without_a_body_says_the_entry_still_holds_and_clears_a_second_look(tmp_path):
+    project, target, _ = _sealed_entry(tmp_path)
+    target.write_text("# feeds\n- a\n- b\n", encoding="utf-8")
+    assert "second look" in runner.invoke(app, ["memory", str(project)]).stdout
+
+    result = runner.invoke(app, ["keep", "feeds-note", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "still holds" in result.stdout
+    assert "second look" not in runner.invoke(app, ["memory", str(project)]).stdout
+    assert history_of(project, "feeds-note")[0]["did"] == "looked"

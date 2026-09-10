@@ -22,9 +22,10 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/runs/{run_id}/memory` | `{run_id, task, shown}` from the run's record; `shown` lists each memory entry the run was shown with `used` (true, false, or null for an entry the memory no longer holds) and its `preview` (the entry's opening words, null for the same), and is null when the record says nothing about memory; 404 for a run nobody recorded |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
-| `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics, search capabilities, a bounded relationship graph, and `learning`, the last few learning passes newest first; supports `If-None-Match` and 304 |
+| `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics (second looks as `{slug, reason}`), search capabilities, a bounded relationship graph, and `learning`, the last few learning passes newest first; supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, write history, and `sources`, each source run id with the task its record names (null when the record is gone), or 404 |
 | `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
+| `GET /api/projects/{project}/tasks/{task}/memory` | `{task, block}`: what the task will be shown on its next run, read without leaving a trace |
 | `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
 
 Model metadata is whatever the endpoint reports. Unknown context, size,
@@ -49,8 +50,9 @@ memory, and only what a person may say travels: never a source or a seal.
 |---|---|
 | `PUT /api/projects/{project}/memory/page` | `{text}`; replaces the page as written |
 | `POST /api/projects/{project}/memory/suggestion` | `{accept}`; lands the last learning pass's page line or lets it go by rewriting the page unchanged; 409 when nothing is suggested |
-| `PUT /api/projects/{project}/memory/{slug}` | `{body, scope?, anchors?, links?}`; keeps an entry, rewriting one that exists; 400 for a bad name or shape, 409 for a connection or anchor that names nothing |
-| `POST /api/projects/{project}/memory/{slug}/set-aside` | `{because}`; retires the entry for its replacement; 404 for an unknown entry, 409 for an unknown replacement |
+| `PUT /api/projects/{project}/memory/{slug}` | `{body, scope?, anchors?, links?}`; keeps an entry, rewriting one that exists; an empty object means the person looked and it still holds; 400 for a bad name or shape, 409 for a connection or anchor that names nothing |
+| `POST /api/projects/{project}/memory/{slug}/set-aside` | `{because}`: the replacing entry or a sentence saying why; 404 for an unknown entry, 409 for a name-shaped replacement that does not exist |
+| `POST /api/projects/{project}/memory/{slug}/put-back` | no body; the entry stands again; 404 unknown, 409 when it was not set aside |
 
 The fixed names `page`, `suggestion`, `search`, and `ask` are routed before the
 entry slug, so a PUT to the page cannot be read as an entry called `page`.

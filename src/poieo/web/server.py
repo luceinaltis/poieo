@@ -54,6 +54,8 @@ from ..memory import (
     memory_report,
     overview_watch_paths,
     page_text,
+    put_back,
+    read_memory,
     read_page,
     set_aside,
     write_page,
@@ -1985,8 +1987,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 status_code=400,
             )
         body = await _json_object(request)
+        # No body at all is "I looked, and it still holds"; an empty one is a typo.
         text = body.get("body")
-        if not isinstance(text, str) or not text.strip():
+        if "body" in body and (not isinstance(text, str) or not text.strip()):
             return JSONResponse({"error": "a memory needs something to say"}, status_code=400)
         said = {key: body[key] for key in ("scope", "anchors", "links") if key in body}
         try:
@@ -2015,6 +2018,30 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except SpecError as exc:
             return JSONResponse({"error": str(exc)}, status_code=409)
         return JSONResponse({"ok": True, "slug": slug, "because": because.strip()})
+
+    async def project_memory_put_back(request: Request) -> JSONResponse:
+        """A person undoes a set-aside."""
+        root, refused = _memory_kept(request)
+        if refused is not None:
+            return refused
+        slug = request.path_params["slug"]
+        if await asyncio.to_thread(entry_named, root, slug) is None:
+            return JSONResponse({"error": f"no memory '{slug}'"}, status_code=404)
+        try:
+            await asyncio.to_thread(put_back, root, slug)
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse({"ok": True, "slug": slug})
+
+    async def project_task_memory(request: Request) -> JSONResponse:
+        """What this task will be shown on its next run, as `poieo memory
+        <card>` prints it -- read without leaving a trace."""
+        project, spec, missing = _asked_card(request)
+        if missing is not None:
+            return missing
+        root = Path(project.config.base_dir)
+        block = await asyncio.to_thread(read_memory, root, spec, preview=True)
+        return JSONResponse({"task": spec.slug, "block": block})
 
     async def project_memory_entry(request: Request) -> JSONResponse:
         project, missing = _asked_project(request)
@@ -2217,6 +2244,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/projects/{project}/memory/{slug}", project_memory_entry),
         Route("/api/projects/{project}/memory/{slug}", project_memory_keep, methods=["PUT"]),
         Route("/api/projects/{project}/memory/{slug}/set-aside", project_memory_set_aside, methods=["POST"]),
+        Route("/api/projects/{project}/memory/{slug}/put-back", project_memory_put_back, methods=["POST"]),
+        Route("/api/projects/{project}/tasks/{task}/memory", project_task_memory),
         # Its own read rather than a field on the one above: a candidate port
         # nothing is listening on costs a full timeout, and the catalogue must
         # not wait on its own footnote.

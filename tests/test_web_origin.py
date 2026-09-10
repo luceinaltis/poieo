@@ -68,6 +68,7 @@ WRITES = [
     "/api/projects/board/memory/suggestion",
     "/api/projects/board/memory/{slug}",
     "/api/projects/board/memory/{slug}/set-aside",
+    "/api/projects/board/memory/{slug}/put-back",
     "/api/tasks/board/f/pause",
     "/api/tasks/board/f/resume",
     "/api/tasks/board/f/run",

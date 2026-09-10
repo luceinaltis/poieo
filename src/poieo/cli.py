@@ -63,7 +63,7 @@ from .layout import layout_for
 from .learn import last_suggestion, recent_passes, settle_suggestion
 from .learn import learn as run_learning_pass
 from .memory import frontmatter as memory_frontmatter
-from .memory import keep_entry, keeps_memory, memory_report, page_text, read_memory, set_aside, write_page
+from .memory import keep_entry, keeps_memory, memory_report, page_text, put_back, read_memory, set_aside, write_page
 from .project import (
     MARKER,
     MOCK_BINDING,
@@ -1417,8 +1417,8 @@ def memory(
     typer.echo(f"lookup     {report['lookup']}")
     for one, other in report["disagreements"]:
         typer.echo(f"disagree     {one} <-> {other}")
-    for line in report["second_look"]:
-        typer.echo(f"second look  {line}")
+    for item in report["second_look"]:
+        typer.echo(f"second look  {item['reason']}")
     accounting = report.get("accounting")
     if accounting:
         typer.echo(
@@ -1466,7 +1466,7 @@ _IN = typer.Option(None, "--in", help="A folder in the project [default: here]."
 @_guarded
 def keep(
     slug: str = typer.Argument(..., help="A name: lowercase letters, digits and dashes."),
-    body: str = typer.Argument(..., help="One statement that stays true."),
+    body: Optional[str] = typer.Argument(None, help="One statement that stays true [default: it still holds]."),
     where: Optional[Path] = _IN,
     scope: Optional[List[str]] = typer.Option(
         None, "--scope", help="A task id or path prefix it applies to [default: global]."
@@ -1480,7 +1480,8 @@ def keep(
     """Tell the project something that stays true.
 
     Naming an existing entry rewrites it; saying nothing else about it keeps
-    what it already said, saying anything replaces all of that.
+    what it already said, saying anything replaces all of that. A name alone
+    means you looked and it still holds, which clears a second look.
     """
     project = _memory_root(where)
     matter = None
@@ -1493,18 +1494,29 @@ def keep(
             }
         )
     keep_entry(project, slug, body, matter)
-    _ok(f"kept {slug}")
+    _ok(f"kept {slug}" if body is not None or matter is not None else f"{slug} still holds")
 
 
 @app.command("set-aside", rich_help_panel=AFTER)
 @_guarded
 def set_aside_entry(
     slug: str = typer.Argument(..., help="The entry that no longer holds."),
-    because: str = typer.Option(..., "--because", help="The entry that replaces it."),
+    because: Optional[str] = typer.Option(
+        None, "--because", help="The entry that replaces it, or a sentence saying why nothing does."
+    ),
+    undo: bool = typer.Option(False, "--put-back", help="Undo: the entry stands again."),
     where: Optional[Path] = _IN,
 ) -> None:
-    """Retire an entry for the one that replaces it. Its words stay; recall moves on."""
+    """Retire an entry, or put one back. Its words stay either way; recall moves on."""
     project = _memory_root(where)
+    if undo and because is not None:
+        _fail("choose --because or --put-back")
+    if undo:
+        put_back(project, slug)
+        _ok(f"put back {slug}")
+        return
+    if because is None:
+        _fail('say what replaces it, or why: --because SLUG, or --because "a sentence"')
     set_aside(project, slug, because, writer="person")
     _ok(f"set aside {slug} for {because}")
 

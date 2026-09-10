@@ -55,7 +55,9 @@ catalogue or add command.
 `keep`, `set-aside`, and `page` are the only memory writes a person has. They
 call the same doors as the learning pass, record the writer as a person, and
 refuse a typed connection, replacement, or anchor that names nothing, so a typo
-fails at the keyboard rather than at the daemon's next load. `page` with no flag
+fails at the keyboard rather than at the daemon's next load. `keep` with a name
+alone means the entry still holds and clears its second look; `set-aside` takes
+an entry or a sentence after `--because`, and `--put-back` undoes it. `page` with no flag
 prints the page as written; `--edit`, `--from`, `--accept`, and `--dismiss` are
 one verb each, and the last two act on the learning pass's page suggestion.
 

@@ -20,6 +20,7 @@ from poieo.memory import (
     keep_entry,
     keeps_memory,
     page_written_at,
+    put_back,
     read_page,
     readable_entries,
     set_aside,
@@ -226,7 +227,7 @@ def test_a_person_typed_claim_must_name_an_entry_now_not_at_3am(tmp_path):
     assert readable_entries(project) == []
 
 
-def test_a_person_anchor_must_name_a_file_and_is_sealed(tmp_path):
+def test_a_person_anchor_must_name_a_path_and_a_file_is_sealed(tmp_path):
     project = _project(tmp_path)
     start_memory(project)
     (project / "notebook").mkdir()
@@ -235,10 +236,12 @@ def test_a_person_anchor_must_name_a_file_and_is_sealed(tmp_path):
     with pytest.raises(SpecError, match="nowhere.md"):
         keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/nowhere.md"]}))
 
-    keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/feeds.md::title"]}))
+    keep_entry(
+        project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/feeds.md::title", "notebook"]})
+    )
     entry = entry_named(project, "feeds")
-    assert entry.matter.anchors == ["notebook/feeds.md::title"]
-    assert set(entry.matter.sealed) == {"notebook/feeds.md"}
+    assert entry.matter.anchors == ["notebook/feeds.md::title", "notebook"]
+    assert set(entry.matter.sealed) == {"notebook/feeds.md"}  # a folder has no bytes to seal
 
 
 def test_rewriting_an_entry_without_saying_more_keeps_what_it_said_about_itself(tmp_path):
@@ -268,3 +271,81 @@ def test_setting_aside_needs_a_replacement_that_exists_and_is_not_itself(tmp_pat
     with pytest.raises(SpecError, match="itself"):
         set_aside(project, "old-cap", "old-cap")
     assert entry_named(project, "old-cap").matter.superseded_by is None
+
+
+# -- setting aside without a replacement, and coming back ---------------------
+
+
+def test_an_entry_can_be_set_aside_for_a_reason_when_nothing_replaces_it(tmp_path):
+    project = _project(tmp_path)
+    write_entry(project, "old-cap", "Batches stop at 10.")
+
+    set_aside(project, "old-cap", "The cap was lifted; nothing replaces this.")
+
+    entry = entry_named(project, "old-cap")
+    assert entry.matter.superseded_by == "The cap was lifted; nothing replaces this."
+    check_memory(project)  # a sentence is not a claim about another entry
+    assert history_of(project, "old-cap")[0]["after"] == {"superseded_by": "The cap was lifted; nothing replaces this."}
+
+
+def test_a_name_shaped_reason_must_be_an_entry(tmp_path):
+    """A slug that names nothing is a typo, not a reason: refused at the door
+    and, if it ever got in, at load."""
+    project = _project(tmp_path)
+    write_entry(project, "old-cap", "Batches stop at 10.")
+
+    with pytest.raises(SpecError, match="ghost"):
+        set_aside(project, "old-cap", "ghost")
+    with pytest.raises(SpecError, match="why"):
+        set_aside(project, "old-cap", "   ")
+    write_entry(project, "typo", "Set aside for a name that is not here.", frontmatter({"superseded_by": "ghost"}))
+    with pytest.raises(SpecError, match="ghost"):
+        check_memory(project)
+
+
+def test_a_set_aside_entry_can_be_put_back(tmp_path):
+    project = _project(tmp_path)
+    write_entry(project, "old-cap", "Batches stop at 10.")
+    set_aside(project, "old-cap", "Seemed wrong.")
+
+    put_back(project, "old-cap")
+
+    entry = entry_named(project, "old-cap")
+    assert entry.matter.superseded_by is None
+    assert entry.body == "Batches stop at 10."
+    line = history_of(project, "old-cap")[0]
+    assert (line["writer"], line["did"]) == ("person", "put back")
+    assert line["before"] == {"superseded_by": "Seemed wrong."}
+    with pytest.raises(SpecError, match="not set aside"):
+        put_back(project, "old-cap")
+    with pytest.raises(SpecError, match="ghost"):
+        put_back(project, "ghost")
+
+
+def test_keeping_an_entry_as_it_is_says_looked_and_moves_its_clock(tmp_path):
+    """The gesture that clears a second look: look, then touch. The body and
+    what it says about itself stay; only the time and the history move."""
+    project = _project(tmp_path)
+    start_memory(project)
+    (project / "notebook").mkdir()
+    (project / "notebook" / "feeds.md").write_text("# feeds\n", encoding="utf-8")
+    keep_entry(
+        project,
+        "feeds",
+        "Feeds land in one file.",
+        frontmatter({"anchors": ["notebook/feeds.md"], "scope": ["importer"]}),
+    )
+    before = entry_named(project, "feeds")
+    (project / "notebook" / "feeds.md").write_text("# feeds\n- a\n", encoding="utf-8")
+
+    after = keep_entry(project, "feeds")
+
+    assert after.body == before.body
+    assert after.matter.scope == ["importer"]
+    assert after.updated_at >= before.updated_at
+    # Sealed against the file as it is now, since that is what was looked at.
+    assert after.matter.sealed["notebook/feeds.md"] != before.matter.sealed["notebook/feeds.md"]
+    line = history_of(project, "feeds")[0]
+    assert (line["writer"], line["did"]) == ("person", "looked")
+    with pytest.raises(SpecError, match="ghost"):
+        keep_entry(project, "ghost")
