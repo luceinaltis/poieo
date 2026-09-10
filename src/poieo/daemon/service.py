@@ -434,7 +434,7 @@ class TaskRunner:
             if self.task.spec.apply.mode == "auto":
                 self._record_application(result, {"status": "blocked", "error": str(exc)})
             return
-        if interrupted.is_set():
+        if interrupted.is_set() and result.status == "completed":
             result.status, result.error = "aborted", "cancelled while recording the change"
             if change is not None:
                 await finish_write(asyncio.to_thread(self.workspace.park_failed, change, result.run_id))
