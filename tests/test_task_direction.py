@@ -11,6 +11,48 @@ from poieo.daemon import Daemon
 from poieo.web.server import create_app
 
 
+async def test_a_second_runner_cannot_deliver_direction_into_an_active_runs_bookmark(tmp_path, monkeypatch):
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    active, board = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = active._open_change
+
+    async def waiting():
+        entered.set()
+        await release.wait()
+        return await original()
+
+    monkeypatch.setattr(active, "_open_change", waiting)
+    running = asyncio.create_task(active.run_once({}))
+    await asyncio.wait_for(entered.wait(), 5)
+    board.leave_note("Keep the heading next time")
+    release.set()
+    await running
+    fresh = read_journal(config.cards_by_task["chores"].journal_path()).split("What you did before that:")[0]
+    assert "Keep the heading next time" in fresh
+
+
+async def test_cli_reads_queued_direction_only_after_owning_the_task(tmp_path):
+    import json
+
+    from typer.testing import CliRunner
+
+    from poieo.cli import app
+
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    driver = Daemon(config)._runners()[0]
+    async with driver._change_lock:
+        driver.leave_note("Keep the heading next time")
+    # A marker makes CLI and daemon share the same configured run store.
+    (tmp_path / "poieo.yaml").write_text((tmp_path / "d.yaml").read_text())
+    reply = await asyncio.to_thread(CliRunner().invoke, app, ["run", str(tmp_path / "cards" / "chores.yaml"), "--json"])
+    assert reply.exit_code == 0, reply.output
+    run_id = json.loads(reply.output)["run_id"]
+    events = list(driver.store.events(run_id))
+    started = next(event for event in events if event["type"] == "run_started")
+    assert "Keep the heading next time" in started["data"]["input"]["journal"]
+
+
 async def test_direction_left_during_work_is_new_after_the_run_finishes(tmp_path, monkeypatch):
     _, config = policy_config(tmp_path, {"mode": "review"})
     daemon = Daemon(config)
