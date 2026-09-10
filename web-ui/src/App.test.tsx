@@ -797,6 +797,8 @@ test("a memory named in the drawer opens the memory place at that entry", async 
   vi.mocked(fetchMemory).mockResolvedValue({
     enabled: true,
     page: null,
+    page_text: "",
+    suggestion: null,
     stats: null,
     capabilities: { words: true, meaning: false, ask: false },
     graph: { nodes: [], edges: [], total_nodes: 0, total_edges: 0, truncated: false, edges_truncated: false },
