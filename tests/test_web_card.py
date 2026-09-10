@@ -187,6 +187,34 @@ def test_a_graph_naming_rewrite_is_fenced_exactly_like_a_folder(tmp_path):
     assert answer.status_code == 200, answer.text
 
 
+def test_a_binding_or_input_file_outside_the_project_is_refused(tmp_path):
+    """The fence forgot two more paths. A card names a `binding:` and an
+    `input_file:` with no folder and no graph in sight, so an edit that adds
+    one walked out of the project unchecked -- one unprivileged PUT reaching a
+    file anywhere on the machine. They take the folder's refusal, in the
+    folder's words."""
+    client, cards = _client(tmp_path)
+    before = (cards / "already.yaml").read_text(encoding="utf-8")
+
+    outside = tmp_path.parent / "elsewhere.yaml"
+    outside.write_text(_MOCK, encoding="utf-8")
+    for line in (
+        f"binding: {outside}",
+        "binding: ../../elsewhere.yaml",
+        f"input_file: {outside}",
+        "input_file: ../../elsewhere.yaml",
+    ):
+        answer = _put(client, f"name: Already\nfolder: ../work\nprompt: x\n{line}\n")
+        assert answer.status_code == 400, (line, answer.text)
+        assert "outside" in answer.json()["error"], (line, answer.text)
+    assert (cards / "already.yaml").read_text(encoding="utf-8") == before
+
+    # ...and one inside the project is not caught in the same net.
+    (tmp_path / "other.yaml").write_text(_MOCK, encoding="utf-8")
+    answer = _put(client, "name: Already\nfolder: ../work\nprompt: x\nbinding: ../other.yaml\n")
+    assert answer.status_code == 200, answer.text
+
+
 def test_live_is_measured_against_what_the_daemon_runs_not_the_file(tmp_path):
     """After a structural edit the file is ahead of the daemon, which adopts
     nothing until a restart. A prompt tweak on top of that must not say
