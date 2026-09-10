@@ -1,5 +1,10 @@
 # The poieo brand
 
+The brand direction is under review in [`docs/branding.md`](../docs/branding.md).
+That brief separates established requirements from proposed changes. This page
+records the current site draft and its assets, including the green palette;
+it is not an approved final identity.
+
 **The right intelligence, in the right place.**
 
 poieo is a personal tool for work that keeps going. Its distinguishing aim is

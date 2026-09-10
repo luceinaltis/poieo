@@ -25,6 +25,10 @@ rules, and [`contribution.md`](contribution.md) contains the procedures needed t
 land a change. `AGENTS.md` at the repository root is the working agreement and
 the source of the merge gate.
 
+[`branding.md`](branding.md) records the brand brief, separating established
+requirements from proposed copy, colours, and visual direction. Proposals are
+marked explicitly and do not describe changes already applied to the site.
+
 Then read the document for the component you are changing:
 
 | document | responsibility | code |
