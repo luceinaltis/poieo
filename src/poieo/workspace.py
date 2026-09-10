@@ -141,10 +141,13 @@ def _repository_lock(repo: Path, *, task: str | None = None) -> Iterator[None]:
 @contextmanager
 def task_run_lock(folder: Path, task: str) -> Iterator[None]:
     """Own a task's input and journal even when it has no Git working copy."""
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f".poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
-    with _path_lock(path, wait=0, busy="this task is already running in another process"):
-        yield
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f".poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
+        with _path_lock(path, wait=0, busy="this task is already running in another process"):
+            yield
+    except OSError as exc:
+        raise WorkspaceError(f"could not coordinate this task: {exc}") from exc
 
 
 @contextmanager
