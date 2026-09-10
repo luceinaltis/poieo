@@ -30,42 +30,42 @@ folders are edited directly. Project-wide learned memory is opt-in.
 
 ## Visual language
 
-Use **proportion and connection**: small repeated marks for routine model work,
-a larger mark for a demanding model step, and a distinct check for evidence.
-A line carries the work between them. Sizes distinguish responsibilities;
-they are not a scale for measured cost, speed, or accuracy. Diagrams must be
-labeled as examples and match a task someone could define.
+Keep the **original tree, golden fruit, and custom wordmark**. Together they
+are poieo's identity. Use the existing assets, including their original shapes
+and colours. The tree can stand alone beside the landing headline; navigation,
+the README, and the share image use the complete tree-and-wordmark lockup.
 
-Keep the main idea visible in one composition. There are no fictional metrics,
-decorative particles, permanent pulsing, or people standing in for models.
-Show real application screenshots as product evidence. The website leads with
-the model choices; documentation gives the article the most space.
+Let typography and space carry the page. Explain the combination of small and
+large models in plain language, then show the real application. Do not turn the
+logo into a model-routing diagram, add decorative node cards, or introduce a
+second set of model symbols. Keep the emblem free of panels, labels, and effects.
+Documentation gives the article the most space.
 
 The landing page, docs viewer, README banner, and share image use this identity.
-The installed board still uses the earlier warm palette and tree lockup; its
-visual redesign is a separate product change. Keep those assets intact until
-that change carries its rebuilt browser bundle.
+The installed board still uses its warm palette and the same original logo;
+its layout and palette redesign are a separate product change.
 
 ## Colour
 
 The public pages share `site/style.css`. Light mode uses a cool paper surface
-and deep green ink. Dark mode reverses their weight. The accent identifies the
-model work and primary action; gold is a small review marker.
+and deep green ink. Dark mode reverses their weight. Green identifies the
+primary action. The original logo keeps its ink (`#221e18`), ivory (`#f0e7d9`),
+and golden fruit (`#d8a657`) in both themes.
 
 | token | dark | light | purpose |
 |---|---|---|---|
 | Ground | `#14221b` | `#f3f5f2` | page |
 | Panel | `#1b2e24` | `#ffffff` | raised reading surface |
-| Well | `#112019` | `#e8ede6` | diagram and code background |
-| Raised | `#294334` | `#dce7d8` | selected item or check |
+| Well | `#112019` | `#e8ede6` | code background and product frame |
+| Raised | `#294334` | `#dce7d8` | selected navigation |
 | Rule | `#3c5445` | `#ccd6cb` | quiet separation |
-| Line | `#95ad9e` | `#687d6a` | diagram connections |
+| Line | `#95ad9e` | `#687d6a` | outlines and reading separators |
 | Text | `#edf3e9` | `#203b2b` | primary text |
 | Dim | `#b4c4b8` | `#536657` | supporting text |
-| Ember | `#d5bc77` | `#876323` | review point |
+| Ember | `#d5bc77` | `#876323` | secondary gold accent |
 | Live | `#c4dda6` | `#3c7150` | active work |
 | Stop | `#eda99a` | `#a34232` | failure |
-| Accent | `#c4dda6` | `#285b3f` | model marks and primary links |
+| Accent | `#c4dda6` | `#285b3f` | primary buttons and links |
 | On accent | `#203b2b` | `#f3f5f2` | text inside an accent shape |
 
 ## Type and layout
@@ -76,25 +76,25 @@ fallback for other scripts. Do not rely on a font download for the page to work.
 
 Headlines use a moderate weight, close spacing, and natural wrapping. Body
 copy is at least 16px; routine labels are at least 14px. Use sentence case.
-The landing page pairs the proposition with a task diagram. Supporting sections
+The landing page pairs the proposition with the original tree. Supporting sections
 use unequal space for the claim and its explanation. Documentation keeps
 navigation quiet, the article readable, and code horizontally scrollable.
 
 ## Assets
 
-The custom wordmark remains the signature. Its approved monoline paths already
-carry continuity in the joined e and o. Recolouring and framing do not redraw
-those paths. A replacement drawing still requires a generated, approved source
-and a faithful trace; keep `wordmark-source.png` and `mark-source.jpg` as sources.
+The tree and custom wordmark remain the signature. Use the approved lockup
+without redrawing or recolouring it. Its lettering carries continuity in the
+joined e and o; the crooked tree carries a single golden fruit. Keep
+`wordmark-source.png` and `mark-source.jpg` as their source material.
 
 | asset | purpose |
 |---|---|
-| `site/img/signature.svg`, `signature-inverse.svg` | original wordmark paths in the public palette |
-| `site/img/site-icon.svg`, `site-touch.png` | the p extracted from the approved lettering on a green plate |
-| `site/img/readme.svg`, `readme-dark.svg` | wordmark and a labeled model-assignment diagram |
+| `site/img/lockup.svg`, `lockup-light.svg` | complete original logo in navigation, the README, and share image |
+| `site/img/mark.svg`, `mark-light.svg` | original tree beside the landing headline |
+| `site/img/favicon.svg`, `apple-touch-icon.png` | original tree for browser and device icons |
+| `site/img/wordmark.svg`, `wordmark-light.svg` | original lettering when a separate wordmark is needed |
 | `site/social.html`, `site/img/social.png` | shared 1280×640 image and its source |
-| `site/img/mark.svg`, `lockup.svg`, `wordmark.svg` and their light variants | earlier assets retained for the installed board |
 
-The tree studies remain reference material, not the leading image on the public
-pages. Forge imagery remains retired. Do not redraw the old marks or quietly
-replace product assets as part of a website-only change.
+The larger tree paintings remain reference material. Forge imagery remains
+retired. A replacement drawing requires an approved source and a faithful trace;
+do not quietly replace the logo as part of a page redesign.

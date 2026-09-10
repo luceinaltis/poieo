@@ -13,12 +13,12 @@
   <meta property="og:image" content="https://luceinaltis.github.io/poieo/img/social.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="poieo — small models for routine work, larger models for demanding steps, and checks for the result">
+  <meta property="og:image:alt" content="poieo — the original tree and wordmark. The right intelligence, in the right place.">
   <meta property="og:url" content="https://luceinaltis.github.io/poieo/">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" href="img/site-icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="img/site-touch.png">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
   <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css">
   <script type="application/ld+json">
@@ -39,7 +39,7 @@
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="bar">
   <a class="wordmark" aria-label="poieo home" href="./">
-    <img class="brand-word" src="img/signature.svg" alt="poieo" width="116" height="42">
+    <img class="brand-logo" src="img/lockup-light.svg" alt="poieo" width="160" height="42">
   </a>
   <nav aria-label="Main navigation">
     <a href="#approach">The approach</a>
@@ -61,33 +61,9 @@
     </div>
     <p class="hero-note">Runs on your machine. Works with local and cloud models.</p>
   </div>
-  <figure class="allocation" aria-labelledby="allocation-caption">
-    <div class="allocation-title">One way to divide a task.</div>
-    <svg class="allocation-map" viewBox="0 0 520 410" role="img" aria-labelledby="map-title map-desc">
-      <title id="map-title">Match the model to the step</title>
-      <desc id="map-desc">An illustrative maintenance task: a small model reads and sorts, a larger model makes a change, and your tests check it before you review. Circle size distinguishes the model choices, not measured performance.</desc>
-      <g class="flow-lines" fill="none" stroke-width="1.5">
-        <path d="M64 104 V179 M64 203 V278"/>
-        <path d="M76 290 H134 Q154 290 154 270 V211 Q154 191 174 191 H215"/>
-        <path d="M343 191 H392 Q412 191 412 211 V302"/>
-        <path d="M412 340 V367 H288"/>
-      </g>
-      <g class="small-step"><circle cx="64" cy="92" r="12"/><circle cx="64" cy="191" r="12"/><circle cx="64" cy="290" r="12"/></g>
-      <g class="map-label"><text x="88" y="67">Read</text><text x="88" y="166">Sort</text><text x="88" y="265">Summarize</text></g>
-      <circle class="large-halo" cx="279" cy="191" r="81" fill="none" stroke-width="1"/>
-      <circle class="large-step" cx="279" cy="191" r="64"/>
-      <text class="large-label" x="279" y="186" text-anchor="middle">Make the</text>
-      <text class="large-label" x="279" y="210" text-anchor="middle">change</text>
-      <text class="map-note" x="279" y="301" text-anchor="middle">Larger model</text>
-      <text class="map-note" x="30" y="338">Small model</text>
-      <rect class="check-step" x="393" y="302" width="38" height="38" rx="8"/>
-      <path class="check-tick" d="M403 321 l6 6 13-14" fill="none" stroke-width="2"/>
-      <text class="map-label" x="412" y="282" text-anchor="middle">Your tests</text>
-      <circle class="review-step" cx="279" cy="367" r="7"/>
-      <text class="map-label" x="255" y="373" text-anchor="end">Your review</text>
-    </svg>
-    <figcaption id="allocation-caption">You choose the model for each step.<br>poieo follows the work you define.</figcaption>
-  </figure>
+  <div class="hero-emblem" aria-hidden="true">
+    <img class="brand-mark" src="img/mark-light.svg" alt="" width="652" height="616">
+  </div>
 </section>
 
 <section class="approach section" id="approach" aria-labelledby="approach-title">
@@ -97,22 +73,19 @@
   </div>
   <div class="principles">
     <article>
-      <div class="principle-mark routine" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <h3>Keep the everyday light.</h3>
       <p>Reading, sorting, routine checks. Give frequent, well-bounded steps a model that handles them economically.</p>
     </article>
     <article>
-      <div class="principle-mark judgment" aria-hidden="true"><i></i></div>
       <h3>Give hard work more room.</h3>
       <p>Bring a larger model into the steps that need deeper reasoning or more context. Change the model without rewriting the work.</p>
     </article>
     <article>
-      <div class="principle-mark evidence" aria-hidden="true"><i></i><i></i></div>
       <h3>Let the result prove itself.</h3>
       <p>Build tests and review into your task. Inspect what ran, what changed, and the usage and cost the model reports.</p>
     </article>
   </div>
-  <p class="approach-note">Model choices are explicit today. Savings and accuracy depend on your models, tasks, and checks.</p>
+  <p class="approach-note">You choose the model for each step. Savings and accuracy depend on your models, tasks, and checks.</p>
 </section>
 
 <section class="work-section section" aria-labelledby="work-title">
@@ -172,7 +145,7 @@ prompt: |
 </main>
 
 <footer class="footer">
-  <div><img class="brand-word" src="img/signature.svg" alt="poieo" width="104" height="38"><p>A personal tool for work that keeps going.</p></div>
+  <div><img class="brand-logo" src="img/lockup-light.svg" alt="poieo" width="160" height="42"><p>A personal tool for work that keeps going.</p></div>
   <nav aria-label="Footer navigation"><a href="docs.html">Documentation</a><a href="https://github.com/luceinaltis/poieo">Source on GitHub</a><a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT license</a></nav>
   <p class="footer-note">From the Greek <i lang="el">ποιέω</i>, “to make.”</p>
 </footer>
