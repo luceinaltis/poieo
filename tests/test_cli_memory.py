@@ -1,6 +1,7 @@
 """`poieo memory` answers "what would this task see, and why?" without
-touching anything. Authoring stays with the editor and git; rebuilding the
-lookup machinery is automatic, so no command exists for either.
+touching anything. A person writes through three commands of their own --
+`keep`, `set-aside`, `page` -- and the lookup machinery rebuilds itself, so
+no command exists for that.
 """
 
 from conftest import at, remember
@@ -9,7 +10,7 @@ from typer.testing import CliRunner
 
 from poieo.card import load_card
 from poieo.cli import app
-from poieo.memory import entry_named, read_memory, write_page
+from poieo.memory import entry_named, history_of, read_memory, read_page, write_page
 
 runner = CliRunner()
 
@@ -443,3 +444,183 @@ def test_editing_the_page_clears_the_suggestion(tmp_path):
     write_page(project, "Never push to main.\nDates are ISO.")
     result = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." not in result.stdout
+
+
+# -- a person's three writes -------------------------------------------------
+
+
+def test_keep_writes_an_entry_a_person_owns(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["keep", "feeds-order", "Feeds are imported oldest first.", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "kept feeds-order" in result.stdout
+    entry = entry_named(project, "feeds-order")
+    assert entry.body == "Feeds are imported oldest first."
+    assert entry.matter.source == []
+    assert history_of(project, "feeds-order")[0]["writer"] == "person"
+
+
+def test_keep_says_scope_anchors_and_connections_in_the_products_words(tmp_path):
+    _, project = _project(tmp_path)
+    (project / "notebook").mkdir()
+    (project / "notebook" / "feeds.md").write_text("# feeds\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        [
+            "keep", "feeds-order", "Oldest first.", "--in", str(project),
+            "--scope", "importer", "--anchor", "notebook/feeds.md",
+            "--leans-on", "batch-cap", "--disagrees-with", "old-cap",
+        ],
+    )  # fmt: skip
+
+    assert result.exit_code == 0, result.output
+    entry = entry_named(project, "feeds-order")
+    assert entry.matter.scope == ["importer"]
+    assert entry.matter.anchors == ["notebook/feeds.md"]
+    assert entry.matter.links.depends_on == ["batch-cap"]
+    assert entry.matter.links.contradicts == ["old-cap"]
+    assert set(entry.matter.sealed) == {"notebook/feeds.md"}
+
+
+def test_keep_refuses_a_connection_to_nothing_and_writes_nothing(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["keep", "leaner", "Leans on air.", "--in", str(project), "--leans-on", "ghost"])
+
+    assert result.exit_code == 1
+    assert "ghost" in result.output
+    assert entry_named(project, "leaner") is None
+
+
+def test_set_aside_marks_an_entry_for_its_replacement(tmp_path):
+    _, project = _project(tmp_path)
+    remember(project, "new-cap", "The api rejects batches over 500.")
+    result = runner.invoke(app, ["set-aside", "batch-cap", "--because", "new-cap", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "set aside batch-cap" in result.stdout
+    assert entry_named(project, "batch-cap").matter.superseded_by == "new-cap"
+    line = history_of(project, "batch-cap")[0]
+    assert (line["writer"], line["did"]) == ("person", "set aside")
+
+
+def test_set_aside_refuses_a_replacement_that_does_not_exist(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["set-aside", "batch-cap", "--because", "ghost", "--in", str(project)])
+
+    assert result.exit_code == 1
+    assert "ghost" in result.output
+    assert entry_named(project, "batch-cap").matter.superseded_by is None
+
+
+def test_page_prints_the_page_as_written_comments_and_all(tmp_path):
+    _, project = _project(tmp_path)
+    write_page(project, "<!-- keep this short -->\nNever push to main.")
+    result = runner.invoke(app, ["page", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "<!-- keep this short -->\nNever push to main." in result.stdout
+
+
+def test_page_from_a_file_replaces_the_page_as_a_person(tmp_path):
+    _, project = _project(tmp_path)
+    rules = tmp_path / "rules.md"
+    rules.write_text("Dates are ISO.\n", encoding="utf-8")
+    result = runner.invoke(app, ["page", "--from", str(rules), "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert read_page(project) == "Dates are ISO."
+    assert history_of(project)[0]["writer"] == "person"
+
+    missing = runner.invoke(app, ["page", "--from", str(tmp_path / "nowhere.md"), "--in", str(project)])
+    assert missing.exit_code == 1
+    assert "nowhere.md" in missing.output
+    assert read_page(project) == "Dates are ISO."
+
+
+def test_page_from_a_dash_reads_stdin(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["page", "--from", "-", "--in", str(project)], input="Dates are ISO.\n")
+
+    assert result.exit_code == 0, result.output
+    assert read_page(project) == "Dates are ISO."
+
+
+def test_page_edit_opens_an_editor_and_keeps_what_comes_back(tmp_path, monkeypatch):
+    import click
+
+    _, project = _project(tmp_path)
+    seen = {}
+
+    def fake_edit(text, **kwargs):
+        seen["text"] = text
+        return text + "\nDates are ISO.\n"
+
+    monkeypatch.setattr(click, "edit", fake_edit)
+    result = runner.invoke(app, ["page", "--edit", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert seen["text"] == "Never push to main."
+    assert read_page(project) == "Never push to main.\nDates are ISO."
+
+
+def _suggested(project, line="Require ISO dates."):
+    import json
+
+    at(project).cache().mkdir(parents=True, exist_ok=True)
+    at(project).learning_log().write_text(
+        json.dumps({"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a", "error": None, "page": line}) + "\n",
+        encoding="utf-8",
+    )
+    _backdate(project, 30 * 86400)
+
+
+def test_page_accept_adds_the_last_suggestion_as_a_line_and_clears_it(tmp_path):
+    _, project = _project(tmp_path)
+    _suggested(project)
+    result = runner.invoke(app, ["page", "--accept", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert read_page(project) == "Never push to main.\nRequire ISO dates."
+    assert "Require ISO dates." not in runner.invoke(app, ["memory", str(project)]).stdout
+
+
+def test_page_dismiss_keeps_the_page_and_clears_the_suggestion(tmp_path):
+    _, project = _project(tmp_path)
+    _suggested(project)
+    result = runner.invoke(app, ["page", "--dismiss", "--in", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert read_page(project) == "Never push to main."
+    assert "Require ISO dates." not in runner.invoke(app, ["memory", str(project)]).stdout
+
+
+def test_page_accept_with_nothing_suggested_says_so(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["page", "--accept", "--in", str(project)])
+
+    assert result.exit_code == 1
+    assert "suggested nothing" in result.output
+    assert read_page(project) == "Never push to main."
+
+
+def test_page_takes_one_verb_at_a_time(tmp_path):
+    _, project = _project(tmp_path)
+    result = runner.invoke(app, ["page", "--accept", "--dismiss", "--in", str(project)])
+
+    assert result.exit_code == 1
+    assert "one of" in result.output
+
+
+def test_writes_where_no_memory_is_kept_say_how_to_start(tmp_path):
+    write_card(tmp_path, "importer", "name: mind the importer\nprompt: go\n")
+    project = tmp_path / "tasks"
+    for args in (
+        ["keep", "a", "Something."],
+        ["set-aside", "a", "--because", "b"],
+        ["page", "--from", "-"],
+    ):
+        result = runner.invoke(app, [*args, "--in", str(project)], input="x\n")
+        assert result.exit_code == 1, args
+        assert "poieo init" in result.output
+    assert not at(project).longterm().exists()

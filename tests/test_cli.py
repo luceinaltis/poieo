@@ -192,7 +192,8 @@ def test_help_tells_two_stories_not_seventeen():
     `tasks` and `note` are on it because this is a task board: a person who
     cannot find how to list their tasks has not been shown the product.
     `memory` and `learn` are on it because a feature nobody can find is a
-    feature nobody has.
+    feature nobody has -- and `keep`, `set-aside` and `page` with them, since
+    a memory nobody can write to is one they can only watch.
 
     `asking` and `answer` are on it for a harder reason: a run that stopped at
     a `confirm` node is waiting on a person, and everything downstream of it is
@@ -212,6 +213,9 @@ def test_help_tells_two_stories_not_seventeen():
         "answer",
         "memory",
         "learn",
+        "keep",
+        "set-aside",
+        "page",
     }
     # `runs` and `config` ride along as sub-apps.
     result = runner.invoke(app, ["--help"])

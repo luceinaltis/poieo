@@ -261,9 +261,18 @@ poieo learn
 
 `learn` reads new run records with the binding’s `learner` role and retains
 only lessons meant to stay true across future runs. Most runs should add
-nothing. The board can browse and search long-term memory but does not edit it;
-`poieo memory` is also read-only, while the validated learning pass can add or
-set aside entries. See [project memory](memory.md) for search setup, selection,
+nothing. `poieo memory` is read-only; a person writes with three commands:
+
+```bash
+poieo page --edit                                      # the rules every run reads
+poieo keep batch-cap "The api rejects batches over 50."  # one thing that stays true
+poieo set-aside old-cap --because batch-cap            # retire one for its replacement
+```
+
+`keep` takes `--scope`, `--anchor`, `--leans-on`, and `--disagrees-with`; `page`
+also takes `--from FILE` (or `-`), and `--accept` or `--dismiss` for the line the
+last learning pass suggested. The board can browse and search long-term memory
+but does not edit it. See [project memory](memory.md) for search setup, selection,
 recovery, and durability rules.
 
 ## Grow a task into a graph
