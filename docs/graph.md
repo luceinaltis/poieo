@@ -50,8 +50,13 @@ node-specific fields, and invalid templates or expressions. Cycles are allowed;
 
 ## Node contracts
 
-All nodes may have a description, output rule, and `next` where the node type
-allows it.
+Whatever its type, a node may have:
+
+- `description` — a note for whoever reads the graph; the runtime ignores it.
+- `output` — where the result lands in the run scope; see below.
+- `next` — the successor, where the node type allows one.
+- `ui` — `{x, y}` canvas coordinates written by the editor and ignored by the
+  runtime.
 
 ### `agent`
 
