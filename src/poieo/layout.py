@@ -84,6 +84,10 @@ class Layout:
         # a card being run again to ask it, never anybody's work.
         return self.runs() / "asking"
 
+    def notes(self, slug: str) -> Path:
+        """Direction queued while a task is still recording its current run."""
+        return self.runs() / "notes" / slug
+
     def worktrees(self) -> Path:
         return self.root / "worktrees"
 

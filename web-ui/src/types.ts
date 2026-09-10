@@ -42,7 +42,12 @@ export interface Check {
  * before tasks could apply their own work.
  */
 export interface Application {
-  status: "applied" | "review" | "blocked" | "discarded"
+  status: "applied" | "review" | "blocked" | "discarded" | "undone"
+  pending?: number
+  unchanged?: boolean
+  undo_of?: string
+  undo?: { run_id: string; before: string; after: string }
+  run_ids?: string[]
   checks?: Check[]
   accepted?: number
   before?: string
@@ -56,7 +61,7 @@ export interface Application {
   /** Files the project changed again between the check and the apply. */
   verification_changed?: string[]
   /** A repair run the task tried first, when its permission allowed one. */
-  repair?: { ready: boolean; run_id: string; reason: string }
+  repair?: { ready: boolean; run_id?: string; reason?: string }
 }
 
 /** The user's permission to apply this task's work, as the card wrote it. */

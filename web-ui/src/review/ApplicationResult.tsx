@@ -3,13 +3,15 @@ import "../application.css"
 
 export function applicationLabel(result?: Application): string {
   if (!result) return ""
-  if (result.status === "applied") return result.accepted === 0 ? "Already included" : "Applied to project"
+  if (result.status === "applied") return result.unchanged || result.accepted === 0 ? "Already included" : result.undo_of ? "Undo applied · task paused" : "Applied to project"
+  if (result.status === "undone") return "Undone · task paused"
   if (result.status === "blocked") return "Needs your decision"
   if (result.status === "discarded") return "Discarded"
   return "Ready for review"
 }
 
 export function applicationReason(result: Partial<Application>): string {
+  if (result.repair?.ready === false && result.repair.reason) return result.repair.reason
   if (result.outside_scope?.length) return `Outside the allowed files: ${result.outside_scope.join(", ")}.`
   if (result.conflict?.length) return `Changes overlap in ${result.conflict.join(", ")}. Your project was kept as it was.`
   if (result.verification_changed?.length) return `A check changed ${result.verification_changed.join(", ")}. Check commands must leave these files unchanged.`
@@ -22,6 +24,7 @@ export function ApplicationResult({ result }: { result: Application }) {
   return (
     <section className="application-result" aria-label="Change application">
       <p><strong>{applicationLabel(result)}</strong></p>
+      {result.repair?.ready ? <p>Overlap repaired and checked again.</p> : null}
       {reason ? <p>{reason}</p> : null}
       {result.checks?.length ? (
         <details>

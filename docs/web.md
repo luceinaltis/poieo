@@ -329,5 +329,15 @@ Hanken Grotesk and DM Mono ship with the board for offline use; decorative wash
 art and serif headings belong to the public website, not the working board.
 The visual reference and asset list live in [the brand guide](../brand/README.md).
 
+The task form and plain-card editor expose review or automatic application,
+allowed paths and verification commands in an optional disclosure. Automatic
+mode requires explicit selection and at least one check. Run history displays
+the application outcome and verification output, including repaired, already
+included and undone work. Applied diffs use the final verified combination.
+An applied run offers undo through the same checks; unresolved undo leaves the
+project intact. Optional direction is saved through the task's `/note` route for
+the next run. Successful application decisions announce a fresh task listing so
+all open boards update pending counts and holds together.
+
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).
