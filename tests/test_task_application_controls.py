@@ -310,6 +310,8 @@ async def test_manual_acceptance_updates_the_question_and_recorded_application(t
     driver = daemon.runners[0]
     accepted = await driver.accept_changes(result.change["head"])
     assert accepted["status"] == "applied"
+    assert driver.last_result.status == "completed"
+    assert driver.last_result.application["status"] == "applied"
     assert driver.asking() is None
     assert not driver.holding
     assert daemon.store.summary(result.run_id)["application"]["status"] == "applied"
@@ -322,8 +324,61 @@ async def test_manual_discard_resolves_the_blocked_question_without_applying(tmp
     daemon, result = await run_once(config)
     driver = daemon.runners[0]
     await driver.discard_changes(result.change["head"])
+    assert driver.last_result.status == "completed"
+    assert driver.last_result.application["status"] == "discarded"
     assert driver.asking() is None
     assert daemon.store.summary(result.run_id)["application"]["status"] == "discarded"
+    assert not (repo / "made.txt").exists()
+
+
+@pytest.mark.parametrize("decision", ["accept", "discard"])
+async def test_deciding_another_process_change_clears_its_persisted_question(tmp_path, decision):
+    from poieo.daemon import Daemon
+
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    board = Daemon(config)._runners()[0]
+    command = Daemon(config)._runners()[0]
+    result = await command.run_once({})
+    assert result.status == "asking" and board.asking() is None
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = [CHECK_MADE]
+    path.write_text(yaml.safe_dump(data))
+    question = next(config.layout().asking().glob("*.json"))
+    stale = question.read_text()
+    outcome = await (board.accept_changes() if decision == "accept" else board.discard_changes())
+    assert ("accepted" if decision == "accept" else "discarded") in outcome
+    assert not question.exists()
+    # An interrupted older writer may leave a stale copy; the resolved run wins.
+    question.write_text(stale)
+    restarted = Daemon(config)._runners()[0]
+    assert restarted.asking() is None
+    assert not restarted.holding
+
+
+@pytest.mark.parametrize("choice", ["accept", "pause", "retry"])
+async def test_a_stale_question_cannot_replace_the_recorded_application_or_prevent_undo(tmp_path, choice):
+    from poieo.daemon import Daemon
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    stale, other = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
+    result = await stale.run_once({})
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = ['python -c "pass"']
+    path.write_text(yaml.safe_dump(data))
+    async with other._private_copy():
+        assert not stale.answer("pause")
+    applied = await other.accept_changes()
+    assert applied["accepted"] == 1
+    if choice == "accept":
+        assert (await stale.accept_changes())["accepted"] == 0
+    else:
+        assert not stale.answer(choice)
+    assert stale.store.summary(result.run_id)["application"] == applied
+    assert stale.last_result.application == applied
+    assert stale.asking() is None and not stale.holding
+    assert (await stale.undo_changes(result.run_id))["status"] == "applied"
     assert not (repo / "made.txt").exists()
 
 
@@ -340,6 +395,25 @@ async def test_removing_the_last_file_in_the_task_folder_still_has_a_check_direc
     outcome = await check_and_apply(point, ApplySpec(mode="auto", checks=['python -c "pass"']))
     assert outcome["status"] == "applied"
     assert not (repo / "docs" / "old.txt").exists()
+
+
+async def test_adopting_an_undo_keeps_an_older_runner_paused(tmp_path):
+    from poieo.daemon import Daemon
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    stale, other = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
+    result = await stale.run_once({})
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = ['python -c "pass"']
+    path.write_text(yaml.safe_dump(data))
+    assert (await other.accept_changes())["status"] == "applied"
+    assert (await other.undo_changes(result.run_id))["status"] == "applied"
+    assert (await stale.accept_changes())["accepted"] == 0
+    assert stale.last_result.application["status"] == "undone"
+    assert stale.asking() is None
+    assert stale.holding
+    assert not (repo / "made.txt").exists()
 
 
 async def test_cancelling_a_shell_stops_orphaned_descendants_before_returning(tmp_path):

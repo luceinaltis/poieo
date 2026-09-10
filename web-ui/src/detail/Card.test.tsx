@@ -52,6 +52,25 @@ afterEach(() => {
 const onSetAside = vi.fn()
 const onAlike = vi.fn()
 
+test("a task can explicitly allow automatic application with checks", async () => {
+  fetchCard.mockResolvedValue({ task: "chores", text: "prompt: tidy\n", name: "Chores", folder: "../work",
+    prompt: "tidy", plain: true, enabled: true, keeps_copies: true })
+  rewriteCard.mockResolvedValue({ ok: true, live: true })
+  await open()
+  await act(async () => container.querySelector<HTMLElement>(".apply-settings summary")!.click())
+  await act(async () => container.querySelector<HTMLInputElement>('input[value="auto"]')!.click())
+  expect(container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.disabled).toBe(true)
+  await act(async () => {
+    const area = container.querySelector<HTMLTextAreaElement>('[name="application-checks"]')!
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(area, "npm test")
+    area.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await save()
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", expect.objectContaining({
+    apply: { mode: "auto", paths: [], checks: ["npm test"], timeout: 120 },
+  }))
+})
+
 async function render() {
   onAlike.mockReset()
   await act(async () => {

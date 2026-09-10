@@ -14,7 +14,7 @@ import {
 import type { FeedStatus } from "../api"
 import { WINDOW, initialStage, keyOfTask, reduce, replay, setRuns } from "../state/stage"
 import type { StageState, TaskState } from "../state/stage"
-import type { ProjectRow, TaskRow, PoieoEvent } from "../types"
+import type { ProjectRow, TaskRow, PoieoEvent, RunSummary } from "../types"
 
 export interface StageApi {
   fetchTasks: typeof defaultFetchTasks
@@ -50,8 +50,7 @@ export interface StageStore {
 function isChangedSummary(event: PoieoEvent): boolean {
   return (
     event.type === "run_summary" &&
-    event.status === "completed" &&
-    event.change !== undefined
+    ((event.status === "completed" && event.change !== undefined) || event.application !== undefined)
   )
 }
 
@@ -199,6 +198,7 @@ export function createStageStore(api: StageApi = {
   async function refreshListingAfterChanges(): Promise<void> {
     holding = true
     held = []
+    let reflected = false
     try {
       while (true) {
         const revisionBeforeRead = changedSummaryRevision
@@ -207,13 +207,18 @@ export function createStageStore(api: StageApi = {
         projects = listing.projects
         const stable = revisionBeforeRead === changedSummaryRevision
         stage = seed(stage, tasks, stable ? held : [])
-        if (stable) break
+        if (stable) { reflected = true; break }
       }
     } finally {
       const queued = held
       holding = false
       held = []
-      stage = replay(stage, queued)
+      stage = replay(stage, reflected ? queued.map((event) => {
+        const application = event.application as RunSummary["application"]
+        return event.type === "run_summary" && application
+          ? { ...event, application: { ...application, pending: undefined } }
+          : event
+      }) : queued)
       announce()
     }
   }

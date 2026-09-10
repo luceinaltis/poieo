@@ -9,6 +9,7 @@
 import { useState } from "react"
 
 import { outcomeOf, rollup } from "./rollup"
+import { applicationLabel } from "./ApplicationResult"
 import type { RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./review.css"
@@ -151,6 +152,7 @@ export function RunList({
                 <span className="run-size">{sizeOf(run)}</span>
               </span>
               <span className="run-what">{accountOf(run, tracked)}</span>
+              {run.application ? <span className="application-label">{applicationLabel(run.application)}</span> : null}
             </button>
             {controls ? <div className="run-controls">{controls(run)}</div> : null}
           </li>

@@ -3,8 +3,8 @@
 Almost everything answers "what is happening / what happened". The routes that
 change anything are marked again where they are registered:
 
-- **The review** -- accept and discard, the only routes that may ever touch the
-  user's own files. If you are adding a third of these, stop.
+- **The review** -- accept, discard and undo run through verified private work
+  before changing the user's own files.
 - **Control** -- pause, resume, run-now. The daemon's runtime state and nothing
   else: no file, no schedule on disk, nothing that survives a restart.
 - **Editing what the reader keeps** -- pointing a role at a model, and writing
@@ -44,7 +44,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
-from ..errors import BindingError, PoieoError, SpecError
+from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
@@ -66,6 +66,7 @@ from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
+from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
 from .events import CLOSED, BroadcastStore
 from .steps import publish_steps, validate_steps
@@ -769,6 +770,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # if switching it on means restarting the daemon, and so arrived with
         # the scan that adopts the switch.
         enabled = body.get("enabled", True) is not False
+        try:
+            application = ApplySpec.model_validate(body.get("apply", {}))
+        except ValueError as exc:
+            return JSONResponse({"error": describe_invalid(exc)}, status_code=400)
 
         # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
         # is a spelling; "../escape" becoming "escape" is a different request
@@ -800,6 +805,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 {"error": f"the folder it would work in is not there: {where}"},
                 status_code=400,
             )
+
+        if application.mode == "auto" and not await asyncio.to_thread(git_keeps_copies, where):
+            return JSONResponse({"error": "automatic application needs a folder protected by Git"}, status_code=400)
 
         # **Inside this project, and nowhere else.** A card takes the files and
         # shell toolsets and fires within seconds of being written, so without
@@ -849,6 +857,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "folder": folder,
                 **({"graph": f"{slug}.graph.yaml"} if graph is not None else {"prompt": prompt}),
                 **({} if enabled else {"enabled": False}),
+                **({"apply": application.model_dump()} if "apply" in body else {}),
             },
             allow_unicode=True,
             sort_keys=False,
@@ -916,7 +925,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return False
         if not isinstance(data, dict):
             return False
-        return set(data) <= {"name", "folder", "prompt", "enabled"}
+        policy = data.get("apply") or {}
+        if isinstance(policy, dict) and any("\n" in str(command) for command in policy.get("checks") or []):
+            return False
+        return set(data) <= {"name", "folder", "prompt", "enabled", "apply"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -987,6 +999,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
                     "enabled": fresh.enabled,
+                    "apply": fresh.apply.model_dump(),
+                    "keeps_copies": bool(
+                        fresh.folder_path() and await asyncio.to_thread(git_keeps_copies, fresh.folder_path())
+                    ),
                     "plain": _plain(text),
                 }
             )
@@ -1033,6 +1049,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # defaulting to on here would have a prompt tweak silently
                     # start a task somebody had switched off.
                     **({} if body.get("enabled", _switch(current)) is not False else {"enabled": False}),
+                    **(
+                        {"apply": body["apply"]}
+                        if "apply" in body
+                        else {"apply": yaml.safe_load(current)["apply"]}
+                        if "apply" in yaml.safe_load(current)
+                        else {}
+                    ),
                 },
                 allow_unicode=True,
                 sort_keys=False,
@@ -1068,6 +1091,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 # folder fence below cannot see -- and the graph is a path
                 # exactly as capable of leaving the project. Same refusals,
                 # resolved the way the card itself will resolve it.
+                if fresh.apply.mode == "auto" and (
+                    fresh.folder_path() is None or not git_keeps_copies(fresh.folder_path())
+                ):
+                    return JSONResponse(
+                        {"error": "automatic application needs a folder protected by Git"}, status_code=400
+                    ), False
                 if fresh.graph:
                     graph_asked = Path(os.path.expanduser(fresh.graph))
                     graph_at = (graph_asked if graph_asked.is_absolute() else cards / graph_asked).resolve()
@@ -1161,7 +1190,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # comparison ignores it, and a switch flipped here is
                     # honestly promised rather than sent away for a restart.
                     def _same(old: Any, new: Any) -> bool:
-                        return old.model_copy(update={"enabled": new.enabled}) == new
+                        return old.model_copy(update={"enabled": new.enabled, "apply": new.apply}) == new
 
                     if loaded is not None:
                         live = _same(loaded.spec, new_spec)
@@ -1682,6 +1711,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
         change = summary.get("change")
+        applied = summary.get("application") or {}
+        if applied.get("status") in {"applied", "undone"} and applied.get("before") and applied.get("after"):
+            change = {"base": applied["before"], "head": applied["after"]}
         point = _workspace_for(daemon, summary.get("project"), summary.get("task"))
         if not change or point is None:
             # A run that altered nothing has nothing to review. That is an
@@ -1723,8 +1755,6 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             change = summary.get("change")
             if not change:
                 return JSONResponse({"error": f"run '{run_id}' has no change"}, status_code=404)
-            if summary.get("task") != task or summary.get("project", project) != project:
-                return JSONResponse({"error": "this run belongs to another task"}, status_code=409)
             target = change["head"]
 
         try:
@@ -1737,6 +1767,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": str(exc)}, status_code=409)
 
         refused = ("accepted" if action == "accept" else "discarded") not in outcome
+        if not refused:
+            _task_changed(runner)
         return JSONResponse(outcome, status_code=409 if refused else 200)
 
     async def flow_accept(request: Request) -> JSONResponse:
@@ -1744,6 +1776,24 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
     async def flow_discard(request: Request) -> JSONResponse:
         return await _decide(request, "discard", "from_run_id")
+
+    async def flow_note(request: Request) -> JSONResponse:
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise SpecError("write direction for the next run")
+            return JSONResponse(runner.leave_note(body.get("text")))
+        except (PoieoError, ValueError, UnicodeDecodeError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except OSError as exc:
+            return JSONResponse({"error": f"direction could not be saved: {exc}"}, status_code=409)
+
+    def _task_changed(runner: Any) -> None:
+        if isinstance(getattr(runner, "store", None), BroadcastStore):
+            runner.store.announce({"type": "tasks_changed", "project": runner.config.display_name})
 
     async def flow_undo(request: Request) -> JSONResponse:
         runner, missing = _asked(request)
@@ -1759,6 +1809,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             outcome = await runner.undo_changes(body["run_id"])
         except PoieoError as exc:
             return JSONResponse({"error": str(exc)}, status_code=409)
+        _task_changed(runner)
         return JSONResponse(outcome, status_code=200 if outcome.get("status") == "applied" else 409)
 
     def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
@@ -2314,6 +2365,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/undo", flow_undo, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/note", flow_note, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
         Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),

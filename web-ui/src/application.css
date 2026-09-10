@@ -1,0 +1,18 @@
+.apply-settings { border-top: 1px solid var(--rule); padding: 12px 0; font-size: .88em; }
+.apply-settings summary { cursor: pointer; color: var(--text); }
+.apply-settings fieldset { border: 0; margin: 12px 0 0; padding: 0; min-width: 0; }
+.apply-settings legend { color: var(--line); margin-bottom: 8px; }
+.apply-choice { display: flex; align-items: center; gap: 8px; margin: 9px 0; }
+.apply-settings p, .apply-field span { color: var(--line); line-height: 1.5; }
+.apply-field { display: flex; flex-direction: column; gap: 5px; margin-top: 14px; }
+.apply-field textarea { background: var(--well); color: var(--text); border: 1px solid var(--rule); border-radius: 4px; padding: 7px; font: inherit; resize: vertical; width: 100%; box-sizing: border-box; }
+.application-result { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 12px; margin: 10px 0; }
+.application-result p { margin: 4px 0; }
+.application-result summary { cursor: pointer; margin-top: 8px; }
+.application-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8em; max-height: 260px; overflow: auto; }
+.application-label { color: var(--line); font-size: .8em; }
+.task-direction { margin: 14px 0; font-size: .88em; }
+.task-direction summary { cursor: pointer; }
+.task-direction button, .undo-change button { margin-top: 8px; }
+.undo-change { margin: 10px 0 18px; font-size: .88em; }
+.undo-change p { color: var(--line); line-height: 1.5; }

@@ -129,18 +129,36 @@ def _repository_lock(repo: Path, *, task: str | None = None) -> Iterator[None]:
     common = Path(_git(repo, "rev-parse", "--git-common-dir").strip())
     common = (repo / common).resolve() if not common.is_absolute() else common.resolve()
     name = "poieo-accept.lock" if task is None else f"poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
-    key = os.path.normcase(str(common / name))
     busy = (
         "another poieo process is still applying a change; try again"
         if task is None
         else "this task is already running in another process"
     )
+    with _path_lock(common / name, wait=60 if task is None else 0, busy=busy):
+        yield
+
+
+@contextmanager
+def task_run_lock(folder: Path, task: str) -> Iterator[None]:
+    """Own a task's input and journal even when it has no Git working copy."""
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f".poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
+        with _path_lock(path, wait=0, busy="this task is already running in another process"):
+            yield
+    except OSError as exc:
+        raise WorkspaceError(f"could not coordinate this task: {exc}") from exc
+
+
+@contextmanager
+def _path_lock(path: Path, *, wait: float, busy: str) -> Iterator[None]:
+    key = os.path.normcase(str(path.resolve()))
     with _LOCKS_GUARD:
         local = _LOCKS.setdefault(key, threading.Lock())
-    if not local.acquire(timeout=60 if task is None else 0):
+    if not local.acquire(timeout=wait):
         raise WorkspaceError(busy)
     try:
-        with _locked_file(common / name, wait=60 if task is None else 0, busy=busy):
+        with _locked_file(path, wait=wait, busy=busy):
             yield
     finally:
         local.release()

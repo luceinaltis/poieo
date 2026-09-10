@@ -54,6 +54,15 @@ function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
 const field = (name: string) => host.querySelector<HTMLInputElement>(`[name="${name}"]`)!
 const save = () => host.querySelector<HTMLButtonElement>('[data-do="make-task"]')!
 
+test("a task may choose a Git subfolder even when its project folder is not Git", () => {
+  show({ keepsCopies: false })
+  act(() => host.querySelector<HTMLElement>(".apply-settings summary")!.click())
+  const automatic = host.querySelector<HTMLInputElement>('input[value="auto"]')!
+  expect(automatic.disabled).toBe(false)
+  act(() => automatic.click())
+  expect(automatic.checked).toBe(true)
+})
+
 function type(name: string, value: string) {
   const input = field(name)
   act(() => {
@@ -79,6 +88,25 @@ test("it asks for a name, a folder and a prompt, and nothing else", () => {
   show()
   const named = [...host.querySelectorAll("[name]")].map((node) => node.getAttribute("name"))
   expect(named.sort()).toEqual(["folder", "name", "prompt"])
+})
+
+test("automatic application is optional and requires an explicit check before saving", async () => {
+  show()
+  type("name", "Tidy")
+  type("folder", "../work")
+  type("prompt", "keep it healthy")
+  const summary = host.querySelector<HTMLElement>(".apply-settings summary")
+  expect(summary).not.toBeNull()
+  await act(async () => summary!.click())
+  await act(async () => host.querySelector<HTMLInputElement>('[value="auto"]')!.click())
+  expect(save().disabled).toBe(true)
+  type("application-checks", "python -m pytest")
+  type("application-paths", "src\ntests")
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+  expect(createTask).toHaveBeenCalledWith("board", "Tidy", "../work", "keep it healthy", true, {
+    mode: "auto", checks: ["python -m pytest"], paths: ["src", "tests"], timeout: 120,
+  })
 })
 
 test("saving is refused until the folder has been named", () => {
