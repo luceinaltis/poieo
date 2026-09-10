@@ -26,6 +26,13 @@ test("a board that fits at reading size keeps the ordinary centred view", () => 
   expect(readingView(board, host)).toEqual(fit(board, host))
 })
 
+test("the reading view follows larger page type without over-shrinking tall boards", () => {
+  const host = { width: 2000, height: 1000 }
+  const small = { width: 800, height: 600 }
+  expect(readingView(small, host, 1.25)).toEqual(fit(small, host, 24, 1.25))
+  expect(readingView({ width: 800, height: 2400 }, host, 1.25).zoom).toBeCloseTo(0.85 * 1.25)
+})
+
 const LINE: GraphShape = {
   entry: "draft",
   nodes: [
