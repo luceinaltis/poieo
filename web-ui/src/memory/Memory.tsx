@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { askMemory, fetchMemory, fetchMemoryEntry, searchMemory } from "../api"
+import {
+  askMemory,
+  fetchMemory,
+  fetchMemoryEntry,
+  keepMemory,
+  putMemoryPage,
+  searchMemory,
+  setAsideMemory,
+  settleMemorySuggestion,
+} from "../api"
 import { Constellation } from "./Constellation"
 import type {
   MemoryAskReply,
@@ -50,9 +59,18 @@ export function Memory({ project }: { project: string }) {
   const [busy, setBusy] = useState(false)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pageDraft, setPageDraft] = useState<string | null>(null)
+  const [newSlug, setNewSlug] = useState("")
+  const [newBody, setNewBody] = useState("")
+  const [replacement, setReplacement] = useState("")
+  const [writing, setWriting] = useState(false)
   const request = useRef(0)
   const detailRequest = useRef(0)
+  const writeTurn = useRef(0)
   const overviewRevision = useRef<string | null>(null)
+  // The overview reader of the open place, so a write can reread at once
+  // rather than wait out the refresh interval.
+  const refresh = useRef<(() => Promise<void>) | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -67,8 +85,14 @@ export function Memory({ project }: { project: string }) {
     setSearched(false)
     setBusy(false)
     setError(null)
+    setPageDraft(null)
+    setNewSlug("")
+    setNewBody("")
+    setReplacement("")
+    setWriting(false)
     request.current += 1
     detailRequest.current += 1
+    writeTurn.current += 1
     const readOverview = async () => {
       if (reading) return
       reading = true
@@ -83,10 +107,12 @@ export function Memory({ project }: { project: string }) {
         reading = false
       }
     }
+    refresh.current = readOverview
     void readOverview()
     const timer = window.setInterval(() => void readOverview(), MEMORY_REFRESH_MS)
     return () => {
       alive = false
+      refresh.current = null
       window.clearInterval(timer)
     }
   }, [project])
@@ -147,6 +173,71 @@ export function Memory({ project }: { project: string }) {
     } finally {
       if (turn === request.current) setBusy(false)
     }
+  }
+
+  // One shape for every write: refuse while one is in flight, keep a refusal
+  // visible as a result, reread the place on success, and let a project
+  // switch mid-flight discard the outcome.
+  const written = async (
+    go: () => Promise<{ ok: boolean; error?: string }>,
+    then?: () => Promise<void>,
+  ): Promise<boolean> => {
+    if (writing) return false
+    const turn = ++writeTurn.current
+    setWriting(true)
+    setError(null)
+    try {
+      const reply = await go()
+      if (turn !== writeTurn.current) return false
+      if (!reply.ok) {
+        setError(reply.error ?? "The daemon refused the write.")
+        return false
+      }
+      await refresh.current?.()
+      if (turn !== writeTurn.current) return false
+      await then?.()
+      return true
+    } finally {
+      if (turn === writeTurn.current) setWriting(false)
+    }
+  }
+
+  const savePage = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (pageDraft === null) return
+    const draft = pageDraft
+    if (await written(() => putMemoryPage(project, draft))) setPageDraft(null)
+  }
+
+  const settle = (accept: boolean) => void written(() => settleMemorySuggestion(project, accept))
+
+  const keep = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const slug = newSlug.trim()
+    const body = newBody.trim()
+    if (!slug || !body) return
+    await written(
+      () => keepMemory(project, slug, body),
+      async () => {
+        setNewSlug("")
+        setNewBody("")
+        await selectEntry(slug)
+      },
+    )
+  }
+
+  const retire = async (event: React.FormEvent) => {
+    event.preventDefault()
+    const slug = detail?.slug
+    const because = replacement.trim()
+    if (!slug || !because) return
+    await written(
+      () => setAsideMemory(project, slug, because),
+      async () => {
+        setReplacement("")
+        await selectEntry(slug)
+      },
+    )
   }
 
   const visibleGraph = useMemo(() => {
@@ -313,6 +404,21 @@ export function Memory({ project }: { project: string }) {
             {answer?.model ? <code>{answer.model}</code> : null}
           </header>
 
+          {overview.suggestion ? (
+            <div className="memory-suggestion" data-suggestion={overview.suggestion}>
+              <span>the last pass suggests</span>
+              <p>{overview.suggestion}</p>
+              <div>
+                <button type="button" data-do="accept-suggestion" disabled={writing} onClick={() => settle(true)}>
+                  add to page
+                </button>
+                <button type="button" data-do="dismiss-suggestion" disabled={writing} onClick={() => settle(false)}>
+                  let go
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {error ? <p className="refusal memory-error" role="alert">{error}</p> : null}
           {answer?.degraded ? <p className="memory-degraded">{answer.degraded}</p> : null}
           {answer?.answer ? (
@@ -400,6 +506,19 @@ export function Memory({ project }: { project: string }) {
                 <dt>updated</dt>
                 <dd>{new Date(detail.updated_at).toLocaleString()}</dd>
               </dl>
+              {detail.superseded_by ? null : (
+                <form className="memory-set-aside" onSubmit={(event) => void retire(event)}>
+                  <input
+                    aria-label="Replaced by"
+                    placeholder="set aside for…"
+                    value={replacement}
+                    onChange={(event) => setReplacement(event.target.value)}
+                  />
+                  <button type="submit" data-do="set-aside" disabled={writing || !replacement.trim()}>
+                    set aside
+                  </button>
+                </form>
+              )}
               {detail.history.length ? (
                 <details className="memory-history">
                   <summary>history ({detail.history.length})</summary>
@@ -416,12 +535,48 @@ export function Memory({ project }: { project: string }) {
             </article>
           ) : null}
 
-          {overview.page ? (
-            <details className="memory-page">
-              <summary>What this project always requires</summary>
-              <p>{overview.page}</p>
-            </details>
-          ) : null}
+          <form className="memory-keep" aria-label="Keep a memory" onSubmit={(event) => void keep(event)}>
+            <span>keep a memory</span>
+            <input
+              aria-label="Memory name"
+              placeholder="a-name-like-this"
+              value={newSlug}
+              onChange={(event) => setNewSlug(event.target.value)}
+            />
+            <textarea
+              aria-label="What stays true"
+              placeholder="One statement that stays true."
+              value={newBody}
+              onChange={(event) => setNewBody(event.target.value)}
+            />
+            <button type="submit" data-do="keep" disabled={writing || !newSlug.trim() || !newBody.trim()}>
+              keep
+            </button>
+          </form>
+
+          <details className="memory-page" open={pageDraft !== null || undefined}>
+            <summary>What this project always requires</summary>
+            {pageDraft === null ? (
+              <>
+                {overview.page ? <p>{overview.page}</p> : <p className="memory-none">Nothing yet.</p>}
+                <button type="button" data-do="edit-page" onClick={() => setPageDraft(overview.page_text)}>
+                  edit
+                </button>
+              </>
+            ) : (
+              <form className="memory-page-edit" onSubmit={(event) => void savePage(event)}>
+                <textarea aria-label="Page" value={pageDraft} onChange={(event) => setPageDraft(event.target.value)} />
+                <div>
+                  <button type="submit" data-do="save-page" disabled={writing}>
+                    save
+                  </button>
+                  <button type="button" data-do="cancel-page" onClick={() => setPageDraft(null)}>
+                    cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </details>
         </aside>
       </div>
     </section>

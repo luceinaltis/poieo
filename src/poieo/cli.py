@@ -59,7 +59,7 @@ from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion
+from .learn import last_suggestion, settle_suggestion
 from .learn import learn as run_learning_pass
 from .memory import frontmatter as memory_frontmatter
 from .memory import keep_entry, keeps_memory, memory_report, page_text, read_memory, set_aside, write_page
@@ -1500,17 +1500,8 @@ def page(
         write_page(project, text)
         _ok("page written")
         return
-    suggestion = last_suggestion(project)
-    if suggestion is None:
-        _fail("the last pass suggested nothing")
-    if accept:
-        write_page(project, (current.rstrip() + "\n" + suggestion + "\n") if current.strip() else suggestion + "\n")
-        _ok(f"added to the page: {suggestion}")
-    else:
-        # The clearing gesture everywhere: look, then touch. The page is
-        # rewritten as it was, and the suggestion stops showing.
-        write_page(project, current)
-        _ok("let go")
+    suggestion = settle_suggestion(project, accept)
+    _ok(f"added to the page: {suggestion}" if accept else "let go")
 
 
 @app.command(rich_help_panel=AFTER)

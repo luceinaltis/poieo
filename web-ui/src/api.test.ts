@@ -6,11 +6,15 @@ import {
   fetchRunEvents,
   fetchRuns,
   fetchTasks,
+  keepMemory,
   openFeed,
   pause,
+  putMemoryPage,
   resume,
   runNow,
   searchMemory,
+  setAsideMemory,
+  settleMemorySuggestion,
 } from "./api"
 import type { PoieoEvent } from "./types"
 
@@ -164,6 +168,36 @@ test("asking memory sends a question rather than disguising it as search", async
       method: "POST",
       body: JSON.stringify({ question: "why?", include_set_aside: true }),
     }),
+  )
+})
+
+test("memory writes go to the page, the entry, its set-aside, and the suggestion", async () => {
+  const fetchStub = stubFetch({
+    "/api/projects/board/memory/page": { body: {} },
+    "/api/projects/board/memory/feeds-order": { body: { slug: "feeds-order" } },
+    "/api/projects/board/memory/feeds-order/set-aside": { body: {} },
+    "/api/projects/board/memory/suggestion": { body: { suggestion: "Require ISO dates." } },
+  })
+
+  expect(await putMemoryPage("board", "Dates are ISO.")).toMatchObject({ ok: true })
+  expect(fetchStub).toHaveBeenCalledWith(
+    "/api/projects/board/memory/page",
+    expect.objectContaining({ method: "PUT", body: JSON.stringify({ text: "Dates are ISO." }) }),
+  )
+  expect(await keepMemory("board", "feeds-order", "Oldest first.")).toMatchObject({ ok: true, slug: "feeds-order" })
+  expect(fetchStub).toHaveBeenCalledWith(
+    "/api/projects/board/memory/feeds-order",
+    expect.objectContaining({ method: "PUT", body: JSON.stringify({ body: "Oldest first." }) }),
+  )
+  expect(await setAsideMemory("board", "feeds-order", "batch-cap")).toMatchObject({ ok: true })
+  expect(fetchStub).toHaveBeenCalledWith(
+    "/api/projects/board/memory/feeds-order/set-aside",
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ because: "batch-cap" }) }),
+  )
+  expect(await settleMemorySuggestion("board", true)).toMatchObject({ ok: true, suggestion: "Require ISO dates." })
+  expect(fetchStub).toHaveBeenCalledWith(
+    "/api/projects/board/memory/suggestion",
+    expect.objectContaining({ method: "POST", body: JSON.stringify({ accept: true }) }),
   )
 })
 

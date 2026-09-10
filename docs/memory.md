@@ -57,7 +57,8 @@ sealed:
 
 `write_entry`, `write_page`, and `set_aside` are the write doors. They validate
 the shape and append history in the same transaction. A person reaches them
-through `poieo keep`, `poieo set-aside`, and `poieo page`; the person's entry
+through `poieo keep`, `poieo set-aside`, and `poieo page`, or the board's memory
+view, which calls the same doors over HTTP; the person's entry
 door additionally requires typed targets and anchored files to exist now,
 seals anchors, and keeps an entry's existing metadata when a rewrite says
 nothing new about it. A replacement named by `set_aside` must exist and differ

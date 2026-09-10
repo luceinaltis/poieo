@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .binding import BindingSpec
+from .errors import SpecError
 from .layout import layout_for
 from .memory import (
     Entry,
@@ -30,6 +31,7 @@ from .memory import (
     frontmatter,
     keeps_memory,
     open_memory,
+    page_text,
     page_written_at,
     read_page,
     readable_entries,
@@ -37,6 +39,7 @@ from .memory import (
     set_aside,
     used_in,
     write_entry,
+    write_page,
 )
 from .providers import ProviderPool
 from .providers.base import LLMRequest
@@ -459,6 +462,21 @@ def last_suggestion(project_dir: Path) -> str | None:
             return None
     except (OSError, ValueError):
         pass  # an unreadable clock keeps the suggestion; showing beats hiding
+    return suggestion
+
+
+def settle_suggestion(project_dir: Path, accept: bool) -> str:
+    """Land the last pass's page line, or let it go. Both are a person
+    writing the page -- letting go rewrites it as it was -- which is the one
+    gesture that stops a suggestion showing."""
+    suggestion = last_suggestion(project_dir)
+    if suggestion is None:
+        raise SpecError("the last pass suggested nothing")
+    current = page_text(project_dir)
+    if accept:
+        write_page(project_dir, (current.rstrip() + "\n" + suggestion + "\n") if current.strip() else suggestion + "\n")
+    else:
+        write_page(project_dir, current)
     return suggestion
 
 
