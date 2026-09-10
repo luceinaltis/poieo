@@ -167,3 +167,20 @@ def test_a_failed_card_publish_leaves_no_graph_or_scratch_file(tmp_path, monkeyp
     answer = make_steps(client)
     assert answer.status_code == 400, answer.text
     assert sorted(p.name for p in cards.iterdir()) == ["already.yaml"]
+
+
+def test_cleanup_failure_keeps_a_task_that_was_already_published(tmp_path, monkeypatch):
+    client, cards = _client(tmp_path)
+    unlink = Path.unlink
+
+    def refuse_cleanup(path, *args, **kwargs):
+        if path.name.startswith(".review.yaml.") and path.suffix == ".tmp":
+            raise PermissionError("temporary file is still open")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", refuse_cleanup)
+    answer = make_steps(client, enabled=False)
+    assert answer.status_code == 200, answer.text
+    card = load_card(cards / "review.yaml")
+    assert load_graph(card.resolve(card.graph)).entry == "read"
+    assert len(load_cards(cards)) == 2
