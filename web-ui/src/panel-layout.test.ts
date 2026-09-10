@@ -36,3 +36,11 @@ test("the page's type follows the screen's width, and the shell follows the type
   expect(CSS).toMatch(/--rail-width:\s*[\d.]+rem/)
   expect(CSS).toMatch(/--panel-width:\s*min\([\d.]+rem,\s*100vw\)/)
 })
+
+test("the board's own type is pinned, so the fit alone magnifies it", () => {
+  // The board is laid out in px and magnified by its fit exactly as far as
+  // the root type grew. Left to inherit that root size as well, its words
+  // grew twice over and the warning line on every card ran off the edge.
+  const board = readFileSync("src/skins/basic/basic.css", "utf8").replace(/\r\n/g, "\n")
+  expect(board).toMatch(/\.basic\s*\{[^}]*font-size:\s*16px/s)
+})

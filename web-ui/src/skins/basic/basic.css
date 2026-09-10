@@ -59,6 +59,11 @@
   position: absolute;
   top: 0;
   left: 0;
+  /* Its own size, not the page's. The board is laid out in px and its fit
+     already magnifies it exactly as far as the root type has grown; inheriting
+     that root size as well grew every word twice over, and the warning line
+     ran off the edge of each card. */
+  font-size: 16px;
   /* Scaled from its own top-left, so the transform's x and y stay the board's
      position on screen rather than drifting with the zoom. */
   transform-origin: 0 0;

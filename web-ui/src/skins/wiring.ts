@@ -229,8 +229,9 @@ export interface View {
  * either, when the page around it is not: the root type grows a little with
  * the screen, and a board fitted at 1 beside 20px type is the one small thing
  * on the page. `ceiling` is how far the type has grown, and the board may grow
- * exactly that far -- the sizes on it were chosen to be read at 1 *of the
- * page's type*. A board that already fits under that is simply centred.
+ * exactly that far: its sizes are px, pinned to a 16px board rather than the
+ * page's type (basic.css), so this transform is the one thing that magnifies
+ * it. A board that already fits under that is simply centred.
  *
  * `margin` is kept clear on every side, which is why it is subtracted before
  * the ratio rather than after -- fitting to the full width and then insetting
