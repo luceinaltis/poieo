@@ -95,3 +95,26 @@ test("a removed task closes its steps instead of leaving a stale picture", () =>
   handle.update(initialStage([]))
   expect(host.querySelector("dialog[open]")).toBeNull()
 })
+
+test("one step that loops back to itself can still be opened for reading", () => {
+  const loop = structuredClone(task)
+  loop.shape.nodes = [{ ...loop.shape.nodes[0], next: "step_1" }]
+  handle.update(initialStage([loop]))
+
+  const opener = button(host, "View steps in Review a draft")
+  expect(opener.closest("[hidden]")).toBeNull()
+  opener.click()
+  expect(host.querySelector('dialog[open] [role="img"]')?.getAttribute("aria-label")).toContain("Review → Review")
+})
+
+test("a final step says it ends the run even when it also edits files", () => {
+  const ending = structuredClone(task)
+  ending.shape.nodes[2].next = null
+  ending.shape.nodes[2].tools = ["files"]
+  handle.update(initialStage([ending]))
+  button(host, "View steps in Review a draft").click()
+
+  const finalStep = host.querySelector('dialog[open] [data-node="step_3"]')!
+  expect(finalStep.textContent).toContain("Edits files")
+  expect(finalStep.textContent).toContain("Ends this run")
+})

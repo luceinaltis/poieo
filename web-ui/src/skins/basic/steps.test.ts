@@ -167,3 +167,12 @@ test("a router with no fallback draws the otherwise path to the end", () => {
     expect.objectContaining({ from: "gate", to: null, label: "default" }),
   ]))
 })
+
+test("a condition named default keeps its authored label beside the otherwise path", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", default: "work", branches: [{ to: "work", label: "default" }] }),
+    step("work"),
+  ] }, () => ({ width: 208, height: 112 }), true)
+
+  expect(laid.edges.map(edge => edge.lines)).toEqual([["default"], ["Otherwise"]])
+})
