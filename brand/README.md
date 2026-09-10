@@ -1,7 +1,8 @@
 # The poieo brand
 
-The brand direction is under review in [`docs/branding.md`](../docs/branding.md).
-That brief separates established requirements from proposed changes. This page
+The selected wash-and-fruit direction and new logo studies are recorded in
+[`docs/branding.md`](../docs/branding.md). The user has authorized exploring a new
+symbol and wordmark; a replacement logo has not yet been selected. This page
 records the current site draft and its assets, including the green palette;
 it is not an approved final identity.
 
