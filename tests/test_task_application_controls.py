@@ -327,6 +327,31 @@ async def test_manual_discard_resolves_the_blocked_question_without_applying(tmp
     assert not (repo / "made.txt").exists()
 
 
+@pytest.mark.parametrize("decision", ["accept", "discard"])
+async def test_deciding_another_process_change_clears_its_persisted_question(tmp_path, decision):
+    from poieo.daemon import Daemon
+
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    board = Daemon(config)._runners()[0]
+    command = Daemon(config)._runners()[0]
+    result = await command.run_once({})
+    assert result.status == "asking" and board.asking() is None
+    path = tmp_path / "cards" / "chores.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["apply"]["checks"] = [CHECK_MADE]
+    path.write_text(yaml.safe_dump(data))
+    question = next(config.layout().asking().glob("*.json"))
+    stale = question.read_text()
+    outcome = await (board.accept_changes() if decision == "accept" else board.discard_changes())
+    assert ("accepted" if decision == "accept" else "discarded") in outcome
+    assert not question.exists()
+    # An interrupted older writer may leave a stale copy; the resolved run wins.
+    question.write_text(stale)
+    restarted = Daemon(config)._runners()[0]
+    assert restarted.asking() is None
+    assert not restarted.holding
+
+
 async def test_removing_the_last_file_in_the_task_folder_still_has_a_check_directory(tmp_path):
     repo = make_repo(tmp_path)
     (repo / "docs").mkdir()
