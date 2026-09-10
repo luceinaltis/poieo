@@ -83,6 +83,14 @@ remains. The private copy stays exclusively owned until every started write and
 its decision record finish, even if the caller disconnects. A discarded result uses status
 `discarded`. Accepting a held change resumes the task's schedule.
 
+Undo names a recorded applied run. It prepares the inverse of that application's
+net file changes against the latest project, checks the current scope and
+verification commands, and records a new run and commit. Conflicts, local edits,
+or failed checks preserve the project. A successful undo marks the application
+`undone` and pauses the task so it cannot immediately repeat the work. Its Git
+marker prevents a repeated undo from deleting work intentionally added later.
+Undo and later decisions do not consume unread user direction.
+
 Application settings alone are read at the next run without rebuilding the
 schedule. Permission is read again immediately before automatic application;
 an edit, removal or disabling of the card prevents the earlier permission from

@@ -116,6 +116,7 @@ class PreparedChange:
     head: str
     count: int
     conflict: list[str] = field(default_factory=list)
+    undo_of: str | None = None
 
 
 _LOCKS: dict[str, threading.Lock] = {}
@@ -279,6 +280,9 @@ class Workspace:
 
     def applied(self, commit: str) -> bool:
         return self._is_ancestor(commit, "HEAD")
+
+    def included_runs(self, before: str, after: str) -> list[str]:
+        return self.run_ids(_git(self.repo, "rev-list", f"{before}..{after}").split())
 
     def run_ids(self, commits: Sequence[str]) -> list[str]:
         wanted = set(commits)
@@ -457,7 +461,7 @@ class Workspace:
                 or _git(self.repo, "rev-parse", "--symbolic-full-name", "HEAD").strip() != prepared.branch
             ):
                 return {"stale": "the project changed during verification"}
-            if not self._is_ancestor(prepared.target, self.branch):
+            if not prepared.undo_of and not self._is_ancestor(prepared.target, self.branch):
                 return {"stale": "this change no longer belongs to the task"}
             invalid = self.validate_prepared(prepared)
             if invalid:
@@ -472,6 +476,49 @@ class Workspace:
                 "after": prepared.head,
                 **({"unchanged": True} if unchanged else {}),
             }
+
+    def prepare_undo(self, before: str, after: str, run_id: str) -> PreparedChange | dict[str, object]:
+        """Reverse an applied file delta on the latest project, preserving later work."""
+        with _repository_lock(self.repo):
+            dirty = self._dirty()
+            if dirty:
+                return {"dirty": dirty}
+            base = _git(self.repo, "rev-parse", "HEAD").strip()
+            if not self._is_ancestor(before, after) or not self._is_ancestor(after, base):
+                return {"error": "the applied change is no longer in this project history"}
+            marker = f"refs/poieo/undo/{after}"
+            if self._is_ancestor(marker, base):
+                return {"error": "this application was already undone"}
+            branch = _git(self.repo, "rev-parse", "--symbolic-full-name", "HEAD").strip()
+            self.worktrees.mkdir(parents=True, exist_ok=True)
+            path = Path(tempfile.mkdtemp(prefix=".review-", dir=self.worktrees)).resolve()
+            prepared = PreparedChange(path, base, branch, after, base, 1, undo_of=after)
+            try:
+                _git(self.repo, "worktree", "add", "--detach", str(path), base)
+                # A synthetic single-parent commit describes the applied net
+                # delta, including merges. Revert its delta, never reset HEAD.
+                tree = _git(self.repo, "rev-parse", f"{after}^{{tree}}").strip()
+                delta = _git(self.repo, "commit-tree", tree, "-p", before, "-m", "poieo applied change").strip()
+                try:
+                    _git(path, "revert", "--no-commit", delta)
+                except WorkspaceError:
+                    prepared.conflict = self._conflicts(path)
+                    if not prepared.conflict:
+                        raise
+                    return prepared
+                if not _git(path, "diff", "--cached", "--name-only").strip():
+                    _git(self.repo, "worktree", "remove", "--force", str(path))
+                    return {"accepted": 0, "unchanged": True, "before": base, "after": base}
+                _git(path, "commit", "-m", f"poieo: undo {self.task} application {after}")
+                prepared.head = _git(path, "rev-parse", "HEAD").strip()
+                _git(self.repo, "update-ref", f"refs/poieo/runs/{run_id}", prepared.head)
+                # A prepared marker counts as done only once it is an ancestor
+                # of the project, so failed checks and crashes remain retryable.
+                _git(self.repo, "update-ref", marker, prepared.head)
+                return prepared
+            except BaseException:
+                _git(self.repo, "worktree", "remove", "--force", str(path))
+                raise
 
     def save_repair(self, prepared: PreparedChange, run_id: str, message: str) -> Change | None:
         """Keep a repaired combination on the task's copy for verification or review."""

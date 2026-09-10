@@ -137,7 +137,7 @@ def revise_application(task: Any, run_id: str, outcome: dict) -> None:
         if record.get("task") != task.slug or record.get("run_id") != run_id:
             return
         record.update(status="completed", application=outcome)
-        if (record.get("asked") or {}).get("node") == "apply_changes":
+        if outcome["status"] in {"applied", "discarded"} and (record.get("asked") or {}).get("node") == "apply_changes":
             record["answer"] = "accept" if outcome["status"] == "applied" else "discard"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         append_journal(task.journal_path(), "change", f"{outcome['status']} the change from {run_id}", title=task.name)

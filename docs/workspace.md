@@ -80,6 +80,13 @@ project retain the repair for the next attempt. It rejects unresolved conflict
 markers or a repair that rewrote candidate history. The original project still
 moves only through `apply_prepared()` after verification.
 
+`prepare_undo()` reverses the net file delta of a recorded application using a
+synthetic single-parent commit. Git's three-way revert preserves later edits
+when compatible. The candidate is verified and applied through the ordinary
+checked path. An undo marker is prepared before application and only counts as
+done when its commit belongs to the project's history, covering a crash between
+the file update and run-record update.
+
 In review mode, when Git is unavailable or the folder is not in a work tree, the daemon warns
 and runs directly in the folder. The run still completes, but there is no
 change to accept or discard. Anything Git cannot prove is treated as
