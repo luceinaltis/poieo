@@ -31,8 +31,6 @@ def leave_note(driver: Any, text: str) -> dict:
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
-    if not driver._change_lock.locked():
-        deliver_notes(driver)
     return {"status": "saved"}
 
 

@@ -104,7 +104,7 @@ export function Card({
         project,
         task,
         isPlainCard ? { name, folder, prompt,
-          ...(cardFields?.apply || JSON.stringify(application) !== JSON.stringify(draftOf())
+          ...(JSON.stringify(application) !== JSON.stringify(draftOf(cardFields?.apply))
             ? { apply: applicationOf(application) } : {}) } : text,
       )
       if (answer.ok) {

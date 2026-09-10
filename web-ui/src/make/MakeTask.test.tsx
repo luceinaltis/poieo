@@ -54,6 +54,15 @@ function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
 const field = (name: string) => host.querySelector<HTMLInputElement>(`[name="${name}"]`)!
 const save = () => host.querySelector<HTMLButtonElement>('[data-do="make-task"]')!
 
+test("a task may choose a Git subfolder even when its project folder is not Git", () => {
+  show({ keepsCopies: false })
+  act(() => host.querySelector<HTMLElement>(".apply-settings summary")!.click())
+  const automatic = host.querySelector<HTMLInputElement>('input[value="auto"]')!
+  expect(automatic.disabled).toBe(false)
+  act(() => automatic.click())
+  expect(automatic.checked).toBe(true)
+})
+
 function type(name: string, value: string) {
   const input = field(name)
   act(() => {

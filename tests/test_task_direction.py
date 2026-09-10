@@ -119,4 +119,5 @@ async def test_the_board_saves_optional_direction_without_starting_a_run(tmp_pat
     assert reply.status_code == 200
     assert len(daemon.runners[0].results) == 1
     assert daemon.runners[0].results[0].run_id == result.run_id
-    assert "Keep the heading" in read_journal(config.cards_by_task["chores"].journal_path())
+    queued = list(config.layout().notes("chores").glob("*.json"))
+    assert len(queued) == 1 and "Keep the heading" in queued[0].read_text()

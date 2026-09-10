@@ -849,7 +849,7 @@ class TaskRunner:
         async with self._change_lock:
             return await self._run_locked(fire)
 
-    async def run_once(self, payload: dict[str, Any]) -> RunResult:
+    async def run_once(self, payload: dict[str, Any] | Callable[[], dict[str, Any]]) -> RunResult:
         """Run a card from the CLI with the daemon's change and history rules."""
         async with self._change_lock:
             await self._run_locked(
@@ -859,7 +859,9 @@ class TaskRunner:
                 raise SpecError(f"task '{self.name}' could not run: {self.status}")
             return self.last_result
 
-    async def _run_locked(self, fire: Firing, payload: dict[str, Any] | None = None) -> bool:
+    async def _run_locked(
+        self, fire: Firing, payload: dict[str, Any] | Callable[[], dict[str, Any]] | None = None
+    ) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
@@ -873,17 +875,6 @@ class TaskRunner:
 
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
-        deliver_notes(self)
-        try:
-            payload = self.task.read_input(self.config) if payload is None else payload
-        except PoieoError as exc:
-            log.error("task '%s': %s", self.name, exc)
-            return self.task.spec.on_error != "stop"
-        if handed is not None:
-            # Merged last: what woke this run is the most specific thing it
-            # knows. `sender`, not `from` -- expressions are parsed as Python,
-            # where `input.from.change` would not even parse.
-            payload["sender"] = handed.result
 
         # Beside `read_input` above, and for the same reason: what this run
         # needs is read now rather than remembered from startup. A file that
@@ -916,7 +907,6 @@ class TaskRunner:
             fire.reason,
         )
         run_id = new_run_id()
-        self._run_input = payload
         self.status, self.current_run_id = "running", run_id
         # Whatever was holding it back has let go -- a spend window that aged
         # out never says so on its own.
@@ -924,6 +914,21 @@ class TaskRunner:
             self.held_because = None
         try:
             async with self._private_copy():
+                deliver_notes(self)
+                try:
+                    payload = (
+                        self.task.read_input(self.config)
+                        if payload is None
+                        else payload()
+                        if callable(payload)
+                        else payload
+                    )
+                except PoieoError as exc:
+                    log.error("task '%s': %s", self.name, exc)
+                    return self.task.spec.on_error != "stop"
+                if handed is not None:
+                    payload["sender"] = handed.result
+                self._run_input = payload
                 workdir = await self._open_change()
                 result = await execute(
                     self.task.graph,
@@ -942,6 +947,8 @@ class TaskRunner:
                     tool_context=self.tool_context,
                     finalize=self._close_change,
                 )
+                self._remember(result)
+                deliver_notes(self)
         except WorkspaceError as exc:
             now = utcnow()
             result = RunResult(
@@ -975,11 +982,10 @@ class TaskRunner:
             )
             self._record_application(result, {"status": "blocked", "error": str(exc)})
             self.store.record_summary(result.summary())
+            self._remember(result)
         finally:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
-        self._remember(result)
-        deliver_notes(self)
         if self.task.spec.carry_state:
             self.state = result.state
 
