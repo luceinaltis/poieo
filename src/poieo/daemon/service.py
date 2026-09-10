@@ -491,6 +491,7 @@ class TaskRunner:
                 through=through,
                 manual=True,
                 tool_context=self.tool_context,
+                cancel=self.cancel,
             )
             if "accepted" in outcome:
                 await finish_write(self._record_decision(outcome, pending))
