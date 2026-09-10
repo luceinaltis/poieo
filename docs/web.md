@@ -24,7 +24,7 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/projects/{project}/memory` | long-term-memory page, upkeep statistics, search capabilities, and a bounded relationship graph; supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, and write history, or 404 |
 | `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
-| `GET /api/events?task=` | server-sent stored events and `tasks_changed` notifications |
+| `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
 
 Model metadata is whatever the endpoint reports. Unknown context, size,
 quantization, capability, or price remains null. The undeclared-engine probe is

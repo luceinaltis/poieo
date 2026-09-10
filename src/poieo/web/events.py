@@ -25,8 +25,11 @@ class BroadcastStore(RunStore):
         self._queue_limit = queue_limit
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         # run_id -> task, learned from run_started, so the SSE endpoint can
-        # filter by task without parsing every payload.
+        # filter by task without parsing every payload. Beside it the project
+        # the task came from: one daemon runs several, and two of them may
+        # both have a `chores`.
         self.run_tasks: dict[str, str] = {}
+        self.run_projects: dict[str, str] = {}
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=self._queue_limit)
@@ -71,11 +74,15 @@ class BroadcastStore(RunStore):
             task = event.data.get("task")
             if task:
                 self.run_tasks[event.run_id] = task
+            project = event.data.get("project")
+            if project:
+                self.run_projects[event.run_id] = project
         self._publish(event.as_dict())
 
     def record_summary(self, summary: dict[str, Any]) -> None:
         self._inner.record_summary(summary)
         self.run_tasks.pop(summary.get("run_id"), None)
+        self.run_projects.pop(summary.get("run_id"), None)
         self._publish({"type": "run_summary", **summary})
 
     # -- reads: the wrapped store answers, never this one --------------------
@@ -167,6 +174,15 @@ class MergedStore(RunStore):
         merged: dict[str, str] = {}
         for store in self._stores:
             merged.update(getattr(store, "run_tasks", {}))
+        return merged
+
+    @property
+    def run_projects(self) -> dict[str, str]:
+        """Which project each in-flight run belongs to -- the other half of the
+        pair, since a task name alone is not one here."""
+        merged: dict[str, str] = {}
+        for store in self._stores:
+            merged.update(getattr(store, "run_projects", {}))
         return merged
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
