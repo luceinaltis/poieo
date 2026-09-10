@@ -13,10 +13,11 @@ from typing import Awaitable, Callable, Sequence, TypeVar
 
 from ..errors import PoieoError
 from ..tools import ToolContext, make_executor
-from ..workspace import ApplySpec, Workspace
+from ..workspace import ApplySpec, PreparedChange, Workspace
 
 log = logging.getLogger("poieo.daemon")
 T = TypeVar("T")
+Repair = Callable[[PreparedChange, dict, asyncio.Event], Awaitable[dict]]
 
 
 async def finish_write(
@@ -54,6 +55,7 @@ async def check_and_apply(
     cancel: asyncio.Event | None = None,
     authorized: Callable[[], bool] | None = None,
     protected: Sequence[Path] = (),
+    repair: Repair | None = None,
 ) -> dict:
     """Finish any in-flight Git write before releasing its copy or returning."""
     stopped = asyncio.Event()
@@ -66,6 +68,7 @@ async def check_and_apply(
             stopped.set()
 
     forwarding = asyncio.create_task(forward_stop())
+    repair_state: dict = {}
     job = asyncio.create_task(
         _check_and_apply(
             point,
@@ -76,12 +79,15 @@ async def check_and_apply(
             cancel=stopped,
             authorized=authorized,
             protected=protected,
+            repair=repair,
+            repair_state=repair_state,
         )
     )
     try:
         while True:
             try:
-                return await asyncio.shield(job)
+                outcome = await asyncio.shield(job)
+                return {**outcome, **({"repair": repair_state["result"]} if repair_state else {})}
             except asyncio.CancelledError:
                 # Cancelling to_thread does not stop its worker. Let it reach the
                 # next cancellation boundary, including recording a write that won.
@@ -103,22 +109,40 @@ async def _check_and_apply(
     cancel: asyncio.Event,
     authorized: Callable[[], bool] | None,
     protected: Sequence[Path],
+    repair: Repair | None,
+    repair_state: dict,
 ) -> dict:
     """Check a fresh combined copy; a competing application requires fresh checks."""
     checks = []
-    for _attempt in range(3):
+    stale_retries = 0
+
+    async def attempt_repair(prepared: PreparedChange, failure: dict) -> bool:
+        if repair is None or repair_state or policy.mode != "auto" or cancel.is_set():
+            return False
+        if authorized is not None and not authorized():
+            return False
+        repair_state["result"] = await repair(prepared, failure, cancel)
+        return repair_state["result"].get("ready") is True
+
+    # At most three project versions and one additional pass after repair.
+    for _attempt in range(4):
         if cancel is not None and cancel.is_set():
             return {"status": "blocked", "error": "application was stopped", "checks": checks}
         prepared = await asyncio.to_thread(point.prepare_accept, through)
         if isinstance(prepared, dict):
             return {"status": "applied" if "accepted" in prepared else "blocked", **prepared, "checks": checks}
         try:
-            if prepared.conflict:
-                return {"status": "blocked", "conflict": prepared.conflict, "checks": checks}
             outside = await asyncio.to_thread(point.outside_scope, prepared, policy.paths, protected)
             if outside:
                 return {"status": "blocked", "outside_scope": outside, "checks": checks}
+            if prepared.conflict:
+                failure = {"status": "blocked", "conflict": prepared.conflict, "checks": checks}
+                if await attempt_repair(prepared, failure):
+                    through = prepared.target
+                    continue
+                return failure
             checks = []
+            failure = None
             folder = await asyncio.to_thread(point.check_folder, prepared)
             # A verification copy has a short lifetime. It must not leave a
             # reusable container mounted onto a directory about to disappear.
@@ -142,10 +166,21 @@ async def _check_and_apply(
                             await asyncio.gather(stopping, return_exceptions=True)
                     except (PoieoError, OSError) as exc:
                         checks.append({"command": command, "exit_code": None, "output": str(exc)})
-                        return {"status": "blocked", "error": "verification failed", "checks": checks}
+                        failure = {"status": "blocked", "error": "verification failed", "checks": checks}
+                        break
                     checks.append({"command": command, "exit_code": checked.exit_code, "output": checked.output})
                     if checked.exit_code != 0:
-                        return {"status": "blocked", "error": "verification failed", "checks": checks}
+                        failure = {"status": "blocked", "error": "verification failed", "checks": checks}
+                        break
+            if failure:
+                invalid = await asyncio.to_thread(point.validate_prepared, prepared)
+                if invalid:
+                    return {"status": "blocked", **invalid, "checks": checks}
+                await asyncio.to_thread(point.clear_verification_artifacts, prepared)
+                if await attempt_repair(prepared, failure):
+                    through = prepared.target
+                    continue
+                return failure
             if cancel is not None and cancel.is_set():
                 return {"status": "blocked", "error": "application was stopped", "checks": checks}
             invalid = await asyncio.to_thread(point.validate_prepared, prepared)
@@ -163,6 +198,9 @@ async def _check_and_apply(
                     return {"status": "blocked", "error": "application was stopped", "checks": checks}
                 return {"status": "review", "checks": checks, "checked_on": prepared.base}
             if outcome.get("stale") == "the project changed during verification":
+                stale_retries += 1
+                if stale_retries >= 3:
+                    break
                 continue
             return {"status": "applied" if "accepted" in outcome else "blocked", **outcome, "checks": checks}
         finally:

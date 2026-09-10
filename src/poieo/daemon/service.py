@@ -32,6 +32,7 @@ from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
 from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
+from .repair import repair_change
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 
 log = logging.getLogger("poieo.daemon")
@@ -443,6 +444,8 @@ class TaskRunner:
             self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
         policy = self.task.spec.apply
         if result.status == "completed" and (policy.mode == "auto" or policy.checks):
+            repairs: list[RunResult] = []
+            pending = await asyncio.to_thread(self.workspace.pending)
             protected = [card.source_path for card in self.config.cards_by_task.values() if card.source_path]
             if self.config.cards:
                 protected.append(self.config.resolve_path(self.config.cards))
@@ -458,9 +461,19 @@ class TaskRunner:
                     cancel=self.cancel,
                     authorized=self._may_auto_apply,
                     protected=protected,
+                    repair=lambda prepared, failure, stopped: repair_change(
+                        self, result, prepared, failure, repairs, stopped
+                    ),
                 )
             except PoieoError as exc:
                 result.application = {"status": "blocked", "error": str(exc)}
+            if result.application.get("status") == "applied":
+                await finish_write(self._record_decision(result.application, pending))
+            for repaired in repairs:
+                repaired.application = result.application
+                self.store.record_summary(repaired.summary())
+                self._remember(repaired)
+            result.finished_at = utcnow()
             self._record_application(result, result.application)
 
     def _record_application(self, result: RunResult, outcome: dict) -> None:
@@ -529,6 +542,7 @@ class TaskRunner:
 
     async def _record_decision(self, outcome: dict, pending: list[str]) -> None:
         remaining = set(await asyncio.to_thread(self.workspace.pending))
+        outcome["pending"] = len(remaining)
         run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
         if not remaining and self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
             run_ids = list(dict.fromkeys([*run_ids, self._asking.run_id]))
@@ -740,7 +754,7 @@ class TaskRunner:
             await self._quiet(fires)
         log.info("task '%s' stopped", self.name)
 
-    def _over_budget(self) -> str | None:
+    def _over_budget(self, additional_cost: float = 0) -> str | None:
         """Why this project may not spend right now, or None.
 
         Checked where the daemon already decides whether to fire, because
@@ -754,7 +768,7 @@ class TaskRunner:
             return None
         window = parse_duration(spend.over)
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window)).isoformat()
-        so_far = self.store.spent_since(cutoff, project=self.config.display_name)
+        so_far = self.store.spent_since(cutoff, project=self.config.display_name) + additional_cost
         if so_far < spend.limit:
             return None
         return (
@@ -830,6 +844,7 @@ class TaskRunner:
             fire.reason,
         )
         run_id = new_run_id()
+        self._run_input = payload
         self.status, self.current_run_id = "running", run_id
         try:
             async with self._private_copy():

@@ -62,7 +62,9 @@ apply:
 
 Paths are files or folders relative to the task folder; omit `paths` to allow the
 whole folder. Verification commands run on the combination with the latest
-project. All must pass. A conflict, failed check or change outside the allowed
+project. All must pass. A compatible conflict or failed check gets one automatic
+repair attempt within the task's permission, followed by fresh checks. Goals
+that contradict each other, a failed repair or a change outside the allowed
 paths leaves the work saved and pauses that task for your decision. Other tasks
 continue. Use `mode: review` to require a decision again. Application settings
 alone take effect on the next run; revoking permission also stops an application

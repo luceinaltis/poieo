@@ -61,6 +61,21 @@ A blocked result asks a persisted `apply_changes` question and holds only that
 task, including after restart. Retry schedules another run; pause leaves it held.
 Pending work is checked even when a retry produces no new file edits.
 
+An automatic task gets one repair attempt for a compatible conflict or failed
+check. The last file worker that ran supplies its existing role, parameters and
+file/shell tools; no task-to-task or memory writing tools are added. It runs in
+the combined copy for at most eight turns and 180 seconds, within any tighter
+authored limits. The project spending limit includes the original run's cost
+before repair starts. Incompatible goals, lost permission, or no suitable worker
+leave the task waiting for a decision.
+
+The repair is a separate recorded run, linked from `application.repair`. It keeps
+its own usage and change. A successful repair stays on the task's private branch,
+then the combination is prepared and checked again. Scope and permissions apply
+again, and a later project update starts fresh checks. Verification commands may
+not change tracked files, including when they fail. Duplicate file content is
+reported as `unchanged` while its run history is retained.
+
 Manual acceptance or discard records the decision for every affected run,
 including full records from before a restart, and clears its persisted
 application question. A no-edit retry is resolved when none of its pending work
@@ -160,8 +175,9 @@ When `learn` is configured and the project's long-term memory is enabled, a
 learning pass may run at its interval only while no armed task is busy. Its
 failure is logged and never stops scheduled work. See [memory.md](memory.md).
 
-Shutdown stops accepting new firings, signals active work cooperatively, closes
-providers and containers, and closes the web service. Blocking file and Git
+Shutdown stops accepting new firings, interrupts active work and its tools,
+closes providers and containers, and closes the web service. Active repairs use
+the same cancellation signal as their application. Blocking file and Git
 operations use worker threads, while container subprocesses are awaited
 asynchronously, so one slow operation does not freeze every task or event
 subscriber.

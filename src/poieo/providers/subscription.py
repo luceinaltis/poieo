@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 from typing import Any
 
 from ..errors import ProviderError
@@ -465,20 +466,44 @@ async def _capture(argv: list[str], stdin: str | None, timeout: float) -> tuple[
     subprocess that outlives its welcome is killed rather than left holding the
     daemon's event loop.
     """
-    process = await asyncio.create_subprocess_exec(
-        *argv,
+    options: dict[str, Any] = dict(
         stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        start_new_session=os.name != "nt",
     )
+    job = None
+    if os.name == "nt":
+        from ..tools.windows_job import WindowsJob
+
+        job = WindowsJob()
+        options["creationflags"] = 0x00000004
     try:
-        out, err = await asyncio.wait_for(
-            process.communicate(stdin.encode("utf-8") if stdin is not None else None), timeout
-        )
-    except asyncio.TimeoutError:
-        process.kill()
-        await process.communicate()
-        raise
+        process = await asyncio.create_subprocess_exec(*argv, **options)
+        if job:
+            try:
+                job.attach(process.pid)
+            except OSError:
+                process.kill()
+                await process.communicate()
+                raise
+        try:
+            out, err = await asyncio.wait_for(
+                process.communicate(stdin.encode("utf-8") if stdin is not None else None), timeout
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            if job:
+                job.terminate()
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            await process.communicate()
+            raise
+    finally:
+        if job:
+            job.close()
     return process.returncode or 0, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
 
 

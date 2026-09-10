@@ -134,7 +134,20 @@ async def execute(
             ctx.path.append(current)
             ctx.emit("node_started", node_id=current, type=spec.type, step=steps)
 
-            result = await build_node(spec).run(ctx)
+            running = asyncio.create_task(build_node(spec).run(ctx))
+            stopping = asyncio.create_task(cancel.wait()) if cancel is not None else None
+            try:
+                if stopping is not None:
+                    done, _ = await asyncio.wait([running, stopping], return_when=asyncio.FIRST_COMPLETED)
+                    if stopping in done:
+                        raise RunAborted("cancelled")
+                result = await running
+            finally:
+                if not running.done():
+                    running.cancel()
+                if stopping is not None:
+                    stopping.cancel()
+                await asyncio.gather(running, *([stopping] if stopping is not None else []), return_exceptions=True)
 
             ctx.emit(
                 "node_finished",
