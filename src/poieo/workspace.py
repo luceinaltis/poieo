@@ -379,6 +379,13 @@ class Workspace:
             message=message.splitlines()[0] if message else "",
         )
 
+    def park_failed(self, change: Change, run_id: str) -> None:
+        """Retain a cancelled save without offering it to a later successful run."""
+        if _git(self.worktree, "rev-parse", "HEAD").strip() != change.head:
+            raise WorkspaceError("the task changed before its cancelled work could be parked")
+        _git(self.repo, "update-ref", f"refs/poieo/failed/{run_id}", change.head)
+        _git(self.worktree, "reset", "--hard", change.base)
+
     # -- the morning after --------------------------------------------------
 
     def accept(self, through: str | None = None) -> dict[str, object]:
