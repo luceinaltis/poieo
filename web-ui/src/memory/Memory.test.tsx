@@ -428,3 +428,96 @@ test("a refused write stays visible as a result and rereads nothing", async () =
   expect(fetchMemory).toHaveBeenCalledTimes(1)
   expect(container.querySelector<HTMLInputElement>('[aria-label="Memory name"]')!.value).toBe("leaner")
 })
+
+test("a source run whose record still names its task opens that run", async () => {
+  const onOpenRun = vi.fn()
+  vi.mocked(fetchMemoryEntry).mockResolvedValueOnce({
+    slug: "windows-shell",
+    body: "Windows tests need a POSIX shell.",
+    updated_at: "2026-08-31T00:00:00Z",
+    mentions: [],
+    scope: ["global"],
+    anchors: [],
+    source: ["20260824T010000-aaaaaaaa", "20260824T020000-bbbbbbbb"],
+    sources: [
+      { run_id: "20260824T010000-aaaaaaaa", task: "importer" },
+      { run_id: "20260824T020000-bbbbbbbb", task: null },
+    ],
+    valid_from: null,
+    superseded_by: null,
+    links: { depends_on: [], contradicts: [] },
+    second_look: [],
+    history: [],
+  })
+  await act(async () => root.render(<Memory project="board" onOpenRun={onOpenRun} />))
+  await act(async () => {})
+  await act(async () => container.querySelector<HTMLElement>('[data-testid="constellation"]')!.click())
+
+  const known = container.querySelector<HTMLElement>('[data-source="20260824T010000-aaaaaaaa"]')!
+  expect(known.tagName).toBe("BUTTON")
+  await act(async () => known.click())
+  expect(onOpenRun).toHaveBeenCalledWith("importer", "20260824T010000-aaaaaaaa")
+
+  // The other record is gone with runs/, so the id is said but goes nowhere.
+  const gone = container.querySelector<HTMLElement>('[data-source="20260824T020000-bbbbbbbb"]')!
+  expect(gone.tagName).not.toBe("BUTTON")
+  expect(gone.textContent).toContain("20260824T020000-bbbbbbbb")
+})
+
+test("arriving with a memory in focus opens it without a search", async () => {
+  await act(async () => root.render(<Memory project="board" focus={{ slug: "windows-shell" }} />))
+  await act(async () => {})
+
+  expect(fetchMemoryEntry).toHaveBeenCalledWith("board", "windows-shell")
+  expect(container.querySelector('[data-memory="windows-shell"]')).not.toBeNull()
+  expect(searchMemory).not.toHaveBeenCalled()
+})
+
+test("recent learning says what each pass kept, set aside, let go, or why it failed", async () => {
+  vi.mocked(fetchMemory).mockResolvedValue({
+    ...OVERVIEW,
+    learning: [
+      {
+        at: "2026-09-02T03:00:00+00:00",
+        read: 3,
+        upto: null,
+        kept: [],
+        set_aside: [],
+        dropped: [],
+        error: "ValueError: the answer holds no JSON object",
+        page: null,
+        let_go: [],
+      },
+      {
+        at: "2026-09-01T03:00:00+00:00",
+        read: 2,
+        upto: "20260901T010000-aaaaaaaa",
+        kept: ["windows-shell"],
+        set_aside: ["old-shell"],
+        dropped: ["'bad slug': not a plain slug"],
+        error: null,
+        page: null,
+        let_go: [],
+      },
+    ],
+  })
+  await render()
+
+  const learning = container.querySelector<HTMLDetailsElement>(".memory-learning")!
+  expect(learning).not.toBeNull()
+  const passes = learning.querySelectorAll("li")
+  expect(passes).toHaveLength(2)
+  expect(passes[0].getAttribute("data-failed")).toBe("true")
+  expect(passes[0].textContent).toContain("the answer holds no JSON object")
+  expect(passes[1].textContent).toContain("read 2 records")
+  expect(passes[1].textContent).toContain("'bad slug': not a plain slug")
+  expect(passes[1].querySelector('[data-related="old-shell"]')).not.toBeNull()
+
+  await act(async () => passes[1].querySelector<HTMLElement>('[data-related="windows-shell"]')!.click())
+  expect(fetchMemoryEntry).toHaveBeenCalledWith("board", "windows-shell")
+})
+
+test("a memory with no passes yet draws no learning section", async () => {
+  await render()
+  expect(container.querySelector(".memory-learning")).toBeNull()
+})

@@ -363,6 +363,9 @@ def test_runs_index_and_detail_and_404(tmp_path):
     detail = client.get("/api/runs/r1").json()
     assert detail["run_id"] == "r1"
     assert detail["events"][0]["type"] == "run_started"
+    # The index row rides along, so one id is enough to show a run that has
+    # left the board's short history.
+    assert detail["summary"]["status"] == "completed"
     assert client.get("/api/runs/nope").status_code == 404
 
 

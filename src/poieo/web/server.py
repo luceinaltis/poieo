@@ -45,7 +45,7 @@ from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..errors import BindingError, PoieoError, SpecError
-from ..learn import last_suggestion, settle_suggestion
+from ..learn import last_suggestion, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
     frontmatter,
@@ -59,7 +59,7 @@ from ..memory import (
     write_page,
 )
 from ..memory.ask import ask_memory
-from ..memory.browse import entry_document, graph_snapshot, keyword_search
+from ..memory.browse import entry_document, graph_snapshot, keyword_search, run_document
 from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
@@ -1617,7 +1617,38 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         events = list(daemon.store.events(run_id))
         if not events:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
-        return JSONResponse({"run_id": run_id, "events": events})
+        # The index row too: a memory entry names its source runs by id, and
+        # the board following one of those needs the run's own line without
+        # paging back through the history to find it. Null while the run is
+        # still in flight, which is when there is no row yet.
+        return JSONResponse({"run_id": run_id, "summary": daemon.store.summary(run_id), "events": events})
+
+    async def run_memory(request: Request) -> JSONResponse:
+        """What one run was shown from the project's memory, and what it used.
+
+        Read from the record the harness wrote for the run, under whichever
+        project it belongs to. A run id is unique across projects, so asking
+        every project is the same as knowing which -- and a record written
+        before runs carried a project is found the same way.
+        """
+        run_id = request.path_params["run_id"]
+
+        def _find() -> dict[str, Any] | None:
+            for project in daemon.projects:
+                found = run_document(Path(project.config.base_dir), run_id)
+                if found is not None:
+                    return found
+            return None
+
+        document = await asyncio.to_thread(_find)
+        if document is not None:
+            return JSONResponse(document)
+        summary = await asyncio.to_thread(daemon.store.summary, run_id)
+        if summary is None:
+            return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
+        # The store saw the run, but it left no record: killed before the
+        # end, or its record went with `runs/`. An answer, not a 404.
+        return JSONResponse({"run_id": run_id, "task": summary.get("task"), "shown": None})
 
     async def run_diff(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
@@ -1791,6 +1822,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             layout.longterm(),
             layout.learning_log(),
             layout.results(),
+            # A pass appends a line here, and the board shows the last few.
+            layout.learning_log(),
             project.config.source_path,
             project.config.default_binding_path(),
             *overview_watch_paths(Path(project.config.base_dir)),
@@ -1840,16 +1873,24 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         "truncated": False,
                         "edges_truncated": False,
                     },
+                    "learning": [],
                 },
                 headers=cache_headers,
             )
 
-        def read_memory() -> tuple[Any, Any, Any, Any, Any]:
+        def read_memory() -> tuple[Any, Any, Any, Any, Any, Any]:
             # The first open after an upgrade may build derived indexes. Keep
             # the database reads sequential so they cannot race that work.
-            return read_page(root), page_text(root), last_suggestion(root), memory_report(root), graph_snapshot(root)
+            return (
+                read_page(root),
+                page_text(root),
+                last_suggestion(root),
+                memory_report(root),
+                graph_snapshot(root),
+                recent_passes(root),
+            )
 
-        page, as_written, suggestion, stats, graph = await asyncio.to_thread(read_memory)
+        page, as_written, suggestion, stats, graph, passes = await asyncio.to_thread(read_memory)
         return JSONResponse(
             {
                 "enabled": True,
@@ -1859,6 +1900,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "stats": stats,
                 "capabilities": capabilities,
                 "graph": graph,
+                # What learning did lately, newest first: the pass log was
+                # otherwise a file only the CLI ever read.
+                "learning": passes,
             },
             headers=cache_headers,
         )
@@ -2140,6 +2184,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
+        Route("/api/runs/{run_id}/memory", run_memory),
         Route("/api/projects/{project}/models", project_models),
         Route("/api/projects/{project}/memory", project_memory),
         # The fixed names come before the slug, so a PUT to the page cannot

@@ -381,6 +381,29 @@
 .memory-history ol { display: grid; gap: 6px; margin: 9px 0 0; padding-left: 18px; }
 .memory-history li span { display: block; }
 
+.memory-source {
+  display: inline-block;
+  margin: 0 8px 2px 0;
+}
+
+/* The pass log, read back. Same ledger face as the history above it. */
+.memory-learning {
+  border-top: 1px solid var(--rule);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.memory-learning summary { cursor: pointer; }
+.memory-learning ol { display: grid; gap: 9px; margin: 9px 0 0; padding-left: 18px; }
+.memory-learning li { display: grid; gap: 2px; }
+.memory-learning li[data-failed="true"] > time { color: var(--stop); }
+.memory-learning li span { display: block; overflow-wrap: anywhere; }
+.memory-pass-error, .memory-pass-dropped { color: var(--stop); }
+.memory-pass-dropped { border-left: 1px solid var(--stop); padding-left: 8px; }
+
 .memory-page {
   border-top: 1px solid var(--rule);
   color: var(--dim);

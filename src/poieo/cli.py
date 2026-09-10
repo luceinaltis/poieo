@@ -59,7 +59,7 @@ from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
 from .layout import layout_for
-from .learn import last_suggestion, settle_suggestion
+from .learn import last_suggestion, recent_passes, settle_suggestion
 from .learn import learn as run_learning_pass
 from .memory import frontmatter as memory_frontmatter
 from .memory import keep_entry, keeps_memory, memory_report, page_text, read_memory, set_aside, write_page
@@ -1417,6 +1417,20 @@ def memory(
         )
         for slug, count in accounting["unused"]:
             typer.echo(f"unused       {slug} (shown {count} times, used never)")
+    for last in recent_passes(project, limit=1):
+        records = f"read {last['read']} record{'s' if last['read'] != 1 else ''}"
+        if last["error"] is not None:
+            typer.echo(f"last pass    {last['at']}, {records}, failed and will reread: {last['error']}")
+        elif not (last["kept"] or last["set_aside"] or last["dropped"]):
+            typer.echo(f"last pass    {last['at']}, {records}, kept nothing")
+        else:
+            typer.echo(f"last pass    {last['at']}, {records}")
+            if last["kept"]:
+                typer.echo(f"  kept       {', '.join(last['kept'])}")
+            if last["set_aside"]:
+                typer.echo(f"  set aside  {', '.join(last['set_aside'])}")
+            for reason in last["dropped"]:
+                typer.echo(f"  let go     {reason}")
     suggestion = last_suggestion(project)
     if suggestion:
         typer.echo(f"the last pass suggests: {suggestion}")

@@ -7,7 +7,7 @@
 
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
-import { fetchRunEvents, fetchRuns } from "../api"
+import { fetchRunEvents, fetchRunMemory, fetchRuns, fetchRunSummary } from "../api"
 import { Card } from "./Card"
 import { Control } from "./Control"
 import { Question } from "./Question"
@@ -16,7 +16,7 @@ import { Diff } from "../review/Diff"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
-import type { PoieoEvent, Question as Asked, RunSummary } from "../types"
+import type { PoieoEvent, Question as Asked, RunMemory, RunSummary, ShownMemory } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
 
@@ -503,11 +503,16 @@ function RunBrief({
   latest,
   tracked,
   headingId,
+  memory,
+  onMemory,
 }: {
   run: RunSummary | null
   latest: boolean
   tracked: boolean
   headingId: string
+  /** What this run started with from memory, once it has been read. */
+  memory?: RunMemory | null
+  onMemory?(slug: string): void
 }) {
   if (!run) {
     return (
@@ -539,7 +544,63 @@ function RunBrief({
       <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
       <p className="run-brief-what">{account}</p>
       <p className="run-brief-meta">{meta.join(" · ")}</p>
+      {memory && memory.run_id === run.run_id ? <ShownMemory memory={memory} onMemory={onMemory} /> : null}
     </section>
+  )
+}
+
+/**
+ * What the run knew when it started, said the way a reader would ask it.
+ *
+ * The record says which entries recall put in front of the model and which
+ * of them surfaced in what it wrote back -- the same judgement `poieo
+ * memory` makes when it says how many runs used what they were shown.
+ *
+ * One sentence, inside the run's own box under its time line, and the rows
+ * folded behind it. It sat below the box first, and read as a fact about
+ * the task rather than about this run; the sentence starts with "This run"
+ * for the same reason. Each row carries the entry's own opening words and a
+ * plain word for what became of it, because a slug alone was a name a reader
+ * had to open to understand. The ones that shaped the answer come first.
+ *
+ * Nothing is drawn when the record says nothing about memory (the project
+ * kept none when this ran). An empty list is different, and says so -- as a
+ * sentence, since there is nothing to unfold.
+ */
+function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: string): void }) {
+  if (!memory.shown) return null
+  const shown = memory.shown
+  if (!shown.length) {
+    return <p className="run-memory-lead">This run started with nothing from memory.</p>
+  }
+  const used = shown.filter((one) => one.used === true)
+  const rows = [...used, ...shown.filter((one) => one.used !== true)]
+  const count = `${shown.length} memor${shown.length === 1 ? "y" : "ies"}`
+  const became = (one: ShownMemory) =>
+    one.used === true ? "shaped the answer" : one.used === false ? "seen, not used" : "seen; no longer in memory"
+  return (
+    <details className="run-memory">
+      <summary className="run-memory-lead">
+        {`This run started with ${count}; ${used.length ? used.length : "none"} shaped the answer.`}
+      </summary>
+      <ul className="run-memory-list">
+        {rows.map((one) => (
+          <li key={one.slug} data-used={one.used === null ? "unknown" : String(one.used)}>
+            <button
+              type="button"
+              className="run-memory-open"
+              data-memory={one.slug}
+              disabled={!onMemory}
+              onClick={() => onMemory?.(one.slug)}
+            >
+              {one.slug}
+            </button>
+            {one.preview ? <span className="run-memory-preview">{one.preview}</span> : null}
+            <span className="run-memory-became">{became(one)}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
@@ -555,9 +616,11 @@ export const Drawer = memo(function Drawer({
   into = null,
   asking = null,
   liveRuns = [],
+  runId = null,
   onClose,
   onDecided,
   onAlike,
+  onMemory,
 }: {
   project: string
   task: string
@@ -571,10 +634,18 @@ export const Drawer = memo(function Drawer({
   asking?: Asked | null
   /** The stage's live summary window, which can advance while this drawer is open. */
   liveRuns?: RunSummary[]
+  /**
+   * A run to open on, named by id -- how a memory entry's source run is
+   * reached. It may be older than the short history holds, so its row is
+   * fetched on its own rather than looked for among the ten.
+   */
+  runId?: string | null
   onClose(): void
   onDecided?(): void
   /** "Make one like it", passed through to the card fold. */
   onAlike?(seed: { name: string; folder: string; prompt: string }): void
+  /** Open the memory place at one entry this run was shown. */
+  onMemory?(slug: string): void
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -585,7 +656,9 @@ export const Drawer = memo(function Drawer({
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityError, setActivityError] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
+  const [memory, setMemory] = useState<RunMemory | null>(null)
   const activityRequest = useRef(0)
+  const memoryRequest = useRef(0)
   const drawerId = useId().replace(/[^a-zA-Z0-9_-]/g, "")
   const titleId = `drawer-${drawerId}-title`
   const briefId = `drawer-${drawerId}-brief`
@@ -602,6 +675,21 @@ export const Drawer = memo(function Drawer({
       live = false
     }
   }, [project, task, refreshVersion])
+
+  // Arriving on a named run. Its row is asked for by id rather than sought
+  // among the ten: a memory entry's source is routinely older than that.
+  useEffect(() => {
+    if (!runId) return
+    let live = true
+    setHistoryOpen(false)
+    setSelectedRunId(runId)
+    void fetchRunSummary(runId).then((found) => {
+      if (live && found) setSelectedRunSnapshot(found)
+    })
+    return () => {
+      live = false
+    }
+  }, [runId])
 
   const refreshAfterAction = () => {
     setRefreshVersion((version) => version + 1)
@@ -636,6 +724,19 @@ export const Drawer = memo(function Drawer({
     setActivityLoading(false)
     setActivityError(false)
   }, [selectedRunKey])
+
+  // The record is written when the run ends, so a run watched to its finish
+  // is asked again once its status settles -- hence the status in the deps.
+  const selectedRunStatus = selectedRun?.status ?? null
+  useEffect(() => {
+    const request = ++memoryRequest.current
+    setMemory(null)
+    if (!selectedRunKey) return
+    void fetchRunMemory(selectedRunKey).then((found) => {
+      if (memoryRequest.current !== request) return
+      setMemory(found)
+    })
+  }, [selectedRunKey, selectedRunStatus])
 
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
@@ -743,6 +844,8 @@ export const Drawer = memo(function Drawer({
             latest={selectedIsLatest}
             tracked={tracked}
             headingId={briefId}
+            memory={memory}
+            onMemory={onMemory}
           />
 
           {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}

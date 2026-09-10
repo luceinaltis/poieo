@@ -198,6 +198,34 @@ export interface PoieoEvent {
 }
 
 
+/**
+ * One entry a run was shown, and whether the run's own output then used it.
+ *
+ * `used` is null -- not false -- for an entry the memory no longer holds:
+ * the judgement needs the entry's words, and "could not be judged" is a
+ * different fact from "was not used".
+ */
+export interface ShownMemory {
+  slug: string
+  used: boolean | null
+  /** The entry's opening words, so a row means something before it is opened. Null with `used`. */
+  preview: string | null
+}
+
+/**
+ * What one run was shown from the project's memory, off the record the
+ * harness wrote when it ended.
+ *
+ * `shown` is null when the record has nothing to say about memory -- written
+ * while the project kept none -- which is not an empty list, where memory
+ * had entries and chose none for this task.
+ */
+export interface RunMemory {
+  run_id: string
+  task: string | null
+  shown: ShownMemory[] | null
+}
+
 export interface DiffFile {
   path: string
   status: string

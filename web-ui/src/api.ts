@@ -9,7 +9,7 @@
  * else.
  */
 
-import type { DiffReport, Listing, PoieoEvent, RunSummary } from "./types"
+import type { DiffReport, Listing, PoieoEvent, RunMemory, RunSummary } from "./types"
 import type {
   MemoryAskReply,
   MemoryEntry,
@@ -220,6 +220,35 @@ export async function fetchRunEvents(runId: string): Promise<PoieoEvent[]> {
     `/api/runs/${encodeURIComponent(runId)}`,
   )
   return body?.events ?? []
+}
+
+/**
+ * The index row for one run, so a run named by id alone -- a memory entry's
+ * source -- can be shown without paging back through the history to find it.
+ * Null for a run the daemon never saw, or one still in flight.
+ */
+export async function fetchRunSummary(runId: string): Promise<RunSummary | null> {
+  try {
+    const body = await getJson<{ summary: RunSummary | null }>(
+      `/api/runs/${encodeURIComponent(runId)}`,
+    )
+    return body?.summary ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What a run was shown from memory, and what it used. Null when the daemon
+ * has no such run, or went away: nothing to draw, which is not an error the
+ * reader can act on.
+ */
+export async function fetchRunMemory(runId: string): Promise<RunMemory | null> {
+  try {
+    return await getJson<RunMemory>(`/api/runs/${encodeURIComponent(runId)}/memory`)
+  } catch {
+    return null
+  }
 }
 
 /**

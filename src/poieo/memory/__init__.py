@@ -37,7 +37,7 @@ from .entries import (
     write_page,
 )
 from .recall import read_memory
-from .results import results_dir, used_in, write_result
+from .results import read_record, results_dir, used_in, write_result
 from .upkeep import doubts, memory_report, overview_watch_paths
 
 __all__ = [
@@ -56,6 +56,7 @@ __all__ = [
     "page_written_at",
     "read_memory",
     "read_page",
+    "read_record",
     "readable_entries",
     "results_dir",
     "set_aside",

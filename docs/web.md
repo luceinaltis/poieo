@@ -17,12 +17,13 @@ the project's display name; task parameters use the card filename stem.
 |---|---|
 | `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, graph, trigger, status, hold, enabled/stale state, current and last run, review state, pending question, handoffs, and graph shape |
 | `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
-| `GET /api/runs/{run_id}` | `{run_id, events}` or 404 |
+| `GET /api/runs/{run_id}` | `{run_id, summary, events}` or 404; `summary` is the index row, null while the run is in flight |
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |
+| `GET /api/runs/{run_id}/memory` | `{run_id, task, shown}` from the run's record; `shown` lists each memory entry the run was shown with `used` (true, false, or null for an entry the memory no longer holds) and its `preview` (the entry's opening words, null for the same), and is null when the record says nothing about memory; 404 for a run nobody recorded |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
-| `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics, search capabilities, and a bounded relationship graph; supports `If-None-Match` and 304 |
-| `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, and write history, or 404 |
+| `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics, search capabilities, a bounded relationship graph, and `learning`, the last few learning passes newest first; supports `If-None-Match` and 304 |
+| `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, write history, and `sources`, each source run id with the task its record names (null when the record is gone), or 404 |
 | `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
 | `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
 
@@ -168,8 +169,12 @@ short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
-Shared action handling prevents a double press from issuing two mutations and
-keeps refusals visible as results.
+Inside the run's own box, one closed line says what it started with from
+memory: the count and how many shaped the answer. Opening it lists one row
+per entry with its opening words and what became of it, the ones that shaped
+the answer first; each opens the memory place on that entry. Shared action
+handling prevents a double press from issuing two mutations and keeps refusals
+visible as results.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently
 provides the task board and a standalone runs view; both consume the same stage
@@ -188,8 +193,11 @@ set-aside memory remains in the outer shadow. Region positions come from their
 own memory relationships, so an unrelated addition does not rearrange the map.
 Each region keeps a reserved screen slot while the place is open, and connected
 regions take neighbouring slots. Large graphs skip decorative haze and taper point
-size so neighbouring regions remain distinct. Adding a task presentation belongs
-in the skin registry and must not add another event reducer or transport path.
+size so neighbouring regions remain distinct. An entry's source runs open the
+task drawer on that run while the run's record still exists, and the evidence
+pane lists the recent learning passes with what each kept, set aside, or let go
+and why. Adding a task presentation belongs in the skin registry and must not
+add another event reducer or transport path.
 
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).

@@ -30,6 +30,26 @@ def results_dir(project_dir: Path) -> Path:
     return layout_for(project_dir).results()
 
 
+def read_record(project_dir: Path, run_id: str) -> dict[str, Any] | None:
+    """The record one run left, or None: never written, gone with `runs/`,
+    or unreadable -- all the same answer to a reader, and none a failure.
+
+    The id is a filename here, so one that could name a path is refused
+    before the folder is asked.
+    """
+    if not run_id or "/" in run_id or chr(92) in run_id or run_id in {".", ".."}:
+        return None
+    path = results_dir(project_dir) / f"{run_id}.json"
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(record, dict):
+        return None
+    record.setdefault("run_id", run_id)
+    return record
+
+
 def used_in(entry: Entry, record: dict[str, Any]) -> bool:
     """Did this entry do real work in this run?
 

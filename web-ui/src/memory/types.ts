@@ -30,6 +30,23 @@ export interface MemoryGraph {
   edges_truncated: boolean
 }
 
+/**
+ * One learning pass, exactly as the pass log records it. A failed pass is
+ * still a pass: `error` says why, and the same records are read again next
+ * time. `dropped` holds the reason each proposal was let go.
+ */
+export interface LearningPass {
+  at: string
+  read: number
+  upto: string | null
+  kept: string[]
+  set_aside: string[]
+  dropped: string[]
+  error: string | null
+  page: string | null
+  let_go: string[]
+}
+
 export interface MemoryOverview {
   /** Opaque validator used only while this memory place remains open. */
   revision?: string
@@ -51,6 +68,8 @@ export interface MemoryOverview {
   } | null
   capabilities: { words: boolean; meaning: boolean; ask: boolean }
   graph: MemoryGraph
+  /** The last few passes, newest first. Absent from an older daemon. */
+  learning?: LearningPass[]
 }
 
 export interface MemoryResult {
@@ -93,6 +112,12 @@ export interface MemoryEntry {
   scope: string[]
   anchors: string[]
   source: string[]
+  /**
+   * Each source run with the task it belonged to, so the id can be followed.
+   * `task` is null when the run's record is gone -- runs/ is disposable --
+   * and the id is then a fact with nowhere to go. Absent from an older daemon.
+   */
+  sources?: Array<{ run_id: string; task: string | null }>
   valid_from: string | null
   superseded_by: string | null
   links: { depends_on: string[]; contradicts: string[] }

@@ -164,6 +164,113 @@
   margin: 0;
 }
 
+/* What the run knew when it started, inside the run's own box so the rule
+   down its left says whose it is. One sentence on the first screen; the rows
+   -- name, opening words, what became of it -- unfold behind it. */
+.run-memory {
+  min-width: 0;
+}
+
+.run-memory-lead {
+  color: var(--dim);
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 2px 0 0;
+}
+
+.run-memory > summary {
+  cursor: pointer;
+  list-style: none;
+  padding-left: 14px;
+  position: relative;
+}
+
+.run-memory > summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-memory > summary::before {
+  content: "›";
+  font-family: var(--mono);
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.run-memory[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.run-memory > .run-memory-list {
+  margin-top: 8px;
+  padding-left: 14px;
+}
+
+.run-memory-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-memory-list li {
+  border-left: 2px solid var(--rule);
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+/* The ones that shaped the answer wear the colour a change wears: they are
+   what memory did for this run. */
+.run-memory-list li[data-used="true"] {
+  border-left-color: var(--ember);
+}
+
+.run-memory-open {
+  background: transparent;
+  border: 0;
+  color: var(--paused-text);
+  font-family: var(--mono);
+  font-size: 0.85em;
+  justify-self: start;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--paused-rule);
+  text-underline-offset: 2px;
+}
+
+.run-memory-open:disabled {
+  color: var(--dim);
+  text-decoration: none;
+}
+
+.run-memory-list li[data-used="unknown"] .run-memory-open {
+  color: var(--dim);
+}
+
+.run-memory-preview {
+  color: var(--dim);
+  font-size: 0.85em;
+  line-height: 1.4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.run-memory-became {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+}
+
+.run-memory-list li[data-used="true"] .run-memory-became {
+  color: var(--ember);
+}
+
 /* History and audit are available without owning the first screen. A single
    ruled disclosure keeps the drawer a ledger rather than a stack of cards. */
 .drawer-fold {

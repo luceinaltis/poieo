@@ -624,3 +624,65 @@ def test_writes_where_no_memory_is_kept_say_how_to_start(tmp_path):
         assert result.exit_code == 1, args
         assert "poieo init" in result.output
     assert not at(project).longterm().exists()
+
+
+def _log_passes(project, *lines):
+    import json
+
+    log = at(project).learning_log()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as handle:
+        for line in lines:
+            handle.write(json.dumps(line) + "\n")
+
+
+def test_memory_reports_what_the_last_pass_did_and_let_go(tmp_path):
+    _, project = _project(tmp_path)
+    _log_passes(
+        project,
+        {"at": "2026-08-20T00:00:00+00:00", "read": 3, "upto": "a", "kept": ["older-one"], "error": None},
+        {
+            "at": "2026-08-21T03:00:00+00:00",
+            "read": 2,
+            "upto": "b",
+            "kept": ["batch-cap"],
+            "set_aside": ["old-cap"],
+            "dropped": ["'bad slug': not a plain slug"],
+            "error": None,
+        },
+    )
+
+    result = runner.invoke(app, ["memory", str(project)])
+
+    assert result.exit_code == 0
+    assert "last pass    2026-08-21T03:00:00+00:00, read 2 records" in result.stdout
+    assert "  kept       batch-cap" in result.stdout
+    assert "  set aside  old-cap" in result.stdout
+    assert "  let go     'bad slug': not a plain slug" in result.stdout
+    assert "older-one" not in result.stdout
+
+
+def test_memory_says_when_the_last_pass_failed(tmp_path):
+    _, project = _project(tmp_path)
+    _log_passes(
+        project,
+        {"at": "2026-08-21T03:00:00+00:00", "read": 4, "upto": None, "error": "ValueError: no JSON object"},
+    )
+
+    result = runner.invoke(app, ["memory", str(project)])
+
+    assert result.exit_code == 0
+    assert (
+        "last pass    2026-08-21T03:00:00+00:00, read 4 records, failed and will reread: ValueError: no JSON object"
+        in result.stdout
+    )
+
+
+def test_a_pass_that_learned_nothing_says_so_in_one_line(tmp_path):
+    _, project = _project(tmp_path)
+    _log_passes(project, {"at": "2026-08-21T03:00:00+00:00", "read": 1, "upto": "a", "error": None})
+
+    result = runner.invoke(app, ["memory", str(project)])
+
+    assert "last pass    2026-08-21T03:00:00+00:00, read 1 record, kept nothing" in result.stdout
+    assert "  kept" not in result.stdout
