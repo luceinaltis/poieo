@@ -43,10 +43,10 @@ nodes:
 
 `GraphSpec` contains `name`, `version`, optional `description`, `entry`,
 `nodes`, seed `state`, `max_steps`, and `default_role`. Node ids are
-alphanumeric with `-` and `_` allowed, and may not start with a digit. Loading
-rejects duplicate ids, missing entry or targets, unreachable nodes, invalid
-node-specific fields, and invalid templates or expressions. Cycles are allowed;
-`max_steps` bounds them at run time.
+ASCII alphanumeric with `-` and `_` allowed, and may not start with a digit.
+Loading rejects duplicate ids, missing entry or targets, unreachable nodes,
+invalid node-specific fields, and invalid templates or expressions. Cycles are
+allowed; `max_steps` bounds them at run time.
 
 ## Node contracts
 
