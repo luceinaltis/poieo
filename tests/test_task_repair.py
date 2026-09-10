@@ -17,7 +17,7 @@ async def test_conflicting_work_is_repaired_privately_then_checked(tmp_path):
     git(repo, "commit", "-am", "another task")
     calls = []
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         calls.append(failure)
         assert (repo / "README.md").read_text() == "other addition\n"
         (prepared.path / "README.md").write_text("other addition\ntask addition\n")
@@ -45,7 +45,7 @@ async def test_semantic_overlap_is_repaired_and_checked_again(tmp_path):
     do_run(point, "r1", "made.txt", "old")
     calls = []
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         calls.append(failure)
         (prepared.path / "made.txt").write_text("hi")
         point.save_repair(prepared, "repair1", "meet the check")
@@ -63,7 +63,7 @@ async def test_verification_artifacts_never_become_part_of_a_repair(tmp_path):
     point = workspace(tmp_path, repo)
     do_run(point, "r1", "made.txt", "old")
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         (prepared.path / "made.txt").write_text("hi")
         point.save_repair(prepared, "repair1", "meet the check")
         return {"ready": True}
@@ -84,7 +84,7 @@ async def test_failed_repair_is_not_repeated_or_applied(tmp_path):
     do_run(point, "r1", "made.txt", "old")
     calls = []
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         calls.append(failure)
         return {"ready": True}
 
@@ -99,7 +99,7 @@ async def test_repair_cannot_expand_the_allowed_scope(tmp_path):
     point = workspace(tmp_path, repo)
     do_run(point, "r1", "made.txt", "old")
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         (prepared.path / "made.txt").write_text("hi")
         (prepared.path / "README.md").write_text("unauthorized")
         point.save_repair(prepared, "repair1", "too much")
@@ -117,7 +117,7 @@ async def test_revoked_permission_does_not_start_a_repair(tmp_path):
     point = workspace(tmp_path, repo)
     do_run(point, "r1", "made.txt", "old")
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         raise AssertionError("permission was revoked")
 
     result = await check_and_apply(
@@ -167,7 +167,7 @@ async def test_stopping_before_a_repair_keeps_it_from_starting(tmp_path):
     stopped = asyncio.Event()
     stopped.set()
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         raise AssertionError("stopped work must not restart")
 
     result = await check_and_apply(point, ApplySpec(mode="auto", checks=[CHECK_MADE]), repair=repair, cancel=stopped)
@@ -193,7 +193,7 @@ async def test_a_failed_check_cannot_smuggle_its_edits_into_a_repair(tmp_path):
     point = workspace(tmp_path, repo)
     do_run(point, "r1", "made.txt", "hi")
 
-    async def repair(prepared, failure):
+    async def repair(prepared, failure, cancel):
         raise AssertionError("a check must not edit the proposed change")
 
     result = await check_and_apply(

@@ -17,7 +17,7 @@ from ..workspace import ApplySpec, PreparedChange, Workspace
 
 log = logging.getLogger("poieo.daemon")
 T = TypeVar("T")
-Repair = Callable[[PreparedChange, dict], Awaitable[dict]]
+Repair = Callable[[PreparedChange, dict, asyncio.Event], Awaitable[dict]]
 
 
 async def finish_write(
@@ -121,7 +121,7 @@ async def _check_and_apply(
             return False
         if authorized is not None and not authorized():
             return False
-        repair_state["result"] = await repair(prepared, failure)
+        repair_state["result"] = await repair(prepared, failure, cancel)
         return repair_state["result"].get("ready") is True
 
     # At most three project versions and one additional pass after repair.
