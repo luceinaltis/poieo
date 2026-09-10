@@ -6,6 +6,7 @@ from test_workspace import make_repo
 from typer.testing import CliRunner
 
 from poieo.cli import AFTER, BOARD, SETUP, app
+from poieo.graph import load_document
 from poieo.layout import layout_for
 
 runner = CliRunner()
@@ -493,6 +494,30 @@ def test_an_ejected_graph_does_not_become_a_second_task(tmp_path):
     assert result.exit_code == 0, result.output
     # One status marker, so one card -- the graph beside it is not a task.
     assert result.stdout.count("[on ]") + result.stdout.count("[off]") == 1
+
+
+def test_eject_rewrites_a_json_card_as_json(tmp_path):
+    """The card is rewritten in the format its suffix promises.
+
+    Serialising a `.json` card as YAML left a file `load_document` could no
+    longer read -- eject corrupted the card it was asked to point at a graph.
+    """
+    (tmp_path / "project").mkdir()
+    (tmp_path / "tasks").mkdir()
+    path = tmp_path / "tasks" / "tidy.json"
+    path.write_text(
+        json.dumps({"folder": (tmp_path / "project").as_posix(), "name": "tidy", "prompt": "go", "every": "30m"}),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["eject", str(path)])
+    assert result.exit_code == 0, result.output
+
+    rewritten = json.loads(path.read_text(encoding="utf-8"))
+    assert rewritten["graph"] == "tidy.graph.yaml"
+    assert rewritten["every"] == "30m"
+    assert "prompt" not in rewritten
+    assert load_document(path) == rewritten
 
 
 def test_eject_refuses_to_overwrite(tmp_path):

@@ -1497,7 +1497,13 @@ def eject(
     except ValueError:  # a different drive on Windows: no relative path exists
         named = target.as_posix()
     kept["graph"] = named
-    task_path.write_text(yaml.safe_dump(kept, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    # In the card's own format: `load_document` reads a `.json` card as JSON,
+    # so writing YAML back into one leaves a card nothing can load again.
+    if task_path.suffix == ".json":
+        rewritten = json.dumps(kept, indent=2, ensure_ascii=False) + "\n"
+    else:
+        rewritten = yaml.safe_dump(kept, sort_keys=False, allow_unicode=True)
+    task_path.write_text(rewritten, encoding="utf-8")
 
     _ok(f"wrote {target}")
     typer.echo(f"{task_path} now names it (comments in it were not preserved)")
