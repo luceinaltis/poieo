@@ -106,6 +106,13 @@ body, metadata, second-look reasons, and write history. The initial graph may be
 truncated; search still considers every entry, with set-aside entries included
 or excluded as the user chooses.
 
+Runs and memory point at each other through the run record. An entry's
+`source` ids are resolved against `runs/results/` to name the task each run
+belonged to, so the board can open that run; an id whose record is gone stays
+a plain id. A run's record answers which entries it was shown and, by the same
+word-overlap judgement the accounting uses, which its output used. Nothing is
+written to resolve either direction.
+
 **Words** searches slugs and raw entry text through Unicode full-text lookup
 with a substring fallback. This reader-facing index is separate from the
 conservative word shaping used for autonomous recall, so adding a language or
@@ -160,8 +167,11 @@ daemon on failure.
 
 `poieo memory` derives its report at read time. It shows standing and set-aside
 entries, unresolved contradictions, entries needing a second look because an
-anchor or dependency changed, and recent evidence that recalled entries were
-or were not used. Nothing automatically acts on this report.
+anchor or dependency changed, recent evidence that recalled entries were or
+were not used, and what the last learning pass did: when it ran, how many
+records it read, what it kept or set aside, each proposal it let go with the
+reason, or the error a failed pass will reread after. The board shows the
+last few passes the same way. Nothing automatically acts on this report.
 
 Anchored-file blobs are content-addressed snapshots used to distinguish a real
 content change from a touched timestamp and to keep the earlier bytes

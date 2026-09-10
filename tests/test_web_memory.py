@@ -153,6 +153,7 @@ def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
             "truncated": False,
             "edges_truncated": False,
         },
+        "learning": [],
     }
 
 
@@ -436,3 +437,110 @@ def test_memory_writes_need_a_memory_and_the_same_fence_as_every_write(tmp_path)
     fenced = _client(kept)
     assert fenced.put("/api/projects/board/memory/page", json={"text": "x"}, headers=elsewhere).status_code == 403
     assert fenced.put("/api/projects/board/memory/slug", json={"body": "x"}, headers=elsewhere).status_code == 403
+
+
+# -- a run and the memory it was shown, in both directions --------------------
+
+
+def _record(tmp_path, run_id, *, task="importer", shown=None, summary="nothing tonight", status="completed"):
+    import json
+
+    from conftest import at
+
+    folder = at(tmp_path).results()
+    folder.mkdir(parents=True, exist_ok=True)
+    record = {"run_id": run_id, "task": task, "status": status, "summary": summary, "outputs": {}}
+    if shown is not None:
+        record["shown"] = shown
+    (folder / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_a_run_says_which_memory_it_was_shown_and_which_it_used(tmp_path):
+    client = _client(tmp_path)
+    _record(
+        tmp_path,
+        "20260824T010000-aaaaaaaa",
+        shown=["windows-shell", "command-env", "long-gone"],
+        summary="Windows 테스트에서는 POSIX 셸을 우선한다고 정리했다",
+    )
+
+    response = client.get("/api/runs/20260824T010000-aaaaaaaa/memory")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "run_id": "20260824T010000-aaaaaaaa",
+        "task": "importer",
+        "shown": [
+            {"slug": "windows-shell", "used": True},
+            {"slug": "command-env", "used": False},
+            # An entry the memory no longer holds cannot be judged.
+            {"slug": "long-gone", "used": None},
+        ],
+    }
+
+
+def test_a_run_recorded_without_memory_answers_null_not_an_empty_list(tmp_path):
+    client = _client(tmp_path)
+    _record(tmp_path, "20260824T010000-aaaaaaaa")
+
+    body = client.get("/api/runs/20260824T010000-aaaaaaaa/memory").json()
+
+    assert body["shown"] is None and body["task"] == "importer"
+
+
+def test_a_run_nobody_recorded_is_404(tmp_path):
+    assert _client(tmp_path).get("/api/runs/nope/memory").status_code == 404
+
+
+def test_an_entry_names_the_task_behind_each_source_run(tmp_path):
+    client = _client(tmp_path)
+    _record(tmp_path, "20260824T010000-aaaaaaaa", task="importer")
+    remember(
+        tmp_path,
+        "learned-cap",
+        "---\nsource: ['20260824T010000-aaaaaaaa', '20260824T020000-bbbbbbbb']\n---\nThe api caps at 50.",
+    )
+
+    body = client.get("/api/projects/board/memory/learned-cap").json()
+
+    assert body["source"] == ["20260824T010000-aaaaaaaa", "20260824T020000-bbbbbbbb"]
+    assert body["sources"] == [
+        {"run_id": "20260824T010000-aaaaaaaa", "task": "importer"},
+        # The record is gone (runs/ is disposable), so there is nowhere to go.
+        {"run_id": "20260824T020000-bbbbbbbb", "task": None},
+    ]
+
+
+def test_the_overview_carries_recent_passes_and_a_new_pass_moves_the_revision(tmp_path):
+    import json
+
+    from conftest import at
+
+    client = _client(tmp_path)
+    first = client.get("/api/projects/board/memory")
+    assert first.json()["learning"] == []
+
+    log = at(tmp_path).learning_log()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(
+        json.dumps(
+            {
+                "at": "2026-08-21T03:00:00+00:00",
+                "read": 2,
+                "upto": "b",
+                "kept": ["windows-shell"],
+                "set_aside": [],
+                "dropped": ["'bad slug': not a plain slug"],
+                "error": None,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    response = client.get("/api/projects/board/memory", headers={"if-none-match": first.headers["etag"]})
+
+    assert response.status_code == 200
+    assert response.headers["etag"] != first.headers["etag"]
+    passes = response.json()["learning"]
+    assert passes[0]["kept"] == ["windows-shell"]
+    assert passes[0]["dropped"] == ["'bad slug': not a plain slug"]

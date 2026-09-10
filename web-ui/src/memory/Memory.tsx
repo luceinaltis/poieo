@@ -12,6 +12,7 @@ import {
 } from "../api"
 import { Constellation } from "./Constellation"
 import type {
+  LearningPass,
   MemoryAskReply,
   MemoryEntry,
   MemoryOverview,
@@ -22,6 +23,58 @@ import "./memory.css"
 
 type Mode = MemorySearchMode | "ask"
 export const MEMORY_REFRESH_MS = 15_000
+
+/** One pass in a sentence: what it read and what came of it. */
+function passLine(pass: LearningPass): string {
+  const records = `read ${pass.read} record${pass.read === 1 ? "" : "s"}`
+  if (pass.error !== null) return `${records}, failed and will reread`
+  const did = [
+    pass.kept.length ? `kept ${pass.kept.length}` : "",
+    pass.set_aside.length ? `set aside ${pass.set_aside.length}` : "",
+    pass.dropped.length ? `let go ${pass.dropped.length}` : "",
+  ].filter(Boolean)
+  return did.length ? `${records}, ${did.join(", ")}` : `${records}, kept nothing`
+}
+
+/**
+ * What learning did lately: the pass log, which was a file only the CLI ever
+ * read. Every slug is a way into the entry; every reason is the harness's
+ * own sentence for why a proposal was let go.
+ */
+function Learning({ passes, onSelect }: { passes: LearningPass[]; onSelect(slug: string): void }) {
+  if (!passes.length) return null
+  const latest = passes[0]
+  const slugs = (list: string[]) =>
+    list.map((slug) => (
+      <button type="button" className="memory-related" data-related={slug} key={slug} onClick={() => onSelect(slug)}>
+        {slug}
+      </button>
+    ))
+  return (
+    <details className="memory-learning">
+      <summary>
+        {`learning · ${new Date(latest.at).toLocaleString()} · ${passLine(latest)}`}
+      </summary>
+      <ol>
+        {passes.map((pass) => (
+          <li key={pass.at} data-failed={String(pass.error !== null)}>
+            <time dateTime={pass.at}>{new Date(pass.at).toLocaleString()}</time>
+            <span>{passLine(pass)}</span>
+            {pass.error !== null ? <span className="memory-pass-error">{pass.error}</span> : null}
+            {pass.kept.length ? <span>kept {slugs(pass.kept)}</span> : null}
+            {pass.set_aside.length ? <span>set aside {slugs(pass.set_aside)}</span> : null}
+            {pass.dropped.map((reason) => (
+              <span className="memory-pass-dropped" key={reason}>
+                let go · {reason}
+              </span>
+            ))}
+            {pass.page ? <span>suggested for the page · {pass.page}</span> : null}
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
 
 function AnswerText({ text, onCitation }: { text: string; onCitation(slug: string): void }) {
   const parts = text.split(/(\[\[[^\[\]]+\]\])/g)
@@ -47,7 +100,21 @@ function AnswerText({ text, onCitation }: { text: string; onCitation(slug: strin
   )
 }
 
-export function Memory({ project }: { project: string }) {
+export function Memory({
+  project,
+  focus = null,
+  onOpenRun,
+}: {
+  project: string
+  /**
+   * An entry to open on arrival -- how the drawer's "memory shown to this
+   * run" lands here. An object rather than the slug, so naming the same
+   * entry twice from two places is two arrivals.
+   */
+  focus?: { slug: string } | null
+  /** Open the task drawer on one of an entry's source runs. */
+  onOpenRun?(task: string, runId: string): void
+}) {
   const [overview, setOverview] = useState<MemoryOverview | null | undefined>(undefined)
   const [query, setQuery] = useState("")
   const [mode, setMode] = useState<Mode>("words")
@@ -134,6 +201,14 @@ export function Memory({ project }: { project: string }) {
     },
     [detail, project],
   )
+
+  // Read through a ref so arriving with a focus does not re-run on every
+  // detail change: `selectEntry` is rebuilt whenever the detail moves.
+  const select = useRef(selectEntry)
+  select.current = selectEntry
+  useEffect(() => {
+    if (focus) void select.current(focus.slug)
+  }, [focus])
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -494,7 +569,28 @@ export function Memory({ project }: { project: string }) {
                 {detail.source.length ? (
                   <>
                     <dt>source</dt>
-                    <dd>{detail.source.join(", ")}</dd>
+                    <dd>
+                      {(detail.sources ?? detail.source.map((run_id) => ({ run_id, task: null }))).map(
+                        ({ run_id, task }) =>
+                          task && onOpenRun ? (
+                            <button
+                              type="button"
+                              className="memory-related memory-source"
+                              data-source={run_id}
+                              key={run_id}
+                              onClick={() => onOpenRun(task, run_id)}
+                            >
+                              {run_id}
+                            </button>
+                          ) : (
+                            // The record is gone with runs/, so the id has
+                            // nowhere to go -- said, but not offered.
+                            <span className="memory-source" data-source={run_id} key={run_id}>
+                              {run_id}
+                            </span>
+                          ),
+                      )}
+                    </dd>
                   </>
                 ) : null}
                 {detail.valid_from ? (
@@ -577,6 +673,8 @@ export function Memory({ project }: { project: string }) {
               </form>
             )}
           </details>
+
+          <Learning passes={overview.learning ?? []} onSelect={(slug) => void selectEntry(slug)} />
         </aside>
       </div>
     </section>

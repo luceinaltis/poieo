@@ -15,10 +15,14 @@ const fetchRunEvents = vi.hoisted(() =>
   vi.fn<typeof import("../api").fetchRunEvents>(),
 )
 const fetchDiff = vi.hoisted(() => vi.fn<typeof import("../api").fetchDiff>())
+const fetchRunMemory = vi.hoisted(() => vi.fn<typeof import("../api").fetchRunMemory>())
+const fetchRunSummary = vi.hoisted(() => vi.fn<typeof import("../api").fetchRunSummary>())
 vi.mock("../api", () => ({
   fetchRuns,
   fetchRunEvents,
   fetchDiff,
+  fetchRunMemory,
+  fetchRunSummary,
   accept: vi.fn<typeof import("../api").accept>(),
   discard: vi.fn<typeof import("../api").discard>(),
   pause: vi.fn<typeof import("../api").pause>(),
@@ -38,9 +42,13 @@ beforeEach(() => {
   fetchRuns.mockReset()
   fetchRunEvents.mockReset()
   fetchDiff.mockReset()
+  fetchRunMemory.mockReset()
+  fetchRunSummary.mockReset()
   fetchRuns.mockResolvedValue([])
   fetchRunEvents.mockResolvedValue([])
   fetchDiff.mockResolvedValue(null)
+  fetchRunMemory.mockResolvedValue(null)
+  fetchRunSummary.mockResolvedValue(null)
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
@@ -780,4 +788,59 @@ test("a card the daemon will not adopt says why, in the daemon's own words", asy
 test("a card nobody edited says nothing about restarts", async () => {
   await show([])
   expect(container.querySelector(".drawer-stale")).toBeNull()
+})
+
+test("the selected run lists the memory it was shown and marks what it used", async () => {
+  const onMemory = vi.fn()
+  fetchRunMemory.mockResolvedValue({
+    run_id: "r1",
+    task: "chores",
+    shown: [
+      { slug: "windows-shell", used: true },
+      { slug: "batch-cap", used: false },
+      { slug: "long-gone", used: null },
+    ],
+  })
+  await draw([run], { onMemory })
+
+  expect(fetchRunMemory).toHaveBeenCalledWith("r1")
+  const shown = container.querySelector(".run-memory")!
+  expect(shown.textContent).toContain("Memory shown to this run")
+  expect(shown.querySelector('[data-memory="windows-shell"]')?.closest("li")?.getAttribute("data-used")).toBe("true")
+  expect(shown.querySelector('[data-memory="batch-cap"]')?.closest("li")?.getAttribute("data-used")).toBe("false")
+  expect(shown.querySelector('[data-memory="long-gone"]')?.closest("li")?.getAttribute("data-used")).toBe("unknown")
+
+  await press('[data-memory="windows-shell"]')
+  expect(onMemory).toHaveBeenCalledWith("windows-shell")
+})
+
+test("a run recorded while the project kept no memory shows no memory section", async () => {
+  fetchRunMemory.mockResolvedValue({ run_id: "r1", task: "chores", shown: null })
+  await draw([run])
+
+  expect(container.querySelector(".run-memory")).toBeNull()
+})
+
+test("a run memory chose nothing for says so rather than vanishing", async () => {
+  fetchRunMemory.mockResolvedValue({ run_id: "r1", task: "chores", shown: [] })
+  await draw([run])
+
+  expect(container.querySelector(".run-memory")?.textContent).toContain("nothing")
+})
+
+test("a run named on arrival is selected even when it left the short history", async () => {
+  const old: RunSummary = {
+    ...run,
+    run_id: "20260801T010000-old",
+    started_at: "2026-08-01T01:00:00Z",
+    finished_at: "2026-08-01T01:00:04Z",
+    said: "an account from weeks ago",
+  }
+  fetchRunSummary.mockResolvedValue(old)
+  await draw([run], { runId: "20260801T010000-old" })
+
+  expect(fetchRunSummary).toHaveBeenCalledWith("20260801T010000-old")
+  expect(container.querySelector(".run-brief")?.getAttribute("data-run")).toBe("20260801T010000-old")
+  expect(container.querySelector(".run-brief h3")?.textContent).toBe("Selected run")
+  expect(container.querySelector(".run-brief-what")?.textContent).toContain("an account from weeks ago")
 })

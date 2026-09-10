@@ -7,7 +7,7 @@
 
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
-import { fetchRunEvents, fetchRuns } from "../api"
+import { fetchRunEvents, fetchRunMemory, fetchRuns, fetchRunSummary } from "../api"
 import { Card } from "./Card"
 import { Control } from "./Control"
 import { Question } from "./Question"
@@ -16,7 +16,7 @@ import { Diff } from "../review/Diff"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
-import type { PoieoEvent, Question as Asked, RunSummary } from "../types"
+import type { PoieoEvent, Question as Asked, RunMemory, RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
 
@@ -543,6 +543,44 @@ function RunBrief({
   )
 }
 
+/**
+ * What the run was shown from the project's long memory, and which of it
+ * showed up in the run's own output -- the same judgement `poieo memory`
+ * makes when it says how many runs used what they were shown.
+ *
+ * Nothing is drawn when the record says nothing about memory (the project
+ * kept none when this ran). An empty list is different, and says so: memory
+ * had entries and chose none for this task.
+ */
+function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: string): void }) {
+  if (!memory.shown) return null
+  return (
+    <section className="run-memory" aria-label="Memory shown to this run">
+      <h3>Memory shown to this run</h3>
+      {memory.shown.length ? (
+        <ul className="run-memory-list">
+          {memory.shown.map((one) => (
+            <li key={one.slug} data-used={one.used === null ? "unknown" : String(one.used)}>
+              <button
+                type="button"
+                className="run-memory-open"
+                data-memory={one.slug}
+                disabled={!onMemory}
+                onClick={() => onMemory?.(one.slug)}
+              >
+                {one.slug}
+              </button>
+              {one.used ? <span className="run-memory-used">used</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="run-memory-none">Memory had nothing to show this run.</p>
+      )}
+    </section>
+  )
+}
+
 // Memoized because the shell re-renders on every SSE frame: a drawer being
 // read must not re-reconcile its whole timeline because another task spoke.
 export const Drawer = memo(function Drawer({
@@ -555,9 +593,11 @@ export const Drawer = memo(function Drawer({
   into = null,
   asking = null,
   liveRuns = [],
+  runId = null,
   onClose,
   onDecided,
   onAlike,
+  onMemory,
 }: {
   project: string
   task: string
@@ -571,10 +611,18 @@ export const Drawer = memo(function Drawer({
   asking?: Asked | null
   /** The stage's live summary window, which can advance while this drawer is open. */
   liveRuns?: RunSummary[]
+  /**
+   * A run to open on, named by id -- how a memory entry's source run is
+   * reached. It may be older than the short history holds, so its row is
+   * fetched on its own rather than looked for among the ten.
+   */
+  runId?: string | null
   onClose(): void
   onDecided?(): void
   /** "Make one like it", passed through to the card fold. */
   onAlike?(seed: { name: string; folder: string; prompt: string }): void
+  /** Open the memory place at one entry this run was shown. */
+  onMemory?(slug: string): void
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -585,7 +633,9 @@ export const Drawer = memo(function Drawer({
   const [activityLoading, setActivityLoading] = useState(false)
   const [activityError, setActivityError] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
+  const [memory, setMemory] = useState<RunMemory | null>(null)
   const activityRequest = useRef(0)
+  const memoryRequest = useRef(0)
   const drawerId = useId().replace(/[^a-zA-Z0-9_-]/g, "")
   const titleId = `drawer-${drawerId}-title`
   const briefId = `drawer-${drawerId}-brief`
@@ -602,6 +652,21 @@ export const Drawer = memo(function Drawer({
       live = false
     }
   }, [project, task, refreshVersion])
+
+  // Arriving on a named run. Its row is asked for by id rather than sought
+  // among the ten: a memory entry's source is routinely older than that.
+  useEffect(() => {
+    if (!runId) return
+    let live = true
+    setHistoryOpen(false)
+    setSelectedRunId(runId)
+    void fetchRunSummary(runId).then((found) => {
+      if (live && found) setSelectedRunSnapshot(found)
+    })
+    return () => {
+      live = false
+    }
+  }, [runId])
 
   const refreshAfterAction = () => {
     setRefreshVersion((version) => version + 1)
@@ -636,6 +701,19 @@ export const Drawer = memo(function Drawer({
     setActivityLoading(false)
     setActivityError(false)
   }, [selectedRunKey])
+
+  // The record is written when the run ends, so a run watched to its finish
+  // is asked again once its status settles -- hence the status in the deps.
+  const selectedRunStatus = selectedRun?.status ?? null
+  useEffect(() => {
+    const request = ++memoryRequest.current
+    setMemory(null)
+    if (!selectedRunKey) return
+    void fetchRunMemory(selectedRunKey).then((found) => {
+      if (memoryRequest.current !== request) return
+      setMemory(found)
+    })
+  }, [selectedRunKey, selectedRunStatus])
 
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
@@ -746,6 +824,10 @@ export const Drawer = memo(function Drawer({
           />
 
           {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}
+
+          {memory && memory.run_id === selectedRunKey ? (
+            <ShownMemory memory={memory} onMemory={onMemory} />
+          ) : null}
 
           {selectedRun ? (
             <section className="drawer-fold activity-fold">

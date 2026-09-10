@@ -480,6 +480,27 @@ def settle_suggestion(project_dir: Path, accept: bool) -> str:
     return suggestion
 
 
+# How many passes a reader is shown. A pass is one line a night, so this is
+# about a working week -- enough to see a run of failures, not the archive.
+RECENT_PASSES = 5
+
+
+def recent_passes(project_dir: Path, limit: int = RECENT_PASSES) -> list[dict[str, Any]]:
+    """The last few passes, newest first, each in the full `PassResult` shape.
+
+    A line written before a field existed answers that field empty rather
+    than absent, so nothing reading this has to guess what a missing key
+    means. Failed passes are included: a reader asking "what did learning do
+    last night" needs the answer "it failed, and here is why" as much as
+    the list of what it kept.
+    """
+    if limit <= 0:
+        return []
+    blank = asdict(PassResult(at="", read=0, upto=None))
+    passes = [{**blank, **{key: entry[key] for key in blank if key in entry}} for entry in _passes(project_dir)]
+    return list(reversed(passes[-limit:]))
+
+
 def _record(project_dir: Path, result: PassResult) -> None:
     path = layout_for(project_dir).learning_log()
     path.parent.mkdir(parents=True, exist_ok=True)

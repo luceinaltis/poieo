@@ -743,3 +743,56 @@ async def test_a_mention_does_not_wear_in_a_disputed_pair(tmp_path):
 
     await _learn(project, _proposal())
     assert strengths(project) == {}
+
+
+# -- what the passes left behind, read back -----------------------------------
+
+
+async def test_recent_passes_read_newest_first_with_every_reason(tmp_path):
+    from poieo.learn import recent_passes
+
+    project = _project(tmp_path)
+    _episode(project, "20260824T010000-aaaaaaaa")
+    await _learn(
+        project,
+        _proposal(entries=[{"slug": "bad slug!", "body": "x"}, {"slug": "cap", "body": "Caps hold."}]),
+    )
+    _episode(project, "20260824T020000-bbbbbbbb")
+    await _learn(project, ["this is not json"])
+
+    passes = recent_passes(project)
+
+    assert [one["error"] is None for one in passes] == [False, True]
+    assert passes[0]["read"] == 1 and passes[0]["upto"] is None
+    assert passes[1]["kept"] == ["cap"] and passes[1]["upto"] == "20260824T010000-aaaaaaaa"
+    assert passes[1]["dropped"] == ["'bad slug!': not a plain slug"]
+    assert recent_passes(project, limit=1) == passes[:1]
+
+
+def test_an_older_pass_line_reads_with_the_full_shape(tmp_path):
+    """A line written before a field existed still answers with that field,
+    so a reader never has to guess whether absent means empty."""
+    from poieo.learn import recent_passes
+
+    project = _project(tmp_path)
+    log = at(project).learning_log()
+    log.parent.mkdir(parents=True)
+    log.write_text(
+        json.dumps({"at": "2026-08-20T00:00:00+00:00", "read": 2, "upto": "a", "error": None}) + "\n[1, 2]\n{ torn\n",
+        encoding="utf-8",
+    )
+
+    assert recent_passes(project) == [
+        {
+            "at": "2026-08-20T00:00:00+00:00",
+            "read": 2,
+            "upto": "a",
+            "kept": [],
+            "set_aside": [],
+            "dropped": [],
+            "error": None,
+            "page": None,
+            "let_go": [],
+        }
+    ]
+    assert recent_passes(tmp_path / "nowhere") == []

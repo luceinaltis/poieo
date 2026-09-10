@@ -13,6 +13,7 @@ from typing import Any
 from ..strength import strengths
 from .entries import Entry, entry_named, history_of, keeps_memory, open_memory, readable_entries
 from .index import search_text
+from .results import read_record, used_in
 from .upkeep import doubts
 
 GRAPH_LIMIT = 2_000
@@ -217,4 +218,38 @@ def entry_document(project_dir: Path, slug: str) -> dict[str, Any] | None:
         },
         "second_look": [reason for named, reason in doubts(project_dir) if named == slug],
         "history": history_of(project_dir, slug),
+        # Each source run with the task it belonged to, read off the record
+        # it left. `task` is None when the record is gone: `runs/` is
+        # disposable, and a source id with nowhere to go is still a fact.
+        "sources": [
+            {"run_id": run_id, "task": (read_record(project_dir, run_id) or {}).get("task")}
+            for run_id in entry.matter.source
+        ],
+    }
+
+
+def run_document(project_dir: Path, run_id: str) -> dict[str, Any] | None:
+    """What one run was shown from memory, and whether it used it.
+
+    None when the run left no record. `shown` is None when the record has
+    nothing to say about memory -- written while the project kept none --
+    which is not the same as an empty list, where memory chose nothing.
+    `used` is the same judgement the accounting makes, and None for an entry
+    the memory no longer holds, which cannot be judged either way.
+    """
+    record = read_record(project_dir, run_id)
+    if record is None:
+        return None
+    shown = record.get("shown")
+    if not isinstance(shown, list):
+        return {"run_id": record["run_id"], "task": record.get("task"), "shown": None}
+    by_slug = {entry.slug: entry for entry in readable_entries(project_dir)} if keeps_memory(project_dir) else {}
+    return {
+        "run_id": record["run_id"],
+        "task": record.get("task"),
+        "shown": [
+            {"slug": slug, "used": used_in(by_slug[slug], record) if slug in by_slug else None}
+            for slug in shown
+            if isinstance(slug, str)
+        ],
     }

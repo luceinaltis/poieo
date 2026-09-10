@@ -5,7 +5,9 @@ import {
   fetchCard,
   fetchMemory,
   fetchRunEvents,
+  fetchRunMemory,
   fetchRuns,
+  fetchRunSummary,
   fetchTasks,
   keepMemory,
   openFeed,
@@ -349,4 +351,26 @@ test("a frame saying the listing changed asks for a resync, not a fold", () => {
 
   expect(resyncs()).toBe(2) // the open, then the frame
   expect(events).toEqual([]) // and nothing reached the reducer
+})
+
+test("a run's memory and its summary are read by id", async () => {
+  const fetchStub = stubFetch({
+    "/api/runs/r1/memory": {
+      body: { run_id: "r1", task: "chores", shown: [{ slug: "windows-shell", used: true }] },
+    },
+    "/api/runs/r1": {
+      body: { run_id: "r1", summary: { run_id: "r1", status: "completed" }, events: [] },
+    },
+  })
+
+  expect(await fetchRunMemory("r1")).toEqual({
+    run_id: "r1",
+    task: "chores",
+    shown: [{ slug: "windows-shell", used: true }],
+  })
+  expect(await fetchRunSummary("r1")).toEqual({ run_id: "r1", status: "completed" })
+  expect(fetchStub).toHaveBeenCalledWith("/api/runs/r1/memory")
+  // A run the daemon never saw is nothing to show, not a throw.
+  expect(await fetchRunMemory("nope")).toBeNull()
+  expect(await fetchRunSummary("nope")).toBeNull()
 })

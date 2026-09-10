@@ -45,7 +45,9 @@ type TaskFields = { name: string; folder: string; prompt: string }
 
 type PanelState =
   | { kind: "closed" }
-  | { kind: "task"; taskKey: string }
+  // `runId` when the drawer was opened on one run -- from a memory entry's
+  // source -- rather than on the task's latest.
+  | { kind: "task"; taskKey: string; runId?: string }
   | { kind: "models" }
   | { kind: "make"; initialFields?: TaskFields }
 
@@ -119,6 +121,9 @@ export default function App({ store }: { store?: StageStore }) {
   const [showMemory, setShowMemory] = useState(
     () => recall(MEMORY_PLACE_KEY, "false") === "true",
   )
+  // The entry the memory place opens on, when a drawer sent the reader there.
+  // Not remembered across reloads: it is a step, not a place.
+  const [memoryFocus, setMemoryFocus] = useState<{ slug: string } | null>(null)
 
   useEffect(() => {
     void stageStore.start()
@@ -178,6 +183,8 @@ export default function App({ store }: { store?: StageStore }) {
     // A task drawer and make form belong to the project that opened them.
     // Models stays open and remounts for the new project below.
     setActivePanel((current) => (current.kind === "models" ? current : CLOSED_PANEL))
+    // As does an entry in focus: a slug names something in one memory.
+    setMemoryFocus(null)
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
@@ -218,6 +225,25 @@ export default function App({ store }: { store?: StageStore }) {
     remember(MEMORY_PLACE_KEY, "true")
     setActivePanel(CLOSED_PANEL)
   }, [])
+  // From a drawer: the memory place, open on the entry that run was shown.
+  const openMemoryAt = useCallback((slug: string) => {
+    setMemoryFocus({ slug })
+    setShowMemory(true)
+    remember(MEMORY_PLACE_KEY, "true")
+    setActivePanel(CLOSED_PANEL)
+  }, [])
+  // The way back: an entry's source run, opened in its task's drawer. The
+  // memory place closes because the drawer covers the board, not the place,
+  // and the run is what the reader asked to see.
+  const openRun = useCallback(
+    (task: string, runId: string) => {
+      if (!project) return
+      setShowMemory(false)
+      remember(MEMORY_PLACE_KEY, "false")
+      setActivePanel({ kind: "task", taskKey: keyOfTask(project.name, task), runId })
+    },
+    [project],
+  )
   const openModels = useCallback(
     (opener: HTMLElement) => {
       rememberPanelOpener(opener)
@@ -379,7 +405,9 @@ export default function App({ store }: { store?: StageStore }) {
 
       <div className="shell-stage" data-drawer={String(panelIsOpen)}>
         <div className="shell-board" data-hidden={String(memoryOpen)} ref={boardRef} />
-        {memoryOpen && project ? <Memory key={project.name} project={project.name} /> : null}
+        {memoryOpen && project ? (
+          <Memory key={project.name} project={project.name} focus={memoryFocus} onOpenRun={openRun} />
+        ) : null}
         {empty && !memoryOpen ? (
           <div className="shell-empty">
             <p>No tasks yet. Create one to put your models to work.</p>
@@ -447,9 +475,11 @@ export default function App({ store }: { store?: StageStore }) {
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
           liveRuns={selectedTaskState?.runs ?? []}
+          runId={activePanel.kind === "task" ? (activePanel.runId ?? null) : null}
           onClose={closePanel}
           onDecided={resyncAfterAction}
           onAlike={makeAlike}
+          onMemory={openMemoryAt}
         />
       ) : null}
     </>

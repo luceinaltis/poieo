@@ -59,6 +59,8 @@ vi.mock("./api", () => ({
     },
   ]),
   fetchRunEvents: vi.fn<typeof import("./api").fetchRunEvents>(async () => AGENT_RUN),
+  fetchRunMemory: vi.fn<typeof import("./api").fetchRunMemory>(async () => null),
+  fetchRunSummary: vi.fn<typeof import("./api").fetchRunSummary>(async () => null),
   fetchDiff: vi.fn<typeof import("./api").fetchDiff>(async () => ({
     run_id: "20260822T072819-98a6708d",
     change: null,
@@ -783,4 +785,58 @@ test("switching projects puts a seeded make panel away with its seed", async () 
   expect(container.querySelector('input[name="folder"]')).toBeNull()
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-make"]')!.click())
   expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("")
+})
+
+test("a memory named in the drawer opens the memory place at that entry", async () => {
+  const { fetchRunMemory, fetchMemory, fetchMemoryEntry } = await import("./api")
+  vi.mocked(fetchRunMemory).mockResolvedValue({
+    run_id: "newest-but-quiet",
+    task: "chores",
+    shown: [{ slug: "windows-shell", used: true }],
+  })
+  vi.mocked(fetchMemory).mockResolvedValue({
+    enabled: true,
+    page: null,
+    stats: null,
+    capabilities: { words: true, meaning: false, ask: false },
+    graph: { nodes: [], edges: [], total_nodes: 0, total_edges: 0, truncated: false, edges_truncated: false },
+    learning: [],
+  })
+  vi.mocked(fetchMemoryEntry).mockResolvedValue({
+    slug: "windows-shell",
+    body: "Windows tests need a POSIX shell.",
+    updated_at: "2026-08-31T00:00:00Z",
+    mentions: [],
+    scope: ["global"],
+    anchors: [],
+    source: ["newest-but-quiet"],
+    sources: [{ run_id: "newest-but-quiet", task: "chores" }],
+    valid_from: null,
+    superseded_by: null,
+    links: { depends_on: [], contradicts: [] },
+    second_look: [],
+    history: [],
+  })
+  await render(initialStage(TASK_ROWS))
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+  await act(async () => {})
+
+  await act(async () => container.querySelector<HTMLElement>('[data-memory="windows-shell"]')!.click())
+  await act(async () => {})
+
+  // The drawer is put away, the memory place is open, and the entry is read.
+  expect(container.querySelector(".drawer")).toBeNull()
+  expect(container.querySelector(".shell-board")!.getAttribute("data-hidden")).toBe("true")
+  expect(fetchMemoryEntry).toHaveBeenCalledWith("board", "windows-shell")
+  expect(container.querySelector('[data-memory="windows-shell"]')).not.toBeNull()
+
+  // And back: the entry's source run reopens the drawer on that very run.
+  await act(async () => container.querySelector<HTMLElement>('[data-source="newest-but-quiet"]')!.click())
+  await act(async () => {})
+  expect(container.querySelector(".shell-board")!.getAttribute("data-hidden")).toBe("false")
+  const drawer = container.querySelector(".drawer")!
+  expect(drawer.getAttribute("data-task")).toBe("chores")
+  expect(drawer.querySelector(".run-brief")?.getAttribute("data-run")).toBe("newest-but-quiet")
 })
