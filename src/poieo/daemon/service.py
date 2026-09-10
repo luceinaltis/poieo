@@ -529,7 +529,7 @@ class TaskRunner:
         if self._change_lock.locked():
             return {"status": "blocked", "error": "this task is still working; try again when it finishes"}
         async with self._change_lock, self._private_copy():
-            return await finish_write(undo_change(self, run_id))
+            return await undo_change(self, run_id)
 
     @asynccontextmanager
     async def _private_copy(self):

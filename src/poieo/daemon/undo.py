@@ -14,7 +14,7 @@ from ..memory import write_result
 from ..memory.results import revise_application
 from ..runtime import RunResult, new_run_id
 from ..store import Event, utcnow
-from .changes import check_and_apply
+from .changes import check_and_apply, finish_write
 
 
 async def undo_change(driver: Any, run_id: str) -> dict:
@@ -47,10 +47,16 @@ async def undo_change(driver: Any, run_id: str) -> dict:
             policy,
             manual=True,
             tool_context=driver.tool_context,
+            cancel=driver.cancel,
             undo=(applied["before"], applied["after"], undo_id),
         )
     except PoieoError as exc:
         outcome = {"status": "blocked", "error": str(exc)}
+    return await finish_write(_record_undo(driver, run_id, applied, undo_id, started, outcome))
+
+
+async def _record_undo(driver: Any, run_id: str, applied: dict, undo_id: str, started: str, outcome: dict) -> dict:
+    card = driver.config.cards_by_task.get(driver.name)
     outcome.update(run_id=undo_id, undo_of=run_id)
     result = RunResult(
         run_id=undo_id,

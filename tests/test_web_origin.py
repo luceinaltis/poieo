@@ -75,6 +75,7 @@ WRITES = [
     "/api/tasks/board/f/answer",
     "/api/tasks/board/f/accept",
     "/api/tasks/board/f/discard",
+    "/api/tasks/board/f/undo",
     "/api/projects/board/models/use",
     "/api/projects/board/models/add",
     "/api/projects/board/tasks",
