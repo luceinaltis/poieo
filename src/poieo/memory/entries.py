@@ -568,13 +568,15 @@ def keep_entry(
                 raise SpecError(f"'{slug}': {kind} names itself")
             if target not in known:
                 raise SpecError(f"'{slug}': {kind} names '{target}', and no such entry exists")
-    sealed: dict[str, str] = {}
-    for anchor in matter.anchors:
-        part = anchor.split("::", 1)[0]
-        target = Path(project_dir) / part
-        if not target.is_file():
+    anchored = {anchor.split("::", 1)[0]: anchor for anchor in matter.anchors}
+    for part, anchor in anchored.items():
+        if not (Path(project_dir) / part).is_file():
             raise SpecError(f"'{slug}': anchors names {anchor}, and there is no such file")
-        name = blob.store(project_dir, target)
+    # Only once every anchor is known to exist: a refusal must leave no copy
+    # behind that no entry names.
+    sealed: dict[str, str] = {}
+    for part in anchored:
+        name = blob.store(project_dir, Path(project_dir) / part)
         if name is None:
             log.warning("'%s': could not keep a copy of %s; doubt will go by its clock", slug, part)
         else:
