@@ -107,6 +107,42 @@ def _node_card(node: NodeSpec, graph: GraphSpec, binding: BindingSpec | None) ->
         parts.append('<div class="block"><span class="block-k">prompt</span>')
         parts.append(f"<pre>{html.escape((node.prompt or '').strip())}</pre></div>")
         parts.append(f'<p class="edge">next &rarr; <code>{html.escape(node.next or "end")}</code></p>')
+    elif node.type == "command":
+        meta = []
+        if node.language:
+            meta.append(_chip("language", node.language))
+        if node.timeout:
+            meta.append(_chip("timeout", f"{node.timeout:g}s"))
+        if node.workdir:
+            meta.append(_chip("workdir", node.workdir))
+        if node.output.as_:
+            meta.append(_chip("as", node.output.as_))
+        if node.output.format != "text":
+            meta.append(_chip("format", node.output.format))
+        if node.output.into_state:
+            meta.append(_chip("state", node.output.into_state))
+        for name, value in node.env.items():
+            # Keyed "env" rather than by the variable's own name, so a variable
+            # called `timeout` cannot read as the node's timeout.
+            meta.append(_chip("env", f"{name}={value}"))
+        if meta:
+            parts.append(f'<div class="chips">{"".join(meta)}</div>')
+
+        # One of the two is always set; the loader refuses a node with neither.
+        kind, source = ("script", node.script) if node.script else ("command", node.command)
+        parts.append(f'<div class="block"><span class="block-k">{kind}</span>')
+        parts.append(f"<pre>{html.escape((source or '').strip())}</pre></div>")
+        parts.append(f'<p class="edge">next &rarr; <code>{html.escape(node.next or "end")}</code></p>')
+    elif node.type == "confirm":
+        parts.append('<div class="block"><span class="block-k">question</span>')
+        parts.append(f"<pre>{html.escape((node.prompt or '').strip())}</pre></div>")
+        parts.append('<ul class="branches">')
+        for choice in node.choices:
+            parts.append(f'<li><code class="cond">{html.escape(choice)}</code></li>')
+        parts.append("</ul>")
+        # It names no successor: the run ends asking, and the card's `then:`
+        # reads the answer.
+        parts.append('<p class="edge">answer &rarr; <code>then</code></p>')
     else:
         parts.append('<ul class="branches">')
         for branch in node.branches:
