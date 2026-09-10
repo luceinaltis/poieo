@@ -124,6 +124,10 @@ cannot enforce. See [binding.md](binding.md).
 
 ## Notes and extension
 
+Normal Docker runs keep borrowed environments for reuse. Cancelling an active
+node removes its environment before releasing the mounted copy, because stopping
+the local Docker client alone does not stop its command inside the container.
+
 The `notes` toolset receives a `Postbox` with a fixed sender and the other task
 ids in the same project. `tell` appends a stamped one-line note to a recipient's
 journal. It cannot address itself, forge a sender, reach outside the roster, or

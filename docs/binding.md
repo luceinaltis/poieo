@@ -132,6 +132,10 @@ must preserve that distinction.
 
 ## Extending bindings
 
+Subscription CLI calls run in an owned process group (a Job Object on Windows).
+Timeout or cancellation terminates and drains the whole tree before the call
+returns, so an interrupted provider cannot keep editing a released task copy.
+
 Add an endpoint family by implementing the provider protocol and registering
 its `type`. Add a recognizable local service through discovery and preset data,
 without duplicating it in binding resolution. Provider-specific request
