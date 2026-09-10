@@ -1,10 +1,10 @@
 # The poieo brand
 
-The selected wash-and-fruit direction and new logo studies are recorded in
-[`docs/branding.md`](../docs/branding.md). The user has authorized exploring a new
-symbol and wordmark; a replacement logo has not yet been selected. This page
-records the current site draft and its assets, including the green palette;
-it is not an approved final identity.
+The selected direction pairs the wash-and-fruit design with the **persimmon
+tree and serif poieo wordmark** in [`docs/branding.md`](../docs/branding.md).
+The logo choice is approved; production vector assets and page updates remain
+to be made. This page records the current site draft and its assets, including
+the original logo and green palette; it is not the selected final identity.
 
 **The right intelligence, in the right place.**
 
@@ -36,10 +36,11 @@ folders are edited directly. Project-wide learned memory is opt-in.
 
 ## Visual language
 
-Keep the **original tree, golden fruit, and custom wordmark**. Together they
-are poieo's identity. Use the existing assets, including their original shapes
-and colours. The tree can stand alone beside the landing headline; navigation,
-the README, and the share image use the complete tree-and-wordmark lockup.
+The current site uses the **original tree, golden fruit, and custom wordmark**,
+including their original shapes and colours. The tree stands alone beside the
+landing headline; navigation, the README, and the share image use the complete
+tree-and-wordmark lockup. The selected replacement is the persimmon concept
+linked in the Assets section below.
 
 Let typography and space carry the page. Explain the combination of small and
 large models in plain language, then show the real application. Do not turn the
@@ -88,10 +89,9 @@ navigation quiet, the article readable, and code horizontally scrollable.
 
 ## Assets
 
-The tree and custom wordmark remain the signature. Use the approved lockup
-without redrawing or recolouring it. Its lettering carries continuity in the
-joined e and o; the crooked tree carries a single golden fruit. Keep
-`wordmark-source.png` and `mark-source.jpg` as their source material.
+The current assets use the original tree and custom wordmark. Their lettering
+joins e and o; the crooked tree carries a single golden fruit.
+`wordmark-source.png` and `mark-source.jpg` are their source material.
 
 | asset | purpose |
 |---|---|
@@ -101,6 +101,10 @@ joined e and o; the crooked tree carries a single golden fruit. Keep
 | `site/img/wordmark.svg`, `wordmark-light.svg` | original lettering when a separate wordmark is needed |
 | `site/social.html`, `site/img/social.png` | shared 1280×640 image and its source |
 
-The larger tree paintings remain reference material. Forge imagery remains
-retired. A replacement drawing requires an approved source and a faithful trace;
-do not quietly replace the logo as part of a page redesign.
+The selected replacement source is
+[`logo-persimmon-concept.png`](../docs/assets/branding/logo-persimmon-concept.png).
+Use its large horizontal lockup to produce faithful vector masters for the
+symbol and wordmark, then derive the colour, monochrome, and small-size assets
+from those masters. The generated sheet's smaller specimens are exploratory
+copies, not exact reductions. The larger tree paintings remain reference
+material. Forge imagery remains retired.
