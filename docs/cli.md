@@ -16,7 +16,8 @@ The main help page follows the user's work:
 
 - **Setting up** — `init`, `validate`, `check`, and `config`;
 - **Your tasks** — `run`, `daemon`, `tasks`, `note`, `asking`, and `answer`;
-- **What happened** — `memory`, `learn`, and `runs`.
+- **What happened** — `memory`, `learn`, and `runs`, plus a person's three memory
+  writes: `keep`, `set-aside`, and `page`.
 
 `config models` asks configured endpoints for their current catalogues;
 `config add` declares a newly discovered or explicitly addressed endpoint;
@@ -50,6 +51,13 @@ daemon because pending questions belong to its runners and persisted run state.
 initialization detects reachable models once; mock initialization gives a
 non-billing scripted path. Detection later happens only through an explicit
 catalogue or add command.
+
+`keep`, `set-aside`, and `page` are the only memory writes a person has. They
+call the same doors as the learning pass, record the writer as a person, and
+refuse a typed connection, replacement, or anchor that names nothing, so a typo
+fails at the keyboard rather than at the daemon's next load. `page` with no flag
+prints the page as written; `--edit`, `--from`, `--accept`, and `--dismiss` are
+one verb each, and the last two act on the learning pass's page suggestion.
 
 Binding edits use the shared rebind functions. They preserve YAML comments and
 formatting around the changed value, validate the resulting binding, and put

@@ -17,6 +17,7 @@ from poieo.memory import (
     entry_named,
     frontmatter,
     history_of,
+    keep_entry,
     keeps_memory,
     page_written_at,
     read_page,
@@ -188,3 +189,82 @@ def test_a_typed_claim_naming_nothing_fails_the_load(tmp_path):
 
     with pytest.raises(SpecError, match="ghost"):
         check_memory(project)
+
+
+# -- a person's door ---------------------------------------------------------
+
+
+def test_a_person_keeps_an_entry_with_no_source_and_a_person_in_the_history(tmp_path):
+    project = _project(tmp_path)
+    start_memory(project)
+
+    keep_entry(project, "batch-cap", "The api rejects batches over 50.")
+
+    entry = entry_named(project, "batch-cap")
+    assert entry.matter.source == []
+    line = history_of(project, "batch-cap")[0]
+    assert (line["writer"], line["did"]) == ("person", "wrote")
+
+
+def test_a_person_cannot_keep_an_entry_where_no_memory_is_kept(tmp_path):
+    """The file is the whole opt-in, and a write is not consent."""
+    project = _project(tmp_path)
+
+    with pytest.raises(SpecError, match="no long memory"):
+        keep_entry(project, "batch-cap", "The api rejects batches over 50.")
+    assert not at(project).longterm().exists()
+
+
+def test_a_person_typed_claim_must_name_an_entry_now_not_at_3am(tmp_path):
+    project = _project(tmp_path)
+    start_memory(project)
+
+    with pytest.raises(SpecError, match="ghost"):
+        keep_entry(project, "leaner", "Leans on air.", frontmatter({"links": {"depends_on": ["ghost"]}}))
+    with pytest.raises(SpecError, match="itself"):
+        keep_entry(project, "loop", "Leans on itself.", frontmatter({"links": {"contradicts": ["loop"]}}))
+    assert readable_entries(project) == []
+
+
+def test_a_person_anchor_must_name_a_file_and_is_sealed(tmp_path):
+    project = _project(tmp_path)
+    start_memory(project)
+    (project / "notebook").mkdir()
+    (project / "notebook" / "feeds.md").write_text("# feeds\n", encoding="utf-8")
+
+    with pytest.raises(SpecError, match="nowhere.md"):
+        keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/nowhere.md"]}))
+
+    keep_entry(project, "feeds", "Feeds land in one file.", frontmatter({"anchors": ["notebook/feeds.md::title"]}))
+    entry = entry_named(project, "feeds")
+    assert entry.matter.anchors == ["notebook/feeds.md::title"]
+    assert set(entry.matter.sealed) == {"notebook/feeds.md"}
+
+
+def test_rewriting_an_entry_without_saying_more_keeps_what_it_said_about_itself(tmp_path):
+    project = _project(tmp_path)
+    write_entry(
+        project,
+        "batch-cap",
+        "The api rejects batches over 50.",
+        frontmatter({"scope": ["importer"], "source": ["r1"]}),
+        writer="pass",
+    )
+
+    keep_entry(project, "batch-cap", "The api rejects batches over 500.")
+
+    entry = entry_named(project, "batch-cap")
+    assert entry.body == "The api rejects batches over 500."
+    assert entry.matter.scope == ["importer"]
+    assert entry.matter.source == ["r1"]
+
+
+def test_setting_aside_needs_a_replacement_that_exists_and_is_not_itself(tmp_path):
+    project = _project(tmp_path)
+    write_entry(project, "old-cap", "Batches stop at 10.")
+
+    with pytest.raises(SpecError, match="ghost"):
+        set_aside(project, "old-cap", "ghost")
+    with pytest.raises(SpecError, match="itself"):
+        set_aside(project, "old-cap", "old-cap")
+    assert entry_named(project, "old-cap").matter.superseded_by is None

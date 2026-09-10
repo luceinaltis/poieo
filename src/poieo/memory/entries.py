@@ -25,6 +25,7 @@ from typing import Any, Iterator
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .. import blob
 from ..errors import SpecError, describe_invalid
 from ..layout import layout_for
 from .index import drop_lookup as _drop_lookup
@@ -393,6 +394,16 @@ def read_page(project_dir: Path) -> str | None:
     return text
 
 
+def page_text(project_dir: Path) -> str:
+    """The page exactly as a person wrote it, comments and all: what an
+    editor is handed, and never what a prompt sees."""
+    if not keeps_memory(project_dir):
+        return ""
+    with open_memory(project_dir) as con:
+        row = con.execute("SELECT text FROM page WHERE only = 1").fetchone()
+    return str(row["text"]) if row else ""
+
+
 def history_of(project_dir: Path, slug: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     """What was written here, newest first. ``slug`` narrows to one entry."""
     if not keeps_memory(project_dir):
@@ -514,15 +525,64 @@ def set_aside(project_dir: Path, slug: str, because: str, *, writer: str = "pers
     """Mark an entry superseded. The body stays exactly what its author wrote:
     setting aside is the strongest thing a pass may do to an existing entry,
     and the history is what makes it reversible."""
+    if because == slug:
+        raise SpecError(f"'{slug}' cannot be set aside for itself")
     with open_memory(project_dir) as con:
         row = con.execute("SELECT superseded_by FROM entries WHERE slug = ?", (slug,)).fetchone()
         if row is None:
             raise SpecError(f"no entry called '{slug}'")
+        # The same rule the load applies, applied here, so a typo cannot
+        # wait for 3am. The pass settles its replacements before calling.
+        if con.execute("SELECT 1 FROM entries WHERE slug = ?", (because,)).fetchone() is None:
+            raise SpecError(f"'{slug}' cannot be set aside for '{because}': no such entry")
         con.execute(
             "UPDATE entries SET superseded_by = ?, updated_at = ? WHERE slug = ?",
             (because, _now(), slug),
         )
         _record(con, writer, "set aside", slug, {"superseded_by": row["superseded_by"]}, {"superseded_by": because})
+
+
+def keep_entry(
+    project_dir: Path,
+    slug: str,
+    body: str,
+    matter: _Frontmatter | None = None,
+) -> Entry:
+    """A person's entry, checked now the way the daemon checks at load.
+
+    The pass settles its links to a fixpoint before it writes; a person writes
+    one entry at a time, so a typed claim naming nothing is refused here
+    rather than found at 3am. Anchors must name a file that exists and are
+    sealed against it, as the pass seals its own. Rewriting an entry without
+    saying anything about it keeps what it already said about itself.
+    """
+    if not keeps_memory(project_dir):
+        raise SpecError(f"{layout_for(project_dir).longterm()}: this project keeps no long memory")
+    if matter is None:
+        existing = entry_named(project_dir, slug)
+        matter = existing.matter if existing is not None else _Frontmatter()
+    known = {entry.slug for entry in readable_entries(project_dir)}
+    for kind, targets in (("depends_on", matter.links.depends_on), ("contradicts", matter.links.contradicts)):
+        for target in targets:
+            if target == slug:
+                raise SpecError(f"'{slug}': {kind} names itself")
+            if target not in known:
+                raise SpecError(f"'{slug}': {kind} names '{target}', and no such entry exists")
+    anchored = {anchor.split("::", 1)[0]: anchor for anchor in matter.anchors}
+    for part, anchor in anchored.items():
+        if not (Path(project_dir) / part).is_file():
+            raise SpecError(f"'{slug}': anchors names {anchor}, and there is no such file")
+    # Only once every anchor is known to exist: a refusal must leave no copy
+    # behind that no entry names.
+    sealed: dict[str, str] = {}
+    for part in anchored:
+        name = blob.store(project_dir, Path(project_dir) / part)
+        if name is None:
+            log.warning("'%s': could not keep a copy of %s; doubt will go by its clock", slug, part)
+        else:
+            sealed[part] = name
+    matter = matter.model_copy(update={"sealed": sealed})
+    return write_entry(project_dir, slug, body, matter, writer="person")
 
 
 def write_page(project_dir: Path, text: str, *, writer: str = "person") -> None:

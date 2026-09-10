@@ -56,10 +56,15 @@ sealed:
 ```
 
 `write_entry`, `write_page`, and `set_aside` are the write doors. They validate
-the shape and append history in the same transaction. Setting an entry aside
-marks `superseded_by`; it does not delete or rewrite the body. Startup validation
-requires typed targets to exist and sealed paths to be anchors. Free-form
-`[[mentions]]` may name an entry that has not been written yet.
+the shape and append history in the same transaction. A person reaches them
+through `poieo keep`, `poieo set-aside`, and `poieo page`; the person's entry
+door additionally requires typed targets and anchored files to exist now,
+seals anchors, and keeps an entry's existing metadata when a rewrite says
+nothing new about it. A replacement named by `set_aside` must exist and differ
+from the entry. Setting an entry aside marks `superseded_by`; it does not delete
+or rewrite the body. Startup validation requires typed targets to exist and
+sealed paths to be anchors. Free-form `[[mentions]]` may name an entry that has
+not been written yet.
 
 ## Recall
 
@@ -139,6 +144,11 @@ harness validates and writes:
 - the pass may add an entry or set one aside, but never overwrite or delete an
   existing body;
 - the pass may suggest a page sentence, but only a person can write the page.
+
+A person lands a page suggestion with `poieo page --accept`, which adds it as a
+line, or lets it go with `--dismiss`, which rewrites the page unchanged: the
+same look-then-touch gesture that already hides a suggestion once the page is
+edited after the pass.
 
 The bookmark advances only after a successful pass. A failed pass records its
 failure and rereads the same records next time. An empty proposal is valid.

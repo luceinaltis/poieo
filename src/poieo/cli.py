@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, NoReturn, Optional
 
+import click
 import typer
 import yaml
 
@@ -60,7 +61,8 @@ from .graph import GraphSpec, load_graph
 from .layout import layout_for
 from .learn import last_suggestion
 from .learn import learn as run_learning_pass
-from .memory import keeps_memory, memory_report, read_memory
+from .memory import frontmatter as memory_frontmatter
+from .memory import keep_entry, keeps_memory, memory_report, page_text, read_memory, set_aside, write_page
 from .project import (
     MARKER,
     MOCK_BINDING,
@@ -1390,8 +1392,8 @@ def memory(
 ) -> None:
     """What this project remembers, and what a task would be shown.
 
-    Read-only on purpose: authoring belongs to the editor and git, and the
-    lookup machinery rebuilds itself, so there is nothing here to run.
+    Read-only on purpose: `keep`, `set-aside` and `page` are the writes, and
+    the lookup machinery rebuilds itself, so there is nothing here to run.
     """
     task, project = _memory_target(path)
 
@@ -1422,6 +1424,115 @@ def memory(
         typer.echo("")
         typer.echo(f"what {task.slug} will be shown on its next run:")
         typer.echo(read_memory(project, task, preview=True) or "(nothing)")
+
+
+def _memory_root(where: "Path | None") -> Path:
+    """The project a write lands in, refused in the usual words when it keeps
+    no memory: a write is not consent to start one."""
+    _, project = _memory_target(where)
+    if not keeps_memory(project):
+        _fail(f"no memory here yet. `poieo init` here starts one at {layout_for(project).longterm()}")
+    return project
+
+
+_IN = typer.Option(None, "--in", help="A folder in the project [default: here].")
+
+
+@app.command(rich_help_panel=AFTER)
+@_guarded
+def keep(
+    slug: str = typer.Argument(..., help="A name: lowercase letters, digits and dashes."),
+    body: str = typer.Argument(..., help="One statement that stays true."),
+    where: Optional[Path] = _IN,
+    scope: Optional[List[str]] = typer.Option(
+        None, "--scope", help="A task id or path prefix it applies to [default: global]."
+    ),
+    anchor: Optional[List[str]] = typer.Option(
+        None, "--anchor", help="A file, or file::symbol, it was written against."
+    ),
+    leans_on: Optional[List[str]] = typer.Option(None, "--leans-on", help="An entry it needs to stay true."),
+    disagrees_with: Optional[List[str]] = typer.Option(None, "--disagrees-with", help="An entry it disputes."),
+) -> None:
+    """Tell the project something that stays true.
+
+    Naming an existing entry rewrites it; saying nothing else about it keeps
+    what it already said, saying anything replaces all of that.
+    """
+    project = _memory_root(where)
+    matter = None
+    if scope or anchor or leans_on or disagrees_with:
+        matter = memory_frontmatter(
+            {
+                "scope": scope or ["global"],
+                "anchors": anchor or [],
+                "links": {"depends_on": leans_on or [], "contradicts": disagrees_with or []},
+            }
+        )
+    keep_entry(project, slug, body, matter)
+    _ok(f"kept {slug}")
+
+
+@app.command("set-aside", rich_help_panel=AFTER)
+@_guarded
+def set_aside_entry(
+    slug: str = typer.Argument(..., help="The entry that no longer holds."),
+    because: str = typer.Option(..., "--because", help="The entry that replaces it."),
+    where: Optional[Path] = _IN,
+) -> None:
+    """Retire an entry for the one that replaces it. Its words stay; recall moves on."""
+    project = _memory_root(where)
+    set_aside(project, slug, because, writer="person")
+    _ok(f"set aside {slug} for {because}")
+
+
+@app.command(rich_help_panel=AFTER)
+@_guarded
+def page(
+    where: Optional[Path] = _IN,
+    edit: bool = typer.Option(False, "--edit", help="Open the page in your editor."),
+    source: Optional[str] = typer.Option(None, "--from", help="Replace the page from a file, or - for stdin."),
+    accept: bool = typer.Option(False, "--accept", help="Add the last pass's suggestion as a line."),
+    dismiss: bool = typer.Option(False, "--dismiss", help="Let the last pass's suggestion go."),
+) -> None:
+    """What this project always requires, as written. With no flag, prints it."""
+    project = _memory_root(where)
+    chosen = [
+        name
+        for name, on in (("--edit", edit), ("--from", source is not None), ("--accept", accept), ("--dismiss", dismiss))
+        if on
+    ]
+    if len(chosen) > 1:
+        _fail("choose one of " + ", ".join(chosen))
+    current = page_text(project)
+    if not chosen:
+        typer.echo(current)
+        return
+    if edit:
+        edited = click.edit(current, extension=".md")
+        if edited is None:
+            typer.echo("unchanged")
+            return
+        write_page(project, edited)
+        _ok("page written")
+        return
+    if source is not None:
+        if source != "-" and not Path(source).is_file():
+            _fail(f"no such file: {source}")
+        text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+        write_page(project, text)
+        _ok("page written")
+        return
+    suggestion = last_suggestion(project)
+    if suggestion is None:
+        _fail("the last pass suggested nothing")
+    if accept:
+        write_page(project, (current.rstrip() + "\n" + suggestion + "\n") if current.strip() else suggestion + "\n")
+        _ok(f"added to the page: {suggestion}")
+    else:
+        # The clearing gesture everywhere: look, then touch. The page is
+        # rewritten as it was, and the suggestion stops showing.
+        write_page(project, current)
+        _ok("let go")
 
 
 @app.command(rich_help_panel=AFTER)
