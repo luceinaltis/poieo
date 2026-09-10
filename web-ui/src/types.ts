@@ -42,8 +42,8 @@ export interface Check {
  * before tasks could apply their own work.
  */
 export interface Application {
-  status: "applied" | "review" | "blocked"
-  checks: Check[]
+  status: "applied" | "review" | "blocked" | "discarded"
+  checks?: Check[]
   accepted?: number
   before?: string
   after?: string
@@ -64,6 +64,13 @@ export interface ApplyPermission {
   mode: "auto" | "review"
   paths: string[]
   checks: string[]
+}
+
+export interface ApplySpec {
+  mode: "review" | "auto"
+  paths: string[]
+  checks: string[]
+  timeout: number
 }
 
 export interface RunSummary {

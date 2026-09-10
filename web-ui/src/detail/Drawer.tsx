@@ -14,6 +14,7 @@ import { Control } from "./Control"
 import { Question } from "./Question"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
+import { ApplicationResult } from "../review/ApplicationResult"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
@@ -1000,6 +1001,7 @@ export const Drawer = memo(function Drawer({
             onMemory={onMemory}
           />
 
+          {selectedRun?.application ? <ApplicationResult result={selectedRun.application} /> : null}
           {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}
 
           {selectedRun ? (
