@@ -2,9 +2,42 @@
 
 The selected direction pairs the wash-and-fruit design with the **persimmon
 tree and serif poieo wordmark** in [`docs/branding.md`](../docs/branding.md).
-The logo choice is approved; production vector assets and page updates remain
-to be made. This page records the current site draft and its assets, including
-the original logo and green palette; it is not the selected final identity.
+The outlined SVG logo files are ready in [`logo/`](logo/poieo.svg), with a
+[preview of the combinations](logo/preview.html). The sections below the logo
+files describe the current site draft, including its original logo and green
+palette; applying the selected identity to those pages remains a separate step.
+
+## Selected logo files
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo/poieo-reversed.svg">
+  <img src="logo/poieo.svg" alt="poieo — persimmon tree and serif wordmark" width="540">
+</picture>
+
+Every SVG has a transparent background and outlined lettering. There are no
+embedded raster images, fonts, or external resources. All variants use the
+same paths traced from the approved large lockup.
+
+| combination | light background | dark background | one colour |
+|---|---|---|---|
+| Horizontal logo | [poieo.svg](logo/poieo.svg) | [poieo-reversed.svg](logo/poieo-reversed.svg) | [poieo-mono.svg](logo/poieo-mono.svg) |
+| Symbol | [symbol.svg](logo/symbol.svg) | [symbol-reversed.svg](logo/symbol-reversed.svg) | [symbol-mono.svg](logo/symbol-mono.svg) |
+| Wordmark | [wordmark.svg](logo/wordmark.svg) | [wordmark-reversed.svg](logo/wordmark-reversed.svg) | Same as the light version |
+
+The colours are ink `#221e18`, gold `#d8a657`, and ivory `#f0e7d9` for reversed
+ink. Preserve the aspect ratio and clear space built into the viewBox. Use the
+symbol at 32 px wide or larger when its leaf detail and gold fruit must remain
+clear. A 24 px rendering is shown in the preview for comparison.
+
+The approved raster reference remains in
+[`logo-persimmon-concept.png`](../docs/assets/branding/logo-persimmon-concept.png).
+[`logo/source.json`](logo/source.json) records the source, crop, tracing settings,
+and original generation prompt. The SVG paths are now the editable logo masters;
+do not retrace the smaller generated specimens to create another variant.
+Retired comparison images and old raster logo sources have been removed;
+their history remains in git.
+
+## Current site draft
 
 **The right intelligence, in the right place.**
 
@@ -89,9 +122,9 @@ navigation quiet, the article readable, and code horizontally scrollable.
 
 ## Assets
 
-The current assets use the original tree and custom wordmark. Their lettering
-joins e and o; the crooked tree carries a single golden fruit.
-`wordmark-source.png` and `mark-source.jpg` are their source material.
+The current site assets use the original tree and custom wordmark. Their
+lettering joins e and o; the crooked tree carries a single golden fruit.
+These in-use files remain until the page update adopts the selected SVG files.
 
 | asset | purpose |
 |---|---|
@@ -101,10 +134,6 @@ joins e and o; the crooked tree carries a single golden fruit.
 | `site/img/wordmark.svg`, `wordmark-light.svg` | original lettering when a separate wordmark is needed |
 | `site/social.html`, `site/img/social.png` | shared 1280×640 image and its source |
 
-The selected replacement source is
-[`logo-persimmon-concept.png`](../docs/assets/branding/logo-persimmon-concept.png).
-Use its large horizontal lockup to produce faithful vector masters for the
-symbol and wordmark, then derive the colour, monochrome, and small-size assets
-from those masters. The generated sheet's smaller specimens are exploratory
-copies, not exact reductions. The larger tree paintings remain reference
-material. Forge imagery remains retired.
+The selected replacements are the outlined SVG files listed above. When the
+pages are updated, derive their logos and browser icons from those files.
+Forge imagery remains retired.
