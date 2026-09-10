@@ -1,12 +1,14 @@
 """Delegation applies only the checked work the task was allowed to change."""
 
+import asyncio
+
 import pytest
 import yaml
-from test_task_workspace import build, events_of, run_once
+from test_task_workspace import build, events_of
 from test_workspace import do_run, git, head, make_repo, workspace
 
 from poieo.card import expand, load_card
-from poieo.daemon import load_config
+from poieo.daemon import Daemon, load_config
 from poieo.errors import SpecError
 
 
@@ -19,7 +21,13 @@ def policy_config(tmp_path, policy, **kwargs):
     return repo, load_config(tmp_path / "d.yaml")
 
 
-CHECK_MADE = 'python -c "from pathlib import Path; assert Path(\'made.txt\').read_text() == \'hi\'"'
+CHECK_MADE = "python -c \"from pathlib import Path; assert Path('made.txt').read_text() == 'hi'\""
+
+
+async def run_once(config):
+    daemon = Daemon(config, on_run=lambda _task, _result: daemon.stop())
+    results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=30)
+    return daemon, results[0]
 
 
 def test_automatic_application_requires_a_real_verification_command(tmp_path):
@@ -103,8 +111,10 @@ async def test_checks_see_the_combined_result_not_just_the_task_copy(tmp_path):
     do_run(point, "r1", "requirement.txt", "old")
     (repo / "value.txt").write_text("new", encoding="utf-8")
     git(repo, "commit", "-am", "another task changed the value")
-    checks = ['python -c "from pathlib import Path; assert Path(\'value.txt\').read_text() == '
-              'Path(\'requirement.txt\').read_text()"']
+    checks = [
+        "python -c \"from pathlib import Path; assert Path('value.txt').read_text() == "
+        "Path('requirement.txt').read_text()\""
+    ]
 
     result = await check_and_apply(point, ApplySpec(mode="auto", checks=checks))
 
@@ -128,10 +138,61 @@ async def test_revoking_permission_during_verification_prevents_application(tmp_
 
 
 async def test_automatic_application_refuses_an_unprotected_folder_before_running(tmp_path):
-    import shutil
-
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
-    shutil.rmtree(repo / ".git")
+    (repo / ".git").rename(repo / ".git-kept")
     with pytest.raises(SpecError, match="Git"):
         await run_once(config)
+    assert not (repo / "made.txt").exists()
+
+
+async def test_an_allowed_folder_includes_its_children_but_not_similar_names(tmp_path):
+    from poieo.daemon.changes import check_and_apply
+    from poieo.workspace import ApplySpec
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    point.prepare()
+    (point.worktree / "docs").mkdir()
+    do_run(point, "r1", "docs/note.txt", "hi")
+    result = await check_and_apply(point, ApplySpec(mode="auto", paths=["docs"], checks=['python -c "pass"']))
+    assert result["status"] == "applied"
+    do_run(point, "r2", "docs-private.txt", "private")
+    result = await check_and_apply(point, ApplySpec(mode="auto", paths=["docs"], checks=['python -c "pass"']))
+    assert result["outside_scope"] == ["docs-private.txt"]
+
+
+async def test_review_does_not_report_a_check_that_rewrote_the_candidate_as_verified(tmp_path):
+    from poieo.daemon.changes import check_and_apply
+    from poieo.workspace import ApplySpec
+
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+    result = await check_and_apply(point, ApplySpec(checks=[
+        "python -c \"from pathlib import Path; Path('made.txt').write_text('different')\""
+    ]))
+    assert result["status"] == "blocked"
+    assert result["verification_changed"] == ["made.txt"]
+
+
+async def test_automatic_work_never_falls_back_to_editing_the_original(tmp_path, monkeypatch):
+    from poieo.workspace import Workspace, WorkspaceError
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+    def broken_copy(self):
+        raise WorkspaceError("could not prepare a private copy")
+    monkeypatch.setattr(Workspace, "prepare", broken_copy)
+    daemon, result = await run_once(config)
+    assert not (repo / "made.txt").exists()
+    assert result.status == "asking"
+    assert result.application["status"] == "blocked"
+    assert daemon.runners[0].holding
+
+
+async def test_manual_application_still_obeys_the_tasks_checks(tmp_path):
+    repo, config = policy_config(tmp_path, {"mode": "review", "checks": ['python -c "raise SystemExit(1)"']})
+    daemon, result = await run_once(config)
+    outcome = await daemon.runners[0].accept_changes(result.change["head"])
+    assert outcome["status"] == "blocked"
+    assert "accepted" not in outcome
     assert not (repo / "made.txt").exists()
