@@ -13,8 +13,12 @@ Design: docs/workspace.md
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
@@ -51,6 +55,55 @@ class Change:
             "deletions": self.deletions,
             "message": self.message,
         }
+
+
+@dataclass(slots=True)
+class PreparedChange:
+    """A disposable combined result, tied to the project version it was checked on."""
+
+    path: Path
+    base: str
+    branch: str
+    target: str
+    head: str
+    count: int
+    conflict: list[str] = field(default_factory=list)
+
+
+_LOCKS: dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+@contextmanager
+def _repository_lock(repo: Path) -> Iterator[None]:
+    """Serialize poieo's writes across tasks, threads, and daemon processes."""
+    common = Path(_git(repo, "rev-parse", "--git-common-dir").strip())
+    common = (repo / common).resolve() if not common.is_absolute() else common.resolve()
+    key = os.path.normcase(str(common))
+    with _LOCKS_GUARD:
+        local = _LOCKS.setdefault(key, threading.Lock())
+    with local, (common / "poieo-accept.lock").open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -230,33 +283,96 @@ class Workspace:
     # -- the morning after --------------------------------------------------
 
     def accept(self, through: str | None = None) -> dict[str, object]:
-        """Put the work in the user's own branch. The one write we ever make there."""
-        dirty = self._dirty()
-        if dirty:
-            return {"dirty": dirty}
+        """Combine privately, then apply without leaving a merge in the user's files."""
+        prepared = self.prepare_accept(through)
+        if isinstance(prepared, dict):
+            return prepared
+        try:
+            outcome = self.apply_prepared(prepared)
+            # Keep the original manual-review response; automated callers also
+            # retain before/after so the exact accepted work stays inspectable.
+            return {"accepted": outcome["accepted"]} if "accepted" in outcome else outcome
+        finally:
+            self.release_prepared(prepared)
 
-        target = through or _git(self.repo, "rev-parse", self.branch).strip()
-        count = len(_git(self.repo, "rev-list", f"HEAD..{target}").split())
-        if count == 0:
-            return {"accepted": 0}
-
-        if self._is_ancestor(_git(self.repo, "rev-parse", "HEAD").strip(), target):
-            _git(self.repo, "merge", "--ff-only", target)
-        else:
+    def prepare_accept(self, through: str | None = None) -> PreparedChange | dict[str, object]:
+        """Combine a task and the current project in a separate, disposable copy."""
+        with _repository_lock(self.repo):
+            dirty = self._dirty()
+            if dirty:
+                return {"dirty": dirty}
+            target = through or _git(self.repo, "rev-parse", self.branch).strip()
+            if not self._is_ancestor(target, self.branch):
+                return {"stale": "this change no longer belongs to the task"}
+            base = _git(self.repo, "rev-parse", "HEAD").strip()
+            count = len(_git(self.repo, "rev-list", f"{base}..{target}").split())
+            if count == 0:
+                return {"accepted": 0}
+            branch = _git(self.repo, "rev-parse", "--symbolic-full-name", "HEAD").strip()
+            self.worktrees.mkdir(parents=True, exist_ok=True)
+            path = Path(tempfile.mkdtemp(prefix=".review-", dir=self.worktrees)).resolve()
+            prepared = PreparedChange(path, base, branch, target, target, count)
+            # Fast-forward candidates retain the run's identity. Divergent work
+            # is combined here, never provisionally in the user's checkout.
+            straight = self._is_ancestor(base, target)
             try:
-                _git(self.repo, "merge", "--no-commit", "--no-ff", target)
-            except WorkspaceError:
-                # Read the conflicted paths before undoing the merge, then leave
-                # the checkout exactly as it was found.
-                conflicted = _git(self.repo, "diff", "--name-only", "--diff-filter=U").split()
-                _git(self.repo, "merge", "--abort")
-                return {"conflict": conflicted}
-            _git(self.repo, "commit", "-m", f"poieo: accept {self.task}")
+                _git(self.repo, "worktree", "add", "--detach", str(path), target if straight else base)
+                if not straight:
+                    try:
+                        _git(path, "merge", "--no-commit", "--no-ff", target)
+                    except WorkspaceError:
+                        prepared.conflict = self._conflicts(path)
+                        if not prepared.conflict:
+                            raise
+                        prepared.head = base
+                        return prepared
+                    _git(path, "commit", "-m", f"poieo: accept {self.task}")
+                    prepared.head = _git(path, "rev-parse", "HEAD").strip()
+                return prepared
+            except BaseException:
+                if (path / ".git").exists():
+                    _git(self.repo, "worktree", "remove", "--force", str(path))
+                else:
+                    path.rmdir()
+                raise
 
-        return {"accepted": count}
+    def apply_prepared(self, prepared: PreparedChange) -> dict[str, object]:
+        """Apply exactly the checked result, provided neither side changed meanwhile."""
+        with _repository_lock(self.repo):
+            if prepared.conflict:
+                return {"conflict": list(prepared.conflict)}
+            dirty = self._dirty()
+            if dirty:
+                return {"dirty": dirty}
+            if (
+                _git(self.repo, "rev-parse", "HEAD").strip() != prepared.base
+                or _git(self.repo, "rev-parse", "--symbolic-full-name", "HEAD").strip() != prepared.branch
+            ):
+                return {"stale": "the project changed during verification"}
+            if not self._is_ancestor(prepared.target, self.branch):
+                return {"stale": "this change no longer belongs to the task"}
+            changed = self._dirty_at(prepared.path)
+            if changed:
+                return {"verification_changed": changed}
+            if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
+                return {"stale": "the change changed during verification"}
+            _git(self.repo, "merge", "--ff-only", prepared.head)
+            return {"accepted": prepared.count, "before": prepared.base, "after": prepared.head}
+
+    def release_prepared(self, prepared: PreparedChange) -> None:
+        """Remove only the temporary copy this acceptance owns."""
+        path = prepared.path.resolve()
+        if path.parent != self.worktrees.resolve() or not path.name.startswith(".review-"):
+            raise WorkspaceError("the temporary change is outside this task's work copies")
+        with _repository_lock(self.repo):
+            _git(self.repo, "worktree", "remove", "--force", str(path))
 
     def discard(self, since: str | None = None) -> dict[str, object]:
         """Throw the work away -- recoverably. The old tip stays on a parked ref."""
+        with _repository_lock(self.repo):
+            return self._discard(since)
+
+    def _discard(self, since: str | None) -> dict[str, object]:
         if not self._branch_exists():
             return {"discarded": 0}
 
@@ -292,8 +408,24 @@ class Workspace:
     def _dirty(self) -> list[str]:
         # Tracked changes only: the store often lives inside the project, and an
         # untracked directory is not a reason to refuse the user's own work.
-        raw = _git(self.repo, "status", "--porcelain", "--untracked-files=no")
-        return [line[3:].strip() for line in raw.splitlines() if line.strip()]
+        return self._dirty_at(self.repo)
+
+    @staticmethod
+    def _dirty_at(path: Path) -> list[str]:
+        raw = _git(path, "status", "--porcelain", "-z", "--untracked-files=no")
+        records = iter(raw.split("\0"))
+        paths = []
+        for record in records:
+            if not record:
+                continue
+            paths.append(record[3:])
+            if "R" in record[:2] or "C" in record[:2]:
+                paths.append(next(records))
+        return sorted(set(paths))
+
+    @staticmethod
+    def _conflicts(path: Path) -> list[str]:
+        return list(filter(None, _git(path, "diff", "--name-only", "--diff-filter=U", "-z").split("\0")))
 
     def _run_id_for(self, commit: str) -> str:
         """Which run produced this commit, so discarded work is findable by name."""
