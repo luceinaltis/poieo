@@ -89,7 +89,7 @@ selected target is the successor.
 ### `confirm`
 
 A confirm node renders a question and presents at least two distinct fixed
-choices. It ends the run with status `asking`; it never names a successor. The
+`choices`. It ends the run with status `asking`; it never names a successor. The
 answer is persisted and any task-level `then` branches decide what task runs
 next. See [daemon.md](daemon.md).
 
@@ -97,6 +97,33 @@ A private Git workspace can undo file changes, but it cannot unsend a message,
 reverse a deployment, cancel a charge, or undo another external effect. Put a
 confirm node before that boundary and place the effect in the downstream task
 selected by `then`; discarding the earlier workspace is not a substitute.
+
+## The `ui` block
+
+Any node may carry an optional `ui` block, holding where it sits on a canvas:
+
+```yaml
+  - id: review
+    type: agent
+    role: reviewer
+    ui: {x: 120, y: 60}
+```
+
+`x` and `y` are numbers, in pixels from the top-left of the canvas, each
+defaulting to `0`. The block takes no other key.
+
+Nothing in a run reads it. A graph loads, validates, and executes identically
+with the block, without it, or with different coordinates in it; it is not part
+of any template or expression scope. It exists so a layout survives a save,
+which is why it lives on the node rather than in a file beside the graph: one
+file moves, renames, and diffs as one thing.
+
+An editing surface owns both halves of that round trip. It writes `ui` back for
+every node it has placed and preserves what it did not move, and it decides
+where a node with no `ui` goes — `poieo edit` lays those out by breadth from
+`entry`. Absent and `{x: 0, y: 0}` therefore mean different things: absent is
+"never placed", and a reader that treats it as the origin stacks a whole
+unplaced graph in one corner.
 
 ## Output and scope
 
