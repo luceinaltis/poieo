@@ -7,8 +7,7 @@ first commit in a session.
 gate jobs are green, admins included. Nothing else is enforced — no required review,
 one account — so everything below still stands where a reviewer would, and is written.
 
-Two halves that rot at different speeds. **Part 1** is judgement. **Part 2** is
-facts about this machine, and goes stale on its own — when it does, fix it.
+**Part 1** is judgement. **Part 2** is facts about this machine; fix them when stale.
 
 ---
 

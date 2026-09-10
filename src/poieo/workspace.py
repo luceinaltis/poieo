@@ -13,11 +13,13 @@ Design: docs/workspace.md
 
 from __future__ import annotations
 
+import errno
 import os
 import shutil
 import subprocess
 import tempfile
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -88,14 +90,24 @@ def _repository_lock(repo: Path) -> Iterator[None]:
             handle.write(b"\0")
             handle.flush()
         handle.seek(0)
-        if os.name == "nt":
-            import msvcrt
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
 
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            import fcntl
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
 
-            fcntl.flock(handle, fcntl.LOCK_EX)
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                    raise WorkspaceError(f"could not coordinate changes: {exc}") from exc
+                if time.monotonic() >= deadline:
+                    raise WorkspaceError("another poieo process is still applying a change; try again") from exc
+                time.sleep(0.05)
         try:
             yield
         finally:
