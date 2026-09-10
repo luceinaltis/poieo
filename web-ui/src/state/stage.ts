@@ -244,7 +244,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       stale: row.stale ?? "",
       pending: row.pending,
       countedChangeRuns: new Set(
-        row.last_run?.status === "completed" && row.last_run.change
+        row.last_run && pendingChange(row.last_run)
           ? [row.last_run.run_id]
           : [],
       ),
@@ -366,6 +366,11 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
  * fields sit beside `type` rather than under `data`, and it names its own task.
  * It is also the last word on a run, so it retires that run's bookkeeping.
  */
+function pendingChange(summary: RunSummary): boolean {
+  return Boolean(summary.change) && (summary.status === "completed" || summary.application?.status === "blocked") &&
+    !["applied", "discarded", "undone"].includes(summary.application?.status ?? "")
+}
+
 function applySummary(state: StageState, event: PoieoEvent): StageState {
   const name = asString(event.task, "")
   const task = name && keyOfTask(asString(event.project, ""), name)
@@ -388,8 +393,7 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
     : [summary, ...current.runs]
   const latest = runs[0]
   const summaryOwnsTerminalState = latest?.run_id === event.run_id && !anotherRunOwnsTask
-  const completedChange = (event.status === "completed" || summary.application?.status === "blocked") &&
-    event.change !== undefined && !["applied", "discarded"].includes(summary.application?.status ?? "")
+  const completedChange = pendingChange(summary)
   const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
   const countedChangeRuns = newlyCountedChange
     ? new Set([...current.countedChangeRuns, event.run_id].slice(-WINDOW))
@@ -421,11 +425,7 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
               finished_at: latest.finished_at,
             }
           : current.lastRun,
-        pending: Math.max(0, current.pending - (
-          summary.application?.status === "applied" &&
-          current.runs.find((run) => run.run_id === event.run_id)?.application?.status !== "applied"
-            ? summary.application.accepted ?? 0 : 0
-        )) + (newlyCountedChange ? 1 : 0),
+        pending: summary.application?.pending ?? current.pending + (newlyCountedChange ? 1 : 0),
         countedChangeRuns,
         asking,
         ...(summaryOwnsTerminalState ? { status, currentNode: null } : {}),

@@ -50,7 +50,9 @@ variable names that answered; it never writes a secret value.
 ## Let a task apply its work
 
 Changes wait for review by default. To let a Git-backed task apply verified work
-automatically, add this to its task card:
+automatically, open **Changes** when creating a task or in its **Task setup**.
+Choose **Apply automatically**, allowed files or folders, and commands that
+verify the work. The equivalent task-card setting is:
 
 ```yaml
 apply:
@@ -69,6 +71,11 @@ paths leaves the work saved and pauses that task for your decision. Other tasks
 continue. Use `mode: review` to require a decision again. Application settings
 alone take effect on the next run; revoking permission also stops an application
 that is still being checked. The run history keeps the checks and their result.
+
+Open an applied run and choose **Undo this change** to cancel its changes while
+preserving later work. Undo must pass the same checks; a conflict leaves the
+project as it was. A successful undo pauses that task. **Give direction** saves
+an optional note for the next run, even when the task is currently working.
 
 ## Create and run a task
 

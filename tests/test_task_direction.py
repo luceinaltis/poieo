@@ -42,12 +42,12 @@ async def test_queued_direction_is_delivered_after_restart_before_reading_input(
     payloads = []
     reader = restarted.task.read_input
 
-    def read(config):
+    def read(_self, config):
         payload = reader(config)
         payloads.append(str(payload))
         return payload
 
-    monkeypatch.setattr(restarted.task, "read_input", read)
+    monkeypatch.setattr(type(restarted.task), "read_input", read)
     from datetime import datetime
 
     from poieo.daemon.triggers import Firing

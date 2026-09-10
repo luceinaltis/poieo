@@ -10,10 +10,12 @@ import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react
 import { fetchRunEvents, fetchRunMemory, fetchRuns, fetchRunSummary } from "../api"
 import { Card } from "./Card"
 import { Control } from "./Control"
+import { Direction } from "./Direction"
 import { Question } from "./Question"
 import { Decide } from "../review/Decide"
 import { Diff } from "../review/Diff"
 import { ApplicationResult } from "../review/ApplicationResult"
+import { UndoChange } from "../review/UndoChange"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
@@ -745,6 +747,10 @@ export const Drawer = memo(function Drawer({
   const timelineEvents = events ? visibleTimelineEvents(events) : null
   const reviewRunId =
     !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
+  const selectedSettled = ["applied", "discarded", "undone"].includes(selectedRun?.application?.status ?? "")
+  const canUndo = selectedRun?.application?.status === "applied" &&
+    selectedRun.application.before && selectedRun.application.after &&
+    !selectedRun.application.undo_of && !selectedRun.application.unchanged && selectedRun.application.accepted !== 0
 
   const selectRun = (runId: string) => {
     setHistoryOpen(false)
@@ -811,7 +817,7 @@ export const Drawer = memo(function Drawer({
           onAnswered={refreshAfterAction}
         />
 
-        {pending > 0 ? (
+        {pending > 0 && !selectedSettled ? (
           <Decide
             project={project}
             task={task}
@@ -838,6 +844,7 @@ export const Drawer = memo(function Drawer({
           enabled={enabled}
           onActed={refreshAfterAction}
         />
+        <Direction key={`${project}/${task}`} project={project} task={task} />
 
         <div className="run-focus">
           <RunBrief
@@ -850,7 +857,9 @@ export const Drawer = memo(function Drawer({
           />
 
           {selectedRun?.application ? <ApplicationResult result={selectedRun.application} /> : null}
-          {selectedRun?.change ? <Diff runId={selectedRun.run_id} /> : null}
+          {canUndo && selectedRun ? <UndoChange key={selectedRun.run_id} project={project} task={task}
+            runId={selectedRun.run_id} onDone={refreshAfterAction} /> : null}
+          {selectedRun && (selectedRun.change || selectedRun.application?.before) ? <Diff runId={selectedRun.run_id} /> : null}
 
           {selectedRun ? (
             <section className="drawer-fold activity-fold">

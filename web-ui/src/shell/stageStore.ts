@@ -50,8 +50,7 @@ export interface StageStore {
 function isChangedSummary(event: PoieoEvent): boolean {
   return (
     event.type === "run_summary" &&
-    event.status === "completed" &&
-    event.change !== undefined
+    ((event.status === "completed" && event.change !== undefined) || event.application !== undefined)
   )
 }
 

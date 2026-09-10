@@ -3,8 +3,8 @@
 Almost everything answers "what is happening / what happened". The routes that
 change anything are marked again where they are registered:
 
-- **The review** -- accept and discard, the only routes that may ever touch the
-  user's own files. If you are adding a third of these, stop.
+- **The review** -- accept, discard and undo run through verified private work
+  before changing the user's own files.
 - **Control** -- pause, resume, run-now. The daemon's runtime state and nothing
   else: no file, no schedule on disk, nothing that survives a restart.
 - **Editing what the reader keeps** -- pointing a role at a model, and writing
@@ -1708,6 +1708,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": f"no run '{run_id}'"}, status_code=404)
 
         change = summary.get("change")
+        applied = summary.get("application") or {}
+        if applied.get("status") in {"applied", "undone"} and applied.get("before") and applied.get("after"):
+            change = {"base": applied["before"], "head": applied["after"]}
         point = _workspace_for(daemon, summary.get("project"), summary.get("task"))
         if not change or point is None:
             # A run that altered nothing has nothing to review. That is an
@@ -1763,6 +1766,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": str(exc)}, status_code=409)
 
         refused = ("accepted" if action == "accept" else "discarded") not in outcome
+        if not refused:
+            _task_changed(runner)
         return JSONResponse(outcome, status_code=409 if refused else 200)
 
     async def flow_accept(request: Request) -> JSONResponse:
@@ -1770,6 +1775,24 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
     async def flow_discard(request: Request) -> JSONResponse:
         return await _decide(request, "discard", "from_run_id")
+
+    async def flow_note(request: Request) -> JSONResponse:
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise SpecError("write direction for the next run")
+            return JSONResponse(runner.leave_note(body.get("text")))
+        except (PoieoError, ValueError, UnicodeDecodeError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except OSError as exc:
+            return JSONResponse({"error": f"direction could not be saved: {exc}"}, status_code=409)
+
+    def _task_changed(runner: Any) -> None:
+        if isinstance(getattr(runner, "store", None), BroadcastStore):
+            runner.store.announce({"type": "tasks_changed", "project": runner.config.display_name})
 
     async def flow_undo(request: Request) -> JSONResponse:
         runner, missing = _asked(request)
@@ -1785,6 +1808,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             outcome = await runner.undo_changes(body["run_id"])
         except PoieoError as exc:
             return JSONResponse({"error": str(exc)}, status_code=409)
+        _task_changed(runner)
         return JSONResponse(outcome, status_code=200 if outcome.get("status") == "applied" else 409)
 
     def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
@@ -2340,6 +2364,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/undo", flow_undo, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/note", flow_note, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
         Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),

@@ -274,5 +274,15 @@ pane lists the recent learning passes with what each kept, set aside, or let go
 and why. Adding a task presentation belongs in the skin registry and must not
 add another event reducer or transport path.
 
+The task form and plain-card editor expose review or automatic application,
+allowed paths and verification commands in an optional disclosure. Automatic
+mode requires explicit selection and at least one check. Run history displays
+the application outcome and verification output, including repaired, already
+included and undone work. Applied diffs use the final verified combination.
+An applied run offers undo through the same checks; unresolved undo leaves the
+project intact. Optional direction is saved through the task's `/note` route for
+the next run. Successful application decisions announce a fresh task listing so
+all open boards update pending counts and holds together.
+
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).

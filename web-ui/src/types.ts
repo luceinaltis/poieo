@@ -31,7 +31,13 @@ export interface ApplySpec {
 }
 
 export interface Application {
-  status: "review" | "applied" | "blocked" | "discarded"
+  status: "review" | "applied" | "blocked" | "discarded" | "undone"
+  pending?: number
+  unchanged?: boolean
+  repair?: { ready: boolean; run_id?: string; reason?: string }
+  undo_of?: string
+  undo?: { run_id: string; before: string; after: string }
+  run_ids?: string[]
   checks?: { command: string; exit_code: number | null; output: string }[]
   accepted?: number
   before?: string

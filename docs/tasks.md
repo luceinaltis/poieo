@@ -101,6 +101,13 @@ forge the sender, wake the recipient, or send outside the fixed roster. See
 
 ## Failure and extension
 
+The board's optional direction is stored before acknowledging it. Notes arriving
+during a run wait under `runs/notes/<task>/`, then join the journal after that run's
+bookmark. A restart delivers queued notes before the next input is read. Saving
+direction never starts a run or requires the user to approve anything. Delivery
+appends before removing its queue file, so recovery may repeat a note but cannot
+silently lose it. The board accepts up to 4000 characters per note.
+
 Card loading checks the folder, schedule shape, graph/binding paths, and
 generated task before execution. Journal, result-memory, or long-memory read
 failures warn and let the primary run continue with less context.

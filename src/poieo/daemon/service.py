@@ -32,6 +32,7 @@ from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError
 from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
+from .notes import deliver_notes, leave_note
 from .repair import repair_change
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 from .undo import undo_change
@@ -523,6 +524,9 @@ class TaskRunner:
                 await finish_write(self._record_decision({"status": "discarded", **outcome}, pending))
             return outcome
 
+    def leave_note(self, text: str) -> dict:
+        return leave_note(self, text)
+
     async def undo_changes(self, run_id: str) -> dict:
         if self.workspace is None:
             return {"status": "blocked", "error": "this task keeps no reviewable copy"}
@@ -816,6 +820,7 @@ class TaskRunner:
 
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
+        deliver_notes(self)
         try:
             payload = self.task.read_input(self.config) if payload is None else payload
         except PoieoError as exc:
@@ -917,6 +922,7 @@ class TaskRunner:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
         self._remember(result)
+        deliver_notes(self)
         if self.task.spec.carry_state:
             self.state = result.state
 

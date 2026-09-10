@@ -399,6 +399,14 @@ export function discard(
   return post(taskUrl(project, task, "discard"), { from_run_id: fromRunId })
 }
 
+export function undo(project: string, task: string, runId: string): Promise<Decision> {
+  return post(taskUrl(project, task, "undo"), { run_id: runId })
+}
+
+export function leaveDirection(project: string, task: string, text: string): Promise<Answer> {
+  return post(taskUrl(project, task, "note"), { text })
+}
+
 /**
  * Control: the other kind of write. Pause and resume answer the resulting
  * status; run answers "starting" or a refusal naming the run in flight.
