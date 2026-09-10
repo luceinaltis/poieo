@@ -95,6 +95,10 @@ Selecting nothing is how a graph stops on a condition, so both ways of doing it
 end the run: a matched branch with no `to`, and no branch matching when there is
 no `default`.
 
+`default` is a router's key alone. Any other node carrying it is refused at
+load: nothing would read it, and the reachability walk followed it, so a node
+reachable through nothing but a stray `default` looked wired up.
+
 ### `confirm`
 
 A confirm node renders a question and presents at least two distinct fixed
