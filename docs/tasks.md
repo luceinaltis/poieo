@@ -107,6 +107,7 @@ bookmark. A restart delivers queued notes before the next input is read.
 All delivery, input construction and the closing journal entry use the same task
 ownership as file changes, including command-line runs. Idle board requests only
 queue notes, so they cannot mark direction read by a separate active process.
+This ownership also covers tasks without a folder or a Git copy.
 Saving direction never starts a run or requires the user to approve anything. Delivery
 appends before removing its queue file, so recovery may repeat a note but cannot
 silently lose it. The board accepts up to 4000 characters per note.
