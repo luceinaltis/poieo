@@ -1,7 +1,47 @@
 """Undo applies a verified inverse change without removing later work."""
 
+import asyncio
+
+import pytest
 from test_task_application import policy_config, run_once
 from test_workspace import git, head
+
+
+@pytest.mark.parametrize("signal", ["daemon", "caller"])
+async def test_stopping_undo_verification_preserves_the_applied_work(tmp_path, monkeypatch, signal):
+    from poieo.tools import LocalExecutor
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
+    daemon, result = await run_once(config)
+    daemon.cancel.clear()
+    entered, released, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def waiting(*args, **kwargs):
+        entered.set()
+        try:
+            await released.wait()
+        finally:
+            cancelled.set()
+        from poieo.tools import CommandResult
+
+        return CommandResult(0, "")
+
+    monkeypatch.setattr(LocalExecutor, "run_command", waiting)
+    running = asyncio.create_task(daemon.runners[0].undo_changes(result.run_id))
+    await asyncio.wait_for(entered.wait(), 5)
+    if signal == "daemon":
+        daemon.stop()
+    else:
+        running.cancel()
+    try:
+        await asyncio.wait_for(cancelled.wait(), 2)
+    finally:
+        released.set()
+        outcome = await running
+    assert outcome["status"] == "blocked"
+    assert (repo / "made.txt").read_text() == "hi"
+    if signal == "caller":
+        assert not daemon.cancel.is_set()
 
 
 async def test_the_board_can_undo_only_an_identified_applied_run(tmp_path):
