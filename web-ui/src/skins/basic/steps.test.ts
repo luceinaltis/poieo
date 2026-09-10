@@ -176,3 +176,11 @@ test("a condition named default keeps its authored label beside the otherwise pa
 
   expect(laid.edges.map(edge => edge.lines)).toEqual([["default"], ["Otherwise"]])
 })
+
+test("condition labels wrap at a space before splitting a result name", () => {
+  const laid = layOutSteps({ entry: "gate", nodes: [
+    step("gate", { type: "router", branches: [{ to: null, label: '"approved" in result.output' }] }),
+  ] }, () => ({ width: 208, height: 112 }), true)
+
+  expect(laid.edges[0].lines).toEqual(['"approved" in', "result.output"])
+})
