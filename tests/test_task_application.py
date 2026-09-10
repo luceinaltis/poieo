@@ -27,6 +27,8 @@ CHECK_MADE = "python -c \"from pathlib import Path; assert Path('made.txt').read
 async def run_once(config):
     daemon = Daemon(config, on_run=lambda _task, _result: daemon.stop())
     results = await asyncio.wait_for(daemon.serve(install_signals=False), timeout=30)
+    # Subsequent board actions exercise a live daemon, after stopping its loop.
+    daemon.cancel.clear()
     return daemon, results[0]
 
 
