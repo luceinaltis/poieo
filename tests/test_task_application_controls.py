@@ -85,7 +85,8 @@ async def test_a_decision_does_not_mark_unread_user_direction_as_consumed(tmp_pa
     assert "Keep the heading next time" in fresh
 
 
-async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch):
+@pytest.mark.parametrize("failed", [False, True])
+async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_path, monkeypatch, failed):
     from conftest import until
 
     from poieo.daemon import Daemon
@@ -98,6 +99,10 @@ async def test_cancelling_preparation_does_not_start_tools_or_apply_work(tmp_pat
     def delayed():
         entered.set()
         assert release.wait(10)
+        if failed:
+            from poieo.workspace import WorkspaceError
+
+            raise WorkspaceError("preparation failed")
         return prepare()
 
     monkeypatch.setattr(driver.workspace, "prepare", delayed)
