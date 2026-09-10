@@ -4,6 +4,24 @@ from test_task_application import policy_config, run_once
 from test_workspace import git, head
 
 
+async def test_the_board_can_undo_only_an_identified_applied_run(tmp_path):
+    import httpx
+
+    from poieo.web.server import create_app
+
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
+    daemon, result = await run_once(config)
+    url = f"/api/tasks/{config.display_name}/chores/undo"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
+    ) as client:
+        assert (await client.post(url, json={})).status_code == 400
+        answer = await client.post(url, json={"run_id": result.run_id})
+        assert answer.status_code == 200, answer.text
+        assert answer.json()["undo_of"] == result.run_id
+    assert not (repo / "made.txt").exists()
+
+
 async def test_undo_preserves_later_work_and_records_a_new_change(tmp_path):
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
     daemon, result = await run_once(config)
