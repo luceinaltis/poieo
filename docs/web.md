@@ -255,7 +255,10 @@ learner's next question against the window the binding declares for the learner,
 in tokens estimated from the last pass that counted (four characters a token
 before one has); with no window declared the question is shown in characters and
 no bar is drawn, since an unknown limit is not a limit of zero. The fill's colour
-and a word both say when a value is near or over its limit. The evidence pane is also where a person
+and a word both say when a value is near or over its limit. The page editor
+counts its draft the same way, as a run reads it with comments removed, and
+never refuses to save over the budget: the page must not become a way to stop
+every task. The evidence pane is also where a person
 writes: the page, a new memory, a set-aside for the selected one, and the last
 learning pass's suggestion; a refused write stays visible as a result, and a
 successful one rereads the overview at once. Only declared memory relationships are

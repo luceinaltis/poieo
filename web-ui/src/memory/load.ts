@@ -38,3 +38,13 @@ export function learnerLoad(overview: MemoryOverview): LearnerLoad | null {
     measured: Boolean(counted),
   }
 }
+
+/**
+ * How long the page is as a run reads it: Markdown comments are notes to
+ * whoever edits the page and are removed before it reaches a prompt, so a
+ * count that included them would tell the editor the wrong thing about the
+ * budget. The same rule the daemon applies, kept in one place here.
+ */
+export function pageLength(text: string): number {
+  return text.replace(/<!--[\s\S]*?-->/g, "").trim().length
+}
