@@ -934,3 +934,22 @@ test("a turn whose window nobody could say keeps the plain count", async () => {
   expect(entry.querySelector('[data-gauge="context"]')).toBeNull()
   expect(entry.textContent).toContain("84,210 in")
 })
+
+test("a part the record did not measure is left out rather than drawn empty", async () => {
+  fetchRunMemory.mockResolvedValue({
+    run_id: "r1",
+    task: "chores",
+    shown: [],
+    prompt: {
+      page: { chars: 205, budget: 12_000 },
+      memory: { chars: null, budget: 4_000 },
+      journal: { chars: null },
+    },
+  })
+  await draw([run])
+
+  const makeup = container.querySelector<HTMLElement>(".run-prompt")!
+  expect(makeup.querySelector('[data-gauge="page"]')).not.toBeNull()
+  expect(makeup.querySelector('[data-gauge="memory"]')).toBeNull()
+  expect(makeup.querySelector('[data-gauge="journal"]')).toBeNull()
+})
