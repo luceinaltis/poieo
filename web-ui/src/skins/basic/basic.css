@@ -35,6 +35,26 @@
   display: block;
 }
 
+.basic-move-help {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: calc(100% - 248px);
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--ground);
+  color: var(--dim);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .basic-move-help {
+    bottom: 168px;
+    max-width: calc(100% - 48px);
+  }
+}
+
 .basic-speck {
   position: absolute;
   background: var(--line);

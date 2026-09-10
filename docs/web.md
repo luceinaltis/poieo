@@ -224,6 +224,9 @@ step. Return paths name the earlier step. Names and conditions wrap within the
 card; repeated descriptions include IDs to distinguish their destinations.
 Steps appear once in entry-first reading order, with a vertically scrollable
 region for long tasks. Scrolling that region does not zoom the board.
+The initial board view keeps cards at a readable scale, fitting at least one
+card's width on narrow screens. Dragging and the minimap reach tasks outside
+the viewport; double-clicking the board background fits the whole board.
 
 **View steps** opens a native dialog outside the board's pan/zoom transform,
 with an independent scrollable canvas, zoom controls, fit, and a 100% reading
@@ -233,8 +236,8 @@ for wrapped conditions, and retains a separate edge for each branch.
 The router's otherwise path is always drawn, including an omitted default that
 ends the run; return paths retain their arrows. Conditional paths are amber.
 Running-step updates highlight both views without rebuilding their steps or
-resetting their scroll or the chosen zoom. Removing the task closes the dialog, and closing
-restores focus to its opener. Narrow screens use the full viewport.
+resetting their scroll or the chosen zoom. Removing the task closes the dialog,
+and closing restores focus to its opener. Narrow screens use the full viewport.
 
 Skins are plain-DOM renderers behind `skins/contract.ts`. The registry currently
 provides the task board and a standalone runs view; both consume the same stage

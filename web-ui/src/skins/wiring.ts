@@ -257,6 +257,18 @@ export function fit(board: Size, host: Size, margin = 24, ceiling = 1): View {
   }
 }
 
+/** Start at readable size; the minimap and dragging reach the rest of a large board. */
+export function readingView(board: Size, host: Size): View {
+  const fitted = fit(board, host)
+  const readable = Math.min(0.85, Math.max(0, host.width - 32) / BOX.width)
+  if (fitted.zoom >= readable) return fitted
+  return {
+    x: Math.max(16, (host.width - board.width * readable) / 2),
+    y: 24,
+    zoom: readable,
+  }
+}
+
 /**
  * How far a view may be scaled by hand.
  *

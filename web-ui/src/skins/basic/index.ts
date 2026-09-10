@@ -29,7 +29,7 @@ import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
-  place, typeScale, walk, wire,
+  place, readingView, typeScale, walk, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -41,6 +41,7 @@ const SVG = "http://www.w3.org/2000/svg"
 const MAP = { width: 200, height: 140 }
 
 interface Box {
+  structure: string
   root: HTMLElement
   name: HTMLElement
   toggle: HTMLElement
@@ -147,6 +148,7 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
   toggle.textContent = "▾"
 
   const box: Box = {
+    structure: "",
     root,
     toggle,
     when: element("div", "basic-when", root),
@@ -258,7 +260,10 @@ function describeStale(taskState: TaskState): string {
 }
 
 /** Connections at card width. Structure stays put while run state changes. */
-function fillInside(box: Box, taskState: TaskState): void {
+function fillInside(box: Box, taskState: TaskState): boolean {
+  const structure = JSON.stringify([taskState.name, taskState.shape])
+  if (box.structure === structure) return false
+  box.structure = structure
   const shape = taskState.shape
   const differ = modelsOf(taskState).length > 1
   const nodes = new Map(shape.nodes.map(node => [node.id, node]))
@@ -321,6 +326,7 @@ function fillInside(box: Box, taskState: TaskState): void {
   box.inside.setAttribute("role", "region")
   box.inside.setAttribute("aria-label", `Step connections in ${taskState.name}`)
   box.steps.replaceChildren(...steps)
+  return true
 }
 
 /** What moves: which node is lit, and what the task has been saying. */
@@ -519,6 +525,8 @@ export const basic: Skin = {
     // panned or scaled along with what it is describing.
     const map = element("div", "basic-minimap", viewport)
     const seen = element("div", "basic-seen", map)
+    const help = element("div", "basic-move-help", viewport)
+    help.textContent = "Drag to see more tasks. Double-click to fit."
     // What the minimap is drawn at, kept from the last relayout so `show` can
     // place the rectangle without measuring the board again on every frame.
     let mapped = { zoom: 1, width: 0, height: 0 }
@@ -616,7 +624,10 @@ export const basic: Skin = {
     // recoverable by reloading the page.
     viewport.addEventListener("dblclick", (event) => {
       if (!grabbable(event)) return
-      chosen = null
+      chosen = fit(
+        { width: board.offsetWidth, height: board.offsetHeight },
+        { width: viewport.clientWidth, height: viewport.clientHeight },
+      )
       show()
     })
 
@@ -711,7 +722,7 @@ export const basic: Skin = {
     function where(): View {
       return (
         chosen ??
-        fit(
+        readingView(
           { width: board.offsetWidth, height: board.offsetHeight },
           { width: viewport.clientWidth, height: viewport.clientHeight },
           24,
@@ -739,6 +750,7 @@ export const basic: Skin = {
       // minimap of something wholly visible is a second, smaller copy of it.
       const all = patch.width >= mapped.width - 1 && patch.height >= mapped.height - 1
       map.dataset.needed = String(!all && mapped.width > 0)
+      help.hidden = all || mapped.width <= 0
     }
 
     /**
@@ -776,7 +788,7 @@ export const basic: Skin = {
             board.append(box.root)
             moved = true
           }
-          fillInside(box, taskState)
+          if (fillInside(box, taskState)) moved = true
           paint(box, taskState, isOpen(task, taskState))
         }
         for (const [task, box] of boxes) {
