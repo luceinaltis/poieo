@@ -30,13 +30,18 @@ async def test_answering_an_application_question_keeps_unread_direction(tmp_path
     assert "Keep the heading next time" in read_journal(journal).split("What you did before that:")[0]
 
 
-async def test_cancelling_a_save_parks_the_work_away_from_future_application(tmp_path, monkeypatch):
+@pytest.mark.parametrize("partial_failure", [False, True])
+async def test_cancelling_a_save_parks_the_work_away_from_future_application(tmp_path, monkeypatch, partial_failure):
     from conftest import until
-    from test_task_workspace import WRITES_NOTHING
+    from test_task_workspace import NEVER_STOPS, WRITES_NOTHING
 
     from poieo.daemon import Daemon
 
-    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
+    repo, config = policy_config(
+        tmp_path,
+        {"mode": "auto", "checks": [CHECK_MADE]},
+        **({"responses": NEVER_STOPS, "max_turns": 2} if partial_failure else {}),
+    )
     daemon = Daemon(config)
     driver = daemon._runners()[0]
     entered, release = threading.Event(), threading.Event()
@@ -53,7 +58,8 @@ async def test_cancelling_a_save_parks_the_work_away_from_future_application(tmp
     running.cancel()
     release.set()
     result = await running
-    assert result.status == "aborted"
+    assert result.status in {"aborted", "failed"}
+    assert result.steps > 0
     assert driver.workspace.pending() == []
     assert git(repo, "rev-parse", f"refs/poieo/failed/{result.run_id}").strip() == result.change["head"]
     from test_task_workspace import BINDING
