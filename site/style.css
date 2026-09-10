@@ -125,6 +125,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .setup-step h3 code { overflow-wrap: anywhere; }
 .setup-step pre { padding: 22px 24px; background: var(--well); border: 1px solid var(--rule); border-radius: 7px; }
 .setup-step p { color: var(--dim); font-size: 0.875rem; margin-top: 12px; }
+.setup-step p code { overflow-wrap: anywhere; }
 .setup-steps, .hero-copy, .section-heading > *, .work-loop > *, .start-intro { min-width: 0; }
 .footer { border-top: 1px solid var(--rule); padding-block: 44px 28px; display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 24px; }
 .footer > div p { margin-top: 12px; font-size: 0.9375rem; color: var(--dim); }
