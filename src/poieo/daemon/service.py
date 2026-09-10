@@ -9,7 +9,7 @@ import logging
 import signal
 import socket
 from collections import deque
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,7 +29,7 @@ from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore, utcnow
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
-from ..workspace import Workspace, WorkspaceError
+from ..workspace import Workspace, WorkspaceError, task_run_lock
 from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .notes import deliver_notes, leave_note
@@ -537,11 +537,18 @@ class TaskRunner:
 
     @asynccontextmanager
     async def _private_copy(self):
-        if self.workspace is None:
-            yield
-            return
-        gate = self.workspace.exclusive_run()
-        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        gate = ExitStack()
+
+        def enter():
+            try:
+                gate.enter_context(task_run_lock(self.config.layout().worktrees(), self.name))
+                if self.workspace is not None:
+                    gate.enter_context(self.workspace.exclusive_run())
+            except BaseException:
+                gate.close()
+                raise
+
+        entered = asyncio.create_task(asyncio.to_thread(enter))
         try:
             await asyncio.shield(entered)
         except asyncio.CancelledError:

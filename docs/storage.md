@@ -49,6 +49,7 @@ task; the daemon extends it when it intends to run them.
     asking/<task>.json           pending questions
     notes/<task>/<id>.json       direction waiting for the next run
   worktrees/<task>/              private Git working copies
+  worktrees/.poieo-task-*.lock    task ownership, including tasks without Git
 ```
 
 An explicit `store` moves the whole `runs/` family and nothing else. Memory and
