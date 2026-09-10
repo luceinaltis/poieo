@@ -6,6 +6,10 @@ to the requested project and task. Refusals also include stale candidates,
 changed verification files, out-of-scope files and failed commands; absence of
 the expected `accepted`/`discarded` result makes the HTTP response 409.
 
+`POST /api/tasks/{project}/{task}/undo` takes `{run_id}`. Only an applied run
+belonging to that task can be undone. It returns the new undo run and application
+result; incompatible changes or failed checks return 409 without changing files.
+
 `src/poieo/web/`, `web-ui/`
 
 The daemon serves the board at `http://127.0.0.1:8484` by default. `--port`

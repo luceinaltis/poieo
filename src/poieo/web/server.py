@@ -1745,6 +1745,22 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
     async def flow_discard(request: Request) -> JSONResponse:
         return await _decide(request, "discard", "from_run_id")
 
+    async def flow_undo(request: Request) -> JSONResponse:
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        if not isinstance(body, dict) or not isinstance(body.get("run_id"), str) or not body["run_id"]:
+            return JSONResponse({"error": "name the applied run to undo"}, status_code=400)
+        try:
+            outcome = await runner.undo_changes(body["run_id"])
+        except PoieoError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse(outcome, status_code=200 if outcome.get("status") == "applied" else 409)
+
     def _asked(request: Request) -> tuple[Any, JSONResponse | None]:
         """The runner a control route is about, or the 404 saying there isn't one."""
         project = request.path_params["project"]
@@ -2289,7 +2305,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         ),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
-        # If you are adding a third of these, stop.
+        # Every application, including undo, goes through verified private work.
         Route(
             "/api/projects/{project}/tasks/{task}",
             _card_verbs,
@@ -2297,6 +2313,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         ),
         Route("/api/tasks/{project}/{task}/accept", flow_accept, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/discard", flow_discard, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/undo", flow_undo, methods=["POST"]),
         # Control: the daemon's runtime state and nothing else.
         Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),

@@ -34,6 +34,7 @@ from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .repair import repair_change
 from .triggers import Firing, _sleep_or_cancel, parse_duration
+from .undo import undo_change
 
 log = logging.getLogger("poieo.daemon")
 
@@ -468,7 +469,7 @@ class TaskRunner:
             except PoieoError as exc:
                 result.application = {"status": "blocked", "error": str(exc)}
             if result.application.get("status") == "applied":
-                await finish_write(self._record_decision(result.application, pending))
+                await finish_write(self._record_decision(result.application, pending, current_id=result.run_id))
             for repaired in repairs:
                 repaired.application = result.application
                 self.store.record_summary(repaired.summary())
@@ -522,6 +523,14 @@ class TaskRunner:
                 await finish_write(self._record_decision({"status": "discarded", **outcome}, pending))
             return outcome
 
+    async def undo_changes(self, run_id: str) -> dict:
+        if self.workspace is None:
+            return {"status": "blocked", "error": "this task keeps no reviewable copy"}
+        if self._change_lock.locked():
+            return {"status": "blocked", "error": "this task is still working; try again when it finishes"}
+        async with self._change_lock, self._private_copy():
+            return await finish_write(undo_change(self, run_id))
+
     @asynccontextmanager
     async def _private_copy(self):
         if self.workspace is None:
@@ -540,12 +549,17 @@ class TaskRunner:
         finally:
             await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
 
-    async def _record_decision(self, outcome: dict, pending: list[str]) -> None:
+    async def _record_decision(self, outcome: dict, pending: list[str], current_id: str | None = None) -> None:
         remaining = set(await asyncio.to_thread(self.workspace.pending))
         outcome["pending"] = len(remaining)
         run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
+        if outcome.get("status") == "applied" and outcome.get("before") and outcome.get("after"):
+            run_ids = await asyncio.to_thread(self.workspace.included_runs, outcome["before"], outcome["after"])
+        if current_id:
+            run_ids = list(dict.fromkeys([*run_ids, current_id]))
         if not remaining and self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
             run_ids = list(dict.fromkeys([*run_ids, self._asking.run_id]))
+        outcome["run_ids"] = run_ids
         for run_id in run_ids:
             result = next((run for run in self.results if run.run_id == run_id), None)
             if self._asking and self._asking.run_id == run_id:
