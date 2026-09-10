@@ -376,7 +376,7 @@ class TaskRunner:
                 )
                 log.warning("task '%s': %s", self.name, self._untracked)
                 return point.repo
-            await finish_write(asyncio.to_thread(point.prepare))
+            await finish_write(asyncio.to_thread(point.prepare), propagate_cancel=True)
         except WorkspaceError as exc:
             if self.task.spec.apply.mode == "auto":
                 raise
@@ -404,6 +404,7 @@ class TaskRunner:
                     )
                 )
             return
+        interrupted = asyncio.Event()
         try:
             change = await finish_write(
                 asyncio.to_thread(
@@ -411,7 +412,8 @@ class TaskRunner:
                     result.run_id,
                     _change_message(result, self.name),
                     failed=result.status != "completed",
-                )
+                ),
+                cancelled=interrupted,
             )
         except WorkspaceError as exc:
             # The work ran; only the record of it failed. That is not a reason
@@ -432,6 +434,8 @@ class TaskRunner:
             if self.task.spec.apply.mode == "auto":
                 self._record_application(result, {"status": "blocked", "error": str(exc)})
             return
+        if interrupted.is_set():
+            result.status, result.error = "aborted", "cancelled while recording the change"
         if change is not None:
             result.change = change.as_dict()
             self.store.append(Event(run_id=result.run_id, type="run_change", data=dict(result.change)))
@@ -508,7 +512,13 @@ class TaskRunner:
             yield
             return
         gate = self.workspace.exclusive_run()
-        await finish_write(asyncio.to_thread(gate.__enter__))
+        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        try:
+            await asyncio.shield(entered)
+        except asyncio.CancelledError:
+            await finish_write(entered)
+            await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
+            raise
         try:
             yield
         finally:
@@ -534,13 +544,12 @@ class TaskRunner:
                 result.status = "completed"
                 if (result.asked or {}).get("node") == "apply_changes":
                     result.answer = "accept" if outcome["status"] == "applied" else "discard"
-                self._remember(result, replace=True)
                 row = result.summary()
             else:
                 row = {**row, "status": "completed", "application": outcome}
-                card = self.config.cards_by_task.get(self.name)
-                if card:
-                    revise_application(card, run_id, outcome)
+            card = self.config.cards_by_task.get(self.name)
+            if card:
+                revise_application(card, run_id, outcome)
             self.store.record_summary(row)
             if (
                 self._asking

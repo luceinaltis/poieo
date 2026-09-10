@@ -19,15 +19,25 @@ log = logging.getLogger("poieo.daemon")
 T = TypeVar("T")
 
 
-async def finish_write(work: Awaitable[T]) -> T:
+async def finish_write(
+    work: Awaitable[T], *, propagate_cancel: bool = False, cancelled: asyncio.Event | None = None
+) -> T:
     """Keep ownership until a started write and its record have finished."""
     job = asyncio.ensure_future(work)
+    interrupted = False
     while True:
         try:
-            return await asyncio.shield(job)
+            result = await asyncio.shield(job)
+            break
         except asyncio.CancelledError:
+            interrupted = True
+            if cancelled is not None:
+                cancelled.set()
             if job.cancelled():
                 raise
+    if interrupted and propagate_cancel:
+        raise asyncio.CancelledError
+    return result
 
 
 async def check_and_apply(
