@@ -256,7 +256,7 @@ class Workspace:
         # used to be handed the run-log store and append `worktrees` itself,
         # which meant pointing the logs at another disk quietly took the
         # working copies along. A copy of a repository is not a log.
-        self.worktrees = Path(worktrees)
+        self.worktrees = Path(worktrees).resolve()
 
     @property
     def branch(self) -> str:
@@ -486,6 +486,7 @@ class Workspace:
         return self._folder_in(prepared.path)
 
     def _folder_in(self, copy: Path) -> Path:
+        self._check_copy_root(copy)
         root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
         folder = copy / self.repo.resolve().relative_to(root)
         if not folder.resolve().is_relative_to(copy.resolve()):
@@ -595,7 +596,10 @@ class Workspace:
 
     def _ensure_worktree(self) -> None:
         work = self.worktree
+        self._check_copy_root(work)
         if (work / ".git").exists():
+            if not (work / ".git").is_file() or _git(work, "symbolic-ref", "--short", "HEAD").strip() != self.branch:
+                raise WorkspaceError("the private copy no longer belongs to this task")
             return
 
         # The directory is disposable: a half-registered worktree (the user
@@ -606,3 +610,8 @@ class Workspace:
             shutil.rmtree(work)
         work.parent.mkdir(parents=True, exist_ok=True)
         _git(self.repo, "worktree", "add", work.as_posix(), self.branch)
+
+    @staticmethod
+    def _check_copy_root(copy: Path) -> None:
+        if copy.resolve() != copy.absolute():
+            raise WorkspaceError("the private copy was redirected outside its owned folder")
