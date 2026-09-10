@@ -392,6 +392,20 @@ def test_a_hand_written_line_is_read_like_any_other(tmp_path):
     assert "stop touching the README" in read_journal(task.journal_path())
 
 
+def test_a_journal_that_will_not_decode_costs_the_notes_not_the_run(tmp_path, caplog):
+    """One stray byte -- a file saved in another encoding -- used to abort the
+    whole run. Forgetting beats failing, the same as an unreadable file."""
+    task = load_card(write_card(tmp_path, "t", "name: t\nprompt: go\n"))
+    task.journal_path().parent.mkdir(parents=True, exist_ok=True)
+    task.journal_path().write_bytes(b"# t\n\n- 2026-08-22 03:14 \xb7 you     caf\xe9\n")
+
+    with caplog.at_level("WARNING", logger="poieo.card"):
+        payload = card_payload(task)
+
+    assert payload["journal"] == "nothing yet"
+    assert "could not read the journal" in caplog.text
+
+
 def test_a_run_leaves_no_journal_among_the_definitions(tmp_path):
     """Why the journal moved at all. A card is a thing a person edits; a
     journal grows every night. Side by side, the folder of definitions went
