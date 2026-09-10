@@ -47,6 +47,34 @@
   color: var(--text);
 }
 
+/* A quiet word beside the project's name. Same size as the status so the bar
+   reads as one line about the project; brightens when open, since the panel
+   it opened is now the thing beside it. */
+.shell-models {
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 3px 7px;
+}
+
+.shell-models:hover:not(:disabled),
+.shell-models[aria-expanded="true"] {
+  color: var(--text);
+}
+
+.shell-models[aria-expanded="true"] {
+  background: var(--raised);
+}
+
+.shell-models:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .shell-status {
   color: var(--dim);
   font-size: 0.875rem;
@@ -78,9 +106,10 @@
   padding: 3px 6px;
 }
 
-/* Down the side, because these are what the page is *for* -- a list that grows
-   as views are added, where the bar's controls are a fixed handful about the
-   board already on screen. Narrow on purpose: it is navigation, not content. */
+/* Down the side, because these are the places the page has -- a list that
+   grows as views are added, where the bar's controls are a fixed handful
+   about the project already on screen. Narrow on purpose: it is navigation,
+   not content. */
 .shell-rail {
   border-right: 1px solid var(--rule);
   bottom: 0;
@@ -136,6 +165,25 @@
   inset: 0;
   overflow: auto;
   position: absolute;
+}
+
+/* On the board's top right, over it: the one thing a reader does *to* the
+   board rather than with a task on it. Above the skin so a card drawn under
+   that corner cannot take the click. */
+.shell-make {
+  border-color: var(--ember);
+  color: var(--text);
+  padding: 5px 11px;
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  z-index: 2;
+}
+
+.shell-make:hover:not(:disabled),
+.shell-make[aria-expanded="true"] {
+  background: var(--ember);
+  color: var(--ground);
 }
 
 .shell-board[data-hidden="true"] {

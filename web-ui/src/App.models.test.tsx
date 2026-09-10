@@ -147,23 +147,26 @@ const button = (name: string) =>
 const railed = () =>
   [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
 
-test("the rail lists what there is to look at, board first", async () => {
+test("the rail lists only the places there are to be, board first", async () => {
   await open()
 
   // `board` is the page with no panel over it, which is why it is a rail item
-  // rather than a close box. Memory is the other project-level place; the two
-  // after it are the panels that take the stage's margin, in arrival order.
-  expect(railed()).toEqual(["board", "runs", "memory", "models", "new task"])
+  // rather than a close box. Models is not a place: it is a panel about the
+  // project, so its button sits on the bar beside the project's name.
+  expect(railed()).toEqual(["board", "runs", "memory"])
+  expect(button("open-models")!.closest(".shell-bar")).not.toBeNull()
 })
 
-test("the rail opens the panel for the project on screen", async () => {
+test("the bar opens the models panel for the project on screen, and the rail stays put", async () => {
   await open()
 
   await act(async () => button("open-models")!.click())
 
   expect(fetchModels).toHaveBeenCalledWith("night shift")
   expect(container.querySelector(".models")).not.toBeNull()
-  expect(button("open-models")!.getAttribute("aria-current")).toBe("page")
+  // Where you are is still the board; the panel is over it, not instead of it.
+  expect(button("open-board")!.getAttribute("aria-current")).toBe("page")
+  expect(button("open-models")!.getAttribute("aria-expanded")).toBe("true")
 })
 
 test("going back to board puts the panel away", async () => {

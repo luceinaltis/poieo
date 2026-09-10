@@ -62,11 +62,11 @@ const row = (name: string, project: string): TaskRow => ({
   },
 })
 
-function api(): StageApi {
+function api(tasks: TaskRow[] = [row("chores", "night shift")]): StageApi {
   return {
     fetchTasks: vi.fn(async () => ({
       projects: [{ name: "night shift", root: "/home/k/a", keeps_copies: true }],
-      tasks: [row("chores", "night shift")],
+      tasks,
     })),
     fetchRunEvents: vi.fn(async () => []),
     fetchRuns: vi.fn(async () => []),
@@ -91,9 +91,9 @@ afterEach(() => {
   container.remove()
 })
 
-async function open() {
+async function open(tasks?: TaskRow[]) {
   await act(async () => {
-    root.render(<App store={createStageStore(api())} />)
+    root.render(<App store={createStageStore(api(tasks))} />)
   })
   await act(async () => {})
   await act(async () => {})
@@ -102,10 +102,26 @@ async function open() {
 const button = (name: string) => container.querySelector<HTMLElement>(`[data-do="${name}"]`)
 const panel = (label: string) => container.querySelector(`[aria-label="${label}"]`)
 
-test("the rail offers making one, beside looking at things", async () => {
+test("making one is offered on the board, not on the rail", async () => {
   await open()
+  // The rail is where you can *be*; making a task is something you do to the
+  // board, so its button sits on the board and goes with it.
   const railed = [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
-  expect(railed).toEqual(["board", "runs", "memory", "models", "new task"])
+  expect(railed).toEqual(["board", "runs", "memory"])
+  const make = button("open-make")!
+  expect(make.textContent).toBe("new task")
+  expect(make.closest(".shell-stage")).not.toBeNull()
+
+  await act(async () => button("open-runs")!.click())
+  expect(button("open-make")).toBeNull()
+  await act(async () => button("open-board")!.click())
+  expect(button("open-make")).not.toBeNull()
+})
+
+test("a bare board offers new task once, in the invitation", async () => {
+  await open([])
+  expect(button("empty-new-task")).not.toBeNull()
+  expect(button("open-make")).toBeNull()
 })
 
 test("it opens the form for the project on screen", async () => {

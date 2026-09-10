@@ -177,7 +177,12 @@ working with a newer daemon.
 
 `App.tsx` owns project selection, the memory place, and the single active side
 panel: task detail, models, task creation, or closed. It shows one project's
-stage at a time and keeps only view preferences in local storage. The task
+stage at a time and keeps only view preferences in local storage. The rail down
+the side lists only places, the views that take the whole stage: board, runs,
+and memory, with the current one marked. Panels are not places: models opens
+from a button beside the project name on the bar, and new task from a button on
+the board itself (the empty board offers it in its invitation instead), and
+neither moves the rail's mark. The task
 drawer leads with whether the reader must act and the latest or selected run's
 result, time, duration, change, or usage. That run owns its lazily fetched
 activity before the full-history picker: each tool call leads with the model's

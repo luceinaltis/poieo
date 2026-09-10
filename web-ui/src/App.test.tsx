@@ -323,12 +323,12 @@ test("a panel opens over runs without knocking it off the stage", async () => {
 
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
 
-  // The panel holds the margin; the place behind it is still runs. One item
-  // says where you are, and it is the panel's.
+  // The panel holds the margin; the place behind it is still runs, and the
+  // rail goes on saying so.
   expect(container.querySelector(".runs")).not.toBeNull()
   expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
   expect(
-    container.querySelector('[data-do="open-models"]')!.getAttribute("aria-current"),
+    container.querySelector('[data-do="open-runs"]')!.getAttribute("aria-current"),
   ).toBe("page")
 
   // Closing it lands back on runs, not on the board.
@@ -783,7 +783,9 @@ test("switching projects puts a seeded make panel away with its seed", async () 
   // The panel is gone, and so is the seed: opening `new task` in the other
   // project starts from a blank page, not from board's folder.
   expect(container.querySelector('input[name="folder"]')).toBeNull()
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-make"]')!.click())
+  // The other project has no tasks, so its board offers new task through the
+  // invitation rather than the corner button.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="empty-new-task"]')!.click())
   expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("")
 })
 
