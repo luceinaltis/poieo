@@ -18,6 +18,45 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+async def test_accepting_old_work_keeps_recent_spending_in_the_limit(tmp_path):
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    daemon, result = await run_once(config)
+    old = {**result.summary(), "finished_at": "2020-01-01", "usage": {"cost": 2}}
+    daemon.store.record_summary(old)
+    daemon.store.record_summary({**old, "run_id": "recent", "finished_at": "2026-01-02", "usage": {"cost": 9}})
+    assert daemon.store.spent_since("2026-01-01", project=config.display_name) == 9
+    daemon.runners[0].results.clear()
+    assert (await daemon.runners[0].accept_changes())["status"] == "applied"
+    assert daemon.store.spent_since("2026-01-01", project=config.display_name) == 9
+
+
+async def test_stopping_the_daemon_during_manual_verification_keeps_the_original(tmp_path, monkeypatch):
+    from poieo.tools import LocalExecutor
+
+    repo, config = policy_config(tmp_path, {"mode": "review", "checks": [CHECK_MADE]})
+    daemon, _ = await run_once(config)
+    entered, cancelled = asyncio.Event(), asyncio.Event()
+
+    async def waiting(*args, **kwargs):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(LocalExecutor, "run_command", waiting)
+    running = asyncio.create_task(daemon.runners[0].accept_changes())
+    await asyncio.wait_for(entered.wait(), 5)
+    daemon.stop()
+    try:
+        await asyncio.wait_for(cancelled.wait(), 2)
+    finally:
+        running.cancel()
+        outcome = await running
+    assert outcome["status"] == "blocked"
+    assert not (repo / "made.txt").exists()
+
+
 @pytest.mark.parametrize("choice", ["retry", "pause"])
 async def test_answering_an_application_question_keeps_unread_direction(tmp_path, choice):
     from poieo.card import append_journal, read_journal
