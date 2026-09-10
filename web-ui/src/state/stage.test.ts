@@ -50,6 +50,13 @@ const TASK_ROWS: TaskRow[] = [
 
 const start = () => initialStage(TASK_ROWS)
 
+test("automatically applied runs do not become changes waiting for review", () => {
+  const event = { ...AGENT_SUMMARY, type: "run_summary", application: { status: "applied", accepted: 1 } }
+  const stage = reduce(start(), event as unknown as PoieoEvent)
+  expect(stage.tasks["board/chores"].pending).toBe(0)
+  expect(stage.tasks["board/chores"].runs[0]).toMatchObject({ application: { status: "applied" } })
+})
+
 test("initialStage seeds one state per task", () => {
   const stage = start()
   expect(Object.keys(stage.tasks)).toEqual(["board/chores", "board/revision"])
