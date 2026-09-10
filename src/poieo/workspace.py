@@ -501,6 +501,14 @@ class Workspace:
         files, insertions, deletions = _parse_numstat(_git(self.repo, "diff", "--numstat", base, head))
         return Change(base, head, files, insertions, deletions, message)
 
+    def clear_verification_artifacts(self, prepared: PreparedChange) -> None:
+        """A fresh review copy had no untracked files before verification."""
+        self._check_copy_root(prepared.path)
+        path = prepared.path.resolve()
+        if path.parent != self.worktrees.resolve() or not path.name.startswith(".review-"):
+            raise WorkspaceError("the temporary change is outside this task's work copies")
+        _git(path, "clean", "-ffdx")
+
     def validate_prepared(self, prepared: PreparedChange) -> dict[str, object]:
         """A check is valid only for the unchanged candidate it was given."""
         changed = self._dirty_at(prepared.path)

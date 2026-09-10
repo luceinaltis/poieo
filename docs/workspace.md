@@ -72,6 +72,8 @@ unreachable.
 copies. `outside_scope()` inspects the combined file delta with rename detection
 disabled, so a permitted destination cannot hide an unauthorized source deletion.
 `validate_prepared()` rejects verification that changed tracked files or HEAD.
+Before repair, generated untracked and ignored files are removed only from the
+owned temporary review copy; check output cannot become part of the saved repair.
 `save_repair()` commits a resolved combination, keeps its run reference, and
 fast-forwards the task's private branch so both a failed check and a stale
 project retain the repair for the next attempt. It rejects unresolved conflict
