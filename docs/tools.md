@@ -1,5 +1,9 @@
 # Tools and isolation
 
+Cancelling a host shell command kills its process tree and waits for it to exit,
+as a timeout does. This lets application verification stop before its temporary
+working folder is removed.
+
 `src/poieo/tools/`
 
 Agent nodes receive named toolsets. Every tool call goes through an `Executor`,

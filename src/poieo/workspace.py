@@ -22,8 +22,10 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Iterator
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Callable, Iterator, Literal, Sequence
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .errors import PoieoError
 
@@ -33,6 +35,49 @@ _IDENTITY = ["-c", "user.name=poieo", "-c", "user.email=poieo@localhost"]
 
 class WorkspaceError(PoieoError):
     """A git operation failed. Never fatal to a task -- the work still ran."""
+
+
+class ApplySpec(BaseModel):
+    """The user's permission to apply a task's verified file changes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["review", "auto"] = "review"
+    paths: list[str] = Field(default_factory=list, max_length=50)
+    checks: list[str] = Field(default_factory=list, max_length=10)
+    timeout: float = Field(default=120, gt=0, le=600)
+
+    @field_validator("paths")
+    @classmethod
+    def _paths(cls, values: list[str]) -> list[str]:
+        normalized = []
+        for value in values:
+            value = value.strip().replace("\\", "/")
+            path = PurePosixPath(value)
+            if (
+                not value
+                or path.is_absolute()
+                or PureWindowsPath(value).drive
+                or ".." in path.parts
+                or any(part.lower() == ".git" for part in path.parts)
+                or any(char in value for char in "*?[]\0")
+            ):
+                raise ValueError("an allowed path must name a file or folder inside the task folder")
+            normalized.append(path.as_posix())
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("checks")
+    @classmethod
+    def _checks(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() or len(value) > 4000 for value in values):
+            raise ValueError("each verification command must contain 1 to 4000 characters")
+        return [value.strip() for value in values]
+
+    @model_validator(mode="after")
+    def _automatic_needs_checks(self) -> ApplySpec:
+        if self.mode == "auto" and not self.checks:
+            raise ValueError("automatic application needs at least one verification command")
+        return self
 
 
 @dataclass(slots=True)
@@ -348,7 +393,9 @@ class Workspace:
                     path.rmdir()
                 raise
 
-    def apply_prepared(self, prepared: PreparedChange) -> dict[str, object]:
+    def apply_prepared(
+        self, prepared: PreparedChange, *, permitted: Callable[[], bool] | None = None
+    ) -> dict[str, object]:
         """Apply exactly the checked result, provided neither side changed meanwhile."""
         with _repository_lock(self.repo):
             if prepared.conflict:
@@ -363,13 +410,22 @@ class Workspace:
                 return {"stale": "the project changed during verification"}
             if not self._is_ancestor(prepared.target, self.branch):
                 return {"stale": "this change no longer belongs to the task"}
-            changed = self._dirty_at(prepared.path)
-            if changed:
-                return {"verification_changed": changed}
-            if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
-                return {"stale": "the change changed during verification"}
+            invalid = self.validate_prepared(prepared)
+            if invalid:
+                return invalid
+            if permitted is not None and not permitted():
+                return {"revoked": True}
             _git(self.repo, "merge", "--ff-only", prepared.head)
             return {"accepted": prepared.count, "before": prepared.base, "after": prepared.head}
+
+    def validate_prepared(self, prepared: PreparedChange) -> dict[str, object]:
+        """A check is valid only for the unchanged candidate it was given."""
+        changed = self._dirty_at(prepared.path)
+        if changed:
+            return {"verification_changed": changed}
+        if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
+            return {"stale": "the change changed during verification"}
+        return {}
 
     def release_prepared(self, prepared: PreparedChange) -> None:
         """Remove only the temporary copy this acceptance owns."""
@@ -378,6 +434,44 @@ class Workspace:
             raise WorkspaceError("the temporary change is outside this task's work copies")
         with _repository_lock(self.repo):
             _git(self.repo, "worktree", "remove", "--force", str(path))
+
+    def working_folder(self) -> Path:
+        """The chosen task folder in its private copy, including a subfolder."""
+        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
+        return self.worktree / self.repo.resolve().relative_to(root)
+
+    def check_folder(self, prepared: PreparedChange) -> Path:
+        """The task's chosen folder inside the combined copy."""
+        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
+        return prepared.path / self.repo.resolve().relative_to(root)
+
+    def outside_scope(self, prepared: PreparedChange, paths: list[str], protected: Sequence[Path] = ()) -> list[str]:
+        """Changed paths outside the user's grant, including both sides of a rename."""
+        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
+        relative = self.repo.resolve().relative_to(root)
+
+        def normalized(path: str) -> str:
+            return os.path.normcase(path).replace("\\", "/").rstrip("/")
+
+        allowed = [normalized((relative / path).as_posix()) for path in paths or ["."]]
+        reserved = {
+            normalized(path.resolve().relative_to(root).as_posix())
+            for path in protected
+            if path.resolve().is_relative_to(root)
+        }
+        changed = filter(
+            None,
+            _git(prepared.path, "diff", "--name-only", "--no-renames", "-z", prepared.base, prepared.head).split("\0"),
+        )
+        return [
+            name
+            for name in changed
+            if any(normalized(name) == kept or normalized(name).startswith(kept + "/") for kept in reserved)
+            or not any(
+                prefix == "." or normalized(name) == prefix or normalized(name).startswith(prefix + "/")
+                for prefix in allowed
+            )
+        ]
 
     def discard(self, since: str | None = None) -> dict[str, object]:
         """Throw the work away -- recoverably. The old tip stays on a parked ref."""

@@ -92,7 +92,7 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
         "summary": closing_line(result),
         "outputs": result.outputs,
     }
-    for key in ("asked", "answer"):
+    for key in ("asked", "answer", "change", "application"):
         # Only when there is one, so every other run's record keeps its shape.
         if getattr(result, key, None) is not None:
             record[key] = getattr(result, key)

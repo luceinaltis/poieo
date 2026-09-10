@@ -63,11 +63,21 @@ unreachable.
 
 ## Failure and extension
 
-When Git is unavailable or the folder is not in a work tree, the daemon warns
+`ApplySpec` validates the user's application settings. `working_folder()` and
+`check_folder()` preserve a task folder below the repository root in both private
+copies. `outside_scope()` inspects the combined file delta with rename detection
+disabled, so a permitted destination cannot hide an unauthorized source deletion.
+`validate_prepared()` rejects verification that changed tracked files or HEAD.
+
+In review mode, when Git is unavailable or the folder is not in a work tree, the daemon warns
 and runs directly in the folder. The run still completes, but there is no
 change to accept or discard. Anything Git cannot prove is treated as
 unreviewable. A half-registered worktree is disposable and may be pruned and
 recreated; task branches and run refs are not.
+
+Automatic mode requires Git at startup. Any later failure to prepare a private
+copy stops that task before its tools run. Nodes with their own working folders
+are refused in automatic mode; the task's chosen folder is the application scope.
 
 Workspace methods are synchronous. Daemon and web callers run them away from
 the shared event loop. Git behavior belongs in this module; other components

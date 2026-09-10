@@ -9,7 +9,8 @@
 your machine until you tell them to stop.**
 
 The user designs the work. Models perform the hands-on steps. poieo keeps each
-task running, records every run, and brings file changes back for review.
+task running and records every run. File changes wait for review by default;
+the user can authorize a task to apply its verified changes automatically.
 
 ## Principles
 
@@ -61,8 +62,10 @@ the affected task instead of producing the same error all night.
 Run records show which model answered, which path the graph took, which tools it
 called, what it used and what it cost when the provider or binding can say. A
 task working in a Git repository uses a private copy. Its edits become one
-change that the user accepts or discards; accepting is the only moment poieo
-writes those edits into the user's checkout.
+change that the user accepts or discards. A task can also apply changes under
+an explicit permission: allowed files or folders and verification commands.
+Changes are checked against the latest project together, then applied one at a
+time. A failed check or conflict pauses the affected task and preserves its work.
 
 ### Use three product words
 
@@ -70,7 +73,7 @@ The user learns a **task**, a **run** and a **change**:
 
 - A task is the work that keeps running.
 - A run is one pass through that task.
-- A change is what a run did to files and left for review.
+- A change is what a run did to files, with its review or application recorded.
 
 Worktrees, providers, indexes and scheduler internals are implementation terms.
 They belong in developer documentation, not in the product, except where naming
@@ -104,7 +107,8 @@ editor operate on the same graph schema.
   Isolation never silently falls back to the host.
 - **Recovery.** A Git-backed task works in a private copy. A folder that cannot
   be protected still runs in place, but poieo says that its edits have no built-in
-  review or undo.
+  review or undo. Automatic application requires a private copy and never falls
+  back to editing the original folder when that copy cannot be prepared.
 - **Time.** Graph steps, model turns, commands, handoff chains and triggers all
   have explicit ceilings. A deadline can additionally bound a model step by
   elapsed time.

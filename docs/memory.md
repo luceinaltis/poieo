@@ -1,5 +1,9 @@
 # Memory
 
+Per-run result records retain optional `change` and `application` data alongside
+questions and answers, so the journal's account can be traced to the files and
+the checks that were applied or refused.
+
 `src/poieo/memory/`, `src/poieo/learn.py`, `src/poieo/strength.py`,
 `src/poieo/blob.py`
 

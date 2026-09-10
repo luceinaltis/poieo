@@ -206,6 +206,10 @@ async def run_here(
         # Not an exit code: "this never finished" and "this finished badly" are
         # different facts, and a caller has to be able to tell them apart.
         raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
+    except asyncio.CancelledError:
+        _kill_tree(process)
+        await process.communicate()
+        raise
     return CommandResult(exit_code=process.returncode or 0, output=capped(decode_output(stdout)))
 
 
