@@ -465,3 +465,100 @@
 @media (prefers-reduced-motion: reduce) {
   .memory * { scroll-behavior: auto !important; }
 }
+
+.memory-suggestion {
+  border-left: 1px solid var(--ember);
+  margin-bottom: 15px;
+  padding-left: 8px;
+}
+
+.memory-suggestion > span,
+.memory-keep > span {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.04em;
+}
+
+.memory-suggestion p {
+  margin: 4px 0 8px;
+}
+
+.memory-suggestion div,
+.memory-page-edit div,
+.memory-set-aside {
+  display: flex;
+  gap: 8px;
+}
+
+.memory-set-aside {
+  margin-top: 10px;
+}
+
+.memory-keep {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.memory-page-edit {
+  display: grid;
+  gap: 6px;
+}
+
+.memory-keep input,
+.memory-keep textarea,
+.memory-set-aside input,
+.memory-page-edit textarea {
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: var(--text);
+  font: inherit;
+  min-width: 0;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.memory-keep textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.memory-page-edit textarea {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  min-height: 160px;
+  resize: vertical;
+}
+
+.memory-keep input:focus-visible,
+.memory-keep textarea:focus-visible,
+.memory-set-aside input:focus-visible,
+.memory-page-edit textarea:focus-visible {
+  border-color: var(--memory-highlight);
+  outline: 1px solid var(--memory-highlight);
+  outline-offset: 2px;
+}
+
+.memory-evidence button[data-do] {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 0.875rem;
+  justify-self: start;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.memory-evidence button[data-do]:disabled {
+  opacity: 0.5;
+}
+
+.memory-page > button[data-do] {
+  margin-top: 6px;
+}

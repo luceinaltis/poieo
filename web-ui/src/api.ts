@@ -16,6 +16,7 @@ import type {
   MemoryOverview,
   MemorySearchMode,
   MemorySearchReply,
+  MemoryWriteReply,
 } from "./memory/types"
 
 async function getJson<T>(path: string): Promise<T | null> {
@@ -312,6 +313,24 @@ export function askMemory(
     question,
     include_set_aside: includeSetAside,
   })
+}
+
+// The person's four memory writes. Only what a person may say travels: a
+// page, a body, a replacement, a yes or no -- never a source or a seal.
+export function putMemoryPage(project: string, text: string): Promise<MemoryWriteReply> {
+  return withBody<MemoryWriteReply>("PUT", memoryUrl(project, "/page"), { text })
+}
+
+export function settleMemorySuggestion(project: string, accept: boolean): Promise<MemoryWriteReply> {
+  return post<MemoryWriteReply>(memoryUrl(project, "/suggestion"), { accept })
+}
+
+export function keepMemory(project: string, slug: string, body: string): Promise<MemoryWriteReply> {
+  return withBody<MemoryWriteReply>("PUT", memoryUrl(project, `/${encodeURIComponent(slug)}`), { body })
+}
+
+export function setAsideMemory(project: string, slug: string, because: string): Promise<MemoryWriteReply> {
+  return post<MemoryWriteReply>(memoryUrl(project, `/${encodeURIComponent(slug)}/set-aside`), { because })
 }
 
 // A project and a task name between them pick out one task; a name alone

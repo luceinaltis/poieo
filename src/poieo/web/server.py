@@ -44,10 +44,23 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
-from ..errors import BindingError, PoieoError
-from ..memory import keeps_memory, memory_report, overview_watch_paths, read_page
+from ..errors import BindingError, PoieoError, SpecError
+from ..learn import last_suggestion, settle_suggestion
+from ..memory import (
+    entry_named,
+    frontmatter,
+    keep_entry,
+    keeps_memory,
+    memory_report,
+    overview_watch_paths,
+    page_text,
+    read_page,
+    set_aside,
+    write_page,
+)
 from ..memory.ask import ask_memory
 from ..memory.browse import entry_document, graph_snapshot, keyword_search
+from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
@@ -1771,6 +1784,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         layout = project.config.layout()
         paths = [
             layout.longterm(),
+            layout.learning_log(),
             layout.results(),
             project.config.source_path,
             project.config.default_binding_path(),
@@ -1809,6 +1823,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 {
                     "enabled": False,
                     "page": None,
+                    "page_text": "",
+                    "suggestion": None,
                     "stats": None,
                     "capabilities": capabilities,
                     "graph": {
@@ -1823,22 +1839,112 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 headers=cache_headers,
             )
 
-        def read_memory() -> tuple[Any, Any, Any]:
+        def read_memory() -> tuple[Any, Any, Any, Any, Any]:
             # The first open after an upgrade may build derived indexes. Keep
-            # the two database reads sequential so they cannot race that work.
-            return read_page(root), memory_report(root), graph_snapshot(root)
+            # the database reads sequential so they cannot race that work.
+            return read_page(root), page_text(root), last_suggestion(root), memory_report(root), graph_snapshot(root)
 
-        page, stats, graph = await asyncio.to_thread(read_memory)
+        page, as_written, suggestion, stats, graph = await asyncio.to_thread(read_memory)
         return JSONResponse(
             {
                 "enabled": True,
                 "page": page,
+                "page_text": as_written,
+                "suggestion": suggestion,
                 "stats": stats,
                 "capabilities": capabilities,
                 "graph": graph,
             },
             headers=cache_headers,
         )
+
+    def _memory_kept(request: Request) -> tuple[Path | None, JSONResponse | None]:
+        """The project's root when it keeps a memory, or the refusal: a write
+        from a page is not consent to start one, any more than a terminal's."""
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return None, missing
+        root = Path(project.config.base_dir)
+        if not keeps_memory(root):
+            return None, JSONResponse({"error": "this project keeps no long memory"}, status_code=409)
+        return root, None
+
+    async def _json_object(request: Request) -> dict[str, Any]:
+        try:
+            body = await request.json()
+        except Exception:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    async def project_memory_page_put(request: Request) -> JSONResponse:
+        """A person replaces the page every run reads, as written."""
+        root, refused = _memory_kept(request)
+        if refused is not None:
+            return refused
+        text = (await _json_object(request)).get("text")
+        if not isinstance(text, str):
+            return JSONResponse({"error": "the page is text"}, status_code=400)
+        await asyncio.to_thread(write_page, root, text)
+        return JSONResponse({"ok": True})
+
+    async def project_memory_suggestion(request: Request) -> JSONResponse:
+        """Land the last pass's page line, or let it go."""
+        root, refused = _memory_kept(request)
+        if refused is not None:
+            return refused
+        accept = (await _json_object(request)).get("accept")
+        if not isinstance(accept, bool):
+            return JSONResponse({"error": "say whether to accept the suggestion"}, status_code=400)
+        try:
+            suggestion = await asyncio.to_thread(settle_suggestion, root, accept)
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse({"ok": True, "accepted": accept, "suggestion": suggestion})
+
+    async def project_memory_keep(request: Request) -> JSONResponse:
+        """A person keeps an entry. Only what a person may say arrives --
+        scope, anchors and links -- never a source or a seal, which the
+        harness stamps."""
+        root, refused = _memory_kept(request)
+        if refused is not None:
+            return refused
+        slug = request.path_params["slug"]
+        if not MEMORY_SLUG.match(slug):
+            return JSONResponse(
+                {"error": f"'{slug}' is not a usable name: lowercase letters, digits and dashes"},
+                status_code=400,
+            )
+        body = await _json_object(request)
+        text = body.get("body")
+        if not isinstance(text, str) or not text.strip():
+            return JSONResponse({"error": "a memory needs something to say"}, status_code=400)
+        said = {key: body[key] for key in ("scope", "anchors", "links") if key in body}
+        try:
+            matter = frontmatter(said) if said else None
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        try:
+            entry = await asyncio.to_thread(keep_entry, root, slug, text, matter)
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse({"ok": True, "slug": entry.slug})
+
+    async def project_memory_set_aside(request: Request) -> JSONResponse:
+        """A person retires an entry for the one that replaces it."""
+        root, refused = _memory_kept(request)
+        if refused is not None:
+            return refused
+        slug = request.path_params["slug"]
+        because = (await _json_object(request)).get("because")
+        if not isinstance(because, str) or not because.strip():
+            return JSONResponse({"error": "name the entry that replaces it"}, status_code=400)
+        if await asyncio.to_thread(entry_named, root, slug) is None:
+            return JSONResponse({"error": f"no memory '{slug}'"}, status_code=404)
+        try:
+            await asyncio.to_thread(set_aside, root, slug, because.strip())
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        return JSONResponse({"ok": True, "slug": slug, "because": because.strip()})
 
     async def project_memory_entry(request: Request) -> JSONResponse:
         project, missing = _asked_project(request)
@@ -2031,9 +2137,15 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/runs/{run_id}/diff", run_diff),
         Route("/api/projects/{project}/models", project_models),
         Route("/api/projects/{project}/memory", project_memory),
+        # The fixed names come before the slug, so a PUT to the page cannot
+        # be read as an entry called "page".
+        Route("/api/projects/{project}/memory/page", project_memory_page_put, methods=["PUT"]),
+        Route("/api/projects/{project}/memory/suggestion", project_memory_suggestion, methods=["POST"]),
         Route("/api/projects/{project}/memory/search", project_memory_search, methods=["POST"]),
         Route("/api/projects/{project}/memory/ask", project_memory_ask, methods=["POST"]),
         Route("/api/projects/{project}/memory/{slug}", project_memory_entry),
+        Route("/api/projects/{project}/memory/{slug}", project_memory_keep, methods=["PUT"]),
+        Route("/api/projects/{project}/memory/{slug}/set-aside", project_memory_set_aside, methods=["POST"]),
         # Its own read rather than a field on the one above: a candidate port
         # nothing is listening on costs a full timeout, and the catalogue must
         # not wait on its own footnote.

@@ -141,6 +141,8 @@ def test_a_project_without_memory_is_an_empty_place_not_a_failure(tmp_path):
     assert response.json() == {
         "enabled": False,
         "page": None,
+        "page_text": "",
+        "suggestion": None,
         "stats": None,
         "capabilities": {"words": False, "meaning": False, "ask": False},
         "graph": {
@@ -288,3 +290,149 @@ def test_memory_routes_keep_project_identity(tmp_path):
 
     assert response.status_code == 404
     assert response.json()["projects"] == ["board"]
+
+
+# -- a person's writes, from the board ---------------------------------------
+
+
+def _suggested(root, line="Require ISO dates."):
+    import json
+
+    from conftest import at
+
+    at(root).cache().mkdir(parents=True, exist_ok=True)
+    at(root).learning_log().write_text(
+        json.dumps({"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a", "error": None, "page": line}) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _page_written_long_ago(root):
+    import sqlite3
+
+    from conftest import at
+
+    con = sqlite3.connect(at(root).longterm())
+    con.execute("UPDATE page SET updated_at = '2026-08-01T00:00:00+00:00'")
+    con.commit()
+    con.close()
+
+
+def test_the_overview_carries_the_page_as_written_and_the_last_suggestion(tmp_path):
+    from poieo.memory import write_page
+
+    client = _client(tmp_path)
+    write_page(tmp_path, "<!-- trim me -->\nKeep tests portable.")
+    _page_written_long_ago(tmp_path)
+    _suggested(tmp_path)
+
+    body = client.get("/api/projects/board/memory").json()
+    assert body["page"] == "Keep tests portable."
+    assert body["page_text"] == "<!-- trim me -->\nKeep tests portable."
+    assert body["suggestion"] == "Require ISO dates."
+
+
+def test_a_person_writes_the_page_from_the_board(tmp_path):
+    from poieo.memory import history_of, read_page
+
+    client = _client(tmp_path)
+    before = client.get("/api/projects/board/memory").headers["etag"]
+
+    response = client.put("/api/projects/board/memory/page", json={"text": "Dates are ISO."})
+
+    assert response.status_code == 200
+    assert read_page(tmp_path) == "Dates are ISO."
+    assert history_of(tmp_path)[0]["writer"] == "person"
+    assert client.get("/api/projects/board/memory").headers["etag"] != before
+    assert client.put("/api/projects/board/memory/page", json={"text": 3}).status_code == 400
+
+
+def test_a_suggestion_lands_or_is_let_go_from_the_board(tmp_path):
+    from poieo.memory import read_page, write_page
+
+    client = _client(tmp_path)
+    write_page(tmp_path, "Keep tests portable.")
+    _page_written_long_ago(tmp_path)
+    _suggested(tmp_path)
+
+    landed = client.post("/api/projects/board/memory/suggestion", json={"accept": True})
+    assert landed.status_code == 200
+    assert landed.json()["suggestion"] == "Require ISO dates."
+    assert read_page(tmp_path) == "Keep tests portable.\nRequire ISO dates."
+    assert client.get("/api/projects/board/memory").json()["suggestion"] is None
+
+    _suggested(tmp_path, "Another line.")
+    _page_written_long_ago(tmp_path)
+    assert client.get("/api/projects/board/memory").json()["suggestion"] == "Another line."
+    gone = client.post("/api/projects/board/memory/suggestion", json={"accept": False})
+    assert gone.status_code == 200
+    assert read_page(tmp_path) == "Keep tests portable.\nRequire ISO dates."
+    assert client.get("/api/projects/board/memory").json()["suggestion"] is None
+    assert client.post("/api/projects/board/memory/suggestion", json={"accept": False}).status_code == 409
+    assert client.post("/api/projects/board/memory/suggestion", json={"accept": "yes"}).status_code == 400
+
+
+def test_a_person_keeps_an_entry_from_the_board(tmp_path):
+    from poieo.memory import entry_named
+
+    client = _client(tmp_path)
+    response = client.put(
+        "/api/projects/board/memory/feeds-order",
+        json={"body": "Feeds are imported oldest first.", "links": {"depends_on": ["command-env"]}},
+    )
+
+    assert response.status_code == 200
+    entry = entry_named(tmp_path, "feeds-order")
+    assert entry.body == "Feeds are imported oldest first."
+    assert entry.matter.links.depends_on == ["command-env"]
+    assert entry.matter.source == []
+    assert client.get("/api/projects/board/memory/feeds-order").json()["history"][0]["writer"] == "person"
+
+    dangling = client.put(
+        "/api/projects/board/memory/leaner",
+        json={"body": "Leans on air.", "links": {"depends_on": ["ghost"]}},
+    )
+    assert dangling.status_code == 409
+    assert "ghost" in dangling.json()["error"]
+    assert entry_named(tmp_path, "leaner") is None
+    assert client.put("/api/projects/board/memory/Bad Name", json={"body": "x"}).status_code == 400
+    assert client.put("/api/projects/board/memory/empty", json={"body": "  "}).status_code == 400
+    assert (
+        client.put("/api/projects/board/memory/typo", json={"body": "x", "links": {"caused_by": []}}).status_code == 400
+    )
+    # What only the harness may stamp cannot arrive from a page.
+    stamped = client.put("/api/projects/board/memory/stamped", json={"body": "x", "source": ["run-1"]})
+    assert stamped.status_code == 200
+    assert entry_named(tmp_path, "stamped").matter.source == []
+
+
+def test_a_person_sets_an_entry_aside_from_the_board(tmp_path):
+    from poieo.memory import entry_named
+
+    client = _client(tmp_path)
+    response = client.post("/api/projects/board/memory/windows-shell/set-aside", json={"because": "command-env"})
+
+    assert response.status_code == 200
+    assert entry_named(tmp_path, "windows-shell").matter.superseded_by == "command-env"
+    assert (
+        client.post("/api/projects/board/memory/nobody/set-aside", json={"because": "command-env"}).status_code == 404
+    )
+    ghost = client.post("/api/projects/board/memory/command-env/set-aside", json={"because": "ghost"})
+    assert ghost.status_code == 409
+    assert client.post("/api/projects/board/memory/command-env/set-aside", json={}).status_code == 400
+    assert entry_named(tmp_path, "command-env").matter.superseded_by is None
+
+
+def test_memory_writes_need_a_memory_and_the_same_fence_as_every_write(tmp_path):
+    client = _client(tmp_path, memory=False)
+    assert client.put("/api/projects/board/memory/page", json={"text": "x"}).status_code == 409
+    assert client.put("/api/projects/board/memory/slug", json={"body": "x"}).status_code == 409
+    assert client.post("/api/projects/board/memory/slug/set-aside", json={"because": "y"}).status_code == 409
+    assert client.post("/api/projects/board/memory/suggestion", json={"accept": True}).status_code == 409
+
+    elsewhere = {"origin": "https://elsewhere.example", "host": "127.0.0.1:8484"}
+    kept = tmp_path / "kept"
+    kept.mkdir()
+    fenced = _client(kept)
+    assert fenced.put("/api/projects/board/memory/page", json={"text": "x"}, headers=elsewhere).status_code == 403
+    assert fenced.put("/api/projects/board/memory/slug", json={"body": "x"}, headers=elsewhere).status_code == 403

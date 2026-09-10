@@ -34,7 +34,12 @@ export interface MemoryOverview {
   /** Opaque validator used only while this memory place remains open. */
   revision?: string
   enabled: boolean
+  /** The page as a run sees it: comments stripped, empty as null. */
   page: string | null
+  /** The page as a person wrote it, for editing. */
+  page_text: string
+  /** The line the last learning pass suggested for the page, until a person writes the page. */
+  suggestion: string | null
   stats: {
     page_chars: number
     page_budget: number
@@ -98,4 +103,13 @@ export interface MemoryEntry {
     did: string
     slug: string | null
   }>
+}
+
+export interface MemoryWriteReply {
+  ok: boolean
+  error?: string
+  slug?: string
+  because?: string
+  accepted?: boolean
+  suggestion?: string
 }
