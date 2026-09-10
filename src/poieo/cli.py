@@ -1472,10 +1472,26 @@ def eject(
         kept["every"] = task.every
     if task.at is not None:
         kept["at"] = task.at
+    if task.trigger is not None:
+        kept["trigger"] = task.trigger
     if task.binding:
         kept["binding"] = task.binding
     if not task.enabled:
         kept["enabled"] = False
+    # These describe the task, not the node that just moved into the graph, so
+    # the graph has nowhere to carry them and leaving them out loses them --
+    # quietly, since the shorter card still loads. `isolation` is the one that
+    # bites: dropped, the task's commands run on the host again.
+    if task.input:
+        kept["input"] = dict(task.input)
+    if task.input_file is not None:
+        kept["input_file"] = task.input_file
+    if task.then:
+        kept["then"] = [branch.model_dump(mode="json", exclude_none=True) for branch in task.then]
+    if task.on_error != "continue":
+        kept["on_error"] = task.on_error
+    if task.isolation is not None:
+        kept["isolation"] = task.isolation.model_dump(mode="json", exclude_none=True)
     try:
         named = Path(os.path.relpath(target, task.dir)).as_posix()
     except ValueError:  # a different drive on Windows: no relative path exists
