@@ -46,7 +46,7 @@ export function resultsFrom(steps: StepDraft[]) {
     ? [{ value: step.id, label: `${step.name} — answer` }]
     : step.kind === "command" ? [
       { value: `${step.id}.exit_code`, label: `${step.name} — exit code` },
-      { value: `${step.id}.stdout`, label: `${step.name} — output` },
+      { value: `${step.id}.output`, label: `${step.name} — output` },
     ] : [])
 }
 

@@ -111,7 +111,8 @@ uses the explicitly chosen task folder; node-specific `workdir` is refused.
 The server derives `<task>.graph.yaml` beside the card. Complete files are
 published without replacement, graph first and card last, so the task scan sees
 the complete task. A failed card publication removes the new graph. An existing
-graph is never overwritten, and no binding or credential is changed.
+graph is never overwritten, and no binding or credential is changed. A failure
+to clean up an ignored temporary file is logged without undoing publication.
 
 Structured editing is offered only when it can reproduce every field and
 comment; otherwise the client edits the raw file. Set-aside and rename place an

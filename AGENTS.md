@@ -134,10 +134,12 @@ so Claude Code loads the page every other agent reads by its own name.
 
 # Part 2 · This machine
 
-Facts about this checkout, not principles; they go stale on their own. **If one of
-these is wrong, the document is wrong — fix it in the PR where you found out.**
+Fix stale machine facts in the PR where you find them.
 
 ## The gate, exactly
+
+In Windows PowerShell, first prepend `C:\Program Files\Git\bin` to `$env:PATH`.
+Otherwise the suite finds the WSL launcher and its POSIX command tests fail.
 
 ```bash
 # Python — tests, then lint and layout; the flags dodge a broken pytest plugin

@@ -5,6 +5,7 @@ Design: docs/web.md
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -17,6 +18,8 @@ from ..binding import BindingSpec
 from ..errors import SpecError, describe_invalid
 from ..graph import GraphSpec
 from ..runtime.executor import preflight
+
+log = logging.getLogger("poieo.web.steps")
 
 
 def validate_steps(document: Any, binding: BindingSpec, folder: Path) -> GraphSpec:
@@ -42,7 +45,12 @@ def _publish(path: Path, text: str) -> None:
         # replacing an existing file, including one created after validation.
         os.link(scratch, path)
     finally:
-        scratch.unlink(missing_ok=True)
+        try:
+            scratch.unlink(missing_ok=True)
+        except OSError as exc:
+            # A published card must keep its graph even if Windows still has
+            # the temporary file open. The task scan ignores this .tmp file.
+            log.warning("could not remove temporary task file %s: %s", scratch, exc)
 
 
 def publish_steps(path: Path, card_text: str, graph: GraphSpec) -> None:

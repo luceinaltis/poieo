@@ -66,7 +66,11 @@ async def test_command_output_can_be_tested_and_passed_to_the_next_step(tmp_path
     client, cards = _client(tmp_path)
     steps = graph()
     steps["nodes"][0] = {
-        "id": "read", "type": "command", "command": "echo ready", "output": {"as": "result"}, "next": "choose"
+        "id": "read",
+        "type": "command",
+        "command": "echo ready",
+        "output": {"as": "result"},
+        "next": "choose",
     }
     steps["nodes"][1]["branches"][0]["when"] = '"ready" in result.output'
     steps["nodes"][2]["prompt"] = "Summarize {{ result.output }}"

@@ -8,7 +8,7 @@
 .step-kind { color: var(--dim); display: block; font-size: .74em; }
 .step-editor input:not([type="checkbox"]), .step-editor textarea, .step-editor select {
   background: var(--well); border: 1px solid var(--rule); border-radius: 4px;
-  box-sizing: border-box; color: var(--text); font: inherit; min-width: 0;
+  box-sizing: border-box; color: var(--text); font: inherit; font-size: 1rem; min-width: 0;
   padding: 7px 8px; width: 100%;
 }
 .step-editor textarea { line-height: 1.5; resize: vertical; }

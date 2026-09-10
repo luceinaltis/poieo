@@ -62,7 +62,7 @@ export function StepEditor({ steps, onChange, disabled }: {
                   <span>Use an earlier result</span>
                   {steps.slice(0, index).filter(s => s.kind === "agent" || s.kind === "command").map(s => (
                     <button type="button" key={s.id} disabled={disabled} onClick={() => update(step.id, {
-                      text: `${step.text}${step.text ? "\n\n" : ""}{{ ${s.id}${s.kind === "command" ? ".stdout" : ""} }}`,
+                      text: `${step.text}${step.text ? "\n\n" : ""}{{ ${s.id}${s.kind === "command" ? ".output" : ""} }}`,
                     })}>Insert result from {s.name}</button>
                   ))}
                 </div>}
