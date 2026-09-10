@@ -58,6 +58,23 @@ async def test_semantic_overlap_is_repaired_and_checked_again(tmp_path):
     assert (repo / "made.txt").read_text() == "hi"
 
 
+async def test_verification_artifacts_never_become_part_of_a_repair(tmp_path):
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "old")
+
+    async def repair(prepared, failure):
+        (prepared.path / "made.txt").write_text("hi")
+        point.save_repair(prepared, "repair1", "meet the check")
+        return {"ready": True}
+
+    command = "python -c \"from pathlib import Path; Path('test-report.txt').write_text('report'); assert Path('made.txt').read_text() == 'hi'\""
+    result = await check_and_apply(point, ApplySpec(mode="auto", checks=[command]), repair=repair)
+    assert result["status"] == "applied"
+    assert (repo / "made.txt").read_text() == "hi"
+    assert not (repo / "test-report.txt").exists()
+
+
 async def test_failed_repair_is_not_repeated_or_applied(tmp_path):
     repo = make_repo(tmp_path)
     point = workspace(tmp_path, repo)
