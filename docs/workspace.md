@@ -53,6 +53,10 @@ not reserve the project until application; a competing application makes the
 older candidate stale. This lock coordinates poieo, not edits made by another
 program. Git also refuses to overwrite conflicting local edits.
 
+A separate per-task file lock spans each complete run and each manual decision.
+This prevents a CLI run or another daemon from resetting an in-progress task
+copy. Other tasks keep working independently. A busy task is refused immediately.
+
 `release_prepared()` removes only its owned temporary copy. The task branch and
 all recorded run references survive, including a candidate refused for conflict.
 

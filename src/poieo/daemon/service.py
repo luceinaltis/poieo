@@ -9,6 +9,7 @@ import logging
 import signal
 import socket
 from collections import deque
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -347,11 +348,9 @@ class TaskRunner:
     async def _open_change(self) -> Path | None:
         """Give the run a private copy of the project to work in.
 
-        Two ways this ends without one, and both leave the run untracked: a
-        folder that is not a repository at all, and a repository that will not
-        make a worktree. Neither stops the work -- 3am is no time to stop --
-        but neither can be quiet either, so the reason is kept for
-        `_close_change` to say once there is a run to hang it on.
+        Review-mode tasks can run untracked when their folder cannot keep a
+        copy, with a recorded warning. Automatic tasks stop before tools run
+        whenever the copy or the chosen folder cannot be protected.
         """
         point = self.workspace
         self._tracking = False
@@ -469,24 +468,82 @@ class TaskRunner:
             return {"status": "blocked", "error": "this task keeps no reviewable copy"}
         if self._change_lock.locked():
             return {"status": "blocked", "error": "this task is still working; try again when it finishes"}
-        async with self._change_lock:
+        async with self._change_lock, self._private_copy():
             card = self.config.cards_by_task.get(self.name)
             policy = load_card(card.source_path).apply if card and card.source_path else self.task.spec.apply
-            return await check_and_apply(
+            pending = await asyncio.to_thread(self.workspace.pending)
+            outcome = await check_and_apply(
                 self.workspace,
                 policy,
                 through=through,
                 manual=True,
                 tool_context=self.tool_context,
             )
+            if "accepted" in outcome:
+                await self._record_decision(outcome, pending)
+            return outcome
 
     async def discard_changes(self, since: str | None = None) -> dict:
         if self.workspace is None:
             return {"error": "this task keeps no reviewable copy"}
         if self._change_lock.locked():
             return {"error": "this task is still working; try again when it finishes"}
-        async with self._change_lock:
-            return await asyncio.to_thread(self.workspace.discard, since)
+        async with self._change_lock, self._private_copy():
+            pending = await asyncio.to_thread(self.workspace.pending)
+            outcome = await asyncio.to_thread(self.workspace.discard, since)
+            if "discarded" in outcome:
+                await self._record_decision({"status": "discarded", **outcome}, pending)
+            return outcome
+
+    @asynccontextmanager
+    async def _private_copy(self):
+        if self.workspace is None:
+            yield
+            return
+        gate = self.workspace.exclusive_run()
+        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        try:
+            await asyncio.shield(entered)
+            yield
+        finally:
+            try:
+                await entered
+            except BaseException:
+                pass
+            else:
+                await asyncio.to_thread(gate.__exit__, None, None, None)
+
+    async def _record_decision(self, outcome: dict, pending: list[str]) -> None:
+        remaining = set(await asyncio.to_thread(self.workspace.pending))
+        run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
+        for run_id in run_ids:
+            result = next((run for run in self.results if run.run_id == run_id), None)
+            if self._asking and self._asking.run_id == run_id:
+                result = self._asking
+            row = self.store.summary(run_id)
+            if row is None and result is None:
+                continue
+            if row and (row.get("task") != self.name or row.get("project") != self.config.display_name):
+                continue
+            self.store.append(Event(run_id=run_id, type="run_application", data=outcome))
+            if result:
+                result.application = outcome
+                result.status = "completed"
+                if (result.asked or {}).get("node") == "apply_changes":
+                    result.answer = "accept" if outcome["status"] == "applied" else "discard"
+                self._remember(result, replace=True)
+                row = result.summary()
+            else:
+                row = {**row, "status": "completed", "application": outcome}
+            self.store.record_summary(row)
+            if (
+                self._asking
+                and self._asking.run_id == run_id
+                and (self._asking.asked or {}).get("node") == "apply_changes"
+            ):
+                self._asking = None
+                self._keep_question()
+                self.resume()
 
     def _may_auto_apply(self) -> bool:
         """Permission revoked while a task runs must take effect before application."""
@@ -755,26 +812,25 @@ class TaskRunner:
         run_id = new_run_id()
         self.status, self.current_run_id = "running", run_id
         try:
-            workdir = await self._open_change()
-            result = await execute(
-                self.task.graph,
-                self.task.binding,
-                self.pool,
-                self.store,
-                input=payload,
-                state=dict(self.state) if self.task.spec.carry_state else None,
-                task=self.name,
-                project=self.config.display_name,
-                # What actually fired this run, not the schedule it may not
-                # have used.
-                trigger=fire.reason,
-                iteration=fire.iteration,
-                run_id=run_id,
-                cancel=self.cancel,
-                workdir=workdir,
-                tool_context=self.tool_context,
-                finalize=self._close_change,
-            )
+            async with self._private_copy():
+                workdir = await self._open_change()
+                result = await execute(
+                    self.task.graph,
+                    self.task.binding,
+                    self.pool,
+                    self.store,
+                    input=payload,
+                    state=dict(self.state) if self.task.spec.carry_state else None,
+                    task=self.name,
+                    project=self.config.display_name,
+                    trigger=fire.reason,
+                    iteration=fire.iteration,
+                    run_id=run_id,
+                    cancel=self.cancel,
+                    workdir=workdir,
+                    tool_context=self.tool_context,
+                    finalize=self._close_change,
+                )
         except WorkspaceError as exc:
             now = utcnow()
             result = RunResult(

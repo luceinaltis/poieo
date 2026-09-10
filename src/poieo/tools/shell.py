@@ -10,7 +10,6 @@ import os
 import shlex
 import shutil
 import signal
-import subprocess
 from functools import partial
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -89,17 +88,11 @@ async def command_text(run: Any, args: dict[str, Any]) -> str:
 
 
 def _kill_tree(process: asyncio.subprocess.Process) -> None:
-    """Kill the shell and everything it spawned."""
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            capture_output=True,
-        )
-    else:
-        try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    """Kill the POSIX session, even when its original shell already exited."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def posix_shell(windows: bool = os.name == "nt") -> str | None:
@@ -191,25 +184,43 @@ async def run_here(
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=(os.name != "nt"),
     )
-    if _POSIX_SHELL:
-        # `-c` and not the shell's own parsing of a whole line: the command is
-        # one argument, so nothing between here and the shell gets a chance to
-        # reinterpret its quoting.
-        process = await asyncio.create_subprocess_exec(_POSIX_SHELL, "-c", command, **shared)
-    else:
-        process = await asyncio.create_subprocess_shell(command, **shared)
+    job = None
+    if os.name == "nt":
+        from .windows_job import WindowsJob
+
+        try:
+            job = WindowsJob()
+        except OSError as exc:
+            raise ToolError(f"could not supervise a command: {exc}") from exc
+        shared["creationflags"] = 0x00000004  # CREATE_SUSPENDED: assign before any children exist.
     try:
-        stdout, _ = await asyncio.wait_for(process.communicate(stdin.encode() if stdin is not None else None), timeout)
-    except asyncio.TimeoutError:
-        _kill_tree(process)
-        await process.communicate()
-        # Not an exit code: "this never finished" and "this finished badly" are
-        # different facts, and a caller has to be able to tell them apart.
-        raise ToolError(f"command timed out after {timeout:.0f}s: {command}")
-    except asyncio.CancelledError:
-        _kill_tree(process)
-        await process.communicate()
-        raise
+        if _POSIX_SHELL:
+            process = await asyncio.create_subprocess_exec(_POSIX_SHELL, "-c", command, **shared)
+        else:
+            process = await asyncio.create_subprocess_shell(command, **shared)
+        if job:
+            try:
+                job.attach(process.pid)
+            except OSError as exc:
+                process.kill()
+                await process.communicate()
+                raise ToolError(f"could not start a supervised command: {exc}") from exc
+        try:
+            stdout, _ = await asyncio.wait_for(
+                process.communicate(stdin.encode() if stdin is not None else None), timeout
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            if job:
+                job.terminate()
+            else:
+                _kill_tree(process)
+            await process.communicate()
+            if isinstance(exc, asyncio.TimeoutError):
+                raise ToolError(f"command timed out after {timeout:.0f}s: {command}") from exc
+            raise
+    finally:
+        if job:
+            job.close()
     return CommandResult(exit_code=process.returncode or 0, output=capped(decode_output(stdout)))
 
 
