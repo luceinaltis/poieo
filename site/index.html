@@ -1,249 +1,180 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>poieo — Your models, at work.</title>
-<meta name="description" content="Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.">
-
-<link rel="canonical" href="https://luceinaltis.github.io/poieo/">
-<meta name="theme-color" content="#100e0c">
-<script src="theme.js"></script>
-
-<meta property="og:site_name" content="poieo">
-<meta property="og:title" content="poieo — Your models, at work.">
-<meta property="og:description" content="Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.">
-<meta property="og:image" content="https://luceinaltis.github.io/poieo/img/social.png">
-<meta property="og:image:width" content="1280">
-<meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="poieo — a small crooked tree with round buds, one amber">
-<meta property="og:url" content="https://luceinaltis.github.io/poieo/">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary_large_image">
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "poieo",
-  "description": "An autonomous task board for the models you choose. Write a task once, keep it running on your machine and schedule, and review every change.",
-  "url": "https://luceinaltis.github.io/poieo/",
-  "image": "https://luceinaltis.github.io/poieo/img/social.png",
-  "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Windows, macOS, Linux",
-  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
-  "license": "https://github.com/luceinaltis/poieo/blob/main/LICENSE",
-  "codeRepository": "https://github.com/luceinaltis/poieo"
-}
-</script>
-
-<!-- The mark's favicon build: the tree on its own dark plate, since a tab's
-     ground is not ours to choose. -->
-<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>poieo — The right intelligence, in the right place.</title>
+  <meta name="description" content="Small and large models, working together. Give each step the model it needs, keep your tasks running, and check the results with poieo.">
+  <meta name="theme-color" content="#f3f5f2">
+  <link rel="canonical" href="https://luceinaltis.github.io/poieo/">
+  <meta property="og:site_name" content="poieo">
+  <meta property="og:title" content="poieo — The right intelligence, in the right place.">
+  <meta property="og:description" content="Small and large models, working together. A personal tool for work that keeps going.">
+  <meta property="og:image" content="https://luceinaltis.github.io/poieo/img/social.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="poieo — small models for routine work, larger models for demanding steps, and checks for the result">
+  <meta property="og:url" content="https://luceinaltis.github.io/poieo/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="img/site-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/site-touch.png">
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "poieo",
+    "description": "A personal tool for recurring work with small and large models. Choose the model for each step, keep tasks running, and inspect the results.",
+    "url": "https://luceinaltis.github.io/poieo/",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "license": "https://github.com/luceinaltis/poieo/blob/main/LICENSE",
+    "codeRepository": "https://github.com/luceinaltis/poieo"
+  }
+  </script>
 </head>
 <body>
-
+<a class="skip-link" href="#main">Skip to content</a>
 <header class="bar">
-  <a class="wordmark" aria-label="poieo — home" href="/poieo/">
-    <img class="logo-mark" src="img/mark.svg" alt="" width="24" height="24">
-    <img class="logo-word" src="img/wordmark.svg" alt="poieo" height="20">
+  <a class="wordmark" aria-label="poieo home" href="./">
+    <img class="brand-word" src="img/signature.svg" alt="poieo" width="116" height="42">
   </a>
-  <span class="bar-sub">models at work</span>
-  <nav>
+  <nav aria-label="Main navigation">
+    <a href="#approach">The approach</a>
     <a href="docs.html">Docs</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
-    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch between light and dark">☀</button>
+    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch theme">Theme</button>
   </nav>
 </header>
 
 <main>
-
-<section class="hero">
-  <!-- The tree is the hero's weather, not its exhibit: masked into the ground
-       so it reads as one painting with the page rather than a framed image. -->
-  <img class="hero-art" src="img/tree.jpg" width="1408" height="768" aria-hidden="true" alt="">
+<section class="hero" id="main">
   <div class="hero-copy">
-    <h1>Your models, at work.</h1>
-    <p class="descriptor">An autonomous task board for the models you choose.</p>
-    <p class="lead">Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.</p>
-
-    <div class="cta">
-      <code class="copy" id="install">git clone https://github.com/luceinaltis/poieo &amp;&amp; cd poieo &amp;&amp;
-  pip install .</code>
-      <button type="button" data-copy="install" hidden>copy</button>
+    <h1>The right intelligence, in the right place.</h1>
+    <p class="descriptor">Small and large models, working together.</p>
+    <p class="lead">Give routine work to a small model and demanding steps to a larger one. poieo keeps your tasks running, carries their context forward, and records the results.</p>
+    <div class="buttons">
+      <a class="button primary" href="#start">Start a task</a>
+      <a class="text-link" href="docs.html#usage/choose-models">Choose your models <span aria-hidden="true">↗</span></a>
     </div>
+    <p class="hero-note">Runs on your machine. Works with local and cloud models.</p>
+  </div>
+  <figure class="allocation" aria-labelledby="allocation-caption">
+    <div class="allocation-title">One way to divide a task.</div>
+    <svg class="allocation-map" viewBox="0 0 520 410" role="img" aria-labelledby="map-title map-desc">
+      <title id="map-title">Match the model to the step</title>
+      <desc id="map-desc">An illustrative maintenance task: a small model reads and sorts, a larger model makes a change, and your tests check it before you review. Circle size distinguishes the model choices, not measured performance.</desc>
+      <g class="flow-lines" fill="none" stroke-width="1.5">
+        <path d="M64 104 V179 M64 203 V278"/>
+        <path d="M76 290 H134 Q154 290 154 270 V211 Q154 191 174 191 H215"/>
+        <path d="M343 191 H392 Q412 191 412 211 V302"/>
+        <path d="M412 340 V367 H288"/>
+      </g>
+      <g class="small-step"><circle cx="64" cy="92" r="12"/><circle cx="64" cy="191" r="12"/><circle cx="64" cy="290" r="12"/></g>
+      <g class="map-label"><text x="88" y="67">Read</text><text x="88" y="166">Sort</text><text x="88" y="265">Summarize</text></g>
+      <circle class="large-halo" cx="279" cy="191" r="81" fill="none" stroke-width="1"/>
+      <circle class="large-step" cx="279" cy="191" r="64"/>
+      <text class="large-label" x="279" y="186" text-anchor="middle">Make the</text>
+      <text class="large-label" x="279" y="210" text-anchor="middle">change</text>
+      <text class="map-note" x="279" y="301" text-anchor="middle">Larger model</text>
+      <text class="map-note" x="30" y="338">Small model</text>
+      <rect class="check-step" x="393" y="302" width="38" height="38" rx="8"/>
+      <path class="check-tick" d="M403 321 l6 6 13-14" fill="none" stroke-width="2"/>
+      <text class="map-label" x="412" y="282" text-anchor="middle">Your tests</text>
+      <circle class="review-step" cx="279" cy="367" r="7"/>
+      <text class="map-label" x="255" y="373" text-anchor="end">Your review</text>
+    </svg>
+    <figcaption id="allocation-caption">You choose the model for each step.<br>poieo follows the work you define.</figcaption>
+  </figure>
+</section>
 
-    <p class="buttons">
-      <a class="button primary" href="#sixty">Get started</a>
-      <a class="button" href="docs.html">Read the docs</a>
-    </p>
-    <p class="hero-note">Local or cloud, chosen per step. Your tasks stay on your machine; every change waits for you.</p>
+<section class="approach section" id="approach" aria-labelledby="approach-title">
+  <div class="section-heading">
+    <h2 id="approach-title">Spend the intelligence<br>where it earns its place.</h2>
+    <p>The goal is more accuracy for the cost. Start with a small model, use a larger one where the task needs it, and judge the result against your checks.</p>
+  </div>
+  <div class="principles">
+    <article>
+      <div class="principle-mark routine" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <h3>Keep the everyday light.</h3>
+      <p>Reading, sorting, routine checks. Give frequent, well-bounded steps a model that handles them economically.</p>
+    </article>
+    <article>
+      <div class="principle-mark judgment" aria-hidden="true"><i></i></div>
+      <h3>Give hard work more room.</h3>
+      <p>Bring a larger model into the steps that need deeper reasoning or more context. Change the model without rewriting the work.</p>
+    </article>
+    <article>
+      <div class="principle-mark evidence" aria-hidden="true"><i></i><i></i></div>
+      <h3>Let the result prove itself.</h3>
+      <p>Build tests and review into your task. Inspect what ran, what changed, and the usage and cost the model reports.</p>
+    </article>
+  </div>
+  <p class="approach-note">Model choices are explicit today. Savings and accuracy depend on your models, tasks, and checks.</p>
+</section>
+
+<section class="work-section section" aria-labelledby="work-title">
+  <div class="section-heading">
+    <h2 id="work-title">Set the work in motion.<br>Come back to something clear.</h2>
+    <p>Write the task once. It keeps its schedule and its journal, so each run starts with context from the last.</p>
+  </div>
+  <div class="work-loop">
+    <article><span class="product-word">task</span><h3>Write the task</h3><p>A name, a folder, and what you want done. Begin with one model; add more steps when the work needs them.</p></article>
+    <article><span class="product-word">run</span><h3>Let it run</h3><p>poieo runs the task on your schedule and records what happened. Pause it, try it again, or follow its progress.</p></article>
+    <article><span class="product-word">change</span><h3>Review the change</h3><p>In a Git project, work happens in a private copy. Read the diff, then accept it or set it aside.</p></article>
+  </div>
+  <figure class="product-shot">
+    <img src="img/task.png" alt="The poieo task board, with a task's runs and a file change opened for review" width="1440" height="900" loading="lazy">
+    <figcaption>The task board keeps the result, its history, and the change together.</figcaption>
+  </figure>
+  <div class="continuity">
+    <h3>The next run has a starting point.</h3>
+    <p>Each task keeps a journal. Project memory can share learned context across tasks. Your work stays in files and records you can inspect.</p>
+    <a class="text-link" href="docs.html#usage/journals-and-project-memory">Read about memory <span aria-hidden="true">↗</span></a>
   </div>
 </section>
 
-<section class="cycle" aria-labelledby="cycle-title">
-  <p class="proof-label">THE WORKING LOOP</p>
-  <h2 id="cycle-title">Write the task. Let it run. Review the change.</h2>
-  <div class="cycle-steps">
-    <article>
-      <span>task</span>
-      <h3>Write the task</h3>
-      <p>A name, a folder, and a prompt. One plain file is enough.</p>
-    </article>
-    <article>
-      <span>run</span>
-      <h3>Let it run</h3>
-      <p>Pick the models that fit. poieo keeps the task moving on its schedule.</p>
-    </article>
-    <article>
-      <span>change</span>
-      <h3>Review the change</h3>
-      <p>Read the result and the diff. Accept it or discard it; you stay in control.</p>
-    </article>
+<section class="start section" id="start" aria-labelledby="start-title">
+  <div class="start-intro">
+    <h2 id="start-title">One task is<br>enough to start.</h2>
+    <p>Try the whole loop offline with a scripted model. Connect your own models when you are ready.</p>
+    <a class="text-link" href="docs.html#usage">Open the manual <span aria-hidden="true">↗</span></a>
   </div>
-  <div class="cycle-proof">
-    <figure class="shot">
-      <img src="img/board.png" width="820" height="900"
-           alt="Five task cards on the poieo board, with one change waiting">
-      <figcaption>Tasks keep moving without becoming a wall of chats.</figcaption>
-    </figure>
-    <figure class="shot cycle-review">
-      <img src="img/task.png" width="1440" height="900"
-           alt="A task opened on the board, showing its runs and a change ready to review">
-      <figcaption>Every change comes back with its history and diff.</figcaption>
-    </figure>
-  </div>
-</section>
+  <div class="setup-steps">
+    <div class="setup-step">
+      <h3>Install and create a project</h3>
+      <pre><code>git clone https://github.com/luceinaltis/poieo
+cd poieo
+pip install .
 
-<section id="sixty">
-  <h2>Get started in sixty seconds</h2>
-
-  <div class="steps">
-    <div class="step">
-      <h3>Set a folder up</h3>
-      <pre><code>mkdir ~/board &amp;&amp; cd ~/board
-poieo init</code></pre>
-      <p>
-        It finds every model server on this machine and writes the result to
-        plain files. No model yet? <code>--mock</code> gives you a stand-in
-        that spends nothing.
-      </p>
+mkdir my-board
+cd my-board
+poieo init --mock</code></pre>
     </div>
-
-    <div class="step">
-      <h3>Write a card</h3>
-      <pre><code><span class="c"># ~/board/tasks/keep-green.yaml</span>
-name: keep the tests green
-folder: ~/code/thing
+    <div class="setup-step">
+      <h3>Save a task in <code>tasks/keep-green.yaml</code></h3>
+      <pre><code>name: keep the tests green
+folder: /path/to/your/git-project
 prompt: |
-  Run the tests. If one fails,
-  find out why and fix it.</code></pre>
-      <p>
-        That is the whole file — everything else has a default.
-      </p>
+  Run the tests. Find and fix a failing test.
+  Run them again to check the change.</code></pre>
+      <p>Choose an existing folder. The mock exercises the loop without calling a real model.</p>
     </div>
-
-    <div class="step">
-      <h3>Leave it running</h3>
+    <div class="setup-step">
+      <h3>Keep it running</h3>
       <pre><code>poieo daemon</code></pre>
-      <p>
-        Every card in <code>tasks/</code> now runs on its schedule, and the
-        board is at <code>127.0.0.1:8484</code>. A task is a file: drop one in,
-        delete it out.
-      </p>
+      <p>Open the board at <code>http://127.0.0.1:8484</code>. Then <a href="docs.html#usage/choose-models">choose the models</a> for your real work.</p>
     </div>
   </div>
 </section>
-
-<section class="morning">
-  <div class="morning-text">
-    <h2>The night, and the morning after</h2>
-    <p>
-      Tasks work in a <strong>private copy</strong>, never in your checkout.
-      Each run leaves at most one change.
-    </p>
-    <p>
-      In the morning, read the diff and <strong>accept</strong> it — the only
-      moment poieo writes to your branch — or <strong>discard</strong> it;
-      nothing is lost for good.
-    </p>
-  </div>
-</section>
-
-<section class="why">
-  <h2>Why it earns a place on your machine</h2>
-  <dl>
-    <div>
-      <dt>Cheaper than doing it one prompt at a time</dt>
-      <dd>
-        Each step names a role, and you pick the model that serves it — free
-        ones for the night shift, a costly one only where it pays.
-      </dd>
-    </div>
-    <div>
-      <dt>The whole flow on one board</dt>
-      <dd>
-        One graph shows every task and its wiring; any run replays what it
-        did, turn by turn.
-      </dd>
-    </div>
-    <div>
-      <dt>One memory, shared by every task</dt>
-      <dd>
-        A lesson one task learns lands in shared memory, and every task reads
-        it before working.
-      </dd>
-    </div>
-    <div>
-      <dt>Tasks that learn their job</dt>
-      <dd>
-        Journals plus a learning pass mean next week starts where this week
-        ended — never from zero.
-      </dd>
-    </div>
-  </dl>
-</section>
-
-<section class="end">
-  <h2>One person's machine, running one person's work</h2>
-  <p>
-    No accounts, no server, no team features — and no plan to have them.
-    Everything on this page ships today.
-  </p>
-  <p class="buttons">
-    <a class="button primary" href="https://github.com/luceinaltis/poieo">Get it on GitHub</a>
-    <a class="button" href="https://github.com/luceinaltis/poieo/blob/main/docs/usage.md">The manual</a>
-  </p>
-</section>
-
 </main>
 
-<footer>
-  <p>
-    <a href="https://github.com/luceinaltis/poieo">Source</a> ·
-    <a href="https://github.com/luceinaltis/poieo/blob/main/DESIGN.md">What it promises</a> ·
-    <a href="docs.html">Docs</a> ·
-    <a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT</a>
-  </p>
-  <p class="quiet">poieo is Greek <i lang="el">ποιέω</i>, “to make” — say it <i>poy-eh-oh</i>.</p>
+<footer class="footer">
+  <div><img class="brand-word" src="img/signature.svg" alt="poieo" width="104" height="38"><p>A personal tool for work that keeps going.</p></div>
+  <nav aria-label="Footer navigation"><a href="docs.html">Documentation</a><a href="https://github.com/luceinaltis/poieo">Source on GitHub</a><a href="https://github.com/luceinaltis/poieo/blob/main/LICENSE">MIT license</a></nav>
+  <p class="footer-note">From the Greek <i lang="el">ποιέω</i>, “to make.”</p>
 </footer>
-
-<script>
-  // The button is hidden in the markup and shown here, so a reader without
-  // JavaScript is not offered one that does nothing. The command is selectable
-  // either way.
-  for (const button of document.querySelectorAll("[data-copy]")) {
-    if (!navigator.clipboard) continue
-    button.hidden = false
-    button.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent)
-      button.textContent = "copied"
-      setTimeout(() => (button.textContent = "copy"), 1600)
-    })
-  }
-</script>
-
 </body>
 </html>
