@@ -5,6 +5,29 @@ from test_web_create_card import _client, _make
 from test_workspace import git
 
 
+async def test_the_applied_diff_includes_the_verified_repair(tmp_path):
+    import httpx
+    from test_task_application import CHECK_MADE, policy_config, run_once
+
+    from poieo.web.server import create_app
+
+    responses = """          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: old}}
+          - wrote made.txt
+          - tool_calls:
+              - {name: write_file, arguments: {path: made.txt, content: hi}}
+          - '{"decision":"ready","summary":"Fixed made.txt"}'
+"""
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]}, responses=responses)
+    daemon, result = await run_once(config)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
+    ) as client:
+        reply = await client.get(f"/api/runs/{result.run_id}/diff")
+    assert reply.json()["head"] == result.application["after"]
+    assert "+hi" in reply.json()["patch"]
+
+
 def test_creation_preserves_the_users_automatic_application_settings(tmp_path):
     client, cards = _client(tmp_path)
     git(tmp_path / "work", "init")

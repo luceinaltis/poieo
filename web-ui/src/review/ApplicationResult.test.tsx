@@ -2,7 +2,12 @@ import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { expect, test } from "vitest"
 
-import { ApplicationResult } from "./ApplicationResult"
+import { ApplicationResult, applicationLabel } from "./ApplicationResult"
+
+test("identical work and undone work have distinct recorded outcomes", () => {
+  expect(applicationLabel({ status: "applied", accepted: 2, unchanged: true })).toBe("Already included")
+  expect(applicationLabel({ status: "undone" })).toBe("Undone · task paused")
+})
 
 test("applied changes show the commands and the recorded verification result", () => {
   const host = document.createElement("div")
