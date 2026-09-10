@@ -137,6 +137,19 @@ async def test_revoking_permission_during_verification_prevents_application(tmp_
     assert not (repo / "made.txt").exists()
 
 
+def test_permission_is_checked_while_holding_the_application_lock(tmp_path):
+    repo = make_repo(tmp_path)
+    point = workspace(tmp_path, repo)
+    do_run(point, "r1", "made.txt", "hi")
+    prepared = point.prepare_accept()
+    try:
+        result = point.apply_prepared(prepared, permitted=lambda: False)
+        assert result == {"revoked": True}
+        assert not (repo / "made.txt").exists()
+    finally:
+        point.release_prepared(prepared)
+
+
 async def test_automatic_application_refuses_an_unprotected_folder_before_running(tmp_path):
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]})
     (repo / ".git").rename(repo / ".git-kept")
@@ -298,18 +311,19 @@ async def test_application_settings_take_effect_on_the_next_run_without_restart(
     data = yaml.safe_load(path.read_text())
     data["apply"] = {"mode": "auto", "checks": [CHECK_MADE]}
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
-    result, = await asyncio.wait_for(daemon.serve(install_signals=False), 30)
+    (result,) = await asyncio.wait_for(daemon.serve(install_signals=False), 30)
     assert result.application["status"] == "applied"
     assert (repo / "made.txt").read_text() == "hi"
 
 
 async def test_auto_checks_pending_work_even_when_the_retry_changes_no_files(tmp_path):
     from test_task_workspace import WRITES_NOTHING
+
     from poieo.workspace import Workspace
 
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": [CHECK_MADE]}, responses=WRITES_NOTHING)
     daemon = Daemon(config, on_run=lambda _task, _result: daemon.stop())
     do_run(Workspace(repo, "chores", config.layout().worktrees()), "previous", "made.txt", "hi")
-    result, = await asyncio.wait_for(daemon.serve(install_signals=False), 30)
+    (result,) = await asyncio.wait_for(daemon.serve(install_signals=False), 30)
     assert result.application["status"] == "applied"
     assert (repo / "made.txt").read_text() == "hi"
