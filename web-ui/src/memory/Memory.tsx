@@ -12,7 +12,7 @@ import {
 } from "../api"
 import { Gauge } from "../Gauge"
 import { Constellation } from "./Constellation"
-import { learnerLoad } from "./load"
+import { learnerLoad, pageLength } from "./load"
 import type {
   LearningPass,
   MemoryAskReply,
@@ -685,6 +685,15 @@ export function Memory({
             ) : (
               <form className="memory-page-edit" onSubmit={(event) => void savePage(event)}>
                 <textarea aria-label="Page" value={pageDraft} onChange={(event) => setPageDraft(event.target.value)} />
+                {/* Counted as a run reads it, against the budget. Over it the
+                    colour and the word say so; saving is never refused, since
+                    the page must not become a way to stop every task. */}
+                <Gauge
+                  label="as a run reads it"
+                  used={pageLength(pageDraft)}
+                  limit={overview.stats?.page_budget ?? null}
+                  unit="chars"
+                />
                 <div>
                   <button type="submit" data-do="save-page" disabled={writing}>
                     save

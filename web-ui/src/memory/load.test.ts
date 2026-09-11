@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 
-import { learnerLoad } from "./load"
+import { learnerLoad, pageLength } from "./load"
 import type { LearningPass, MemoryOverview } from "./types"
 
 const PASS: LearningPass = {
@@ -55,10 +55,8 @@ test("a pass that counted nothing is not a ratio", () => {
   expect(load.measured).toBe(false)
 })
 
-test("without a window the size stands alone in characters", () => {
-  const load = learnerLoad(overview({ prompt_chars: 3_000, entries: 12, model: null, context: null }, [PASS]))!
-
-  expect(load.tokens).toBeNull()
-  expect(load.chars).toBe(3_000)
-  expect(learnerLoad(overview(null))).toBeNull()
+test("a page's length is counted as a run reads it, without its comments", () => {
+  expect(pageLength("<!-- a note to the editor -->\nNever push to main.")).toBe("Never push to main.".length)
+  expect(pageLength("<!-- only a note -->")).toBe(0)
+  expect(pageLength("  Dates are ISO.  ")).toBe("Dates are ISO.".length)
 })

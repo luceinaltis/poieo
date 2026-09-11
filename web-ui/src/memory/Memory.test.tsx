@@ -582,3 +582,24 @@ test("once a pass has counted, the learner's question is converted at that pass'
   expect(learner.dataset.level).toBe("ok")
   expect(learner.getAttribute("title")).toContain("as the last pass counted")
 })
+
+test("the page editor counts the draft as a run reads it and never refuses to save", async () => {
+  vi.mocked(putMemoryPage).mockResolvedValue({ ok: true })
+  vi.mocked(fetchMemory).mockResolvedValue({
+    ...OVERVIEW,
+    stats: { ...OVERVIEW.stats!, page_chars: 20, page_budget: 40 },
+  })
+  await render()
+  await act(async () => container.querySelector<HTMLElement>('[data-do="edit-page"]')!.click())
+
+  const gauge = () => container.querySelector<HTMLElement>('.memory-page-edit [data-gauge="as a run reads it"]')!
+  // The fixture's page is a comment and then "Keep tests portable.": the comment does not count.
+  expect(gauge().textContent).toContain("20 / 40 chars")
+  expect(gauge().dataset.level).toBe("ok")
+
+  await fill('[aria-label="Page"]', "<!-- trim -->\nKeep tests portable. Dates are ISO. Never push.")
+  expect(gauge().textContent).toContain("47 / 40 chars")
+  expect(gauge().dataset.level).toBe("over")
+  expect(gauge().textContent).toContain("over the limit")
+  expect(container.querySelector<HTMLButtonElement>('[data-do="save-page"]')!.disabled).toBe(false)
+})
