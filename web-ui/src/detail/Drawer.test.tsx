@@ -875,3 +875,81 @@ test("a run named on arrival is selected even when it left the short history", a
   expect(container.querySelector(".run-brief h3")?.textContent).toBe("Selected run")
   expect(container.querySelector(".run-brief-what")?.textContent).toContain("an account from weeks ago")
 })
+
+test("the selected run says what its prompt was made of, each part against its budget", async () => {
+  fetchRunMemory.mockResolvedValue({
+    run_id: "r1",
+    task: "chores",
+    shown: [],
+    prompt: {
+      page: { chars: 205, budget: 12_000 },
+      memory: { chars: 3_600, budget: 4_000 },
+      journal: { chars: 11 },
+    },
+  })
+  await draw([run])
+
+  const makeup = container.querySelector<HTMLElement>(".run-brief .run-prompt")!
+  expect(makeup).not.toBeNull()
+  const page = makeup.querySelector<HTMLElement>('[data-gauge="page"]')!
+  expect(page.textContent).toContain("205 / 12k chars")
+  const memory = makeup.querySelector<HTMLElement>('[data-gauge="memory"]')!
+  expect(memory.dataset.level).toBe("near")
+  expect(memory.textContent).toContain("3,600 / 4,000 chars")
+  // The journal has a size and no budget, so no bar.
+  const journal = makeup.querySelector<HTMLElement>('[data-gauge="journal"]')!
+  expect(journal.dataset.level).toBe("unbounded")
+  expect(journal.textContent).toContain("11 chars")
+})
+
+test("a record written before runs measured their prompt draws no make-up", async () => {
+  fetchRunMemory.mockResolvedValue({ run_id: "r1", task: "chores", shown: [], prompt: null })
+  await draw([run])
+
+  expect(container.querySelector(".run-prompt")).toBeNull()
+})
+
+test("a turn that knows its window puts its input against it", async () => {
+  await show([
+    event("node_turn", {
+      data: { turn: 8, text: "thinking about it", input_tokens: 170_000, output_tokens: 3_120, window: 200_000 },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="turn"]')!
+  const gauge = entry.querySelector<HTMLElement>('[data-gauge="context"]')!
+  expect(gauge.dataset.level).toBe("near")
+  expect(gauge.textContent).toContain("170k / 200k tokens")
+  expect(entry.textContent).toContain("3,120 out")
+})
+
+test("a turn whose window nobody could say keeps the plain count", async () => {
+  await show([
+    event("node_turn", {
+      data: { turn: 8, text: "thinking about it", input_tokens: 84_210, output_tokens: 3_120, window: null },
+    }),
+  ])
+
+  const entry = container.querySelector('[data-kind="turn"]')!
+  expect(entry.querySelector('[data-gauge="context"]')).toBeNull()
+  expect(entry.textContent).toContain("84,210 in")
+})
+
+test("a part the record did not measure is left out rather than drawn empty", async () => {
+  fetchRunMemory.mockResolvedValue({
+    run_id: "r1",
+    task: "chores",
+    shown: [],
+    prompt: {
+      page: { chars: 205, budget: 12_000 },
+      memory: { chars: null, budget: 4_000 },
+      journal: { chars: null },
+    },
+  })
+  await draw([run])
+
+  const makeup = container.querySelector<HTMLElement>(".run-prompt")!
+  expect(makeup.querySelector('[data-gauge="page"]')).not.toBeNull()
+  expect(makeup.querySelector('[data-gauge="memory"]')).toBeNull()
+  expect(makeup.querySelector('[data-gauge="journal"]')).toBeNull()
+})

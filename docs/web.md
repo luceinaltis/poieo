@@ -190,7 +190,11 @@ from a button beside the project name on the bar, and new task from a button on
 the board itself (the empty board offers it in its invitation instead), and
 neither moves the rail's mark. The task
 drawer leads with whether the reader must act and the latest or selected run's
-result, time, duration, change, or usage. That run owns its lazily fetched
+result, time, duration, change, or usage, then what its prompt was made of --
+the page and the memory entries against their budgets, the journal by size,
+with the same gauge the memory view uses -- and which memory it was shown. In
+the activity, a turn that knows its window puts its input tokens against it;
+one whose window nobody could say keeps the plain count. That run owns its lazily fetched
 activity before the full-history picker: each tool call leads with the model's
 short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from

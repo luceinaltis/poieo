@@ -8,6 +8,7 @@
 import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
 import { fetchRunEvents, fetchRunMemory, fetchRuns, fetchRunSummary } from "../api"
+import { Gauge } from "../Gauge"
 import { Card } from "./Card"
 import { Control } from "./Control"
 import { Question } from "./Question"
@@ -277,6 +278,9 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
     }
     const sent = Number(data.input_tokens ?? 0)
     const wrote = Number(data.output_tokens ?? 0)
+    // The window this turn was measured against, when the binding or the
+    // endpoint said; an older event or a silent endpoint leaves the count alone.
+    const window = typeof data.window === "number" && data.window > 0 ? Number(data.window) : null
     // The turn number is the loop's bookkeeping. What a reader wants from a
     // second turn is that the model spoke again, which the entry already is.
     return (
@@ -295,7 +299,11 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
               which turn it happened on. */}
           {sent > 0 ? (
             <p className="drawer-cost">
-              {`${sent.toLocaleString("en-US")} in`}
+              {window !== null ? (
+                <Gauge label="context" used={sent} limit={window} unit="tokens" />
+              ) : (
+                `${sent.toLocaleString("en-US")} in`
+              )}
               {wrote > 0 ? ` · ${wrote.toLocaleString("en-US")} out` : ""}
             </p>
           ) : null}
@@ -544,6 +552,7 @@ function RunBrief({
       <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
       <p className="run-brief-what">{account}</p>
       <p className="run-brief-meta">{meta.join(" · ")}</p>
+      {memory && memory.run_id === run.run_id ? <PromptMakeup memory={memory} /> : null}
       {memory && memory.run_id === run.run_id ? <ShownMemory memory={memory} onMemory={onMemory} /> : null}
     </section>
   )
@@ -567,6 +576,30 @@ function RunBrief({
  * kept none when this ran). An empty list is different, and says so -- as a
  * sentence, since there is nothing to unfold.
  */
+/**
+ * What the run's prompt was made of, each part against its budget: the page
+ * and the memory entries have one, the journal only a size. Nothing is drawn
+ * for a record written before runs measured this, and a part the record did
+ * not measure is left out rather than drawn empty.
+ */
+function PromptMakeup({ memory }: { memory: RunMemory }) {
+  const prompt = memory.prompt
+  if (!prompt) return null
+  return (
+    <div className="run-prompt" data-run-prompt={memory.run_id} aria-label="What the prompt was made of">
+      {prompt.page.chars !== null ? (
+        <Gauge label="page" used={prompt.page.chars} limit={prompt.page.budget} unit="chars" />
+      ) : null}
+      {prompt.memory.chars !== null ? (
+        <Gauge label="memory" used={prompt.memory.chars} limit={prompt.memory.budget} unit="chars" />
+      ) : null}
+      {prompt.journal.chars !== null ? (
+        <Gauge label="journal" used={prompt.journal.chars} limit={null} unit="chars" />
+      ) : null}
+    </div>
+  )
+}
+
 function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: string): void }) {
   if (!memory.shown) return null
   const shown = memory.shown

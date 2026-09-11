@@ -171,6 +171,20 @@
   min-width: 0;
 }
 
+/* The prompt's make-up, one gauge a part, on its own line under the time
+   line and before the memory sentence. */
+.run-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 4px 0 0;
+}
+
+.run-prompt .gauge,
+.drawer-cost .gauge {
+  font-size: 0.85em;
+}
+
 .run-memory-lead {
   color: var(--dim);
   font-size: 0.85em;
