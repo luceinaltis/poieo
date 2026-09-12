@@ -1,6 +1,7 @@
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
+import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, expect, test } from "vitest"
 
 import { compact, Gauge, gaugeLevel } from "./Gauge"
@@ -65,4 +66,14 @@ test("an estimate is marked, and an unknown limit draws no track", async () => {
   expect(bare.dataset.level).toBe("unbounded")
   expect(bare.querySelector(".gauge-track")).toBeNull()
   expect(bare.textContent).toContain("1,550 chars")
+})
+
+test("a gauge wraps its parts in a narrow place instead of running out of the box", () => {
+  // The drawer clipped "near the limit" mid-word at the first look; the parts
+  // stay whole and the word drops a line.
+  const css = readFileSync("src/gauge.css", "utf8")
+  const rule = css.slice(css.indexOf(".gauge {"), css.indexOf("}", css.indexOf(".gauge {")))
+  expect(rule).toContain("flex-wrap: wrap")
+  expect(rule).not.toContain("white-space: nowrap")
+  expect(css).toMatch(/\.gauge > span \{[^}]*white-space: nowrap/)
 })

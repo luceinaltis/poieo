@@ -1,12 +1,19 @@
+/* Each part keeps to one line, but the parts may wrap: in a narrow place the
+   word drops under the numbers rather than running out of the box. */
 .gauge {
   --gauge-fill: var(--paused);
   align-items: center;
   color: var(--dim);
   display: inline-flex;
+  flex-wrap: wrap;
   font-family: var(--mono);
   font-size: 0.875rem;
-  gap: 6px;
+  gap: 2px 6px;
   letter-spacing: 0.04em;
+  max-width: 100%;
+}
+
+.gauge > span {
   white-space: nowrap;
 }
 
