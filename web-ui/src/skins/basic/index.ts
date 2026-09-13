@@ -1,8 +1,8 @@
 /**
  * The plain view: the work as a graph, with one noun on screen.
  *
- * Each task carries readable step connections, including incoming paths and
- * explicit destinations. Opening the border adds the live text and tool calls;
+ * Each task carries a vertical graph with a visible start and endings.
+ * Opening the border adds the live text and tool calls;
  * View steps opens the spatial graph at an independent reading size.
  *
  * One rule reads the whole picture: **an arrow that crosses a border ends one
@@ -22,14 +22,15 @@ import { zoom as d3zoom, zoomIdentity } from "d3-zoom"
 import type { D3ZoomEvent } from "d3-zoom"
 
 import { changedTasks } from "../changed"
-import { stepName, waysOut } from "./steps"
+import { stepName } from "./steps"
+import { drawCardSteps } from "./card"
 import { createGraphDialog } from "./graph"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
   BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
-  place, readingView, typeScale, walk, wire,
+  place, readingView, typeScale, wire,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -264,68 +265,11 @@ function fillInside(box: Box, taskState: TaskState): boolean {
   const structure = JSON.stringify([taskState.name, taskState.shape])
   if (box.structure === structure) return false
   box.structure = structure
-  const shape = taskState.shape
-  const differ = modelsOf(taskState).length > 1
-  const nodes = new Map(shape.nodes.map(node => [node.id, node]))
-  const names = new Map<string, number>()
-  for (const node of shape.nodes) names.set(stepName(node), (names.get(stepName(node)) ?? 0) + 1)
-  const nameOf = (id: string): string => {
-    const node = nodes.get(id)
-    if (!node) return id
-    const name = stepName(node)
-    return names.get(name)! > 1 ? `${name} (${id})` : name
-  }
-  const incoming = new Map(shape.nodes.map(node => [node.id, new Set<string>()]))
-  for (const node of shape.nodes) {
-    for (const way of waysOut(node)) {
-      if (way.to !== null) incoming.get(way.to)?.add(node.id)
-    }
-  }
-
-  const steps = walk(shape).map(id => {
-    const spec = nodes.get(id)!
-    const step = document.createElement("section")
-    step.className = "basic-node"
-    step.dataset.node = id
-    step.dataset.type = spec.type
-    step.setAttribute("aria-label", nameOf(id))
-
-    const input = element("div", "basic-step-input", step)
-    element("span", "basic-step-label", input).textContent = "From"
-    const sources = [...incoming.get(id)!].map(nameOf)
-    if (id === shape.entry) sources.unshift("Start")
-    element("span", "basic-step-source", input).textContent = sources.join(" · ") || "No previous step"
-
-    const heading = element("div", "basic-node-head", step)
-    const name = element("span", "basic-node-name", heading)
-    name.textContent = nameOf(id)
-    name.title = `${stepName(spec)} (${id})`
-    if (differ && spec.model) element("span", "basic-node-model", heading).textContent = spec.model
-    if (spec.tools.length > 0) {
-      const hands = element("span", "basic-node-hands", heading)
-      hands.textContent = "edits files"
-      hands.title = spec.tools.join(", ")
-    }
-
-    const ways = waysOut(spec)
-    // A leaf still has an explicit destination: ending this run.
-    if (ways.length === 0) ways.push({ to: null, label: "", fallback: false })
-    for (const way of ways) {
-      const output = element("div", "basic-step-output", step)
-      output.dataset.conditional = String(Boolean(way.label) && !way.fallback)
-      element("span", "basic-step-label", output).textContent =
-        way.fallback ? "Otherwise" : way.label ? `If ${way.label}` : "Next"
-      const destination = element("span", "basic-step-destination", output)
-      destination.textContent = way.to === null ? "End run" : nameOf(way.to)
-      destination.dataset.end = String(way.to === null)
-    }
-    return step
-  })
-  box.inside.hidden = steps.length === 0
+  box.inside.hidden = taskState.shape.nodes.length === 0
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
   box.inside.setAttribute("aria-label", `Step connections in ${taskState.name}`)
-  box.steps.replaceChildren(...steps)
+  drawCardSteps(box.steps, taskState)
   return true
 }
 
