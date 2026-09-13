@@ -18,6 +18,36 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+@pytest.mark.parametrize("resolution", ["successful_run", "retry_answer"])
+async def test_resolving_an_application_hold_notifies_open_boards(tmp_path, resolution):
+    from poieo.daemon import Daemon
+    from poieo.web import BroadcastStore
+
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
+    driver = Daemon(config)._runners()[0]
+    driver.store = BroadcastStore(driver.store)
+    events = driver.store.subscribe()
+    await driver.run_once({})
+    assert driver.holding
+    while not events.empty():
+        events.get_nowait()
+
+    if resolution == "retry_answer":
+        assert driver.answer("retry")
+    else:
+        path = tmp_path / "cards" / "chores.yaml"
+        data = yaml.safe_load(path.read_text())
+        data["apply"]["checks"] = [CHECK_MADE]
+        path.write_text(yaml.safe_dump(data))
+        result = await driver.run_once({})
+        assert result.application["status"] == "applied"
+
+    assert not driver.holding
+    assert driver.held_because is None
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert {"type": "tasks_changed", "project": config.display_name} in records
+
+
 async def test_accepting_old_work_keeps_recent_spending_in_the_limit(tmp_path):
     _, config = policy_config(tmp_path, {"mode": "review"})
     daemon, result = await run_once(config)
