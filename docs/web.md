@@ -276,11 +276,27 @@ placement: the first matching condition wins. The otherwise
 path always appears, including when it ends the run. Step names wrap, and repeated
 descriptions include IDs to distinguish destinations.
 
+Task handoffs continue through the card graphs: every possible **End run** feeds
+one **Output / Run result**, and the receiving card's **Input** leads to its first
+step. The output is the completed run's results, state and answer received as
+`input.sender`; it does not claim that a particular last node supplies a particular
+field. Question endings say **After answer** before Output. A null task handoff
+ends at **Stop here**. Several conditions to the same task share a board wire and
+retain their authored priority. Only tasks in the sender's project can receive it.
+
+Board wires attach to the measured Output and Input, even after pan/zoom or a card
+resize. Forward wires use the gaps between columns; returns are dashed and run
+below the cards, as do forward wires that skip columns. Hovering or focusing a
+terminal or wire highlights its connections and both cards. Clicking a wire, or
+pressing Enter/Space on it, brings the receiving card into view and focuses Input.
+
 Card graphs measure their labels before Dagre places nodes from top to bottom.
-Conditions wrap more narrowly when needed to fit the card. The graph never scales
-below 90% within the card; unusually wide forks and graphs taller than 460 pixels
-scroll inside their own region without zooming the board. Start/end markers are
-separate from authored step IDs, so a step named `start` remains an ordinary step.
+Connected cards grow to fit the complete graph without internal scrolling or
+scaled-down labels. Column widths include the widest card so wires clear the
+other cards too. Independent cards wrap conditions more narrowly when needed;
+their graphs never scale below 90%, and unusually wide forks or graphs taller than
+460 pixels scroll within the card. Diagram terminals are separate from authored
+step IDs, so a step named `start` remains an ordinary step.
 The initial board view keeps cards at a readable scale, fitting at least one
 card's width on narrow screens. Dragging and the minimap reach tasks outside
 the viewport; double-clicking the board background fits the whole board.

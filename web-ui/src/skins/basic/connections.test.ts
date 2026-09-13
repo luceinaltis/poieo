@@ -140,7 +140,7 @@ test("a route beside a narrow card also clears wider cards in the same column", 
   expect(lane).toBeLessThan(parseFloat(card("Review").style.left))
 })
 
-test("a connected graph pans with the board instead of trapping the wheel in an inner scroll area", () => {
+test("a connected graph lets the board handle wheel navigation", () => {
   const board = host.querySelector<HTMLElement>(".basic")!
   const before = board.style.transform
   const wheel = new WheelEvent("wheel", { deltaY: -200, cancelable: true, bubbles: true })

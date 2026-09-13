@@ -25,12 +25,13 @@ import { changedTasks } from "../changed"
 import { stepName } from "./steps"
 import { drawCardSteps } from "./card"
 import { createGraphDialog } from "./graph"
+import { drawConnections, taskConnections } from "./connections"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
 import { keyOfTask } from "../../state/stage"
 import type { StageState, TaskState } from "../../state/stage"
 import {
-  BOX, ZOOM, backWire, centreOn, corner, fit, looking, loops, minimap,
-  place, readingView, typeScale, wire,
+  BOX, ZOOM, centreOn, corner, fit, looking, minimap,
+  place, readingView, typeScale,
 } from "../wiring"
 import type { Frame, Placed, View } from "../wiring"
 import { shortTime } from "../../when"
@@ -132,8 +133,7 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
   const root = document.createElement("div")
   root.className = "basic-task"
   root.dataset.task = task
-  // The one width, from the constant the arrows are drawn against. Written in
-  // the stylesheet it was free to drift from them, and it had.
+  // Independent cards stay compact. Connected graphs may need a wider border.
   root.style.width = `${BOX.width}px`
 
   const head = element("div", "basic-head", root)
@@ -283,15 +283,19 @@ function describeStale(taskState: TaskState): string {
 }
 
 /** Connections at card width. Structure stays put while run state changes. */
-function fillInside(box: Box, taskState: TaskState): boolean {
-  const structure = JSON.stringify([taskState.name, taskState.shape])
+function fillInside(box: Box, taskState: TaskState, receives: boolean): boolean {
+  const structure = JSON.stringify([taskState.name, taskState.shape, taskState.then, receives])
   if (box.structure === structure) return false
   box.structure = structure
-  box.inside.hidden = taskState.shape.nodes.length === 0
+  const connected = receives || taskState.then.some(way => way.to !== null)
+  box.root.dataset.connected = String(connected)
+  box.root.style.width = `${BOX.width}px`
+  box.inside.hidden = taskState.shape.nodes.length === 0 && !connected
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
   box.inside.setAttribute("aria-label", `Step connections in ${taskState.name}`)
-  drawCardSteps(box.steps, taskState)
+  const width = drawCardSteps(box.steps, taskState, receives)
+  if (connected) box.root.style.width = `${Math.max(BOX.width, width + 32)}px`
   return true
 }
 
@@ -371,88 +375,6 @@ function measure(placed: Placed[], boxes: Map<string, Box>): Frame {
   return { tops, bottom: y - BOX.gapY, heights }
 }
 
-function drawWires(
-  svg: SVGElement,
-  stage: StageState,
-  placed: Placed[],
-  frame: Frame,
-): void {
-  const at = new Map(placed.map((one) => [one.task, one]))
-  const lastRow = placed.reduce((low, one) => Math.max(low, one.row), 0)
-  const lines: SVGElement[] = []
-
-  for (const [task, taskState] of Object.entries(stage.tasks)) {
-    const from = at.get(task)
-    if (from === undefined) continue
-    for (const arrow of taskState.then) {
-      // `then:` names a task in the sender's own project, which is the only
-      // place a handoff can reach -- so the key is built from that project.
-      const to =
-        arrow.to === null
-          ? undefined
-          : at.get(keyOfTask(taskState.project, arrow.to))
-      // A branch that deliberately stops has nothing to point at, and a target
-      // that is disabled has no box on this board.
-      if (to === undefined) continue
-      const back = loops(from, to) ? backWire(from, to, lastRow, frame) : null
-      const line = back ?? wire(from, to, frame)
-
-      const path = document.createElementNS(SVG, "path")
-      path.setAttribute("class", "basic-wire")
-      path.setAttribute(
-        "d",
-        back
-          ? `M ${back.x1} ${back.y1} H ${back.turn} V ${back.under} H ${back.x2} V ${back.y2}`
-          : `M ${line.x1} ${line.y1} C ${line.turn} ${line.y1}, ${line.turn} ${line.y2}, ${line.x2} ${line.y2}`,
-      )
-      lines.push(path)
-
-      // A head, because the rule the whole board rests on is that an arrow
-      // crosses a border. A bare line says two tasks are related; it does not
-      // say which one ends and which one begins.
-      //
-      // Going back it points up instead, into an underside. A forward arrow
-      // always arrives at a left edge, so one arriving from below cannot be
-      // mistaken for a step onward.
-      const head = document.createElementNS(SVG, "path")
-      head.setAttribute("class", "basic-tip")
-      head.setAttribute(
-        "d",
-        back
-          ? `M ${back.x2 - 4} ${back.y2 + 8} L ${back.x2} ${back.y2} L ${back.x2 + 4} ${back.y2 + 8} Z`
-          : `M ${line.x2 - 8} ${line.y2 - 4} L ${line.x2} ${line.y2} L ${line.x2 - 8} ${line.y2 + 4} Z`,
-      )
-      lines.push(head)
-
-      // **Where it leaves from.** A head at one end said which way the arrow
-      // pointed and nothing said where it began, so a reader had a line
-      // touching two borders and no way to tell the sender from the receiver
-      // without following it. A socket at the source and a head at the target
-      // are a pair: one gesture, two ends, and which is which is read rather
-      // than worked out.
-      const socket = document.createElementNS(SVG, "circle")
-      socket.setAttribute("class", "basic-socket")
-      socket.setAttribute("cx", String(back ? back.x1 : line.x1))
-      socket.setAttribute("cy", String(back ? back.y1 : line.y1))
-      socket.setAttribute("r", "3.5")
-      lines.push(socket)
-
-      const word = document.createElementNS(SVG, "text")
-      word.setAttribute("class", "basic-word")
-      // Forward, the bend is the middle of the gap the arrow crosses; going
-      // back, the middle of the long leg underneath. Either way it is the one
-      // piece of the route that is nowhere near a border.
-      word.setAttribute("x", String(back ? (back.turn + back.x2) / 2 : line.turn))
-      // On the line, not above it: floated, the word sat against the border
-      // below and read as that box's label rather than this arrow's.
-      word.setAttribute("y", String(back ? back.under : (line.y1 + line.y2) / 2))
-      word.textContent = arrow.label
-      lines.push(word)
-    }
-  }
-  svg.replaceChildren(...lines)
-}
-
 /** Whether the layout has to be worked out again, rather than just repainted. */
 /**
  * What the layout depends on: who hands to whom, and which borders are open.
@@ -522,9 +444,9 @@ export const basic: Skin = {
     // view, and `show` stops fitting.
     let chosen: View | null = null
 
-    // Controls and the scrollable steps keep their own mouse/touch gestures.
+    // Independent graphs scroll locally. Full connected graphs move with the board.
     const grabbable = (event: Event): boolean =>
-      !(event.target as HTMLElement | null)?.closest("button, .basic-inside")
+      !(event.target as Element | null)?.closest('button, [data-port], .basic-connection, .basic-task[data-connected="false"] .basic-inside')
 
     map.addEventListener("pointerdown", (event) => {
       event.stopPropagation()
@@ -621,6 +543,9 @@ export const basic: Skin = {
 
     function relayout(stage: StageState): void {
       const tasks = Object.keys(stage.tasks)
+      help.textContent = taskConnections(stage).length
+        ? "Click a connection to follow it. Drag to move; double-click to fit."
+        : "Drag to see more tasks. Double-click to fit."
       const handoffs: Record<string, string[]> = {}
       for (const [task, taskState] of Object.entries(stage.tasks)) {
         // Keyed the way the board is: `then:` names a task in the sender's
@@ -638,23 +563,65 @@ export const basic: Skin = {
       const across = Math.max(1, Math.floor((viewport.clientWidth + BOX.gapX) / (BOX.width + BOX.gapX)))
       const placed = place(tasks, handoffs, across)
       const rows = measure(placed, boxes)
+      const columns = Math.max(1, ...placed.map(one => one.column + 1))
+      const widths = Array.from({ length: columns }, () => BOX.width)
+      for (const one of placed) widths[one.column] = Math.max(widths[one.column], parseFloat(boxes.get(one.task)!.root.style.width))
+      const positions = new Map(placed.map(one => [one.task, one]))
+      const outer = taskConnections(stage).some(link => positions.get(link.to)!.column !== positions.get(link.from)!.column + 1)
+      const lefts: number[] = []
+      let left = outer ? 24 : 0
+      for (const width of widths) { lefts.push(left); left += width + BOX.gapX }
       for (const one of placed) {
-        const box = boxes.get(one.task)
-        if (box === undefined) continue
-        const spot = corner(one, rows)
-        box.root.style.left = `${spot.x}px`
-        box.root.style.top = `${spot.y}px`
+        const box = boxes.get(one.task)!
+        box.root.style.left = `${lefts[one.column]}px`
+        box.root.style.top = `${corner(one, rows).y}px`
       }
-      const columns = Math.max(1, ...placed.map((one) => one.column + 1))
-      // The gaps sit between columns, so the last one is trailing air.
-      board.style.width = `${columns * (BOX.width + BOX.gapX) - BOX.gapX}px`
-      // Room below for the return leg of a handoff that goes back, which is
-      // drawn half a gap under the lowest box. Trimmed to `rows.bottom`, the
-      // fit would size the board without it and the viewport would clip it.
-      board.style.height = `${rows.bottom + BOX.gapY}px`
-      drawWires(svg, stage, placed, rows)
+      board.style.width = `${left - BOX.gapX + (outer ? 24 : 0)}px`
+      const bottom = drawConnections(svg, stage, placed, boxes, rows.bottom, follow, trace)
+      board.style.height = `${bottom}px`
+      trace(null)
       drawMap(placed, rows)
       show()
+    }
+
+    function trace(from: string | null, to?: string) {
+      // A pointer leaving a wire after following it must not clear the Input
+      // that still has keyboard focus. Hover temporarily takes precedence.
+      if (from === null && to === undefined && board.contains(document.activeElement)) {
+        const focused = document.activeElement!
+        const connection = focused.closest<SVGElement>(".basic-connection")
+        const port = focused.closest<HTMLElement>("[data-port]")
+        if (connection) { from = connection.dataset.from!; to = connection.dataset.to! }
+        else if (port) {
+          const task = port.closest<HTMLElement>(".basic-task")!.dataset.task!
+          if (port.dataset.port === "output") from = task
+          else to = task
+        }
+      }
+      const clear = from === null && to === undefined
+      const linked = new Set([from, to].filter((key): key is string => Boolean(key)))
+      for (const connection of svg.querySelectorAll<SVGElement>(".basic-connection")) {
+        const active = (from === null || connection.dataset.from === from) && (to === undefined || connection.dataset.to === to)
+        if (clear) delete connection.dataset.active
+        else connection.dataset.active = String(active)
+        if (active) { linked.add(connection.dataset.from!); linked.add(connection.dataset.to!) }
+      }
+      for (const [key, box] of boxes) {
+        if (clear) delete box.root.dataset.linked
+        else box.root.dataset.linked = String(linked.has(key))
+      }
+    }
+
+    function follow(task: string) {
+      const box = boxes.get(task)
+      if (!box) return
+      const current = where()
+      chosen = { ...current,
+        x: Math.max(16, (viewport.clientWidth - parseFloat(box.root.style.width) * current.zoom) / 2) - parseFloat(box.root.style.left) * current.zoom,
+        y: 24 - parseFloat(box.root.style.top) * current.zoom,
+      }
+      show()
+      box.steps.querySelector<HTMLElement>('[data-port="input"]')?.focus({ preventScroll: true })
     }
 
     /** The board again, small enough to sit in a corner: one speck per task. */
@@ -667,7 +634,8 @@ export const basic: Skin = {
       map.style.height = `${mapped.height}px`
 
       const specks = placed.map((one) => {
-        const spot = corner(one, rows)
+        const root = boxes.get(one.task)!.root
+        const spot = { x: parseFloat(root.style.left), y: parseFloat(root.style.top) }
         const speck = document.createElement("div")
         speck.className = "basic-speck"
         // Not `data-task`: that already means "a border on the board", and one
@@ -675,7 +643,7 @@ export const basic: Skin = {
         speck.dataset.speck = one.task
         speck.style.left = `${spot.x * mapped.zoom}px`
         speck.style.top = `${spot.y * mapped.zoom}px`
-        speck.style.width = `${BOX.width * mapped.zoom}px`
+        speck.style.width = `${parseFloat(root.style.width) * mapped.zoom}px`
         speck.style.height = `${(rows.heights[one.task] ?? BOX.height) * mapped.zoom}px`
         return speck
       })
@@ -742,6 +710,7 @@ export const basic: Skin = {
     return {
       update(stage: StageState) {
         let moved = false
+        const receiving = new Set(taskConnections(stage).map(link => link.to))
         for (const [task, taskState] of changedTasks(stage.tasks, painted)) {
           let box = boxes.get(task)
           if (box === undefined) {
@@ -755,11 +724,18 @@ export const basic: Skin = {
               if (now !== undefined) paint(box!, now, isOpen(task, now))
               if (last !== null) relayout(last)
             })
+            const tracePort = (event: Event) => {
+              const port = (event.target as Element).closest<HTMLElement>("[data-port]")
+              if (port) trace(port.dataset.port === "output" ? task : null, port.dataset.port === "input" ? task : undefined)
+            }
+            box.root.addEventListener("focusin", tracePort)
+            box.root.addEventListener("pointerover", tracePort)
+            box.root.addEventListener("focusout", () => trace(null))
+            box.root.addEventListener("pointerleave", () => { if (!box!.root.contains(document.activeElement)) trace(null) })
             boxes.set(task, box)
             board.append(box.root)
             moved = true
           }
-          if (fillInside(box, taskState)) moved = true
           paint(box, taskState, isOpen(task, taskState))
         }
         for (const [task, box] of boxes) {
@@ -768,6 +744,13 @@ export const basic: Skin = {
             boxes.delete(task)
             byHand.delete(task)
             moved = true
+          }
+        }
+        for (const [task, box] of boxes) {
+          const taskState = stage.tasks[task]
+          if (fillInside(box, taskState, receiving.has(task))) {
+            moved = true
+            paint(box, taskState, isOpen(task, taskState))
           }
         }
         last = stage
