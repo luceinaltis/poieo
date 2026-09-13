@@ -84,6 +84,13 @@ The theme follows the operating system until a person chooses Light or Dark.
 The choice is saved in `poieo.theme` for that browser origin. If storage is
 unavailable, the control still changes the current page.
 
+The landing's sun and crescent moon use the visitor's local clock independently
+of the theme: sun from 06:00 to 18:00, moon otherwise. Their height follows a
+quiet 12-hour arc, highest at noon or midnight. This is a clock convention,
+not astronomical sunrise or lunar-phase data. Use gold and pale ink-wash shapes
+in the left margin, above the headline on phones. Update once a minute while
+visible; respect reduced motion and leave the headline and controls unobstructed.
+
 ## Type and copy
 
 Georgia gives the website and docs headings a restrained serif voice. Hanken
