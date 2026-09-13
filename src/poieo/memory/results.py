@@ -71,7 +71,7 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     ``replace`` records a later answer or application decision. Without it a
     finished decision would remain open in the task's memory.
     """
-    from ..card import closing_line  # late: task.py imports this package
+    from ..card import closing_line  # late: card.py imports this package
 
     path = results_dir(task.dir) / f"{result.run_id}.json"
     record = {

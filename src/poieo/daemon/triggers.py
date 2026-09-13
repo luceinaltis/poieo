@@ -11,47 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import random
-import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import AsyncIterator, Literal
+from typing import AsyncIterator
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from ..cron import CronSchedule
 from ..errors import SpecError
-from .cron import CronSchedule
-
-_DURATION = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)?\s*$", re.IGNORECASE)
-_UNITS = {"ms": 0.001, "s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
-
-
-def parse_duration(value: str | int | float) -> float:
-    """``"30s"`` / ``"5m"`` / ``90`` -> seconds."""
-    if isinstance(value, (int, float)):
-        return float(value)
-    match = _DURATION.match(str(value))
-    if not match:
-        raise SpecError(f"cannot parse duration {value!r} (try '30s', '5m', '2h')")
-    amount, unit = match.groups()
-    return float(amount) * _UNITS[(unit or "s").lower()]
-
-
-def humanize(seconds: float) -> str:
-    """Seconds back in the units somebody would have written them in.
-
-    The inverse of :func:`parse_duration`, near enough: `30m` read back as
-    `every 1800s` makes a person do arithmetic to check their own config, and
-    only one of those two can be checked at a glance. The largest unit that
-    divides evenly wins; nothing does, and seconds is the honest answer.
-
-    This reaches further than it looks -- it is what `poieo tasks`, `flows`
-    and `validate` print, what the board labels a task with, and the reason
-    every interval run records for having fired.
-    """
-    for size, unit in ((86400, "d"), (3600, "h"), (60, "m")):
-        if seconds >= size and seconds % size == 0:
-            return f"{seconds / size:g}{unit}"
-    return f"{seconds:g}s"
+from ..task import TriggerSpec, humanize, parse_duration
 
 
 @dataclass(slots=True)
@@ -63,67 +29,35 @@ class Firing:
     reason: str
 
 
-class TriggerSpec(BaseModel):
-    """Declarative trigger configuration, discriminated by ``type``."""
+def build_trigger(spec: TriggerSpec) -> Trigger:
+    """The trigger a task's schedule settings ask for.
 
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["manual", "interval", "cron", "loop"] = "manual"
-
-    # interval
-    every: str | float | None = None
-    jitter: str | float = 0
-    run_at_start: bool = True
-
-    # cron
-    expression: str | None = None
-
-    # loop
-    cooldown: str | float = 0
-
-    # all types
-    max_iterations: int | None = Field(default=None, ge=1)
-
-    @field_validator("expression")
-    @classmethod
-    def _valid_cron(cls, value: str | None) -> str | None:
-        if value is not None:
-            CronSchedule(value)
-        return value
-
-    @field_validator("every", "jitter", "cooldown")
-    @classmethod
-    def _valid_duration(cls, value: str | float | None) -> str | float | None:
-        # Checked here, not in build(): a schedule that cannot parse must
-        # fail where `poieo validate` and the daemon's load can see it,
-        # not when the trigger is first armed.
-        if value is not None:
-            parse_duration(value)
-        return value
-
-    def build(self) -> Trigger:
-        if self.type == "interval":
-            if self.every is None:
-                raise SpecError("interval trigger requires 'every'")
-            return IntervalTrigger(
-                every=parse_duration(self.every),
-                jitter=parse_duration(self.jitter),
-                run_at_start=self.run_at_start,
-                max_iterations=self.max_iterations,
-            )
-        if self.type == "cron":
-            if not self.expression:
-                raise SpecError("cron trigger requires 'expression'")
-            return CronTrigger(
-                schedule=CronSchedule(self.expression),
-                max_iterations=self.max_iterations,
-            )
-        if self.type == "loop":
-            return LoopTrigger(
-                cooldown=parse_duration(self.cooldown),
-                max_iterations=self.max_iterations,
-            )
-        return ManualTrigger(max_iterations=self.max_iterations)
+    A function beside the trigger classes rather than a method on the spec:
+    the spec lives in ``task.py``, below the daemon, and must not know what
+    waits on it.
+    """
+    if spec.type == "interval":
+        if spec.every is None:
+            raise SpecError("interval trigger requires 'every'")
+        return IntervalTrigger(
+            every=parse_duration(spec.every),
+            jitter=parse_duration(spec.jitter),
+            run_at_start=spec.run_at_start,
+            max_iterations=spec.max_iterations,
+        )
+    if spec.type == "cron":
+        if not spec.expression:
+            raise SpecError("cron trigger requires 'expression'")
+        return CronTrigger(
+            schedule=CronSchedule(spec.expression),
+            max_iterations=spec.max_iterations,
+        )
+    if spec.type == "loop":
+        return LoopTrigger(
+            cooldown=parse_duration(spec.cooldown),
+            max_iterations=spec.max_iterations,
+        )
+    return ManualTrigger(max_iterations=spec.max_iterations)
 
 
 async def _sleep_or_cancel(seconds: float, cancel: asyncio.Event) -> bool:

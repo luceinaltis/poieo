@@ -9,7 +9,8 @@ pending questions, handoffs, spend limits, learning passes, and shutdown.
 
 ## Runnable configuration
 
-A `TaskSpec` contains:
+A `TaskSpec` is defined in `src/poieo/task.py`, below the daemon, so that card
+expansion and `poieo run` share it without loading the scheduler. It contains:
 
 | field | contract |
 |---|---|
@@ -121,7 +122,9 @@ private copies, application rules, result records and journal.
 
 ## Triggers
 
-`TriggerSpec` supports:
+`TriggerSpec`, the settings in `task.py`, becomes a trigger here through
+`build_trigger`; the cron notation is parsed by `src/poieo/cron.py`. It
+supports:
 
 - `manual` — fires only through run-now or a handoff;
 - `interval` — `every`, optional `jitter`, and `run_at_start`;
