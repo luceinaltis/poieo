@@ -87,17 +87,26 @@ for that browser origin and reflect changes in other open tabs. If storage is
 unavailable, the control still changes the current page. The installed board
 keeps its separate Light/Dark control and system-preference fallback.
 
-The landing's photographic sun and full moon always follow the local clock:
-sun from 06:00 to 18:00, moon otherwise, even with a manual theme choice.
-They rise on the left, cross the high middle at noon or midnight, and descend
-on the right. This is a clock convention, not astronomical sunrise or lunar-phase
-data. Keep the arc clear of text and controls, including on phones. A soft
-ivory halo makes the moon luminous on dark ground. Use the generated transparent
-assets; do not replace them with drawn icons. Only the current body is loaded.
+The landing's photographic sun belongs to a light page and its full moon to a
+dark one. In Auto that is the local clock: sun from 06:00 to 18:00, moon
+otherwise. A chosen Light or Dark keeps its own body at any hour. The arc keeps
+the clock either way: the body rises on the left, crosses the high middle at
+noon or midnight, and descends on the right, so a moon chosen at noon stands
+where the sun was. This is a clock convention, not astronomical sunrise or
+lunar-phase data. Keep the arc clear of text and controls, including on phones.
+A soft ivory halo makes the moon luminous on dark ground. Use the generated
+transparent assets; do not replace them with drawn icons. Only the current body
+is loaded.
+
+Three wash clouds drift slowly across the sky in front of the sun or moon:
+ivory on dark ground, diluted ink on paper. They are drawn in CSS, hidden from
+assistive technology, and stay above the headline. Keep them faint; the sky is
+a backdrop, not a scene.
 
 Update each minute while visible. Resume from the current time after sleep or
-browser-history restoration. Reduced motion disables transitions; switching
-bodies or returning after a time jump also places the body immediately.
+browser-history restoration. Reduced motion disables transitions and holds the
+clouds still; switching bodies or returning after a time jump also places the
+body immediately.
 
 ## Type and copy
 
