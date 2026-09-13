@@ -41,6 +41,7 @@ export function MakeTask({
   project,
   keepsCopies,
   onClose,
+  onMade,
   seed,
   taken = [],
 }: {
@@ -54,6 +55,12 @@ export function MakeTask({
    */
   keepsCopies: boolean
   onClose(): void
+  /**
+   * A card was written, under the name the daemon filed it under. The shell
+   * opens it the moment the board has it; until then the panel stays and
+   * says what it made.
+   */
+  onMade?(task: string): void
   /**
    * "Make one like it": the fields of an existing card, to start from.
    *
@@ -105,8 +112,11 @@ export function MakeTask({
         setMade(answer.task)
         // Cleared rather than closed. Closing was the first shape and it made
         // the confirmation unreachable -- the panel unmounted in the same
-        // batch that set it, so a save gave no sign at all. The board is one
-        // click away on the rail, and the card takes a moment to appear there.
+        // batch that set it, so a save gave no sign at all. The shell takes
+        // over from here: the daemon looks at the folder as soon as the card
+        // is written and says "ask again", and the card opens in its drawer
+        // the moment the listing carries it. Until then this line stands.
+        onMade?.(answer.task)
         setName("")
         setFolder("")
         setPrompt("")
@@ -223,7 +233,7 @@ export function MakeTask({
           Made “{made}”.{" "}
           {started
             ? "It starts on its own."
-            : "It is on the board, switched off — start it from there."}
+            : "It is switched off — switch it on in its Task setup when it is ready."}
         </p>
       ) : null}
 

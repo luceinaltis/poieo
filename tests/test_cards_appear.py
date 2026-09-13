@@ -211,6 +211,33 @@ async def test_a_card_asking_for_isolation_waits_for_a_restart(tmp_path, monkeyp
     await down(daemon, task)
 
 
+async def test_a_card_posted_to_the_board_is_looked_at_now(tmp_path, monkeypatch):
+    """The scan is the one door a card comes through, and it stays so. What a
+    board write adds is a knock: the daemon looks at the folder now rather
+    than at the end of a sleep it was in the middle of, so a card made from
+    the form is on the board before the hand that made it has moved. The
+    scan interval here is longer than the test, so only the knock can pass it.
+    """
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 60.0)
+    daemon = Daemon(_project(tmp_path), store=BroadcastStore(NullStore()))
+    (tmp_path / "work").mkdir()
+    task = await up(daemon)
+    queue = daemon.projects[0].store.subscribe()
+
+    transport = httpx.ASGITransport(app=create_app(daemon))
+    async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+        answer = await client.post(
+            f"/api/projects/{daemon.config.display_name}/tasks",
+            json={"name": "now", "folder": "../work", "prompt": "look around", "enabled": False},
+        )
+        assert answer.status_code == 200, answer.text
+        await until(lambda: _named(daemon, "now") is not None, "the posted card to be noticed", timeout=2.0)
+        await until(lambda: not queue.empty(), "the board to be told", timeout=2.0)
+        assert queue.get_nowait()["type"] == "tasks_changed"
+
+    await down(daemon, task)
+
+
 async def test_a_card_posted_to_the_board_starts_running(tmp_path, monkeypatch):
     """The two halves meeting, which is the only thing neither test proves on
     its own: the route writes a file, and the daemon that was already running

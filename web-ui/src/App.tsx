@@ -75,6 +75,10 @@ export default function App({ store }: { store?: StageStore }) {
   // These three panels share one margin, so only one can be open at a time.
   // Unlike the skin and project, the open panel is not remembered across reloads.
   const [activePanel, setActivePanel] = useState<PanelState>(CLOSED_PANEL)
+  // A card the form just wrote, by the key the stage will file it under. The
+  // daemon looks at the folder the moment it is written and says "ask again";
+  // when the listing then carries it, it opens where the form was.
+  const [awaitedTaskKey, setAwaitedTaskKey] = useState<string | null>(null)
   const panelOpenerRef = useRef<HTMLElement | null>(null)
   const panelWasOpenRef = useRef(false)
   const panelIsOpen = activePanel.kind !== "closed"
@@ -262,6 +266,25 @@ export default function App({ store }: { store?: StageStore }) {
     },
     [rememberPanelOpener],
   )
+  const openOnceMade = useCallback(
+    (task: string) => {
+      if (project) setAwaitedTaskKey(keyOfTask(project.name, task))
+    },
+    [project],
+  )
+  useEffect(() => {
+    if (awaitedTaskKey === null) return
+    // Only where the form still is. A reader who has since closed it, opened
+    // models, picked another task or switched project has said where they
+    // want to be, and a card arriving a moment later must not take that back.
+    if (activePanel.kind !== "make") {
+      setAwaitedTaskKey(null)
+      return
+    }
+    if (!(awaitedTaskKey in stage.tasks)) return
+    setActivePanel({ kind: "task", taskKey: awaitedTaskKey })
+    setAwaitedTaskKey(null)
+  }, [activePanel.kind, awaitedTaskKey, stage.tasks])
   const makeAlike = useCallback(
     (initialFields: TaskFields) => setActivePanel({ kind: "make", initialFields }),
     [],
@@ -470,6 +493,7 @@ export default function App({ store }: { store?: StageStore }) {
           // already the filename, which is what a collision is about.
           taken={tasks.filter((one) => one.project === project.name).map((one) => one.name)}
           onClose={closePanel}
+          onMade={openOnceMade}
         />
       ) : null}
 

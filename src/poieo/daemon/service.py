@@ -166,6 +166,26 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
     return graph, None, fresh
 
 
+async def _sleep_or_knock(seconds: float, cancel: asyncio.Event, knock: asyncio.Event) -> bool:
+    """Sleep until the next look is due, a knock comes, or shutdown asks first.
+
+    True means look now -- the interval passed or somebody knocked -- and False
+    means shutdown, which is the only way out of the loop that waits here. A
+    knock is consumed on the way out, so one knock is one early look and not a
+    scan that never sleeps again.
+    """
+    if cancel.is_set():
+        return False
+    waits = [asyncio.ensure_future(cancel.wait()), asyncio.ensure_future(knock.wait())]
+    try:
+        await asyncio.wait(waits, timeout=seconds, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for wait in waits:
+            wait.cancel()
+    knock.clear()
+    return not cancel.is_set()
+
+
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
     """Wait out one background task on the way down, and say what it did.
 
@@ -1402,6 +1422,9 @@ class Daemon:
         self.web_host = web_host
         self.on_run = on_run
         self.cancel = asyncio.Event()
+        # A knock on the tasks folder: the scan looks now rather than at the end
+        # of the sleep it is in. Set by `look_now`, cleared by the scan.
+        self._knock = asyncio.Event()
         # One pool per distinct binding file: clients are reused across tasks,
         # and across projects -- two projects naming one binding file mean one
         # set of clients, which is the point of keying on the file.
@@ -1496,7 +1519,7 @@ class Daemon:
         try:
             while not self.cancel.is_set():
                 # False means shutdown asked first, which is the only way out.
-                if not await _sleep_or_cancel(SCAN_SECONDS, self.cancel):
+                if not await _sleep_or_knock(SCAN_SECONDS, self.cancel, self._knock):
                     break
                 for project in self.projects:
                     switches = [(r, r.armed) for r in self.runners if r.config is project.config]
@@ -1655,6 +1678,21 @@ class Daemon:
                 runner.title = fresh.name
                 moved = True
         return moved
+
+    def look_now(self) -> None:
+        """Look at the tasks folder now rather than at the end of the current sleep.
+
+        The scan stays the one door a card comes through -- the board's writes
+        do not load anything themselves, so a card made from the form and a
+        card dropped into the folder by hand are noticed by the same code and
+        refused by the same rules. What a write adds is the knock: without it
+        a card saved from the board took up to a scan to appear on the board
+        that saved it, and the form could only say "it takes a moment".
+
+        On the loop, like `_announce`: the routes that call this are async
+        handlers, and an event set from another thread would not wake a waiter.
+        """
+        self._knock.set()
 
     def _announce(self, project: LoadedProject, kind: str) -> None:
         """Push one frame that is not a run event at every page watching.

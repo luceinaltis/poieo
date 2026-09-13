@@ -225,6 +225,18 @@ def _question(runner: Any) -> dict[str, Any] | None:
     }
 
 
+def _look_now(daemon: Any) -> None:
+    """Ask the daemon to look at the tasks folder now, after a card write.
+
+    The write itself loads nothing -- the scan is the one door -- so this is
+    a knock, not a reload. A daemon standing in for the real one in a test has
+    no watcher to wake, and the write is no less written for that.
+    """
+    look = getattr(daemon, "look_now", None)
+    if look is not None:
+        look()
+
+
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The one runner a project and a task name between them pick out.
 
@@ -913,7 +925,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 status_code=409,
             )
         # No reload here: the daemon watches this folder and will find it, the
-        # same way it finds one written by a hand. One door, not two.
+        # same way it finds one written by a hand. One door, not two -- but a
+        # knock on it, so the board that made the card has it now and not at
+        # the end of a sleep the scan was in the middle of.
+        _look_now(daemon)
         return JSONResponse({"ok": True, "task": slug, "path": str(path)})
 
     def _asked_card(request: Request) -> tuple[Any, Any, JSONResponse | None]:
@@ -1258,6 +1273,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         refused, live = await asyncio.to_thread(_judge)
         if refused is not None:
             return refused
+        # The scan adopts a switch and carries a title; knocking makes that
+        # now rather than within a few seconds.
+        _look_now(daemon)
         return JSONResponse({"ok": True, "task": spec.slug, "live": live})
 
     async def project_task_set_aside(request: Request) -> JSONResponse:
@@ -1312,6 +1330,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             # set aside, and "paused from the board" would be a press nobody made.
             runner.pause(because=None)
 
+        _look_now(daemon)
         return JSONResponse({"ok": True, "task": spec.slug, "kept": str(kept)})
 
     async def project_task_rename(request: Request) -> JSONResponse:
@@ -1389,6 +1408,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         if runner is not None:
             runner.pause(because=None)
 
+        # The new name is a card that appeared; knocking makes it appear now.
+        _look_now(daemon)
         return JSONResponse({"ok": True, "task": slug, "path": str(moved)})
 
     async def _card_verbs(request: Request) -> JSONResponse:
