@@ -82,6 +82,8 @@ export function MakeTask({
   const [folder, setFolder] = useState(seed?.folder ?? "")
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [steps, setSteps] = useState<StepDraft[] | null>(null)
+  /** One line, or nothing: the card then takes its hourly default. */
+  const [schedule, setSchedule] = useState("")
   const [application, setApplication] = useState(draftOf())
   const [made, setMade] = useState<string | null>(null)
   // Which of the two presses made it, so the confirmation says which happened.
@@ -101,7 +103,14 @@ export function MakeTask({
     void act(async () => {
       const configured = JSON.stringify(application) !== JSON.stringify(draftOf())
       const args = [project, name.trim(), folder.trim(), steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled] as const
-      const answer = configured ? await createTask(...args, applicationOf(application)) : await createTask(...args)
+      // Only what was said: a blank schedule is not sent, so a card made
+      // without one reads exactly as it did before there was a field.
+      const when = schedule.trim()
+      const answer = when
+        ? await createTask(...args, configured ? applicationOf(application) : undefined, when)
+        : configured
+          ? await createTask(...args, applicationOf(application))
+          : await createTask(...args)
       // `ok` alone is not enough: a 2xx whose body did not parse arrives as
       // {ok: true} with no task, and treating that as made would clear the
       // form over a card that may not exist -- and a second press would
@@ -121,6 +130,7 @@ export function MakeTask({
         setName("")
         setFolder("")
         setPrompt("")
+        setSchedule("")
         setSteps(null)
         setApplication(draftOf())
         setStarted(enabled)
@@ -183,6 +193,22 @@ export function MakeTask({
       <button type="button" className="step-start" disabled={busy}
         onClick={() => setSteps([newStep([], "agent", prompt)])}>Write as steps</button>
       </>}
+
+      {/* The short form's schedule, as one line: an interval, the word loop,
+          or a cron line. Left blank the card says nothing and runs hourly,
+          which is what every card made here did before there was a field.
+          Jitter, a start rule or a run limit are still the file's. */}
+      <label className="make-field">
+        every
+        <input
+          name="schedule"
+          className="make-input"
+          placeholder="1h unless said — 30m, loop, or a cron line like 0 2 * * *"
+          value={schedule}
+          disabled={busy}
+          onChange={(event) => setSchedule(event.target.value)}
+        />
+      </label>
 
       {problems.length > 0 && <ul className="step-problems" aria-label="Steps to fix">
         {problems.map(problem => <li key={problem}>{problem}</li>)}

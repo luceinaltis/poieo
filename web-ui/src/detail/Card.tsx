@@ -37,6 +37,8 @@ export function Card({
   const [prompt, setPrompt] = useState("")
   /** The fourth thing the form can show: whether the card lets the task run. */
   const [enabled, setEnabled] = useState(true)
+  /** The card's `every:` or `at:` as one line; "" leaves it to the default. */
+  const [schedule, setSchedule] = useState("")
   const [application, setApplication] = useState(draftOf())
   const [text, setText] = useState("")
   const [isMissing, setIsMissing] = useState(false)
@@ -67,6 +69,7 @@ export function Card({
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
     setEnabled(card.enabled)
+    setSchedule(card.schedule ?? "")
     setApplication(draftOf(card.apply))
   }
 
@@ -102,12 +105,16 @@ export function Card({
       folder === (cardFields.folder ?? "") &&
       prompt === (cardFields.prompt ?? "") &&
       enabled === cardFields.enabled &&
+      schedule === (cardFields.schedule ?? "") &&
       JSON.stringify(application) === JSON.stringify(draftOf(cardFields.apply))
     : text === originalText
 
   // Only when it moved. Absent means unchanged to the daemon, and a prompt
   // tweak must not carry a switch either way.
   const isSwitchFlipped = isPlainCard && enabled !== cardFields.enabled
+  // Same rule: sent only when it moved, so a prompt tweak never rewrites a
+  // schedule the daemon then asks a restart for.
+  const isScheduleMoved = isPlainCard && schedule !== (cardFields.schedule ?? "")
 
   const saveCard = () =>
     void act(async () => {
@@ -116,12 +123,13 @@ export function Card({
         task,
         isPlainCard ? { name, folder, prompt,
           ...(isSwitchFlipped ? { enabled } : {}),
+          ...(isScheduleMoved ? { schedule: schedule.trim() } : {}),
           ...(JSON.stringify(application) !== JSON.stringify(draftOf(cardFields?.apply))
             ? { apply: applicationOf(application) } : {}) } : text,
       )
       if (answer.ok) {
         if (isPlainCard && cardFields) {
-          setCardFields({ ...cardFields, name, folder, prompt, enabled, apply: applicationOf(application) })
+          setCardFields({ ...cardFields, name, folder, prompt, enabled, schedule: schedule.trim(), apply: applicationOf(application) })
         } else {
           setOriginalText(text)
         }
@@ -202,6 +210,24 @@ export function Card({
                     setPrompt(event.target.value)
                     setSaveResult(null)
                     // Reaching for the words is deciding to keep the task.
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+              </label>
+              {/* One line for `every:` or `at:`. A schedule reaches a trigger
+                  built at startup, so a change here waits for a restart, and
+                  the saved line says so; the field is here so that finding
+                  that out no longer means opening the file. */}
+              <label className="card-field">
+                every
+                <input
+                  className="card-field-schedule"
+                  placeholder="1h unless said — 30m, loop, or a cron line"
+                  value={schedule}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setSchedule(event.target.value)
+                    setSaveResult(null)
                     setIsSetAsideArmed(false)
                   }}
                 />

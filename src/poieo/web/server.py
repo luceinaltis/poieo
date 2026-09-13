@@ -44,6 +44,8 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
+from ..daemon.cron import CronSchedule
+from ..daemon.triggers import parse_duration
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
@@ -244,6 +246,42 @@ _NOT_A_WORKPLACE = {"node_modules", "__pycache__"}
 # person to read, not a file tree.
 _FOLDERS_DEEP = 2
 _FOLDERS_OFFERED = 200
+
+
+def _schedule_keys(value: str) -> dict[str, str]:
+    """The card keys one schedule line stands for, or a SpecError.
+
+    The form has one field where the card has two keys: an interval like
+    `30m`, or the word `loop`, is `every:`; five cron fields are `at:`. The
+    same parsers the daemon arms a trigger with decide which, so a line the
+    form accepts is a line the card will load. Blank is no key at all, and
+    the card takes its default.
+    """
+    line = " ".join(value.split())
+    if not line:
+        return {}
+    if line.lower() == "loop":
+        return {"every": "loop"}
+    if len(line.split(" ")) == 5:
+        try:
+            CronSchedule(line)
+        except Exception as exc:
+            raise SpecError(f"a schedule of five fields is a cron line, and this one is not: {exc}") from exc
+        return {"at": line}
+    try:
+        parse_duration(line)
+    except SpecError as exc:
+        raise SpecError(
+            "a schedule is an interval like 30m or 2h, the word loop, or a cron line like 0 2 * * *"
+        ) from exc
+    return {"every": line}
+
+
+def _schedule_line(every: Any, at: Any) -> str:
+    """The one line the form shows for a card's `every:` or `at:`."""
+    if every is not None:
+        return str(every)
+    return str(at) if at is not None else ""
 
 
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
@@ -886,6 +924,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             application = ApplySpec.model_validate(body.get("apply", {}))
         except ValueError as exc:
             return JSONResponse({"error": describe_invalid(exc)}, status_code=400)
+        try:
+            schedule = _schedule_keys(str(body.get("schedule") or ""))
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
 
         # Refused rather than quietly rewritten. "tidy up" becoming "tidy-up"
         # is a spelling; "../escape" becoming "escape" is a different request
@@ -968,6 +1010,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "name": title,
                 "folder": folder,
                 **({"graph": f"{slug}.graph.yaml"} if graph is not None else {"prompt": prompt}),
+                # One line on the form, spelled as the card spells it.
+                **schedule,
                 **({} if enabled else {"enabled": False}),
                 **({"apply": application.model_dump()} if "apply" in body else {}),
             },
@@ -1043,7 +1087,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         policy = data.get("apply") or {}
         if isinstance(policy, dict) and any("\n" in str(command) for command in policy.get("checks") or []):
             return False
-        return set(data) <= {"name", "folder", "prompt", "enabled", "apply"}
+        # A one-line schedule is the form's to show; a `trigger:` block is not.
+        return set(data) <= {"name", "folder", "prompt", "enabled", "apply", "every", "at"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -1114,6 +1159,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "folder": fresh.folder,
                     "prompt": fresh.prompt,
                     "enabled": fresh.enabled,
+                    # The one line the form shows for `every:` or `at:`, or
+                    # nothing when the card leaves its schedule to the default.
+                    "schedule": _schedule_line(fresh.every, fresh.at),
                     "apply": fresh.apply.model_dump(),
                     "keeps_copies": bool(
                         fresh.folder_path() and await asyncio.to_thread(git_keeps_copies, fresh.folder_path())
@@ -1151,11 +1199,23 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     },
                     status_code=409,
                 )
+            kept = yaml.safe_load(current)
+            # Absent means unchanged, as the switch does: the card keeps the
+            # `every:` or `at:` it had, in the spelling it had. Sent, the line
+            # decides which key; blank is neither, and the default.
+            if "schedule" in body:
+                try:
+                    schedule = _schedule_keys(str(body.get("schedule") or ""))
+                except SpecError as exc:
+                    return JSONResponse({"error": str(exc)}, status_code=400)
+            else:
+                schedule = {key: kept[key] for key in ("every", "at") if key in kept}
             text = yaml.safe_dump(
                 {
                     "name": str(body.get("name") or spec.slug),
                     "folder": str(body.get("folder") or ""),
                     "prompt": str(body.get("prompt") or ""),
+                    **schedule,
                     # Written only when off, as make writes it: a card saying
                     # `enabled: true` says nothing a card without it does not.
                     #

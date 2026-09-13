@@ -49,7 +49,7 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
 | `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics (second looks as `{slug, reason}`), search capabilities, a bounded relationship graph, `learning`, the last few learning passes newest first, and `learner`, the size of the learner's next question with the model and window it will face (null window when the binding names none); supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, write history, and `sources`, each source run id with the task its record names (null when the record is gone), or 404 |
-| `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, plus whether the simple form can preserve it |
+| `GET /api/projects/{project}/tasks/{task}` | card file and parsed `name`, `folder`, `prompt`, `enabled`, `schedule` (the card's `every:` or `at:` as one line, or empty), plus whether the simple form can preserve it |
 | `GET /api/projects/{project}/tasks/{task}/memory` | `{task, block}`: what the task will be shown on its next run, read without leaving a trace |
 | `GET /api/events?project=&task=` | server-sent stored events and `tasks_changed` notifications; project and task filters may be combined, and `tasks_changed` reaches every reader |
 
@@ -126,8 +126,8 @@ daemon state only. An answer persists with its run and may start a task handoff.
 |---|---|
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
-| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?}` or `{name, folder, graph, enabled?}` with a graph document; creates one card, optionally its neighboring graph, and returns its task id and path |
-| `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?}`; atomically validates and replaces one card, returning whether the edit is live |
+| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:` or five cron fields written as `at:`, and 400 when neither; creates one card, optionally its neighboring graph, and returns its task id and path |
+| `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it; atomically validates and replaces one card, returning whether the edit is live |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
 
@@ -152,7 +152,8 @@ graph is never overwritten, and no binding or credential is changed. A failure
 to clean up an ignored temporary file is logged without undoing publication.
 
 Structured editing is offered only when it can reproduce every field and
-comment; otherwise the client edits the raw file. Set-aside and rename place an
+comment, which since the form gained a schedule line includes a one-line
+`every:` or `at:` but not a `trigger:` block; otherwise the client edits the raw file. Set-aside and rename place an
 immediate hold on the old runner, while the folder scan or next restart
 reconciles the resident roster. Every card write knocks: the daemon's next look
 at the folder is immediate rather than at the end of its scan interval, so a

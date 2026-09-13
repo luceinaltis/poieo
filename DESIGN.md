@@ -105,7 +105,8 @@ From the board a user can:
 - inspect available models, declare an answering endpoint and choose which model
   serves a role.
 
-Advanced task fields and editing existing graph wiring remain file-based. New
+Advanced task fields beyond a one-line schedule, and editing existing graph
+wiring, remain file-based. New
 tasks can be written as steps on the board. The standalone graph viewer and
 editor operate on the same graph schema.
 
