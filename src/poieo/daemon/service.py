@@ -637,6 +637,7 @@ class TaskRunner:
                 self._asking = None
                 self._keep_question()
                 self.resume()
+                self._say_changed()
                 if outcome["status"] == "applied" and self.handoff is not None and self.task.spec.then:
                     self.handoff(self, result, self._asking_depth)
 
@@ -1247,6 +1248,7 @@ class TaskRunner:
             if choice == "retry":
                 self.resume()
                 self.run_now()
+                self._say_changed()
             return True
         self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:

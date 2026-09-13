@@ -89,6 +89,8 @@ Older live runners adopt that recorded decision before answering or accepting,
 restore its hold reason, and refresh open boards, so a stale question cannot
 replace the applied history. Answers take the same
 task ownership as runs and decisions.
+Whenever an application hold ends, open boards refresh the listing, including
+after a successful run or a retry answer.
 Older run summaries without a project field remain decidable; recording the
 decision fills that field so subsequent history and undo use the current project.
 A caller disconnecting does not interrupt that recording. A discarded result uses status
