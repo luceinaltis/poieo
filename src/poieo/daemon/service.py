@@ -205,7 +205,8 @@ def _application_hold(result: RunResult) -> str:
     elif outcome.get("dirty"):
         what = "the project has unsaved edits in " + ", ".join(outcome["dirty"])
     elif outcome.get("verification_changed"):
-        what = "the project changed again before it could apply, in " + ", ".join(outcome["verification_changed"])
+        files = ", ".join(outcome["verification_changed"])
+        what = f"a verification command changed {files} in the prepared copy"
     elif outcome.get("stale"):
         what = f"its change could not be applied: {outcome['stale']}"
     elif outcome.get("error"):
