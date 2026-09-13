@@ -115,6 +115,24 @@ async def test_undo_preserves_later_work_and_records_a_new_change(tmp_path):
     assert undo["application"]["undo_of"] == result.run_id
 
 
+async def test_undo_notifies_open_boards_after_recording_the_pause(tmp_path):
+    from poieo.web import BroadcastStore
+
+    _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
+    daemon, result = await run_once(config)
+    driver = daemon.runners[0]
+    driver.store = BroadcastStore(driver.store)
+    events = driver.store.subscribe()
+
+    outcome = await driver.undo_changes(result.run_id)
+
+    assert outcome["status"] == "applied"
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert records[-1] == {"type": "tasks_changed", "project": config.display_name}
+    assert daemon.store.summary(result.run_id)["application"]["status"] == "undone"
+    assert driver.holding
+
+
 async def test_undo_refuses_conflicts_with_later_work(tmp_path):
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
     daemon, result = await run_once(config)
