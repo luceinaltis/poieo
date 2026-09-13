@@ -36,6 +36,7 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   new Function(script)()
   const sky = document.getElementById("landing-sky")!
   const rise = () => Number(sky.style.getPropertyValue("--sky-rise"))
+  const across = () => Number(sky.style.getPropertyValue("--sky-progress"))
   expect(sky.hidden).toBe(false)
   expect(sky.getAttribute("role")).toBe("img")
   expect(sky.dataset.period).toBe("night")
@@ -47,10 +48,17 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   expect(sky.dataset.period).toBe("day")
   expect(sky.getAttribute("aria-label")).toBe("Sun at 06:00, your local time")
   const dawn = rise()
+  expect(across()).toBe(0)
+  vi.setSystemTime(new Date(2026, 8, 13, 9, 0))
+  window.dispatchEvent(new Event("pageshow"))
+  expect(across()).toBeCloseTo(0.25)
+  const morning = rise()
   vi.setSystemTime(new Date(2026, 8, 13, 12, 0))
   window.dispatchEvent(new Event("pageshow"))
   expect(sky.dataset.period).toBe("day")
   expect(rise()).toBeGreaterThan(dawn)
+  expect(rise()).toBeGreaterThan(morning)
+  expect(across()).toBeCloseTo(0.5)
   expect(document.documentElement.dataset.theme).toBe("dark")
   expect(localStorage.getItem("poieo.theme")).toBe("dark")
   expect(vi.getTimerCount()).toBe(1)
@@ -59,9 +67,12 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   window.dispatchEvent(new Event("pageshow"))
   expect(sky.dataset.period).toBe("day")
   expect(rise()).toBeLessThan(0.01)
+  expect(across()).toBeGreaterThan(0.99)
   vi.advanceTimersByTime(1_000)
   expect(sky.dataset.period).toBe("night")
   expect(sky.getAttribute("aria-label")).toBe("Moon at 18:00, your local time")
+  expect(across()).toBe(0)
+  expect(sky.classList.contains("sky-jump")).toBe(true)
 
   // A light theme at midnight still shows the moon. This is not a theme switch.
   document.documentElement.dataset.theme = "light"
@@ -72,6 +83,7 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   expect(sky.dataset.period).toBe("night")
   expect(sky.getAttribute("aria-label")).toContain("00:00")
   expect(rise()).toBeGreaterThan(0.99)
+  expect(across()).toBeCloseTo(0.5)
   expect(document.documentElement.dataset.theme).toBe("light")
   expect(localStorage.getItem("poieo.theme")).toBe("light")
 
