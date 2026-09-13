@@ -21,11 +21,11 @@ test("the saved theme controls the page, browser colour, and named toggle", () =
   const button = document.getElementById("theme-flip")!
   expect(document.documentElement.dataset.theme).toBe("light")
   expect(button.getAttribute("aria-label")).toBe("Switch to dark theme")
-  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#f3f5f2")
+  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#f8f5ef")
 
   button.click()
   expect(document.documentElement.dataset.theme).toBe("dark")
   expect(localStorage.getItem("poieo.theme")).toBe("dark")
   expect(button.getAttribute("aria-label")).toBe("Switch to light theme")
-  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#14221b")
+  expect(document.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#100e0c")
 })

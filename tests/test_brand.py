@@ -15,11 +15,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-HEADLINE = "The right intelligence, in the right place."
+HEADLINE = "Less spend. Better work."
 DESCRIPTOR = "Small and large models, working together."
 EXPLANATION = (
-    "Give routine work to a small model and demanding steps to a larger one. "
-    "poieo keeps your tasks running, carries their context forward, and records the results."
+    "Write a task. Choose its models. Let poieo keep it running."
 )
 ACTIVE_SURFACES = [ROOT / "README.md", ROOT / "brand" / "README.md", ROOT / "site" / "index.html"]
 CORE_TOKENS = {"ground", "panel", "well", "raised", "rule", "line", "text", "dim", "ember", "live", "stop"}
