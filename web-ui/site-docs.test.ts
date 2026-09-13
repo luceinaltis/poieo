@@ -26,24 +26,24 @@ test("docs navigation follows the document and headings below the sticky header"
     vi.fn(async () => ({ ok: true, text: async () => "# A document\n\n## Install\n\n## Choose models\n\n### Cloud models" })),
   )
 
-  location.hash = "#usage"
+  location.hash = "#tasks"
   new Function(SCRIPT)()
   await vi.waitFor(() => expect(document.querySelector("#doc h1")?.textContent).toBe("A document"))
 
   const contributor = document.querySelector<HTMLDetailsElement>(".nav-contributor")!
-  expect(contributor.open).toBe(false)
+  expect(contributor.open).toBe(true)
   expect(contributor.querySelector("summary")?.textContent).toBe("Contributor reference")
-  expect(document.querySelector('[data-id="usage"]')?.closest(".nav-contributor")).toBeNull()
+  expect(document.querySelector('[data-id="tasks"]')?.closest(".nav-contributor")).toBe(contributor)
 
-  // The guide and its topics form one outline, instead of a quick-link list,
-  // a separate "The manual" selection, and another outline on the right.
+  // Long component references retain a single heading outline in the sidebar.
+  // The short user guides are exercised separately in site-guides.test.ts.
   const nav = document.getElementById("doc-nav")!
   const fold = document.querySelector<HTMLDetailsElement>(".doc-nav-fold")!
   expect(document.querySelector(".doc-nav-intro")).toBeNull()
   expect(document.querySelector("#doc-toc")).toBeNull()
   expect(nav.querySelector(":scope > .nav-group > .nav-title")?.textContent).toBe("Documentation")
-  expect(nav.querySelectorAll('a[href="#usage/choose-models"]')).toHaveLength(1)
-  expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe("Overview")
+  expect(nav.querySelectorAll('a[href="#tasks/choose-models"]')).toHaveLength(1)
+  expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe("tasks")
 
   // Anchor jumps leave the heading below the sticky bar. The outline must
   // name that heading, including when the compact layout uses a taller bar.
@@ -69,14 +69,14 @@ test("docs navigation follows the document and headings below the sticky header"
 
   headings[0].getBoundingClientRect = () => new DOMRect(0, 160, 500, 40)
   window.dispatchEvent(new Event("scroll"))
-  expect(nav.querySelector("a.active")?.textContent).toBe("Overview")
-  expect(fold.querySelector("summary")?.textContent).toBe("Overview")
+  expect(nav.querySelector("a.active")?.textContent).toBe("tasks")
+  expect(fold.querySelector("summary")?.textContent).toBe("tasks")
 
   location.hash = "#architecture"
   window.dispatchEvent(new HashChangeEvent("hashchange"))
   await vi.waitFor(() => expect(contributor.open).toBe(true))
   await vi.waitFor(() => expect(nav.querySelector('a[href="#architecture/choose-models"]')).not.toBeNull())
-  expect(nav.querySelector('a[href="#usage/choose-models"]')).toBeNull()
+  expect(nav.querySelector('a[href="#tasks/choose-models"]')).toBeNull()
 
   fold.open = true
   for (const gesture of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
@@ -105,25 +105,25 @@ test("docs navigation follows the document and headings below the sticky header"
   const answers: ((value: { ok: boolean; text: () => Promise<string> }) => void)[] = []
   sessionStorage.clear()
   vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => answers.push(resolve))))
-  location.hash = "#usage/choose-models"
+  location.hash = "#tasks/choose-models"
   await vi.waitFor(() => expect(answers).toHaveLength(1))
-  location.hash = "#usage"
+  location.hash = "#tasks"
   await vi.waitFor(() => expect(answers).toHaveLength(2))
   const guide = { ok: true, text: async () => "# The guide\n\n## Install\n\n## Choose models" }
   answers[1](guide)
-  await vi.waitFor(() => expect(nav.querySelectorAll('a[href="#usage/choose-models"]')).toHaveLength(1))
+  await vi.waitFor(() => expect(nav.querySelectorAll('a[href="#tasks/choose-models"]')).toHaveLength(1))
   vi.mocked(Element.prototype.scrollIntoView).mockClear()
   answers[0](guide)
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(nav.querySelectorAll(".doc-sections")).toHaveLength(1)
-  expect(nav.querySelectorAll('a[href="#usage/choose-models"]')).toHaveLength(1)
+  expect(nav.querySelectorAll('a[href="#tasks/choose-models"]')).toHaveLength(1)
   expect(nav.querySelectorAll("a[aria-current]")).toHaveLength(1)
   expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
 
   // An obsolete error must not replace the document the reader chose next.
   location.hash = "#design"
   await vi.waitFor(() => expect(answers).toHaveLength(3))
-  location.hash = "#usage"
+  location.hash = "#tasks"
   await vi.waitFor(() => expect(document.querySelector("#doc h1")?.textContent).toBe("The guide"))
   answers[2]({ ...guide, ok: false })
   await new Promise((resolve) => setTimeout(resolve, 0))

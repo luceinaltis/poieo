@@ -49,6 +49,9 @@ test("short guides have separate articles, stable page selection, and working ol
     expect(document.querySelectorAll("#doc h1")).toHaveLength(1)
     expect(nav.querySelector(".doc-sections")).toBeNull()
     expect(document.querySelector<HTMLDetailsElement>(".nav-contributor")!.open).toBe(false)
+    const section = document.querySelector("#doc h2")!.id
+    visit(`#${id}/${section}`)
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
     window.dispatchEvent(new Event("scroll"))
     expect([...nav.querySelectorAll("a.active")].map((a) => a.textContent)).toEqual([title])
     expect(nav.querySelector('a[aria-current="page"]')?.textContent).toBe(title)
@@ -63,6 +66,8 @@ test("short guides have separate articles, stable page selection, and working ol
   // Bookmarked sections must still lead to the actual topic after the split.
   for (const [old, current] of [
     ["", "get-started"],
+    ["/missing", "get-started"],
+    ["/__proto__", "get-started"],
     ["/install", "get-started/install"],
     ["/start-a-project", "get-started/open-the-board"],
     ["/create-and-run-a-task", "run-tasks/create-a-task"],
