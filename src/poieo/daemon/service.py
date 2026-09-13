@@ -9,7 +9,7 @@ import logging
 import signal
 import socket
 from collections import deque
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -29,9 +29,10 @@ from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore, utcnow
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
-from ..workspace import Workspace, WorkspaceError
+from ..workspace import Workspace, WorkspaceError, task_run_lock
 from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
+from .notes import deliver_notes, leave_note
 from .repair import repair_change
 from .triggers import Firing, _sleep_or_cancel, parse_duration
 from .undo import undo_change
@@ -204,7 +205,8 @@ def _application_hold(result: RunResult) -> str:
     elif outcome.get("dirty"):
         what = "the project has unsaved edits in " + ", ".join(outcome["dirty"])
     elif outcome.get("verification_changed"):
-        what = "the project changed again before it could apply, in " + ", ".join(outcome["verification_changed"])
+        files = ", ".join(outcome["verification_changed"])
+        what = f"a verification command changed {files} in the prepared copy"
     elif outcome.get("stale"):
         what = f"its change could not be applied: {outcome['stale']}"
     elif outcome.get("error"):
@@ -555,6 +557,9 @@ class TaskRunner:
                 await finish_write(self._record_decision({"status": "discarded", **outcome}, pending))
             return outcome
 
+    def leave_note(self, text: str) -> dict:
+        return leave_note(self, text)
+
     async def undo_changes(self, run_id: str) -> dict:
         if self.workspace is None:
             return {"status": "blocked", "error": "this task keeps no reviewable copy"}
@@ -565,11 +570,18 @@ class TaskRunner:
 
     @asynccontextmanager
     async def _private_copy(self):
-        if self.workspace is None:
-            yield
-            return
-        gate = self.workspace.exclusive_run()
-        entered = asyncio.create_task(asyncio.to_thread(gate.__enter__))
+        gate = ExitStack()
+
+        def enter():
+            try:
+                gate.enter_context(task_run_lock(self.config.layout().worktrees(), self.name))
+                if self.workspace is not None:
+                    gate.enter_context(self.workspace.exclusive_run())
+            except BaseException:
+                gate.close()
+                raise
+
+        entered = asyncio.create_task(asyncio.to_thread(enter))
         try:
             await asyncio.shield(entered)
         except asyncio.CancelledError:
@@ -582,6 +594,9 @@ class TaskRunner:
             await finish_write(asyncio.to_thread(gate.__exit__, None, None, None))
 
     async def _record_decision(self, outcome: dict, pending: list[str], current_id: str | None = None) -> None:
+        # Another entry point may have parked work after this runner started.
+        # The caller owns the task, so adopt that question before resolving it.
+        self._restore_question()
         remaining = set(await asyncio.to_thread(self.workspace.pending))
         outcome["pending"] = len(remaining)
         run_ids = await asyncio.to_thread(self.workspace.run_ids, [head for head in pending if head not in remaining])
@@ -594,22 +609,23 @@ class TaskRunner:
         outcome["run_ids"] = run_ids
         for run_id in run_ids:
             result = next((run for run in self.results if run.run_id == run_id), None)
-            if self._asking and self._asking.run_id == run_id:
+            if result is None and self._asking and self._asking.run_id == run_id:
                 result = self._asking
             row = self.store.summary(run_id)
             if row is None and result is None:
                 continue
-            if row and (row.get("task") != self.name or row.get("project") != self.config.display_name):
+            if row and (row.get("task") != self.name or row.get("project") not in (None, self.config.display_name)):
                 continue
             self.store.append(Event(run_id=run_id, type="run_application", data=outcome))
             if result:
                 result.application = outcome
                 result.status = "completed"
+                result.project = self.config.display_name
                 if (result.asked or {}).get("node") == "apply_changes":
                     result.answer = "accept" if outcome["status"] == "applied" else "discard"
                 row = result.summary()
             else:
-                row = {**row, "status": "completed", "application": outcome}
+                row = {**row, "project": self.config.display_name, "status": "completed", "application": outcome}
             card = self.config.cards_by_task.get(self.name)
             if card:
                 revise_application(card, run_id, outcome)
@@ -622,6 +638,7 @@ class TaskRunner:
                 self._asking = None
                 self._keep_question()
                 self.resume()
+                self._say_changed()
                 if outcome["status"] == "applied" and self.handoff is not None and self.task.spec.then:
                     self.handoff(self, result, self._asking_depth)
 
@@ -845,7 +862,7 @@ class TaskRunner:
         async with self._change_lock:
             return await self._run_locked(fire)
 
-    async def run_once(self, payload: dict[str, Any]) -> RunResult:
+    async def run_once(self, payload: dict[str, Any] | Callable[[], dict[str, Any]]) -> RunResult:
         """Run a card from the CLI with the daemon's change and history rules."""
         async with self._change_lock:
             await self._run_locked(
@@ -855,7 +872,9 @@ class TaskRunner:
                 raise SpecError(f"task '{self.name}' could not run: {self.status}")
             return self.last_result
 
-    async def _run_locked(self, fire: Firing, payload: dict[str, Any] | None = None) -> bool:
+    async def _run_locked(
+        self, fire: Firing, payload: dict[str, Any] | Callable[[], dict[str, Any]] | None = None
+    ) -> bool:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
@@ -869,16 +888,6 @@ class TaskRunner:
 
         handed, self._handed = self._handed, None
         self._depth = handed.depth if handed is not None else 0
-        try:
-            payload = self.task.read_input(self.config) if payload is None else payload
-        except PoieoError as exc:
-            log.error("task '%s': %s", self.name, exc)
-            return self.task.spec.on_error != "stop"
-        if handed is not None:
-            # Merged last: what woke this run is the most specific thing it
-            # knows. `sender`, not `from` -- expressions are parsed as Python,
-            # where `input.from.change` would not even parse.
-            payload["sender"] = handed.result
 
         # Beside `read_input` above, and for the same reason: what this run
         # needs is read now rather than remembered from startup. A file that
@@ -899,8 +908,11 @@ class TaskRunner:
         if card and card.source_path:
             try:
                 fresh, _ = expand(load_card(card.source_path), roster=list(self.config.cards_by_task))
-                if fresh == self.task.spec.model_copy(update={"apply": fresh.apply}):
+                if fresh.apply != self.task.spec.apply and fresh == self.task.spec.model_copy(
+                    update={"apply": fresh.apply}
+                ):
                     self.task.spec.apply = fresh.apply
+                    self._say_changed()
             except PoieoError:
                 pass  # The current permission is checked again before applying.
 
@@ -911,7 +923,6 @@ class TaskRunner:
             fire.reason,
         )
         run_id = new_run_id()
-        self._run_input = payload
         self.status, self.current_run_id = "running", run_id
         # Whatever was holding it back has let go -- a spend window that aged
         # out never says so on its own.
@@ -919,6 +930,21 @@ class TaskRunner:
             self.held_because = None
         try:
             async with self._private_copy():
+                deliver_notes(self)
+                try:
+                    payload = (
+                        self.task.read_input(self.config)
+                        if payload is None
+                        else payload()
+                        if callable(payload)
+                        else payload
+                    )
+                except PoieoError as exc:
+                    log.error("task '%s': %s", self.name, exc)
+                    return self.task.spec.on_error != "stop"
+                if handed is not None:
+                    payload["sender"] = handed.result
+                self._run_input = payload
                 workdir = await self._open_change()
                 result = await execute(
                     self.task.graph,
@@ -937,6 +963,8 @@ class TaskRunner:
                     tool_context=self.tool_context,
                     finalize=self._close_change,
                 )
+                self._remember(result)
+                deliver_notes(self)
         except WorkspaceError as exc:
             now = utcnow()
             result = RunResult(
@@ -970,10 +998,10 @@ class TaskRunner:
             )
             self._record_application(result, {"status": "blocked", "error": str(exc)})
             self.store.record_summary(result.summary())
+            self._remember(result)
         finally:
             self.status, self.current_run_id = "waiting", None
         self.results.append(result)
-        self._remember(result)
         if self.task.spec.carry_state:
             self.state = result.state
 
@@ -1048,13 +1076,23 @@ class TaskRunner:
         derived from a run that already happened, and the recovery is the same
         one the user has anyway.
         """
+        if self._asking and (self._asking.asked or {}).get("node") == "apply_changes":
+            self._restore_decision(self._asking.run_id)
         path = self._asking_path()
         if path is None or not path.exists():
             return
         try:
             kept = json.loads(path.read_text(encoding="utf-8"))
             depth = kept.pop("depth", 0)
-            self._asking, self._asking_depth = RunResult(**kept), int(depth)
+            if (kept.get("asked") or {}).get("node") == "apply_changes":
+                run_id = kept.get("run_id")
+                if isinstance(run_id, str) and self._restore_decision(run_id):
+                    return  # An older process may have left an already-resolved question.
+            saved = RunResult(**kept)
+            self._asking = next(
+                (result for result in [*self.results, self._asking] if result and result.run_id == saved.run_id), saved
+            )
+            self._asking_depth = int(depth)
         except (OSError, ValueError, TypeError) as exc:
             log.warning("task '%s': could not read the question left at %s: %s", self.name, path, exc)
             return
@@ -1067,6 +1105,29 @@ class TaskRunner:
             self._hold = True
             self.status = "paused"
             self.held_because = _application_hold(self._asking)
+
+    def _restore_decision(self, run_id: str) -> bool:
+        """Bring an older runner up to a decision made by another entry point."""
+        row = self.store.summary(run_id)
+        if not row or row.get("task") != self.name or row.get("project") not in (None, self.config.display_name):
+            return False
+        applied = row.get("application") or {}
+        if applied.get("status") not in {"applied", "discarded", "undone"}:
+            return False
+        for result in [*self.results, self._asking]:
+            if result is not None and result.run_id == run_id:
+                result.application = applied
+                result.status = row["status"]
+                result.project = self.config.display_name
+                result.answer = row.get("answer")
+        if self._asking and self._asking.run_id == run_id:
+            self._asking = None
+            if applied["status"] == "undone":
+                self.pause(because="paused after undoing an applied change")
+            else:
+                self.resume()
+            self._say_changed()
+        return True
 
     def _keep_question(self) -> None:
         """Write the outstanding question down, or forget it once answered."""
@@ -1131,6 +1192,15 @@ class TaskRunner:
         node exists to replace, and it would be read here rather than by the
         person who typed it.
         """
+        try:
+            with task_run_lock(self.config.layout().worktrees(), self.name):
+                self._restore_question()
+                return self._answer_locked(choice)
+        except WorkspaceError as exc:
+            log.warning("task '%s': %s", self.name, exc)
+            return False
+
+    def _answer_locked(self, choice: str) -> bool:
         result = self._asking
         if result is None:
             log.warning("task '%s' is not waiting on an answer", self.name)
@@ -1182,6 +1252,7 @@ class TaskRunner:
             if choice == "retry":
                 self.resume()
                 self.run_now()
+                self._say_changed()
             return True
         self._remember(result, replace=True)
         if self.handoff is not None and self.task.spec.then:
@@ -1414,6 +1485,7 @@ class Daemon:
                 if not await _sleep_or_cancel(SCAN_SECONDS, self.cancel):
                     break
                 for project in self.projects:
+                    switches = [(r, r.armed) for r in self.runners if r.config is project.config]
                     try:
                         # A thread, because `load_tasks` runs `check_isolation`,
                         # which shells out to docker with a 20-second timeout.
@@ -1443,7 +1515,10 @@ class Daemon:
                     except Exception as exc:
                         log.warning("the tasks could not be checked against their cards: %s", exc)
                         moved = False
-                    if appeared or moved:
+                    # Switching off starts no runner and leaves no drift.
+                    # Announce its adopted state here, back on the event loop.
+                    switched = any(r.armed != armed for r, armed in switches)
+                    if appeared or moved or switched:
                         # The board does not poll, and no frame is published
                         # when a file changes under it. Without this a reader
                         # who edited a card -- or wrote a new one, from the
@@ -1478,18 +1553,14 @@ class Daemon:
 
     def _reconcile_switch(self, project: LoadedProject, task: LoadedTask) -> "TaskRunner | None":
         """Make a task the daemon already knows match what its card now says
-        about being switched on -- and only about that.
+        about being switched on, including its application permission.
 
         Returns the runner to start, when switching one on, or None.
 
-        **`enabled:` is the one field a scan may adopt whole.** Everything else
-        in a card reaches something built at startup, and half-adopting a spec
-        is worse than not adopting one -- `_reread_graph` says why. This is the
-        exception because both directions happen while the task is *not*
-        running, so what is adopted is the whole of what changed. That is also
-        why an edit touching anything **else** in the same save is left alone
-        and goes on asking for a restart: flipping the switch around a new
-        schedule would arm a trigger nobody built.
+        `enabled` and `apply` need no rebuilt trigger or executor. Adopt them
+        together while the task is not running, including when its permission
+        changed while it was off. Everything else must still match: flipping
+        the switch around a new schedule would arm a trigger nobody built.
 
         The two halves setting a task aside already uses, in both directions.
         Off: the file is the durable half, and the schedule stops now rather
@@ -1506,9 +1577,12 @@ class Daemon:
         )
         if runner is None or runner.armed == task.spec.enabled:
             return None
-        # Only the switch. Anything else in the same save is a restart, and
-        # saying so is `_note_drift`'s job rather than this one's.
-        if task.spec.model_copy(update={"enabled": runner.task.spec.enabled}) != runner.task.spec:
+        # Only the switch and permission. A structural edit still needs a
+        # restart, and saying so is `_note_drift`'s job rather than this one's.
+        if (
+            task.spec.model_copy(update={"enabled": runner.task.spec.enabled, "apply": runner.task.spec.apply})
+            != runner.task.spec
+        ):
             return None
         if runner.status == "running":
             # Never mid-run. The next scan is seconds away, and stopping a run

@@ -188,7 +188,9 @@ def test_a_change_that_could_not_be_applied_is_said_as_the_reason():
     assert "conflicts with the project in src/app.py" in held(status="blocked", conflict=["src/app.py"])
     assert "outside the allowed paths: docs/x.md" in held(status="blocked", outside_scope=["docs/x.md"])
     assert "unsaved edits in README.md" in held(status="blocked", dirty=["README.md"])
-    assert "changed again before it could apply, in a.py" in held(status="blocked", verification_changed=["a.py"])
+    assert "a verification command changed a.py in the prepared copy" in held(
+        status="blocked", verification_changed=["a.py"]
+    )
     assert "verification failed" in held(status="blocked", error="verification failed")
     assert held(status="blocked").startswith("paused because its change could not be applied")
     assert held(status="blocked").endswith("from the board")

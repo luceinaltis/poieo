@@ -26,7 +26,7 @@ export interface Change {
 /** One verification command, as it was run against the combined copy. */
 export interface Check {
   command: string
-  /** Null when the command could not be started at all. */
+  /** Null when the command could not finish, including a timeout. */
   exit_code: number | null
   output: string
 }
@@ -42,8 +42,13 @@ export interface Check {
  * before tasks could apply their own work.
  */
 export interface Application {
-  status: "applied" | "review" | "blocked"
-  checks: Check[]
+  status: "applied" | "review" | "blocked" | "discarded" | "undone"
+  pending?: number
+  unchanged?: boolean
+  undo_of?: string
+  undo?: { run_id: string; before: string; after: string }
+  run_ids?: string[]
+  checks?: Check[]
   accepted?: number
   before?: string
   after?: string
@@ -53,10 +58,10 @@ export interface Application {
   outside_scope?: string[]
   dirty?: string[]
   stale?: string
-  /** Files the project changed again between the check and the apply. */
+  /** Files a verification command changed in the prepared copy. */
   verification_changed?: string[]
   /** A repair run the task tried first, when its permission allowed one. */
-  repair?: { ready: boolean; run_id: string; reason: string }
+  repair?: { ready: boolean; run_id?: string; reason?: string }
 }
 
 /** The user's permission to apply this task's work, as the card wrote it. */
@@ -64,6 +69,13 @@ export interface ApplyPermission {
   mode: "auto" | "review"
   paths: string[]
   checks: string[]
+}
+
+export interface ApplySpec {
+  mode: "review" | "auto"
+  paths: string[]
+  checks: string[]
+  timeout: number
 }
 
 export interface RunSummary {

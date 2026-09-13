@@ -12,6 +12,7 @@ import { accept, discard } from "../api"
 import type { Decision } from "../api"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
+import { applicationReason } from "./ApplicationResult"
 import "./review.css"
 
 /**
@@ -22,6 +23,7 @@ import "./review.css"
  * daemon's sentence.
  */
 function WhyRefused({ decision }: { decision: Decision }) {
+  const reason = applicationReason(decision)
   if (decision.dirty?.length) {
     return (
       <Refusal>
@@ -40,7 +42,7 @@ function WhyRefused({ decision }: { decision: Decision }) {
       </Refusal>
     )
   }
-  return <Refusal answer={decision} />
+  return reason ? <Refusal>{reason}</Refusal> : <Refusal answer={decision} />
 }
 
 export function Decide({

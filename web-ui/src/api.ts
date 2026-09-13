@@ -377,6 +377,10 @@ export interface Decision extends Answer {
   discarded?: number
   dirty?: string[]
   conflict?: string[]
+  outside_scope?: string[]
+  verification_changed?: string[]
+  stale?: string
+  checks?: import("./types").Application["checks"]
 }
 
 export function accept(
@@ -393,6 +397,14 @@ export function discard(
   fromRunId?: string,
 ): Promise<Decision> {
   return post(taskUrl(project, task, "discard"), { from_run_id: fromRunId })
+}
+
+export function undo(project: string, task: string, runId: string): Promise<Decision> {
+  return post(taskUrl(project, task, "undo"), { run_id: runId })
+}
+
+export function leaveDirection(project: string, task: string, text: string): Promise<Answer> {
+  return post(taskUrl(project, task, "note"), { text })
 }
 
 /**
@@ -533,12 +545,14 @@ export function createTask(
   prompt: string | import("./make/steps").TaskGraph,
   /** False makes the card switched off: written, on the board, not running. */
   enabled = true,
+  apply?: import("./types").ApplySpec,
 ): Promise<MadeTask> {
   return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
     name,
     folder,
     ...(typeof prompt === "string" ? { prompt } : { graph: prompt }),
     enabled,
+    ...(apply ? { apply } : {}),
   })
 }
 
@@ -550,6 +564,8 @@ export function createTask(
  * second parser to keep honest against the one that runs the card.
  */
 export interface Card {
+  apply?: import("./types").ApplySpec
+  keeps_copies?: boolean
   task: string
   text: string
   name: string
@@ -592,7 +608,7 @@ export interface RewrittenCard extends Answer {
 export function rewriteCard(
   project: string,
   task: string,
-  card: string | { name: string; folder: string; prompt: string; enabled?: boolean },
+  card: string | { name: string; folder: string; prompt: string; enabled?: boolean; apply?: import("./types").ApplySpec },
 ): Promise<RewrittenCard> {
   // Two spellings of one write: the raw file, or the three fields the daemon
   // serialises itself -- through the same dump make uses, so a person who

@@ -1,5 +1,19 @@
 # Web API and board
 
+New task and Task setup expose an optional Changes section. Review is the
+default; automatic application requires explicit selection and verification
+commands. The form also supports file/folder scope. Card reads expose `apply`
+and `keeps_copies`; creation and rewrites validate application settings before
+writing. Editing only the prompt preserves an existing permission. Comments
+and advanced fields continue to use the file editor. Application-only edits
+take effect at the next run. Automatic mode requires Git in the selected task
+folder and explains that work stays in a private copy until checks pass.
+
+Run history labels applied, pending and blocked changes and shows each command,
+exit code and output on demand. Applied changes do not add to the review count.
+An application question immediately marks the affected task paused in the event
+stream. Refusals explain scope, stale work and verification-modified files.
+
 Acceptance on a running task goes through the runner's application checks.
 Accept/discard refuse while that task is working, and a selected run must belong
 to the requested project and task. Refusals also include stale candidates,
@@ -239,8 +253,14 @@ authoritative. Failed saves retain the whole draft; successful saves clear it.
 This form creates new tasks; editing existing graphs remains file-based.
 
 A card whose task applies its checked changes itself says so on its face, with
-the checks on the tooltip; a run list row whose change the task landed is marked
-`applied`, and such a change is not counted as waiting for review.
+the checks on the tooltip. Fresh listings update this permission and its checks
+on an already open board. A run list row carries one recorded outcome, including
+applied, already included, discarded and undone; completed decisions are not
+counted as waiting for review. The run brief keeps that outcome on its time line
+and shows each verification command once below it. A check that modifies the
+prepared copy explains that refusal even when its exit code was zero. Unfinished
+checks retain their output, and a repair refused before starting says why
+without claiming it ran.
 
 Each task card shows a vertical graph with **Start** and **End run** terminals,
 even for a single step. Arrows point into the next step and small dots mark the
@@ -315,6 +335,17 @@ zoom, and selected entry.
 Hanken Grotesk and DM Mono ship with the board for offline use; decorative wash
 art and serif headings belong to the public website, not the working board.
 The visual reference and asset list live in [the brand guide](../brand/README.md).
+
+The task form and plain-card editor expose review or automatic application,
+allowed paths and verification commands in an optional disclosure. Automatic
+mode requires explicit selection and at least one check. Run history displays
+the application outcome and verification output, including repaired, already
+included and undone work. Applied diffs use the final verified combination.
+An applied run offers undo through the same checks; unresolved undo leaves the
+project intact. Optional direction is saved through the task's `/note` route for
+the next run. Successful application decisions announce a fresh task listing so
+all open boards update pending counts, holds and their reasons together. Fresh
+listings replace or clear previous hold reasons.
 
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).

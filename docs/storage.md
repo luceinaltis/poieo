@@ -47,7 +47,9 @@ task; the daemon extends it when it intends to run them.
     events/<run-id>.jsonl        append-only event streams
     results/<run-id>.json        complete records used by memory
     asking/<task>.json           pending questions
+    notes/<task>/<id>.json       direction waiting for the next run
   worktrees/<task>/              private Git working copies
+  worktrees/.poieo-task-*.lock    task ownership, including tasks without Git
 ```
 
 An explicit `store` moves the whole `runs/` family and nothing else. Memory and

@@ -9,6 +9,7 @@
 import { useState } from "react"
 
 import { outcomeOf, rollup } from "./rollup"
+import { applicationLabel } from "./ApplicationResult"
 import type { RunSummary } from "../types"
 import { shortTime } from "../when"
 import "./review.css"
@@ -149,13 +150,9 @@ export function RunList({
               <span className="run-meta">
                 <span className="run-when">{shortTime(run.started_at)}</span>
                 <span className="run-size">{sizeOf(run)}</span>
-                {/* Landed by the task itself: the row must not read like one
-                    whose change is still waiting on the reader. */}
-                {run.application?.status === "applied" ? (
-                  <span className="run-applied">applied</span>
-                ) : null}
               </span>
               <span className="run-what">{accountOf(run, tracked)}</span>
+              {run.application ? <span className="application-label">{applicationLabel(run.application)}</span> : null}
             </button>
             {controls ? <div className="run-controls">{controls(run)}</div> : null}
           </li>

@@ -72,6 +72,65 @@ function harness(overrides: Partial<StageApi> = {}) {
   return { api, store: createStageStore(api), feed: () => handlers! }
 }
 
+test("older application frames cannot overwrite the count in a fresh listing", async () => {
+  let calls = 0
+  const { store, feed } = harness({
+    fetchTasks: vi.fn(async () => {
+      const n = calls++
+      if (n === 1 || n === 2) feed().onEvent({ type: "run_summary", ...CHANGED_RUN,
+        run_id: `older-${n}`, application: { status: "applied", accepted: 2, pending: 0 } })
+      return listing([{ ...CHORES, pending: n >= 2 ? 1 : 2, last_run: n >= 2 ? CHANGED_RUN : null }])
+    }),
+  })
+  await store.start()
+  await store.resync()
+  expect(store.getTasks()[0].pending).toBe(1)
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  feed().onEvent({ type: "run_summary", ...CHANGED_RUN })
+  expect(store.getStage().tasks["board/chores"].pending).toBe(1)
+  store.stop()
+})
+
+test("a fresh listing replaces and clears the reason a task is held", async () => {
+  let task: TaskRow = { ...CHORES, status: "paused", holding: true,
+    held_because: "paused because its change conflicts with the project" }
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing([task])) })
+  await store.start()
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe(task.held_because)
+
+  task = { ...task, held_because: "paused after undoing an applied change" }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe(task.held_because)
+
+  task = { ...task, status: "waiting", holding: false, held_because: null }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].held).toBe(false)
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe("")
+  store.stop()
+})
+
+test("an open board refreshes a task's application permission and checks", async () => {
+  let task: TaskRow = { ...CHORES, apply: { mode: "review", paths: [], checks: [] } }
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing([task])) })
+  await store.start()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("review")
+
+  task = { ...task, apply: { mode: "auto", paths: ["src"], checks: ["pytest -q"] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("auto")
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual(["pytest -q"])
+
+  task = { ...task, apply: { mode: "auto", paths: ["src"], checks: ["npm test"] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual(["npm test"])
+
+  task = { ...task, apply: { mode: "review", paths: [], checks: [] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("review")
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual([])
+  store.stop()
+})
+
 test("seeds from the task list, then subscribes", async () => {
   const { api, store } = harness()
   await store.start()
