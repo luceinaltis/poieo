@@ -29,6 +29,7 @@ import { useState } from "react"
 import { createTask } from "../api"
 import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { MadeTask } from "../api"
+import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
 import { slugOf } from "./slug"
 import { useAct } from "../useAct"
@@ -161,6 +162,10 @@ export function MakeTask({
           disabled={busy}
           onChange={(event) => setFolder(event.target.value)}
         />
+        {/* The choice, spelled out. `..` for the project itself was the one
+            thing a reader could not guess, and the field still fills in
+            nothing on its own. */}
+        <FolderPick project={project} value={folder} disabled={busy} onPick={setFolder} />
       </label>
 
       {steps ? <StepEditor steps={steps} onChange={setSteps} disabled={busy} /> : <>

@@ -108,6 +108,29 @@ def stub_runner(
     )
 
 
+def test_the_folders_a_task_may_work_in_are_listed_as_a_card_would_spell_them(tmp_path):
+    """A card made from the board works inside its project, and its folder is
+    written relative to the tasks folder -- so the one folder most people want,
+    the project itself, was spelled `..`, and nothing on the form said so. The
+    daemon lists the project and what is under it, spelled as the card will
+    spell them, so the form can offer them; the reader still chooses."""
+    for folder in ("tasks", "src/app/deep", ".git/objects", "node_modules/x", "runs", "worktrees", "memory"):
+        (tmp_path / folder).mkdir(parents=True)
+    project = stub_project(tmp_path)
+    # The stub names no tasks folder; a card's folder is spelled from one.
+    project.cards = "tasks"
+    daemon = stub_daemon(tmp_path, [], project=project)
+    client = TestClient(create_app(daemon))
+
+    body = client.get(f"/api/projects/{tmp_path.name}/folders").json()
+
+    assert body["folders"] == [
+        {"path": "..", "name": "this project"},
+        {"path": "../src", "name": "src"},
+        {"path": "../src/app", "name": "src/app"},
+    ]
+
+
 def test_the_listing_carries_the_cards_own_title(tmp_path):
     """The `name:` in a card is a title the reader may rewrite, and until now
     the board never saw it: every row said the filename, so a title edited in

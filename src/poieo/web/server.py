@@ -237,6 +237,15 @@ def _look_now(daemon: Any) -> None:
         look()
 
 
+# What the folder list leaves out by name: nobody points a task at these, and a
+# dependency folder alone would push the project's own folders past the limit.
+_NOT_A_WORKPLACE = {"node_modules", "__pycache__"}
+# How far down the folder list goes, and how long it may be. A list for a
+# person to read, not a file tree.
+_FOLDERS_DEEP = 2
+_FOLDERS_OFFERED = 200
+
+
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The one runner a project and a task name between them pick out.
 
@@ -701,6 +710,60 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 ],
             }
         )
+
+    async def project_folders(request: Request) -> JSONResponse:
+        """The folders a task made here may work in: this project, and what is
+        under it, spelled as a card will spell them.
+
+        A card's folder is written relative to the tasks folder, and a card
+        made from the board works inside its project -- so the one folder most
+        people want, the project itself, was spelled `..`, and nothing on the
+        form said so. This lists what the fence would accept so the form can
+        offer it. Offering is not inferring: nothing is chosen here, and the
+        reader still picks the place the model's hands may touch.
+
+        Two levels down and a bounded count: the list is for a person to read,
+        not a file tree. Hidden folders, dependency folders, the tasks folder
+        itself and the project's own runs, worktrees and memory are left out --
+        none of them is a place to point a task at.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        if not config.cards:
+            return JSONResponse({"error": "this project names no tasks folder"}, status_code=409)
+        root = Path(config.base_dir).resolve()
+        cards = config.resolve_path(config.cards).resolve()
+        layout = config.layout()
+        kept_out = {cards, layout.runs().resolve(), layout.worktrees().resolve(), layout.memory().resolve()}
+
+        def _spelled(folder: Path) -> str:
+            return Path(os.path.relpath(folder, cards)).as_posix()
+
+        def _walk() -> list[dict[str, str]]:
+            found = [{"path": _spelled(root), "name": "this project"}]
+
+            def visit(folder: Path, depth: int) -> None:
+                try:
+                    children = sorted(child for child in folder.iterdir() if child.is_dir())
+                except OSError:
+                    return
+                for child in children:
+                    if len(found) >= _FOLDERS_OFFERED:
+                        return
+                    if child.name.startswith(".") or child.name in _NOT_A_WORKPLACE:
+                        continue
+                    if child.resolve() in kept_out:
+                        continue
+                    found.append({"path": _spelled(child), "name": child.relative_to(root).as_posix()})
+                    if depth < _FOLDERS_DEEP:
+                        visit(child, depth + 1)
+
+            visit(root, 1)
+            return found
+
+        return JSONResponse({"folders": await asyncio.to_thread(_walk)})
 
     async def project_models_undeclared(request: Request) -> JSONResponse:
         """Engines answering on this machine that this project cannot reach.
@@ -2379,6 +2442,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # nothing is listening on costs a full timeout, and the catalogue must
         # not wait on its own footnote.
         Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
+        Route("/api/projects/{project}/folders", project_folders),
         # Models: the fourth kind. They write the project's binding file and
         # nothing else, and never accept or return a credential. `add` declares
         # an endpoint; `use` chooses among the models of one already declared.

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 const fetchCard = vi.hoisted(() => vi.fn<typeof import("../api").fetchCard>())
 const rewriteCard = vi.hoisted(() => vi.fn<typeof import("../api").rewriteCard>())
 const setAside = vi.hoisted(() => vi.fn<typeof import("../api").setAside>())
+const fetchFolders = vi.hoisted(() => vi.fn<typeof import("../api").fetchFolders>())
 
 // The reads and the two writes this file already covers are stubs; everything
 // else stays the real module, so the rename test below watches the request the
@@ -15,6 +16,7 @@ vi.mock("../api", async () => ({
   fetchCard,
   rewriteCard,
   setAside,
+  fetchFolders,
 }))
 
 import { Card } from "./Card"
@@ -26,6 +28,8 @@ beforeEach(() => {
   fetchCard.mockReset()
   rewriteCard.mockReset()
   setAside.mockReset()
+  fetchFolders.mockReset()
+  fetchFolders.mockResolvedValue([])
   onSetAside.mockReset()
   fetchCard.mockResolvedValue({
     task: "chores",
@@ -390,6 +394,44 @@ test("a switch flipped beside a moved folder does not talk over the restart", as
 test("a card edited as a file has no switch: the file already says it", async () => {
   await open()
   expect(container.querySelector(".card-field-switch")).toBeNull()
+})
+
+test("a plain card's folder can be chosen from the project", async () => {
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: true,
+  })
+  fetchFolders.mockResolvedValue([
+    { path: "..", name: "this project" },
+    { path: "../work", name: "work" },
+  ])
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
+  await open()
+  await act(async () => {})
+
+  const pick = container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
+  // Opens on the folder the card has, when the list has it.
+  expect(pick.value).toBe("../work")
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(save().disabled).toBe(true)
+
+  await act(async () => {
+    pick.value = ".."
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(container.querySelector<HTMLInputElement>(".card-field-folder")!.value).toBe("..")
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "..",
+    prompt: "tidy",
+  })
 })
 
 test("a card carrying more than the three fields still opens as a file", async () => {

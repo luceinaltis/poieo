@@ -11,6 +11,7 @@ import { useState } from "react"
 import { fetchCard, renameCard, rewriteCard, setAside } from "../api"
 import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { Card as CardFields, RenamedCard, RewrittenCard, SetAside } from "../api"
+import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 
@@ -175,6 +176,16 @@ export function Card({
                   disabled={busy}
                   onChange={(event) => {
                     setFolder(event.target.value)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+                <FolderPick
+                  project={project}
+                  value={folder}
+                  disabled={busy}
+                  onPick={(path) => {
+                    setFolder(path)
                     setSaveResult(null)
                     setIsSetAsideArmed(false)
                   }}
