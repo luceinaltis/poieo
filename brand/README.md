@@ -94,8 +94,11 @@ its compact sans serif labels for scanning. The logo is drawn, not typeset.
 The first screen has one headline, one descriptor, and **Get started**. Do
 not add a paragraph repeating the promise. Supporting sections explain model
 choices and show the actual board. Documentation prioritizes the article,
-quiet navigation, and horizontally scrollable code. Keep body copy at least
-16 px and routine labels at least 14 px.
+quiet navigation, and horizontally scrollable code. Keep one documentation
+outline: document links and the current document's headings share the sidebar,
+with only the current topic selected. On a phone, the same outline folds under
+the current topic's name. Keep body copy at least 16 px and routine labels at
+least 14 px.
 
 Git projects run in a private copy with changes to accept or discard. Non-Git
 folders are edited directly. Project memory is opt-in. Keep those limits

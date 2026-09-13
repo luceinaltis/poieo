@@ -1,6 +1,6 @@
-/* The docs viewer: a sidebar of every document, and the document itself
-   fetched from the main branch and rendered here. No copy of any document
-   lives on this site -- the moment one merges, this page shows it.
+/* The docs viewer: one outline of documents and the current document's topics.
+   Documents are fetched from the main branch and rendered here; no separate
+   copy lives on this site.
 
    The renderer is deliberately small. It covers exactly the markdown these
    documents use (headings, paragraphs, fenced code, inline marks, lists two
@@ -13,8 +13,8 @@ const RAW = `https://raw.githubusercontent.com/${REPO}/main/`
 const BLOB = `https://github.com/${REPO}/blob/main/`
 
 const USER_GROUPS = [
-  ["Using poieo", [
-    ["usage", "The manual", "docs/usage.md"],
+  ["Documentation", [
+    ["usage", "Overview", "docs/usage.md"],
     ["design", "What poieo promises", "DESIGN.md"],
   ]],
 ]
@@ -215,12 +215,25 @@ function render(md, toc) {
 
 const article = document.getElementById("doc")
 const nav = document.getElementById("doc-nav")
+const folded = document.querySelector(".doc-nav-fold")
 
 // Hashes select documents. Skipping the navigation must keep that selection.
 document.querySelector(".skip-link")?.addEventListener("click", (event) => {
   event.preventDefault()
   article.focus({ preventScroll: true })
   article.scrollIntoView()
+})
+
+// Selecting the current hash still needs to jump back after scrolling away.
+nav.addEventListener("click", (event) => {
+  const link = event.target.closest("a")
+  if (!link) return
+  if (folded) folded.open = false
+  if (link.hash === location.hash) {
+    event.preventDefault()
+    const { id, anchor } = route()
+    show(id, anchor)
+  }
 })
 
 function route() {
@@ -244,17 +257,28 @@ function buildNav() {
 }
 
 function markActive(id) {
-  for (const a of nav.querySelectorAll("a")) a.classList.toggle("active", a.dataset.id === id)
+  nav.querySelector(".doc-sections")?.remove()
+  heads = []
+  markLocation(null)
   const contributor = nav.querySelector(".nav-contributor")
   if (contributor) contributor.open = CONTRIBUTOR_IDS.has(id)
-  const folded = document.querySelector(".doc-nav-fold")
-  if (folded) {
-    folded.open = false
-    folded.querySelector("summary").textContent = DOCS.get(id).title
+  if (folded) folded.open = false
+}
+
+function markLocation(anchor) {
+  for (const a of nav.querySelectorAll("a")) {
+    const selected = anchor ? a.dataset.anchor === anchor : a.dataset.id === activeDoc
+    a.classList.toggle("active", selected)
+    if (selected) {
+      a.setAttribute("aria-current", anchor ? "location" : "page")
+      if (folded) folded.querySelector("summary").textContent = a.textContent
+    } else a.removeAttribute("aria-current")
   }
 }
 
+let latestRequest = 0
 async function show(id, anchor) {
+  const request = ++latestRequest
   const { title, path } = DOCS.get(id)
   activeDoc = id
   markActive(id)
@@ -271,13 +295,14 @@ async function show(id, anchor) {
       md = await answer.text()
       sessionStorage.setItem("poieo.doc." + path, md)
     } catch {
+      if (request !== latestRequest) return
       article.innerHTML = `<p class="doc-state">Could not fetch <code>${esc(path)}</code> from the main branch —
         the network, or GitHub, is not answering. <a href="${BLOB + path}">Read it on GitHub</a>,
         or <a href="#${id}" onclick="location.reload()">try again</a>.</p>`
       return
     }
   }
-  if (route().id !== id) return // the reader moved on while this fetched
+  if (request !== latestRequest) return // includes another topic in the same document
   const toc = []
   const group = DOCS.get(id).group
   article.innerHTML =
@@ -285,33 +310,23 @@ async function show(id, anchor) {
     `<a href="${BLOB + path}">Edit on GitHub</a></p>` +
     render(md, toc) +
     pager(id)
-  paintToc(id, toc)
+  paintSections(id, toc)
   watchHeadings()
   const target = anchor && document.getElementById(anchor)
   if (target) target.scrollIntoView()
   else window.scrollTo(0, 0)
 }
 
-/** The outline rail. On a wide screen it stands open with its summary hidden;
-    narrow, it is a real disclosure above the document. */
-const tocBox = document.getElementById("doc-toc")
-const wide = window.matchMedia("(min-width: 1100px)")
-
-function tocMode() {
-  if (tocBox) tocBox.open = wide.matches ? true : tocBox.open
-}
-wide.addEventListener("change", tocMode)
-
-function paintToc(id, toc) {
-  if (!tocBox) return
-  tocBox.style.display = toc.length ? "" : "none"
-  tocBox.querySelector("nav").innerHTML = toc
-    .map((h) => `<a class="toc-h${h.level}" href="#${id}/${h.id}">${inline(h.text)}</a>`)
+/** Topics come from the rendered headings, so new sections appear in the same
+    outline automatically. Other documents stay available around that outline. */
+function paintSections(id, toc) {
+  if (!toc.length) return
+  const sections = document.createElement("div")
+  sections.className = "doc-sections"
+  sections.innerHTML = toc
+    .map((h) => `<a class="toc-h${h.level}" data-anchor="${h.id}" href="#${id}/${h.id}">${inline(h.text)}</a>`)
     .join("")
-  tocMode()
-  // a pick on a phone should close the disclosure it came from
-  if (!wide.matches)
-    for (const a of tocBox.querySelectorAll("a")) a.addEventListener("click", () => (tocBox.open = false))
+  nav.querySelector(`[data-id="${id}"]`).after(sections)
 }
 
 /** Read on: the previous and next documents, in the sidebar's own order. */
@@ -340,12 +355,11 @@ function markScroll() {
   ticking = true
   requestAnimationFrame(() => {
     ticking = false
-    let current = heads[0].id
+    let current = null
     // Use the same offset as anchor scrolling, including the taller phone bar.
     const top = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0
     for (const h of heads) if (h.getBoundingClientRect().top <= top + 1) current = h.id
-    for (const a of tocBox.querySelectorAll("a"))
-      a.classList.toggle("active", a.getAttribute("href").endsWith("/" + current))
+    markLocation(current)
   })
 }
 window.addEventListener("scroll", markScroll, { passive: true })

@@ -77,9 +77,12 @@ def test_model_selection_is_explicit_and_accuracy_is_a_goal():
 
 
 def test_public_pages_offer_a_direct_route_to_model_setup():
-    for name in ("index.html", "docs.html"):
-        source = (ROOT / "site" / name).read_text(encoding="utf-8")
-        assert "docs.html#usage/choose-models" in source
+    source = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    assert "docs.html#usage/choose-models" in source
+    # Docs generate their links from these headings; site-docs.test.ts checks
+    # the rendered link and its active state. Keep the real target in sync.
+    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+    assert re.search(r"^## Choose models$", usage, re.M)
 
 
 @pytest.mark.parametrize("path", DARK_BRAND_ASSETS, ids=lambda path: path.name)
