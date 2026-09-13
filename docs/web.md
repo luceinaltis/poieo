@@ -227,14 +227,21 @@ result reads that could occur before their writer. Server validation remains
 authoritative. Failed saves retain the whole draft; successful saves clear it.
 This form creates new tasks; editing existing graphs remains file-based.
 
-Each task card shows its step connections at reading size. Every step names
-where it comes **From** and where it goes **Next**, with **Start** and **End run**
-spelled out. These are execution connections, not data inputs or result values.
-Conditions keep their order and destinations, even when two choose the same
-step. Return paths name the earlier step. Names and conditions wrap within the
-card; repeated descriptions include IDs to distinguish their destinations.
-Steps appear once in entry-first reading order, with a vertically scrollable
-region for long tasks. Scrolling that region does not zoom the board.
+Each task card shows a vertical graph with **Start** and **End run** terminals,
+even for a single step. Arrows point into the next step and small dots mark the
+source of each connection; return paths use dashed lines. These are execution
+connections, not data inputs or result values. Conditions stay on their own
+amber wires, even when two choose the same step. When several conditions are tried,
+their labels show the authored priority (1, 2, …), independently of their spatial
+placement: the first matching condition wins. The otherwise
+path always appears, including when it ends the run. Step names wrap, and repeated
+descriptions include IDs to distinguish destinations.
+
+Card graphs measure their labels before Dagre places nodes from top to bottom.
+Conditions wrap more narrowly when needed to fit the card. The graph never scales
+below 90% within the card; unusually wide forks and graphs taller than 460 pixels
+scroll inside their own region without zooming the board. Start/end markers are
+separate from authored step IDs, so a step named `start` remains an ordinary step.
 The initial board view keeps cards at a readable scale, fitting at least one
 card's width on narrow screens. Dragging and the minimap reach tasks outside
 the viewport; double-clicking the board background fits the whole board.
