@@ -185,3 +185,19 @@ test("a self-loop and an otherwise ending stay separate even with diagram-like s
   expect(connections()).toEqual(["Start → Ready to finish?", "Ready to finish? → Ready to finish?: If retry", "Ready to finish? → End run: Otherwise"])
   for (const path of paths()) expect(path.getAttribute("d")).not.toMatch(/NaN|Infinity/)
 })
+
+test("overlapping conditions show which is tried first regardless of where their paths are placed", () => {
+  const priority = structuredClone(task)
+  priority.shape.nodes[1].branches = [
+    { to: "revise", label: "state.score > 0" },
+    { to: "review", label: "state.score > 10" },
+  ]
+  priority.shape.nodes[1].default = null
+  handle.update(initialStage([priority]))
+  expect([...host.querySelectorAll(".basic-step-condition")].map(el => el.textContent))
+    .toEqual(["1. If state.score > 0", "2. If state.score > 10", "Otherwise"])
+  expect(connections()).toEqual(expect.arrayContaining([
+    "Ready to finish? → Revise: 1. If state.score > 0",
+    "Ready to finish? → Review: 2. If state.score > 10",
+  ]))
+})
