@@ -80,16 +80,24 @@ surfaces, small gold text uses the darker ember colour for contrast.
 | Accent | `#d8a657` | `#d8a657` | Primary button fill |
 | On accent | `#221e18` | `#221e18` | Primary button text |
 
-The theme follows the operating system until a person chooses Light or Dark.
-The choice is saved in `poieo.theme` for that browser origin. If storage is
-unavailable, the control still changes the current page.
+The website and docs offer **Auto, Light, and Dark**. Auto is the default and
+follows the visitor's local clock: light from 06:00 to 18:00, dark otherwise.
+Existing Light/Dark choices still win. Save all three modes in `poieo.theme`
+for that browser origin and reflect changes in other open tabs. If storage is
+unavailable, the control still changes the current page. The installed board
+keeps its separate Light/Dark control and system-preference fallback.
 
-The landing's sun and crescent moon use the visitor's local clock independently
-of the theme: sun from 06:00 to 18:00, moon otherwise. Their height follows a
-quiet 12-hour arc, highest at noon or midnight. This is a clock convention,
-not astronomical sunrise or lunar-phase data. Use gold and pale ink-wash shapes
-in the left margin, above the headline on phones. Update once a minute while
-visible; respect reduced motion and leave the headline and controls unobstructed.
+The landing's photographic sun and full moon always follow the local clock:
+sun from 06:00 to 18:00, moon otherwise, even with a manual theme choice.
+They rise on the left, cross the high middle at noon or midnight, and descend
+on the right. This is a clock convention, not astronomical sunrise or lunar-phase
+data. Keep the arc clear of text and controls, including on phones. A soft
+ivory halo makes the moon luminous on dark ground. Use the generated transparent
+assets; do not replace them with drawn icons. Only the current body is loaded.
+
+Update each minute while visible. Resume from the current time after sleep or
+browser-history restoration. Reduced motion disables transitions; switching
+bodies or returning after a time jump also places the body immediately.
 
 ## Type and copy
 
@@ -121,9 +129,11 @@ clear wherever the corresponding feature is explained.
 | `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
+| `site/img/sun.png`, `moon.png` | ChatGPT Image-generated transparent sun and moon; original alpha and resolution preserved |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
 | `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
 
 The illustration's generation record is [wash-source.json](wash-source.json).
+The sun and moon's prompts, asset paths, and hashes are in [sky-source.json](sky-source.json).
 The Korean design rationale and selected reference are in
 [docs/branding.md](../docs/branding.md). Retired concepts remain in git history.

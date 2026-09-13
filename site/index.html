@@ -46,31 +46,18 @@
   <nav aria-label="Main navigation">
     <a href="docs.html">Docs</a>
     <a href="https://github.com/luceinaltis/poieo">GitHub</a>
-    <button class="theme-flip" id="theme-flip" type="button" aria-label="Switch theme">Theme</button>
+    <select class="theme-mode" id="theme-mode" aria-label="Color theme" title="Auto follows your local time" hidden>
+      <option value="auto">Auto</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
   </nav>
 </header>
 
 <main>
 <section class="hero" id="main">
   <div class="landing-sky" id="landing-sky" role="img" hidden>
-    <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
-      <defs>
-        <filter id="sky-wash" x="-10%" y="-10%" width="120%" height="120%">
-          <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="3" seed="7" result="grain"/>
-          <feDisplacementMap in="SourceGraphic" in2="grain" scale="1.6" xChannelSelector="R" yChannelSelector="G" result="paint"/>
-          <feTurbulence type="fractalNoise" baseFrequency=".6" numOctaves="3" seed="11"/>
-          <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .35 0 0 0 .65"/>
-          <feComposite in="paint" operator="in"/>
-        </filter>
-      </defs>
-      <g class="sky-sun" filter="url(#sky-wash)">
-        <path d="M103 59C105 82 85 104 61 103C36 105 16 85 17 61C15 36 34 17 59 16C84 15 104 34 103 59Z" opacity=".76"/>
-      </g>
-      <g class="sky-moon" filter="url(#sky-wash)">
-        <path d="M76 18C49 10 22 30 20 57C17 83 37 104 64 102C83 101 97 88 102 70C85 82 63 77 55 61C46 44 56 25 76 18Z"/>
-        <path class="moon-wash" d="M33 39C24 60 32 82 49 94C26 86 21 60 33 39Z"/>
-      </g>
-    </svg>
+    <img class="sky-body" alt="" width="1254" height="1254" decoding="async" aria-hidden="true">
   </div>
   <h1>Less spend. Better work.</h1>
   <p class="descriptor">Small and large models, working together.</p>
