@@ -108,6 +108,7 @@ async def test_undo_preserves_later_work_and_records_a_new_change(tmp_path):
     assert (repo / "later.txt").read_text() == "someone else's work"
     assert git(repo, "merge-base", "--is-ancestor", before_undo, "HEAD") == ""
     assert driver.holding
+    assert driver.held_because == "paused after undoing an applied change"
     assert daemon.store.summary(result.run_id)["application"]["status"] == "undone"
     undo = daemon.store.summary(outcome["run_id"])
     assert undo["change"]["base"] == before_undo
