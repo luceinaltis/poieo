@@ -18,7 +18,11 @@ The default is once at startup, then hourly. **run now**, **pause**, and
 **resume** control an enabled task. Pause stops future work; it does not kill
 an operation already in progress.
 
-To change the schedule, edit the task's file under `tasks/`. Use one of:
+Set the schedule in the **every** line of the form or of **Task setup**: an
+interval such as `30m`, the word `loop`, or a cron line such as `0 2 * * *`.
+Leave it blank for the hourly default. A changed schedule takes effect when
+the daemon restarts, and the form says so. In the task's file under `tasks/`
+the same line is one of:
 
 ```yaml
 every: 30m

@@ -95,7 +95,8 @@ alive with `poieo daemon`. The daemon serves one board for one or more projects.
 
 From the board a user can:
 
-- create a basic task, edit its name, folder and prompt, and switch it on or off;
+- create a basic task, edit its name, folder, prompt and one-line schedule,
+  and switch it on or off;
 - create a task with several steps and conditions without writing YAML;
 - rename a task or set it aside without destroying its file;
 - see task state, graph wiring, model assignments and run history, including
