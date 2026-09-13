@@ -94,13 +94,13 @@ a curl response, a Windows-only run, anything exercised by hand — as output, n
 
 ## The shape of the repo
 
-- `docs/` — **one document per component**, describing how it works today, plus three
-  that are not: `usage.md`, the manual `README.md` sends a reader to; `conventions.md`,
-  how code here is written and where that departs from generic good taste, read before
-  your first change to `src/`; and `contribution.md`, the longer procedures these rules
-  send you to. `docs/README.md` is the index, and a component's document is edited in
-  the PR that changes its shape. Do not start dated design files; current reasoning
-  belongs in the component document and history belongs in git.
+- `docs/` — **one document per component**, describing how it works today.
+  Short user guides live in `docs/guides/`, linked from `usage.md`.
+  `conventions.md` explains how code here is written; read it before changing
+  `src/`. `contribution.md` holds the longer procedures these rules send you to.
+  `docs/README.md` is the index. Edit a component's document in the PR that changes
+  its shape. Do not start dated design files; current reasoning belongs in the
+  component document and history belongs in git.
 
 The remote is **public** (`github.com/luceinaltis/poieo`). Never commit an API key, a
 token, or a real model transcript. Run logs live in gitignored `runs/`; keep it there.

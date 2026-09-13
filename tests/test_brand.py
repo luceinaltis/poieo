@@ -78,11 +78,11 @@ def test_model_selection_is_explicit_and_accuracy_is_a_goal():
 
 def test_public_pages_offer_a_direct_route_to_model_setup():
     source = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
-    assert "docs.html#usage/choose-models" in source
-    # Docs generate their links from these headings; site-docs.test.ts checks
-    # the rendered link and its active state. Keep the real target in sync.
-    usage = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
-    assert re.search(r"^## Choose models$", usage, re.M)
+    assert "docs.html#models" in source
+    # The model guide is its own page; site-guides.test.ts loads the real
+    # document and checks navigation, old links, and the active page.
+    models = (ROOT / "docs" / "guides" / "models.md").read_text(encoding="utf-8")
+    assert re.search(r"^# Models$", models, re.M)
 
 
 @pytest.mark.parametrize("path", DARK_BRAND_ASSETS, ids=lambda path: path.name)

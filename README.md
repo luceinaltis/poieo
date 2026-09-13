@@ -22,7 +22,7 @@ tests and review to judge the result. You choose the model for each step;
 savings and accuracy depend on your models, tasks, and checks.
 
 Models can run locally or through cloud APIs. Assign them to roles, then
-change a model without rewriting the task. [Choose your models](docs/usage.md#choose-models).
+change a model without rewriting the task. [Choose your models](docs/guides/models.md).
 
 ## Set it running
 
@@ -75,7 +75,7 @@ poieo daemon
 
 Open the board at **http://127.0.0.1:8484**. The mock exercises the loop without
 calling a real model; it does not actually repair your project. Follow the
-[model setup guide](docs/usage.md#choose-models) to connect real models.
+[model setup guide](docs/guides/models.md) to connect real models.
 
 For a new project that should discover real models immediately, use
 `poieo init` without `--mock`. It records reachable model endpoints and
@@ -93,7 +93,7 @@ when the short form is no longer enough. The
 reading, planning, building, and review.
 
 poieo is a personal tool, with no accounts or team workspaces. The
-[manual](docs/usage.md) covers everyday use. [DESIGN.md](DESIGN.md) records
+[guides](docs/usage.md) cover everyday use. [DESIGN.md](DESIGN.md) records
 product principles and the roadmap. For contributing, start with
 [component documentation](docs/README.md) and [AGENTS.md](AGENTS.md).
 

@@ -1,4 +1,4 @@
-/* The docs viewer: one outline of documents and the current document's topics.
+/* The docs viewer: short user guides, with a separate contributor reference.
    Documents are fetched from the main branch and rendered here; no separate
    copy lives on this site.
 
@@ -14,8 +14,11 @@ const BLOB = `https://github.com/${REPO}/blob/main/`
 
 const USER_GROUPS = [
   ["Documentation", [
-    ["usage", "Overview", "docs/usage.md"],
-    ["design", "What poieo promises", "DESIGN.md"],
+    ["get-started", "Get started", "docs/guides/getting-started.md"],
+    ["models", "Models", "docs/guides/models.md"],
+    ["run-tasks", "Tasks", "docs/guides/tasks.md"],
+    ["changes", "Changes", "docs/guides/changes.md"],
+    ["troubleshooting", "Troubleshooting", "docs/guides/troubleshooting.md"],
   ]],
 ]
 const CONTRIBUTOR_GROUPS = [
@@ -34,6 +37,7 @@ const CONTRIBUTOR_GROUPS = [
     ["cli", "cli", "docs/cli.md"],
   ]],
   ["Working here — for contributors", [
+    ["design", "Product principles", "DESIGN.md"],
     ["agents", "The working agreements", "AGENTS.md"],
     ["contribution", "The longer procedures", "docs/contribution.md"],
     ["conventions", "How the code is written", "docs/conventions.md"],
@@ -45,9 +49,26 @@ const CONTRIBUTOR_IDS = new Set(CONTRIBUTOR_GROUPS.flatMap(([, docs]) => docs.ma
 const DOCS = new Map(
   GROUPS.flatMap(([group, docs]) => docs.map(([id, title, path]) => [id, { title, path, group }])),
 )
-const ORDER = GROUPS.flatMap(([, docs]) => docs.map(([id]) => id))
-const BY_FILE = new Map([...DOCS].map(([id, doc]) => [doc.path.split("/").pop().toLowerCase(), id]))
-const DEFAULT = "usage"
+const USER_ORDER = USER_GROUPS.flatMap(([, docs]) => docs.map(([id]) => id))
+const REFERENCE_ORDER = CONTRIBUTOR_GROUPS.flatMap(([, docs]) => docs.map(([id]) => id))
+const BY_PATH = new Map([...DOCS].map(([id, doc]) => [doc.path, id]))
+const DEFAULT = "get-started"
+
+// Keep shared links into the former single-page manual useful.
+const LEGACY_USAGE = new Map([
+  ["install", "get-started/install"],
+  ["start-a-project", "get-started/open-the-board"],
+  ["create-and-run-a-task", "run-tasks/create-a-task"],
+  ["keep-tasks-running", "run-tasks/run-and-schedule"],
+  ["let-a-task-apply-its-work", "changes/apply-automatically"],
+  ["review-a-change", "changes/review"],
+  ["schedule-and-control-work", "run-tasks/run-and-schedule"],
+  ["choose-models", "models"],
+  ["isolate-model-tools", "tools/isolation"],
+  ["journals-and-project-memory", "run-tasks/give-direction"],
+  ["grow-a-task-into-a-graph", "run-tasks/add-steps"],
+  ["if-something-fails", "troubleshooting"],
+])
 
 /* ---------------- markdown, the subset the documents actually use -------- */
 
@@ -64,9 +85,14 @@ function href(target) {
   if (/^[a-z]+:/i.test(target)) return target
   const [path, anchor] = target.split("#")
   if (!path) return `#${activeDoc}${anchor ? "/" + anchor : ""}`
-  const id = BY_FILE.get(path.split("/").pop().toLowerCase())
-  if (id && path.toLowerCase().endsWith(".md")) return `#${id}${anchor ? "/" + anchor : ""}`
-  return BLOB + path.replace(/^(\.\.\/)+/, "")
+  // Resolve from the source document, including nested guides. A basename
+  // lookup would confuse guides/tasks.md with the component docs/tasks.md.
+  const source = new URL(target, `https://source.invalid/${DOCS.get(activeDoc).path}`)
+  const resolved = source.pathname.slice(1)
+  if (resolved === "docs/usage.md") return `#${LEGACY_USAGE.get(anchor) || DEFAULT}`
+  const id = BY_PATH.get(resolved)
+  if (id) return `#${id}${source.hash ? "/" + source.hash.slice(1) : ""}`
+  return BLOB + resolved + source.search + source.hash
 }
 
 /** A heading's anchor: the text with its markdown marks dropped, kebab-cased. */
@@ -239,6 +265,12 @@ nav.addEventListener("click", (event) => {
 
 function route() {
   const [id, anchor] = location.hash.replace("#", "").split("/")
+  if (id === "usage") {
+    const destination = LEGACY_USAGE.get(anchor) || DEFAULT
+    history.replaceState(null, "", `#${destination}`)
+    const [page, section] = destination.split("/")
+    return { id: page, anchor: section || null }
+  }
   return { id: DOCS.has(id) ? id : DEFAULT, anchor: anchor || null }
 }
 
@@ -311,15 +343,16 @@ async function show(id, anchor) {
     `<a href="${BLOB + path}">Edit on GitHub</a></p>` +
     render(md, toc) +
     pager(id)
-  paintSections(id, toc)
-  watchHeadings()
+  if (CONTRIBUTOR_IDS.has(id)) {
+    paintSections(id, toc)
+    watchHeadings()
+  }
   const target = anchor && document.getElementById(anchor)
   if (target) target.scrollIntoView()
   else window.scrollTo(0, 0)
 }
 
-/** Topics come from the rendered headings, so new sections appear in the same
-    outline automatically. Other documents stay available around that outline. */
+/** Long references expose their headings. Guides keep a stable page list. */
 function paintSections(id, toc) {
   if (!toc.length) return
   const sections = document.createElement("div")
@@ -330,14 +363,15 @@ function paintSections(id, toc) {
   nav.querySelector(`[data-id="${id}"]`).after(sections)
 }
 
-/** Read on: the previous and next documents, in the sidebar's own order. */
+/** Read on within the guide or reference, in the sidebar's own order. */
 function pager(id) {
-  const i = ORDER.indexOf(id)
+  const order = CONTRIBUTOR_IDS.has(id) ? REFERENCE_ORDER : USER_ORDER
+  const i = order.indexOf(id)
   const cell = (which, of) =>
     of
       ? `<a class="pager-${which}" href="#${of}"><span>${which === "prev" ? "← Previous" : "Next →"}</span>${DOCS.get(of).title}</a>`
       : `<span></span>`
-  return `<nav class="pager">${cell("prev", ORDER[i - 1])}${cell("next", ORDER[i + 1])}</nav>`
+  return `<nav class="pager" aria-label="Read next">${cell("prev", order[i - 1])}${cell("next", order[i + 1])}</nav>`
 }
 
 /** The outline marker follows the reader: the last heading above the fold

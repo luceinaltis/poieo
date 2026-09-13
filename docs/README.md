@@ -5,10 +5,15 @@ describes the current repository; git keeps the history.
 
 ## Use poieo
 
-Start with the root [`README.md`](../README.md) for the one-minute tour, then use
-[`usage.md`](usage.md) to create a project, keep tasks running and review their
-changes. [`DESIGN.md`](../DESIGN.md) records the promises and limits behind that
-experience.
+The short guides each cover one part of everyday use:
+
+- [Get started](guides/getting-started.md) — install and open the board.
+- [Models](guides/models.md) — connect models and assign them to steps.
+- [Tasks](guides/tasks.md) — create, schedule, and direct work.
+- [Changes](guides/changes.md) — review, apply, and undo work.
+- [Troubleshooting](guides/troubleshooting.md) — find and fix a problem.
+
+[`DESIGN.md`](../DESIGN.md) records the product's promises and limits.
 
 The CLI itself is the command reference:
 
@@ -49,8 +54,8 @@ Then read the document for the component you are changing:
 
 - A component document explains current responsibilities, contracts and
   non-obvious constraints. It is updated in the PR that changes them.
-- Product instructions belong in `usage.md`; product promises and future work
-  belong in `DESIGN.md`.
+- Product instructions belong in the short pages under `guides/`; `usage.md`
+  is their entry index. Product promises and future work belong in `DESIGN.md`.
 - Implementation history belongs in git, not in dated design files or in a
   current component guide.
 - If the code and a current document disagree, the document is a bug.
