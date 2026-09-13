@@ -222,6 +222,38 @@ test("a card made from the form opens in its drawer as soon as the board has it"
   expect(panel("New task")).toBeNull()
 })
 
+test("a card arriving after the reader has moved on does not take the margin back", async () => {
+  // The drawer opens where the form was, and only there: closing the form
+  // between the save and the card's arrival is the reader saying where they
+  // want to be, and a card arriving a moment later must not overrule it.
+  createTask.mockResolvedValue({ ok: true, task: "evening-sweep" })
+  const tasks = [row("chores", "night shift")]
+  await open(tasks)
+  await act(async () => button("open-make")!.click())
+
+  const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+  const name = container.querySelector<HTMLInputElement>('input[name="name"]')!
+  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
+  const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+  await act(async () => {
+    write.call(name, "evening sweep")
+    name.dispatchEvent(new Event("input", { bubbles: true }))
+    write.call(folder, "../work")
+    folder.dispatchEvent(new Event("input", { bubbles: true }))
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "x")
+    prompt.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => button("make-task")!.click())
+  await act(async () => container.querySelector<HTMLElement>(".make-close")!.click())
+  expect(panel("New task")).toBeNull()
+
+  tasks.push(row("evening-sweep", "night shift"))
+  await act(async () => feed!.onResync())
+  await act(async () => {})
+
+  expect(container.querySelector(".drawer")).toBeNull()
+})
+
 test("a name already taken says so while it is being typed", async () => {
   // The server would refuse this with a 409 after save; the panel knows the
   // project's tasks already, so the sentence comes while the name is still

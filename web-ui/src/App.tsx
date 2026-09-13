@@ -273,10 +273,18 @@ export default function App({ store }: { store?: StageStore }) {
     [project],
   )
   useEffect(() => {
-    if (awaitedTaskKey === null || !(awaitedTaskKey in stage.tasks)) return
+    if (awaitedTaskKey === null) return
+    // Only where the form still is. A reader who has since closed it, opened
+    // models, picked another task or switched project has said where they
+    // want to be, and a card arriving a moment later must not take that back.
+    if (activePanel.kind !== "make") {
+      setAwaitedTaskKey(null)
+      return
+    }
+    if (!(awaitedTaskKey in stage.tasks)) return
     setActivePanel({ kind: "task", taskKey: awaitedTaskKey })
     setAwaitedTaskKey(null)
-  }, [awaitedTaskKey, stage.tasks])
+  }, [activePanel.kind, awaitedTaskKey, stage.tasks])
   const makeAlike = useCallback(
     (initialFields: TaskFields) => setActivePanel({ kind: "make", initialFields }),
     [],
