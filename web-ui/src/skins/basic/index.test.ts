@@ -55,6 +55,16 @@ beforeEach(() => {
   document.body.append(el)
 })
 
+test("a card wears its title, and still answers to its name", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([{ ...TASK_ROWS[0], title: "Keep the tests green" }, TASK_ROWS[1]]))
+
+  const card = el.querySelector('[data-task="board/chores"]')!
+  expect(card.querySelector(".basic-name")!.textContent).toBe("Keep the tests green")
+  expect(el.querySelector('[data-task="board/revision"] .basic-name')!.textContent).toBe("revision")
+  handle.destroy()
+})
+
 afterEach(() => {
   el.remove()
 })

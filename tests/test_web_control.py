@@ -22,6 +22,7 @@ class StubRunner:
 
     def __init__(self, name="triage", status="waiting"):
         self.name = name
+        self.title = name
         self.status = status
         self.current_run_id = "r7" if status == "running" else None
         self.last_result = None

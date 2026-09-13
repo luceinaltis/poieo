@@ -119,6 +119,22 @@ test("the panel is named by the task heading", async () => {
   expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe("chores")
 })
 
+test("the heading is the card's title, with the name it answers to beneath", async () => {
+  // The title is the card's own word for itself; the name is the file, and
+  // the one the rename field and every route go by. Both, and told apart.
+  await draw([], { title: "Keep the tests green" })
+
+  const panel = container.querySelector("aside")!
+  const labelledBy = panel.getAttribute("aria-labelledby")!
+  expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe("Keep the tests green")
+  expect(container.querySelector(".drawer-id")?.textContent).toBe("chores")
+})
+
+test("a title that is the name is said once", async () => {
+  await draw([], { title: "chores" })
+  expect(container.querySelector(".drawer-id")).toBeNull()
+})
+
 test("the first glance leads with attention and the newest run", async () => {
   const olderChange: RunSummary = {
     ...run,

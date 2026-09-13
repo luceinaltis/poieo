@@ -180,7 +180,7 @@ export function createGraphDialog(host: HTMLElement) {
   }
 
   function paint(task: TaskState) {
-    title.textContent = task.name
+    title.textContent = task.title
     const current = task.shape.nodes.find(node => node.id === task.currentNode)
     const now = task.status === "running" && current ? `Running: ${stepName(current)}`
       : task.status === "paused" ? task.enabled ? "Paused" : "Switched off"
@@ -210,7 +210,7 @@ export function createGraphDialog(host: HTMLElement) {
       selected = key
       opener = from
       zoom = 1
-      dialog.setAttribute("aria-label", `Steps in ${task.name}`)
+      dialog.setAttribute("aria-label", `Steps in ${task.title}`)
       draw(task)
       paint(task)
       dialog.showModal()

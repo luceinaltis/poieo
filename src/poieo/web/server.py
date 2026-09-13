@@ -480,6 +480,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             rows.append(
                 {
                     "name": runner.name,
+                    # What the card calls itself. The name above is the file
+                    # and the identity every route takes; this is the line
+                    # inside, which the form lets a reader rewrite -- and which
+                    # the board never drew, so the field read as a second name
+                    # and editing it changed nothing on screen.
+                    "title": runner.title,
                     # Which project's. A name alone stopped being an identity
                     # when one daemon could run several: every project has a
                     # `chores`, and the pair is what a control route takes.

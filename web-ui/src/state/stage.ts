@@ -27,8 +27,10 @@ export interface LastRun {
 }
 
 export interface TaskState {
-  /** What to call it on screen. The key it is filed under is the identity. */
+  /** What it is filed under, and what every route takes. Never the title. */
   name: string
+  /** What to call it on screen: the card's own title, or the name without one. */
+  title: string
   project: string
   /**
    * The four states a view has to draw apart.
@@ -181,6 +183,7 @@ function createEmptyTaskState(): TaskState {
     countedChangeRuns: new Set(),
     asking: null,
     name: "",
+    title: "",
     project: "",
     currentNode: null,
     step: 0,
@@ -250,6 +253,7 @@ export function initialStage(rows: TaskRow[]): StageState {
     tasks[keyOfTask(row.project, row.name)] = {
       ...createEmptyTaskState(),
       name: row.name,
+      title: row.title || row.name,
       project: row.project,
       tracked: row.into !== null,
       then: row.then,

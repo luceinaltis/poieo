@@ -84,9 +84,12 @@ def stub_runner(
     graph=None,
     binding=None,
     apply=None,
+    title=None,
 ):
     return SimpleNamespace(
         name=name,
+        # What the card calls itself; the name when there is no card.
+        title=title or name,
         config=None,
         status=status,
         holding=holding,
@@ -105,6 +108,18 @@ def stub_runner(
     )
 
 
+def test_the_listing_carries_the_cards_own_title(tmp_path):
+    """The `name:` in a card is a title the reader may rewrite, and until now
+    the board never saw it: every row said the filename, so a title edited in
+    the form changed nothing on screen and the field read as a second name."""
+    daemon = stub_daemon(tmp_path, [stub_runner(name="keep-green", title="Keep the tests green")])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+    assert row["name"] == "keep-green"
+    assert row["title"] == "Keep the tests green"
+
+
 def test_flows_lists_runner_state(tmp_path):
     last = SimpleNamespace(summary=lambda: {"run_id": "r0", "status": "completed"})
     daemon = stub_daemon(tmp_path, [stub_runner(last=last)])
@@ -114,6 +129,7 @@ def test_flows_lists_runner_state(tmp_path):
     assert body["tasks"] == [
         {
             "name": "triage",
+            "title": "triage",
             "project": tmp_path.name,
             "graph": "support-triage",
             "trigger": "interval 30s",

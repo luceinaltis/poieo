@@ -168,7 +168,7 @@ function summarise(marks: Mark[], earlier: number, span: Span, tracked: boolean)
 }
 
 function paint(row: Row, taskState: TaskState, span: Span): void {
-  row.name.textContent = taskState.name
+  row.name.textContent = taskState.title
   row.trigger.textContent = taskState.trigger
   row.last.textContent = describeLast(taskState)
   row.root.dataset.status = taskState.status
@@ -346,12 +346,12 @@ export const runs: Skin = {
           set = true
         }
 
-        // Alphabetical, and re-sorted only when the set changes: a board that
-        // reorders itself while it is being read is what the graph view went to
-        // some trouble to stop doing.
+        // Alphabetical by what is drawn -- the title -- and re-sorted only when
+        // the set changes: a board that reorders itself while it is being read
+        // is what the graph view went to some trouble to stop doing.
         if (set) {
           const order = [...rows.entries()].sort(([one], [other]) =>
-            (stage.tasks[one]?.name ?? one).localeCompare(stage.tasks[other]?.name ?? other),
+            (stage.tasks[one]?.title ?? one).localeCompare(stage.tasks[other]?.title ?? other),
           )
           for (const [, row] of order) body.append(row.root)
         }

@@ -293,7 +293,7 @@ function fillInside(box: Box, taskState: TaskState, receives: boolean): boolean 
   box.inside.hidden = taskState.shape.nodes.length === 0 && !connected
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
-  box.inside.setAttribute("aria-label", `Step connections in ${taskState.name}`)
+  box.inside.setAttribute("aria-label", `Step connections in ${taskState.title}`)
   const width = drawCardSteps(box.steps, taskState, receives)
   if (connected) box.root.style.width = `${Math.max(BOX.width, width + 32)}px`
   return true
@@ -303,7 +303,9 @@ function fillInside(box: Box, taskState: TaskState, receives: boolean): boolean 
 function paint(box: Box, taskState: TaskState, open: boolean): void {
   // The name on the card, not the key it is filed under: that carries the
   // project as well, which is the board's business and not the reader's.
-  box.name.textContent = taskState.name
+  // The title, which is the card's own word for itself; the name it is filed
+  // under is on the drawer, beside the field that changes it.
+  box.name.textContent = taskState.title
   box.root.dataset.status = taskState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "▾" : "▸"
@@ -323,7 +325,7 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   const count = taskState.shape.nodes.length
   box.graphHead.hidden = count === 0
   box.graphCount.textContent = `${count} ${count === 1 ? "step" : "steps"}`
-  box.viewSteps.setAttribute("aria-label", `View steps in ${taskState.name}`)
+  box.viewSteps.setAttribute("aria-label", `View steps in ${taskState.title}`)
 
   for (const pill of box.steps.querySelectorAll<HTMLElement>("[data-node]")) {
     pill.dataset.here = String(taskState.status === "running" && pill.dataset.node === taskState.currentNode)

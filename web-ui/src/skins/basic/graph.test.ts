@@ -75,6 +75,17 @@ test("steps open at reading size, can be enlarged, and close back to their opene
   expect(document.activeElement).toBe(opener)
 })
 
+test("the steps are opened and headed by the card's title, not its filename", () => {
+  // Every other place draws the title now; a dialog opened from the same
+  // card must not answer with the filename the card no longer shows.
+  handle.update(initialStage([{ ...task, title: "Keep the tests green" }]))
+  button(host, "View steps in Keep the tests green").click()
+  const dialog = host.querySelector<HTMLDialogElement>('dialog[open][aria-label="Steps in Keep the tests green"]')!
+  expect(dialog).not.toBeNull()
+  expect(dialog.querySelector(".graph-title")?.textContent).toBe("Keep the tests green")
+  button(dialog, "Close steps").click()
+})
+
 test("the running step lights up in both views without losing the chosen zoom", () => {
   button(host, "View steps in Review a draft").click()
   const dialog = host.querySelector<HTMLDialogElement>("dialog[open]")!

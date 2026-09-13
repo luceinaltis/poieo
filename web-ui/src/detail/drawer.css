@@ -40,6 +40,14 @@
   min-width: 0;
 }
 
+/* The name the task is filed under, when the title above is not it. */
+.drawer-id {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  margin: 0;
+}
+
 /* The first answer in the panel: whether the task needs its owner. Colour
    follows the same fact on the board; the sentence carries it without colour. */
 .drawer-state {

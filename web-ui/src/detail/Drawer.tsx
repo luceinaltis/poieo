@@ -674,6 +674,7 @@ function ShownMemory({ memory, onMemory }: { memory: RunMemory; onMemory?(slug: 
 export const Drawer = memo(function Drawer({
   project,
   task,
+  title,
   status = "waiting",
   enabled = true,
   stale = null,
@@ -690,6 +691,12 @@ export const Drawer = memo(function Drawer({
 }: {
   project: string
   task: string
+  /**
+   * What the card calls itself, for the heading. `task` is the file and the
+   * identity every route here takes; when the two differ the name is said
+   * under the title, because it is also what the rename field changes.
+   */
+  title?: string
   status?: string
   /** Whether the card file lets this task run at all. */
   enabled?: boolean
@@ -861,7 +868,8 @@ export const Drawer = memo(function Drawer({
     <aside className="panel drawer" data-task={task} aria-labelledby={titleId}>
       <header className="drawer-head">
         <div className="drawer-title">
-          <h2 id={titleId}>{task}</h2>
+          <h2 id={titleId}>{title || task}</h2>
+          {title && title !== task ? <p className="drawer-id">{task}</p> : null}
           <p className="drawer-state" data-state={attention.kind} role="status">
             {attention.text}
           </p>
