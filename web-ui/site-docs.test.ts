@@ -78,8 +78,15 @@ test("docs navigation follows the document and headings below the sticky header"
   await vi.waitFor(() => expect(nav.querySelector('a[href="#architecture/choose-models"]')).not.toBeNull())
   expect(nav.querySelector('a[href="#usage/choose-models"]')).toBeNull()
 
-  vi.mocked(window.scrollTo).mockClear()
   fold.open = true
+  for (const gesture of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, ...gesture })
+    nav.querySelector<HTMLAnchorElement>('a[href="#architecture"]')!.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(fold.open).toBe(true)
+  }
+
+  vi.mocked(window.scrollTo).mockClear()
   nav.querySelector<HTMLAnchorElement>('a[href="#architecture"]')!.click()
   expect(fold.open).toBe(false)
   await vi.waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 0))
