@@ -13,8 +13,9 @@ afterEach(() => {
 
 test("docs navigation follows the document and headings below the sticky header", async () => {
   document.body.innerHTML = `
+    <a class="skip-link" href="#doc">Skip to content</a>
     <nav id="doc-nav"></nav>
-    <article id="doc"></article>
+    <article id="doc" tabindex="-1"></article>
     <details id="doc-toc"><summary>On this page</summary><nav></nav></details>
     <details class="doc-nav-fold"><summary>All documents</summary></details>
   `
@@ -53,4 +54,12 @@ test("docs navigation follows the document and headings below the sticky header"
   location.hash = "#architecture"
   window.dispatchEvent(new HashChangeEvent("hashchange"))
   await vi.waitFor(() => expect(contributor.open).toBe(true))
+
+  const article = document.getElementById("doc")!
+  article.scrollIntoView = vi.fn()
+  document.querySelector<HTMLAnchorElement>(".skip-link")!.click()
+  await vi.waitFor(() => expect(document.activeElement).toBe(article))
+  expect(location.hash).toBe("#architecture")
+  expect(document.title).toBe("Architecture — poieo docs")
+  expect(article.scrollIntoView).toHaveBeenCalled()
 })
