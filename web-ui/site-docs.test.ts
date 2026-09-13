@@ -85,6 +85,7 @@ test("docs navigation follows the document and headings below the sticky header"
     expect(event.defaultPrevented).toBe(false)
     expect(fold.open).toBe(true)
   }
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
   vi.mocked(window.scrollTo).mockClear()
   nav.querySelector<HTMLAnchorElement>('a[href="#architecture"]')!.click()

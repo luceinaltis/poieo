@@ -226,6 +226,7 @@ document.querySelector(".skip-link")?.addEventListener("click", (event) => {
 
 // Selecting the current hash still needs to jump back after scrolling away.
 nav.addEventListener("click", (event) => {
+  if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
   const link = event.target.closest("a")
   if (!link) return
   if (folded) folded.open = false
