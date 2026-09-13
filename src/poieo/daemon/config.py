@@ -5,63 +5,21 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from ..binding import BindingSpec, load_binding
 from ..card import CardSpec, card_payload, expand, load_cards
 from ..errors import SpecError
-from ..graph import Branch, GraphSpec, load_document, load_graph, load_spec
+from ..graph import GraphSpec, load_document, load_graph, load_spec
 from ..layout import find_project_file
 from ..memory import check_memory, keeps_memory
 from ..project import ProjectSpec, load_project
-from ..tools import Isolation
-from ..workspace import ApplySpec, usable
-from .triggers import TriggerSpec
+from ..task import TaskSpec, parse_duration
+from ..workspace import usable
 
 log = logging.getLogger("poieo.daemon")
-
-
-class TaskSpec(BaseModel):
-    """One logical workflow wired to a trigger and a binding."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    graph: str
-    # Falls back to the daemon-level binding when omitted.
-    binding: str | None = None
-    trigger: TriggerSpec = Field(default_factory=TriggerSpec)
-    enabled: bool = True
-
-    # Where this task's agent nodes work. Resolved against the config file, so
-    # the graph can stay portable and say nothing about this machine.
-    workdir: str | None = None
-
-    # Static payload handed to every run.
-    input: dict[str, Any] = Field(default_factory=dict)
-    # Re-read before each run, so an external process can feed the task.
-    input_file: str | None = None
-    # Carry the ending state of one run into the next -- the memory that makes
-    # a looping task accumulate instead of restarting from zero every time.
-    carry_state: bool = False
-    # Where this task's commands may run. Absent means the host, as before.
-    isolation: Isolation | None = None
-    apply: ApplySpec = Field(default_factory=ApplySpec)
-    on_error: Literal["continue", "stop"] = "continue"
-
-    # Which task should work next: the router's own when/to/label, one level
-    # up. First match wins, and `to: null` means matched-and-no-further. No
-    # `default`, because a finished run does not have to go anywhere; a
-    # catch-all is a last branch reading `"true"`.
-    then: list[Branch] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _check_name(self) -> TaskSpec:
-        if not self.name.strip():
-            raise ValueError("task name must not be empty")
-        return self
 
 
 class DaemonConfig(ProjectSpec):
@@ -121,8 +79,6 @@ class DaemonConfig(ProjectSpec):
             if not task.binding and not self.binding:
                 raise ValueError(f"task '{task.name}' has no binding and the daemon declares no default")
         if self.learn is not None:
-            from .triggers import parse_duration
-
             # Fails at load, not at 3am -- and a zero interval would spin
             # the loop without ever yielding, starving the whole daemon.
             if parse_duration(self.learn) <= 0:

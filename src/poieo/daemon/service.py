@@ -27,6 +27,7 @@ from ..providers import ProviderPool, check_credentials
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore, utcnow
+from ..task import parse_duration
 from ..tools import ToolContext, make_container_pool, sweep_containers
 from ..web import BroadcastStore, MergedStore, create_app
 from ..workspace import Workspace, WorkspaceError, task_run_lock
@@ -34,7 +35,7 @@ from .changes import check_and_apply, finish_write
 from .config import DaemonConfig, LoadedTask, load_config, load_tasks
 from .notes import deliver_notes, leave_note
 from .repair import repair_change
-from .triggers import Firing, _sleep_or_cancel, parse_duration
+from .triggers import Firing, _sleep_or_cancel, build_trigger
 from .undo import undo_change
 
 log = logging.getLogger("poieo.daemon")
@@ -329,7 +330,7 @@ class TaskRunner:
         self.store = store
         self.cancel = cancel
         self.on_run = on_run
-        self.trigger = task.spec.trigger.build()
+        self.trigger = build_trigger(task.spec.trigger)
         self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
         # Ending state of the last run, replayed into the next when carrying.
         self.state: dict[str, Any] = {}

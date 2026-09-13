@@ -34,8 +34,8 @@ class Postbox:
 
 def _tell_tool(postbox: Postbox) -> Tool:
     async def run(_workdir: Path, args: dict[str, Any]) -> str:
-        # Late: the journal's format belongs to the task module, and importing
-        # it at module level would close a cycle (task imports tools).
+        # Late: the journal's format belongs to the card module, and importing
+        # it at module level would close a cycle (card imports tools).
         from ..card import append_journal
 
         name = str(args.get("task", "")).strip()

@@ -39,6 +39,9 @@ provider choice in it.
 
 ## Ownership boundaries
 
+- `task.py` owns the full form of a task and its schedule settings: the shape a
+  card expands to and the daemon loads. It knows neither cards nor the daemon;
+  `cron.py` parses the cron notation for it.
 - `card.py` owns the authored short form and its expansion. Runtime code does
   not know that cards exist.
 - `graph.py` and `expr.py` own workflow shape and safe expressions.

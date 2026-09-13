@@ -42,8 +42,8 @@ Then read the document for the component you are changing:
 | [binding.md](binding.md) | resolving roles to models and providers | `binding.py`, `providers/` |
 | [runtime.md](runtime.md) | executing one run | `runtime/` |
 | [tools.md](tools.md) | file, shell and note tools; execution and isolation | `tools/` |
-| [tasks.md](tasks.md) | task cards, journals and notes | `card.py` |
-| [daemon.md](daemon.md) | triggers, residency, control and handoff | `daemon/` |
+| [tasks.md](tasks.md) | the full form of a task, task cards, journals and notes | `task.py`, `card.py` |
+| [daemon.md](daemon.md) | triggers, residency, control and handoff | `daemon/`, `cron.py` |
 | [workspace.md](workspace.md) | private copies and reviewable changes | `workspace.py` |
 | [memory.md](memory.md) | long-term project memory and learning | `memory/`, `learn.py`, `strength.py`, `blob.py` |
 | [storage.md](storage.md) | project layout, run records and detection | `layout.py`, `project.py`, `detect.py`, `store.py` |

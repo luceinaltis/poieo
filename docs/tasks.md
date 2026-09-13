@@ -1,11 +1,13 @@
 # Tasks
 
-`src/poieo/card.py`
+`src/poieo/task.py`, `src/poieo/card.py`
 
 A task card is the short form for recurring work. It puts one task in one YAML
-or JSON file and expands to the same `TaskSpec` and `GraphSpec` used by the
-daemon. Downstream runtime code does not know whether a graph was authored
-directly or generated from a card.
+or JSON file and expands to the same `TaskSpec` and `GraphSpec` the daemon
+loads. `TaskSpec` and the `TriggerSpec` inside it live in `task.py`, below both
+the card and the daemon, so a card becomes a task without loading the
+scheduler; [daemon.md](daemon.md) lists their fields. Downstream runtime code
+does not know whether a graph was authored directly or generated from a card.
 
 For the user workflow, start with [usage.md](usage.md).
 

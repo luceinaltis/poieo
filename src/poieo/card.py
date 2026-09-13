@@ -18,7 +18,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -26,11 +26,9 @@ from .errors import SpecError, describe_invalid
 from .graph import Branch, GraphSpec, NodeSpec, OutputSpec, load_document, load_spec
 from .layout import layout_for
 from .memory import read_memory, write_result
+from .task import TaskSpec
 from .tools import DEFAULT_TOOLSETS, Isolation
 from .workspace import ApplySpec
-
-if TYPE_CHECKING:  # pragma: no cover - typing only
-    from .daemon.config import TaskSpec
 
 log = logging.getLogger("poieo.card")
 
@@ -117,9 +115,8 @@ class CardSpec(BaseModel):
     # things still possible.
     every: str | float | None = None
     at: str | None = None
-    # Left as a mapping rather than a TriggerSpec: importing one here would
-    # close the loop with daemon.config, and TaskSpec validates it a moment
-    # later anyway -- where the error can name the card it came from.
+    # Left as a mapping rather than a TriggerSpec: TaskSpec validates it a
+    # moment later anyway, where the error can name the card it came from.
     trigger: dict[str, Any] | None = None
 
     # What the work is handed, and what should work next. These were a task's
@@ -319,8 +316,6 @@ def expand(task: CardSpec, roster: list[str] | None = None) -> tuple[TaskSpec, G
     at that file and is loaded like any other.
     """
     from pydantic import ValidationError
-
-    from .daemon.config import TaskSpec  # late import: config imports this module
 
     graph = None if task.graph else build_graph(task, roster)
     try:

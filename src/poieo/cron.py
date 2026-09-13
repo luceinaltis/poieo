@@ -4,13 +4,18 @@ Supports the fields ``minute hour day-of-month month day-of-week`` with ``*``,
 ``*/step``, ``a-b``, ``a-b/step``, comma lists, and three-letter month/day names.
 Day-of-month and day-of-week follow the usual cron rule: when *both* are
 restricted, a day matching *either* one fires.
+
+Below the daemon, because a task's schedule settings validate a cron
+expression at load time and those settings must not reach into the scheduler.
+
+Design: docs/daemon.md
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from ..errors import SpecError
+from .errors import SpecError
 
 _MONTHS = {n: i for i, n in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), start=1)}
 _DAYS = {n: i for i, n in enumerate("sun mon tue wed thu fri sat".split())}

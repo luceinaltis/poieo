@@ -56,6 +56,7 @@ from .daemon.config import (
     config_for_tasks_folder,
     declared_input,
 )
+from .daemon.triggers import build_trigger
 from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
@@ -389,7 +390,7 @@ def validate(
         # The whole card, not just its graph: a schedule that cannot
         # parse must fail here, not when the daemon is armed.
         task, _ = expand(task)
-        report["schedule"] = task.trigger.build().describe
+        report["schedule"] = build_trigger(task.trigger).describe
 
     homeless = needs_a_workdir(graph)
     if homeless:
@@ -1361,7 +1362,7 @@ def tasks(
     for card in items:
         task, _ = expand(card)
         state = "on " if task.enabled else "off"
-        typer.echo(f"[{state}] {card.slug:<20} {task.trigger.build().describe:<24} {card.folder_path()}")
+        typer.echo(f"[{state}] {card.slug:<20} {build_trigger(task.trigger).describe:<24} {card.folder_path()}")
         # "isolated", never the image: naming it is licensed in configuration
         # and in errors, not in a listing.
         boxed = " · isolated" if card.isolation else ""

@@ -6,13 +6,14 @@ import httpx
 import pytest
 from conftest import EXAMPLES, card
 
+from poieo.cron import CronSchedule
 from poieo.daemon import Daemon, load_config, load_tasks
-from poieo.daemon.cron import CronSchedule
 from poieo.daemon.service import _ensure_port_free
-from poieo.daemon.triggers import TriggerSpec, _next_tick, parse_duration
+from poieo.daemon.triggers import _next_tick, build_trigger
 from poieo.errors import SpecError
 from poieo.memory import start_memory
 from poieo.store import Event, NullStore
+from poieo.task import TriggerSpec, parse_duration
 from poieo.web.events import BroadcastStore
 
 
@@ -66,13 +67,13 @@ async def collect(trigger, limit, cancel=None):
 
 
 async def test_loop_trigger_stops_at_max_iterations():
-    trigger = TriggerSpec(type="loop", max_iterations=3).build()
+    trigger = build_trigger(TriggerSpec(type="loop", max_iterations=3))
     fires = await collect(trigger, 10)
     assert [f.iteration for f in fires] == [1, 2, 3]
 
 
 async def test_interval_trigger_fires_immediately_then_periodically():
-    trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=3, run_at_start=True).build()
+    trigger = build_trigger(TriggerSpec(type="interval", every="0.05s", max_iterations=3, run_at_start=True))
     started = asyncio.get_running_loop().time()
     fires = await collect(trigger, 10)
     elapsed = asyncio.get_running_loop().time() - started
@@ -95,7 +96,7 @@ async def test_interval_trigger_takes_the_time_its_periods_come_to():
 
     The invariant itself is arithmetic and is asked as arithmetic, above.
     """
-    trigger = TriggerSpec(type="interval", every="0.05s", max_iterations=20).build()
+    trigger = build_trigger(TriggerSpec(type="interval", every="0.05s", max_iterations=20))
     loop = asyncio.get_running_loop()
 
     stamps = []
@@ -111,7 +112,7 @@ async def test_interval_trigger_takes_the_time_its_periods_come_to():
 
 
 async def test_manual_trigger_waits_for_shutdown_without_firing(monkeypatch):
-    trigger = TriggerSpec(type="manual").build()
+    trigger = build_trigger(TriggerSpec(type="manual"))
     cancel = asyncio.Event()
     waiting = asyncio.Event()
     wait_for_cancel = cancel.wait
@@ -707,7 +708,7 @@ def test_a_schedule_reads_back_the_way_it_was_written():
     print, what the board labels a task with, and what every run records as
     the reason it fired -- so it is worth being readable in one place.
     """
-    said = lambda every: TriggerSpec(type="interval", every=every).build().describe
+    said = lambda every: build_trigger(TriggerSpec(type="interval", every=every)).describe
 
     assert said("30m") == "every 30m"
     assert said("1h") == "every 1h"
