@@ -56,7 +56,7 @@ function wrap(text: string): string[] {
 
 export function drawConnections(
   canvas: SVGElement, stage: StageState, placed: Placed[], boxes: Map<string, ConnectedBox>, bottom: number,
-  follow: (task: string) => void, trace: (from: string | null, to?: string) => void,
+  follow: (task: string, input: { x: number; y: number }) => void, trace: (from: string | null, to?: string) => void,
 ) {
   const positions = new Map(placed.map(at => [at.task, at]))
   const columnRight = new Map<number, number>()
@@ -90,6 +90,7 @@ export function drawConnections(
     const title = svg("title", {})
     title.textContent = `${description}. Follow this connection to the receiving task. The first matching condition wins.`
     group.append(title,
+      svg("path", { class: "basic-connection-hit", d: edgePath(points) }),
       svg("path", { class: "basic-wire", d: edgePath(points) }),
       svg("path", { class: "basic-tip", d: `M ${end.x - 8} ${end.y - 4} L ${end.x} ${end.y} L ${end.x - 8} ${end.y + 4} Z` }),
       svg("circle", { class: "basic-socket", cx: String(start.x), cy: String(start.y), r: "3.5" }),
@@ -105,11 +106,11 @@ export function drawConnections(
     group.addEventListener("blur", () => trace(null))
     group.addEventListener("pointerenter", () => trace(connection.from, connection.to))
     group.addEventListener("pointerleave", () => { if (document.activeElement !== group) trace(null) })
-    group.addEventListener("click", () => follow(connection.to))
+    group.addEventListener("click", () => follow(connection.to, end))
     group.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return
       event.preventDefault()
-      follow(connection.to)
+      follow(connection.to, end)
     })
     groups.push(group)
   }

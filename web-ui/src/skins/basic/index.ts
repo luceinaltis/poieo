@@ -612,13 +612,13 @@ export const basic: Skin = {
       }
     }
 
-    function follow(task: string) {
+    function follow(task: string, input: { x: number; y: number }) {
       const box = boxes.get(task)
       if (!box) return
       const current = where()
       chosen = { ...current,
-        x: Math.max(16, (viewport.clientWidth - parseFloat(box.root.style.width) * current.zoom) / 2) - parseFloat(box.root.style.left) * current.zoom,
-        y: 24 - parseFloat(box.root.style.top) * current.zoom,
+        x: viewport.clientWidth / 2 - input.x * current.zoom,
+        y: Math.min(160, viewport.clientHeight / 2) - input.y * current.zoom,
       }
       show()
       box.steps.querySelector<HTMLElement>('[data-port="input"]')?.focus({ preventScroll: true })
@@ -731,7 +731,7 @@ export const basic: Skin = {
             box.root.addEventListener("focusin", tracePort)
             box.root.addEventListener("pointerover", tracePort)
             box.root.addEventListener("focusout", () => trace(null))
-            box.root.addEventListener("pointerleave", () => { if (!box!.root.contains(document.activeElement)) trace(null) })
+            box.root.addEventListener("pointerleave", () => trace(null))
             boxes.set(task, box)
             board.append(box.root)
             moved = true

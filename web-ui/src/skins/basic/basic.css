@@ -94,6 +94,7 @@
 }
 
 .basic-connection { cursor: pointer; outline: none; }
+.basic-connection-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; }
 .basic-connection :is(.basic-wire, .basic-socket, .basic-tip) { pointer-events: stroke; }
 .basic-connection .basic-word { pointer-events: auto; }
 .basic-connection[data-return="true"] .basic-wire { stroke-dasharray: 5 4; }
