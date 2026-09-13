@@ -6,7 +6,8 @@ commands. The form also supports file/folder scope. Card reads expose `apply`
 and `keeps_copies`; creation and rewrites validate application settings before
 writing. Editing only the prompt preserves an existing permission. Comments
 and advanced fields continue to use the file editor. Application-only edits
-take effect at the next run.
+take effect at the next run. Automatic mode requires Git in the selected task
+folder and explains that work stays in a private copy until checks pass.
 
 Run history labels applied, pending and blocked changes and shows each command,
 exit code and output on demand. Applied changes do not add to the review count.

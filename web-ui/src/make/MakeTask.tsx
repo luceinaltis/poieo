@@ -195,13 +195,14 @@ export function MakeTask({
             <>, read from this project’s tasks folder</>
           )}
           .{" "}
-          {keepsCopies ? (
+          {application.mode === "auto" ? (
+            <>The selected folder needs Git. Its work is kept in a private copy, checked,
+              then applied within your allowed files.</>
+          ) : keepsCopies ? (
             // Said even though it is the good news: without it the other
             // wording reads as boilerplate about files rather than as the one
             // project where the morning cannot help.
-            application.mode === "auto"
-              ? <>Its work is checked, then applied automatically within your allowed files.</>
-              : <>Its work is kept in a private copy for you to accept or throw away.</>
+            <>Its work is kept in a private copy for you to accept or throw away.</>
           ) : (
             <strong className="make-undo">
               This project is not a git repository, so there is no copy — it changes your files
