@@ -283,7 +283,7 @@ function describeStale(taskState: TaskState): string {
 
 /** Connections at card width. Structure stays put while run state changes. */
 function fillInside(box: Box, taskState: TaskState, receives: boolean, open: boolean): boolean {
-  const structure = JSON.stringify([taskState.name, taskState.shape, taskState.then, receives, open])
+  const structure = JSON.stringify([taskState.name, taskState.title, taskState.shape, taskState.then, receives, open])
   if (box.structure === structure) return false
   box.structure = structure
   const connected = receives || taskState.then.some(way => way.to !== null)
@@ -309,7 +309,7 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   box.root.dataset.status = taskState.status
   box.root.dataset.open = String(open)
   box.toggle.textContent = open ? "Collapse ▴" : "Expand ▾"
-  box.toggle.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} steps in ${taskState.name}`)
+  box.toggle.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} steps in ${taskState.title}`)
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(taskState)
   box.warn.textContent = describeRisk(taskState)
