@@ -44,8 +44,6 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
-from ..daemon.cron import CronSchedule
-from ..daemon.triggers import parse_duration
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
@@ -257,6 +255,12 @@ def _schedule_keys(value: str) -> dict[str, str]:
     form accepts is a line the card will load. Blank is no key at all, and
     the card takes its default.
     """
+    # Late, as card.py imports the daemon: the daemon imports this package
+    # for its broadcast store, so a module-level import here is a circle
+    # that closes on whoever imports `poieo.web` first.
+    from ..daemon.cron import CronSchedule
+    from ..daemon.triggers import parse_duration
+
     line = " ".join(value.split())
     if not line:
         return {}

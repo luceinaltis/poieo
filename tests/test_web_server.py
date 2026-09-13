@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import pathlib
 from types import SimpleNamespace
 
 import pytest
@@ -108,6 +109,23 @@ def stub_runner(
             spec=SimpleNamespace(then=list(then), apply=apply or ApplySpec()),
         ),
     )
+
+
+def test_the_web_package_imports_on_its_own():
+    """`poieo.web` first, in a fresh interpreter, as the installed package is
+    imported. The daemon imports this package for its broadcast store, so any
+    module-level import of the daemon from here is a circle that only closes
+    in that order -- which the suite, importing the daemon first, never takes."""
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, "-c", "import poieo.web; import poieo.web.server"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(pathlib.Path(__file__).resolve().parents[1] / "src")},
+    )
+    assert done.returncode == 0, done.stderr
 
 
 def test_the_folders_a_task_may_work_in_are_listed_as_a_card_would_spell_them(tmp_path):
