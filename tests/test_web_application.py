@@ -6,6 +6,47 @@ from test_web_create_card import _client, _make
 from test_workspace import git
 
 
+@pytest.mark.parametrize("initially_enabled", [False, True])
+async def test_switching_a_task_adopts_its_application_permission_without_restart(tmp_path, initially_enabled):
+    import httpx
+    from test_task_application import CHECK_MADE, policy_config
+
+    from poieo.daemon import Daemon, load_config
+    from poieo.web import create_app
+    from poieo.workspace import ApplySpec
+
+    policy_config(tmp_path, {"mode": "review"})
+    path = tmp_path / "cards" / "chores.yaml"
+    card = yaml.safe_load(path.read_text())
+    card["enabled"] = initially_enabled
+    path.write_text(yaml.safe_dump(card))
+    daemon = Daemon(load_config(tmp_path / "d.yaml"))
+    daemon.runners = daemon._runners()
+    project = daemon.projects[0]
+    driver = daemon.runners[0]
+    permission = {"mode": "auto", "checks": [CHECK_MADE]}
+    card.update(enabled=not initially_enabled, apply=permission)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
+    ) as client:
+        response = await client.put(
+            f"/api/projects/{project.config.display_name}/tasks/chores", json={"text": yaml.safe_dump(card)}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["live"] is True
+        appeared = daemon._appeared(project, {})
+        daemon._note_drift(project)
+        listing = (await client.get("/api/tasks")).json()["tasks"][0]
+
+    assert driver.armed is not initially_enabled
+    assert driver.task.spec.apply == ApplySpec.model_validate(permission)
+    assert driver.stale is None
+    assert listing["enabled"] is not initially_enabled
+    assert listing["apply"]["mode"] == "auto"
+    assert appeared == ([] if initially_enabled else [driver])
+
+
 @pytest.mark.parametrize("missing_project", [False, True])
 @pytest.mark.parametrize(
     "action,key,status", [("accept", "through_run_id", "applied"), ("discard", "from_run_id", "discarded")]
