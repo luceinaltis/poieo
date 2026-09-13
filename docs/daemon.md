@@ -91,6 +91,12 @@ replace the applied history. Answers take the same
 task ownership as runs and decisions.
 Whenever an application hold ends, open boards refresh the listing, including
 after a successful run or a retry answer.
+Adopting changed application settings at a run's start also refreshes open
+boards; an unchanged permission sends no extra notification. A task switched
+on or off can adopt an application edit in the same save while it is idle,
+including permission edits saved while it was off. Structural changes still
+need a restart. The folder scan announces an adopted switch on the event loop,
+including switching off, after its worker thread has finished reading cards.
 Older run summaries without a project field remain decidable; recording the
 decision fills that field so subsequent history and undo use the current project.
 A caller disconnecting does not interrupt that recording. A discarded result uses status

@@ -1204,11 +1204,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     loaded = next((t for t in project.tasks if t.spec.name == spec.slug), None)
                     new_spec, _ = expand(fresh.model_copy(update={"source_path": path}), roster=roster)
 
-                    # `enabled` is live where the rest of a spec is not: the
-                    # folder scan adopts that one field whole, because both
-                    # directions happen while the task is not running. So the
-                    # comparison ignores it, and a switch flipped here is
-                    # honestly promised rather than sent away for a restart.
+                    # The folder scan can switch an idle task and adopt its
+                    # permission together. Permission-only changes take effect
+                    # at the next run. Neither needs a rebuilt trigger.
                     def _same(old: Any, new: Any) -> bool:
                         return old.model_copy(update={"enabled": new.enabled, "apply": new.apply}) == new
 

@@ -908,8 +908,11 @@ class TaskRunner:
         if card and card.source_path:
             try:
                 fresh, _ = expand(load_card(card.source_path), roster=list(self.config.cards_by_task))
-                if fresh == self.task.spec.model_copy(update={"apply": fresh.apply}):
+                if fresh.apply != self.task.spec.apply and fresh == self.task.spec.model_copy(
+                    update={"apply": fresh.apply}
+                ):
                     self.task.spec.apply = fresh.apply
+                    self._say_changed()
             except PoieoError:
                 pass  # The current permission is checked again before applying.
 
@@ -1482,6 +1485,7 @@ class Daemon:
                 if not await _sleep_or_cancel(SCAN_SECONDS, self.cancel):
                     break
                 for project in self.projects:
+                    switches = [(r, r.armed) for r in self.runners if r.config is project.config]
                     try:
                         # A thread, because `load_tasks` runs `check_isolation`,
                         # which shells out to docker with a 20-second timeout.
@@ -1511,7 +1515,10 @@ class Daemon:
                     except Exception as exc:
                         log.warning("the tasks could not be checked against their cards: %s", exc)
                         moved = False
-                    if appeared or moved:
+                    # Switching off starts no runner and leaves no drift.
+                    # Announce its adopted state here, back on the event loop.
+                    switched = any(r.armed != armed for r, armed in switches)
+                    if appeared or moved or switched:
                         # The board does not poll, and no frame is published
                         # when a file changes under it. Without this a reader
                         # who edited a card -- or wrote a new one, from the
@@ -1546,18 +1553,14 @@ class Daemon:
 
     def _reconcile_switch(self, project: LoadedProject, task: LoadedTask) -> "TaskRunner | None":
         """Make a task the daemon already knows match what its card now says
-        about being switched on -- and only about that.
+        about being switched on, including its application permission.
 
         Returns the runner to start, when switching one on, or None.
 
-        **`enabled:` is the one field a scan may adopt whole.** Everything else
-        in a card reaches something built at startup, and half-adopting a spec
-        is worse than not adopting one -- `_reread_graph` says why. This is the
-        exception because both directions happen while the task is *not*
-        running, so what is adopted is the whole of what changed. That is also
-        why an edit touching anything **else** in the same save is left alone
-        and goes on asking for a restart: flipping the switch around a new
-        schedule would arm a trigger nobody built.
+        `enabled` and `apply` need no rebuilt trigger or executor. Adopt them
+        together while the task is not running, including when its permission
+        changed while it was off. Everything else must still match: flipping
+        the switch around a new schedule would arm a trigger nobody built.
 
         The two halves setting a task aside already uses, in both directions.
         Off: the file is the durable half, and the schedule stops now rather
@@ -1574,9 +1577,12 @@ class Daemon:
         )
         if runner is None or runner.armed == task.spec.enabled:
             return None
-        # Only the switch. Anything else in the same save is a restart, and
-        # saying so is `_note_drift`'s job rather than this one's.
-        if task.spec.model_copy(update={"enabled": runner.task.spec.enabled}) != runner.task.spec:
+        # Only the switch and permission. A structural edit still needs a
+        # restart, and saying so is `_note_drift`'s job rather than this one's.
+        if (
+            task.spec.model_copy(update={"enabled": runner.task.spec.enabled, "apply": runner.task.spec.apply})
+            != runner.task.spec
+        ):
             return None
         if runner.status == "running":
             # Never mid-run. The next scan is seconds away, and stopping a run
