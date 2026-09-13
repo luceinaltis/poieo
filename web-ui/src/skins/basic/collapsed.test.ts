@@ -126,3 +126,19 @@ test("a compact independent flow belongs to board navigation", () => {
   expect(wheel.defaultPrevented).toBe(true)
   expect(board.style.transform).not.toBe(before)
 })
+
+test("expansion controls follow the visible card title, including a title edited while open", () => {
+  const titled = { ...source, title: "Prepare a reply" }
+  handle.update(initialStage([titled, task("Review")]))
+  expect(toggle("Draft").getAttribute("aria-label")).toBe("Expand steps in Prepare a reply")
+  expect(card("Draft").querySelector(".basic-inside")?.getAttribute("aria-label"))
+    .toBe("Step connections in Prepare a reply")
+  toggle("Draft").click()
+  handle.update(initialStage([{ ...titled, title: "Polish the reply" }, task("Review")]))
+  expect(toggle("Draft").getAttribute("aria-label")).toBe("Collapse steps in Polish the reply")
+  expect(card("Draft").querySelector(".basic-inside")?.getAttribute("aria-label"))
+    .toBe("Step connections in Polish the reply")
+  expect(card("Draft").querySelectorAll(".basic-node")).toHaveLength(2)
+  toggle("Draft").click()
+  expect(toggle("Draft").getAttribute("aria-label")).toBe("Expand steps in Polish the reply")
+})
