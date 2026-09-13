@@ -47,6 +47,47 @@ async def test_switching_a_task_adopts_its_application_permission_without_restar
     assert appeared == ([] if initially_enabled else [driver])
 
 
+async def test_disabling_a_task_announces_the_adopted_permission_after_the_scan(tmp_path, monkeypatch):
+    import httpx
+    from test_task_application import CHECK_MADE, policy_config
+
+    from poieo.daemon import Daemon
+    from poieo.store import NullStore
+    from poieo.web import BroadcastStore, create_app
+
+    _, config = policy_config(tmp_path, {"mode": "review"})
+    daemon = Daemon(config, store=BroadcastStore(NullStore()))
+    daemon.runners = daemon._runners()
+    events = daemon.store.subscribe()
+    path = tmp_path / "cards" / "chores.yaml"
+    card = yaml.safe_load(path.read_text())
+    card.update(enabled=False, apply={"mode": "auto", "checks": [CHECK_MADE]})
+    scans = 0
+
+    async def two_scans(_seconds, _cancel):
+        nonlocal scans
+        scans += 1
+        return scans <= 2
+
+    monkeypatch.setattr("poieo.daemon.service._sleep_or_cancel", two_scans)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
+    ) as client:
+        response = await client.put(
+            f"/api/projects/{config.display_name}/tasks/chores", json={"text": yaml.safe_dump(card)}
+        )
+        assert response.status_code == 200, response.text
+        while not events.empty():
+            events.get_nowait()
+        await daemon._watch_cards()
+        listed = (await client.get("/api/tasks")).json()["tasks"][0]
+
+    assert listed["enabled"] is False
+    assert listed["apply"]["mode"] == "auto"
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert records == [{"type": "tasks_changed", "project": config.display_name}]
+
+
 @pytest.mark.parametrize("missing_project", [False, True])
 @pytest.mark.parametrize(
     "action,key,status", [("accept", "through_run_id", "applied"), ("discard", "from_run_id", "discarded")]
