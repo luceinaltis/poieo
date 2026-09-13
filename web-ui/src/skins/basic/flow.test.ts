@@ -145,3 +145,43 @@ test("changed connections replace the old destinations and lay out the board aga
   expect(connections()).not.toContain("Review → Ready to finish?")
   expect(host.querySelector(".basic-speck")).not.toBe(before)
 })
+
+test("the start, steps and ending follow a vertical direction at card width", () => {
+  const plain = structuredClone(task)
+  plain.shape.nodes = [plain.shape.nodes[0], { ...plain.shape.nodes[2], next: null }]
+  plain.shape.nodes[0].next = "revise"
+  handle.update(initialStage([plain]))
+  const top = (selector: string) => parseFloat(host.querySelector<HTMLElement>(selector)!.style.top)
+  expect(top(".basic-step-start")).toBeLessThan(top('[data-node="review"]'))
+  expect(top('[data-node="review"]')).toBeLessThan(top('[data-node="revise"]'))
+  expect(top('[data-node="revise"]')).toBeLessThan(top(".basic-step-end"))
+  expect(parseFloat(host.querySelector<HTMLElement>(".basic-steps-group")!.style.width)).toBeLessThanOrEqual(308)
+})
+
+test("parallel conditions and a return path fit the card without shrinking the text away", () => {
+  const branching = structuredClone(task)
+  branching.shape.nodes[1].branches = [
+    { to: "revise", label: "state.priority == 'urgent' and state.category == 'support'" },
+    { to: "revise", label: "state.category == 'question'" },
+  ]
+  branching.shape.nodes[1].default = null
+  branching.shape.nodes[2].next = "verify"
+  branching.shape.nodes.push({ ...branching.shape.nodes[1], id: "verify", description: "Is the reply ready?",
+    branches: [{ to: null, label: "state.approved" }], default: "review" })
+  handle.update(initialStage([branching]))
+  expect(parseFloat(host.querySelector<HTMLElement>(".basic-steps-group")!.style.width)).toBeLessThanOrEqual(308)
+  const scene = host.querySelector<HTMLElement>(".basic-step-scene")!
+  expect(Number(scene.style.transform.slice(6, -1))).toBeGreaterThanOrEqual(0.9)
+  expect(host.querySelector('[data-return="true"] .basic-step-arrow')).not.toBeNull()
+})
+
+test("a self-loop and an otherwise ending stay separate even with diagram-like step IDs", () => {
+  const loop = structuredClone(task)
+  loop.shape = { entry: "start", nodes: [{ ...loop.shape.nodes[1], id: "start", branches: [
+    { to: "start", label: "retry" },
+  ], default: null }] }
+  handle.update(initialStage([loop]))
+  expect(host.querySelectorAll(".basic-node")).toHaveLength(1)
+  expect(connections()).toEqual(["Start → Ready to finish?", "Ready to finish? → Ready to finish?: If retry", "Ready to finish? → End run: Otherwise"])
+  for (const path of paths()) expect(path.getAttribute("d")).not.toMatch(/NaN|Infinity/)
+})

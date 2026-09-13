@@ -398,7 +398,7 @@ test("the steps name every connection and where the run ends", () => {
 
   const inside = el.querySelector('[data-task="board/chores"] .basic-inside')!
   expect([...inside.querySelectorAll(".basic-step-edge")].map(el => el.getAttribute("aria-label")))
-    .toEqual(["Start → read", "read → route", "route → draft: Otherwise", "draft → End run"])
+    .toEqual(["Start → classify", "classify → route", "route → draft: Otherwise", "draft → End run"])
   handle.destroy()
 })
 
