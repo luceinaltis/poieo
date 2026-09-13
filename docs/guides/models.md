@@ -19,6 +19,9 @@ poieo check
 served by your configured endpoints. Replace `<provider>/<model>` with one
 of those choices. `check` tests the connection.
 
+If you set credentials after opening the board, restart the daemon from
+that terminal.
+
 Use `poieo config` to inspect the current selection. Hosted credentials stay
 in environment variables; model files store their names, not secret values.
 For an endpoint discovery does not find, see
@@ -35,7 +38,7 @@ existing role:
 poieo config use <provider>/<model> --role reviewer
 ```
 
-Restart the daemon after changing model assignments. poieo does not choose
-models automatically. Check run results, tests, and usage before deciding
+New assignments take effect on the next run. poieo does not choose models
+automatically. Check run results, tests, and usage before deciding
 whether an assignment improves cost and accuracy. Cost appears when the
 provider reports it or you configure model prices.

@@ -28,9 +28,9 @@ every: 30m
 at: "0 2 * * *"
 ```
 
-Restart the daemon after changing a schedule, folder, model binding, isolation
-setting, or graph relationship. Prompt edits and switching a task on or off
-do not need a restart. [More schedule options](../daemon.md#triggers).
+Restart the daemon after changing a schedule or working folder. Prompt edits
+and switching a task on or off do not need a restart.
+[More schedule options](../daemon.md#triggers).
 
 ## Add steps
 
