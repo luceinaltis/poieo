@@ -91,9 +91,8 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-sky.sky-jump { transition: none; }
 .sky-body { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
 .landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; opacity: 0; background: rgb(240 231 217 / .06); box-shadow: 0 0 64px 40px rgb(240 231 217 / .08); }
-[data-theme="dark"] .landing-sky[data-period="night"]::before { opacity: 1; }
-[data-theme="dark"] .landing-sky[data-period="night"] .sky-body { filter: drop-shadow(0 0 12px rgb(240 231 217 / .28)); }
-[data-theme="light"] .landing-sky[data-period="night"] .sky-body { filter: brightness(.82); }
+.landing-sky[data-period="night"]::before { opacity: 1; }
+.landing-sky[data-period="night"] .sky-body { filter: drop-shadow(0 0 12px rgb(240 231 217 / .28)); }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }
 .hero .button { margin-top: 30px; }
