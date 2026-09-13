@@ -139,3 +139,12 @@ test("a route beside a narrow card also clears wider cards in the same column", 
   expect(lane).toBeGreaterThan(parseFloat(card("Other").style.left) + parseFloat(card("Other").style.width))
   expect(lane).toBeLessThan(parseFloat(card("Review").style.left))
 })
+
+test("a connected graph pans with the board instead of trapping the wheel in an inner scroll area", () => {
+  const board = host.querySelector<HTMLElement>(".basic")!
+  const before = board.style.transform
+  const wheel = new WheelEvent("wheel", { deltaY: -200, cancelable: true, bubbles: true })
+  card("Draft").querySelector(".basic-node")!.dispatchEvent(wheel)
+  expect(wheel.defaultPrevented).toBe(true)
+  expect(board.style.transform).not.toBe(before)
+})
