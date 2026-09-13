@@ -36,7 +36,7 @@ export function Control({
   if (!enabled) {
     return (
       <p className="control-off">
-        Switched off in Task setup. Set <code>enabled: true</code> to switch it on.
+        Switched off. Open Task setup below and switch it on to run it.
       </p>
     )
   }

@@ -231,6 +231,10 @@ short purpose, while its exact recorded input and result stay in a closed
 disclosure. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
+A plain card's form carries its on/off switch beside the three fields, sent
+only when it moved; because the folder scan adopts that field without a
+restart, the saved line then promises the daemon's next look rather than the
+next run, and a switched-off task's controls point at that switch.
 Inside the run's own box, one closed line says what it started with from
 memory: the count and how many shaped the answer. Opening it lists one row
 per entry with its opening words and what became of it, the ones that shaped

@@ -111,5 +111,8 @@ test("a task its card switched off offers no button, and says why", () => {
   expect(button("pause")).toBeNull()
   expect(button("resume")).toBeNull()
   expect(button("run-now")).toBeNull()
-  expect(container.textContent).toContain("enabled: true")
+  // Sent to the switch the form has, not to a line in a file the form hides.
+  expect(container.textContent).toContain("switch it on")
+  expect(container.textContent).not.toContain("enabled: true")
+  expect(container.textContent).not.toContain("restart")
 })
