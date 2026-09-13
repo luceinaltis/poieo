@@ -148,3 +148,33 @@ test("a connected graph lets the board handle wheel navigation", () => {
   expect(wheel.defaultPrevented).toBe(true)
   expect(board.style.transform).not.toBe(before)
 })
+
+test("following a wide receiving graph brings its Input into a narrow viewport", () => {
+  const viewport = host.querySelector<HTMLElement>(".basic-viewport")!
+  Object.defineProperty(viewport, "clientWidth", { value: 390 })
+  Object.defineProperty(viewport, "clientHeight", { value: 844 })
+  const wide = task("Review")
+  wide.shape.nodes = [{ ...wide.shape.nodes[0], type: "router", branches:
+    Array.from({ length: 8 }, (_, index) => ({ to: null, label: `choice ${index}` })),
+  }]
+  handle.update(initialStage([source, wide]))
+  expect(parseFloat(card("Review").style.width)).toBeGreaterThan(390 * 2)
+  host.querySelector(".basic-connection")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+  const input = card("Review").querySelector<HTMLElement>('[data-port="input"]')!
+  const transform = host.querySelector<HTMLElement>(".basic")!.style.transform.match(/-?\d+(?:\.\d+)?/g)!.map(Number)
+  const x = transform[0] + (parseFloat(card("Review").style.left) + parseFloat(input.style.left)) * transform[2]
+  expect(document.activeElement).toBe(input)
+  expect(x).toBeGreaterThan(0)
+  expect(x + parseFloat(input.style.width) * transform[2]).toBeLessThan(390)
+})
+
+test("leaving a hovered Output restores the connection to the focused Input", () => {
+  handle.update(initialStage([source, { ...task("Review"), then: [{ to: "Other", label: "Approved" }] }, task("Other")]))
+  card("Review").querySelector<HTMLElement>('[data-port="input"]')!.focus()
+  card("Review").querySelector('[data-port="output"]')!.dispatchEvent(new Event("pointerover", { bubbles: true }))
+  expect(card("Draft").dataset.linked).toBe("false")
+  expect(card("Other").dataset.linked).toBe("true")
+  card("Review").dispatchEvent(new Event("pointerleave"))
+  expect(card("Draft").dataset.linked).toBe("true")
+  expect(card("Other").dataset.linked).toBe("false")
+})
