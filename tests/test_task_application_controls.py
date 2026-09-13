@@ -18,6 +18,41 @@ from poieo.daemon.changes import check_and_apply
 from poieo.workspace import ApplySpec, Workspace
 
 
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ({"mode": "review"}, {"mode": "auto", "checks": [CHECK_MADE]}),
+        ({"mode": "auto", "checks": [CHECK_MADE]}, {"mode": "review"}),
+        ({"mode": "auto", "checks": [CHECK_MADE]}, {"mode": "auto", "checks": ['python -c "pass"']}),
+    ],
+)
+async def test_adopting_application_settings_notifies_open_boards_once(tmp_path, before, after):
+    from test_task_workspace import WRITES_NOTHING
+
+    from poieo.daemon import Daemon
+    from poieo.web import BroadcastStore
+
+    _, config = policy_config(tmp_path, before, responses=WRITES_NOTHING)
+    driver = Daemon(config)._runners()[0]
+    await driver.run_once({})
+    driver.store = BroadcastStore(driver.store)
+    events = driver.store.subscribe()
+    path = tmp_path / "cards" / "chores.yaml"
+    card = yaml.safe_load(path.read_text())
+    card["apply"] = after
+    path.write_text(yaml.safe_dump(card))
+
+    result = await driver.run_once({})
+    assert result.status == "completed"
+    assert driver.task.spec.apply == ApplySpec.model_validate(after)
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert records.count({"type": "tasks_changed", "project": config.display_name}) == 1
+
+    await driver.run_once({})
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert not any(event["type"] == "tasks_changed" for event in records)
+
+
 @pytest.mark.parametrize("resolution", ["successful_run", "retry_answer"])
 async def test_resolving_an_application_hold_notifies_open_boards(tmp_path, resolution):
     from poieo.daemon import Daemon
