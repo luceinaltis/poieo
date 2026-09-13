@@ -131,7 +131,7 @@ test("a handoff is drawn as an arrow carrying the word on it", () => {
   // One arrow, not two: the branch that deliberately stops has nothing to
   // point at, and an arrow to nowhere would be a line the reader must ignore.
   expect(el.querySelectorAll(".basic-wire")).toHaveLength(1)
-  expect(el.querySelector(".basic-word")!.textContent).toBe("changed")
+  expect(el.querySelector(".basic-word")!.textContent).toBe("1. changed")
   handle.destroy()
 })
 
@@ -145,7 +145,10 @@ test("a handoff says which way it goes", () => {
   const heads = el.querySelectorAll(".basic-tip")
   expect(heads).toHaveLength(1)
   // Pointing at the task being handed to, not away from it.
-  expect(heads[0].getAttribute("d")).toContain(String(BOX.width + BOX.gapX))
+  const target = el.querySelector<HTMLElement>('[data-task="board/revision"]')!
+  const x = Number(heads[0].getAttribute("d")!.match(/L ([\d.-]+)/)![1])
+  expect(x).toBeGreaterThan(parseFloat(target.style.left))
+  expect(x).toBeLessThan(parseFloat(target.style.left) + parseFloat(target.style.width))
   handle.destroy()
 })
 
@@ -155,8 +158,13 @@ test("the word on an arrow sits on the line it names", () => {
 
   // Floated above the line it belonged to the box underneath it instead, and
   // on the top row it had the board's own edge to collide with.
-  const [, , y] = el.querySelector(".basic-wire")!.getAttribute("d")!.split(/[ ,]/)
-  expect(el.querySelector(".basic-word")!.getAttribute("y")).toBe(y)
+  const word = el.querySelector(".basic-word")!
+  const x = Number(word.getAttribute("x")), y = Number(word.getAttribute("y"))
+  const start = Number(el.querySelector(".basic-socket")!.getAttribute("cy"))
+  const end = Number(el.querySelector(".basic-tip")!.getAttribute("d")!.match(/L [\d.-]+ ([\d.-]+)/)![1])
+  expect(el.querySelector(".basic-wire")!.getAttribute("d")).toContain(`L${x} `)
+  expect(y).toBeGreaterThan(Math.min(start, end))
+  expect(y).toBeLessThan(Math.max(start, end))
   handle.destroy()
 })
 
@@ -436,18 +444,20 @@ test("a handoff that goes back does not run through what lies between", () => {
   const wires = Array.from(el.querySelectorAll(".basic-wire")).map((w) => w.getAttribute("d")!)
   expect(wires).toHaveLength(2)
   const [, backward] = wires
-  // Round, under, and up: four turns, where a step onward is one curve.
-  expect(backward).toMatch(/H .* V .* H .* V /)
-
-  // And its head points up into an underside, which no arrow going forward
-  // ever does -- so the reader cannot read it as one.
-  const tips = Array.from(el.querySelectorAll(".basic-tip")).map((t) => t.getAttribute("d")!)
-  const rise = (d: string) => {
-    const [, , y1, , , y2] = d.split(/[ ,]/)
-    return Number(y2) - Number(y1)
-  }
-  expect(rise(tips[0])).toBe(4)   // forward: level, pointing right
-  expect(rise(tips[1])).toBe(-8)  // back: rising, pointing up
+  // The return travels under the cards, then enters the earlier Input from
+  // the left. The dashed return styling distinguishes it from a forward leg.
+  const coordinates = backward.match(/-?\d+(?:\.\d+)?/g)!.map(Number)
+  const xs = coordinates.filter((_, i) => i % 2 === 0)
+  const ys = coordinates.filter((_, i) => i % 2 === 1)
+  const target = el.querySelector<HTMLElement>('[data-task="board/chores"]')!
+  expect(Math.min(...xs)).toBeLessThan(parseFloat(target.style.left))
+  expect(Math.max(...ys)).toBeGreaterThan(BOX.height)
+  const returning = el.querySelector('.basic-connection[data-return="true"]')!
+  expect(returning.getAttribute("aria-label")).toContain("revision output → chores input")
+  const tip = returning.querySelector(".basic-tip")!.getAttribute("d")!
+    .match(/-?\d+(?:\.\d+)?/g)!.map(Number)
+  expect(tip[2]).toBeGreaterThan(tip[0])
+  expect(tip[2]).toBeGreaterThan(tip[4])
   handle.destroy()
 })
 
