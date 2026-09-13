@@ -100,6 +100,8 @@ function seed(state: StageState, rows: TaskRow[], reflectedEvents: PoieoEvent[] 
       then: blank.then,
       shape: blank.shape,
       trigger: blank.trigger,
+      applies: blank.applies,
+      applyChecks: blank.applyChecks,
       stale: blank.stale,
       enabled: blank.enabled,
       pending: blank.pending,

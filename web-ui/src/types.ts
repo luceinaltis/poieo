@@ -26,7 +26,7 @@ export interface Change {
 /** One verification command, as it was run against the combined copy. */
 export interface Check {
   command: string
-  /** Null when the command could not be started at all. */
+  /** Null when the command could not finish, including a timeout. */
   exit_code: number | null
   output: string
 }
@@ -58,7 +58,7 @@ export interface Application {
   outside_scope?: string[]
   dirty?: string[]
   stale?: string
-  /** Files the project changed again between the check and the apply. */
+  /** Files a verification command changed in the prepared copy. */
   verification_changed?: string[]
   /** A repair run the task tried first, when its permission allowed one. */
   repair?: { ready: boolean; run_id?: string; reason?: string }

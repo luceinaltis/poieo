@@ -19,24 +19,68 @@ export function applicationReason(result: Partial<Application>): string {
   return result.stale ?? result.error ?? ""
 }
 
-export function ApplicationResult({ result }: { result: Application }) {
-  const reason = applicationReason(result)
+/** The repair the task tried before this verdict, if its permission allowed one. */
+function describeRepair(repair: NonNullable<Application["repair"]>): string {
+  return repair.ready
+    ? repair.run_id ? `repaired first, by run ${repair.run_id}` : "Overlap repaired and checked again."
+    : `a repair${repair.run_id ? ` (run ${repair.run_id})` : ""} could not finish: ${repair.reason || "no further detail was recorded"}`
+}
+
+/**
+ * The checks the change was put through, folded behind their verdict.
+ *
+ * The line says what a reader scanning wants -- all passed, or which one
+ * refused it -- and the rows behind it carry each command's exit code and
+ * what it printed, because "verification failed" is the one sentence that
+ * always has to be followed by "on what".
+ */
+export function ApplicationResult({ result: application }: { result: Application }) {
+  const checks = application.checks ?? []
+  const failed = checks.find((check) => check.exit_code !== 0)
+  // A refusal with every check green -- the project moved, a file was out of
+  // bounds -- must say so ahead of "2 checks passed", or the line beside
+  // "Not applied" reads as a riddle.
+  const verdict = failed
+    ? failed.exit_code === null ? `${failed.command} did not finish` : `${failed.command} failed (exit ${failed.exit_code})`
+    : application.status === "blocked"
+      ? applicationReason(application) || "could not be applied"
+      : checks.length
+        ? `${checks.length} check${checks.length === 1 ? "" : "s"} passed`
+        : null
+  const repair = application.repair ? (
+    <p className="run-repair" data-ready={String(application.repair.ready)}>
+      {describeRepair(application.repair)}
+    </p>
+  ) : null
+  if (verdict === null) return repair
+  if (checks.length === 0) {
+    return (
+      <>
+        <p className="run-checks run-checks-lead" data-verdict={application.status}>
+          {verdict}
+        </p>
+        {repair}
+      </>
+    )
+  }
   return (
-    <section className="application-result" aria-label="Change application">
-      <p><strong>{applicationLabel(result)}</strong></p>
-      {result.repair?.ready ? <p>Overlap repaired and checked again.</p> : null}
-      {reason ? <p>{reason}</p> : null}
-      {result.checks?.length ? (
-        <details>
-          <summary>Verification · {result.checks.every((check) => check.exit_code === 0) ? "passed" : "did not pass"}</summary>
-          {result.checks.map((check, index) => (
-            <div key={index}>
-              <p><code>{check.command}</code> · {check.exit_code === 0 ? "passed" : check.exit_code === null ? "could not finish" : `exit ${check.exit_code}`}</p>
-              {check.output ? <pre>{check.output}</pre> : null}
-            </div>
-          ))}
-        </details>
-      ) : null}
-    </section>
+    <>
+    <details className="run-checks" data-verdict={application.status}>
+      <summary className="run-checks-lead">{verdict}</summary>
+      <ul className="run-checks-list">
+        {checks.map((check, index) => (
+          <li key={index} data-exit={check.exit_code === null ? "none" : String(check.exit_code)}>
+            <code className="run-check-command">{check.command}</code>
+            <span className="run-check-exit">
+              {check.exit_code === null ? "could not finish" : check.exit_code === 0 ? "passed" : `exit ${check.exit_code}`}
+            </span>
+            {check.output ? <pre className="run-check-output">{check.output}</pre> : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+    {repair}
+    </>
   )
 }
+

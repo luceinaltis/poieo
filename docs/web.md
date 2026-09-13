@@ -253,8 +253,14 @@ authoritative. Failed saves retain the whole draft; successful saves clear it.
 This form creates new tasks; editing existing graphs remains file-based.
 
 A card whose task applies its checked changes itself says so on its face, with
-the checks on the tooltip; a run list row whose change the task landed is marked
-`applied`, and such a change is not counted as waiting for review.
+the checks on the tooltip. Fresh listings update this permission and its checks
+on an already open board. A run list row carries one recorded outcome, including
+applied, already included, discarded and undone; completed decisions are not
+counted as waiting for review. The run brief keeps that outcome on its time line
+and shows each verification command once below it. A check that modifies the
+prepared copy explains that refusal even when its exit code was zero. Unfinished
+checks retain their output, and a repair refused before starting says why
+without claiming it ran.
 
 Each task card shows a vertical graph with **Start** and **End run** terminals,
 even for a single step. Arrows point into the next step and small dots mark the
