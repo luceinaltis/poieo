@@ -71,6 +71,13 @@
   min-width: 0;
 }
 
+.run-applied {
+  color: var(--ember);
+  font-family: var(--mono);
+  font-size: 0.78em;
+  white-space: nowrap;
+}
+
 .run-when,
 .run-size {
   color: var(--dim);

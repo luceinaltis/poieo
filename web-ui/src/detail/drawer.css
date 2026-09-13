@@ -185,6 +185,97 @@
   font-size: 0.85em;
 }
 
+/* The checks a change was put through: the verdict on a line, the commands
+   and what they printed behind it, drawn as the memory fold below is. */
+.run-checks {
+  min-width: 0;
+}
+
+.run-checks-lead {
+  color: var(--dim);
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 2px 0 0;
+}
+
+.run-checks[data-verdict="blocked"] > .run-checks-lead,
+p.run-checks[data-verdict="blocked"] {
+  color: var(--stop);
+}
+
+.run-checks > summary {
+  cursor: pointer;
+  list-style: none;
+  padding-left: 14px;
+  position: relative;
+}
+
+.run-checks > summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-checks > summary::before {
+  content: "›";
+  font-family: var(--mono);
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+.run-checks[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.run-checks-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0 0 0 14px;
+}
+
+.run-checks-list li {
+  border-left: 2px solid var(--rule);
+  display: grid;
+  font-size: 0.85em;
+  gap: 1px;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+.run-checks-list li[data-exit]:not([data-exit="0"]) {
+  border-left-color: var(--stop);
+}
+
+.run-check-command {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.run-check-exit {
+  color: var(--dim);
+}
+
+.run-check-output {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  margin: 2px 0 0;
+  max-height: 12em;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.run-repair {
+  color: var(--dim);
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 2px 0 0;
+}
+
+.run-repair[data-ready="false"] {
+  color: var(--stop);
+}
+
 .run-memory-lead {
   color: var(--dim);
   font-size: 0.85em;

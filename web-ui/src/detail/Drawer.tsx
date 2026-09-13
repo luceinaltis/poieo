@@ -17,7 +17,7 @@ import { Diff } from "../review/Diff"
 import { accountOf, durationOf, RunList, sizeOf } from "../review/RunList"
 import { outcomeOf } from "../review/rollup"
 import { subjectOf } from "../state/stage"
-import type { PoieoEvent, Question as Asked, RunMemory, RunSummary, ShownMemory } from "../types"
+import type { Application, PoieoEvent, Question as Asked, RunMemory, RunSummary, ShownMemory } from "../types"
 import { shortTime } from "../when"
 import "./drawer.css"
 
@@ -513,10 +513,103 @@ function runTime(run: RunSummary): number {
   return Number.isFinite(started) ? started : Number.NEGATIVE_INFINITY
 }
 
+/**
+ * What became of the run's change, in the words of the time line.
+ *
+ * Three answers and each changes what the reader does next: applied means
+ * there is nothing to decide, review means there is, and not applied means
+ * the task has stopped over it and the checks below say why.
+ */
+function describeApplication(application: Application | undefined, into: string | null): string | null {
+  if (!application) return null
+  if (application.status === "applied") return into ? `Applied to ${into}` : "Applied"
+  if (application.status === "review") return "Checked, waiting for review"
+  return "Not applied"
+}
+
+/** Why a change could not land, when no check is there to say it. */
+function describeRefusal(application: Application): string {
+  if (application.conflict?.length) return `conflicts with the project in ${application.conflict.join(", ")}`
+  if (application.outside_scope?.length) {
+    return `edits files outside the allowed paths: ${application.outside_scope.join(", ")}`
+  }
+  if (application.dirty?.length) return `the project has unsaved edits in ${application.dirty.join(", ")}`
+  if (application.verification_changed?.length) {
+    return `the project changed again before it could apply, in ${application.verification_changed.join(", ")}`
+  }
+  return application.stale ?? application.error ?? "could not be applied"
+}
+
+/** The repair the task tried before this verdict, if its permission allowed one. */
+function describeRepair(repair: NonNullable<Application["repair"]>): string {
+  return repair.ready
+    ? `repaired first, by run ${repair.run_id}`
+    : `a repair (run ${repair.run_id}) could not finish: ${repair.reason}`
+}
+
+/**
+ * The checks the change was put through, folded behind their verdict.
+ *
+ * The line says what a reader scanning wants -- all passed, or which one
+ * refused it -- and the rows behind it carry each command's exit code and
+ * what it printed, because "verification failed" is the one sentence that
+ * always has to be followed by "on what".
+ */
+function Checks({ application }: { application: Application }) {
+  const checks = application.checks ?? []
+  const failed = checks.find((check) => check.exit_code !== 0)
+  // A refusal with every check green -- the project moved, a file was out of
+  // bounds -- must say so ahead of "2 checks passed", or the line beside
+  // "Not applied" reads as a riddle.
+  const verdict = failed
+    ? `${failed.command} failed${failed.exit_code === null ? "" : ` (exit ${failed.exit_code})`}`
+    : application.status === "blocked"
+      ? describeRefusal(application)
+      : checks.length
+        ? `${checks.length} check${checks.length === 1 ? "" : "s"} passed`
+        : null
+  const repair = application.repair ? (
+    <p className="run-repair" data-ready={String(application.repair.ready)}>
+      {describeRepair(application.repair)}
+    </p>
+  ) : null
+  if (verdict === null) return repair
+  if (checks.length === 0) {
+    return (
+      <>
+        <p className="run-checks run-checks-lead" data-verdict={application.status}>
+          {verdict}
+        </p>
+        {repair}
+      </>
+    )
+  }
+  return (
+    <>
+    <details className="run-checks" data-verdict={application.status}>
+      <summary className="run-checks-lead">{verdict}</summary>
+      <ul className="run-checks-list">
+        {checks.map((check, index) => (
+          <li key={index} data-exit={check.exit_code === null ? "none" : String(check.exit_code)}>
+            <code className="run-check-command">{check.command}</code>
+            <span className="run-check-exit">
+              {check.exit_code === null ? "could not run" : check.exit_code === 0 ? "passed" : `exit ${check.exit_code}`}
+            </span>
+            {check.output ? <pre className="run-check-output">{check.output}</pre> : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+    {repair}
+    </>
+  )
+}
+
 function RunBrief({
   run,
   latest,
   tracked,
+  into,
   headingId,
   memory,
   onMemory,
@@ -524,6 +617,8 @@ function RunBrief({
   run: RunSummary | null
   latest: boolean
   tracked: boolean
+  /** What an applied change was added to; null when the task keeps no copy. */
+  into: string | null
   headingId: string
   /** What this run started with from memory, once it has been read. */
   memory?: RunMemory | null
@@ -547,6 +642,8 @@ function RunBrief({
   if (duration) meta.push(duration)
   if (outcome === "nothing" && (run.said ?? "").trim()) meta.push("No files changed")
   if (size) meta.push(size)
+  const applied = describeApplication(run.application, into)
+  if (applied) meta.push(applied)
 
   return (
     <section
@@ -559,6 +656,7 @@ function RunBrief({
       <h3 id={headingId}>{latest ? "Latest run" : "Selected run"}</h3>
       <p className="run-brief-what">{account}</p>
       <p className="run-brief-meta">{meta.join(" · ")}</p>
+      {run.application ? <Checks application={run.application} /> : null}
       {memory && memory.run_id === run.run_id ? <PromptMakeup memory={memory} /> : null}
       {memory && memory.run_id === run.run_id ? <ShownMemory memory={memory} onMemory={onMemory} /> : null}
     </section>
@@ -893,6 +991,7 @@ export const Drawer = memo(function Drawer({
 
         <div className="run-focus">
           <RunBrief
+            into={into}
             run={selectedRun}
             latest={selectedIsLatest}
             tracked={tracked}

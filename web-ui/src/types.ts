@@ -23,6 +23,49 @@ export interface Change {
   message: string
 }
 
+/** One verification command, as it was run against the combined copy. */
+export interface Check {
+  command: string
+  /** Null when the command could not be started at all. */
+  exit_code: number | null
+  output: string
+}
+
+/**
+ * What became of a run's change under the task's permission.
+ *
+ * `applied` landed it; `review` checked it and left it for a decision;
+ * `blocked` could not land it, and one of the refusal fields says why: a
+ * check that failed (`error`), files in conflict, files outside the allowed
+ * paths, unsaved edits in the project (`dirty`), or a copy that moved
+ * (`stale`). Absent from a run that had nothing to apply, or one recorded
+ * before tasks could apply their own work.
+ */
+export interface Application {
+  status: "applied" | "review" | "blocked"
+  checks: Check[]
+  accepted?: number
+  before?: string
+  after?: string
+  checked_on?: string
+  error?: string
+  conflict?: string[]
+  outside_scope?: string[]
+  dirty?: string[]
+  stale?: string
+  /** Files the project changed again between the check and the apply. */
+  verification_changed?: string[]
+  /** A repair run the task tried first, when its permission allowed one. */
+  repair?: { ready: boolean; run_id: string; reason: string }
+}
+
+/** The user's permission to apply this task's work, as the card wrote it. */
+export interface ApplyPermission {
+  mode: "auto" | "review"
+  paths: string[]
+  checks: string[]
+}
+
 export interface RunSummary {
   run_id: string
   task: string | null
@@ -42,6 +85,8 @@ export interface RunSummary {
   said: string
   /** Absent when the run altered nothing -- which is not the same as null. */
   change?: Change
+  /** What became of that change under the task's permission, when it was checked. */
+  application?: Application
 }
 
 /**
@@ -189,6 +234,8 @@ export interface TaskRow {
   then: Arrow[]
   /** What this task walks on the way there. */
   shape: GraphShape
+  /** How its work reaches the project. Absent from an older daemon, which only reviewed. */
+  apply?: ApplyPermission
 }
 
 /**

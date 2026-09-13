@@ -13,7 +13,7 @@ from poieo.store import Event, RunStore
 from poieo.web import server
 from poieo.web.events import BroadcastStore
 from poieo.web.server import _event_stream, create_app, sse_frame
-from poieo.workspace import Workspace
+from poieo.workspace import ApplySpec, Workspace
 
 
 def stub_project(tmp_path, project_name=None):
@@ -83,6 +83,7 @@ def stub_runner(
     then=(),
     graph=None,
     binding=None,
+    apply=None,
 ):
     return SimpleNamespace(
         name=name,
@@ -99,7 +100,7 @@ def stub_runner(
         task=SimpleNamespace(
             graph=GraphSpec.model_validate(graph or STUB_GRAPH),
             binding=BindingSpec.model_validate(binding or STUB_BINDING),
-            spec=SimpleNamespace(then=list(then)),
+            spec=SimpleNamespace(then=list(then), apply=apply or ApplySpec()),
         ),
     )
 
@@ -127,6 +128,7 @@ def test_flows_lists_runner_state(tmp_path):
             "into": None,
             "asking": None,
             "then": [],
+            "apply": {"mode": "review", "paths": [], "checks": []},
             "shape": {
                 "entry": "classify",
                 "nodes": [
@@ -162,6 +164,17 @@ def test_flows_lists_runner_state(tmp_path):
             },
         }
     ]
+
+
+def test_the_board_is_told_a_task_applies_its_own_changes(tmp_path):
+    """Which tasks land work without a decision is the one fact a reader of a
+    board of quiet cards cannot afford to find out from the git log."""
+    permission = ApplySpec(mode="auto", paths=["src", "tests"], checks=["python -m pytest -q"])
+    daemon = stub_daemon(tmp_path, [stub_runner(apply=permission)])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+    assert row["apply"] == {"mode": "auto", "paths": ["src", "tests"], "checks": ["python -m pytest -q"]}
 
 
 def test_the_board_is_told_why_a_task_is_held(tmp_path):

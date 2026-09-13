@@ -107,6 +107,14 @@ export interface TaskState {
   shape: GraphShape
   /** How this task is scheduled, as the daemon describes it. Structure too. */
   trigger: string
+  /**
+   * How its work reaches the project: `auto` lands a change itself once its
+   * checks pass, `review` leaves every change for a decision. Structure, like
+   * the wiring -- and the one line on a quiet card a reader must not miss.
+   */
+  applies: "auto" | "review"
+  /** The commands that must pass first, for the card to name. */
+  applyChecks: string[]
 }
 
 /**
@@ -184,6 +192,8 @@ function createEmptyTaskState(): TaskState {
     recent: NOTHING,
     runs: [],
     tracked: false,
+    applies: "review",
+    applyChecks: [],
     then: [],
     shape: { entry: "", nodes: [] },
     trigger: "",
@@ -245,6 +255,8 @@ export function initialStage(rows: TaskRow[]): StageState {
       then: row.then,
       shape: row.shape,
       trigger: row.trigger,
+      applies: row.apply?.mode ?? "review",
+      applyChecks: row.apply?.checks ?? [],
       status: drawnStatus(row),
       held: row.holding,
       heldBecause: row.held_because ?? "",
@@ -395,7 +407,12 @@ function applySummary(state: StageState, event: PoieoEvent): StageState {
     : [summary, ...current.runs]
   const latest = runs[0]
   const summaryOwnsTerminalState = latest?.run_id === event.run_id && !anotherRunOwnsTask
-  const completedChange = event.status === "completed" && event.change !== undefined
+  // A change the task applied itself has already landed: counting it would
+  // offer the reader a decision that has been made.
+  const completedChange =
+    event.status === "completed" &&
+    event.change !== undefined &&
+    summary.application?.status !== "applied"
   const newlyCountedChange = completedChange && !current.countedChangeRuns.has(event.run_id)
   const countedChangeRuns = newlyCountedChange
     ? new Set([...current.countedChangeRuns, event.run_id].slice(-WINDOW))

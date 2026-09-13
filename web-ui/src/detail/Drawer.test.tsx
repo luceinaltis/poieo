@@ -343,6 +343,114 @@ test("attention names a waiting change, a restart, and a failed run", async () =
   expect(container.querySelector(".drawer-state")?.textContent).toBe("Latest run failed")
 })
 
+test("a run that applied its own change says so, with the checks that let it", async () => {
+  const applied: RunSummary = {
+    ...run,
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: {
+      status: "applied",
+      accepted: 1,
+      before: "a1",
+      after: "c3",
+      checks: [{ command: "pytest -q", exit_code: 0, output: "3 passed" }],
+    },
+  }
+  await draw([applied], { into: "main" })
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Applied to main")
+  const checks = container.querySelector(".run-checks") as HTMLElement
+  expect(checks.querySelector("summary")?.textContent).toBe("1 check passed")
+  expect(checks.textContent).toContain("pytest -q")
+  expect(checks.textContent).toContain("3 passed")
+})
+
+test("a run whose change could not be applied says which check refused it", async () => {
+  const blocked: RunSummary = {
+    ...run,
+    status: "asking",
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: {
+      status: "blocked",
+      error: "verification failed",
+      checks: [
+        { command: "ruff check .", exit_code: 0, output: "All checks passed!" },
+        { command: "pytest -q", exit_code: 1, output: "1 failed" },
+      ],
+    },
+  }
+  await draw([blocked], { into: "main" })
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Not applied")
+  const checks = container.querySelector(".run-checks") as HTMLElement
+  expect(checks.querySelector("summary")?.textContent).toBe("pytest -q failed (exit 1)")
+  expect(checks.querySelectorAll("li")).toHaveLength(2)
+  expect(checks.querySelector('li[data-exit="1"]')?.textContent).toContain("1 failed")
+})
+
+test("a change whose checks passed but could not land still says why", async () => {
+  // The project moved between the check and the apply: every check passed,
+  // and "2 checks passed" beside "Not applied" would be a riddle.
+  const moved: RunSummary = {
+    ...run,
+    status: "asking",
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: {
+      status: "blocked",
+      verification_changed: ["src/x.py"],
+      checks: [
+        { command: "ruff check .", exit_code: 0, output: "" },
+        { command: "pytest -q", exit_code: 0, output: "3 passed" },
+      ],
+    },
+  }
+  await draw([moved], { into: "main" })
+  expect(container.querySelector(".run-checks > summary")?.textContent).toBe(
+    "the project changed again before it could apply, in src/x.py",
+  )
+  expect(container.querySelectorAll(".run-checks li")).toHaveLength(2)
+})
+
+test("a repair the task tried is said beside the checks", async () => {
+  const repaired: RunSummary = {
+    ...run,
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: {
+      status: "applied",
+      accepted: 1,
+      checks: [{ command: "pytest -q", exit_code: 0, output: "" }],
+      repair: { ready: true, run_id: "r9", reason: "" },
+    },
+  }
+  await draw([repaired], { into: "main" })
+  expect(container.querySelector(".run-repair")?.textContent).toBe("repaired first, by run r9")
+})
+
+test("a repair that could not finish says why beside the checks", async () => {
+  const unrepaired: RunSummary = {
+    ...run,
+    status: "asking",
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: {
+      status: "blocked",
+      error: "verification failed",
+      checks: [{ command: "pytest -q", exit_code: 1, output: "1 failed" }],
+      repair: { ready: false, run_id: "r9", reason: "The repair exceeded its 120-second time limit." },
+    },
+  }
+  await draw([unrepaired], { into: "main" })
+  expect(container.querySelector(".run-repair")?.textContent).toBe(
+    "a repair (run r9) could not finish: The repair exceeded its 120-second time limit.",
+  )
+})
+
+test("a checked change still waiting for a decision says both", async () => {
+  const checked: RunSummary = {
+    ...run,
+    change: { base: "a1", head: "b2", files: ["src/x.py"], insertions: 3, deletions: 1, message: "fixed x" },
+    application: { status: "review", checked_on: "a1", checks: [{ command: "pytest -q", exit_code: 0, output: "" }] },
+  }
+  await draw([checked], { into: "main", pending: 1 })
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain("Checked, waiting for review")
+})
+
 test("a held task leads with that, and says why in the daemon's words", async () => {
   const why = "paused because its change conflicts with the project in src/app.py; retry or keep it paused from the board"
   await draw([run], { status: "paused", heldBecause: why })

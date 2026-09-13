@@ -49,6 +49,11 @@ const DID_SOMETHING = run({
   },
 })
 const FOUND_NOTHING = run({ run_id: "b" })
+const APPLIED = run({
+  run_id: "d",
+  change: { base: "a", head: "b", files: ["x"], insertions: 1, deletions: 0, message: "landed x" },
+  application: { status: "applied", accepted: 1, checks: [] },
+})
 const BROKE = run({ run_id: "c", status: "failed", error: "the tool went missing" })
 
 let container: HTMLDivElement
@@ -112,6 +117,12 @@ test("time and spend share a ledger line above the run's account", () => {
   expect(meta.nextElementSibling).toBe(account)
   expect(REVIEW_CSS).toMatch(/\.run-open\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s)
   expect(REVIEW_CSS).toMatch(/\.run-what\s*\{[^}]*overflow-wrap:\s*anywhere/s)
+})
+
+test("a run that landed its own change says so on its row", () => {
+  render([APPLIED, DID_SOMETHING])
+  expect(container.querySelector('[data-run="d"] .run-applied')?.textContent).toBe("applied")
+  expect(container.querySelector('[data-run="a"] .run-applied')).toBeNull()
 })
 
 test("a run that found nothing to do says so, and is not a failure", () => {
