@@ -95,6 +95,12 @@ captured as `failed`, and step-limit or cooperative-stop failures as `aborted`.
 A confirm node changes an otherwise completed walk to `asking`. An external
 `asyncio.CancelledError` still propagates so process cancellation retains its
 normal semantics.
+Cooperative cancellation also interrupts and drains the active node, including
+its shell process, before the aborted run records its known usage. Automatic
+repair shares the application's signal instead of waiting for another model turn.
+Subscription subprocesses stop their full process tree on cancellation or
+timeout. A cancelled Docker node removes its environment before releasing the
+mounted copy; normal runs continue reusing their environment.
 
 The optional finalizer runs before the summary is recorded. The daemon uses it
 to attach a reviewable change; no later component may silently revise an
