@@ -18,10 +18,7 @@ test("docs navigation follows the document and headings below the sticky header"
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
     () => new DOMRect(0, 400, 500, 40),
   )
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: () => ({ matches: true, addEventListener: vi.fn() }),
-  })
+  Element.prototype.scrollIntoView = vi.fn()
   Object.defineProperty(window, "scrollTo", { configurable: true, value: vi.fn() })
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1 })
   vi.stubGlobal(
@@ -81,9 +78,11 @@ test("docs navigation follows the document and headings below the sticky header"
   await vi.waitFor(() => expect(nav.querySelector('a[href="#architecture/choose-models"]')).not.toBeNull())
   expect(nav.querySelector('a[href="#usage/choose-models"]')).toBeNull()
 
+  vi.mocked(window.scrollTo).mockClear()
   fold.open = true
   nav.querySelector<HTMLAnchorElement>('a[href="#architecture"]')!.click()
   expect(fold.open).toBe(false)
+  await vi.waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith(0, 0))
 
   const article = document.getElementById("doc")!
   article.scrollIntoView = vi.fn()
@@ -92,4 +91,33 @@ test("docs navigation follows the document and headings below the sticky header"
   expect(location.hash).toBe("#architecture")
   expect(document.title).toBe("Architecture — poieo docs")
   expect(article.scrollIntoView).toHaveBeenCalled()
+
+  // A fast second navigation can finish first. The older response must not
+  // append a second outline or move the reader back to the previous topic.
+  const answers: ((value: { ok: boolean; text: () => Promise<string> }) => void)[] = []
+  sessionStorage.clear()
+  vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => answers.push(resolve))))
+  location.hash = "#usage/choose-models"
+  await vi.waitFor(() => expect(answers).toHaveLength(1))
+  location.hash = "#usage"
+  await vi.waitFor(() => expect(answers).toHaveLength(2))
+  const guide = { ok: true, text: async () => "# The guide\n\n## Install\n\n## Choose models" }
+  answers[1](guide)
+  await vi.waitFor(() => expect(nav.querySelectorAll('a[href="#usage/choose-models"]')).toHaveLength(1))
+  vi.mocked(Element.prototype.scrollIntoView).mockClear()
+  answers[0](guide)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(nav.querySelectorAll(".doc-sections")).toHaveLength(1)
+  expect(nav.querySelectorAll('a[href="#usage/choose-models"]')).toHaveLength(1)
+  expect(nav.querySelectorAll("a[aria-current]")).toHaveLength(1)
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+
+  // An obsolete error must not replace the document the reader chose next.
+  location.hash = "#design"
+  await vi.waitFor(() => expect(answers).toHaveLength(3))
+  location.hash = "#usage"
+  await vi.waitFor(() => expect(document.querySelector("#doc h1")?.textContent).toBe("The guide"))
+  answers[2]({ ...guide, ok: false })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(document.querySelector("#doc h1")?.textContent).toBe("The guide")
 })
