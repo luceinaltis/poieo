@@ -21,7 +21,7 @@ the project's display name; task parameters use the card filename stem.
 
 | request | response |
 |---|---|
-| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, graph, trigger, status, hold, enabled/stale state, current and last run, review state, pending question, handoffs, and graph shape |
+| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, graph, trigger, status, hold and why it is held (`held_because`, the daemon's own sentence or null), enabled/stale state, current and last run, review state, pending question, handoffs, and graph shape |
 | `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
 | `GET /api/runs/{run_id}` | `{run_id, summary, events}` or 404; `summary` is the index row, null while the run is in flight |
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |

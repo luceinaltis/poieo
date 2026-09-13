@@ -24,6 +24,7 @@ const row = (name: string, project: string): TaskRow => ({
   trigger: "loop",
   status: "waiting",
   holding: false,
+  held_because: null,
   enabled: true,
   stale: null,
   current_run_id: null,

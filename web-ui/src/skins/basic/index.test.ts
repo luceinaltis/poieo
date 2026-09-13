@@ -14,6 +14,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    held_because: null,
     enabled: true,
     stale: null,
     current_run_id: null,
@@ -34,6 +35,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    held_because: null,
     enabled: true,
     stale: null,
     current_run_id: null,
@@ -691,6 +693,21 @@ test("a handoff is marked at both ends, so the sender is not guessed at", () => 
     svg.querySelectorAll(".basic-tip").length,
   )
   expect(svg.querySelectorAll(".basic-socket").length).toBeGreaterThan(0)
+  handle.destroy()
+})
+
+test("a task that stopped itself says why on its card", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const why = "paused after 3 identical failures: the endpoint did not answer"
+  handle.update(
+    initialStage([TASK_ROWS[0], { ...TASK_ROWS[1], status: "paused", holding: true, held_because: why }]),
+  )
+
+  // The reason where the card would have said what it was doing: "paused"
+  // alone reads as a button somebody pressed, and this one nobody pressed.
+  const now = el.querySelector('[data-task="board/revision"] .basic-now') as HTMLElement
+  expect(now.textContent).toBe(why)
+  expect(now.title).toBe(why)
   handle.destroy()
 })
 

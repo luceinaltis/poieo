@@ -288,14 +288,16 @@ def test_a_set_aside_task_stops_scheduling_now(tmp_path, monkeypatch):
     import poieo.web.server as server
 
     held = []
-    runner = SimpleNamespace(name="already", pause=lambda: held.append(True) or "paused")
+    runner = SimpleNamespace(name="already", pause=lambda because="?": held.append(because) or "paused")
     monkeypatch.setattr(server, "_runner_for", lambda daemon, project, task: runner)
 
     client, cards = _client(tmp_path)
     answer = client.delete("/api/projects/board/tasks/already")
 
     assert answer.status_code == 200, answer.text
-    assert held == [True]
+    # Held with no reason on it: the card fold says set aside, and "paused
+    # from the board" would report a press nobody made.
+    assert held == [None]
 
 
 def test_a_set_aside_task_answers_cleanly_not_with_a_500(tmp_path):
@@ -382,14 +384,14 @@ def test_a_renamed_task_stops_firing_under_its_old_name(tmp_path, monkeypatch):
     import poieo.web.server as server
 
     held = []
-    runner = SimpleNamespace(name="already", pause=lambda: held.append(True) or "paused")
+    runner = SimpleNamespace(name="already", pause=lambda because="?": held.append(because) or "paused")
     monkeypatch.setattr(server, "_runner_for", lambda daemon, project, task: runner)
 
     client, cards = _client(tmp_path)
     answer = _patch(client, "renamed")
 
     assert answer.status_code == 200, answer.text
-    assert held == [True]
+    assert held == [None]
 
 
 def test_a_three_field_card_says_it_is_plain(tmp_path):

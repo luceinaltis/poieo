@@ -483,6 +483,7 @@ export default function App({ store }: { store?: StageStore }) {
           status={selectedTaskState?.status ?? selectedTask?.status ?? "waiting"}
           enabled={selectedTaskState?.enabled ?? selectedTask?.enabled ?? true}
           stale={selectedTaskState?.stale || selectedTask?.stale || null}
+          heldBecause={selectedTaskState?.heldBecause || selectedTask?.held_because || null}
           pending={selectedTaskState?.pending ?? selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}

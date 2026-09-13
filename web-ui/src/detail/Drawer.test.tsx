@@ -343,6 +343,22 @@ test("attention names a waiting change, a restart, and a failed run", async () =
   expect(container.querySelector(".drawer-state")?.textContent).toBe("Latest run failed")
 })
 
+test("a held task leads with that, and says why in the daemon's words", async () => {
+  const why = "paused because its change conflicts with the project in src/app.py; retry or keep it paused from the board"
+  await draw([run], { status: "paused", heldBecause: why })
+  expect(container.querySelector(".drawer-state")?.textContent).toBe("Paused")
+  expect(container.querySelector(".drawer-state")?.getAttribute("data-state")).toBe("held")
+  expect(container.querySelector(".drawer-held")?.textContent).toBe(why)
+
+  // A pause the reader pressed is still a hold, and still says so.
+  await draw([run], { status: "paused", heldBecause: "paused from the board" })
+  expect(container.querySelector(".drawer-held")?.textContent).toBe("paused from the board")
+
+  // Nothing to say, nothing drawn.
+  await draw([run], { status: "waiting", heldBecause: null })
+  expect(container.querySelector(".drawer-held")).toBeNull()
+})
+
 test("routine runtime states remain no action needed", async () => {
   await draw([run], { status: "running" })
   expect(container.querySelector(".drawer-state")?.textContent).toBe("No action needed")

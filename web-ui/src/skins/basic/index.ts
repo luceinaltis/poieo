@@ -208,7 +208,11 @@ function describeNow(taskState: TaskState): string {
   // and telling a reader to press resume would send them somewhere that
   // refuses them.
   if (taskState.status === "paused") {
-    return taskState.enabled ? "paused" : "switched off in its card"
+    if (!taskState.enabled) return "switched off in its card"
+    // The daemon's reason when it has one: "paused" alone reads as a button
+    // somebody pressed, and a task that parked itself after three failures,
+    // or over a change it could not apply, is the one a reader came to find.
+    return taskState.heldBecause || "paused"
   }
   if (taskState.status !== "running") return "waiting for its next turn"
   const current = taskState.shape.nodes.find(node => node.id === taskState.currentNode)
@@ -290,6 +294,8 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   // who just saved the file needs.
   box.stale.title = taskState.stale
   box.now.textContent = describeNow(taskState)
+  // The line is cut at the card's edge; the whole sentence is on the tooltip.
+  box.now.title = taskState.status === "paused" ? taskState.heldBecause : ""
   const count = taskState.shape.nodes.length
   box.graphHead.hidden = count === 0
   box.graphCount.textContent = `${count} ${count === 1 ? "step" : "steps"}`

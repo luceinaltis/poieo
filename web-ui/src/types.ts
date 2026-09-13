@@ -148,6 +148,15 @@ export interface TaskRow {
    */
   holding: boolean
   /**
+   * Why it is held, in the daemon's own words, or null while nothing holds it.
+   *
+   * A pause somebody pressed, a pause the task put on itself after repeated
+   * failures, a change it could not apply, a spend limit reached: the boolean
+   * above says the same thing about all four, and only one of them is a
+   * button somebody meant to press. Absent from an older daemon.
+   */
+  held_because?: string | null
+  /**
    * Whether the *file* lets this task run at all.
    *
    * A switched-off card draws as stopped like a paused one, and the two are

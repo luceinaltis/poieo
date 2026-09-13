@@ -151,3 +151,43 @@ async def test_a_paused_task_says_why_in_its_journal(tmp_path):
     assert "ran out of turns" in journal
     # The way back is the board, now that resume exists; a restart still works.
     assert "resume it from the board" in journal
+
+
+# -- the reason, where the board can read it ---------------------------------
+
+
+async def test_a_paused_task_says_why_to_the_board(tmp_path):
+    """The journal survives to the morning; the board is what the morning opens."""
+    daemon = Daemon(_config(tmp_path), store=NullStore())
+    await _paused(daemon)
+
+    runner = daemon.runners[0]
+    assert runner.holding
+    assert runner.held_because is not None
+    assert runner.held_because.startswith(f"paused after {PAUSE_AFTER} identical failures")
+
+
+def test_a_hand_pause_and_a_resume_say_so():
+    runner = _bare_runner()
+    runner.armed, runner.status, runner._hold = True, "waiting", False
+    runner._wake = __import__("asyncio").Event()
+    runner.held_because = None
+
+    runner.pause()
+    assert runner.held_because == "paused from the board"
+    runner.resume()
+    assert runner.held_because is None
+
+
+def test_a_change_that_could_not_be_applied_is_said_as_the_reason():
+    from poieo.daemon.service import _application_hold
+
+    def held(**application):
+        return _application_hold(SimpleNamespace(application=application))
+
+    assert "conflicts with the project in src/app.py" in held(status="blocked", conflict=["src/app.py"])
+    assert "outside the allowed paths: docs/x.md" in held(status="blocked", outside_scope=["docs/x.md"])
+    assert "unsaved edits in README.md" in held(status="blocked", dirty=["README.md"])
+    assert "verification failed" in held(status="blocked", error="verification failed")
+    assert held(status="blocked").startswith("paused because its change could not be applied")
+    assert held(status="blocked").endswith("from the board")
