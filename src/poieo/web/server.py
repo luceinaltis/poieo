@@ -44,6 +44,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
+from ..cron import CronSchedule
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
@@ -66,6 +67,7 @@ from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
 from ..providers import ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
+from ..task import parse_duration
 from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
 from .events import CLOSED, BroadcastStore
@@ -255,12 +257,6 @@ def _schedule_keys(value: str) -> dict[str, str]:
     form accepts is a line the card will load. Blank is no key at all, and
     the card takes its default.
     """
-    # Late, as card.py imports the daemon: the daemon imports this package
-    # for its broadcast store, so a module-level import here is a circle
-    # that closes on whoever imports `poieo.web` first.
-    from ..daemon.cron import CronSchedule
-    from ..daemon.triggers import parse_duration
-
     line = " ".join(value.split())
     if not line:
         return {}
