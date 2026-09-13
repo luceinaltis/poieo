@@ -1118,9 +1118,10 @@ class TaskRunner:
         if self._asking and self._asking.run_id == run_id:
             self._asking = None
             if applied["status"] == "undone":
-                self.pause()
+                self.pause(because="paused after undoing an applied change")
             else:
                 self.resume()
+            self._say_changed()
         return True
 
     def _keep_question(self) -> None:

@@ -115,6 +115,7 @@ function seed(state: StageState, rows: TaskRow[], reflectedEvents: PoieoEvent[] 
       // Whether a hold is on is the daemon's to say, never the event
       // stream's: no frame is published when somebody presses pause.
       held: blank.held,
+      heldBecause: blank.heldBecause,
       // The listing wins except while the feed knows about a failure that its
       // last run does not yet supersede. A newer completed or asking run clears
       // that old failure; the same older run cannot. Held reaches here from

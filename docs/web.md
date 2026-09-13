@@ -338,7 +338,8 @@ included and undone work. Applied diffs use the final verified combination.
 An applied run offers undo through the same checks; unresolved undo leaves the
 project intact. Optional direction is saved through the task's `/note` route for
 the next run. Successful application decisions announce a fresh task listing so
-all open boards update pending counts and holds together.
+all open boards update pending counts, holds and their reasons together. Fresh
+listings replace or clear previous hold reasons.
 
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).

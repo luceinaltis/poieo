@@ -86,7 +86,8 @@ remains. The private copy stays exclusively owned until every started write and
 its decision record finish. Decisions reread questions created by another entry
 point; a resolved run record prevents an older question from returning on restart.
 Older live runners adopt that recorded decision before answering or accepting,
-so a stale question cannot replace the applied history. Answers take the same
+restore its hold reason, and refresh open boards, so a stale question cannot
+replace the applied history. Answers take the same
 task ownership as runs and decisions.
 Older run summaries without a project field remain decidable; recording the
 decision fills that field so subsequent history and undo use the current project.
