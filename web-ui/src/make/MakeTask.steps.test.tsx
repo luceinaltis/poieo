@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 const createTask = vi.hoisted(() => vi.fn<typeof import("../api").createTask>())
 vi.mock("../api", async (original) => ({
   ...(await original<typeof import("../api")>()), createTask,
+  fetchFolders: vi.fn<typeof import("../api").fetchFolders>(async () => []),
 }))
 
 import { MakeTask } from "./MakeTask"

@@ -1,8 +1,10 @@
 """The observation API over a stub daemon."""
 
 import asyncio
+import os
 from types import SimpleNamespace
 
+import pytest
 from starlette.testclient import TestClient
 from test_workspace import git, head, make_repo
 
@@ -129,6 +131,38 @@ def test_the_folders_a_task_may_work_in_are_listed_as_a_card_would_spell_them(tm
         {"path": "../src", "name": "src"},
         {"path": "../src/app", "name": "src/app"},
     ]
+
+
+def test_the_folder_list_stops_at_its_limit_and_stays_inside_the_project(tmp_path):
+    """A list for a person to read, not a file tree: past the limit nothing
+    more is read. And a link leading out of the project is not offered --
+    a task made here may not work there, so its name is not the board's to
+    show."""
+    from poieo.web import server
+
+    (tmp_path / "tasks").mkdir()
+    for n in range(250):
+        (tmp_path / f"folder-{n:03d}").mkdir()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (outside / "secret").mkdir()
+    try:
+        os.symlink(outside, tmp_path / "away", target_is_directory=True)
+        linked = True
+    except OSError:
+        linked = False
+    project = stub_project(tmp_path)
+    project.cards = "tasks"
+    client = TestClient(create_app(stub_daemon(tmp_path, [], project=project)))
+
+    folders = client.get(f"/api/projects/{tmp_path.name}/folders").json()["folders"]
+
+    assert len(folders) == server._FOLDERS_OFFERED
+    assert folders[0] == {"path": "..", "name": "this project"}
+    names = {one["name"] for one in folders}
+    assert "away" not in names and "away/secret" not in names
+    if not linked:
+        pytest.skip("this machine cannot make a symlink; the limit half still ran")
 
 
 def test_the_listing_carries_the_cards_own_title(tmp_path):

@@ -30,6 +30,9 @@ const fetchUndeclared = vi.hoisted(() =>
 const pickModel = vi.hoisted(() => vi.fn<typeof import("./api").pickModel>())
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
+  // The folder list under the make form: stood in for, or the form reaches
+  // jsdom's fetch with a relative URL and fails the run as an unhandled error.
+  fetchFolders: vi.fn<typeof import("./api").fetchFolders>(async () => []),
   fetchModels,
   fetchRuns,
   fetchRunEvents,

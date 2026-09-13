@@ -745,6 +745,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             found = [{"path": _spelled(root), "name": "this project"}]
 
             def visit(folder: Path, depth: int) -> None:
+                # Before the listing, not only between entries: a folder past
+                # the limit is not read at all, so one enormous directory
+                # costs one listing and its subfolders cost nothing.
+                if len(found) >= _FOLDERS_OFFERED:
+                    return
                 try:
                     children = sorted(child for child in folder.iterdir() if child.is_dir())
                 except OSError:
@@ -754,7 +759,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         return
                     if child.name.startswith(".") or child.name in _NOT_A_WORKPLACE:
                         continue
-                    if child.resolve() in kept_out:
+                    where = child.resolve()
+                    if where in kept_out:
+                        continue
+                    # A link that leads out of the project is not a place a
+                    # task made here may work, so it is not a place to list:
+                    # the fence the write applies, applied to what is offered.
+                    if where != root and root not in where.parents:
                         continue
                     found.append({"path": _spelled(child), "name": child.relative_to(root).as_posix()})
                     if depth < _FOLDERS_DEEP:
