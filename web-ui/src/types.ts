@@ -189,6 +189,12 @@ export interface Question {
 
 export interface TaskRow {
   name: string
+  /**
+   * What the card calls itself: the `name:` line inside, which the form lets
+   * a reader rewrite. `name` is the file, and the identity. Absent from an
+   * older daemon, and then the name is all there is to call it.
+   */
+  title?: string
   /** Which project's. With `name`, this is the task's identity. */
   project: string
   graph: string

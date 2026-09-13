@@ -36,7 +36,8 @@ node-specific `prompt`, `role`, `tools`, `max_turns`, or `deadline`; those belon
 in the graph once it has more than one authored step.
 
 The filename stem is the stable task id. `name` is a title and may change
-without changing stored history, journal paths, or API identity. Paths in a
+without changing stored history, journal paths, or API identity; the board
+draws the title on the card and the id beneath it in the drawer. Paths in a
 card are relative to the card file after `~` expansion.
 
 ## Applying changes

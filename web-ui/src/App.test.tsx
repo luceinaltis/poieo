@@ -409,6 +409,18 @@ test("selecting a task opens the drawer, and reading it leaves the board alone",
   expect(store.getStage()).toBe(stage)
 })
 
+test("the drawer opens under the card's title", async () => {
+  await render(initialStage([{ ...TASK_ROWS[0], title: "Keep the tests green" }, ...TASK_ROWS.slice(1)]))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+
+  const drawer = container.querySelector(".drawer")!
+  expect(drawer.getAttribute("data-task")).toBe("chores")
+  expect(drawer.querySelector("h2")?.textContent).toBe("Keep the tests green")
+})
+
 test("closing the drawer puts it away", async () => {
   await render(replay(initialStage(TASK_ROWS), AGENT_RUN))
 

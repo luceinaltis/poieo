@@ -150,6 +150,36 @@ async def test_the_board_is_told_to_read_again(tmp_path, monkeypatch):
     await down(daemon, task)
 
 
+async def test_a_title_edited_by_hand_reaches_the_board(tmp_path, monkeypatch):
+    """The `name:` in a card is a title, and the board draws it. A title is
+    not drift -- it reaches no trigger, so nothing waits for a restart -- but
+    a title edited at noon must not read as the old one all day, so the scan
+    carries it to the runner and tells the board to read again."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path, _AT_THREE), store=BroadcastStore(NullStore()))
+    wait_for_drift = method_barrier(daemon, monkeypatch, "_note_drift")
+    task = await up(daemon)
+    assert await wait_for_drift() is False
+    assert _named(daemon, "chores").title == "chores"
+    queue = daemon.projects[0].store.subscribe()
+
+    (tmp_path / "cards" / "chores.yaml").write_text("name: Keep the tests green\n" + _AT_THREE, encoding="utf-8")
+    await until(lambda: _named(daemon, "chores").title == "Keep the tests green", "the title to be noticed")
+    # The title lands in the scan's thread; the announcement lands on the loop
+    # a moment later, so it is waited for as the schedule test waits for its.
+    await until(lambda: not queue.empty(), "the board to be told")
+
+    assert queue.get_nowait()["type"] == "tasks_changed"
+    # Not a restart: a title reaches nothing built at startup.
+    assert _named(daemon, "chores").stale is None
+    # And said once: the scan that carried it answered True, and none after.
+    assert await wait_for_drift() is True
+    assert await wait_for_drift() is False
+    assert await wait_for_drift() is False
+    assert queue.empty()
+    await down(daemon, task)
+
+
 async def test_a_card_naming_its_own_graph_is_judged_too(tmp_path, monkeypatch):
     """The shape the first cut of this passed over. A card with a `graph:` of
     its own hands back no generated graph, and that was read as "nothing to

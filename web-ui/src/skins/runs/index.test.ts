@@ -93,6 +93,25 @@ test("mount/update/destroy leaves the element empty", () => {
   expect(el.childElementCount).toBe(0)
 })
 
+test("a lane wears the card's title", () => {
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([TASK_ROWS[0], { ...CHORES, title: "Keep the tests green" }]))
+
+  expect(el.querySelector('[data-task="board/chores"] .runs-name')!.textContent).toBe("Keep the tests green")
+  handle.destroy()
+})
+
+test("lanes are alphabetical by the title they wear, not the name beneath it", () => {
+  const handle = runs.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([{ ...TASK_ROWS[0], title: "Aardvark" }, CHORES]))
+
+  expect([...el.querySelectorAll(".runs-name")].map((node) => node.textContent)).toEqual([
+    "Aardvark",
+    "chores",
+  ])
+  handle.destroy()
+})
+
 test("one lane per task, under its own name and trigger", () => {
   const handle = runs.mount(el, { onSelectTask: vi.fn() })
   handle.update(board([]))

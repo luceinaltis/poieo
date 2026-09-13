@@ -169,7 +169,9 @@ flight. If the same save changes any other task field, the daemon does not adopt
 only the convenient part: it marks the task stale and requires a restart. New
 simple cards can become resident from the scan; changes that alter startup-wide
 resources, such as a missing isolation keeper or the notes roster, also require
-a restart. The board exposes the stale reason.
+a restart. The board exposes the stale reason. A card's `name:` is a title
+rather than a setting: the scan carries a hand-edited one to the listing and
+announces it, without a warning, because it reaches nothing built at startup.
 
 Repeated identical failures pause a task after the safety threshold
 instead of spending indefinitely. A successful run or a run waiting on a

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..binding import BindingSpec, load_binding
-from ..card import append_journal, closing_line, expand, load_card, record_run
+from ..card import CardSpec, append_journal, closing_line, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
@@ -118,8 +118,9 @@ SCAN_SECONDS = 5.0
 STALE_CARD = "the card changed more than its prompt, and the rest of it only takes effect on a restart"
 
 
-def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec | None, str | None]":
-    """The card on disk as the graph this task may adopt, or why it may not.
+def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec | None, str | None, CardSpec | None]":
+    """The card on disk as the graph this task may adopt, or why it may not,
+    and the card itself whenever it loaded.
 
     The graph when the file still expands to the task that is running -- which
     includes a card whose *prompt* changed, since that is the half a run really
@@ -145,18 +146,24 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
     An unreadable file is a change the reader has to be told about too, and the
     folder scan's own complaint names the folder rather than the card -- which
     is the one case where a reader most needs the card pointed at.
+
+    The third answer is the card as it now reads, or None when there was none
+    or it would not load. It rides along for what is not drift at all: a
+    `name:` reaches no trigger, so the scan carries it rather than warning
+    about it, and reading the file twice to do so would be the same file.
     """
     card = config.cards_by_task.get(task.spec.name)
     if card is None or card.source_path is None:
-        return None, None
+        return None, None, None
     try:
         roster = [c.slug for c in config.cards_by_task.values()]
-        spec, graph = expand(load_card(card.source_path), roster=roster)
+        fresh = load_card(card.source_path)
+        spec, graph = expand(fresh, roster=roster)
     except PoieoError as exc:
-        return None, str(exc)
+        return None, str(exc), None
     if spec != task.spec.model_copy(update={"apply": spec.apply}):
-        return None, STALE_CARD
-    return graph, None
+        return None, STALE_CARD, fresh
+    return graph, None, fresh
 
 
 async def _stopped(task: "asyncio.Task[Any]", what: str) -> None:
@@ -329,6 +336,13 @@ class TaskRunner:
         # than by a run, because a card edited at noon whose task fires at 3am
         # would otherwise keep its old schedule all day with nothing to say so.
         self.stale: str | None = None
+        # What the card calls itself, for the board to draw. The name is the
+        # filename and the identity every route goes by; this is the `name:`
+        # line inside, which the reader may rewrite freely -- and until the
+        # board drew it, rewriting it changed nothing anyone could see. A task
+        # with no card has nothing to call itself but its name.
+        card = config.cards_by_task.get(task.spec.name)
+        self.title: str = card.name if card is not None else task.spec.name
         # Why this task is not running right now, in the daemon's own words,
         # or None while nothing is holding it. A pause from the board, a
         # pause the task put on itself after repeated failures, a change that
@@ -1628,11 +1642,17 @@ class Daemon:
         for runner in self.runners:
             if runner.config is not project.config:
                 continue
-            drift = reread_card(project.config, runner.task)[1]
+            _, drift, fresh = reread_card(project.config, runner.task)
             if drift != runner.stale:
                 if drift is not None:
                     log.warning("task '%s': %s", runner.name, drift)
                 runner.stale = drift
+                moved = True
+            # A title is not drift -- it reaches nothing built at startup, so
+            # nothing waits for a restart -- but the board draws it, and a
+            # title edited at noon must not read as the old one all day.
+            if fresh is not None and fresh.name != runner.title:
+                runner.title = fresh.name
                 moved = True
         return moved
 
@@ -1894,7 +1914,7 @@ class Daemon:
         # The same judgement the folder scan reports on the board, made by the
         # same function, so the two cannot come to disagree about what a card
         # is allowed to change.
-        graph, drift = reread_card(config, task)
+        graph, drift, _ = reread_card(config, task)
         if drift is not None:
             raise SpecError(f"task '{task.spec.name}': {drift}")
         if graph is None:

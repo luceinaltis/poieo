@@ -77,6 +77,14 @@ test("initialStage seeds one state per task", () => {
   expect(stage.tasks["board/chores"].currentNode).toBeNull()
 })
 
+test("initialStage carries the card's title, and falls back to the name", () => {
+  // The title is what a card wears; the name is what it is filed under. An
+  // older daemon sends no title, and a task with no card has none but its name.
+  const stage = initialStage([{ ...TASK_ROWS[0], title: "Keep the tests green" }, TASK_ROWS[1]])
+  expect(stage.tasks["board/chores"].title).toBe("Keep the tests green")
+  expect(stage.tasks["board/revision"].title).toBe("revision")
+})
+
 test("initialStage keeps the action state the drawer needs", () => {
   const question = { run_id: "asking", question: "Ship it?", choices: ["ship", "hold"] }
   const stage = initialStage([{ ...TASK_ROWS[0], pending: 2, asking: question }])
