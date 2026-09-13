@@ -51,7 +51,8 @@ a task's work while that task is running is refused.
 A competing project update causes preparation and verification to restart, at
 most three attempts. Cancellation terminates active verification commands and
 waits for an in-flight Git operation to finish before cleaning up. A write that
-finished before cancellation still reports its actual result. Disposable checks
+finished before cancellation still reports its actual result, including when
+cancellation arrives during the final stop-monitor cleanup. Disposable checks
 use disposable containers and do not reuse a container mounted on a deleted copy.
 
 Each result carries optional `application` data: `status` (`review`, `applied`, or
@@ -84,6 +85,15 @@ application question. A no-edit retry is resolved when none of its pending work
 remains. The private copy stays exclusively owned until every started write and
 its decision record finish, even if the caller disconnects. A discarded result uses status
 `discarded`. Accepting a held change resumes the task's schedule.
+
+Undo names a recorded applied run. It prepares the inverse of that application's
+net file changes against the latest project, checks the current scope and
+verification commands, and records a new run and commit. Conflicts, local edits,
+or failed checks preserve the project. A successful undo marks the application
+`undone` and pauses the task with an undo-specific reason so it cannot immediately
+repeat the work. Once the new run is recorded, open boards refresh that hold. Its Git
+marker prevents a repeated undo from deleting work intentionally added later.
+Undo and later decisions do not consume unread user direction.
 
 Application settings alone are read at the next run without rebuilding the
 schedule. Permission is read again immediately before automatic application;

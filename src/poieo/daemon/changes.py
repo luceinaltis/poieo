@@ -56,6 +56,7 @@ async def check_and_apply(
     authorized: Callable[[], bool] | None = None,
     protected: Sequence[Path] = (),
     repair: Repair | None = None,
+    undo: tuple[str, str, str] | None = None,
 ) -> dict:
     """Finish any in-flight Git write before releasing its copy or returning."""
     stopped = asyncio.Event()
@@ -81,6 +82,7 @@ async def check_and_apply(
             protected=protected,
             repair=repair,
             repair_state=repair_state,
+            undo=undo,
         )
     )
     try:
@@ -96,7 +98,8 @@ async def check_and_apply(
                     raise
     finally:
         forwarding.cancel()
-        await asyncio.gather(forwarding, return_exceptions=True)
+        # Cleanup must not hide a completed write from the caller recording it.
+        await finish_write(asyncio.gather(forwarding, return_exceptions=True))
 
 
 async def _check_and_apply(
@@ -111,6 +114,7 @@ async def _check_and_apply(
     protected: Sequence[Path],
     repair: Repair | None,
     repair_state: dict,
+    undo: tuple[str, str, str] | None,
 ) -> dict:
     """Check a fresh combined copy; a competing application requires fresh checks."""
     checks = []
@@ -128,7 +132,11 @@ async def _check_and_apply(
     for _attempt in range(4):
         if cancel is not None and cancel.is_set():
             return {"status": "blocked", "error": "application was stopped", "checks": checks}
-        prepared = await asyncio.to_thread(point.prepare_accept, through)
+        prepared = (
+            await asyncio.to_thread(point.prepare_undo, *undo)
+            if undo
+            else await asyncio.to_thread(point.prepare_accept, through)
+        )
         if isinstance(prepared, dict):
             return {"status": "applied" if "accepted" in prepared else "blocked", **prepared, "checks": checks}
         try:

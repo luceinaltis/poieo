@@ -6,6 +6,10 @@ to the requested project and task. Refusals also include stale candidates,
 changed verification files, out-of-scope files and failed commands; absence of
 the expected `accepted`/`discarded` result makes the HTTP response 409.
 
+`POST /api/tasks/{project}/{task}/undo` takes `{run_id}`. Only an applied run
+belonging to that task can be undone. It returns the new undo run and application
+result; incompatible changes or failed checks return 409 without changing files.
+
 `src/poieo/web/`, `web-ui/`
 
 The daemon serves the board at `http://127.0.0.1:8484` by default. `--port`
@@ -88,14 +92,17 @@ state is 409.
 |---|---|
 | `POST /api/tasks/{project}/{task}/accept` | optional `{through_run_id}`; fast-forwards or merges reviewable work, or returns dirty/conflict paths |
 | `POST /api/tasks/{project}/{task}/discard` | optional `{from_run_id}`; parks and removes that run and later pending changes |
+| `POST /api/tasks/{project}/{task}/undo` | `{run_id}`; verifies and applies the inverse of an applied change, preserving later work, or returns why it was blocked |
 | `POST /api/tasks/{project}/{task}/pause` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/resume` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/run` | no body; returns `starting`, or 409 with the in-flight run id |
 | `POST /api/tasks/{project}/{task}/answer` | `{choice}`; completes the persisted pending question or returns the currently offered choices |
 
-Accept and discard are the only routes that may change the user's checked-out
-branch, so a run id given to either must belong to the task in the path; one
-recorded under another project or task is 404. Pause, resume, and run-now change
+Accept and undo can update the checked-out project; discard removes pending
+work from the task's private copy. A run id supplied to any review action must
+belong to the named task and project. Accept and discard return 404 for a run
+recorded elsewhere; undo returns 409 for a run it cannot undo.
+Pause, resume, and run-now change
 daemon state only. An answer persists with its run and may start a task handoff.
 
 ### Models and cards
