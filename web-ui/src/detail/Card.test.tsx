@@ -309,6 +309,56 @@ test("a plain card opens as the three fields, not as a file", async () => {
   expect(container.textContent).toContain("next run")
 })
 
+test("a switched-off plain card carries its switch, and saving sends the flip", async () => {
+  // "Save without starting" says "start it from there" of the board, and the
+  // form was the only place on the board that could -- and it had no switch.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nenabled: false\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: false,
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: true })
+  await open()
+
+  const on = () => container.querySelector<HTMLInputElement>(".card-field-switch")!
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(on().checked).toBe(false)
+  expect(save().disabled).toBe(true)
+
+  await act(async () => on().click())
+  expect(on().checked).toBe(true)
+  expect(save().disabled).toBe(false)
+
+  // Back where it was is nothing to save, the rule every other field follows.
+  await act(async () => on().click())
+  expect(save().disabled).toBe(true)
+  await act(async () => on().click())
+  await act(async () => save().click())
+
+  // The switch rides with the three fields only when it moved: absent means
+  // unchanged to the daemon, and a prompt tweak must not send one either way.
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    enabled: true,
+  })
+  expect(container.textContent).toContain("switched on")
+  expect(container.textContent).not.toContain("next run")
+
+  // Saved is the new baseline: the switch does not read as an edit again.
+  expect(save().disabled).toBe(true)
+})
+
+test("a card edited as a file has no switch: the file already says it", async () => {
+  await open()
+  expect(container.querySelector(".card-field-switch")).toBeNull()
+})
+
 test("a card carrying more than the three fields still opens as a file", async () => {
   fetchCard.mockResolvedValue({
     task: "chores",

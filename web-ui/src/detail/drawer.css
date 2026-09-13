@@ -764,6 +764,19 @@ p.run-checks[data-verdict="blocked"] {
   gap: 4px;
 }
 
+/* The one field that is a switch and not a box: the word sits beside it. */
+.card-switch {
+  align-items: center;
+  grid-auto-flow: column;
+  gap: 8px;
+  justify-content: start;
+}
+
+.card-switch input {
+  margin: 0;
+  padding: 0;
+}
+
 .card-field input,
 .card-field textarea {
   background: var(--ground);

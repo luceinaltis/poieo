@@ -34,10 +34,14 @@ export function Card({
   const [name, setName] = useState("")
   const [folder, setFolder] = useState("")
   const [prompt, setPrompt] = useState("")
+  /** The fourth thing the form can show: whether the card lets the task run. */
+  const [enabled, setEnabled] = useState(true)
   const [application, setApplication] = useState(draftOf())
   const [text, setText] = useState("")
   const [isMissing, setIsMissing] = useState(false)
   const [saveResult, setSaveResult] = useState<RewrittenCard | null>(null)
+  /** Which way the last save moved the switch, or null if it did not. */
+  const [switchedTo, setSwitchedTo] = useState<boolean | null>(null)
   const [hasRequestedCard, setHasRequestedCard] = useState(false)
   /** Two-step: the first press arms, the second acts, an edit stands it down. */
   const [isSetAsideArmed, setIsSetAsideArmed] = useState(false)
@@ -61,6 +65,7 @@ export function Card({
     setName(card.name)
     setFolder(card.folder ?? "")
     setPrompt(card.prompt ?? "")
+    setEnabled(card.enabled)
     setApplication(draftOf(card.apply))
   }
 
@@ -95,8 +100,13 @@ export function Card({
     ? name === cardFields.name &&
       folder === (cardFields.folder ?? "") &&
       prompt === (cardFields.prompt ?? "") &&
+      enabled === cardFields.enabled &&
       JSON.stringify(application) === JSON.stringify(draftOf(cardFields.apply))
     : text === originalText
+
+  // Only when it moved. Absent means unchanged to the daemon, and a prompt
+  // tweak must not carry a switch either way.
+  const isSwitchFlipped = isPlainCard && enabled !== cardFields.enabled
 
   const saveCard = () =>
     void act(async () => {
@@ -104,15 +114,17 @@ export function Card({
         project,
         task,
         isPlainCard ? { name, folder, prompt,
+          ...(isSwitchFlipped ? { enabled } : {}),
           ...(JSON.stringify(application) !== JSON.stringify(draftOf(cardFields?.apply))
             ? { apply: applicationOf(application) } : {}) } : text,
       )
       if (answer.ok) {
         if (isPlainCard && cardFields) {
-          setCardFields({ ...cardFields, name, folder, prompt, apply: applicationOf(application) })
+          setCardFields({ ...cardFields, name, folder, prompt, enabled, apply: applicationOf(application) })
         } else {
           setOriginalText(text)
         }
+        setSwitchedTo(isSwitchFlipped ? enabled : null)
         setSaveResult(answer)
       } else {
         setSaveResult(null)
@@ -183,6 +195,24 @@ export function Card({
                   }}
                 />
               </label>
+              {/* The switch "save without starting" points a reader at. The
+                  daemon's folder scan adopts this one field without a restart,
+                  which is the whole reason the quiet save exists -- so it
+                  belongs on the form and not in a file the form hides. */}
+              <label className="card-field card-switch">
+                <input
+                  type="checkbox"
+                  className="card-field-switch"
+                  checked={enabled}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setEnabled(event.target.checked)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+                switched on
+              </label>
               <ApplySettings value={application} onChange={(value) => { setApplication(value); setSaveResult(null) }}
                 disabled={busy} keepsCopies={cardFields?.keeps_copies ?? true} />
             </div>
@@ -205,7 +235,16 @@ export function Card({
           {refused ? <Refusal answer={refused} /> : null}
 
           {saveResult ? (
-            saveResult.live ? (
+            switchedTo !== null ? (
+              // The switch is adopted by the daemon's next look at the folder,
+              // seconds away -- not by the next run, which a switched-off task
+              // does not have.
+              <p className="card-saved">
+                {switchedTo
+                  ? "Saved and switched on. The daemon picks that up on its own within a moment."
+                  : "Saved and switched off. The schedule stops on the daemon's next look, within a moment."}
+              </p>
+            ) : saveResult.live ? (
               <p className="card-saved">Saved. The next run reads this.</p>
             ) : (
               <p className="card-saved card-waits">
