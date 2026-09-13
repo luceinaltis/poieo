@@ -21,6 +21,8 @@ const task: TaskRow = {
 let host: HTMLDivElement
 let handle: ReturnType<typeof basic.mount>
 const step = (id: string) => host.querySelector<HTMLElement>(`.basic-node[data-node="${id}"]`)!
+const paths = () => [...host.querySelectorAll<SVGElement>(".basic-step-edge")]
+const connections = () => paths().map(path => path.getAttribute("aria-label"))
 
 beforeEach(() => {
   host = document.createElement("div")
@@ -34,12 +36,15 @@ afterEach(() => {
   host.remove()
 })
 
-test("a closed card names where each step comes from and goes next, including the return path", () => {
+test("a closed card draws directed connections, including the return path", () => {
   expect(host.querySelector("[data-task]")?.getAttribute("data-open")).toBe("false")
-  expect(step("review").querySelector(".basic-step-input")?.textContent).toBe("FromStart · Revise")
-  expect(step("review").querySelector(".basic-step-output")?.textContent).toBe("NextReady to finish?")
-  expect(step("decide").querySelector(".basic-step-input")?.textContent).toBe("FromReview")
-  expect(step("revise").querySelector(".basic-step-output")?.textContent).toBe("NextReview")
+  expect(connections()).toEqual(expect.arrayContaining([
+    "Start → Review", "Review → Ready to finish?", "Revise → Review",
+  ]))
+  for (const path of paths()) {
+    expect(path.getAttribute("d")).toMatch(/^M.+L/)
+    expect(path.parentElement?.querySelector(".basic-step-arrow")).not.toBeNull()
+  }
 })
 
 test("every condition keeps its own named destination and otherwise can end the run", () => {
@@ -51,10 +56,12 @@ test("every condition keeps its own named destination and otherwise can end the 
   branches.shape.nodes[1].default = null
   handle.update(initialStage([branches]))
 
-  const routes = [...step("decide").querySelectorAll(".basic-step-output")].map(el => el.textContent)
-  expect(routes).toEqual(["If result.needs_workRevise", "If result.too_longRevise", "OtherwiseEnd run"])
-  // Two conditions are alternatives from one step, not two previous steps.
-  expect(step("revise").querySelector(".basic-step-input")?.textContent).toBe("FromReady to finish?")
+  const routes = paths().filter(path => path.dataset.from === "decide")
+  expect(routes.map(path => path.getAttribute("aria-label"))).toEqual([
+    "Ready to finish? → Revise: If result.needs_work", "Ready to finish? → Revise: If result.too_long",
+    "Ready to finish? → End run: Otherwise",
+  ])
+  expect(new Set(routes.map(path => path.getAttribute("d"))).size).toBe(3)
 })
 
 test("one step shows both the start and the end without opening anything", () => {
@@ -62,8 +69,9 @@ test("one step shows both the start and the end without opening anything", () =>
   single.shape.nodes = [{ ...single.shape.nodes[0], next: null }]
   handle.update(initialStage([single]))
 
-  expect(step("review").querySelector(".basic-step-input")?.textContent).toBe("FromStart")
-  expect(step("review").querySelector(".basic-step-output")?.textContent).toBe("NextEnd run")
+  expect(connections()).toEqual(["Start → Review", "Review → End run"])
+  expect(host.querySelector(".basic-step-start")?.textContent).toBe("Start")
+  expect(host.querySelector(".basic-step-end")?.textContent).toBe("End run")
 })
 
 test("steps with the same description remain distinguishable at both ends of a connection", () => {
@@ -72,8 +80,7 @@ test("steps with the same description remain distinguishable at both ends of a c
   handle.update(initialStage([duplicate]))
 
   expect(step("review").querySelector(".basic-node-name")?.textContent).toBe("Review (review)")
-  expect(step("review").querySelector(".basic-step-input")?.textContent).toContain("Review (revise)")
-  expect(step("revise").querySelector(".basic-step-output")?.textContent).toContain("Review (review)")
+  expect(connections()).toContain("Review (revise) → Review (review)")
 })
 
 test("long names and conditions stay available on the card, in reading order from the start", () => {
@@ -88,7 +95,9 @@ test("long names and conditions stay available on the card, in reading order fro
   expect([...host.querySelectorAll(".basic-node")].map(el => el.getAttribute("data-node")))
     .toEqual(["review", "decide", "revise"])
   expect(step("review").querySelector(".basic-node-name")?.textContent).toBe(name)
-  expect(step("decide").querySelector(".basic-step-output")?.textContent).toBe(`If ${condition}End run`)
+  expect(connections()).toContain(`Ready to finish? → End run: If ${condition}`)
+  expect([...host.querySelectorAll(".basic-step-condition")].map(el => el.textContent))
+    .toContain(`If ${condition}`)
 })
 
 test("scrolling the steps belongs to the card and does not zoom the board", () => {
@@ -132,6 +141,7 @@ test("changed connections replace the old destinations and lay out the board aga
   const changed = structuredClone(task)
   changed.shape.nodes[0].next = "revise"
   handle.update(initialStage([changed]))
-  expect(step("review").querySelector(".basic-step-output")?.textContent).toBe("NextRevise")
+  expect(connections()).toContain("Review → Revise")
+  expect(connections()).not.toContain("Review → Ready to finish?")
   expect(host.querySelector(".basic-speck")).not.toBe(before)
 })

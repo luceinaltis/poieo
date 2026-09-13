@@ -397,8 +397,8 @@ test("the steps name every connection and where the run ends", () => {
   handle.update(initialStage([triage(["mock", null, "mock"])]))
 
   const inside = el.querySelector('[data-task="board/chores"] .basic-inside')!
-  expect([...inside.querySelectorAll(".basic-step-output")].map(el => el.textContent))
-    .toEqual(["Nextroute", "Otherwisedraft", "NextEnd run"])
+  expect([...inside.querySelectorAll(".basic-step-edge")].map(el => el.getAttribute("aria-label")))
+    .toEqual(["Start → read", "read → route", "route → draft: Otherwise", "draft → End run"])
   handle.destroy()
 })
 
