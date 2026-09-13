@@ -58,7 +58,7 @@ test("every condition keeps its own named destination and otherwise can end the 
 
   const routes = paths().filter(path => path.dataset.from === "decide")
   expect(routes.map(path => path.getAttribute("aria-label"))).toEqual([
-    "Ready to finish? → Revise: If result.needs_work", "Ready to finish? → Revise: If result.too_long",
+    "Ready to finish? → Revise: 1. If result.needs_work", "Ready to finish? → Revise: 2. If result.too_long",
     "Ready to finish? → End run: Otherwise",
   ])
   expect(new Set(routes.map(path => path.getAttribute("d"))).size).toBe(3)

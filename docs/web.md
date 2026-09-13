@@ -231,7 +231,9 @@ Each task card shows a vertical graph with **Start** and **End run** terminals,
 even for a single step. Arrows point into the next step and small dots mark the
 source of each connection; return paths use dashed lines. These are execution
 connections, not data inputs or result values. Conditions stay on their own
-amber wires, in authored order, even when two choose the same step. The otherwise
+amber wires, even when two choose the same step. When several conditions are tried,
+their labels show the authored priority (1, 2, …), independently of their spatial
+placement: the first matching condition wins. The otherwise
 path always appears, including when it ends the run. Step names wrap, and repeated
 descriptions include IDs to distinguish destinations.
 

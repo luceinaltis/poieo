@@ -78,12 +78,16 @@ export function drawCardSteps(container: HTMLElement, task: TaskState) {
   for (const id of walk(shape)) {
     const ways = waysOut(nodes.get(id)!)
     if (!ways.length) ways.push({ to: null, label: "", fallback: false })
+    const ordered = ways.filter(way => way.label && !way.fallback).length > 1
+    let conditionNumber = 0
     for (const [index, way] of ways.entries()) {
+      if (way.label && !way.fallback) conditionNumber++
       if (way.to !== null && !nodes.has(way.to)) continue
       const to = way.to === null ? `end:${id}:${index}` : keyOf(way.to)
       if (way.to === null) add(to, html("span", "basic-step-end", "End run"), 68, 26)
-      const condition = way.fallback ? "Otherwise" : way.label ? `If ${way.label}` : ""
+      const condition = way.fallback ? "Otherwise" : way.label ? `${ordered ? `${conditionNumber}. ` : ""}If ${way.label}` : ""
       const label = condition ? html("span", "basic-step-condition", condition) : undefined
+      if (ordered && label) label.title = "The first matching condition chooses the next step."
       const description = `${nameOf(id)} → ${way.to === null ? "End run" : nameOf(way.to)}${condition ? `: ${condition}` : ""}`
       connect(keyOf(id), to, description, label, id)
     }
