@@ -283,7 +283,9 @@ function describeStale(taskState: TaskState): string {
 
 /** Connections at card width. Structure stays put while run state changes. */
 function fillInside(box: Box, taskState: TaskState, receives: boolean, open: boolean): boolean {
-  const structure = JSON.stringify([taskState.name, taskState.title, taskState.shape, taskState.then, receives, open])
+  // A title edit updates the reading label without replacing a focused terminal.
+  box.inside.setAttribute("aria-label", `Step connections in ${taskState.title}`)
+  const structure = JSON.stringify([taskState.name, taskState.shape, taskState.then, receives, open])
   if (box.structure === structure) return false
   box.structure = structure
   const connected = receives || taskState.then.some(way => way.to !== null)
@@ -293,7 +295,6 @@ function fillInside(box: Box, taskState: TaskState, receives: boolean, open: boo
   box.inside.hidden = taskState.shape.nodes.length === 0 && !connected
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
-  box.inside.setAttribute("aria-label", `Step connections in ${taskState.title}`)
   const width = (open ? drawCardSteps : drawCardSummary)(box.steps, taskState, receives)
   if (connected) box.root.style.width = `${Math.max(BOX.width, width + 32)}px`
   return true
@@ -395,7 +396,9 @@ function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boo
         // are measured off those heights. Left out, a card that grows a line
         // keeps the geometry of the board before it had one.
         `${task}>${taskState.then.map((a) => a.to).join(",")}${open(task, taskState) ? "+" : "-"}` +
-        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}${describeApply(taskState) ? "a" : ""}`,
+        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}${describeApply(taskState) ? "a" : ""}` +
+        // A wrapped title can change height without changing the steps inside.
+        JSON.stringify(taskState.title),
     )
     .join("|")
 }
