@@ -481,6 +481,31 @@ test("why a task is held rides along with that it is", () => {
   expect(older.tasks["board/chores"].heldBecause).toBe("")
 })
 
+test("a change the task applied itself is not counted as waiting", () => {
+  // Auto-applied work has already landed: counting it would offer the reader
+  // a decision that has been made.
+  let stage = initialStage([{ ...TASK_ROWS[0], into: "main", pending: 0 }])
+  stage = reduce(stage, { run_id: "r1", type: "run_started", at: "", data: { task: "chores", project: "board" } })
+  stage = reduce(stage, {
+    run_id: "r1",
+    type: "run_summary",
+    task: "chores",
+    project: "board",
+    status: "completed",
+    change: { base: "a", head: "b", files: ["x"], insertions: 1, deletions: 0, message: "did x" },
+    application: { status: "applied", accepted: 1, checks: [] },
+  } as any)
+  expect(stage.tasks["board/chores"].pending).toBe(0)
+})
+
+test("how a task applies its work rides along from the listing", () => {
+  const auto = initialStage([{ ...TASK_ROWS[0], apply: { mode: "auto", paths: ["src"], checks: ["pytest"] } }])
+  expect(auto.tasks["board/chores"].applies).toBe("auto")
+  // An older daemon says nothing; review is what it did.
+  const older = initialStage([{ ...TASK_ROWS[0], apply: undefined }])
+  expect(older.tasks["board/chores"].applies).toBe("review")
+})
+
 test("a task held back by its budget reads as paused too", () => {
   // Not the same reason, but the same answer to the question the board is
   // asked: this one is not going to run right now.

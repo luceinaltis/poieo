@@ -696,6 +696,24 @@ test("a handoff is marked at both ends, so the sender is not guessed at", () => 
   handle.destroy()
 })
 
+test("a task that applies its own work says so on its card", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(
+    initialStage([
+      { ...TASK_ROWS[0], into: "main", apply: { mode: "auto", paths: [], checks: ["pytest -q"] } },
+      { ...TASK_ROWS[1], into: "main" },
+    ]),
+  )
+
+  // On the closed card: a board of quiet cards must say which of them land
+  // work with nobody deciding.
+  const auto = el.querySelector('[data-task="board/chores"] .basic-apply') as HTMLElement
+  expect(auto.textContent).toBe("applies its checked changes itself")
+  expect(auto.title).toContain("pytest -q")
+  expect(el.querySelector('[data-task="board/revision"] .basic-apply')!.textContent).toBe("")
+  handle.destroy()
+})
+
 test("a task that stopped itself says why on its card", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   const why = "paused after 3 identical failures: the endpoint did not answer"

@@ -202,6 +202,8 @@ def _application_hold(result: RunResult) -> str:
         what = "its change edits files outside the allowed paths: " + ", ".join(outcome["outside_scope"])
     elif outcome.get("dirty"):
         what = "the project has unsaved edits in " + ", ".join(outcome["dirty"])
+    elif outcome.get("verification_changed"):
+        what = "the project changed again before it could apply, in " + ", ".join(outcome["verification_changed"])
     elif outcome.get("stale"):
         what = f"its change could not be applied: {outcome['stale']}"
     elif outcome.get("error"):

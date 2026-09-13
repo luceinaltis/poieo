@@ -58,6 +58,7 @@ interface Box {
   tally: HTMLElement
   warn: HTMLElement
   stale: HTMLElement
+  apply: HTMLElement
 }
 
 function element(tag: string, className: string, parent: Element): HTMLElement {
@@ -162,6 +163,11 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
     // that edits your files directly *and* one whose last edit did not take --
     // and either of those crowding the other out is the wrong trade.
     stale: element("div", "basic-stale", root),
+    // The same kind of fact again -- what this task may do to the project
+    // without anyone deciding -- and worth its own line for the same reason
+    // the warning above has one: it is the one thing on a board of quiet
+    // cards a reader must not have to open anything to find.
+    apply: element("div", "basic-apply", root),
     // Shut, this is the whole of what a task says about right now. It sits
     // above the graph because it is the answer to the question a person came
     // to the board with, and the graph is the answer to the next one.
@@ -247,6 +253,18 @@ function describeRisk(taskState: TaskState): string {
 }
 
 /**
+ * That this task lands its own work, in one line -- or nothing.
+ *
+ * A task in review mode is the ordinary case and says nothing; the promise of
+ * the board is that its changes wait. One that applies itself has been given
+ * a permission to skip that wait once its checks pass, and the commands it
+ * trusts are on the tooltip, for whoever wants to know what "checked" means.
+ */
+function describeApply(taskState: TaskState): string {
+  return taskState.applies === "auto" ? "applies its checked changes itself" : ""
+}
+
+/**
  * That the card on disk is not what is running, in one line.
  *
  * Only a prompt is really re-read before a run. A schedule, a folder or an
@@ -293,6 +311,8 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   // the summary is what a scan of the board needs, and this is what the person
   // who just saved the file needs.
   box.stale.title = taskState.stale
+  box.apply.textContent = describeApply(taskState)
+  box.apply.title = taskState.applies === "auto" ? `checks: ${taskState.applyChecks.join(" · ")}` : ""
   box.now.textContent = describeNow(taskState)
   // The line is cut at the card's edge; the whole sentence is on the tooltip.
   box.now.title = taskState.status === "paused" ? taskState.heldBecause : ""
@@ -450,7 +470,7 @@ function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boo
         // are measured off those heights. Left out, a card that grows a line
         // keeps the geometry of the board before it had one.
         `${task}>${taskState.then.map((a) => a.to).join(",")}${open(task, taskState) ? "+" : "-"}` +
-        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}`,
+        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}${describeApply(taskState) ? "a" : ""}`,
     )
     .join("|")
 }

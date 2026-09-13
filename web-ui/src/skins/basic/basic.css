@@ -240,7 +240,8 @@
 .basic-tally,
 .basic-now,
 .basic-warn,
-.basic-stale {
+.basic-stale,
+.basic-apply {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-feature-settings: "tnum" 1;
 }
@@ -531,5 +532,19 @@
 
 /* Nothing out of step, so no room taken -- the rule `warn` keeps. */
 .basic-stale:empty {
+  display: none;
+}
+
+/* A task that lands its own work. The accent, because it is the one line on
+   a quiet card that changes what a reader has to check in the morning. */
+.basic-apply {
+  color: var(--ember);
+  font-size: 0.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.basic-apply:empty {
   display: none;
 }

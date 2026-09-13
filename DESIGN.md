@@ -98,7 +98,8 @@ From the board a user can:
 - create a basic task, edit its name, folder and prompt, and switch it on or off;
 - create a task with several steps and conditions without writing YAML;
 - rename a task or set it aside without destroying its file;
-- see task state, graph wiring, model assignments and run history;
+- see task state, graph wiring, model assignments and run history, including
+  whether a task applies its own checked changes and what its checks said;
 - pause, resume or run a task now, and answer a decision it stopped to ask;
 - inspect, accept or discard a run's change;
 - inspect available models, declare an answering endpoint and choose which model

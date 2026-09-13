@@ -361,6 +361,16 @@ def _keeps_copies(project: Any) -> bool:
     return git_keeps_copies(Path(project.config.base_dir))
 
 
+def _permission(policy: Any) -> dict[str, Any]:
+    """The user's permission to apply, as the board draws it.
+
+    The mode, the paths it is confined to and the checks that must pass: what
+    a reader needs to know what will happen to their files without a decision.
+    The timeout stays behind, being a fact about the checks and not the work.
+    """
+    return {"mode": policy.mode, "paths": list(policy.paths), "checks": list(policy.checks)}
+
+
 def _branches(branches: Any) -> list[dict[str, Any]]:
     """How an arrow is drawn: where it goes, and the word on it.
 
@@ -509,6 +519,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # this the answer route is a button with no label on it.
                     "asking": _question(runner),
                     "then": _branches(runner.task.spec.then),
+                    # How this task's work reaches the project: waiting for a
+                    # decision, or landing itself once its checks pass. A board
+                    # of quiet cards must say which of them do the second.
+                    "apply": _permission(runner.task.spec.apply),
                     "shape": _shape(runner.task),
                 }
             )
