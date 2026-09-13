@@ -25,9 +25,9 @@ rules, and [`contribution.md`](contribution.md) contains the procedures needed t
 land a change. `AGENTS.md` at the repository root is the working agreement and
 the source of the merge gate.
 
-[`branding.md`](branding.md) records the brand brief, separating established
-requirements from proposed copy, colours, and visual direction. Proposals are
-marked explicitly and do not describe changes already applied to the site.
+[`branding.md`](branding.md) records the approved persimmon identity, copy,
+colours, and visual direction shared by the website, docs, README, and board.
+The [brand guide](../brand/README.md) lists the assets and their use.
 
 Then read the document for the component you are changing:
 

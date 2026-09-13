@@ -1,58 +1,48 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/img/lockup.svg">
-  <img src="site/img/lockup-light.svg" alt="poieo — the tree with its golden fruit and original wordmark" width="460">
+  <img src="site/img/lockup-light.svg" alt="poieo — a persimmon tree with one golden fruit" width="320">
 </picture>
 
-# The right intelligence, in the right place.
+# Less spend. Better work.
 
 **Small and large models, working together.**
 
-Give routine work to a small model and demanding steps to a larger one. poieo keeps your tasks running, carries their context forward, and records the results.
+Write a task. Choose its models. Let poieo keep it running.
 
 [Website](https://luceinaltis.github.io/poieo/) · [Documentation](https://luceinaltis.github.io/poieo/docs.html) · [Get started](#start-with-one-task)
 
 [![gate](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml/badge.svg)](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml)
-[![license: MIT](https://img.shields.io/badge/license-MIT-285b3f.svg)](LICENSE)
-[![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-536657.svg)](pyproject.toml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-d8a657.svg)](LICENSE)
+[![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-635b50.svg)](pyproject.toml)
 
-## Put each model where it helps
+## Every model has its place
 
-The goal is more accuracy for the cost. A small model can handle frequent,
-well-bounded steps; a larger model can take on demanding reasoning, writing,
-or review. Add checks that tell you whether the result is useful.
+Use small models for routine work and larger ones for demanding steps. Add
+tests and review to judge the result. You choose the model for each step;
+savings and accuracy depend on your models, tasks, and checks.
 
-| Work | An approach to try |
-|---|---|
-| Read, sort, summarize | Start with a small model and check its output. |
-| Make a difficult change | Use a larger model where its capability earns the cost. |
-| Check the result | Run your tests and inspect the change; model size alone is not evidence. |
+Models can run locally or through cloud APIs. Assign them to roles, then
+change a model without rewriting the task. [Choose your models](docs/usage.md#choose-models).
 
-You choose the model for each step. poieo follows those assignments; it does
-not automatically find the cheapest or most accurate model. Savings and
-accuracy depend on the models, tasks, and checks you choose.
-
-Models can run locally or through cloud APIs. The work names roles; a separate
-configuration assigns models to them, so a model can change without rewriting
-the task. [Choose your models](docs/usage.md#choose-models).
-
-## Work that keeps going
+## Set it running
 
 | | |
 |---|---|
-| **task** | The work you want kept running: a name, a folder, and instructions. |
-| **run** | One attempt at that task, with a record of what happened. |
+| **task** | A folder, instructions, and a schedule. |
+| **run** | One attempt, with its progress and results recorded. |
 | **change** | File edits a run leaves for review in a Git project. |
 
-Write the task once. poieo runs it on your schedule, keeps its journal, and
-shows its results on one board. Project memory can share learned context
-across tasks. Pause a task, run it now, or leave a note for its next run.
+Each task keeps a journal for its next run. Turn on project memory to share
+learned context across tasks. Pause work, run it now, or leave a note.
 
-![The task board, with a run's result and a file change opened for review](site/img/task.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/img/task.png">
+  <img src="site/img/task-light.png" alt="The poieo task board, with a run and its file change open for review">
+</picture>
 
-In a Git project, the task works in a **private copy**. Read the diff and
-**accept** it when you want the edits in your checkout, or **discard** it to
-set the work aside. A folder without Git is edited directly and has no
-built-in review or undo.
+In a Git project, work happens in a **private copy**. Read the diff, then
+**accept** or **discard** the change. A folder without Git is edited directly
+and has no built-in review or undo.
 
 ## Start with one task
 
@@ -91,43 +81,20 @@ For a new project that should discover real models immediately, use
 `poieo init` without `--mock`. It records reachable model endpoints and
 credential variable names in plain files.
 
-## Give the work more shape
+## When a task needs more steps
 
-An ordinary task needs one prompt. When it needs several kinds of work, a
-graph adds steps, branches, loops, and checks. Each model step names a role:
+The browser can create tasks with several steps and conditions. Give each
+model step a role; use small and large models where they help. Existing
+graphs, advanced schedules, and isolation settings are edited in files.
 
-```yaml
-nodes:
-  - id: classify
-    type: agent
-    role: reader
-    prompt: "Classify as bug, feature, or question.\n{{ input.message }}"
-```
+`poieo show` displays a task's graph. `poieo eject` exports the full graph
+when the short form is no longer enough. The
+[self-improvement example](examples/improving-poieo/README.md) connects
+reading, planning, building, and review.
 
-Assign a small model to `reader` and a larger one to a demanding role in the
-model configuration. `poieo show` displays a task's graph; `poieo eject`
-exports the full graph when the short form is no longer enough.
-
-The [self-improvement example](examples/improving-poieo/README.md) connects
-reading, planning, building, and review. It is a concrete place to try different
-model assignments and judge their results.
-
-## Yours to run and inspect
-
-The graph, the models, the daemon, the model's hands, the private copy and the
-undo, container isolation, the memory a project keeps, and the board you watch
-it all on are built and in use. The browser can create, edit, rename, switch off
-and set aside ordinary task cards, and create tasks with several steps and
-conditions without YAML. Advanced schedules, isolation and editing existing
-graphs still use their files. `DESIGN.md` has the remaining roadmap.
-
-poieo is a personal tool: no accounts or team workspaces. The browser handles
-ordinary tasks, model choices, memory, and review. Advanced schedules,
-isolation, and graph wiring are configured in files.
-
-The [manual](docs/usage.md) covers setup and everyday use.
-[DESIGN.md](DESIGN.md) records product principles and the roadmap.
-[Component documentation](docs/README.md) and [AGENTS.md](AGENTS.md) are the
-starting points for contributing.
+poieo is a personal tool, with no accounts or team workspaces. The
+[manual](docs/usage.md) covers everyday use. [DESIGN.md](DESIGN.md) records
+product principles and the roadmap. For contributing, start with
+[component documentation](docs/README.md) and [AGENTS.md](AGENTS.md).
 
 MIT licensed. `poieo` is Greek *ποιέω*, “to make.”

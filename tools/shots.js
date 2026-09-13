@@ -32,7 +32,7 @@ if (!open) {
 const CARDS = { width: 820, height: 900 }
 const OPENED = { width: 1440, height: 900 }
 
-async function shot(browser, { skin, file, settle, size, then }) {
+async function shot(browser, { skin, theme = "dark", file, settle, size, then }) {
   const page = await browser.newPage({
     viewport: size,
     // Twice the pixels, so the picture stays sharp on the screens people read
@@ -46,7 +46,10 @@ async function shot(browser, { skin, file, settle, size, then }) {
   page.on("console", (m) => m.type() === "error" && problems.push(m.text()))
   page.on("pageerror", (e) => problems.push(String(e)))
 
-  await page.addInitScript((chosen) => localStorage.setItem("poieo.skin", chosen), skin)
+  await page.addInitScript(({ skin, theme }) => {
+    localStorage.setItem("poieo.skin", skin)
+    localStorage.setItem("poieo.theme", theme)
+  }, { skin, theme })
   await page.goto(base + "/", { waitUntil: "networkidle" })
   await page.waitForTimeout(settle)
   if (then) await then(page)
@@ -89,16 +92,24 @@ async function social(browser) {
     problems.push(...(await shot(browser, { skin: "basic", file: "board.png", size: CARDS, settle: 16000 })))
 
     // One task, opened: its runs, what it said, and the change waiting.
-    problems.push(...(await shot(browser, {
-      skin: "basic",
-      file: "task.png",
-      size: OPENED,
-      settle: 2500,
-      then: async (page) => {
-        await page.getByText(open, { exact: true }).first().click()
-        await page.waitForTimeout(1500)
-      },
-    })))
+    for (const theme of ["dark", "light"]) {
+      problems.push(...(await shot(browser, {
+        skin: "basic",
+        theme,
+        file: theme === "dark" ? "task.png" : "task-light.png",
+        size: OPENED,
+        settle: 2500,
+        then: async (page) => {
+          await page.getByText(open, { exact: true }).first().click()
+          // Later runs can be quiet. Open the run that actually left a change,
+          // then its file, so the picture shows what the reader can review.
+          await page.locator(".drawer-disclosure").filter({ hasText: /^All runs/ }).click()
+          await page.locator(".run-open").filter({ hasText: "+1 / -1" }).first().click()
+          await page.locator(".diff-open").filter({ hasText: "src/parse.py" }).click()
+          await page.waitForFunction(() => document.querySelector("aside")?.textContent.includes('"d": 86400'))
+        },
+      })))
+    }
 
     problems.push(...(await social(browser)))
   } finally {

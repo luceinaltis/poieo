@@ -9,7 +9,7 @@
   function apply(theme) {
     document.documentElement.dataset.theme = theme;
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = theme === "light" ? "#f3f5f2" : "#14221b";
+    if (meta) meta.content = theme === "light" ? "#f8f5ef" : "#100e0c";
     var button = document.getElementById("theme-flip");
     if (button) {
       button.textContent = theme === "light" ? "Dark" : "Light";

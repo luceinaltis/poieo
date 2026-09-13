@@ -14,6 +14,7 @@ import {
   useSyncExternalStore,
 } from "react"
 
+import { ThemeSwitch } from "./shell/ThemeSwitch"
 import { Drawer } from "./detail/Drawer"
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell/skinHost"
 import type { SkinHost } from "./shell/skinHost"
@@ -343,6 +344,7 @@ export default function App({ store }: { store?: StageStore }) {
             </select>
           </label>
         )}
+        <ThemeSwitch />
       </header>
 
       {/* Where the reader can *be*: the places that take the whole stage, and

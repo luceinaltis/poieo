@@ -17,9 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINE = "Less spend. Better work."
 DESCRIPTOR = "Small and large models, working together."
-EXPLANATION = (
-    "Write a task. Choose its models. Let poieo keep it running."
-)
+EXPLANATION = "Write a task. Choose its models. Let poieo keep it running."
 ACTIVE_SURFACES = [ROOT / "README.md", ROOT / "brand" / "README.md", ROOT / "site" / "index.html"]
 CORE_TOKENS = {"ground", "panel", "well", "raised", "rule", "line", "text", "dim", "ember", "live", "stop"}
 DARK_BRAND_ASSETS = [ROOT / "site" / "img" / name for name in ("favicon.svg", "lockup.svg", "mark.svg", "wordmark.svg")]

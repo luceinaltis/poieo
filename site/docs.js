@@ -334,7 +334,9 @@ function markScroll() {
   requestAnimationFrame(() => {
     ticking = false
     let current = heads[0].id
-    for (const h of heads) if (h.getBoundingClientRect().top <= 90) current = h.id
+    // Use the same offset as anchor scrolling, including the taller phone bar.
+    const top = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0
+    for (const h of heads) if (h.getBoundingClientRect().top <= top + 1) current = h.id
     for (const a of tocBox.querySelectorAll("a"))
       a.classList.toggle("active", a.getAttribute("href").endsWith("/" + current))
   })

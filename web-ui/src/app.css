@@ -11,8 +11,28 @@
 .shell-lockup {
   display: block;
   flex: none;
-  height: 23px;
+  height: 2.375rem;
   width: auto;
+}
+
+[data-theme="light"] .shell-lockup {
+  content: url("../../site/img/lockup-light.svg");
+}
+
+.shell-theme {
+  background: none;
+  border-color: var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+  flex: none;
+  font-size: 0.875rem;
+  min-height: 32px;
+  padding: 3px 12px;
+}
+
+.shell-theme:hover {
+  color: var(--text);
+  border-color: var(--ember);
 }
 
 /* The subject of the page, beside the name of the tool. Reads brighter than
@@ -173,8 +193,9 @@
 }
 
 .shell-make {
-  border-color: var(--ember);
-  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
   padding: 5px 11px;
   position: absolute;
   right: 16px;
@@ -264,6 +285,11 @@
   .shell-rail button {
     padding-inline: 4px;
   }
+
+  .shell-bar { gap: 7px; padding-inline: 10px; }
+  .shell-lockup { height: 2rem; }
+  .shell-theme { padding-inline: 9px; }
+  .shell-models, .shell-status { flex: none; }
 
   /* Four words on a 393px bar: the project's name is the one that can be
      long, so it is the one that gives. */
