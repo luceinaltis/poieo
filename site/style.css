@@ -75,15 +75,16 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-page { position: relative; isolation: isolate; }
 .landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; opacity: .4; }
-/* Three wash clouds, the text colour at low opacity, drift in front of the sun or moon. The silhouette is masked on the
-   inner box and blurred on the outer one, because a filter runs before a mask and would leave the edge crisp. */
+/* Three wash clouds drift in front of the sun or moon: the text colour, lit from above on dark ground and pooling
+   at the base on paper. The silhouette is masked on the inner box so the outer blur softens its edge; the mask's
+   turbulence roughens the outline like a brush. */
 .landing-clouds { position: absolute; top: 0; left: 0; width: 100%; height: 400px; overflow: hidden; z-index: -1; pointer-events: none; }
-.cloud { position: absolute; right: 100%; width: clamp(280px, 36vw, 620px); aspect-ratio: 4 / 1; opacity: .12; filter: blur(clamp(8px, 1vw, 14px)); animation: cloud-drift 150s linear infinite; }
-.cloud::before { content: ""; position: absolute; inset: 0; background: var(--text); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 100'%3E%3Cpath d='M14 78C16 58 44 48 72 56C84 28 140 20 170 44C182 14 238 14 256 42C276 30 322 34 334 60C356 54 386 62 386 78C386 88 360 90 330 88C280 92 220 90 170 92C120 94 60 92 30 88C18 86 14 82 14 78Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
-[data-theme="light"] .cloud { opacity: .07; }
-.cloud:nth-child(1) { top: 56px; animation-delay: -46s; }
-.cloud:nth-child(2) { top: 120px; width: clamp(220px, 28vw, 480px); scale: -1 1; animation-duration: 190s; animation-delay: -132s; }
-.cloud:nth-child(3) { top: 170px; width: clamp(300px, 40vw, 700px); animation-duration: 120s; animation-delay: -84s; }
+.cloud { position: absolute; right: 100%; width: clamp(200px, 36vw, 620px); aspect-ratio: 10 / 3; filter: blur(clamp(1.5px, .2vw, 3px)); animation: cloud-drift 150s linear infinite; }
+.cloud::before { content: ""; position: absolute; inset: 0; background: linear-gradient(color-mix(in srgb, var(--text) 28%, transparent), color-mix(in srgb, var(--text) 11%, transparent) 45%, color-mix(in srgb, var(--text) 6%, transparent)); mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120'%3E%3Cfilter id='w' x='-5%25' y='-10%25' width='110%25' height='120%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.014 .05' numOctaves='3' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='10' xChannelSelector='R' yChannelSelector='G'/%3E%3C/filter%3E%3Cpath filter='url(%23w)' transform='translate(0 12)' d='M14 78C16 58 44 48 72 56C84 28 140 20 170 44C182 14 238 14 256 42C276 30 322 34 334 60C356 54 386 62 386 78C386 88 360 90 330 88C280 92 220 90 170 92C120 94 60 92 30 88C18 86 14 82 14 78Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+[data-theme="light"] .cloud::before { background: linear-gradient(color-mix(in srgb, var(--text) 3%, transparent), color-mix(in srgb, var(--text) 7%, transparent) 55%, color-mix(in srgb, var(--text) 12%, transparent)); }
+.cloud:nth-child(1) { top: 64px; animation-delay: -46s; }
+.cloud:nth-child(2) { top: 120px; width: clamp(160px, 28vw, 480px); scale: -1 1; animation-duration: 190s; animation-delay: -132s; }
+.cloud:nth-child(3) { top: 176px; width: clamp(220px, 40vw, 700px); aspect-ratio: 9 / 2; animation-duration: 120s; animation-delay: -84s; }
 @keyframes cloud-drift { from { translate: 0 0; } to { translate: calc(100vw + 100%) 0; } }
 .hero { position: relative; min-height: 800px; padding: 224px 0 200px; display: flex; align-items: center; flex-direction: column; text-align: center; }
 .landing-sky { position: absolute; top: calc(204px - var(--sky-rise, 0) * 128px); left: calc(8% + var(--sky-progress, 0) * 84%); width: 144px; aspect-ratio: 1; transform: translate(-50%, -50%); transition: left 55s linear, top 55s linear; z-index: -2; pointer-events: none; }
@@ -209,6 +210,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .bar .brand-logo { width: 132px; }
   .hero { min-height: 730px; padding: 176px 0 250px; }
   .landing-sky { top: calc(108px - var(--sky-rise, 0) * 48px); left: calc(18% + var(--sky-progress, 0) * 64%); width: 112px; }
+  .landing-clouds { top: 44px; }
   .hero h1 { font-size: clamp(3.5rem, 9vw, 4.75rem); }
   .landing-art { height: 816px; object-position: right bottom; opacity: .55; }
   .section { padding-block: 56px; }
