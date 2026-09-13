@@ -361,6 +361,20 @@ test("a run that applied its own change says so, with the checks that let it", a
   expect(checks.querySelector("summary")?.textContent).toBe("1 check passed")
   expect(checks.textContent).toContain("pytest -q")
   expect(checks.textContent).toContain("3 passed")
+  const commands = Array.from(container.querySelectorAll(".run-focus code"))
+    .filter((entry) => entry.textContent === "pytest -q")
+  expect(commands).toHaveLength(1)
+})
+
+test.each([
+  [{ status: "undone" }, "Undone"],
+  [{ status: "discarded" }, "Discarded"],
+  [{ status: "applied", undo_of: "r0" }, "Undo applied"],
+  [{ status: "applied", unchanged: true, accepted: 0 }, "Already included"],
+] as const)("the run brief preserves its recorded outcome %s", async (application, label) => {
+  await draw([{ ...run, application }], { into: "main" })
+  expect(container.querySelector(".run-brief-meta")?.textContent).toContain(label)
+  expect(container.querySelector(".run-brief-meta")?.textContent).not.toContain("Not applied")
 })
 
 test("a run whose change could not be applied says which check refused it", async () => {
@@ -386,7 +400,7 @@ test("a run whose change could not be applied says which check refused it", asyn
 })
 
 test("a change whose checks passed but could not land still says why", async () => {
-  // The project moved between the check and the apply: every check passed,
+  // A check changed the prepared copy: every command passed,
   // and "2 checks passed" beside "Not applied" would be a riddle.
   const moved: RunSummary = {
     ...run,
@@ -403,7 +417,7 @@ test("a change whose checks passed but could not land still says why", async () 
   }
   await draw([moved], { into: "main" })
   expect(container.querySelector(".run-checks > summary")?.textContent).toBe(
-    "the project changed again before it could apply, in src/x.py",
+    "A check changed src/x.py. Check commands must leave these files unchanged.",
   )
   expect(container.querySelectorAll(".run-checks li")).toHaveLength(2)
 })

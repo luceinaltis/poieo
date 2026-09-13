@@ -123,6 +123,7 @@ test("a run that landed its own change says so on its row", () => {
   render([APPLIED, DID_SOMETHING])
   expect(container.querySelector('[data-run="d"] .run-applied')?.textContent).toBe("applied")
   expect(container.querySelector('[data-run="a"] .run-applied')).toBeNull()
+  expect(container.querySelectorAll('[data-run="d"] .run-applied, [data-run="d"] .application-label')).toHaveLength(1)
 })
 
 test("a run that found nothing to do says so, and is not a failure", () => {

@@ -109,6 +109,28 @@ test("a fresh listing replaces and clears the reason a task is held", async () =
   store.stop()
 })
 
+test("an open board refreshes a task's application permission and checks", async () => {
+  let task: TaskRow = { ...CHORES, apply: { mode: "review", paths: [], checks: [] } }
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing([task])) })
+  await store.start()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("review")
+
+  task = { ...task, apply: { mode: "auto", paths: ["src"], checks: ["pytest -q"] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("auto")
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual(["pytest -q"])
+
+  task = { ...task, apply: { mode: "auto", paths: ["src"], checks: ["npm test"] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual(["npm test"])
+
+  task = { ...task, apply: { mode: "review", paths: [], checks: [] } }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].applies).toBe("review")
+  expect(store.getStage().tasks["board/chores"].applyChecks).toEqual([])
+  store.stop()
+})
+
 test("seeds from the task list, then subscribes", async () => {
   const { api, store } = harness()
   await store.start()
