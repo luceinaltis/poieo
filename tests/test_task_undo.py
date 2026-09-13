@@ -7,6 +7,36 @@ from test_task_application import policy_config, run_once
 from test_workspace import git, head
 
 
+async def test_cancelling_during_undo_cleanup_keeps_the_completed_record(tmp_path, monkeypatch):
+    repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "pass"']})
+    daemon, result = await run_once(config)
+    daemon.cancel.clear()
+    driver = daemon.runners[0]
+    wait_for_stop = daemon.cancel.wait
+    interrupted = asyncio.Event()
+
+    async def stop_while_closing():
+        try:
+            await wait_for_stop()
+        finally:
+            interrupted.set()
+            running.cancel()
+
+    monkeypatch.setattr(daemon.cancel, "wait", stop_while_closing)
+    running = asyncio.create_task(driver.undo_changes(result.run_id))
+    outcome = await running
+
+    assert interrupted.is_set()
+    assert outcome["status"] == "applied"
+    assert not (repo / "made.txt").exists()
+    application = daemon.store.summary(result.run_id)["application"]
+    assert application["status"] == "undone"
+    assert application["undo"]["run_id"] == outcome["run_id"]
+    assert daemon.store.summary(outcome["run_id"])["application"]["undo_of"] == result.run_id
+    assert driver.holding
+    assert not daemon.cancel.is_set()
+
+
 @pytest.mark.parametrize("signal", ["daemon", "caller"])
 async def test_stopping_undo_verification_preserves_the_applied_work(tmp_path, monkeypatch, signal):
     from poieo.tools import LocalExecutor
