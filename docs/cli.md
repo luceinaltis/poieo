@@ -47,6 +47,12 @@ daemon because pending questions belong to its runners and persisted run state.
 
 ## Writes
 
+`run` executes task cards through `TaskRunner.run_once`, including private Git
+copies, optional verified application, and one journal entry. Raw graphs still
+execute directly. An application refusal returns a nonzero exit status and its
+details in the JSON result. The card's isolation is used unless `--isolate`
+explicitly overrides it.
+
 `init` never overwrites an existing file and validates what it leaves. Normal
 initialization detects reachable models once; mock initialization gives a
 non-billing scripted path. Detection later happens only through an explicit

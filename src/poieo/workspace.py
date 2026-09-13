@@ -14,6 +14,7 @@ Design: docs/workspace.md
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import shutil
 import subprocess
@@ -22,8 +23,10 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Iterator
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Callable, Iterator, Literal, Sequence
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .errors import PoieoError
 
@@ -33,6 +36,49 @@ _IDENTITY = ["-c", "user.name=poieo", "-c", "user.email=poieo@localhost"]
 
 class WorkspaceError(PoieoError):
     """A git operation failed. Never fatal to a task -- the work still ran."""
+
+
+class ApplySpec(BaseModel):
+    """The user's permission to apply a task's verified file changes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["review", "auto"] = "review"
+    paths: list[str] = Field(default_factory=list, max_length=50)
+    checks: list[str] = Field(default_factory=list, max_length=10)
+    timeout: float = Field(default=120, gt=0, le=600)
+
+    @field_validator("paths")
+    @classmethod
+    def _paths(cls, values: list[str]) -> list[str]:
+        normalized = []
+        for value in values:
+            value = value.strip().replace("\\", "/")
+            path = PurePosixPath(value)
+            if (
+                not value
+                or path.is_absolute()
+                or PureWindowsPath(value).drive
+                or ".." in path.parts
+                or any(part.lower() == ".git" for part in path.parts)
+                or any(char in value for char in "*?[]\0")
+            ):
+                raise ValueError("an allowed path must name a file or folder inside the task folder")
+            normalized.append(path.as_posix())
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("checks")
+    @classmethod
+    def _checks(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() or len(value) > 4000 for value in values):
+            raise ValueError("each verification command must contain 1 to 4000 characters")
+        return [value.strip() for value in values]
+
+    @model_validator(mode="after")
+    def _automatic_needs_checks(self) -> ApplySpec:
+        if self.mode == "auto" and not self.checks:
+            raise ValueError("automatic application needs at least one verification command")
+        return self
 
 
 @dataclass(slots=True)
@@ -77,20 +123,37 @@ _LOCKS_GUARD = threading.Lock()
 
 
 @contextmanager
-def _repository_lock(repo: Path) -> Iterator[None]:
+def _repository_lock(repo: Path, *, task: str | None = None) -> Iterator[None]:
     """Serialize poieo's writes across tasks, threads, and daemon processes."""
     common = Path(_git(repo, "rev-parse", "--git-common-dir").strip())
     common = (repo / common).resolve() if not common.is_absolute() else common.resolve()
-    key = os.path.normcase(str(common))
+    name = "poieo-accept.lock" if task is None else f"poieo-task-{hashlib.sha256(task.encode()).hexdigest()}.lock"
+    key = os.path.normcase(str(common / name))
+    busy = (
+        "another poieo process is still applying a change; try again"
+        if task is None
+        else "this task is already running in another process"
+    )
     with _LOCKS_GUARD:
         local = _LOCKS.setdefault(key, threading.Lock())
-    with local, (common / "poieo-accept.lock").open("a+b") as handle:
+    if not local.acquire(timeout=60 if task is None else 0):
+        raise WorkspaceError(busy)
+    try:
+        with _locked_file(common / name, wait=60 if task is None else 0, busy=busy):
+            yield
+    finally:
+        local.release()
+
+
+@contextmanager
+def _locked_file(path: Path, *, wait: float, busy: str) -> Iterator[None]:
+    with path.open("a+b") as handle:
         handle.seek(0, os.SEEK_END)
         if handle.tell() == 0:
             handle.write(b"\0")
             handle.flush()
         handle.seek(0)
-        deadline = time.monotonic() + 60
+        deadline = time.monotonic() + wait
         while True:
             try:
                 if os.name == "nt":
@@ -106,7 +169,7 @@ def _repository_lock(repo: Path) -> Iterator[None]:
                 if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
                     raise WorkspaceError(f"could not coordinate changes: {exc}") from exc
                 if time.monotonic() >= deadline:
-                    raise WorkspaceError("another poieo process is still applying a change; try again") from exc
+                    raise WorkspaceError(busy) from exc
                 time.sleep(0.05)
         try:
             yield
@@ -193,7 +256,7 @@ class Workspace:
         # used to be handed the run-log store and append `worktrees` itself,
         # which meant pointing the logs at another disk quietly took the
         # working copies along. A copy of a repository is not a log.
-        self.worktrees = Path(worktrees)
+        self.worktrees = Path(worktrees).resolve()
 
     @property
     def branch(self) -> str:
@@ -204,6 +267,28 @@ class Workspace:
         return self.worktrees / self.task
 
     # -- inspection ---------------------------------------------------------
+
+    @contextmanager
+    def exclusive_run(self) -> Iterator[None]:
+        """Keep another runner from resetting or committing this task's copy."""
+        if not self.available():
+            yield
+            return
+        with _repository_lock(self.repo, task=self.task):
+            yield
+
+    def applied(self, commit: str) -> bool:
+        return self._is_ancestor(commit, "HEAD")
+
+    def run_ids(self, commits: Sequence[str]) -> list[str]:
+        wanted = set(commits)
+        refs = _git(self.repo, "for-each-ref", "--format=%(objectname) %(refname)", "refs/poieo/runs")
+        return [
+            ref.rsplit("/", 1)[-1]
+            for line in refs.splitlines()
+            for commit, ref in [line.split(" ", 1)]
+            if commit in wanted
+        ]
 
     def available(self) -> bool:
         """git on PATH, and the workdir actually inside a repository."""
@@ -258,6 +343,8 @@ class Workspace:
             _git(self.repo, "branch", self.branch, user_head)
         self._ensure_worktree()
 
+        self.working_folder()
+
         # Follow the user forward only while there is nothing to review:
         # rebasing unread work out from under them would lose it.
         if not self.pending():
@@ -291,6 +378,13 @@ class Workspace:
             deletions=deletions,
             message=message.splitlines()[0] if message else "",
         )
+
+    def park_failed(self, change: Change, run_id: str) -> None:
+        """Retain a cancelled save without offering it to a later successful run."""
+        if _git(self.worktree, "rev-parse", "HEAD").strip() != change.head:
+            raise WorkspaceError("the task changed before its cancelled work could be parked")
+        _git(self.repo, "update-ref", f"refs/poieo/failed/{run_id}", change.head)
+        _git(self.worktree, "reset", "--hard", change.base)
 
     # -- the morning after --------------------------------------------------
 
@@ -348,7 +442,9 @@ class Workspace:
                     path.rmdir()
                 raise
 
-    def apply_prepared(self, prepared: PreparedChange) -> dict[str, object]:
+    def apply_prepared(
+        self, prepared: PreparedChange, *, permitted: Callable[[], bool] | None = None
+    ) -> dict[str, object]:
         """Apply exactly the checked result, provided neither side changed meanwhile."""
         with _repository_lock(self.repo):
             if prepared.conflict:
@@ -363,13 +459,22 @@ class Workspace:
                 return {"stale": "the project changed during verification"}
             if not self._is_ancestor(prepared.target, self.branch):
                 return {"stale": "this change no longer belongs to the task"}
-            changed = self._dirty_at(prepared.path)
-            if changed:
-                return {"verification_changed": changed}
-            if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
-                return {"stale": "the change changed during verification"}
+            invalid = self.validate_prepared(prepared)
+            if invalid:
+                return invalid
+            if permitted is not None and not permitted():
+                return {"revoked": True}
             _git(self.repo, "merge", "--ff-only", prepared.head)
             return {"accepted": prepared.count, "before": prepared.base, "after": prepared.head}
+
+    def validate_prepared(self, prepared: PreparedChange) -> dict[str, object]:
+        """A check is valid only for the unchanged candidate it was given."""
+        changed = self._dirty_at(prepared.path)
+        if changed:
+            return {"verification_changed": changed}
+        if _git(prepared.path, "rev-parse", "HEAD").strip() != prepared.head:
+            return {"stale": "the change changed during verification"}
+        return {}
 
     def release_prepared(self, prepared: PreparedChange) -> None:
         """Remove only the temporary copy this acceptance owns."""
@@ -378,6 +483,54 @@ class Workspace:
             raise WorkspaceError("the temporary change is outside this task's work copies")
         with _repository_lock(self.repo):
             _git(self.repo, "worktree", "remove", "--force", str(path))
+
+    def working_folder(self) -> Path:
+        """The chosen task folder in its private copy, including a subfolder."""
+        return self._folder_in(self.worktree)
+
+    def check_folder(self, prepared: PreparedChange) -> Path:
+        """The task's chosen folder inside the combined copy."""
+        return self._folder_in(prepared.path)
+
+    def _folder_in(self, copy: Path) -> Path:
+        self._check_copy_root(copy)
+        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
+        folder = copy / self.repo.resolve().relative_to(root)
+        if not folder.resolve().is_relative_to(copy.resolve()):
+            raise WorkspaceError("the task folder moved outside its private copy")
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise WorkspaceError(f"the task folder could not be opened: {exc}") from exc
+        return folder
+
+    def outside_scope(self, prepared: PreparedChange, paths: list[str], protected: Sequence[Path] = ()) -> list[str]:
+        """Changed paths outside the user's grant, including both sides of a rename."""
+        root = Path(_git(self.repo, "rev-parse", "--show-toplevel").strip()).resolve()
+        relative = self.repo.resolve().relative_to(root)
+
+        def normalized(path: str) -> str:
+            return os.path.normcase(path).replace("\\", "/").rstrip("/")
+
+        allowed = [normalized((relative / path).as_posix()) for path in paths or ["."]]
+        reserved = {
+            normalized(path.resolve().relative_to(root).as_posix())
+            for path in protected
+            if path.resolve().is_relative_to(root)
+        }
+        changed = filter(
+            None,
+            _git(prepared.path, "diff", "--name-only", "--no-renames", "-z", prepared.base, prepared.head).split("\0"),
+        )
+        return [
+            name
+            for name in changed
+            if any(normalized(name) == kept or normalized(name).startswith(kept + "/") for kept in reserved)
+            or not any(
+                prefix == "." or normalized(name) == prefix or normalized(name).startswith(prefix + "/")
+                for prefix in allowed
+            )
+        ]
 
     def discard(self, since: str | None = None) -> dict[str, object]:
         """Throw the work away -- recoverably. The old tip stays on a parked ref."""
@@ -450,7 +603,10 @@ class Workspace:
 
     def _ensure_worktree(self) -> None:
         work = self.worktree
+        self._check_copy_root(work)
         if (work / ".git").exists():
+            if not (work / ".git").is_file() or _git(work, "symbolic-ref", "--short", "HEAD").strip() != self.branch:
+                raise WorkspaceError("the private copy no longer belongs to this task")
             return
 
         # The directory is disposable: a half-registered worktree (the user
@@ -461,3 +617,8 @@ class Workspace:
             shutil.rmtree(work)
         work.parent.mkdir(parents=True, exist_ok=True)
         _git(self.repo, "worktree", "add", work.as_posix(), self.branch)
+
+    @staticmethod
+    def _check_copy_root(copy: Path) -> None:
+        if copy.resolve() != copy.absolute():
+            raise WorkspaceError("the private copy was redirected outside its owned folder")
