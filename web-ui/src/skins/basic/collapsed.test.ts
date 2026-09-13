@@ -158,3 +158,18 @@ test.each([false, true])("editing a card title preserves its focused input (expa
   expect(card("Review").querySelector(".basic-inside")?.getAttribute("aria-label"))
     .toBe("Step connections in Check before sending")
 })
+
+test.each([false, true])("a focused wire still follows its connection after a title edit (expanded: %s)", open => {
+  if (open) toggle("Review").click()
+  const wire = () => host.querySelector<SVGElement>(".basic-connection")!
+  wire().focus()
+  expect(document.activeElement).toBe(wire())
+  handle.update(initialStage([source, { ...task("Review"), title: "Check before sending" }, task("Other")]))
+  expect(document.activeElement).toBe(wire())
+  expect(wire().dataset.active).toBe("true")
+  expect(card("Draft").dataset.linked).toBe("true")
+  expect(card("Other").dataset.linked).toBe("false")
+  document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+  expect(document.activeElement).toBe(card("Review").querySelector('[data-port="input"]'))
+  expect(card("Review").dataset.open).toBe(String(open))
+})
