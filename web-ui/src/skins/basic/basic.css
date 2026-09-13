@@ -189,6 +189,7 @@
   cursor: pointer;
   display: flex;
   flex: 1;
+  min-width: 0;
   font: inherit;
   gap: 8px;
   padding: 0;
@@ -197,6 +198,7 @@
 
 .basic-name {
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .basic-dot {
@@ -225,11 +227,13 @@
 .basic-toggle {
   background: none;
   border: 0;
-  color: var(--dim);
+  color: var(--ember);
   cursor: pointer;
   font: inherit;
-  line-height: 1;
-  padding: 2px 4px;
+  font-size: .74em;
+  line-height: 1.5;
+  padding: 4px;
+  flex: none;
 }
 
 .basic-toggle:hover {
@@ -262,15 +266,7 @@
   white-space: nowrap;
 }
 
-/* Shut, a task is a border with a name on it and nothing else -- which is all
-   a node says until you open it.
-
-   Removed, not hidden. This was reserved room for a while, because a task
-   opened itself when it started running and shut when it stopped, so on a
-   board that runs every minute `display: none` made every border grow and
-   shrink all day. Nothing opens itself any more -- the `now` line says what
-   that was for -- so the size changes only when a person asks, and a shut
-   border is as small as what it has to say. */
+/* Live detail uses space only when the reader has expanded this card. */
 .basic-task[data-open="false"] .basic-tools,
 .basic-task[data-open="false"] .basic-said {
   display: none;
@@ -364,7 +360,7 @@
   }
 }
 
-/* A vertical graph keeps ordinary tasks readable within the closed card. */
+/* Expanded independent graphs own their scrolling. */
 .basic-inside {
   background: var(--well);
   border: 1px solid var(--rule);
@@ -386,7 +382,8 @@
   outline-offset: 2px;
 }
 
-/* A handoff must visibly touch the graph, so connected graphs use their full size. */
+/* Handoffs and compact flows stay attached to the board, without local scrolling. */
+.basic-task[data-open="false"] .basic-inside,
 .basic-task[data-connected="true"] .basic-inside {
   max-height: none;
   overflow: visible;
@@ -413,6 +410,17 @@
 .basic [data-port]:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
 
 .basic-step-scene { position: relative; }
+.basic-step-count {
+  position: absolute;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 26px;
+  text-align: center;
+}
+.basic-summary-edge { fill: none; stroke: var(--dim); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.basic-summary-arrow { fill: var(--dim); }
 .basic-step-wires { position: absolute; inset: 0; overflow: visible; }
 .basic-step-wire { color: var(--dim); }
 .basic-step-wire[data-conditional="true"] { color: var(--ember); }

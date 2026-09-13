@@ -1,9 +1,9 @@
 /**
  * The plain view: the work as a graph, with one noun on screen.
  *
- * Each task carries a vertical graph with a visible start and endings.
- * Opening the border adds the live text and tool calls;
- * View steps opens the spatial graph at an independent reading size.
+ * Each task starts with a compact flow between its input and output.
+ * Expanding reveals its vertical graph, live text and tool calls;
+ * View steps opens that graph at an independent reading size.
  *
  * One rule reads the whole picture: **an arrow that crosses a border ends one
  * run and starts another.** Inside a border is the next step, immediately,
@@ -23,7 +23,7 @@ import type { D3ZoomEvent } from "d3-zoom"
 
 import { changedTasks } from "../changed"
 import { stepName } from "./steps"
-import { drawCardSteps } from "./card"
+import { drawCardSteps, drawCardSummary } from "./card"
 import { createGraphDialog } from "./graph"
 import { drawConnections, taskConnections } from "./connections"
 import type { Skin, SkinCallbacks, SkinHandle } from "../contract"
@@ -138,7 +138,7 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
 
   const head = element("div", "basic-head", root)
   // Two things to click, so neither has to mean two things: the name selects
-  // the task, exactly as a card did, and the chevron opens the box.
+  // the task, exactly as a card did, and Expand opens the box.
   const pick = element("button", "basic-pick", head)
   ;(pick as HTMLButtonElement).type = "button"
   pick.addEventListener("click", () => callbacks.onSelectTask(task, pick))
@@ -147,7 +147,6 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
 
   const toggle = element("button", "basic-toggle", head)
   ;(toggle as HTMLButtonElement).type = "button"
-  toggle.textContent = "▾"
 
   const box: Box = {
     structure: "",
@@ -283,18 +282,20 @@ function describeStale(taskState: TaskState): string {
 }
 
 /** Connections at card width. Structure stays put while run state changes. */
-function fillInside(box: Box, taskState: TaskState, receives: boolean): boolean {
-  const structure = JSON.stringify([taskState.name, taskState.shape, taskState.then, receives])
+function fillInside(box: Box, taskState: TaskState, receives: boolean, open: boolean): boolean {
+  // A title edit updates the reading label without replacing a focused terminal.
+  box.inside.setAttribute("aria-label", `Step connections in ${taskState.title}`)
+  const structure = JSON.stringify([taskState.name, taskState.shape, taskState.then, receives, open])
   if (box.structure === structure) return false
   box.structure = structure
   const connected = receives || taskState.then.some(way => way.to !== null)
   box.root.dataset.connected = String(connected)
+  box.root.dataset.open = String(open)
   box.root.style.width = `${BOX.width}px`
   box.inside.hidden = taskState.shape.nodes.length === 0 && !connected
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
-  box.inside.setAttribute("aria-label", `Step connections in ${taskState.title}`)
-  const width = drawCardSteps(box.steps, taskState, receives)
+  const width = (open ? drawCardSteps : drawCardSummary)(box.steps, taskState, receives)
   if (connected) box.root.style.width = `${Math.max(BOX.width, width + 32)}px`
   return true
 }
@@ -308,7 +309,8 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   box.name.textContent = taskState.title
   box.root.dataset.status = taskState.status
   box.root.dataset.open = String(open)
-  box.toggle.textContent = open ? "▾" : "▸"
+  box.toggle.textContent = open ? "Collapse ▴" : "Expand ▾"
+  box.toggle.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} steps in ${taskState.title}`)
   box.toggle.setAttribute("aria-expanded", String(open))
   box.when.textContent = describeWhen(taskState)
   box.warn.textContent = describeRisk(taskState)
@@ -323,7 +325,7 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   // The line is cut at the card's edge; the whole sentence is on the tooltip.
   box.now.title = taskState.status === "paused" ? taskState.heldBecause : ""
   const count = taskState.shape.nodes.length
-  box.graphHead.hidden = count === 0
+  box.graphHead.hidden = count === 0 || !open
   box.graphCount.textContent = `${count} ${count === 1 ? "step" : "steps"}`
   box.viewSteps.setAttribute("aria-label", `View steps in ${taskState.title}`)
 
@@ -394,7 +396,9 @@ function wiringKey(stage: StageState, open: (task: string, at: TaskState) => boo
         // are measured off those heights. Left out, a card that grows a line
         // keeps the geometry of the board before it had one.
         `${task}>${taskState.then.map((a) => a.to).join(",")}${open(task, taskState) ? "+" : "-"}` +
-        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}${describeApply(taskState) ? "a" : ""}`,
+        `${describeRisk(taskState) ? "r" : ""}${describeStale(taskState) ? "s" : ""}${describeApply(taskState) ? "a" : ""}` +
+        // A wrapped title can change height without changing the steps inside.
+        JSON.stringify(taskState.title),
     )
     .join("|")
 }
@@ -427,9 +431,7 @@ export const basic: Skin = {
 
     const boxes = new Map<string, Box>()
     const painted = new Map<string, TaskState>()
-    // Only tasks the reader has touched. Everything else follows the rule
-    // below, so the board opens where something is happening and stays quiet
-    // everywhere else.
+    // Every card starts compact; live updates keep the reader's chosen detail.
     const byHand = new Map<string, boolean>()
     let key = ""
     // The last stage drawn, so a border opened by hand can lay the board out
@@ -446,9 +448,9 @@ export const basic: Skin = {
     // view, and `show` stops fitting.
     let chosen: View | null = null
 
-    // Independent graphs scroll locally. Full connected graphs move with the board.
+    // Only expanded independent graphs scroll locally; compact flows move with the board.
     const grabbable = (event: Event): boolean =>
-      !(event.target as Element | null)?.closest('button, [data-port], .basic-connection, .basic-task[data-connected="false"] .basic-inside')
+      !(event.target as Element | null)?.closest('button, [data-port], .basic-connection, .basic-task[data-connected="false"][data-open="true"] .basic-inside')
 
     map.addEventListener("pointerdown", (event) => {
       event.stopPropagation()
@@ -723,8 +725,15 @@ export const basic: Skin = {
             box.toggle.addEventListener("click", () => {
               byHand.set(task, !isOpen(task, painted.get(task) ?? taskState))
               const now = painted.get(task)
-              if (now !== undefined) paint(box!, now, isOpen(task, now))
-              if (last !== null) relayout(last)
+              if (now !== undefined) {
+                const receives = last !== null && taskConnections(last).some(link => link.to === task)
+                fillInside(box!, now, receives, isOpen(task, now))
+                paint(box!, now, isOpen(task, now))
+              }
+              if (last !== null) {
+                key = wiringKey(last, isOpen)
+                relayout(last)
+              }
             })
             const tracePort = (event: Event) => {
               const port = (event.target as Element).closest<HTMLElement>("[data-port]")
@@ -750,7 +759,7 @@ export const basic: Skin = {
         }
         for (const [task, box] of boxes) {
           const taskState = stage.tasks[task]
-          if (fillInside(box, taskState, receiving.has(task))) {
+          if (fillInside(box, taskState, receiving.has(task), isOpen(task, taskState))) {
             moved = true
             paint(box, taskState, isOpen(task, taskState))
           }

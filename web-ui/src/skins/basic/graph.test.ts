@@ -41,6 +41,7 @@ beforeEach(() => {
   })
   handle = basic.mount(host, { onSelectTask: vi.fn() })
   handle.update(initialStage([task]))
+  host.querySelector<HTMLElement>(".basic-toggle")!.click()
 })
 
 afterEach(() => {

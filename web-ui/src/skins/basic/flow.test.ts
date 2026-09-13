@@ -29,6 +29,7 @@ beforeEach(() => {
   document.body.append(host)
   handle = basic.mount(host, { onSelectTask: vi.fn() })
   handle.update(initialStage([task]))
+  host.querySelector<HTMLElement>(".basic-toggle")!.click()
 })
 
 afterEach(() => {
@@ -36,8 +37,8 @@ afterEach(() => {
   host.remove()
 })
 
-test("a closed card draws directed connections, including the return path", () => {
-  expect(host.querySelector("[data-task]")?.getAttribute("data-open")).toBe("false")
+test("an expanded card draws directed connections, including the return path", () => {
+  expect(host.querySelector("[data-task]")?.getAttribute("data-open")).toBe("true")
   expect(connections()).toEqual(expect.arrayContaining([
     "Start → Review", "Review → Ready to finish?", "Revise → Review",
   ]))
@@ -64,7 +65,7 @@ test("every condition keeps its own named destination and otherwise can end the 
   expect(new Set(routes.map(path => path.getAttribute("d"))).size).toBe(3)
 })
 
-test("one step shows both the start and the end without opening anything", () => {
+test("an expanded single step shows both the start and the end", () => {
   const single = structuredClone(task)
   single.shape.nodes = [{ ...single.shape.nodes[0], next: null }]
   handle.update(initialStage([single]))

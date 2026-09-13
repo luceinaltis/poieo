@@ -39,8 +39,10 @@ conditions, or a question for you. **Insert result from…** passes an earlier
 answer into later instructions. Answer waiting questions on the board while
 the daemon is running.
 
-**View steps** shows the flow. Editing an existing graph uses its file;
-see the [graph reference](../graph.md).
+Cards start collapsed, keeping their inputs, outputs and connections visible.
+Choose **Expand** on a card to see its steps, then **View steps** for a larger view.
+Choose **Collapse** to return to the compact flow. Editing an existing graph uses
+its file; see the [graph reference](../graph.md).
 
 ## Give direction
 
