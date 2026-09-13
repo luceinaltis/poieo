@@ -58,6 +58,8 @@ export function drawConnections(
   canvas: SVGElement, stage: StageState, placed: Placed[], boxes: Map<string, ConnectedBox>, bottom: number,
   follow: (task: string, input: { x: number; y: number }) => void, trace: (from: string | null, to?: string) => void,
 ) {
+  const focused = document.activeElement?.closest<SVGElement>(".basic-connection")
+  const keepFocus = focused && canvas.contains(focused)
   const positions = new Map(placed.map(at => [at.task, at]))
   const columnRight = new Map<number, number>()
   for (const at of placed) {
@@ -115,5 +117,8 @@ export function drawConnections(
     groups.push(group)
   }
   canvas.replaceChildren(...groups)
+  // A title can change card height while the reader is about to follow a wire.
+  if (keepFocus) groups.find(group => group.dataset.from === focused.dataset.from && group.dataset.to === focused.dataset.to)
+    ?.focus({ preventScroll: true })
   return floor
 }

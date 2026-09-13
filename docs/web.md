@@ -297,6 +297,8 @@ resize. Forward wires use the gaps between columns; returns are dashed and run
 below the cards, as do forward wires that skip columns. Hovering or focusing a
 terminal or wire highlights its connections and both cards. Clicking a wire, or
 pressing Enter/Space on it, brings the receiving card into view and focuses Input.
+Title updates preserve focused terminals and wires while allowing the board to
+remeasure a wrapped title.
 
 Expanded card graphs measure their labels before Dagre places nodes from top to
 bottom. Expanded connected cards grow to fit the complete graph without internal
