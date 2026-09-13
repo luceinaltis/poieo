@@ -64,12 +64,14 @@ async def test_disabling_a_task_announces_the_adopted_permission_after_the_scan(
     card.update(enabled=False, apply={"mode": "auto", "checks": [CHECK_MADE]})
     scans = 0
 
-    async def two_scans(_seconds, _cancel):
+    async def two_scans(_seconds, _cancel, _knock):
         nonlocal scans
         scans += 1
         return scans <= 2
 
-    monkeypatch.setattr("poieo.daemon.service._sleep_or_cancel", two_scans)
+    # The scan's own sleep, which a board write knocks on; stood in for here
+    # so the watcher looks twice and then returns instead of sleeping.
+    monkeypatch.setattr("poieo.daemon.service._sleep_or_knock", two_scans)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_app(daemon)), base_url="http://localhost"
     ) as client:
