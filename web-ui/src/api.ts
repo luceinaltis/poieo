@@ -563,6 +563,8 @@ export function createTask(
   /** False makes the card switched off: written, on the board, not running. */
   enabled = true,
   apply?: import("./types").ApplySpec,
+  /** One line: an interval, the word loop, or a cron line. Blank sends nothing. */
+  schedule?: string,
 ): Promise<MadeTask> {
   return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
     name,
@@ -570,6 +572,7 @@ export function createTask(
     ...(typeof prompt === "string" ? { prompt } : { graph: prompt }),
     enabled,
     ...(apply ? { apply } : {}),
+    ...(schedule ? { schedule } : {}),
   })
 }
 
@@ -597,6 +600,11 @@ export interface Card {
   plain: boolean
   /** False when the card is switched off: on the board, written, not running. */
   enabled: boolean
+  /**
+   * The card's `every:` or `at:` as one line, or "" when it leaves the
+   * schedule to the default. Absent from an older daemon.
+   */
+  schedule?: string
 }
 
 export async function fetchCard(project: string, task: string): Promise<Card | null> {
@@ -625,7 +633,17 @@ export interface RewrittenCard extends Answer {
 export function rewriteCard(
   project: string,
   task: string,
-  card: string | { name: string; folder: string; prompt: string; enabled?: boolean; apply?: import("./types").ApplySpec },
+  card:
+    | string
+    | {
+        name: string
+        folder: string
+        prompt: string
+        enabled?: boolean
+        apply?: import("./types").ApplySpec
+        /** Sent only when it moved; absent means unchanged, "" means the default. */
+        schedule?: string
+      },
 ): Promise<RewrittenCard> {
   // Two spellings of one write: the raw file, or the three fields the daemon
   // serialises itself -- through the same dump make uses, so a person who

@@ -57,6 +57,35 @@ def test_a_card_is_written_where_the_daemon_will_find_it(tmp_path):
     assert answer.json()["task"] == "tidy-up"
 
 
+def test_a_schedule_is_written_as_every_or_at_by_its_shape(tmp_path):
+    """One field on the form, two keys in the card: an interval or the word
+    `loop` is `every:`, five cron fields are `at:`. Left blank, the card says
+    nothing and takes its hourly default, exactly as make wrote it before."""
+    client, cards = _client(tmp_path)
+
+    assert _make(client, {"name": "often", "folder": "../work", "prompt": "x", "schedule": "30m"}).status_code == 200
+    assert "every: 30m" in (cards / "often.yaml").read_text(encoding="utf-8")
+
+    assert (
+        _make(client, {"name": "nightly", "folder": "../work", "prompt": "x", "schedule": "0 2 * * *"}).status_code
+        == 200
+    )
+    assert "at: 0 2 * * *" in (cards / "nightly.yaml").read_text(encoding="utf-8")
+
+    assert _make(client, {"name": "plain", "folder": "../work", "prompt": "x", "schedule": " "}).status_code == 200
+    text = (cards / "plain.yaml").read_text(encoding="utf-8")
+    assert "every" not in text and "at:" not in text
+
+
+def test_a_schedule_that_is_neither_is_refused_before_anything_is_written(tmp_path):
+    client, cards = _client(tmp_path)
+    answer = _make(client, {"name": "odd", "folder": "../work", "prompt": "x", "schedule": "whenever"})
+
+    assert answer.status_code == 400
+    assert "schedule" in answer.json()["error"]
+    assert not (cards / "odd.yaml").exists()
+
+
 def test_a_folder_that_is_not_there_is_refused_and_nothing_is_written(tmp_path):
     """The folder is the one thing the model's hands will touch. A card naming
     one that does not exist would fail at 3am, which is the hour this project

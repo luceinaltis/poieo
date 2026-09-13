@@ -92,10 +92,17 @@ test("it is one of the panels on the right edge, not a third geometry", () => {
   expect(host.querySelector("aside")?.classList.contains("panel")).toBe(true)
 })
 
-test("it asks for a name, a folder and a prompt, and nothing else", () => {
+test("it asks for a name, a folder and a prompt, and offers one line for when", () => {
+  // Three fields to fill, and no fourth to fill: the schedule line is
+  // optional and blank, so the common case is still the three, and a card
+  // made without touching it reads exactly as one made before there was a
+  // line. What changed is that the hourly default is no longer the only
+  // schedule a card can be given without opening the file.
   show()
   const named = [...host.querySelectorAll("[name]")].map((node) => node.getAttribute("name"))
-  expect(named.sort()).toEqual(["folder", "name", "prompt"])
+  expect(named.sort()).toEqual(["folder", "name", "prompt", "schedule"])
+  expect(field("schedule").value).toBe("")
+  expect(field("schedule").hasAttribute("required")).toBe(false)
 })
 
 test("automatic application is optional and requires an explicit check before saving", async () => {
@@ -150,6 +157,23 @@ test("with nothing to offer, the folder is typed as before", async () => {
   await act(async () => {})
   expect(host.querySelector('select[name="folder-pick"]')).toBeNull()
   expect(field("folder")).not.toBeNull()
+})
+
+test("a schedule typed on the form rides with the card, and a blank one is not sent", async () => {
+  // One line: an interval, the word loop, or a cron line. Blank means the
+  // card says nothing and takes its default, exactly as before.
+  show()
+  type("name", "nightly")
+  type("folder", "../work")
+  type("prompt", "look around")
+  type("schedule", "0 2 * * *")
+
+  await act(async () => {
+    save().click()
+  })
+
+  expect(createTask).toHaveBeenCalledWith("board", "nightly", "../work", "look around", true, undefined, "0 2 * * *")
+  expect(field("schedule").value).toBe("")
 })
 
 test("saving is refused until the folder has been named", () => {

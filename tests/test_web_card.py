@@ -401,11 +401,76 @@ def test_a_three_field_card_says_it_is_plain(tmp_path):
     assert _get(client).json()["plain"] is True
 
 
-def test_a_card_carrying_more_than_the_three_fields_is_not_plain(tmp_path):
-    """A schedule, an isolation, a comment somebody wrote: a form would
-    silently drop them on save, so such a card stays a file on screen."""
+def test_a_one_line_schedule_keeps_a_card_plain_and_reads_back(tmp_path):
+    """The form has a schedule field now, so `every:` or `at:` on one line is
+    something it can show and rebuild. A full `trigger:` block is not."""
     client, cards = _client(tmp_path)
     (cards / "already.yaml").write_text("name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n", encoding="utf-8")
+    body = _get(client).json()
+    assert body["plain"] is True
+    assert body["schedule"] == "15m"
+
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\nat: '0 2 * * *'\n", encoding="utf-8"
+    )
+    body = _get(client).json()
+    assert body["plain"] is True
+    assert body["schedule"] == "0 2 * * *"
+
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\ntrigger: {type: interval, every: 1h, jitter: 5m}\n",
+        encoding="utf-8",
+    )
+    assert _get(client).json()["plain"] is False
+    assert _get(client).json()["schedule"] == ""
+
+
+def test_fields_carry_the_schedule_and_absent_means_unchanged(tmp_path):
+    """Sent, it is written in the card's own spelling; absent, the card keeps
+    the schedule it had, as it keeps its switch; blank, the card drops it and
+    goes back to the default. A schedule reaches a trigger built at startup,
+    so the answer says the edit is not live."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "x", "schedule": "0 3 * * *"},
+    )
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["live"] is False
+    assert yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))["at"] == "0 3 * * *"
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper"},
+    )
+    assert answer.status_code == 200, answer.text
+    assert yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))["at"] == "0 3 * * *"
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper", "schedule": ""},
+    )
+    assert answer.status_code == 200, answer.text
+    written = yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))
+    assert "at" not in written and "every" not in written
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper", "schedule": "whenever"},
+    )
+    assert answer.status_code == 400
+    assert "schedule" in answer.json()["error"]
+
+
+def test_a_card_carrying_more_than_the_form_can_show_is_not_plain(tmp_path):
+    """An isolation, a handoff, a comment somebody wrote: a form would
+    silently drop them on save, so such a card stays a file on screen."""
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\nisolation: {image: python:3.12-slim}\n", encoding="utf-8"
+    )
     assert _get(client).json()["plain"] is False
 
     (cards / "already.yaml").write_text(
@@ -450,7 +515,8 @@ def test_fields_take_the_same_folder_fence_as_text(tmp_path):
 def test_fields_refuse_a_card_that_is_not_plain(tmp_path):
     """The one thing a form must never do is drop what it cannot show."""
     client, cards = _client(tmp_path)
-    kept = "name: Already\nfolder: ../work\nprompt: x\nevery: 15m\n"
+    # A full trigger block, not the one-line schedule the form can show.
+    kept = "name: Already\nfolder: ../work\nprompt: x\ntrigger: {type: interval, every: 1h, jitter: 5m}\n"
     (cards / "already.yaml").write_text(kept, encoding="utf-8")
 
     answer = client.put(

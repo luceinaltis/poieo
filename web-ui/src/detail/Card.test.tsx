@@ -434,6 +434,41 @@ test("a plain card's folder can be chosen from the project", async () => {
   })
 })
 
+test("a plain card shows its schedule, and a changed one is sent and waits for a restart", async () => {
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\nevery: 15m\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: true,
+    schedule: "15m",
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
+  await open()
+
+  const schedule = () => container.querySelector<HTMLInputElement>(".card-field-schedule")!
+  expect(schedule().value).toBe("15m")
+  const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
+  expect(save().disabled).toBe(true)
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(schedule(), "0 2 * * *")
+    schedule().dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(save().disabled).toBe(false)
+  await act(async () => save().click())
+
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    schedule: "0 2 * * *",
+  })
+  expect(container.textContent).toContain("restarts")
+})
+
 test("a card carrying more than the three fields still opens as a file", async () => {
   fetchCard.mockResolvedValue({
     task: "chores",

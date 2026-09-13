@@ -95,7 +95,8 @@ alive with `poieo daemon`. The daemon serves one board for one or more projects.
 
 From the board a user can:
 
-- create a basic task, edit its name, folder and prompt, and switch it on or off;
+- create a basic task, edit its name, folder, prompt and one-line schedule,
+  and switch it on or off;
 - create a task with several steps and conditions without writing YAML;
 - rename a task or set it aside without destroying its file;
 - see task state, graph wiring, model assignments and run history, including
@@ -105,7 +106,8 @@ From the board a user can:
 - inspect available models, declare an answering endpoint and choose which model
   serves a role.
 
-Advanced task fields and editing existing graph wiring remain file-based. New
+Advanced task fields beyond a one-line schedule, and editing existing graph
+wiring, remain file-based. New
 tasks can be written as steps on the board. The standalone graph viewer and
 editor operate on the same graph schema.
 
