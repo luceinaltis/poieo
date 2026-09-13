@@ -87,7 +87,7 @@ async def _record_undo(driver: Any, run_id: str, applied: dict, undo_id: str, st
             "deletions": sum(file["deletions"] for file in report["files"]),
             "message": result.said(),
         }
-        driver.pause()
+        driver.pause(because="paused after undoing an applied change")
         for affected in dict.fromkeys([run_id, *applied.get("run_ids", [])]):
             old = driver.store.summary(affected)
             previous = (old or {}).get("application") or {}
@@ -120,4 +120,6 @@ async def _record_undo(driver: Any, run_id: str, applied: dict, undo_id: str, st
             append_journal(card.journal_path(), "change", result.said(), title=card.name)
         except OSError:
             pass  # The durable run remains available if its journal is unwritable.
+    if outcome["status"] == "applied":
+        driver._say_changed()
     return outcome

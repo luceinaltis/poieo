@@ -90,7 +90,8 @@ Undo names a recorded applied run. It prepares the inverse of that application's
 net file changes against the latest project, checks the current scope and
 verification commands, and records a new run and commit. Conflicts, local edits,
 or failed checks preserve the project. A successful undo marks the application
-`undone` and pauses the task so it cannot immediately repeat the work. Its Git
+`undone` and pauses the task with an undo-specific reason so it cannot immediately
+repeat the work. Once the new run is recorded, open boards refresh that hold. Its Git
 marker prevents a repeated undo from deleting work intentionally added later.
 Undo and later decisions do not consume unread user direction.
 
