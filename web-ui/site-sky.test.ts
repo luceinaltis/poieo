@@ -32,6 +32,7 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   document.body.innerHTML = page.body.innerHTML
   document.documentElement.dataset.theme = "dark"
   localStorage.setItem("poieo.theme", "dark")
+  vi.advanceTimersByTime(0) // flush jsdom's queued storage event
   new Function(script)()
   const sky = document.getElementById("landing-sky")!
   const rise = () => Number(sky.style.getPropertyValue("--sky-rise"))
@@ -65,6 +66,7 @@ test("the landing sun and moon follow local time, survive sleep, and leave the c
   // A light theme at midnight still shows the moon. This is not a theme switch.
   document.documentElement.dataset.theme = "light"
   localStorage.setItem("poieo.theme", "light")
+  vi.advanceTimersByTime(0)
   vi.setSystemTime(new Date(2026, 8, 14, 0, 0))
   window.dispatchEvent(new Event("pageshow"))
   expect(sky.dataset.period).toBe("night")

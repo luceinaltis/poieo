@@ -74,7 +74,14 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-page { position: relative; isolation: isolate; }
 .landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 824px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -1; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; opacity: .4; }
-.hero { min-height: 720px; padding: 84px 0 260px; display: flex; align-items: center; flex-direction: column; text-align: center; }
+.hero { position: relative; min-height: 720px; padding: 84px 0 260px; display: flex; align-items: center; flex-direction: column; text-align: center; }
+.landing-sky { position: absolute; top: 172px; left: 9%; width: clamp(76px, 8.5vw, 122px); --sky-travel: -82px; transform: translateY(calc(var(--sky-rise, 0) * var(--sky-travel))); transition: transform 55s linear; pointer-events: none; }
+.landing-sky svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sky-sun, .sky-moon { display: none; }
+[data-period="day"] .sky-sun { display: inline; fill: var(--accent); }
+[data-period="night"] .sky-moon { display: inline; fill: var(--text); stroke: var(--line); stroke-width: .6; opacity: .82; }
+[data-theme="light"] .sky-moon { fill: var(--raised); stroke: var(--dim); stroke-width: 1.2; }
+.sky-moon .moon-wash { fill: var(--line); stroke: none; opacity: .2; }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }
 .hero .button { margin-top: 30px; }
@@ -189,6 +196,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .bar nav { gap: 18px; }
   .bar .brand-logo { width: 132px; }
   .hero { min-height: 650px; padding: 88px 0 250px; }
+  .landing-sky { top: 24px; left: calc(50% - 26px); width: 52px; --sky-travel: -12px; }
   .hero h1 { font-size: clamp(3.5rem, 9vw, 4.75rem); }
   .landing-art { height: 736px; object-position: right bottom; opacity: .55; }
   .section { padding-block: 56px; }
@@ -227,4 +235,5 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
+  .landing-sky { transition: none; }
 }
