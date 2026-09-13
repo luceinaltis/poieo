@@ -506,12 +506,4 @@ def init_project(root: Path, default_body: str, name: str | None = None) -> list
         joined = existing + ("" if existing.endswith("\n") or not existing else "\n")
         gitignore.write_text(joined + "".join(f"{line}\n" for line in missing), encoding="utf-8")
         report.append(("wrote", ".gitignore"))
-
-    # A generated project that cannot load is an init bug, caught here and not
-    # at 3am -- and a kept, hand-edited poieo.yaml is re-checked too. The one
-    # caller that wants the full depth, and the only reason this module knows
-    # the daemon exists. Late, because DaemonConfig extends ProjectSpec above.
-    from .daemon.config import load_config
-
-    load_config(root / "poieo.yaml")
     return report

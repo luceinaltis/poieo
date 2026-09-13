@@ -326,6 +326,44 @@ def test_init_mock_is_the_deliberate_way_to_get_an_offline_project(tmp_path, mon
     assert "completed" in result.stdout
 
 
+def test_writing_a_project_does_not_load_the_daemon(tmp_path):
+    """The project module sits below the daemon, which extends its spec. Only
+    `poieo init` itself re-reads what was written with the daemon's loader.
+
+    A fresh interpreter, because the suite has imported everything already;
+    ``PYTHONPATH`` pins it to this checkout rather than whatever ``pip install
+    -e`` last pointed at.
+    """
+    import os
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from poieo.project import MOCK_BINDING, init_project\n"
+        f"init_project(Path({str(tmp_path)!r}), MOCK_BINDING)\n"
+        "print(sorted(name for name in sys.modules if name.startswith('poieo.daemon')))\n"
+    )
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]", result.stdout
+
+
+def test_init_refuses_a_kept_marker_that_cannot_load(tmp_path, monkeypatch):
+    """A kept, hand-edited poieo.yaml is re-read with the daemon's loader
+    before init returns: a project that cannot load is found here, not at 3am."""
+    _no_machine(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    _mark(tmp_path, "version: 1\ntasks: does/not/exist\n")
+
+    result = runner.invoke(app, ["init", "--mock"])
+
+    assert result.exit_code == 1
+    assert "tasks folder does not exist" in result.stderr
+
+
 def test_every_engine_found_is_declared_so_a_role_can_name_it(tmp_path, monkeypatch):
     """The point of detection: a pool to bind roles against. A machine with
     two engines that could only ever use one of them is the reason roles
