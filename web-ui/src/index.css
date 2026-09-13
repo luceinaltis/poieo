@@ -90,7 +90,6 @@ html {
 
   --accent: #d8a657;
   --on-accent: #221e18;
-  --serif: Georgia, "Times New Roman", serif;
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -109,7 +108,6 @@ html {
      and the space kept for it are one number or the board slides under it. */
   --panel-width: min(27.5rem, 100vw);
 }
-
 
 [data-theme="light"] {
   color-scheme: light;

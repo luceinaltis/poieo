@@ -61,6 +61,7 @@ def test_site_and_product_keep_the_core_palette_roles():
     site = _dark_tokens(ROOT / "site" / "style.css")
     assert CORE_TOKENS <= product.keys()
     assert CORE_TOKENS <= site.keys()
+    assert {name: site[name] for name in CORE_TOKENS} == {name: product[name] for name in CORE_TOKENS}
     brand = (ROOT / "brand" / "README.md").read_text(encoding="utf-8").lower()
     assert all(colour.lower() in brand for colour in site.values())
     for page in ("index.html", "docs.html", "social.html"):

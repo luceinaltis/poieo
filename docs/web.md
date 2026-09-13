@@ -295,6 +295,8 @@ so status stays distinct from the gold review accent. `ThemeSwitch` follows the
 system preference until the user chooses Light or Dark, saves that choice in
 `poieo.theme` for the browser origin, and updates the browser's theme colour.
 Storage failure does not disable switching. The logo changes with the theme.
+The memory canvas also repaints its colours, preserving the current orbit,
+zoom, and selected entry.
 Hanken Grotesk and DM Mono ship with the board for offline use; decorative wash
 art and serif headings belong to the public website, not the working board.
 The visual reference and asset list live in [the brand guide](../brand/README.md).

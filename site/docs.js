@@ -216,6 +216,13 @@ function render(md, toc) {
 const article = document.getElementById("doc")
 const nav = document.getElementById("doc-nav")
 
+// Hashes select documents. Skipping the navigation must keep that selection.
+document.querySelector(".skip-link")?.addEventListener("click", (event) => {
+  event.preventDefault()
+  article.focus({ preventScroll: true })
+  article.scrollIntoView()
+})
+
 function route() {
   const [id, anchor] = location.hash.replace("#", "").split("/")
   return { id: DOCS.has(id) ? id : DEFAULT, anchor: anchor || null }
