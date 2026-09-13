@@ -98,7 +98,8 @@ async def check_and_apply(
                     raise
     finally:
         forwarding.cancel()
-        await asyncio.gather(forwarding, return_exceptions=True)
+        # Cleanup must not hide a completed write from the caller recording it.
+        await finish_write(asyncio.gather(forwarding, return_exceptions=True))
 
 
 async def _check_and_apply(
