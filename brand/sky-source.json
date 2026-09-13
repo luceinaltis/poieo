@@ -1,0 +1,25 @@
+{
+  "generator": "ChatGPT Image (built-in image_gen tool)",
+  "created": "2026-09-13",
+  "use": "Photographic celestial bodies composited on the landing's existing wash landscape. Decorative local-clock convention, not astronomical or lunar-phase data.",
+  "assets": {
+    "moon": {
+      "path": "site/img/moon.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: isolated transparent PNG for the poieo website, square 1024 by 1024. Create a single beautiful realistic nearly full moon, viewed from Earth through a clear night, centered. The luminous ivory lunar disc occupies about 60 percent of the image width. Recognizable but delicate natural maria and crater details, softly luminous highlights, subtle warm silver coloration rather than blue, photographic realism. Surround the disc with a restrained feather-soft moonlight halo that fades out entirely into TRUE TRANSPARENCY; retain transparent alpha throughout the empty background. The disc should feel like a distant moon glowing in the night, not a shaded 3D stone sphere. This will be composited over an ink-black Korean landscape painting on a website; the moon itself must be photographic, calm and convincing. No landscape, no sky rectangle, no stars, no typography, no illustration outline, no crescent icon, no decorative rings, no watermark, no checkerboard pattern. Produce exactly one moon asset, no presentation board.",
+      "format": "PNG",
+      "width": 1254,
+      "height": 1254,
+      "alpha": "Preserved from original generated asset; no raster edits.",
+      "sha256": "27752759b3066e3b10a9f4c822f6efe2ea483bb3c40eefb7513b6a2071be3aee"
+    },
+    "sun": {
+      "path": "site/img/sun.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: isolated transparent PNG for the poieo website, square 1024 by 1024. Create a single realistic sun as seen from Earth in soft atmospheric haze, centered, its circular disc occupying about 60 percent of the image width. Photographic long-lens appearance: luminous pale-gold center, warmer honey-gold towards the soft edge, extremely subtle solar surface variation. A small restrained warm atmospheric bloom fades entirely into TRUE TRANSPARENCY; the empty background must have real transparent alpha. It will sit on warm ivory paper beside a Korean ink-and-wash landscape, so use quiet natural light and a refined muted gold, not saturated orange. No dramatic flame texture, no fireball, no cartoon rays, no drawn outlines, no decorative rings, no lens flare streaks, no landscape, no sky rectangle, no stars, no text or watermark, no checkerboard pattern. Produce exactly one isolated sun asset, no presentation board.",
+      "format": "PNG",
+      "width": 1254,
+      "height": 1254,
+      "alpha": "Preserved from original generated asset; no raster edits.",
+      "sha256": "6c7e2568a62b8da28bf7dc447795bd5d3e8e8fc598949689903505b303701365"
+    }
+  }
+}

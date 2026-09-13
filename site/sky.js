@@ -4,6 +4,7 @@
   const sky = document.getElementById("landing-sky");
   if (!sky) return;
   let timer;
+  let previous;
 
   function pause() {
     clearTimeout(timer);
@@ -20,7 +21,16 @@
     const progress = (day ? clock - 360 : (clock + 360) % 1440) / 720;
     const time = String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
 
-    sky.dataset.period = day ? "day" : "night";
+    const period = day ? "day" : "night";
+    // Do not animate a whole crossing when the body changes or a sleeping tab returns.
+    sky.classList.toggle("sky-jump", sky.dataset.period !== period || previous === undefined || Math.abs(clock - previous) > 1);
+    previous = clock;
+    if (sky.dataset.period !== period) {
+      const body = sky.querySelector("img");
+      if (body) body.src = day ? "img/sun.png" : "img/moon.png";
+    }
+    sky.dataset.period = period;
+    sky.style.setProperty("--sky-progress", progress.toFixed(4));
     sky.style.setProperty("--sky-rise", Math.sin(progress * Math.PI).toFixed(4));
     sky.setAttribute("aria-label", `${day ? "Sun" : "Moon"} at ${time}, your local time`);
     sky.hidden = false;

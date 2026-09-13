@@ -46,7 +46,7 @@ html { scroll-padding-top: 7rem; }
 body { margin: 0; background: var(--ground); color: var(--text); font: 1.0625rem/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 4px; }
 a:hover { color: var(--ember); }
-button { font: inherit; }
+button, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--ember); outline-offset: 5px; }
 img { max-width: 100%; height: auto; }
@@ -67,21 +67,22 @@ pre code { font-size: 0.875rem; line-height: 1.8; }
 .bar nav { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 28px; font-size: 0.9375rem; }
 .bar nav a { text-decoration: none; }
 .bar nav a[aria-current="page"] { text-decoration: underline; text-underline-offset: 7px; }
-.theme-flip { background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 24px; padding: 5px 13px; min-height: 36px; font-size: 0.875rem; cursor: pointer; }
-.theme-flip:hover { border-color: var(--ember); color: var(--text); }
+.theme-mode { background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 24px; padding: 5px 13px; min-height: 36px; font-size: 0.875rem; cursor: pointer; }
+.theme-mode option { background: var(--ground); color: var(--text); }
+.theme-mode:hover { border-color: var(--ember); color: var(--text); }
 main, .footer { max-width: var(--column); margin-inline: auto; }
 .section { padding-block: 88px; }
 .landing-page { position: relative; isolation: isolate; }
-.landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 824px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -1; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
+.landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -1; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; opacity: .4; }
-.hero { position: relative; min-height: 720px; padding: 84px 0 260px; display: flex; align-items: center; flex-direction: column; text-align: center; }
-.landing-sky { position: absolute; top: 172px; left: 9%; width: clamp(76px, 8.5vw, 122px); --sky-travel: -82px; transform: translateY(calc(var(--sky-rise, 0) * var(--sky-travel))); transition: transform 55s linear; pointer-events: none; }
-.landing-sky svg { display: block; width: 100%; height: auto; overflow: visible; }
-.sky-sun, .sky-moon { display: none; }
-[data-period="day"] .sky-sun { display: inline; fill: var(--accent); }
-[data-period="night"] .sky-moon { display: inline; fill: var(--text); stroke: var(--line); stroke-width: .6; opacity: .82; }
-[data-theme="light"] .sky-moon { fill: var(--raised); stroke: var(--dim); stroke-width: 1.2; }
-.sky-moon .moon-wash { fill: var(--line); stroke: none; opacity: .2; }
+.hero { position: relative; min-height: 800px; padding: 224px 0 200px; display: flex; align-items: center; flex-direction: column; text-align: center; }
+.landing-sky { position: absolute; top: calc(204px - var(--sky-rise, 0) * 128px); left: calc(8% + var(--sky-progress, 0) * 84%); width: 144px; aspect-ratio: 1; transform: translate(-50%, -50%); transition: left 55s linear, top 55s linear; pointer-events: none; }
+.landing-sky.sky-jump { transition: none; }
+.sky-body { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
+.landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; opacity: 0; background: rgb(240 231 217 / .06); box-shadow: 0 0 64px 40px rgb(240 231 217 / .08); }
+[data-theme="dark"] .landing-sky[data-period="night"]::before { opacity: 1; }
+[data-theme="dark"] .landing-sky[data-period="night"] .sky-body { filter: drop-shadow(0 0 12px rgb(240 231 217 / .28)); }
+[data-theme="light"] .landing-sky[data-period="night"] .sky-body { filter: brightness(.82); }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }
 .hero .button { margin-top: 30px; }
@@ -185,6 +186,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .docs-layout { grid-template-columns: 200px minmax(0, 1fr); gap: 40px; }
 }
 @media (max-width: 1099px) {
+  .landing-sky { top: calc(180px - var(--sky-rise, 0) * 112px); width: 120px; }
   .section-heading { gap: 40px; }
   .principles { gap: 28px; }
   .start { gap: 48px; }
@@ -195,10 +197,10 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .bar { min-height: 86px; }
   .bar nav { gap: 18px; }
   .bar .brand-logo { width: 132px; }
-  .hero { min-height: 650px; padding: 88px 0 250px; }
-  .landing-sky { top: 24px; left: calc(50% - 26px); width: 52px; --sky-travel: -12px; }
+  .hero { min-height: 730px; padding: 176px 0 250px; }
+  .landing-sky { top: calc(108px - var(--sky-rise, 0) * 48px); left: calc(18% + var(--sky-progress, 0) * 64%); width: 112px; }
   .hero h1 { font-size: clamp(3.5rem, 9vw, 4.75rem); }
-  .landing-art { height: 736px; object-position: right bottom; opacity: .55; }
+  .landing-art { height: 816px; object-position: right bottom; opacity: .55; }
   .section { padding-block: 56px; }
   .section-heading { grid-template-columns: 1fr; gap: 20px; }
   .principles { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }
@@ -223,14 +225,15 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .bar nav { gap: 14px; font-size: 0.875rem; }
   .bar .brand-logo { width: 104px; }
   .docs-page .bar nav a[href="./"] { display: none; }
-  .theme-flip { font-size: 0.8125rem; padding: 4px 10px; }
+  .theme-mode { font-size: 0.8125rem; padding: 4px 10px; }
   .hero h1 { font-size: clamp(3rem, 13vw, 3.5rem); }
   .descriptor { font-size: 1.0625rem; max-width: 27ch; }
   .setup-step pre, .doc-body pre { padding: 16px; }
   .pager { gap: 16px; }
 }
 @media (pointer: coarse) {
-  .bar a, .theme-flip { min-height: 44px; display: inline-flex; align-items: center; }
+  .bar a, .theme-mode { min-height: 44px; }
+  .bar a { display: inline-flex; align-items: center; }
   .doc-nav a { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
