@@ -142,3 +142,19 @@ test("expansion controls follow the visible card title, including a title edited
   toggle("Draft").click()
   expect(toggle("Draft").getAttribute("aria-label")).toBe("Expand steps in Polish the reply")
 })
+
+test.each([false, true])("editing a card title preserves its focused input (expanded: %s)", open => {
+  if (open) toggle("Review").click()
+  const input = card("Review").querySelector<HTMLElement>('[data-port="input"]')!
+  const scene = card("Review").querySelector(".basic-step-scene")
+  input.focus()
+  handle.update(initialStage([source, { ...task("Review"), title: "Check before sending" }, task("Other")]))
+  expect(card("Review").querySelector('[data-port="input"]')).toBe(input)
+  expect(card("Review").querySelector(".basic-step-scene")).toBe(scene)
+  expect(document.activeElement).toBe(input)
+  expect(card("Draft").dataset.linked).toBe("true")
+  expect(card("Review").dataset.linked).toBe("true")
+  expect(card("Other").dataset.linked).toBe("false")
+  expect(card("Review").querySelector(".basic-inside")?.getAttribute("aria-label"))
+    .toBe("Step connections in Check before sending")
+})
