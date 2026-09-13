@@ -453,6 +453,7 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
 }
 
 type AttentionKind =
+  | "held"
   | "answer"
   | "review"
   | "restart"
@@ -463,12 +464,14 @@ function attentionOf({
   asking,
   pending,
   stale,
+  heldBecause,
   status,
   latest,
 }: {
   asking: Asked | null
   pending: number
   stale: string | null
+  heldBecause: string | null
   status: string
   latest: RunSummary | null
 }): { kind: AttentionKind; text: string } {
@@ -480,6 +483,10 @@ function attentionOf({
     }
   }
   if (stale) return { kind: "restart", text: "Restart needed" }
+  // Ahead of the failed run: a task that paused itself after three of them
+  // has one thing to say, and it is why it stopped, not that the last one
+  // failed too. The sentence itself is drawn below, whole.
+  if (status === "paused" && heldBecause) return { kind: "held", text: "Paused" }
   if (
     status === "error" ||
     (latest && latest.status !== "completed" && latest.status !== "asking")
@@ -645,6 +652,7 @@ export const Drawer = memo(function Drawer({
   status = "waiting",
   enabled = true,
   stale = null,
+  heldBecause = null,
   pending = 0,
   into = null,
   asking = null,
@@ -662,6 +670,8 @@ export const Drawer = memo(function Drawer({
   enabled?: boolean
   /** Why the card file and the running task disagree, or null. */
   stale?: string | null
+  /** Why the task is held, in the daemon's own words, or null. */
+  heldBecause?: string | null
   pending?: number
   into?: string | null
   asking?: Asked | null
@@ -773,7 +783,7 @@ export const Drawer = memo(function Drawer({
 
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
-  const attention = attentionOf({ asking, pending, stale, status, latest: latestRun })
+  const attention = attentionOf({ asking, pending, stale, heldBecause, status, latest: latestRun })
   const timelineEvents = events ? visibleTimelineEvents(events) : null
   const reviewRunId =
     !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
@@ -860,6 +870,16 @@ export const Drawer = memo(function Drawer({
         {stale ? (
           <p className="drawer-stale" role="status">
             {stale}
+          </p>
+        ) : null}
+
+        {/* Why it is not running, above the button that would start it. A
+            pause the reader pressed says so too, which is the honest sentence
+            beside a resume button; the ones worth the room are the holds
+            nobody pressed. */}
+        {status === "paused" && heldBecause ? (
+          <p className="drawer-held" role="status">
+            {heldBecause}
           </p>
         ) : null}
 

@@ -42,6 +42,12 @@ export interface TaskState {
   /** Whether a hold is on, even while the run it was pressed during finishes. */
   held: boolean
   /**
+   * Why, in the daemon's own words, or "" while it says nothing. Like `stale`,
+   * the empty string rather than null: a view asks it the way it asks every
+   * other line on a card whether it has anything to say.
+   */
+  heldBecause: string
+  /**
    * Whether the card file lets this task run at all.
    *
    * Beside `status` rather than a fifth value of it: it is stopped either way,
@@ -160,6 +166,7 @@ function createEmptyTaskState(): TaskState {
   return {
     status: "waiting",
     held: false,
+    heldBecause: "",
     enabled: true,
     stale: "",
     pending: 0,
@@ -240,6 +247,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       trigger: row.trigger,
       status: drawnStatus(row),
       held: row.holding,
+      heldBecause: row.held_because ?? "",
       enabled: row.enabled,
       stale: row.stale ?? "",
       pending: row.pending,

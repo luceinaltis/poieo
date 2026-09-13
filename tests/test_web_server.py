@@ -74,6 +74,7 @@ def stub_runner(
     name="triage",
     status="waiting",
     holding=False,
+    held_because=None,
     armed=True,
     stale=None,
     current=None,
@@ -88,6 +89,7 @@ def stub_runner(
         config=None,
         status=status,
         holding=holding,
+        held_because=held_because,
         armed=armed,
         stale=stale,
         current_run_id=current,
@@ -116,6 +118,7 @@ def test_flows_lists_runner_state(tmp_path):
             "trigger": "interval 30s",
             "status": "waiting",
             "holding": False,
+            "held_because": None,
             "enabled": True,
             "stale": None,
             "current_run_id": None,
@@ -159,6 +162,17 @@ def test_flows_lists_runner_state(tmp_path):
             },
         }
     ]
+
+
+def test_the_board_is_told_why_a_task_is_held(tmp_path):
+    """A hold with no reason on it reads as a button somebody forgot to press."""
+    why = "paused after 3 identical failures: the model endpoint did not answer"
+    daemon = stub_daemon(tmp_path, [stub_runner(status="paused", holding=True, held_because=why)])
+    client = TestClient(create_app(daemon))
+
+    row = client.get("/api/tasks").json()["tasks"][0]
+    assert row["holding"] is True
+    assert row["held_because"] == why
 
 
 def test_a_flow_serves_the_handoffs_it_declared(tmp_path):

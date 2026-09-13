@@ -149,6 +149,13 @@ Repeated identical failures pause a task after the safety threshold
 instead of spending indefinitely. A successful run or a run waiting on a
 question clears the consecutive-failure sequence. Resume clears it as well.
 
+Every hold carries its reason in the runner's own words: a pause from the
+board, the repeated failure and what it said, the change that could not be
+applied, or the spend limit reached. The listing serves it beside the hold
+flag, and a hold the task puts on itself announces `tasks_changed` so an open
+board rereads the listing instead of drawing a parked task as one waiting its
+turn.
+
 ## Questions and handoffs
 
 A confirm node produces `{node, question, choices}` and status `asking`. The

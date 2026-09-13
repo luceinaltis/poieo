@@ -186,6 +186,29 @@ def _change_message(result: RunResult, task: str) -> str:
 # failing identically is noise, not resilience.
 PAUSE_AFTER = 3
 
+
+def _application_hold(result: RunResult) -> str:
+    """Why a task stopped over a change it could not apply, in one sentence.
+
+    The application record says it in fields -- a conflict list, files outside
+    the permission, a check that failed, a stale copy -- and the board wants
+    the one the reader has to act on, said as words.
+    """
+    outcome = result.application or {}
+    what = "its change could not be applied"
+    if outcome.get("conflict"):
+        what = "its change conflicts with the project in " + ", ".join(outcome["conflict"])
+    elif outcome.get("outside_scope"):
+        what = "its change edits files outside the allowed paths: " + ", ".join(outcome["outside_scope"])
+    elif outcome.get("dirty"):
+        what = "the project has unsaved edits in " + ", ".join(outcome["dirty"])
+    elif outcome.get("stale"):
+        what = f"its change could not be applied: {outcome['stale']}"
+    elif outcome.get("error"):
+        what = f"its change could not be applied: {outcome['error']}"
+    return f"paused because {what}; retry or keep it paused from the board"
+
+
 # How many finished runs a runner keeps in memory. A RunResult carries the
 # run's whole outputs and state, and only the tail is ever read; a loop task
 # would otherwise accumulate every output for the daemon's lifetime.
@@ -301,6 +324,13 @@ class TaskRunner:
         # than by a run, because a card edited at noon whose task fires at 3am
         # would otherwise keep its old schedule all day with nothing to say so.
         self.stale: str | None = None
+        # Why this task is not running right now, in the daemon's own words,
+        # or None while nothing is holding it. A pause from the board, a
+        # pause the task put on itself after repeated failures, a change that
+        # could not be applied, a spend limit reached: every one of them used
+        # to reach the board as one boolean, and a hold with no reason on it
+        # reads as a button somebody forgot to press.
+        self.held_because: str | None = None
         # Consecutive failures sharing one cause; a completed run resets it.
         self._repeat_key: str | None = None
         self._repeat_count: int = 0
@@ -596,13 +626,20 @@ class TaskRunner:
 
     # -- the control seam: the board's three verbs ---------------------------
 
-    def pause(self) -> str:
-        """Hold the schedule. Takes effect between runs; due fires are skipped."""
+    def pause(self, because: str | None = "paused from the board") -> str:
+        """Hold the schedule. Takes effect between runs; due fires are skipped.
+
+        `because` is what the board will say for it. The default is the
+        button; a caller holding a task for a reason the card already tells --
+        switched off, set aside, renamed -- passes None, so the board does not
+        report a press nobody made.
+        """
         if not self.armed:
             # Already stopped, by the file rather than by anyone here. Saying
             # so beats reporting a pause nothing could undo.
             return self.status
         self._hold = True
+        self.held_because = because
         if self.status == "waiting":
             self.status = "paused"
         self._wake.set()
@@ -622,6 +659,7 @@ class TaskRunner:
         if not self.armed:
             return self.status
         self._hold = False
+        self.held_because = None
         self._repeat_key, self._repeat_count = None, 0
         if self.status == "paused":
             self.status = "waiting"
@@ -644,6 +682,17 @@ class TaskRunner:
     def holding(self) -> bool:
         """Whether a hold is on -- by hand, or by this task's own failures."""
         return self._hold
+
+    def _say_changed(self) -> None:
+        """Tell every open page to read the listing again.
+
+        A hold the runner puts on itself rides in no run frame: the summary
+        that ends the run says the run failed, not that the task then stopped.
+        The board learned that only on its next reconnect, and drew a task
+        that had parked itself as one waiting for its next turn.
+        """
+        if isinstance(self.store, BroadcastStore):
+            self.store.announce({"type": "tasks_changed", "project": self.config.display_name})
 
     def hand(self, handoff: Handoff) -> Handoff | None:
         """Take a handoff, and say which one it displaced.
@@ -797,7 +846,9 @@ class TaskRunner:
         held_back = self._over_budget()
         if held_back is not None:
             log.warning("task '%s': %s", self.name, held_back)
-            self.status = "over budget"
+            if self.held_because != held_back:
+                self.status, self.held_because = "over budget", held_back
+                self._say_changed()
             return True
 
         handed, self._handed = self._handed, None
@@ -846,6 +897,10 @@ class TaskRunner:
         run_id = new_run_id()
         self._run_input = payload
         self.status, self.current_run_id = "running", run_id
+        # Whatever was holding it back has let go -- a spend window that aged
+        # out never says so on its own.
+        if not self._hold:
+            self.held_because = None
         try:
             async with self._private_copy():
                 workdir = await self._open_change()
@@ -954,6 +1009,8 @@ class TaskRunner:
             # coroutine has to stay alive for resume() to have anyone to wake.
             self._hold = True
             self.status = "paused"
+            self.held_because = f"paused after {PAUSE_AFTER} identical failures: {said}"
+            self._say_changed()
         return True
 
     def _asking_path(self) -> Path | None:
@@ -993,6 +1050,7 @@ class TaskRunner:
         if (self._asking.asked or {}).get("node") == "apply_changes":
             self._hold = True
             self.status = "paused"
+            self.held_because = _application_hold(self._asking)
 
     def _keep_question(self) -> None:
         """Write the outstanding question down, or forget it once answered."""
@@ -1035,6 +1093,8 @@ class TaskRunner:
         if (result.asked or {}).get("node") == "apply_changes":
             self._hold = True
             self.status = "paused"
+            self.held_because = _application_hold(result)
+            self._say_changed()
         self._keep_question()
         log.info(
             "task '%s' run %s is waiting on you: %s [%s]",
@@ -1446,7 +1506,7 @@ class Daemon:
         if not task.spec.enabled:
             # In place: its coroutine is live, and parking one is what a hold
             # is for. `armed` last, so `pause()` still applies to it.
-            runner.pause()
+            runner.pause(because=None)
             runner.armed = False
             runner.status = "paused"
             log.info("task '%s' was switched off in its card", task.spec.name)
@@ -1458,6 +1518,7 @@ class Daemon:
         # what it is holding for no gain.
         runner.armed = True
         runner._hold = False
+        runner.held_because = None
         runner.status = "waiting"
         log.info("task '%s' was switched on in its card", task.spec.name)
         return runner

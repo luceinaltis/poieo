@@ -19,6 +19,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    held_because: null,
     enabled: true,
     stale: null,
     current_run_id: null,
@@ -36,6 +37,7 @@ const TASK_ROWS: TaskRow[] = [
     trigger: "loop",
     status: "waiting",
     holding: false,
+    held_because: null,
     enabled: true,
     stale: null,
     current_run_id: null,
@@ -468,6 +470,15 @@ test("a task still knows what it is called, whatever it is filed under", () => {
 test("a paused task is not folded into waiting", () => {
   const stage = initialStage([{ ...TASK_ROWS[0], status: "paused", holding: true }])
   expect(stage.tasks["board/chores"].status).toBe("paused")
+})
+
+test("why a task is held rides along with that it is", () => {
+  const why = "paused after 3 identical failures: the endpoint did not answer"
+  const stage = initialStage([{ ...TASK_ROWS[0], status: "paused", holding: true, held_because: why }])
+  expect(stage.tasks["board/chores"].heldBecause).toBe(why)
+  // An older daemon says nothing about why; the board must not read that as a sentence.
+  const older = initialStage([{ ...TASK_ROWS[0], status: "paused", holding: true, held_because: undefined as any }])
+  expect(older.tasks["board/chores"].heldBecause).toBe("")
 })
 
 test("a task held back by its budget reads as paused too", () => {

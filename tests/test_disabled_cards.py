@@ -164,6 +164,8 @@ async def test_switching_one_off_in_its_file_stops_it(tmp_path, monkeypatch):
     assert _named(daemon, "sleeper").status == "paused"
     assert _named(daemon, "sleeper").run_now() is False
     assert _named(daemon, "sleeper").stale is None
+    # The card says why; a reason on the runner would be a press nobody made.
+    assert _named(daemon, "sleeper").held_because is None
     await down(daemon, task)
 
 

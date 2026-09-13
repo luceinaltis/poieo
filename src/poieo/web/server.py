@@ -483,6 +483,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # it on the way out and drew a stopped task as a waiting
                     # one until somebody reloaded the page.
                     "holding": runner.holding,
+                    # And why, in the daemon's own words, or null. A hold the
+                    # task put on itself -- three identical failures, a
+                    # change it could not apply, a spend limit reached -- is
+                    # not the same thing as a pause somebody pressed, and the
+                    # board could not tell them apart from the boolean.
+                    "held_because": runner.held_because,
                     # Whether the *file* lets this task run. A switched-off
                     # card draws as stopped like a paused one, and the two are
                     # opposite kinds of stopped: a pause is runtime state the
@@ -1255,7 +1261,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # over a bare app) simply has no schedule to stop.
         runner = _runner_for(daemon, project.config.display_name, spec.slug)
         if runner is not None:
-            runner.pause()
+            # No reason on it: the card fold has already said the task is
+            # set aside, and "paused from the board" would be a press nobody made.
+            runner.pause(because=None)
 
         return JSONResponse({"ok": True, "task": spec.slug, "kept": str(kept)})
 
@@ -1332,7 +1340,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
         runner = _runner_for(daemon, project.config.display_name, spec.slug)
         if runner is not None:
-            runner.pause()
+            runner.pause(because=None)
 
         return JSONResponse({"ok": True, "task": slug, "path": str(moved)})
 
