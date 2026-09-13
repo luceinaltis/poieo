@@ -21,8 +21,10 @@ function svg(tag: string, attrs: Record<string, string>) {
   return el
 }
 
-export function drawCardSteps(container: HTMLElement, task: TaskState) {
+export function drawCardSteps(container: HTMLElement, task: TaskState, receives = false) {
   const shape = task.shape
+  const sends = task.then.some(way => way.to !== null)
+  const connected = receives || sends
   const nodes = new Map(shape.nodes.map(node => [node.id, node]))
   const names = new Map<string, number>()
   for (const node of shape.nodes) names.set(stepName(node), (names.get(stepName(node)) ?? 0) + 1)
@@ -71,9 +73,23 @@ export function drawCardSteps(container: HTMLElement, task: TaskState) {
     graph.setEdge(from, to, size, String(edges.length))
     edges.push({ from, to, description, label, source })
   }
-  if (nodes.has(shape.entry)) {
-    add("start", html("span", "basic-step-start", "Start"), 60, 24)
-    connect("start", keyOf(shape.entry), `Start → ${nameOf(shape.entry)}`)
+  if (nodes.has(shape.entry) || receives) {
+    const input = html("span", "basic-step-start", receives ? "Input" : "Start")
+    if (receives) {
+      input.dataset.port = "input"
+      input.tabIndex = 0
+      input.title = "The sending task's completed run is received here."
+    }
+    add("start", input, 60, 24)
+    if (nodes.has(shape.entry)) connect("start", keyOf(shape.entry), `${receives ? "Input" : "Start"} → ${nameOf(shape.entry)}`)
+  }
+  if (sends) {
+    const output = html("span", "basic-step-output", "Output")
+    output.dataset.port = "output"
+    output.tabIndex = 0
+    output.title = "This completed run's results, state and answer are passed to the next task."
+    output.append(html("small", "", "Run result"))
+    add("output", output, 100, 44)
   }
   for (const id of walk(shape)) {
     const ways = waysOut(nodes.get(id)!)
@@ -84,7 +100,13 @@ export function drawCardSteps(container: HTMLElement, task: TaskState) {
       if (way.label && !way.fallback) conditionNumber++
       if (way.to !== null && !nodes.has(way.to)) continue
       const to = way.to === null ? `end:${id}:${index}` : keyOf(way.to)
-      if (way.to === null) add(to, html("span", "basic-step-end", "End run"), 68, 26)
+      if (way.to === null) {
+        add(to, html("span", "basic-step-end", "End run"), 68, 26)
+        if (sends) {
+          const answer = nodes.get(id)!.type === "confirm" ? html("span", "basic-step-condition", "After answer") : undefined
+          connect(to, "output", `End run → Output${answer ? ": After answer" : ""}`, answer)
+        }
+      }
       const condition = way.fallback ? "Otherwise" : way.label ? `${ordered ? `${conditionNumber}. ` : ""}If ${way.label}` : ""
       const label = condition ? html("span", "basic-step-condition", condition) : undefined
       if (ordered && label) label.title = "The first matching condition chooses the next step."
@@ -92,10 +114,17 @@ export function drawCardSteps(container: HTMLElement, task: TaskState) {
       connect(keyOf(id), to, description, label, id)
     }
   }
+  if (sends) task.then.forEach((way, index) => {
+    if (way.to !== null) return
+    const end = `handoff-end:${index}`
+    add(end, html("span", "basic-step-end", "Stop here"), 76, 26)
+    const label = `${task.then.length > 1 ? `${index + 1}. ` : ""}${way.label}`
+    connect("output", end, `Output → Stop here: ${label}`, html("span", "basic-step-condition", label))
+  })
   dagre.layout(graph)
   const room = (container.parentElement?.clientWidth || 310) - 2
   // Conditions can use more lines before the graph needs to use smaller type.
-  if ((graph.graph().width ?? 0) > room) {
+  if (!connected && (graph.graph().width ?? 0) > room) {
     edges.forEach((edge, index) => {
       if (!edge.label) return
       edge.label.style.width = "66px"
@@ -126,7 +155,8 @@ export function drawCardSteps(container: HTMLElement, task: TaskState) {
   }
   const width = graph.graph().width ?? 0, height = graph.graph().height ?? 0
   // Keep type readable for unusually wide forks; the card owns that scrolling.
-  const scale = width ? Math.min(1, Math.max(0.9, room / width)) : 1
+  const scale = !connected && width ? Math.min(1, Math.max(0.9, room / width)) : 1
   Object.assign(scene.style, { width: `${width}px`, height: `${height}px`, transform: `scale(${scale})`, transformOrigin: "0 0" })
   Object.assign(container.style, { width: `${Math.ceil(width * scale)}px`, height: `${Math.ceil(height * scale)}px`, marginInline: "auto" })
+  return Math.ceil(width * scale)
 }

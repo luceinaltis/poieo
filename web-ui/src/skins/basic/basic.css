@@ -90,7 +90,18 @@
   pointer-events: none;
   width: 100%;
   height: 100%;
+  z-index: 2;
 }
+
+.basic-connection { cursor: pointer; outline: none; }
+.basic-connection-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; }
+.basic-connection :is(.basic-wire, .basic-socket, .basic-tip) { pointer-events: stroke; }
+.basic-connection .basic-word { pointer-events: auto; }
+.basic-connection[data-return="true"] .basic-wire { stroke-dasharray: 5 4; }
+.basic-connection[data-active="false"] { opacity: 0.2; }
+.basic-connection:is([data-active="true"], :focus-visible) .basic-wire { stroke-width: 3; }
+.basic-task[data-linked="false"] { opacity: 0.4; }
+.basic-task[data-linked="true"] { outline: 2px solid var(--ember); outline-offset: 2px; }
 
 /* The most important line on the board: it is the one that says where a run
    ends. Drawn at the weight of a border it read as one, and a reader could
@@ -110,9 +121,7 @@
   fill: var(--ember);
 }
 
-/* Where a handoff leaves. Filled with the page and ringed, so it reads as a
-   socket on the border rather than a blob against it -- and so the pair with
-   the head at the far end is unmistakable. */
+/* An open socket leaves Output; a filled arrow enters the next Input. */
 .basic-socket {
   fill: var(--ground);
   stroke: var(--ember);
@@ -135,9 +144,7 @@
 
 .basic-task {
   position: absolute;
-  /* Width is set from BOX.width, and border-box makes that the width the
-     reader sees. Declared here it was 260 plus padding plus border = 286,
-     and every arrow's arithmetic was 26px wrong about where a box ends. */
+  /* Layout includes padding and borders when reserving space for a graph. */
   box-sizing: border-box;
   /* Lifted off the page rather than tinted like it. At one step from the
      background a border stopped reading as a thing on a board and started
@@ -379,6 +386,32 @@
   outline-offset: 2px;
 }
 
+/* A handoff must visibly touch the graph, so connected graphs use their full size. */
+.basic-task[data-connected="true"] .basic-inside {
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.basic-step-output {
+  position: absolute;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 5px 10px;
+  border: 1px solid var(--ember);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  font: 600 13px/16px var(--sans);
+  text-align: center;
+}
+.basic-step-output small { display: block; color: var(--dim); font-size: 10px; font-weight: 400; }
+.basic-step-start[data-port="input"] { border-color: var(--ember); }
+.basic [data-port]:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
+
 .basic-step-scene { position: relative; }
 .basic-step-wires { position: absolute; inset: 0; overflow: visible; }
 .basic-step-wire { color: var(--dim); }
@@ -458,13 +491,6 @@
 .basic-node[data-here="true"] .basic-node-model {
   color: var(--ember);
 }
-
-/* Where a handoff leaves from used to be marked here too, in the arrow's own
-   colour. It is not any more: the arrow now carries a **socket** on the border
-   it leaves, drawn where it actually leaves, which says the same thing where a
-   reader is already looking. Two marks for one fact only made the amber cheap
-   -- and amber is worth keeping expensive, because it means a condition chose
-   this path. */
 
 /* One row, always, for the same reason as the line above: a tool call is a
    thing that happens mid-run, and the border must not jump when it does. The
