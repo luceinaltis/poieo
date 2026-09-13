@@ -61,9 +61,10 @@ the component that writes a file creates its parent.
 
 `poieo init` writes a marker, detected default binding, mock binding, disabled
 sample task, long-term memory database, agent instructions, and ignore rules.
-It never overwrites an existing file and validates the resulting project before
-returning. `--mock` produces a runnable offline binding when no real endpoint
-should be selected.
+It never overwrites an existing file, and the command re-reads the resulting
+project with the daemon's loader before returning; `project.py` itself does not
+know the daemon, whose configuration extends the project spec. `--mock`
+produces a runnable offline binding when no real endpoint should be selected.
 
 Initial model detection probes known candidates concurrently and writes only
 the endpoints that answer. It records model ids and any context, size, or price

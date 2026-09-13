@@ -253,6 +253,12 @@ def init(
         reason = f"{engine.known_as} -- {engine.models[0]}"
 
     report = init_project(Path.cwd(), body, name=name)
+    # A generated project that cannot load is an init bug, caught here and not
+    # at 3am -- and a kept, hand-edited poieo.yaml is re-checked too. Here
+    # rather than in init_project: this is the one caller that wants the full
+    # depth, and the project module cannot know the daemon, whose config
+    # extends its spec.
+    load_config(Path.cwd() / "poieo.yaml")
     for action, relative in report:
         line = f"{action}  {relative}"
         if relative == "models/default.yaml":
