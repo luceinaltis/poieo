@@ -33,11 +33,28 @@ branch is reset, so partial work does not mix with acceptable work.
 `diff(base, head)` returns per-file status and counts plus a bounded patch;
 binary files remain listed and an oversized patch is marked truncated.
 
-`accept(through)` is the only write to the user's checked-out branch. It refuses
-tracked local changes. It fast-forwards when possible, otherwise performs a
-no-commit merge and creates one acceptance commit. A conflict is aborted and
-returned as a path list with the checkout restored. `through` allows accepting
-only up to a selected run.
+`accept(through)` refuses tracked local changes and changes that no longer
+belong to the task. It prepares the combined result in a disposable private
+copy, then fast-forwards the user's branch to that exact result. A divergent
+history receives an acceptance commit in the private copy; even a conflicting
+merge never touches the user's checkout. `through` accepts only up to a
+selected run.
+
+`prepare_accept()` exposes that private result for verification before
+`apply_prepared()` applies it. The latter rechecks the user's branch identity,
+commit and local edits, the task's ownership of the change, and the candidate's
+commit and tracked files. If any changed, the result must be prepared and
+checked again. A same-file overlap may merge cleanly; only checking the combined
+result can establish whether its behavior still works.
+
+Applying and discarding use a lock in the repository's common Git directory,
+shared across tasks and poieo processes. Preparing or verifying a result does
+not reserve the project until application; a competing application makes the
+older candidate stale. This lock coordinates poieo, not edits made by another
+program. Git also refuses to overwrite conflicting local edits.
+
+`release_prepared()` removes only its owned temporary copy. The task branch and
+all recorded run references survive, including a candidate refused for conflict.
 
 `discard(since)` first parks the old task tip under a recoverable ref, then
 resets the task branch to before the selected run or to the user's `HEAD`.
