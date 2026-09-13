@@ -26,12 +26,14 @@ const fetchRunEvents = vi.hoisted(() =>
 const fetchUndeclared = vi.hoisted(() =>
   vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
 )
+const createTask = vi.hoisted(() => vi.fn<typeof import("./api").createTask>())
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   fetchModels,
   fetchRuns,
   fetchRunEvents,
   fetchUndeclared,
+  createTask,
 }))
 
 import App from "./App"
@@ -63,15 +65,23 @@ const row = (name: string, project: string): TaskRow => ({
   },
 })
 
+/** The feed's handlers, so a test can say "ask again" the way the daemon does. */
+let feed: Parameters<StageApi["openFeed"]>[0] | null = null
+
 function api(tasks: TaskRow[] = [row("chores", "night shift")]): StageApi {
   return {
+    // Read live, so a row pushed onto the list after mounting is what the
+    // next listing answers with.
     fetchTasks: vi.fn(async () => ({
       projects: [{ name: "night shift", root: "/home/k/a", keeps_copies: true }],
       tasks,
     })),
     fetchRunEvents: vi.fn(async () => []),
     fetchRuns: vi.fn(async () => []),
-    openFeed: vi.fn(() => () => {}),
+    openFeed: vi.fn((handlers) => {
+      feed = handlers
+      return () => {}
+    }),
   }
 }
 
@@ -171,6 +181,45 @@ test("picking a task on the board takes the margin back", async () => {
   // drawer, so whatever was holding the margin has to let go of it.
   expect(panel("New task")).toBeNull()
   expect(container.querySelector(".drawer")).not.toBeNull()
+})
+
+test("a card made from the form opens in its drawer as soon as the board has it", async () => {
+  // "Made X" and a cleared form was the whole of the confirmation, and the
+  // card took a scan to appear somewhere else on the page. The daemon now
+  // looks at the folder the moment the board writes to it and says "ask
+  // again"; the shell answers by opening what was just made.
+  createTask.mockResolvedValue({ ok: true, task: "evening-sweep" })
+  const tasks = [row("chores", "night shift")]
+  await open(tasks)
+  await act(async () => button("open-make")!.click())
+
+  const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+  const name = container.querySelector<HTMLInputElement>('input[name="name"]')!
+  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
+  const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
+  await act(async () => {
+    write.call(name, "evening sweep")
+    name.dispatchEvent(new Event("input", { bubbles: true }))
+    write.call(folder, "../work")
+    folder.dispatchEvent(new Event("input", { bubbles: true }))
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "x")
+    prompt.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => button("make-task")!.click())
+
+  // Not yet: the listing has not been read again, so the form stays and
+  // says what it made.
+  expect(panel("New task")).not.toBeNull()
+  expect(container.querySelector(".drawer")).toBeNull()
+
+  tasks.push(row("evening-sweep", "night shift"))
+  await act(async () => feed!.onResync())
+  await act(async () => {})
+
+  const drawer = container.querySelector(".drawer")!
+  expect(drawer).not.toBeNull()
+  expect(drawer.getAttribute("data-task")).toBe("evening-sweep")
+  expect(panel("New task")).toBeNull()
 })
 
 test("a name already taken says so while it is being typed", async () => {

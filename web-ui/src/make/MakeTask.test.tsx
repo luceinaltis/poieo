@@ -46,6 +46,7 @@ function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
         project="board"
         keepsCopies={props.keepsCopies ?? true}
         onClose={props.onClose ?? (() => {})}
+        onMade={props.onMade}
       />,
     )
   })
@@ -170,6 +171,22 @@ test("a saved card is sent as the three things, and says so in place", async () 
   expect(host.textContent).toContain("tidy-up")
   // And cleared, because the next card is a different card.
   expect(field("prompt").value).toBe("")
+})
+
+test("a made card is handed up by the name the daemon filed it under", async () => {
+  // So the shell can open it the moment the board has it. The daemon's
+  // spelling, not the typed one: that is the key the stage files it under.
+  const onMade = vi.fn()
+  show({ onMade })
+  type("name", "tidy up")
+  type("folder", "../work")
+  type("prompt", "look around")
+
+  await act(async () => {
+    save().click()
+  })
+
+  expect(onMade).toHaveBeenCalledWith("tidy-up")
 })
 
 test("a refusal is shown and the form keeps what was typed", async () => {

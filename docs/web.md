@@ -151,7 +151,11 @@ to clean up an ignored temporary file is logged without undoing publication.
 Structured editing is offered only when it can reproduce every field and
 comment; otherwise the client edits the raw file. Set-aside and rename place an
 immediate hold on the old runner, while the folder scan or next restart
-reconciles the resident roster.
+reconciles the resident roster. Every card write knocks: the daemon's next look
+at the folder is immediate rather than at the end of its scan interval, so a
+card made, switched, renamed or set aside from the board is on the board before
+the reader has moved. The write itself loads nothing; the scan stays the one
+door a card comes through.
 
 ## Browser security
 
@@ -209,7 +213,9 @@ and no further. Its initial view keeps a readable lower limit; fitting the
 whole board can shrink a wider or taller graph further.
 
 `App.tsx` owns project selection, the memory place, and the single active side
-panel: task detail, models, task creation, or closed. It shows one project's
+panel: task detail, models, task creation, or closed. A card made from the
+creation panel opens in its drawer as soon as the listing carries it; until
+then the panel stays and says what it made. It shows one project's
 stage at a time and keeps only view preferences in local storage. The rail down
 the side lists only places, the views that take the whole stage: board, runs,
 and memory, with the current one marked. Panels are not places: models opens
