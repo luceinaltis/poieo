@@ -27,11 +27,12 @@ from poieo.card import (
     read_journal,
     system_block,
 )
-from poieo.daemon.config import TaskSpec, check_handoffs, load_config, load_tasks
+from poieo.daemon.config import check_handoffs, load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec
 from poieo.memory import write_page
 from poieo.store import NullStore
+from poieo.task import TaskSpec
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 

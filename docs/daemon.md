@@ -1,6 +1,6 @@
 # Daemon
 
-`src/poieo/daemon/`
+`src/poieo/daemon/`, `src/poieo/cron.py`
 
 The daemon keeps project tasks resident, fires them on schedule, and exposes
 their current controls and events. It owns everything that spans runs:
@@ -9,8 +9,8 @@ pending questions, handoffs, spend limits, learning passes, and shutdown.
 
 ## Runnable configuration
 
-A `TaskSpec` is defined in `src/poieo/task.py`, below the daemon, so that card
-expansion and `poieo run` share it without loading the scheduler. It contains:
+A `TaskSpec` is defined in `src/poieo/task.py`, below the daemon, so that a
+card expands to it without loading the scheduler. It contains:
 
 | field | contract |
 |---|---|
