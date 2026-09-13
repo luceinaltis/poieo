@@ -1,4 +1,4 @@
-/** A vertical graph at card reading size. Exact conditions stay on their own wires. */
+/** Compact task flows expand into vertical graphs with conditions on their wires. */
 import dagre from "@dagrejs/dagre"
 
 import type { TaskState } from "../../state/stage"
@@ -19,6 +19,46 @@ function svg(tag: string, attrs: Record<string, string>) {
   const el = document.createElementNS(NS, tag)
   for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value)
   return el
+}
+
+function inputPort(receives: boolean) {
+  const input = html("span", "basic-step-start", receives ? "Input" : "Start")
+  if (receives) {
+    input.dataset.port = "input"
+    input.tabIndex = 0
+    input.title = "The sending task's completed run is received here."
+  }
+  return input
+}
+
+function outputPort() {
+  const output = html("span", "basic-step-output", "Output")
+  output.dataset.port = "output"
+  output.tabIndex = 0
+  output.title = "This completed run's results, state and answer are passed to the next task."
+  output.append(html("small", "", "Run result"))
+  return output
+}
+
+/** The hidden steps occupy one short connection between the same task terminals. */
+export function drawCardSummary(container: HTMLElement, task: TaskState, receives: boolean) {
+  const sends = task.then.some(way => way.to !== null)
+  const count = task.shape.nodes.length
+  const scene = html("div", "basic-step-scene basic-step-summary")
+  const start = inputPort(receives)
+  const steps = html("span", "basic-step-count", `${count} ${count === 1 ? "step" : "steps"}`)
+  const end = sends ? outputPort() : html("span", "basic-step-end", "End run")
+  Object.assign(start.style, { left: "10px", top: "20px", width: "60px" })
+  Object.assign(steps.style, { left: "98px", top: "19px", width: "76px" })
+  Object.assign(end.style, { left: "202px", top: sends ? "10px" : "19px", width: "88px" })
+  const wires = svg("svg", { class: "basic-step-wires", width: "300", height: "64", "aria-hidden": "true" })
+  wires.append(svg("path", { class: "basic-summary-edge", d: "M70 32 H94 M174 32 H198" }),
+    svg("path", { class: "basic-summary-arrow", d: "M98 32 l-5 -3 v6 Z M202 32 l-5 -3 v6 Z" }))
+  scene.append(wires, start, steps, end)
+  Object.assign(scene.style, { width: "300px", height: "64px" })
+  Object.assign(container.style, { width: "300px", height: "64px", marginInline: "auto" })
+  container.replaceChildren(scene)
+  return 300
 }
 
 export function drawCardSteps(container: HTMLElement, task: TaskState, receives = false) {
@@ -74,23 +114,10 @@ export function drawCardSteps(container: HTMLElement, task: TaskState, receives 
     edges.push({ from, to, description, label, source })
   }
   if (nodes.has(shape.entry) || receives) {
-    const input = html("span", "basic-step-start", receives ? "Input" : "Start")
-    if (receives) {
-      input.dataset.port = "input"
-      input.tabIndex = 0
-      input.title = "The sending task's completed run is received here."
-    }
-    add("start", input, 60, 24)
+    add("start", inputPort(receives), 60, 24)
     if (nodes.has(shape.entry)) connect("start", keyOf(shape.entry), `${receives ? "Input" : "Start"} → ${nameOf(shape.entry)}`)
   }
-  if (sends) {
-    const output = html("span", "basic-step-output", "Output")
-    output.dataset.port = "output"
-    output.tabIndex = 0
-    output.title = "This completed run's results, state and answer are passed to the next task."
-    output.append(html("small", "", "Run result"))
-    add("output", output, 100, 44)
-  }
+  if (sends) add("output", outputPort(), 100, 44)
   for (const id of walk(shape)) {
     const ways = waysOut(nodes.get(id)!)
     if (!ways.length) ways.push({ to: null, label: "", fallback: false })

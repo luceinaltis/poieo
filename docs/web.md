@@ -266,7 +266,15 @@ prepared copy explains that refusal even when its exit code was zero. Unfinished
 checks retain their output, and a repair refused before starting says why
 without claiming it ran.
 
-Each task card shows a vertical graph with **Start** and **End run** terminals,
+Task cards start collapsed, showing a compact **Start / Input → step count →
+End run / Output** flow. **Expand** reveals only that card's full graph, live text
+and tool calls; **Collapse** gives its space back. The chosen state survives live
+updates, and running a task never opens its card automatically. Status and standing
+warnings remain visible in either state. Handoff wires keep connecting the visible
+Output and Input when either card expands or collapses; following a wire leaves
+the receiving card's chosen detail level intact.
+
+An expanded task card shows a vertical graph with **Start** and **End run** terminals,
 even for a single step. Arrows point into the next step and small dots mark the
 source of each connection; return paths use dashed lines. These are execution
 connections, not data inputs or result values. Conditions stay on their own
@@ -290,9 +298,9 @@ below the cards, as do forward wires that skip columns. Hovering or focusing a
 terminal or wire highlights its connections and both cards. Clicking a wire, or
 pressing Enter/Space on it, brings the receiving card into view and focuses Input.
 
-Card graphs measure their labels before Dagre places nodes from top to bottom.
-Connected cards grow to fit the complete graph without internal scrolling or
-scaled-down labels. Column widths include the widest card so wires clear the
+Expanded card graphs measure their labels before Dagre places nodes from top to
+bottom. Expanded connected cards grow to fit the complete graph without internal
+scrolling or scaled-down labels. Column widths include the widest card so wires clear the
 other cards too. Independent cards wrap conditions more narrowly when needed;
 their graphs never scale below 90%, and unusually wide forks or graphs taller than
 460 pixels scroll within the card. Diagram terminals are separate from authored
@@ -301,8 +309,8 @@ The initial board view keeps cards at a readable scale, fitting at least one
 card's width on narrow screens. Dragging and the minimap reach tasks outside
 the viewport; double-clicking the board background fits the whole board.
 
-**View steps** opens a native dialog outside the board's pan/zoom transform,
-with an independent scrollable canvas, zoom controls, fit, and a 100% reading
+Within an expanded card, **View steps** opens a native dialog outside the board's
+pan/zoom transform, with an independent scrollable canvas, zoom controls, fit, and a 100% reading
 size. Nodes use authored descriptions, an entry marker, model assignments and
 explicit endings. Dagre lays this graph out from left to right, reserves space
 for wrapped conditions, and retains a separate edge for each branch.

@@ -15,6 +15,7 @@ const source = { ...task("Draft"), then: [{ to: "Review", label: "Ready for revi
 let host: HTMLElement
 let handle: ReturnType<typeof basic.mount>
 const card = (name: string) => host.querySelector<HTMLElement>(`[data-task="demo/${name}"]`)!
+const expand = (name: string) => card(name).querySelector<HTMLElement>(".basic-toggle")!.click()
 
 beforeEach(() => {
   host = document.createElement("div")
@@ -25,6 +26,8 @@ beforeEach(() => {
 afterEach(() => { handle.destroy(); host.remove(); vi.restoreAllMocks() })
 
 test("a handoff joins the sending graph's output to the receiving graph's input", () => {
+  expand("Draft")
+  expand("Review")
   expect(card("Draft").querySelector('[data-port="output"]')?.textContent).toContain("Output")
   expect(card("Review").querySelector('[data-port="input"]')?.textContent).toContain("Input")
   const outgoing = [...card("Draft").querySelectorAll(".basic-step-edge")].map(e => e.getAttribute("aria-label"))
@@ -43,6 +46,7 @@ test("all possible endings feed the completed run output, not one guessed last s
     { to: null, label: "approved" },
   ] }]
   handle.update(initialStage([branching, task("Review")]))
+  expand("Draft")
   expect(card("Draft").querySelectorAll('[data-port="output"]')).toHaveLength(1)
   expect([...card("Draft").querySelectorAll(".basic-step-edge")].filter(e => e.getAttribute("aria-label") === "End run → Output"))
     .toHaveLength(2)
@@ -70,6 +74,7 @@ test("parallel handoffs share one route while retaining their authored priority"
     { to: "Review", label: "question" }, { to: null, label: "quiet" },
   ] }
   handle.update(initialStage([parallel, task("Review"), task("Other")]))
+  expand("Draft")
   expect(host.querySelectorAll(".basic-connection")).toHaveLength(2)
   const sameTarget = host.querySelector('[data-from="demo/Draft"][data-to="demo/Review"]')!
   expect(sameTarget.textContent).toContain("1. urgent")
@@ -78,6 +83,7 @@ test("parallel handoffs share one route while retaining their authored priority"
 })
 
 test("changing an upstream route updates an otherwise unchanged receiving card", () => {
+  expand("Other")
   const before = card("Other").querySelector(".basic-node")
   const changed = { ...source, then: [{ to: "Other", label: "Send elsewhere" }] }
   handle.update(initialStage([changed, task("Review"), task("Other")]))
@@ -91,6 +97,7 @@ test("changing an upstream route updates an otherwise unchanged receiving card",
 test("unrelated live updates preserve the graph and connection being read", () => {
   const stage = initialStage([source, task("Review"), task("Other")])
   handle.update(stage)
+  expand("Draft")
   const before = card("Draft").querySelector(".basic-node")
   const connection = host.querySelector(".basic-connection")
   const next = { ...stage, tasks: { ...stage.tasks, "demo/Other": { ...stage.tasks["demo/Other"], status: "running" as const } } }
@@ -133,6 +140,7 @@ test("a route beside a narrow card also clears wider cards in the same column", 
     { to: null, label: "approved" }, { to: null, label: "changes" }, { to: null, label: "question" },
   ] }]
   handle.update(initialStage([source, task("Review"), wide]))
+  expand("Other")
   expect(parseFloat(card("Other").style.width)).toBeGreaterThan(parseFloat(card("Draft").style.width))
   const route = host.querySelector('.basic-connection[data-from="demo/Draft"]')!
   const lane = Number(route.querySelector(".basic-word")!.getAttribute("x"))
@@ -141,6 +149,7 @@ test("a route beside a narrow card also clears wider cards in the same column", 
 })
 
 test("a connected graph lets the board handle wheel navigation", () => {
+  expand("Draft")
   const board = host.querySelector<HTMLElement>(".basic")!
   const before = board.style.transform
   const wheel = new WheelEvent("wheel", { deltaY: -200, cancelable: true, bubbles: true })
@@ -158,6 +167,7 @@ test("following a wide receiving graph brings its Input into a narrow viewport",
     Array.from({ length: 8 }, (_, index) => ({ to: null, label: `choice ${index}` })),
   }]
   handle.update(initialStage([source, wide]))
+  expand("Review")
   expect(parseFloat(card("Review").style.width)).toBeGreaterThan(390 * 2)
   host.querySelector(".basic-connection")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
   const input = card("Review").querySelector<HTMLElement>('[data-port="input"]')!

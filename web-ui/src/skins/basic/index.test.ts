@@ -49,6 +49,7 @@ const TASK_ROWS: TaskRow[] = [
 ]
 
 let el: HTMLDivElement
+const expand = () => el.querySelector<HTMLElement>('[data-task="board/chores"] .basic-toggle')!.click()
 
 beforeEach(() => {
   el = document.createElement("div")
@@ -71,10 +72,10 @@ afterEach(() => {
 
 test("a frame for one task does not rebuild the other tasks' boxes", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
-  // A task of two steps, so there are nodes inside to survive at all: one
-  // step draws no graph, the border being that step already.
+  // Open the two steps whose DOM should survive another task's updates.
   const stage = replay(initialStage([build(), TASK_ROWS[1]]), AGENT_RUN)
   handle.update(stage)
+  expand()
 
   // chores is drawn with its graph's nodes inside it.
   const node = el.querySelector('[data-task="board/chores"] .basic-node')
@@ -162,9 +163,10 @@ test("a handoff says which way it goes", () => {
   handle.destroy()
 })
 
-test("the word on an arrow sits on the line it names", () => {
+test.each([false, true])("the word on an arrow sits on the line it names (expanded: %s)", open => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage(WIRED))
+  if (open) expand()
 
   // Floated above the line it belonged to the box underneath it instead, and
   // on the top row it had the board's own edge to collide with.
@@ -172,9 +174,15 @@ test("the word on an arrow sits on the line it names", () => {
   const x = Number(word.getAttribute("x")), y = Number(word.getAttribute("y"))
   const start = Number(el.querySelector(".basic-socket")!.getAttribute("cy"))
   const end = Number(el.querySelector(".basic-tip")!.getAttribute("d")!.match(/L [\d.-]+ ([\d.-]+)/)![1])
-  expect(el.querySelector(".basic-wire")!.getAttribute("d")).toContain(`L${x} `)
-  expect(y).toBeGreaterThan(Math.min(start, end))
-  expect(y).toBeLessThan(Math.max(start, end))
+  const path = el.querySelector(".basic-wire")!.getAttribute("d")!
+  if (start === end) {
+    const points = path.match(/-?\d+(?:\.\d+)?/g)!.map(Number)
+    expect(points).toEqual([expect.any(Number), y, expect.any(Number), y])
+    expect(x).toBeGreaterThan(points[0])
+    expect(x).toBeLessThan(points[2])
+  } else expect(path).toContain(`L${x} `)
+  expect(y).toBeGreaterThanOrEqual(Math.min(start, end))
+  expect(y).toBeLessThanOrEqual(Math.max(start, end))
   handle.destroy()
 })
 
@@ -258,6 +266,7 @@ const pill = (id: string) =>
 test("a task that resolves to one model says so once, beside the trigger", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["qwen3:8b", null, "qwen3:8b"])]))
+  expand()
 
   // Said once, on the line that is legible with the border shut: ten tasks
   // collapsed is the glance, and "what is running my board" is answered there.
@@ -270,6 +279,7 @@ test("a task that resolves to one model says so once, beside the trigger", () =>
 test("a task on two models counts them, and each node carries its own", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
+  expand()
 
   // The header cannot answer it, so it stops trying and says how many;
   // opening the border is what says which is which.
@@ -282,6 +292,7 @@ test("a task on two models counts them, and each node carries its own", () => {
 test("a router carries no model, because it calls none", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["llama3.2:3b", null, "claude-opus-5"])]))
+  expand()
 
   // The gap is information: it is why branching is free.
   expect(pill("route").querySelector(".basic-node-model")).toBeNull()
@@ -307,6 +318,7 @@ function build(): TaskRow {
 test("a step that can reach the folder says so; one that only answers does not", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([build()]))
+  expand()
 
   // Same type, same model, same box: what they may touch is the whole
   // difference between a step that rewrites the project and one that talks
@@ -341,29 +353,24 @@ function oneStep(): TaskRow {
   }
 }
 
-test("a task draws its steps without being opened first", () => {
+test("a task summarizes its steps until it is expanded", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([build()]))
 
-  // What a task walks is structure: it changes when a file does, never
-  // between one frame and the next. So it can be drawn on a shut border
-  // without the board moving under the reader -- and being able to read the
-  // work at a glance is the whole reason the board is a canvas rather than a
-  // list.
   expect(el.querySelector('[data-task="board/chores"]')!.getAttribute("data-open")).toBe("false")
+  expect(el.querySelector('[data-task="board/chores"] .basic-inside')!.textContent).toContain("2 steps")
+  expect(el.querySelectorAll('[data-task="board/chores"] .basic-node')).toHaveLength(0)
+  expand()
   expect(el.querySelectorAll('[data-task="board/chores"] .basic-node')).toHaveLength(2)
   handle.destroy()
 })
 
-test("a task of one step draws that step, rather than an empty row", () => {
+test("an expanded task of one step draws that step, rather than an empty row", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([oneStep()]))
+  expand()
 
-  // It was drawn as nothing while the steps were hidden until asked for: one
-  // pill named `work` was noise the reader had opened a border to find. Now
-  // that every other task shows its steps unasked, a blank where they belong
-  // reads as broken -- and the step carries whether it can reach the folder,
-  // which is worth the row on its own.
+  // A single step still carries its name and whether it can reach the folder.
   const only = el.querySelector<HTMLElement>('[data-task="board/chores"] .basic-node')!
   expect(only.dataset.node).toBe("work")
   expect(only.querySelector(".basic-node-hands")).not.toBeNull()
@@ -415,6 +422,7 @@ test("a task that reports no model at all leaves the trigger line alone", () => 
 test("the steps name every connection and where the run ends", () => {
   const handle = basic.mount(el, { onSelectTask: vi.fn() })
   handle.update(initialStage([triage(["mock", null, "mock"])]))
+  expand()
 
   const inside = el.querySelector('[data-task="board/chores"] .basic-inside')!
   expect([...inside.querySelectorAll(".basic-step-edge")].map(el => el.getAttribute("aria-label")))
