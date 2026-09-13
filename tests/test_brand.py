@@ -104,6 +104,21 @@ def test_landing_headline_can_wrap_on_a_narrow_screen():
     assert "white-space: nowrap" not in base_rule.group(1)
 
 
+def test_landing_clouds_drift_quietly_and_hold_still_for_reduced_motion():
+    page = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    clouds = re.search(r'<div class="landing-clouds"([^>]*)>(.*?)</div>', page, re.S)
+    assert clouds
+    assert 'aria-hidden="true"' in clouds.group(1)
+    assert len(re.findall(r'<span class="cloud"', clouds.group(2))) == 3
+    assert "landing-clouds" not in (ROOT / "site" / "docs.html").read_text(encoding="utf-8")
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    drift = re.search(r"\.cloud\s*\{([^}]*)\}", css)
+    assert drift
+    assert re.search(r"animation:\s*[\w-]+ \d+s linear infinite", drift.group(1))
+    calm = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert re.search(r"\.cloud\s*\{[^}]*animation-play-state: paused", calm)
+
+
 def test_running_tasks_use_live_green_not_the_review_accent():
     css = (ROOT / "web-ui" / "src" / "skins" / "basic" / "basic.css").read_text(encoding="utf-8")
     running = re.findall(r'\.basic-task\[data-status="running"\][^{]*\{([^}]+)\}', css)
