@@ -65,7 +65,9 @@ An automatic task gets one repair attempt for a compatible conflict or failed
 check. The last file worker that ran supplies its existing role, parameters and
 file/shell tools; no task-to-task or memory writing tools are added. It runs in
 the combined copy for at most eight turns and 180 seconds, within any tighter
-authored limits. The project spending limit includes the original run's cost
+authored limits. An elapsed timer interrupts an active model call or tool at
+the limit; cleanup finishes before the copy is released, and the aborted repair
+retains its known usage. The project spending limit includes the original run's cost
 before repair starts. Incompatible goals, lost permission, or no suitable worker
 leave the task waiting for a decision.
 

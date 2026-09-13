@@ -55,6 +55,7 @@ async def repair_change(
         "failure": failure,
         "allowed_paths": driver.task.spec.apply.paths or ["."],
     }
+    deadline = min(source.deadline or 180, 180)
     node = NodeSpec(
         id="repair",
         type="agent",
@@ -69,26 +70,39 @@ async def repair_change(
         prompt="Reconcile this work with the current project:\n{{ input.repair }}",
         tools=[name for name in source.tools or [] if name in {"files", "shell"}],
         max_turns=min(source.max_turns, 8),
-        deadline=min(source.deadline or 180, 180),
+        deadline=deadline,
         output=OutputSpec(format="json"),
     )
     graph = GraphSpec(
         name=driver.task.graph.name, entry=node.id, nodes=[node], default_role=driver.task.graph.default_role
     )
     context = replace(driver.tool_context, containers=None) if driver.tool_context else None
-    result = await execute(
-        graph,
-        driver.task.binding,
-        driver.pool,
-        driver.store,
-        input={"original_system": system, "repair": repair_input},
-        task=driver.name,
-        project=driver.config.display_name,
-        trigger=f"repair change from {parent.run_id}",
-        cancel=cancel,
-        workdir=await asyncio.to_thread(driver.workspace.check_folder, prepared),
-        tool_context=context,
-    )
+    workdir = await asyncio.to_thread(driver.workspace.check_folder, prepared)
+    expired = False
+
+    def expire() -> None:
+        nonlocal expired
+        expired = True
+        # This event belongs to this application, never the whole daemon.
+        cancel.set()
+
+    timer = asyncio.get_running_loop().call_later(deadline, expire)
+    try:
+        result = await execute(
+            graph,
+            driver.task.binding,
+            driver.pool,
+            driver.store,
+            input={"original_system": system, "repair": repair_input},
+            task=driver.name,
+            project=driver.config.display_name,
+            trigger=f"repair change from {parent.run_id}",
+            cancel=cancel,
+            workdir=workdir,
+            tool_context=context,
+        )
+    finally:
+        timer.cancel()
     records.append(result)
     answer = result.outputs.get("repair")
     ready = (
@@ -98,6 +112,8 @@ async def repair_change(
         and answer.get("decision") == "ready"
     )
     reason = answer.get("summary") if isinstance(answer, dict) else result.error
+    if expired:
+        reason = f"The repair exceeded its {deadline:g}-second time limit."
     if isinstance(answer, dict):
         result.outputs["repair"] = str(answer.get("summary") or "Repair finished")
         result.outputs["decision"] = answer.get("decision")
