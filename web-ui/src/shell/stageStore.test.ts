@@ -91,6 +91,24 @@ test("older application frames cannot overwrite the count in a fresh listing", a
   store.stop()
 })
 
+test("a fresh listing replaces and clears the reason a task is held", async () => {
+  let task: TaskRow = { ...CHORES, status: "paused", holding: true,
+    held_because: "paused because its change conflicts with the project" }
+  const { store } = harness({ fetchTasks: vi.fn(async () => listing([task])) })
+  await store.start()
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe(task.held_because)
+
+  task = { ...task, held_because: "paused after undoing an applied change" }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe(task.held_because)
+
+  task = { ...task, status: "waiting", holding: false, held_because: null }
+  await store.resync()
+  expect(store.getStage().tasks["board/chores"].held).toBe(false)
+  expect(store.getStage().tasks["board/chores"].heldBecause).toBe("")
+  store.stop()
+})
+
 test("seeds from the task list, then subscribes", async () => {
   const { api, store } = harness()
   await store.start()

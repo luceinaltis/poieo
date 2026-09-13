@@ -399,6 +399,7 @@ async def test_removing_the_last_file_in_the_task_folder_still_has_a_check_direc
 
 async def test_adopting_an_undo_keeps_an_older_runner_paused(tmp_path):
     from poieo.daemon import Daemon
+    from poieo.web import BroadcastStore
 
     repo, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
     stale, other = Daemon(config)._runners()[0], Daemon(config)._runners()[0]
@@ -409,10 +410,15 @@ async def test_adopting_an_undo_keeps_an_older_runner_paused(tmp_path):
     path.write_text(yaml.safe_dump(data))
     assert (await other.accept_changes())["status"] == "applied"
     assert (await other.undo_changes(result.run_id))["status"] == "applied"
+    stale.store = BroadcastStore(stale.store)
+    events = stale.store.subscribe()
     assert (await stale.accept_changes())["accepted"] == 0
     assert stale.last_result.application["status"] == "undone"
     assert stale.asking() is None
     assert stale.holding
+    records = [events.get_nowait() for _ in range(events.qsize())]
+    assert {"type": "tasks_changed", "project": config.display_name} in records
+    assert stale.held_because == "paused after undoing an applied change"
     assert not (repo / "made.txt").exists()
 
 
