@@ -1,133 +1,100 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="site/img/lockup.svg">
-  <img src="site/img/lockup-light.svg" alt="poieo" width="380">
+  <img src="site/img/lockup-light.svg" alt="poieo — a persimmon tree with one golden fruit" width="320">
 </picture>
 
-**Your models, at work.**
+# Less spend. Better work.
 
-**An autonomous task board for the models you choose.**
+**Small and large models, working together.**
 
-Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.
+Write a task. Choose its models. Let poieo keep it running.
+
+[Website](https://luceinaltis.github.io/poieo/) · [Documentation](https://luceinaltis.github.io/poieo/docs.html) · [Get started](#start-with-one-task)
 
 [![gate](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml/badge.svg)](https://github.com/luceinaltis/poieo/actions/workflows/gate.yml)
-[![license: MIT](https://img.shields.io/badge/license-MIT-a9b665.svg)](LICENSE)
-[![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-d6ccbe.svg)](pyproject.toml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-d8a657.svg)](LICENSE)
+[![python: 3.10+](https://img.shields.io/badge/python-3.10%2B-635b50.svg)](pyproject.toml)
 
-## Get started in sixty seconds
+## Every model has its place
 
-```bash
-git clone https://github.com/luceinaltis/poieo && cd poieo && pip install .
+Use small models for routine work and larger ones for demanding steps. Add
+tests and review to judge the result. You choose the model for each step;
+savings and accuracy depend on your models, tasks, and checks.
 
-mkdir ~/board && cd ~/board
-poieo init          # finds every model server on this machine -- and any
-                    # cloud key -- and writes what answered to plain files
-```
+Models can run locally or through cloud APIs. Assign them to roles, then
+change a model without rewriting the task. [Choose your models](docs/usage.md#choose-models).
 
-Then write a card. This is the whole file:
-
-```yaml
-# ~/board/tasks/keep-green.yaml
-name: keep the tests green
-folder: ~/code/thing
-prompt: |
-  Run the tests. If one fails, find out why and fix it.
-```
-
-```bash
-poieo daemon        # every card in tasks/ runs from now on,
-                    # and the board is at http://127.0.0.1:8484
-```
-
-That is the entire setup — everything else has a default. No model yet?
-`poieo init --mock` gives you a scripted stand-in, so the wiring can be tried
-offline.
-
-## How it works: task, run, change
+## Set it running
 
 | | |
 |---|---|
-| **task** | a name, a folder, and a prompt. One file. Drop it in `tasks/` and it runs; delete it and it stops. |
-| **run** | one pass through a task. It succeeded, it failed, or it found nothing to do. |
-| **change** | what a run did to your files — which you accept, or throw away. |
+| **task** | A folder, instructions, and a schedule. |
+| **run** | One attempt, with its progress and results recorded. |
+| **change** | File edits a run leaves for review in a Git project. |
 
-You learn these three and no fourth — everything underneath is machinery,
-and machinery stays out of the way.
+Each task keeps a journal for its next run. Turn on project memory to share
+learned context across tasks. Pause work, run it now, or leave a note.
 
-## A night, end to end
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="site/img/task.png">
+  <img src="site/img/task-light.png" alt="The poieo task board, with a run and its file change open for review">
+</picture>
 
-The task above fires while you are asleep — in a **private copy**, never in
-your checkout. Each run leaves at most one change, with the model's own
-sentence about what it did.
+In a Git project, work happens in a **private copy**. Read the diff, then
+**accept** or **discard** the change. A folder without Git is edited directly
+and has no built-in review or undo.
 
-![A task opened on the board: its runs, what it said, and the change waiting](site/img/task.png)
+## Start with one task
 
-Four runs. Three found nothing and left nothing behind. One is waiting: read
-the diff and **accept** it — the only moment poieo writes to your branch — or
-**discard** it; nothing is thrown away for good.
-
-Each task also keeps a journal it reads before every run, so tonight starts
-where last night stopped, and you can put a line in it yourself:
+Install poieo and create a project with its offline scripted model:
 
 ```bash
-poieo note tasks/keep-green.yaml "leave the prose alone, spend the night on tests"
+git clone https://github.com/luceinaltis/poieo
+cd poieo
+pip install .
+
+mkdir my-board
+cd my-board
+poieo init --mock
 ```
 
-## Why it earns a place on your machine
-
-- **Cheaper than doing it one prompt at a time.** Each step names a role, and
-  you pick the model that serves it — free ones for the night shift, a costly
-  one only where it pays.
-- **The whole flow on one board.** One graph shows every task and its wiring;
-  any run replays what it did, turn by turn.
-- **One memory, shared by every task.** A lesson one task learns lands in
-  shared memory, and every task reads it before working.
-- **Everything is a file.** Tasks, models, journals and run logs are YAML,
-  Markdown and JSONL you can read, diff and commit — one log answers "what did
-  this thing do last night?".
-
-## When one line is not enough
-
-A card is sugar. Underneath, the work is a **graph** — steps, branching,
-loops, state carried between runs — that names *roles* rather than models, and
-a **binding** maps those roles onto real endpoints. Moving a workflow from a
-laptop model to a frontier one is a flag, not an edit.
+Save this as `tasks/keep-green.yaml`. Replace the folder with an existing Git
+project on your machine:
 
 ```yaml
-nodes:
-  - id: classify
-    type: agent
-    role: classifier            # a role, not a model
-    prompt: "Classify as bug, feature, or question.\n{{ input.message }}"
+name: keep the tests green
+folder: /path/to/your/git-project
+prompt: |
+  Run the tests. Find and fix a failing test.
+  Run them again to check the change.
 ```
 
-`poieo show` prints the graph a card expands into, and `poieo eject` hands it
-over the moment one line stops being enough. A task can also be given container
-isolation, a schedule of its own, a deadline, or the right to leave a note in
-another task's journal.
+```bash
+poieo daemon
+```
 
-**[The manual is `docs/usage.md`](docs/usage.md)** — from the first task through
-models, memory, isolation and larger graphs. **[DESIGN.md](DESIGN.md)** says what poieo promises and
-what it refuses to become, and **[docs/](docs/README.md)** has one document per
-component for anyone changing the code. There is a
-**[page](https://luceinaltis.github.io/poieo/)** too, if you would rather send
-somebody that.
+Open the board at **http://127.0.0.1:8484**. The mock exercises the loop without
+calling a real model; it does not actually repair your project. Follow the
+[model setup guide](docs/usage.md#choose-models) to connect real models.
 
-## Where it stands
+For a new project that should discover real models immediately, use
+`poieo init` without `--mock`. It records reachable model endpoints and
+credential variable names in plain files.
 
-The graph, the models, the daemon, the model's hands, the private copy and the
-undo, container isolation, the memory a project keeps, and the board you watch
-it all on are built and in use. The browser can create, edit, rename, switch off
-and set aside ordinary task cards, and create tasks with several steps and
-conditions without YAML. Advanced schedules, isolation and editing existing
-graphs still use their files. `DESIGN.md` has the remaining roadmap.
+## When a task needs more steps
 
-poieo is one person's machine running one person's work: no accounts, no
-server, no team features, and no plan to have them.
+The browser can create tasks with several steps and conditions. Give each
+model step a role; use small and large models where they help. Existing
+graphs, advanced schedules, and isolation settings are edited in files.
 
-## Contributing
+`poieo show` displays a task's graph. `poieo eject` exports the full graph
+when the short form is no longer enough. The
+[self-improvement example](examples/improving-poieo/README.md) connects
+reading, planning, building, and review.
 
-`AGENTS.md` is the working agreement — how big a change should be, what the
-merge gate is, and how to run it. It is written for agents and people alike,
-since both work on this.
+poieo is a personal tool, with no accounts or team workspaces. The
+[manual](docs/usage.md) covers everyday use. [DESIGN.md](DESIGN.md) records
+product principles and the roadmap. For contributing, start with
+[component documentation](docs/README.md) and [AGENTS.md](AGENTS.md).
 
-MIT licensed. `poieo` is Greek *ποιέω*, "to make".
+MIT licensed. `poieo` is Greek *ποιέω*, “to make.”

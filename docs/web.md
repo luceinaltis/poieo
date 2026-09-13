@@ -289,5 +289,17 @@ pane lists the recent learning passes with what each kept, set aside, or let go
 and why. Adding a task presentation belongs in the skin registry and must not
 add another event reducer or transport path.
 
+The board shares the persimmon logo and paper, ink, and gold palette with
+the website. `index.css` defines both themes; components use its named colours
+so status stays distinct from the gold review accent. `ThemeSwitch` follows the
+system preference until the user chooses Light or Dark, saves that choice in
+`poieo.theme` for the browser origin, and updates the browser's theme colour.
+Storage failure does not disable switching. The logo changes with the theme.
+The memory canvas also repaints its colours, preserving the current orbit,
+zoom, and selected entry.
+Hanken Grotesk and DM Mono ship with the board for offline use; decorative wash
+art and serif headings belong to the public website, not the working board.
+The visual reference and asset list live in [the brand guide](../brand/README.md).
+
 Any change under `web-ui/src/` must rebuild and commit
 `src/poieo/web/static/` in the same PR. See [contribution.md](contribution.md).

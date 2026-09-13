@@ -1,0 +1,9 @@
+{
+  "asset": "site/img/persimmon-wash.webp",
+  "sha256": "360639ab0809e1ee4a49f0d9b7ddd9c563cecc944cc0ee499b57d929adada0c7",
+  "reference": "docs/assets/branding/joseon-wash-english.png",
+  "tool": "ChatGPT Image",
+  "purpose": "Decorative artwork only; all page text, controls, and logos are separate HTML and SVG.",
+  "prompt": "Use case: precise-object-edit\nEdit the supplied approved poieo landing-page mockup into a standalone background illustration for the real website.\nKeep the warm near-white hanji-like background (#f8f5ef), the extremely pale Korean ink-and-wash brushwork, quiet generous empty space, and the existing composition of a sparse branch entering from the right and extending across the bottom third. Remove ALL text, logos, navigation, buttons, letters, and interface elements, reconstructing the plain warm paper behind them.\nMake the existing golden fruit unmistakably a persimmon: one gently flattened golden-ochre fruit (#d8a657) with a small dark four-lobed calyx, attached naturally to the branch. Keep sparse broad oval leaves and subtle pale grey-brown branches. No other fruits. The composition is inspired lightly by Joseon ink-and-wash painting, not a detailed botanical plate. The entire upper two thirds and left/center should be almost blank for real HTML headings later. The rightmost branch and bottom leaves may exit the frame. No landscape, mountains, sun, stamps, borders, lettering, ornaments, gradients or metallic gold. Landscape 1536x1024. This is only the decorative background; no new logo or webpage design. Preserve the approved illustration's restrained, softly washed character.",
+  "export": "1536 x 1024; WebP quality 85"
+}

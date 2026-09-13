@@ -216,6 +216,13 @@ function render(md, toc) {
 const article = document.getElementById("doc")
 const nav = document.getElementById("doc-nav")
 
+// Hashes select documents. Skipping the navigation must keep that selection.
+document.querySelector(".skip-link")?.addEventListener("click", (event) => {
+  event.preventDefault()
+  article.focus({ preventScroll: true })
+  article.scrollIntoView()
+})
+
 function route() {
   const [id, anchor] = location.hash.replace("#", "").split("/")
   return { id: DOCS.has(id) ? id : DEFAULT, anchor: anchor || null }
@@ -254,7 +261,7 @@ async function show(id, anchor) {
   document.title = `${title} — poieo docs`
 
   const cached = sessionStorage.getItem("poieo.doc." + path)
-  if (!cached) article.innerHTML = `<p class="doc-state">Fetching ${path} from main…</p>`
+  if (!cached) article.innerHTML = `<p class="doc-state">Loading ${title}…</p>`
 
   let md = cached
   if (!md) {
@@ -275,7 +282,7 @@ async function show(id, anchor) {
   const group = DOCS.get(id).group
   article.innerHTML =
     `<p class="doc-meta"><span class="doc-crumb">${group}</span>` +
-    `<a href="${BLOB + path}">Edit on GitHub</a> · served from <code>main</code></p>` +
+    `<a href="${BLOB + path}">Edit on GitHub</a></p>` +
     render(md, toc) +
     pager(id)
   paintToc(id, toc)
@@ -334,7 +341,9 @@ function markScroll() {
   requestAnimationFrame(() => {
     ticking = false
     let current = heads[0].id
-    for (const h of heads) if (h.getBoundingClientRect().top <= 90) current = h.id
+    // Use the same offset as anchor scrolling, including the taller phone bar.
+    const top = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0
+    for (const h of heads) if (h.getBoundingClientRect().top <= top + 1) current = h.id
     for (const a of tocBox.querySelectorAll("a"))
       a.classList.toggle("active", a.getAttribute("href").endsWith("/" + current))
   })

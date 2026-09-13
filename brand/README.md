@@ -1,98 +1,118 @@
 # The poieo brand
 
-**Your models, at work.** The brand has one picture and one promise. The
-**tree** shows work that keeps growing after the task is written: crooked
-branches are work in motion, the buds are continuing tasks, and the single
-amber fruit is a change ready for review. The voice stays plain and user-side:
-the reader chooses the models and schedule, then decides what reaches their
-files.
+**Less spend. Better work.**
 
-The product should feel like a quiet working team without pretending the
-models are people. No faces, names, avatars, or employee cards enter the
-interface. Its vocabulary remains **task, run, change**.
+Small and large models, working together.
 
-The look began with a photographed kinetic sculpture (a sphere sprouting
-crooked ball-tipped stalks) and was distilled through tree studies into the
-current mark.
+Write a task. Choose its models. Let poieo keep it running.
 
-## The mark system
+poieo is a personal tool for recurring work. The aim is better accuracy at a
+lower cost, with a result a person can inspect. The character is quiet, capable,
+and clear. The product's words are **task, run, change**.
 
-Everything below is **traced from an approved generated image, never redrawn
-by hand** — a hand redraw drifted once (#258) and the rule exists because of
-it. To change a mark: generate, get it approved, trace, replace.
+You choose the model for each step. Savings and accuracy depend on the models,
+tasks, and checks. Do not imply automatic optimization, invent a savings
+percentage, or present model size as proof of correctness. Cost appears when
+the provider reports it or the configuration supplies prices.
 
-| asset | what it is |
-|---|---|
-| `site/img/mark.svg` | the mark — a small crooked tree, five buds, one amber |
-| `site/img/favicon.svg` | the same tree on its own dark plate, for grounds we do not control |
-| `site/img/wordmark.svg` | `poieo` in custom monoline lettering; the e flows into the final o as a small infinity |
-| `site/img/lockup.svg` / `lockup-light.svg` | mark + wordmark, for dark and light grounds |
-| `site/img/mark-light.svg` / `wordmark-light.svg` | the same traced paths in ink, for the site's light theme |
-| `site/img/social.png` | the 1280×640 share card; its source page is `site/social.html` |
-| `mark-source.jpg` (here) | the generation the mark's SVG is traced from |
-| `wordmark-source.png` (here) | the generation the wordmark's SVG is traced from |
+## Identity
+
+The approved direction is **wash and fruit**: warm paper, sparse ink, and a
+single golden persimmon. The landing page places a short serif headline in
+open space, with a pale branch entering from the edge. Documentation and the
+installed board use clean surfaces so the work stays easy to read.
+
+The persimmon tree has a curved trunk, three broad leaves, and one fruit with
+a calyx. Its custom lowercase serif wordmark keeps all five letters of
+**poieo** legible, with e and o joined. Keep these shapes. Do not use the tree
+as a diagram or assign a model role to each branch.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo/poieo-reversed.svg">
+  <img src="logo/poieo.svg" alt="poieo — persimmon tree and serif wordmark" width="540">
+</picture>
+
+## Logo masters
+
+Every SVG is transparent and outlined, including the lettering. There are no
+embedded raster images, fonts, or external resources. All variants use the
+same paths traced from the approved large lockup.
+
+| Combination | Light background | Dark background | One colour |
+|---|---|---|---|
+| Horizontal logo | [poieo.svg](logo/poieo.svg) | [poieo-reversed.svg](logo/poieo-reversed.svg) | [poieo-mono.svg](logo/poieo-mono.svg) |
+| Symbol | [symbol.svg](logo/symbol.svg) | [symbol-reversed.svg](logo/symbol-reversed.svg) | [symbol-mono.svg](logo/symbol-mono.svg) |
+| Wordmark | [wordmark.svg](logo/wordmark.svg) | [wordmark-reversed.svg](logo/wordmark-reversed.svg) | Same as the light version |
+
+Use ink `#221e18` and gold `#d8a657` on a light background, ivory `#f0e7d9`
+and the same gold on a dark one. Preserve the aspect ratio and clear space in
+the viewBox. Use the symbol at 32 px or larger when its leaf detail must remain
+clear; the favicon is an intentionally small use. The [logo preview](logo/preview.html)
+shows combinations and small sizes.
+
+The [approved raster](../docs/assets/branding/logo-persimmon-concept.png) remains
+as the tracing source. [source.json](logo/source.json) records its hash, crop,
+settings, and generation prompt. Edit the SVG masters; do not retrace the
+smaller generated specimens.
 
 ## Colour
 
-Inherited from the product's own board (`web-ui/src`), so the brand and the
-running software are one thing:
+The website, docs, and board share these roles. Gold is used sparingly for the
+fruit and primary actions. Green, red, and blue describe status. On light
+surfaces, small gold text uses the darker ember colour for contrast.
 
-| token | hex | job |
-|---|---|---|
-| Ground | `#100e0c` | the warm near-black everything sits on |
-| Panel | `#201c18` | a task card on the ground |
-| Well | `#181513` | a recessed graph or field inside a card |
-| Raised | `#2e2721` | buttons and steps |
-| Rule | `#332b23` | hairlines and quiet borders |
-| Line | `#7d7164` | wires, arrowheads, and stronger outlines |
-| Parchment | `#f0e7d9` | shapes and body text on dark |
-| Dim | `#a0958a` | supporting copy that remains readable |
-| Ember | `#d8a657` | the one ripe bud; every accent |
-| Live | `#a9b665` | the product's own "running right now" — the board owns this word, not the mark |
-| Stop | `#e08a74` | failure and direct-file risk |
-| Ink | `#221e18` | what parchment becomes on light grounds |
+| Token | Dark | Light | Purpose |
+|---|---|---|---|
+| Ground | `#100e0c` | `#f8f5ef` | Page |
+| Panel | `#201c18` | `#ffffff` | Card or reading surface |
+| Well | `#181513` | `#eee8df` | Graph and code background |
+| Raised | `#2e2721` | `#e7dfd2` | Controls and selected navigation |
+| Rule | `#332b23` | `#d6ccbd` | Quiet separation |
+| Line | `#7d7164` | `#877966` | Outlines, graph wires |
+| Text | `#f0e7d9` | `#221e18` | Primary text |
+| Dim | `#a0958a` | `#635b50` | Supporting text |
+| Ember | `#d8a657` | `#845617` | Focus, links, and review |
+| Live | `#a9b665` | `#47602b` | Running work |
+| Stop | `#e08a74` | `#9d4530` | Failure |
+| Paused | `#7f9bb5` | `#456782` | Paused work |
+| Paused rule | `#3b4652` | `#b8c7d2` | Paused surface edge |
+| Paused text | `#9db4c9` | `#375771` | Paused label |
+| Accent | `#d8a657` | `#d8a657` | Primary button fill |
+| On accent | `#221e18` | `#221e18` | Primary button text |
 
-## Type
+The theme follows the operating system until a person chooses Light or Dark.
+The choice is saved in `poieo.theme` for that browser origin. If storage is
+unavailable, the control still changes the current page.
 
-- **Wordmark**: the traced custom lettering only — never set the name in a font.
-- **Sentences**: Hanken Grotesk. **Labels, figures, code**: DM Mono. Both
-  OFL, and the site ships them itself (`site/fonts/`, latin subsets, no
-  external request) — leaning on visitors' system stacks made the typography
-  a lottery, and one custom browser default changed the page's whole voice.
+## Type and copy
 
-## Rules
+Georgia gives the website and docs headings a restrained serif voice. Hanken
+Grotesk carries prose and interface labels; DM Mono carries code and exact
+data. The latter two are self-hosted with their OFL licences. The board keeps
+its compact sans serif labels for scanning. The logo is drawn, not typeset.
 
-1. **Crooked stays crooked.** Do not straighten the branches, and do not
-   redraw them by hand — trace.
-2. **One amber, never more.** The amber bud is the ripe one — the fruit
-   worth the reader's attention — not a status lamp: on the board, "running"
-   is Live green. Two ambers make it decoration.
-3. **Flat vector.** No gradients, no texture, no shadows.
-4. **On light grounds**, parchment becomes ink; the amber stays.
-5. **No forge imagery.** The blacksmith-workshop register (smiths, anvils,
-   fires) is retired from every brand surface — README, site, cards,
-   screenshots. The atelier skin that carried it has since been removed from
-   the product as well; nothing renders a forge anywhere now.
+The first screen has one headline, one descriptor, and **Get started**. Do
+not add a paragraph repeating the promise. Supporting sections explain model
+choices and show the actual board. Documentation prioritizes the article,
+quiet navigation, and horizontally scrollable code. Keep body copy at least
+16 px and routine labels at least 14 px.
 
-## Voice
+Git projects run in a private copy with changes to accept or discard. Non-Git
+folders are edited directly. Project memory is opt-in. Keep those limits
+clear wherever the corresponding feature is explained.
 
-The active copy hierarchy is fixed:
+## Published assets
 
-- **Headline:** Your models, at work.
-- **Descriptor:** An autonomous task board for the models you choose.
-- **Explanation:** Write a task once. poieo keeps it running on the models you choose—on your machine, on your schedule—and brings every change back for your approval.
-
-Explain the product in the order a person experiences it: **Write the task →
-Let it run → Review the change.** Night and morning may illustrate a use case,
-but they are not the brand promise.
-
-## Registers — reference images
-
-Three generations kept here set the range of the voice. Keep their qualities,
-not their exact pixels:
-
-| file | register |
+| Asset | Purpose |
 |---|---|
-| `reference-crooked-tree.jpg` | **rich** — the full wilful tree; hero and card art (`site/img/tree.jpg` is a copy) |
-| `reference-windswept-tree.png` | **dramatic** — motion, one fruit about to let go; note it arrived on a light ground, which reads as the light-theme voice (`site/img/tree-light.jpg` is a copy) |
-| `reference-ikebana-branch.png` | **minimal** — one pruned branch, editorial air; where small or quiet surfaces should head |
+| `site/img/lockup.svg`, `lockup-light.svg` | Copies of the reversed and normal logo masters; website, README, installed board |
+| `site/img/mark.svg`, `mark-light.svg` | Copies of the symbol masters |
+| `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
+| `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
+| `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
+| `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
+| `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
+
+The illustration's generation record is [wash-source.json](wash-source.json).
+The Korean design rationale and selected reference are in
+[docs/branding.md](../docs/branding.md). Retired concepts remain in git history.

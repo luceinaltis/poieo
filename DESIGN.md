@@ -12,6 +12,12 @@ The user designs the work. Models perform the hands-on steps. poieo keeps each
 task running and records every run. File changes wait for review by default;
 the user can authorize a task to apply its verified changes automatically.
 
+The aim is better accuracy for the cost by combining small and large models:
+use economical models for routine steps, spend more capability on demanding
+steps, and check the result. Today the user chooses the model for each role;
+poieo does not automatically optimize those choices. Results and savings must
+be evaluated on the user's actual tasks.
+
 ## Principles
 
 ### Separate the work from the model

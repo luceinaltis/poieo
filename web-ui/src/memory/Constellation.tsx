@@ -155,13 +155,14 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
     if (!canvas) return
     const context = canvas.getContext("2d")
     if (!context) return
-    const colors = palette()
-    const edgeStyle: Record<MemoryEdgeKind, { color: string; dash: number[] }> = {
+    let colors = palette()
+    const readEdgeStyle = (): Record<MemoryEdgeKind, { color: string; dash: number[] }> => ({
       mentions: { color: colors.paused, dash: EDGE_DASH.mentions },
       depends_on: { color: colors.ember, dash: EDGE_DASH.depends_on },
       contradicts: { color: colors.stop, dash: EDGE_DASH.contradicts },
       supersedes: { color: colors.line, dash: EDGE_DASH.supersedes },
-    }
+    })
+    let edgeStyle = readEdgeStyle()
     const curvedEdges = edgeUsesCurve(graph.edges.length)
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
     const began = performance.now()
@@ -472,11 +473,20 @@ export function Constellation({ graph, highlighted, cited, selected, onSelect }:
     canvas.addEventListener("wheel", wheel, { passive: false })
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize)
     observer?.observe(canvas)
+    // Canvas does not inherit CSS colours. Repaint when the shell changes
+    // theme, keeping the user's orbit, zoom, and selection in place.
+    const themeObserver = new MutationObserver(() => {
+      colors = palette()
+      edgeStyle = readEdgeStyle()
+      scheduleDraw()
+    })
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
     window.addEventListener("resize", resize)
     resize()
     return () => {
       cancelAnimationFrame(frame)
       observer?.disconnect()
+      themeObserver.disconnect()
       window.removeEventListener("resize", resize)
       canvas.removeEventListener("pointerdown", pointerDown)
       canvas.removeEventListener("pointermove", pointerMove)
