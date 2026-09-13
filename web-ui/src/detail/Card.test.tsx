@@ -354,6 +354,39 @@ test("a switched-off plain card carries its switch, and saving sends the flip", 
   expect(save().disabled).toBe(true)
 })
 
+test("a switch flipped beside a moved folder does not talk over the restart", async () => {
+  // The daemon says `live: false` of a save that moved the folder, whatever
+  // else rode along. The switch line is said beside that, never instead.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores' + esc + 'folder: ../work' + esc + 'prompt: tidy' + esc + 'enabled: false' + esc + '",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: false,
+  })
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
+  await open()
+
+  await act(async () => container.querySelector<HTMLInputElement>(".card-field-switch")!.click())
+  await act(async () => {
+    const folder = container.querySelector<HTMLInputElement>(".card-field-folder")!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(folder, "../other")
+    folder.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.click())
+
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
+    name: "Chores",
+    folder: "../other",
+    prompt: "tidy",
+    enabled: true,
+  })
+  expect(container.textContent).toContain("Switched on")
+  expect(container.textContent).toContain("restarts")
+})
+
 test("a card edited as a file has no switch: the file already says it", async () => {
   await open()
   expect(container.querySelector(".card-field-switch")).toBeNull()

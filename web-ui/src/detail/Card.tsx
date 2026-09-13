@@ -235,23 +235,31 @@ export function Card({
           {refused ? <Refusal answer={refused} /> : null}
 
           {saveResult ? (
-            switchedTo !== null ? (
-              // The switch is adopted by the daemon's next look at the folder,
-              // seconds away -- not by the next run, which a switched-off task
-              // does not have.
-              <p className="card-saved">
-                {switchedTo
-                  ? "Saved and switched on. The daemon picks that up on its own within a moment."
-                  : "Saved and switched off. The schedule stops on the daemon's next look, within a moment."}
-              </p>
-            ) : saveResult.live ? (
-              <p className="card-saved">Saved. The next run reads this.</p>
-            ) : (
-              <p className="card-saved card-waits">
-                Saved — but this changed more than the prompt, and the rest only
-                takes effect when the daemon restarts.
-              </p>
-            )
+            <>
+              {switchedTo !== null ? (
+                // The switch is adopted by the daemon's next look at the
+                // folder, seconds away -- not by the next run, which a
+                // switched-off task does not have. Said beside the other
+                // line, never instead of it: a folder moved in the same save
+                // still waits for a restart, and the switch is not allowed to
+                // talk over that.
+                <p className="card-saved card-switched">
+                  {switchedTo
+                    ? "Switched on. The daemon picks that up on its own within a moment."
+                    : "Switched off. The schedule stops on the daemon's next look, within a moment."}
+                </p>
+              ) : null}
+              {saveResult.live ? (
+                switchedTo === null ? (
+                  <p className="card-saved">Saved. The next run reads this.</p>
+                ) : null
+              ) : (
+                <p className="card-saved card-waits">
+                  Saved — but this changed more than the prompt, and the rest only
+                  takes effect when the daemon restarts.
+                </p>
+              )}
+            </>
           ) : null}
 
           {setAsideResult ? (
