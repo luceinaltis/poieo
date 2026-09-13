@@ -45,6 +45,7 @@ the project's display name; task parameters use the card filename stem.
 | `GET /api/runs/{run_id}/diff` | `{run_id, change: null}` when there is nothing reviewable, otherwise base/head, files, bounded patch, and truncation flag |
 | `GET /api/runs/{run_id}/memory` | `{run_id, task, shown, prompt}` from the run's record; `prompt` says what the prompt was made of, each part's characters beside its budget (`page`, `memory`, `journal`), or null for a record written before runs measured this; `shown` lists each memory entry the run was shown with `used` (true, false, or null for an entry the memory no longer holds) and its `preview` (the entry's opening words, null for the same), and is null when the record says nothing about memory; 404 for a run nobody recorded |
 | `GET /api/projects/{project}/models` | live binding catalogue: roles and endpoints with model metadata, usage assignments, credential variable name and set/unset state; never a credential value or full base URL |
+| `GET /api/projects/{project}/folders` | `{folders}`: the project and the folders under it, two levels down and at most 200, each as `path` (how a card spells it, relative to the tasks folder) and `name` (how a person reads it); hidden and dependency folders, the tasks folder and the project's runs, worktrees and memory are left out |
 | `GET /api/projects/{project}/models/undeclared` | `{undeclared}` engines detected on this machine but absent from the project's binding |
 | `GET /api/projects/{project}/memory` | long-term-memory page as a run sees it and as written, the last learning pass's page suggestion, upkeep statistics (second looks as `{slug, reason}`), search capabilities, a bounded relationship graph, `learning`, the last few learning passes newest first, and `learner`, the size of the learner's next question with the model and window it will face (null window when the binding names none); supports `If-None-Match` and 304 |
 | `GET /api/projects/{project}/memory/{slug}` | one complete entry with metadata, relationships, second-look reasons, write history, and `sources`, each source run id with the task its record names (null when the record is gone), or 404 |
@@ -138,6 +139,8 @@ new binding.
 Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
 `input_file:` — must stay inside the project.
+Both forms list the folders that fence would accept beside the folder field,
+in the card's own spelling; the field fills in nothing on its own.
 Names are converted to safe filenames and never overwrite an existing card.
 Step creation uses the existing graph schema and preflight to check node fields,
 templates, conditions, connections, and model roles before writing. Every step

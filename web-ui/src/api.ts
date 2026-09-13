@@ -199,6 +199,23 @@ export async function fetchUndeclared(project: string): Promise<UndeclaredEngine
   return body?.undeclared ?? []
 }
 
+/**
+ * A folder a task made here may work in, as the daemon lists them: `path` is
+ * how the card will spell it, relative to the tasks folder, and `name` is how
+ * a person reads it -- "this project", or the folder's own place under it.
+ */
+export interface Folder {
+  path: string
+  name: string
+}
+
+export async function fetchFolders(project: string): Promise<Folder[]> {
+  const body = await getJson<{ folders: Folder[] }>(
+    `/api/projects/${encodeURIComponent(project)}/folders`,
+  )
+  return body?.folders ?? []
+}
+
 export async function fetchRuns(
   opts: { task?: string; project?: string; limit?: number } = {},
 ): Promise<RunSummary[]> {

@@ -95,6 +95,7 @@ vi.mock("./api", () => ({
     endpoints: [],
   })),
   fetchUndeclared: vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
+  fetchFolders: vi.fn<typeof import("./api").fetchFolders>(async () => []),
   fetchMemory: vi.fn<typeof import("./api").fetchMemory>(async () => ({
     enabled: false,
     page: null,

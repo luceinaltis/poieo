@@ -1,8 +1,10 @@
 """The observation API over a stub daemon."""
 
 import asyncio
+import os
 from types import SimpleNamespace
 
+import pytest
 from starlette.testclient import TestClient
 from test_workspace import git, head, make_repo
 
@@ -106,6 +108,61 @@ def stub_runner(
             spec=SimpleNamespace(then=list(then), apply=apply or ApplySpec()),
         ),
     )
+
+
+def test_the_folders_a_task_may_work_in_are_listed_as_a_card_would_spell_them(tmp_path):
+    """A card made from the board works inside its project, and its folder is
+    written relative to the tasks folder -- so the one folder most people want,
+    the project itself, was spelled `..`, and nothing on the form said so. The
+    daemon lists the project and what is under it, spelled as the card will
+    spell them, so the form can offer them; the reader still chooses."""
+    for folder in ("tasks", "src/app/deep", ".git/objects", "node_modules/x", "runs", "worktrees", "memory"):
+        (tmp_path / folder).mkdir(parents=True)
+    project = stub_project(tmp_path)
+    # The stub names no tasks folder; a card's folder is spelled from one.
+    project.cards = "tasks"
+    daemon = stub_daemon(tmp_path, [], project=project)
+    client = TestClient(create_app(daemon))
+
+    body = client.get(f"/api/projects/{tmp_path.name}/folders").json()
+
+    assert body["folders"] == [
+        {"path": "..", "name": "this project"},
+        {"path": "../src", "name": "src"},
+        {"path": "../src/app", "name": "src/app"},
+    ]
+
+
+def test_the_folder_list_stops_at_its_limit_and_stays_inside_the_project(tmp_path):
+    """A list for a person to read, not a file tree: past the limit nothing
+    more is read. And a link leading out of the project is not offered --
+    a task made here may not work there, so its name is not the board's to
+    show."""
+    from poieo.web import server
+
+    (tmp_path / "tasks").mkdir()
+    for n in range(250):
+        (tmp_path / f"folder-{n:03d}").mkdir()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (outside / "secret").mkdir()
+    try:
+        os.symlink(outside, tmp_path / "away", target_is_directory=True)
+        linked = True
+    except OSError:
+        linked = False
+    project = stub_project(tmp_path)
+    project.cards = "tasks"
+    client = TestClient(create_app(stub_daemon(tmp_path, [], project=project)))
+
+    folders = client.get(f"/api/projects/{tmp_path.name}/folders").json()["folders"]
+
+    assert len(folders) == server._FOLDERS_OFFERED
+    assert folders[0] == {"path": "..", "name": "this project"}
+    names = {one["name"] for one in folders}
+    assert "away" not in names and "away/secret" not in names
+    if not linked:
+        pytest.skip("this machine cannot make a symlink; the limit half still ran")
 
 
 def test_the_listing_carries_the_cards_own_title(tmp_path):

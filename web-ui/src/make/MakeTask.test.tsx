@@ -16,9 +16,11 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const createTask = vi.hoisted(() => vi.fn<typeof import("../api").createTask>())
+const fetchFolders = vi.hoisted(() => vi.fn<typeof import("../api").fetchFolders>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   createTask,
+  fetchFolders,
 }))
 
 import { MakeTask } from "./MakeTask"
@@ -29,6 +31,8 @@ let root: Root
 beforeEach(() => {
   createTask.mockReset()
   createTask.mockResolvedValue({ ok: true, task: "tidy-up" })
+  fetchFolders.mockReset()
+  fetchFolders.mockResolvedValue([])
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -111,6 +115,41 @@ test("automatic application is optional and requires an explicit check before sa
   expect(createTask).toHaveBeenCalledWith("board", "Tidy", "../work", "keep it healthy", true, {
     mode: "auto", checks: ["python -m pytest"], paths: ["src", "tests"], timeout: 120,
   })
+})
+
+test("the folder can be chosen from the project, and is still never filled in", async () => {
+  // `..` for the project itself was the one thing nobody could guess. The
+  // daemon lists the project and what is under it, spelled as the card will
+  // spell them; the form offers them and fills nothing in on its own.
+  fetchFolders.mockResolvedValue([
+    { path: "..", name: "this project" },
+    { path: "../work", name: "work" },
+  ])
+  show()
+  await act(async () => {})
+
+  const pick = host.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
+  expect(pick).not.toBeNull()
+  expect(field("folder").value).toBe("")
+  expect(pick.value).toBe("")
+
+  await act(async () => {
+    pick.value = "../work"
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(field("folder").value).toBe("../work")
+  expect(host.textContent).toContain("../work")
+
+  // Typing keeps the last word: a path the list does not have unselects it.
+  type("folder", "../elsewhere")
+  expect(pick.value).toBe("")
+})
+
+test("with nothing to offer, the folder is typed as before", async () => {
+  show()
+  await act(async () => {})
+  expect(host.querySelector('select[name="folder-pick"]')).toBeNull()
+  expect(field("folder")).not.toBeNull()
 })
 
 test("saving is refused until the folder has been named", () => {
