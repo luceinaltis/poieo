@@ -455,6 +455,24 @@ test("a repair that could not finish says why beside the checks", async () => {
   )
 })
 
+test("an unfinished check keeps its partial output without claiming it never ran", async () => {
+  await draw([{ ...run, application: {
+    status: "blocked", checks: [{ command: "pytest -q", exit_code: null, output: "started checking" }],
+  } }], { into: "main" })
+  expect(container.querySelector(".run-checks > summary")?.textContent).toBe("pytest -q did not finish")
+  expect(container.querySelector('.run-checks li[data-exit="none"]')?.textContent).toContain("could not finish")
+  expect(container.querySelector('.run-checks li[data-exit="none"]')?.textContent).toContain("started checking")
+})
+
+test("a repair refused before starting keeps its reason without inventing a run", async () => {
+  await draw([{ ...run, application: {
+    status: "blocked", repair: { ready: false, reason: "No repair worker is available." },
+  } }], { into: "main" })
+  expect(container.querySelector(".run-repair")?.textContent).toBe(
+    "a repair could not finish: No repair worker is available.",
+  )
+})
+
 test("a checked change still waiting for a decision says both", async () => {
   const checked: RunSummary = {
     ...run,
