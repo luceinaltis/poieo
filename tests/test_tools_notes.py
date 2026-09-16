@@ -1,11 +1,11 @@
 """One task leaving a line in another task's journal.
 
-The delivery guarantee lives in read_journal (tests/test_task.py); these cover
+The delivery guarantee lives in read_journal (tests/test_card.py); these cover
 the writing side and its refusals. A refusal is a tool error the model reads
 and corrects, never an exception that ends the run.
 """
 
-from poieo.card import append_journal, read_journal
+from poieo.journal import append_journal, read_journal
 from poieo.providers.base import ToolCall
 from poieo.tools import DEFAULT_TOOLSETS, LocalExecutor, ToolContext
 from poieo.tools.notes import Postbox

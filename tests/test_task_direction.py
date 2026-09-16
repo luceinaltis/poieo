@@ -6,8 +6,8 @@ import httpx
 import pytest
 from test_task_application import policy_config, run_once
 
-from poieo.card import read_journal
 from poieo.daemon import Daemon
+from poieo.journal import read_journal
 from poieo.web.server import create_app
 
 

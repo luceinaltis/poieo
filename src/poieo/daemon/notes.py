@@ -9,8 +9,8 @@ import os
 import time
 from typing import Any
 
-from ..card import append_journal
 from ..errors import SpecError
+from ..journal import append_journal
 from ..runtime import new_run_id
 
 log = logging.getLogger("poieo.daemon")

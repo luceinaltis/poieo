@@ -16,10 +16,11 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..binding import BindingSpec, load_binding
-from ..card import CardSpec, append_journal, closing_line, expand, load_card, record_run
+from ..card import CardSpec, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
+from ..journal import append_journal, closing_line
 from ..learn import learn as learn_pass
 from ..memory import keeps_memory, write_result
 from ..memory.results import revise_application

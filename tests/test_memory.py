@@ -15,7 +15,6 @@ from test_card import write_card
 
 from poieo.binding import BindingSpec
 from poieo.card import (
-    JOURNAL_WIDTH,
     card_payload,
     load_card,
     record_run,
@@ -24,6 +23,7 @@ from poieo.card import (
 from poieo.daemon.config import load_config, load_tasks
 from poieo.errors import SpecError
 from poieo.graph import GraphSpec, NodeSpec
+from poieo.journal import JOURNAL_WIDTH
 from poieo.layout import layout_for
 from poieo.memory import check_memory, readable_entries, write_page
 from poieo.providers import ProviderPool
@@ -525,7 +525,7 @@ def test_a_question_is_not_a_bookmark(tmp_path):
     """`OWN_KINDS` marks where the task last read to. A question is not the end
     of the work, so the notes it saw stay new -- reading one twice is
     recoverable, losing one is not."""
-    from poieo.card import _is_own_entry
+    from poieo.journal import _is_own_entry
 
     task = _task(tmp_path)
     record_run(task, _result(status="asking", asked={"question": "Land it?"}))
@@ -562,7 +562,7 @@ def test_a_record_is_not_rewritten_by_default(tmp_path):
 
 
 def test_an_episode_records_how_much_of_the_prompt_was_page_memory_and_journal(tmp_path):
-    from poieo.card import append_journal
+    from poieo.journal import append_journal
     from poieo.memory import read_page
 
     task, result = _task(tmp_path), _result()

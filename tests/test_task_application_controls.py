@@ -124,7 +124,7 @@ async def test_stopping_the_daemon_during_manual_verification_keeps_the_original
 
 @pytest.mark.parametrize("choice", ["retry", "pause"])
 async def test_answering_an_application_question_keeps_unread_direction(tmp_path, choice):
-    from poieo.card import append_journal, read_journal
+    from poieo.journal import append_journal, read_journal
 
     _, config = policy_config(tmp_path, {"mode": "auto", "checks": ['python -c "raise SystemExit(1)"']})
     daemon, _ = await run_once(config)
@@ -176,8 +176,8 @@ async def test_cancelling_a_save_parks_the_work_away_from_future_application(tmp
 
 @pytest.mark.parametrize("restart", [False, True])
 async def test_a_decision_does_not_mark_unread_user_direction_as_consumed(tmp_path, restart):
-    from poieo.card import append_journal, read_journal
     from poieo.daemon import Daemon
+    from poieo.journal import append_journal, read_journal
 
     _, config = policy_config(tmp_path, {"mode": "review"})
     daemon, _ = await run_once(config)

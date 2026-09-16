@@ -16,6 +16,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from ..journal import append_journal, closing_line, read_journal
 from ..layout import layout_for
 from .entries import Entry, keeps_memory, read_page, words
 from .recall import recall
@@ -71,8 +72,6 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     ``replace`` records a later answer or application decision. Without it a
     finished decision would remain open in the task's memory.
     """
-    from ..card import closing_line  # late: card.py imports this package
-
     path = results_dir(task.dir) / f"{result.run_id}.json"
     record = {
         "run_id": result.run_id,
@@ -97,8 +96,6 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
     try:
         # Recomputed rather than passed in, and emphasis-grade: it may fail
         # without costing the record, let alone the run.
-        from ..card import read_journal  # late: card imports this package
-
         chosen = recall(task.dir, task) if keeps_memory(task.dir) else []
         if keeps_memory(task.dir):
             record["shown"] = [entry.slug for entry in chosen]
@@ -127,8 +124,6 @@ def write_result(task: Any, result: Any, replace: bool = False) -> Path | None:
 
 def revise_application(task: Any, run_id: str, outcome: dict) -> None:
     """Revise an older run without losing outputs that are no longer in memory."""
-    from ..card import append_journal
-
     path = results_dir(task.dir) / f"{run_id}.json"
     try:
         if not path.exists():
