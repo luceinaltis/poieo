@@ -102,7 +102,8 @@ Three rendered clouds drift slowly across the sky in front of the sun or moon
 and veil them as they pass. `brand/clouds.py` draws them procedurally: sun-lit
 white with grey undersides for paper, moonlit grey for dark ground, each lit
 from the upper left. Run it to regenerate the six transparent WebP files. The
-layer is hidden from assistive technology and stays above the headline. Do not
+layer is hidden from assistive technology and keeps to the sky band above the
+headline, behind the header and the text. Do not
 mirror or recolour a cloud in CSS; its light would come from the wrong side.
 
 Update each minute while visible. Resume from the current time after sleep or
