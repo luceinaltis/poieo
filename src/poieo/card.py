@@ -421,7 +421,7 @@ def card_payload(task: CardSpec) -> dict[str, Any]:
     try:
         memory = read_memory(task.dir, task)
     except (sqlite3.Error, SpecError, OSError) as exc:
-        # Forgetting beats failing, same as the journal above: a run with less
+        # Forgetting beats failing, the same as read_journal: a run with less
         # in mind beats no run at all.
         log.warning("could not read this project's memory: %s; running without it", exc)
         memory = None

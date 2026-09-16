@@ -17,8 +17,10 @@ def _fresh(probe: str) -> subprocess.CompletedProcess:
     """A fresh interpreter, because the suite has imported everything already;
     ``PYTHONPATH`` pins it to this checkout rather than whatever ``pip install
     -e`` last pointed at."""
-    env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
-    return subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, env=env)
+    # UTF-8 both ways: a journal line carries a middle dot, and the pipe must
+    # not depend on the console's code page.
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "src"), "PYTHONIOENCODING": "utf-8"}
+    return subprocess.run([sys.executable, "-c", probe], capture_output=True, encoding="utf-8", env=env)
 
 
 def test_the_journal_loads_without_the_card_or_the_memory():

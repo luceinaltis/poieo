@@ -53,8 +53,8 @@ provider choice in it.
 - `layout.py`, `project.py`, and `store.py` own project discovery and durable run
   history.
 - `memory/` owns long-term memory; `journal.py` owns each task's journal, the
-  append-only file that runs, review decisions and `tell` notes write to and
-  the card reads into the prompt. It sits below all of them.
+  append-only file that runs, review decisions, the user's notes and `tell`
+  notes write to and the card reads into the prompt. It sits below all of them.
 - `tools/` owns filesystem, process, notes, and isolation boundaries.
 - `workspace.py` is the only module that knows Git.
 - `web/` and `cli.py` are interfaces over these components, not alternate

@@ -412,7 +412,7 @@ def test_a_journal_that_will_not_decode_costs_the_notes_not_the_run(tmp_path, ca
     task.journal_path().parent.mkdir(parents=True, exist_ok=True)
     task.journal_path().write_bytes(b"# t\n\n- 2026-08-22 03:14 \xb7 you     caf\xe9\n")
 
-    with caplog.at_level("WARNING", logger="poieo.card"):
+    with caplog.at_level("WARNING", logger="poieo.journal"):
         payload = card_payload(task)
 
     assert payload["journal"] == "nothing yet"
