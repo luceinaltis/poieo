@@ -98,10 +98,12 @@ A soft ivory halo makes the moon luminous on dark ground. Use the generated
 transparent assets; do not replace them with drawn icons. Only the current body
 is loaded.
 
-Three wash clouds drift slowly across the sky in front of the sun or moon:
-ivory on dark ground, diluted ink on paper. They are drawn in CSS, hidden from
-assistive technology, and stay above the headline. Keep them faint; the sky is
-a backdrop, not a scene.
+Three rendered clouds drift slowly across the sky in front of the sun or moon
+and veil them as they pass. `brand/clouds.py` draws them procedurally: sun-lit
+white with grey undersides for paper, moonlit grey for dark ground, each lit
+from the upper left. Run it to regenerate the six transparent WebP files. The
+layer is hidden from assistive technology and stays above the headline. Do not
+mirror or recolour a cloud in CSS; its light would come from the wrong side.
 
 Update each minute while visible. Resume from the current time after sleep or
 browser-history restoration. Reduced motion disables transitions and holds the
@@ -139,10 +141,12 @@ clear wherever the corresponding feature is explained.
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
 | `site/img/sun.png`, `moon.png` | ChatGPT Image-generated transparent sun and moon; original alpha and resolution preserved |
+| `site/img/cloud-1.webp` … `cloud-3-light.webp` | Rendered clouds for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
 | `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
 
 The illustration's generation record is [wash-source.json](wash-source.json).
-The sun and moon's prompts, asset paths, and hashes are in [sky-source.json](sky-source.json).
+The sun and moon's prompts, asset paths, and hashes are in [sky-source.json](sky-source.json);
+the clouds have no prompt, and [clouds.py](clouds.py) is their record.
 The Korean design rationale and selected reference are in
 [docs/branding.md](../docs/branding.md). Retired concepts remain in git history.

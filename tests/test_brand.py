@@ -119,6 +119,19 @@ def test_landing_clouds_drift_quietly_and_hold_still_for_reduced_motion():
     assert re.search(r"\.cloud\s*\{[^}]*animation-play-state: paused", calm)
 
 
+def test_landing_clouds_are_rendered_images_for_each_ground():
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    images = re.findall(r'url\("(img/cloud-[^"]+\.webp)"\)', css)
+    assert len(set(images)) == 6, images
+    for image in images:
+        assert (ROOT / "site" / image).is_file(), image
+    # The paper ground gets its own rendering, in the -light naming the other assets use.
+    light = re.findall(r'\[data-theme="light"\][^{}]*\{[^{}]*?url\("(img/cloud-[^"]+\.webp)"\)', css)
+    assert {image for image in images if image.endswith("-light.webp")} == set(light)
+    # A sun-lit cloud must not be mirrored: its light would come from the wrong side.
+    assert "scale: -1 1" not in css
+
+
 def test_running_tasks_use_live_green_not_the_review_accent():
     css = (ROOT / "web-ui" / "src" / "skins" / "basic" / "basic.css").read_text(encoding="utf-8")
     running = re.findall(r'\.basic-task\[data-status="running"\][^{]*\{([^}]+)\}', css)
