@@ -128,7 +128,7 @@ def test_landing_clouds_are_rendered_images_for_each_ground():
     # The paper ground gets its own rendering, in the -light naming the other assets use.
     light = re.findall(r'\[data-theme="light"\][^{}]*\{[^{}]*?url\("(img/cloud-[^"]+\.webp)"\)', css)
     assert {image for image in images if image.endswith("-light.webp")} == set(light)
-    # A sun-lit cloud must not be mirrored: its light would come from the wrong side.
+    # The wash carries its own direction and tone; CSS does not mirror it.
     assert "scale: -1 1" not in css
 
 

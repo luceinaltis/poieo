@@ -75,13 +75,13 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-page { position: relative; isolation: isolate; }
 .landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; opacity: .4; }
-/* Three rendered clouds drift in front of the sun or moon and veil them as they pass. brand/clouds.py draws them,
-   moonlit grey for dark ground and sun-lit white for paper, each lit from the upper left, so none is mirrored. */
+/* Three ink-wash cloud banks drift in front of the sun or moon and veil them as they pass. brand/clouds.py draws them,
+   diluted ink for paper and pale ivory for dark ground, one tint with the tone in the transparency. */
 .landing-clouds { position: absolute; top: 0; left: 0; width: 100%; height: 420px; overflow: hidden; z-index: -1; pointer-events: none; }
 .cloud { position: absolute; right: 100%; background: center / 100% 100% no-repeat; animation: cloud-drift 150s linear infinite; }
-.cloud:nth-child(1) { top: 36px; width: clamp(300px, 42vw, 660px); aspect-ratio: 5 / 2; background-image: url("img/cloud-1.webp"); animation-delay: -46s; }
-.cloud:nth-child(2) { top: 116px; width: clamp(220px, 30vw, 460px); aspect-ratio: 45 / 23; background-image: url("img/cloud-2.webp"); animation-duration: 190s; animation-delay: -132s; }
-.cloud:nth-child(3) { top: 150px; width: clamp(320px, 48vw, 780px); aspect-ratio: 35 / 9; background-image: url("img/cloud-3.webp"); animation-duration: 120s; animation-delay: -84s; }
+.cloud:nth-child(1) { top: 20px; width: clamp(300px, 40vw, 660px); aspect-ratio: 70 / 23; background-image: url("img/cloud-1.webp"); animation-delay: -46s; }
+.cloud:nth-child(2) { top: 96px; width: clamp(220px, 28vw, 460px); aspect-ratio: 50 / 21; background-image: url("img/cloud-2.webp"); animation-duration: 190s; animation-delay: -132s; }
+.cloud:nth-child(3) { top: 150px; width: clamp(320px, 46vw, 760px); aspect-ratio: 5 / 1; background-image: url("img/cloud-3.webp"); animation-duration: 120s; animation-delay: -84s; }
 [data-theme="light"] .cloud:nth-child(1) { background-image: url("img/cloud-1-light.webp"); }
 [data-theme="light"] .cloud:nth-child(2) { background-image: url("img/cloud-2-light.webp"); }
 [data-theme="light"] .cloud:nth-child(3) { background-image: url("img/cloud-3-light.webp"); }

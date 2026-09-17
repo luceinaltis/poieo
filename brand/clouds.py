@@ -1,16 +1,18 @@
-"""Render the landing's clouds.
+"""Render the landing's clouds as ink washes.
 
-Six transparent WebP images in ``site/img``: three cloud shapes, each drawn twice, once for
-dark ground (``cloud-N.webp``, moonlit grey) and once for paper (``cloud-N-light.webp``,
-sun-lit white). The drawing is procedural, so this file is the generation record; run it
-again to reproduce the assets::
+Six transparent WebP images in ``site/img``: three cloud banks, each drawn twice, once for
+paper (``cloud-N-light.webp``, diluted ink) and once for dark ground (``cloud-N.webp``, pale
+ivory). The drawing is procedural, so this file is the generation record; run it again to
+reproduce the assets::
 
     python brand/clouds.py
 
-It needs numpy, scipy, and Pillow, which the product itself does not use. A cloud is a soft
-union of round puffs, cut into billows by inverted Worley noise and fractal noise, then lit
-from the upper left by treating the smoothed density as a height field. It is decoration on
-the landing page, not a weather model.
+It needs numpy, scipy, and Pillow, which the product itself does not use. Each bank is a
+soft union of round lobes with a flat, wet underside, painted the way a wash sits on paper:
+one tint, with the tone carried by transparency; ink gathering toward the underside while
+the crown thins into the paper; pigment pooling where the wet edge stopped; a sideways
+bleed; a hint of dry brush; paper grain. No lighting model, no volume. Decoration for the
+landing page in the manner of its persimmon wash, not a weather picture.
 """
 
 from __future__ import annotations
@@ -19,84 +21,56 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import gaussian_filter, map_coordinates
+from scipy.ndimage import gaussian_filter, map_coordinates, zoom
 
 OUT = Path(__file__).resolve().parents[1] / "site" / "img"
-LIGHT_DIRECTION = np.array([-0.30, -0.80, 0.52])
 
-# Sun-lit white with warm grey undersides, thin edges glowing where light passes through.
-DAY = {
-    "light": (255, 253, 249),
-    "shadow": (146, 137, 126),
-    "ambient": 0.42,
-    "gain": 0.68,
-    "texture": 0.45,
-    "core": (0.40, 0.72),
-    "fringe": (0.18, 0.48),
-    "glow": 0.45,
-    "occlusion": 0.45,
-}
-# Moonlit grey: denser and calmer, so the dark sky does not show through as mottling.
-NIGHT = {
-    "light": (214, 206, 192),
-    "shadow": (66, 60, 54),
-    "ambient": 0.46,
-    "gain": 0.62,
-    "texture": 0.30,
-    "core": (0.34, 0.66),
-    "fringe": (0.16, 0.44),
-    "glow": 0.25,
-    "occlusion": 0.40,
-}
+# Diluted warm ink on paper, and the same wash as pale ivory on dark ground.
+DAY = {"tint": (108, 100, 92), "max_alpha": 0.46}
+NIGHT = {"tint": (236, 228, 214), "max_alpha": 0.48}
 
-# name: (width, height), puffs as (x, y, radius), baseline y of the flat underside, noise seed
+# name: (width, height), noise seed, banks as (weight, lobes as (x, y, radius), baseline y of the underside)
 CLOUDS = {
     "cloud-1": (
-        (1200, 480),
+        (1400, 460),
+        5,
         [
-            (600, 190, 230),
-            (420, 250, 180),
-            (790, 240, 175),
-            (300, 300, 130),
-            (920, 300, 120),
-            (520, 300, 170),
-            (700, 290, 160),
-            (200, 340, 90),
-            (1010, 345, 80),
+            (
+                1.0,
+                [(420, 250, 150), (600, 190, 200), (800, 215, 180), (980, 270, 130), (280, 300, 110), (700, 300, 160)],
+                360,
+            ),
+            (0.55, [(1000, 330, 120), (1160, 350, 90), (860, 360, 100)], 400),
         ],
-        372,
-        1,
     ),
     "cloud-2": (
-        (900, 460),
+        (1000, 420),
+        9,
         [
-            (450, 170, 200),
-            (300, 250, 150),
-            (600, 240, 160),
-            (200, 320, 100),
-            (700, 320, 95),
-            (450, 300, 170),
-            (560, 330, 120),
+            (1.0, [(300, 220, 130), (480, 160, 170), (660, 210, 150), (200, 300, 90), (500, 290, 150)], 340),
+            (0.5, [(700, 310, 110), (820, 330, 80)], 380),
         ],
-        366,
-        7,
     ),
     "cloud-3": (
-        (1400, 360),
+        (1700, 340),
+        13,
         [
-            (700, 150, 190),
-            (450, 190, 150),
-            (950, 180, 160),
-            (250, 230, 110),
-            (1150, 230, 110),
-            (600, 220, 150),
-            (820, 230, 140),
-            (130, 270, 70),
-            (1290, 265, 70),
-            (1000, 250, 100),
+            (
+                1.0,
+                [
+                    (300, 190, 110),
+                    (520, 150, 140),
+                    (760, 170, 130),
+                    (1000, 140, 150),
+                    (1250, 180, 120),
+                    (1450, 220, 90),
+                    (640, 230, 120),
+                    (1120, 230, 110),
+                ],
+                280,
+            ),
+            (0.45, [(180, 250, 70), (420, 260, 90), (1350, 270, 80), (1550, 280, 60)], 310),
         ],
-        292,
-        11,
     ),
 }
 
@@ -137,75 +111,64 @@ def fbm(h: int, w: int, cells: float, octaves: int, rng: np.random.Generator) ->
     return total / weight
 
 
-def worley(h: int, w: int, cells: int, rng: np.random.Generator) -> np.ndarray:
-    """Distance to the nearest jittered lattice point, 0 at the point and 1 a cell away: inverted, round puffs."""
-    size = w / cells
-    grid_y, grid_x = int(np.ceil(h / size)) + 3, cells + 3
-    grid = np.mgrid[0:grid_y, 0:grid_x].transpose(1, 2, 0).astype(float)
-    points = (grid + rng.random((grid_y, grid_x, 2))) * size - size
-    yy, xx = np.mgrid[0:h, 0:w].astype(float)
-    cell_y = ((yy + size) // size).astype(int)
-    cell_x = ((xx + size) // size).astype(int)
-    nearest = np.full((h, w), np.inf)
-    for dy in (-1, 0, 1):
-        for dx in (-1, 0, 1):
-            iy = np.clip(cell_y + dy, 0, grid_y - 1)
-            ix = np.clip(cell_x + dx, 0, grid_x - 1)
-            nearest = np.minimum(nearest, np.hypot(yy - points[iy, ix, 0], xx - points[iy, ix, 1]))
-    return np.clip(nearest / size, 0, 1)
+def bank(w: int, h: int, rng: np.random.Generator, lobes, base_y: float) -> tuple[np.ndarray, np.ndarray]:
+    """A lobed bank with a flat underside, its outline nudged by slow noise so no lobe is a clean circle.
 
-
-def lit(thickness: np.ndarray, relief: float) -> np.ndarray:
-    """Diffuse light on the thickness map read as a height field."""
-    gy, gx = np.gradient(thickness)
-    normal = np.dstack([-gx * relief, -gy * relief, np.ones_like(thickness)])
-    normal /= np.linalg.norm(normal, axis=2, keepdims=True)
-    return np.clip(normal @ (LIGHT_DIRECTION / np.linalg.norm(LIGHT_DIRECTION)), 0, 1)
-
-
-def render(size, puffs, baseline, seed, *, light, shadow, ambient, gain, texture, core, fringe, glow, occlusion):
-    w, h = size
-    rng = np.random.default_rng(seed)
+    Returns the bank's coverage and, separately, how close each pixel sits to a lobe's heart.
+    """
     yy, xx = np.mgrid[0:h, 0:w].astype(float)
     field = np.zeros((h, w))
-    for cx, cy, r in puffs:
-        field += np.exp(-1.5 * (((xx - cx) / r) ** 2 + ((yy - cy) / (r * 0.85)) ** 2))
-    body = (1 - np.exp(-1.3 * field)) * smoothstep(baseline + 12, baseline - 34, yy)
-
-    # Billows and texture are sampled through a gentle domain warp so nothing sits on a grid.
-    warp = 0.05 * w
+    for cx, cy, r in lobes:
+        field += np.exp(-1.6 * (((xx - cx) / r) ** 2 + ((yy - cy) / (r * 0.8)) ** 2))
+    body = (1 - np.exp(-1.4 * field)) * smoothstep(base_y + 16, base_y - 40, yy)
+    warp = 0.03 * w
     coords = [
-        np.clip(yy + (fbm(h, w, 2, 3, rng) - 0.5) * warp, 0, h - 1),
-        np.clip(xx + (fbm(h, w, 2, 3, rng) - 0.5) * warp, 0, w - 1),
+        np.clip(yy + (fbm(h, w, 3, 3, rng) - 0.5) * warp, 0, h - 1),
+        np.clip(xx + (fbm(h, w, 3, 3, rng) - 0.5) * warp, 0, w - 1),
     ]
-    cells = max(3, round(w / 240))
-    billow = sum(weight * (1 - worley(h, w, cells * scale, rng)) for weight, scale in ((0.55, 1), (0.30, 2), (0.15, 4)))
-    billow = map_coordinates(billow, coords, order=1, mode="nearest")
-    grain = map_coordinates(fbm(h, w, 4, 5, rng), coords, order=1, mode="nearest")
-    fine = fbm(h, w, 16, 3, rng)
-    density = body * (0.25 + 0.95 * billow) * (1 - texture / 2 + texture * grain) + 0.14 * (fine - 0.5)
-    alpha = 0.5 * smoothstep(*fringe, density) + 0.5 * smoothstep(*core, density)
-    alpha = gaussian_filter(np.clip(alpha, 0, 1), 0.8)
+    return (
+        map_coordinates(body, coords, order=1, mode="nearest"),
+        map_coordinates(np.clip(field, 0, 1.2) / 1.2, coords, order=1, mode="nearest"),
+    )
 
-    coarse = gaussian_filter(alpha, 12)
-    diffuse = 0.62 * lit(coarse, 120) + 0.38 * lit(gaussian_filter(alpha, 4), 32)
-    rows = np.where(alpha.max(axis=1) > 0.05)[0]
-    top = rows.min() if rows.size else 0
-    depth = np.clip((yy - top) / max(1.0, baseline - top), 0, 1)
-    shade = (ambient + gain * diffuse) * (1 - occlusion * depth**1.4 * coarse / max(coarse.max(), 1e-6))
-    shade = np.clip(shade, 0, 1)
-    shade += (1 - shade) * glow * (1 - alpha)
 
-    light, shadow = np.array(light, float), np.array(shadow, float)
-    rgb = shadow + (light - shadow) * shade[..., None]
+def render(size, seed, banks, *, tint, max_alpha) -> Image.Image:
+    w, h = size
+    rng = np.random.default_rng(seed)
+    yy = np.mgrid[0:h, 0:w][0].astype(float)
+    wash = np.zeros((h, w))
+    hearts = np.zeros((h, w))
+    for weight, lobes, base_y in banks:
+        body, heart = bank(w, h, rng, lobes, base_y)
+        wash = 1 - (1 - wash) * (1 - weight * body)
+        hearts = np.maximum(hearts, heart * weight)
+    rows = np.where(wash.max(axis=1) > 0.05)[0]
+    top, base = (rows.min(), max(rows.max(), rows.min() + 1)) if rows.size else (0, h - 1)
+
+    # Ink gathers toward the underside while the crown thins; each lobe keeps a slightly denser heart.
+    gradation = 0.32 + 0.68 * smoothstep(top, base, yy) ** 1.1
+    density = wash * gradation * (0.78 + 0.32 * hearts) * (0.72 + 0.56 * fbm(h, w, 2, 3, rng))
+    # Pigment pools where the wet wash stopped along the underside.
+    gy = np.gradient(gaussian_filter(wash, 3), axis=0)
+    density += gaussian_filter(np.clip(-gy, 0, None), 2) * 9 * wash
+    # The wash bleeds sideways; a little of the crisp edge survives.
+    density = 0.62 * gaussian_filter(density, sigma=(4, 7)) + 0.38 * density
+    # A hint of dry brush along the body, then paper grain.
+    streak = zoom(fbm(h, max(8, w // 10), 10, 3, rng), (1, 10), order=1)[:, :w]
+    streak = np.pad(streak, ((0, 0), (0, w - streak.shape[1])), mode="edge")
+    density *= 0.94 + 0.12 * streak
+    density *= 0.92 + 0.16 * fbm(h, w, 70, 2, rng)
+
+    alpha = np.clip(density, 0, 1) * max_alpha
+    rgb = np.broadcast_to(np.array(tint, float), (h, w, 3))
     return Image.fromarray(np.dstack([rgb, alpha * 255]).clip(0, 255).astype(np.uint8), "RGBA")
 
 
 def main() -> None:
-    for name, (size, puffs, baseline, seed) in CLOUDS.items():
+    for name, (size, seed, banks) in CLOUDS.items():
         for suffix, palette in (("", NIGHT), ("-light", DAY)):
             path = OUT / f"{name}{suffix}.webp"
-            render(size, puffs, baseline, seed, **palette).save(path, quality=80, method=6)
+            render(size, seed, banks, **palette).save(path, quality=80, method=6)
             print(f"{path.relative_to(OUT.parents[1])}  {path.stat().st_size // 1024} KB")
 
 

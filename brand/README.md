@@ -98,13 +98,16 @@ A soft ivory halo makes the moon luminous on dark ground. Use the generated
 transparent assets; do not replace them with drawn icons. Only the current body
 is loaded.
 
-Three rendered clouds drift slowly across the sky in front of the sun or moon
-and veil them as they pass. `brand/clouds.py` draws them procedurally: sun-lit
-white with grey undersides for paper, moonlit grey for dark ground, each lit
-from the upper left. Run it to regenerate the six transparent WebP files. The
-layer is hidden from assistive technology and keeps to the sky band above the
-headline, behind the header and the text. Do not
-mirror or recolour a cloud in CSS; its light would come from the wrong side.
+Three ink-wash cloud banks drift slowly across the sky in front of the sun or
+moon and veil them as they pass, the way mist crosses a moon in a wash painting.
+`brand/clouds.py` draws them procedurally in the manner of the persimmon wash:
+one tint with the tone in the transparency, ink gathering toward a wet underside
+while the crown thins into the paper, a sideways bleed, a hint of dry brush, and
+paper grain. Paper gets diluted warm ink; dark ground gets the same wash as pale
+ivory. Run it to regenerate the six transparent WebP files. The layer is hidden
+from assistive technology and keeps to the sky band above the headline, behind
+the header and the text. Do not recolour or sharpen a bank in CSS; the tone is
+the drawing.
 
 Update each minute while visible. Resume from the current time after sleep or
 browser-history restoration. Reduced motion disables transitions and holds the
@@ -142,7 +145,7 @@ clear wherever the corresponding feature is explained.
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
 | `site/img/sun.png`, `moon.png` | ChatGPT Image-generated transparent sun and moon; original alpha and resolution preserved |
-| `site/img/cloud-1.webp` … `cloud-3-light.webp` | Rendered clouds for dark ground and paper; regenerate with `brand/clouds.py` |
+| `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
 | `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
 
