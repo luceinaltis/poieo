@@ -8,8 +8,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ..card import append_journal, load_card
+from ..card import load_card
 from ..errors import PoieoError
+from ..journal import append_journal
 from ..memory import write_result
 from ..memory.results import revise_application
 from ..runtime import RunResult, new_run_id

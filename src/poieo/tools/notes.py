@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..journal import append_journal
 from ..providers.base import ToolDef
 from . import Tool, ToolError
 
@@ -34,10 +35,6 @@ class Postbox:
 
 def _tell_tool(postbox: Postbox) -> Tool:
     async def run(_workdir: Path, args: dict[str, Any]) -> str:
-        # Late: the journal's format belongs to the card module, and importing
-        # it at module level would close a cycle (card imports tools).
-        from ..card import append_journal
-
         name = str(args.get("task", "")).strip()
         message = " ".join(str(args.get("message", "")).split())
 

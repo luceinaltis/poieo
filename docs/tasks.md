@@ -1,6 +1,6 @@
 # Tasks
 
-`src/poieo/task.py`, `src/poieo/card.py`
+`src/poieo/task.py`, `src/poieo/card.py`, `src/poieo/journal.py`
 
 A task card is the short form for recurring work. It puts one task in one YAML
 or JSON file and expands to the same `TaskSpec` and `GraphSpec` the daemon
@@ -90,7 +90,9 @@ visible to the next. `poieo run` builds the same payload and puts `--input` and
 `--set` on top of it, resolving a relative `input_file` against the card, since
 by hand there is no project config to resolve it against.
 
-The journal is append-only at `memory/shortterm/<task>.md`. Every CLI and daemon
+The journal is append-only at `memory/shortterm/<task>.md`, read and written
+through `journal.py`, which sits below the card, the run records and the tools
+so that each can write a line without loading the card. Every CLI and daemon
 run records its outcome. Prompt assembly shows new notes in oldest-first order
 before bounded older history, using the task's last successful own entry as the
 bookmark. A failed run does not advance that bookmark, because repeating a note

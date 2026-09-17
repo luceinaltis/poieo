@@ -38,14 +38,12 @@ from . import detect as engines
 from .binding import load_binding, split_ref
 from .card import (
     CardSpec,
-    append_journal,
     build_graph,
     card_payload,
     expand,
     is_card_file,
     load_card,
     load_cards,
-    read_journal,
 )
 from .daemon import Daemon, load_config
 from .daemon.config import (
@@ -60,6 +58,7 @@ from .daemon.triggers import build_trigger
 from .editor import render_editor
 from .errors import BindingError, PoieoError
 from .graph import GraphSpec, load_graph
+from .journal import append_journal, read_journal
 from .layout import layout_for
 from .learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from .learn import learn as run_learning_pass
