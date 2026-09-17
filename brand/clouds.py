@@ -143,7 +143,7 @@ def render(size, seed, banks, *, tint, max_alpha) -> Image.Image:
         wash = 1 - (1 - wash) * (1 - weight * body)
         hearts = np.maximum(hearts, heart * weight)
     rows = np.where(wash.max(axis=1) > 0.05)[0]
-    top, base = (rows.min(), rows.max()) if rows.size else (0, h - 1)
+    top, base = (rows.min(), max(rows.max(), rows.min() + 1)) if rows.size else (0, h - 1)
 
     # Ink gathers toward the underside while the crown thins; each lobe keeps a slightly denser heart.
     gradation = 0.32 + 0.68 * smoothstep(top, base, yy) ** 1.1
