@@ -281,8 +281,7 @@ offers `use this draft`, which brings the fields out and fills the name and
 prompt, the folder only when the draft names one inside the project (the list
 keeps what it had otherwise), and when it runs -- a schedule the choices have
 is chosen, any other opens the line with it written out -- and says so above
-the fields. Once the form has become steps, the draft's prompt becomes the
-first step's instructions. Enter sends, Shift+Enter breaks the line, and Enter
+the fields. Enter sends, Shift+Enter breaks the line, and Enter
 during input-method composition does nothing. A refusal stays on screen with
 the message still in the box, so nothing typed is lost. The conversation lives
 in the panel and goes with it.
@@ -309,12 +308,10 @@ nothing. A refusal that names the model -- no models file, a role that
 resolves to nothing, an endpoint that did not answer -- carries `open models`,
 which opens the models panel in the panel's place.
 
-Steps are not written here. The step form -- `StepEditor` and the drafts in
-`steps.ts` that compile to the graph schema, with the checks for empty
-instructions, unreachable steps, removed results, and result reads before
-their writer -- stays in the tree for the canvas that will replace it, and
-the daemon's steps route and validation are unchanged; until the board hosts
-that canvas, a task of several steps is drawn in the standalone editor.
+Steps are not written here. The step form that compiled drop-downs to the
+graph schema is gone from the tree (git history has it); the daemon's steps
+route and validation are unchanged, and until the board hosts the graph
+canvas, a task of several steps is drawn in the standalone editor.
 
 A card whose task applies its checked changes itself says so on its face, with
 the checks on the tooltip. Fresh listings update this permission and its checks

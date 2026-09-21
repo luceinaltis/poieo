@@ -27,6 +27,7 @@ const fetchUndeclared = vi.hoisted(() =>
   vi.fn<typeof import("./api").fetchUndeclared>(async () => []),
 )
 const createTask = vi.hoisted(() => vi.fn<typeof import("./api").createTask>())
+const draftTask = vi.hoisted(() => vi.fn<typeof import("./api").draftTask>())
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   // The folder list under the make form: stood in for, or the form reaches
@@ -37,6 +38,7 @@ vi.mock("./api", async (importOriginal) => ({
   fetchRunEvents,
   fetchUndeclared,
   createTask,
+  draftTask,
 }))
 
 import App from "./App"
@@ -286,4 +288,23 @@ test("a name already taken says so while it is being typed", async () => {
   })
   expect(container.textContent).not.toContain("already has a task called")
   expect(container.querySelector<HTMLButtonElement>('[data-do="make-task"]')!.disabled).toBe(false)
+})
+
+test("a conversation the project has no model for opens the models panel in the form's place", async () => {
+  // The button is the conversation's; the way to the panel is the shell's,
+  // handed down through the form. One margin, so the form gives it up.
+  draftTask.mockResolvedValue({ ok: false, error: "this project has no models file for a draft to come from" })
+  await open([row("chores", "night shift")])
+  await act(async () => button("open-make")!.click())
+
+  const box = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Describe the work"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "fix the tests")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-do="describe"]')!.click())
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-do="describe-models"]')!.click())
+
+  expect(panel("Models")).not.toBeNull()
+  expect(panel("New task")).toBeNull()
 })
