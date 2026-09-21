@@ -8,6 +8,10 @@ test("a blank name is taken from the first line of the prompt, cut short", () =>
   expect(titleOf("Run the tests. Fix one failure.")).toBe("Run the tests")
   expect(titleOf("매일 밤 테스트를 돌리고 실패하는 걸 하나만 고쳐줘")).toBe("매일 밤 테스트를 돌리고 실패하는 걸 하나만 고쳐줘")
   expect(titleOf("\n\n  Tidy the docs!\nThen stop.")).toBe("Tidy the docs")
+  // An ideographic full stop is not followed by a space, and is still the
+  // end of the first sentence; a dot inside a version is not.
+  expect(titleOf("今日は掃除する。次に直す。")).toBe("今日は掃除する")
+  expect(titleOf("Bump v2.0 to v2.1 everywhere")).toBe("Bump v2.0 to v2.1 everywhere")
   expect(
     titleOf("Look through every open issue in the tracker and pick the one that has waited longest without an answer"),
   ).toBe("Look through every open issue in the tracker and pick the")
