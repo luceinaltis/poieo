@@ -1,16 +1,17 @@
 /**
  * Choosing the folder a task works in, from the ones the project has.
  *
- * The folder is the one thing a form here never fills in: it is the place the
- * model's hands may touch, and DESIGN.md keeps that choice with the person.
- * What the form could not do was *say* what the choice was between -- a card
- * spells its folder relative to the tasks folder, so the project itself was
- * `..`, and a reader had to know that. This lists what the daemon would
- * accept, in the daemon's spelling, beside the field it fills. Offering is
- * not inferring: it opens on nothing, or on the folder the field already has.
+ * A card spells its folder relative to the tasks folder, so the project
+ * itself is `..`, and a reader had to know that. This lists what the daemon
+ * would accept, in the daemon's spelling, labelled as a person reads them.
  *
- * The field stays the truth. A path typed by hand that the list does not
- * have leaves the list unselected rather than the field unchanged.
+ * It stands beside a field or alone. Beside the setup form's field, it
+ * offers and the field stays the truth: a path typed by hand that the list
+ * does not have leaves the list unselected rather than the field unchanged,
+ * and with nothing to offer it is not there at all. Alone, on the new-task
+ * panel, it is the field: it always stands on the folder the task has,
+ * starting on the whole project, and a folder the list does not have -- a
+ * seed's, a draft's -- is shown as one more choice rather than hidden.
  */
 
 import { useEffect, useState } from "react"
@@ -22,12 +23,15 @@ export function FolderPick({
   project,
   value,
   disabled = false,
+  alone = false,
   onPick,
 }: {
   project: string
-  /** The field's current value, so the list can stand on it when it has it. */
+  /** The folder the task has, so the list can stand on it when it has it. */
   value: string
   disabled?: boolean
+  /** The only control for the folder, rather than a list beside a field. */
+  alone?: boolean
   onPick(path: string): void
 }) {
   const [folders, setFolders] = useState<Folder[]>([])
@@ -43,22 +47,27 @@ export function FolderPick({
   }, [project])
 
   // Nothing to offer is no list at all, not an empty one: a daemon too old to
-  // answer leaves the form exactly as it was.
-  if (folders.length === 0) return null
+  // answer leaves the setup form exactly as it was. Alone, the list is the
+  // field, and a field cannot be absent.
+  if (folders.length === 0 && !alone) return null
 
-  const chosen = folders.some((folder) => folder.path === value.trim()) ? value.trim() : ""
+  const current = value.trim()
+  const known = folders.some((folder) => folder.path === current)
   return (
     <select
       name="folder-pick"
       className="folder-pick"
       aria-label="Choose a folder in this project"
-      value={chosen}
+      value={alone || known ? current : ""}
       disabled={disabled}
       onChange={(event) => {
         if (event.target.value) onPick(event.target.value)
       }}
     >
-      <option value="">choose from this project…</option>
+      {alone ? null : <option value="">choose from this project…</option>}
+      {alone && current && !known ? (
+        <option value={current}>{current === ".." ? "this project" : current}</option>
+      ) : null}
       {folders.map((folder) => (
         <option key={folder.path} value={folder.path}>
           {folder.name}

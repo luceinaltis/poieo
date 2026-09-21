@@ -1,6 +1,18 @@
 import { expect, test } from "vitest"
 
-import { slugOf } from "./slug"
+import { slugOf, titleOf } from "./slug"
+
+test("a blank name is taken from the first line of the prompt, cut short", () => {
+  // The first sentence when it comes soon enough; the first words otherwise;
+  // and never the second line, which is where instructions get long.
+  expect(titleOf("Run the tests. Fix one failure.")).toBe("Run the tests")
+  expect(titleOf("매일 밤 테스트를 돌리고 실패하는 걸 하나만 고쳐줘")).toBe("매일 밤 테스트를 돌리고 실패하는 걸 하나만 고쳐줘")
+  expect(titleOf("\n\n  Tidy the docs!\nThen stop.")).toBe("Tidy the docs")
+  expect(
+    titleOf("Look through every open issue in the tracker and pick the one that has waited longest without an answer"),
+  ).toBe("Look through every open issue in the tracker and pick the")
+  expect(titleOf("   ")).toBe("")
+})
 
 test("a title becomes the filename the daemon would give it", () => {
   // Mirrors the server's _slug, case for case: the point of warning early is

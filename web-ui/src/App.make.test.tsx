@@ -198,13 +198,10 @@ test("a card made from the form opens in its drawer as soon as the board has it"
 
   const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
   const name = container.querySelector<HTMLInputElement>('input[name="name"]')!
-  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
   const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
   await act(async () => {
     write.call(name, "evening sweep")
     name.dispatchEvent(new Event("input", { bubbles: true }))
-    write.call(folder, "../work")
-    folder.dispatchEvent(new Event("input", { bubbles: true }))
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "x")
     prompt.dispatchEvent(new Event("input", { bubbles: true }))
   })
@@ -236,13 +233,10 @@ test("a card arriving after the reader has moved on does not take the margin bac
 
   const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
   const name = container.querySelector<HTMLInputElement>('input[name="name"]')!
-  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
   const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
   await act(async () => {
     write.call(name, "evening sweep")
     name.dispatchEvent(new Event("input", { bubbles: true }))
-    write.call(folder, "../work")
-    folder.dispatchEvent(new Event("input", { bubbles: true }))
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "x")
     prompt.dispatchEvent(new Event("input", { bubbles: true }))
   })
@@ -273,13 +267,10 @@ test("a name already taken says so while it is being typed", async () => {
   })
 
   expect(container.textContent).toContain("already has a task called")
-  // Saving is refused here, not by the daemon later: the folder and prompt
-  // could be perfect and the save would still bounce.
-  const folder = container.querySelector<HTMLInputElement>('input[name="folder"]')!
+  // Saving is refused here, not by the daemon later: the prompt could be
+  // perfect and the save would still bounce.
   const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
   await act(async () => {
-    write.call(folder, "../work")
-    folder.dispatchEvent(new Event("input", { bubbles: true }))
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
       prompt,
       "x",

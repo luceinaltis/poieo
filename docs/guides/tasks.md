@@ -6,16 +6,17 @@ A task is a folder, instructions, and a schedule. Each run records what happened
 
 Choose **New task** on the board and say what it should do, in any language:
 “every night, run the tests and fix one failure”. Your project's model asks
-what it needs to know and proposes a card; **use this draft** fills in the
-name and the prompt for you to read over, change and save. Or choose **or
-write it yourself** and type them. Choose **save and start**, or **save without
-starting** to inspect it first. Open **Task setup** to switch a saved task on
-or edit its instructions.
+what it needs to know and proposes a card; **use this draft** fills it in for
+you to read over, change and save. Or choose **or write it yourself** and type
+the prompt; the name can stay blank and is taken from its first line. Choose
+**save and start**, or **save without starting** to inspect it first. Open
+**Task setup** to switch a saved task on or edit its instructions.
 
-A task works in your whole project. To limit it to one folder, set its
-schedule, write it as steps, or let it apply its own checked changes, open
-**more** under the prompt. The line above the save button always says which
-folder will change and whether poieo can undo it.
+A task works in your whole project and runs every hour. To limit it to one
+folder, choose when it runs, or write it as steps, open **more** under the
+prompt. The line above the save button always says which folder will change
+and whether poieo can undo it. Letting a task apply its own checked changes
+is switched on later, in **Task setup**, under [Changes](changes.md).
 
 Use a Git project for work you can [review and undo](changes.md). Without Git,
 a task edits the folder directly and poieo cannot undo it.
@@ -26,9 +27,11 @@ The default is once at startup, then hourly. **run now**, **pause**, and
 **resume** control an enabled task. Pause stops future work; it does not kill
 an operation already in progress.
 
-Set the schedule in the **every** line under **more** on the form, or in **Task setup**: an
-interval such as `30m`, the word `loop`, or a cron line such as `0 2 * * *`.
-Leave it blank for the hourly default. A changed schedule takes effect when
+Choose **when** under **more** on the form: every hour, every 30 minutes,
+every day, every night at 2, or **at another time…** for a line of your own.
+In **Task setup** the same thing is the **every** line: an interval such as
+`30m`, the word `loop`, or a cron line such as `0 2 * * *`. Leave it blank
+for the hourly default. A changed schedule takes effect when
 the daemon restarts, and the form says so. In the task's file under `tasks/`
 the same line is one of:
 

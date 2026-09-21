@@ -48,7 +48,6 @@ function fill(selector: string, value: string) {
 
 async function start() {
   fill('[name="name"]', "review")
-  fill('[name="folder"]', "../work")
   fill('[name="prompt"]', "Draft an answer")
   await click("Write as steps")
 }
@@ -59,7 +58,7 @@ test("a prompt grows into connected steps without retyping it", async () => {
   fill('[aria-label="Instructions for Step 2"]', "Review the draft")
   await click("Insert result from Step 1")
   await click("save without starting")
-  expect(createTask).toHaveBeenCalledWith("board", "review", "../work", expect.objectContaining({
+  expect(createTask).toHaveBeenCalledWith("board", "review", "..", expect.objectContaining({
     entry: "step_1",
     nodes: [
       expect.objectContaining({ id: "step_1", type: "agent", prompt: "Draft an answer", next: "step_2" }),
@@ -76,7 +75,7 @@ test("a condition is written by picking a result, comparison, and next step", as
   fill('[aria-label="Value for condition 1 in Step 2"]', 'try "again"')
   fill('[aria-label="Next step for condition 1 in Step 2"]', "step_1")
   await click("save without starting")
-  expect(createTask).toHaveBeenCalledWith("board", "review", "../work", expect.objectContaining({
+  expect(createTask).toHaveBeenCalledWith("board", "review", "..", expect.objectContaining({
     max_steps: 100,
     nodes: expect.arrayContaining([expect.objectContaining({
       type: "router", branches: [{ when: '"try \\"again\\"" in step_1', to: "step_1" }], default: null,
@@ -90,7 +89,7 @@ test("command success compares the numeric exit code, not the output text", asyn
   fill('[aria-label="Command for Step 2"]', "npm test")
   await click("Add condition")
   await click("save without starting")
-  expect(createTask).toHaveBeenCalledWith("board", "review", "../work", expect.objectContaining({
+  expect(createTask).toHaveBeenCalledWith("board", "review", "..", expect.objectContaining({
     nodes: expect.arrayContaining([expect.objectContaining({
       type: "router", branches: [{ when: "step_2.exit_code == 0", to: null }],
     })]),
@@ -104,7 +103,7 @@ test("inserting command output uses the field the runtime records", async () => 
   await click("Add step")
   await click("Insert result from Step 2")
   await click("save without starting")
-  expect(createTask).toHaveBeenCalledWith("board", "review", "../work", expect.objectContaining({
+  expect(createTask).toHaveBeenCalledWith("board", "review", "..", expect.objectContaining({
     nodes: expect.arrayContaining([expect.objectContaining({ id: "step_3", prompt: "{{ step_2.output }}" })]),
   }), false)
 })
