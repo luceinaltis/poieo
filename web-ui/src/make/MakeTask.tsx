@@ -16,12 +16,14 @@
  * is second and plainer for the same reason the warning below it exists: the
  * consequence belongs to the loud one.
  *
- * **The folder is required and never filled in.** It is the one thing the
- * model's hands will touch, so a default there would fill in the single moment
- * principle 7 keeps out of the machinery it otherwise hides. That is also why
- * the sentence above the button names the folder rather than describing it:
- * the card starts running when it is saved, and this is where a person finds
- * that out.
+ * **The folder is required and has no default.** It is the one thing the
+ * model's hands will touch, so a guess there would fill in the single moment
+ * principle 7 keeps out of the machinery it otherwise hides. A draft from the
+ * conversation may put a folder in the field, but only one inside the project
+ * and only when the person's own words named it, and the field stays theirs
+ * to change. That is also why the sentence above the button names the folder
+ * rather than describing it: the card starts running when it is saved, and
+ * this is where a person finds that out.
  *
  * Shell UI, so it may read the API. It hangs off the rail beside `models`
  * because making a task is what the page is for, not something one task does.
