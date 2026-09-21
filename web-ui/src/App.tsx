@@ -445,7 +445,7 @@ export default function App({ store }: { store?: StageStore }) {
         ) : null}
         {empty && !memoryOpen ? (
           <div className="shell-empty">
-            <p>No tasks yet. Create one to put your models to work.</p>
+            <p>No tasks yet. Say what you want done.</p>
             <button
               type="button"
               data-do="empty-new-task"
@@ -494,6 +494,9 @@ export default function App({ store }: { store?: StageStore }) {
           taken={tasks.filter((one) => one.project === project.name).map((one) => one.name)}
           onClose={closePanel}
           onMade={openOnceMade}
+          // Where a conversation the project has no model for sends the
+          // reader: the panel that connects one, in this panel's place.
+          onModels={openModels}
         />
       ) : null}
 

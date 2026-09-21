@@ -28,13 +28,16 @@ task from a laptop model to a cloud model changes the binding, not the graph.
 
 ### Keep the common case small
 
-An ordinary task needs a name, a folder and a prompt. It receives a schedule, a
-model role, tools and turn limits from defaults. Schedules, isolation, handoffs
-and custom graphs remain available when the work needs them; they are not setup
-steps for everyone else.
+An ordinary task needs a name and a prompt, and can be asked for in one
+sentence to the project's model. It works in the whole project and receives a
+schedule, a model role, tools and turn limits from defaults. Narrowing the
+folder, schedules, isolation, handoffs and custom graphs remain available when
+the work needs them; they are not setup steps for everyone else.
 
-The folder is never inferred. It is the place the model may edit, so the user
-must choose it explicitly.
+The folder is the project the user opened, never anywhere else, and a task can
+be narrowed to a folder inside it. Because that is where the model may edit,
+the moment before saving says whose files will change and whether that can be
+undone.
 
 ### Prefer local models, allow any chosen model
 
@@ -90,8 +93,9 @@ a mechanism is necessary to explain what will happen to the user's files.
 ## The experience today
 
 `poieo init` creates a project and records the model endpoints it can reach. A
-task card can be written as three fields, tried once with `poieo run`, and kept
-alive with `poieo daemon`. The daemon serves one board for one or more projects.
+task card can be written as a name and a prompt, tried once with `poieo run`,
+and kept alive with `poieo daemon`. The daemon serves one board for one or more
+projects.
 
 From the board a user can:
 
@@ -99,7 +103,6 @@ From the board a user can:
   and switch it on or off;
 - describe the work in a conversation with the project's model and put the
   card it proposes on the form, to check and save;
-- create a task with several steps and conditions without writing YAML;
 - rename a task or set it aside without destroying its file;
 - see task state, graph wiring, model assignments and run history, including
   whether a task applies its own checked changes and what its checks said;
@@ -108,10 +111,10 @@ From the board a user can:
 - inspect available models, declare an answering endpoint and choose which model
   serves a role.
 
-Advanced task fields beyond a one-line schedule, and editing existing graph
-wiring, remain file-based. New
-tasks can be written as steps on the board. The standalone graph viewer and
-editor operate on the same graph schema.
+Advanced task fields beyond a one-line schedule, and graph wiring, remain
+file-based: a task of several steps and conditions is drawn in the standalone
+graph editor, which operates on the same graph schema as the viewer, until the
+board hosts that canvas.
 
 ## Safety boundaries
 

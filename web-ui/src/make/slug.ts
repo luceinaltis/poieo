@@ -14,3 +14,23 @@ export function slugOf(title: string): string {
     .replace(/[^\p{L}\p{N}_-]+/gu, "-")
     .replace(/^-+|-+$/g, "")
 }
+
+/**
+ * A title for a card whose name was left blank: the first line of its
+ * prompt, cut at the first sentence when that comes soon enough, otherwise
+ * at the last word that fits. A name is a title on the board and a filename
+ * on disk, and both read better short.
+ */
+export function titleOf(text: string): string {
+  const line = text.split("\n").map((one) => one.trim()).find(Boolean) ?? ""
+  // A full stop ends a sentence only before a space or the end, or "v2.0"
+  // would be cut in half; the ideographic one is never followed by a space
+  // and is a boundary on its own.
+  const stop = line.search(/[.!?](\s|$)|。/u)
+  let title = stop > 0 && stop <= 60 ? line.slice(0, stop) : line
+  if (title.length > 60) {
+    const cut = title.lastIndexOf(" ", 60)
+    title = cut > 20 ? title.slice(0, cut) : title.slice(0, 60)
+  }
+  return title.replace(/[\s.,;:!?。]+$/u, "")
+}

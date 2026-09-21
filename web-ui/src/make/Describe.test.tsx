@@ -73,8 +73,10 @@ test("a message goes to the daemon with the conversation so far, and the reply i
   ])
   expect(host.textContent).toContain("every night run the tests and fix one failure")
   expect(host.textContent).toContain("Which folder should it work in?")
-  // The box is empty again for the next message.
+  // The box is empty again for the next message -- and the examples do not
+  // come back under a conversation that has begun.
   expect(box().value).toBe("")
+  expect(host.querySelectorAll('[data-do="describe-example"]').length).toBe(0)
 
   say("src")
   await send()
@@ -122,6 +124,39 @@ test("a refusal stays on screen and the message stays in the box", async () => {
   await send()
   expect(draftTask).toHaveBeenLastCalledWith("board", [{ role: "user", content: "fix the tests" }])
   expect(host.querySelector('[role="alert"]')).toBeNull()
+})
+
+test("an example goes into the box to be changed or sent, and the examples leave with the first word", () => {
+  // For the person who does not know what to ask for. Into the box, not
+  // sent: a model call is not something to spend on a press meant as a look.
+  show()
+  const examples = () => [...host.querySelectorAll<HTMLButtonElement>('[data-do="describe-example"]')]
+  expect(examples().length).toBe(3)
+
+  act(() => examples()[0].click())
+  expect(box().value).toBe("every night, run the tests and fix one failure")
+  expect(document.activeElement).toBe(box())
+  expect(examples().length).toBe(0)
+  expect(draftTask).not.toHaveBeenCalled()
+})
+
+test("a refusal about the model offers the models panel; one about the message does not", async () => {
+  const onModels = vi.fn()
+  act(() => {
+    root.render(<Describe project="board" onDraft={() => {}} onModels={onModels} />)
+  })
+  draftTask.mockResolvedValue({ ok: false, error: "this project has no models file for a draft to come from" })
+  say("fix the tests")
+  await send()
+
+  const open = host.querySelector<HTMLButtonElement>('[data-do="describe-models"]')!
+  expect(open).not.toBeNull()
+  act(() => open.click())
+  expect(onModels).toHaveBeenCalledWith(open)
+
+  draftTask.mockResolvedValue({ ok: false, error: "a conversation is at most 30 turns; start a new one" })
+  await send()
+  expect(host.querySelector('[data-do="describe-models"]')).toBeNull()
 })
 
 test("nothing is sent while the box is blank, and Enter sends what is there", async () => {

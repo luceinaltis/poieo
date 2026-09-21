@@ -1,8 +1,9 @@
 # Web API and board
 
-New task and Task setup expose an optional Changes section. Review is the
-default; automatic application requires explicit selection and verification
-commands. The form also supports file/folder scope. Card reads expose `apply`
+Task setup exposes an optional Changes section; a new task starts under review
+and the new-task panel does not ask. Review is the default; automatic
+application requires explicit selection and verification commands. The setup
+form also supports file/folder scope. Card reads expose `apply`
 and `keeps_copies`; creation and rewrites validate application settings before
 writing. Editing only the prompt preserves an existing permission. Comments
 and advanced fields continue to use the file editor. Application-only edits
@@ -140,8 +141,10 @@ new binding.
 Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
 `input_file:` — must stay inside the project.
-Both forms list the folders that fence would accept beside the folder field,
-in the card's own spelling; the field fills in nothing on its own.
+Both forms list the folders that fence would accept, in the card's own
+spelling: beside the setup form's folder field, and as the new-task panel's
+only folder control, standing on the project itself (`..`) until narrowed and
+showing a seed's or draft's folder as one more choice when the list lacks it.
 Names are converted to safe filenames and never overwrite an existing card.
 Step creation uses the existing graph schema and preflight to check node fields,
 templates, conditions, connections, and model roles before writing. Every step
@@ -269,31 +272,46 @@ the answer first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
 
-Above the new-task form's fields, the person can describe the work in their
-own words. Each message sends the whole conversation to the draft route; the
-reply is shown under it, with the model that answered named once. A reply
-carrying a card shows that card and offers `use this draft`, which fills the
-name, prompt and schedule, and the folder only when the draft names one the
-project has -- the field keeps what the person typed otherwise -- and says so
-above the fields. Once the form has become steps, the draft's prompt becomes
-the first step's instructions. Enter sends, Shift+Enter breaks the line, and
-Enter during input-method composition does nothing. A refusal stays on screen
-with the message still in the box, so nothing typed is lost. The conversation
-lives in the panel and goes with it.
+The new-task panel opens on one question: the conversation, with the fields
+put away until a draft arrives or the person chooses `or write it yourself`.
+A seeded panel (make one like it) opens on the fields. Each message sends the
+whole conversation to the draft route; the reply is shown under it, with the
+model that answered named once. A reply carrying a card shows that card and
+offers `use this draft`, which brings the fields out and fills the name and
+prompt, the folder only when the draft names one inside the project (the list
+keeps what it had otherwise), and when it runs -- a schedule the choices have
+is chosen, any other opens the line with it written out -- and says so above
+the fields. Enter sends, Shift+Enter breaks the line, and Enter
+during input-method composition does nothing. A refusal stays on screen with
+the message still in the box, so nothing typed is lost. The conversation lives
+in the panel and goes with it.
 
-The new-task form starts with name, folder, and prompt. `Write as steps` keeps
-the prompt as the first step and adds model instructions, commands, conditions,
-or a question for a person. Results can be inserted into later instructions;
-conditions choose an earlier answer or command result, a comparison, a value,
-and a destination, with a separate fallback. Conditions keep their first-match
-order. A question ends the run; task-level handoffs still belong in the card.
-New model steps use the ordinary 40-turn limit and include journal and memory
-input. Each graph limits a run to 100 steps including repeats.
+The fields are a prompt and a name, and the name may be left blank: it is then
+the first line of the prompt, cut at the first sentence when that comes
+within sixty characters and at the last word that fits otherwise, shown as the
+field's placeholder before it is used and checked for collisions like a typed
+one. Under `more` are where it works and when it runs. The
+folder is a list standing on the whole project, `..`, offered as "this
+project". When it runs is a list of plain words -- every hour, every 30
+minutes, every day, every night at 2 -- each carrying the card's own line,
+with a last choice that opens that line for an interval, the word loop, or a
+cron line; blank sends nothing and the card takes its hourly default. How
+changes reach the project is not asked: a new task starts under review, and
+Task setup is where automatic application is switched on. The sentence above
+the save names the folder that will change and whether there is a copy, and
+it is there before anything is typed. Failed saves retain the whole draft;
+successful saves clear it.
 
-The form checks empty instructions, unreachable steps, removed results, and
-result reads that could occur before their writer. Server validation remains
-authoritative. Failed saves retain the whole draft; successful saves clear it.
-This form creates new tasks; editing existing graphs remains file-based.
+Under the question, before the first word, three example sentences stand as
+buttons; pressing one puts it in the box to be changed or sent, and spends
+nothing. A refusal that names the model -- no models file, a role that
+resolves to nothing, an endpoint that did not answer -- carries `open models`,
+which opens the models panel in the panel's place.
+
+Steps are not written here. The step form that compiled drop-downs to the
+graph schema is gone from the tree (git history has it); the daemon's steps
+route and validation are unchanged, and until the board hosts the graph
+canvas, a task of several steps is drawn in the standalone editor.
 
 A card whose task applies its checked changes itself says so on its face, with
 the checks on the tooltip. Fresh listings update this permission and its checks
@@ -405,9 +423,10 @@ Hanken Grotesk and DM Mono ship with the board for offline use; decorative wash
 art and serif headings belong to the public website, not the working board.
 The visual reference and asset list live in [the brand guide](../brand/README.md).
 
-The task form and plain-card editor expose review or automatic application,
-allowed paths and verification commands in an optional disclosure. Automatic
-mode requires explicit selection and at least one check. Run history displays
+The plain-card editor exposes review or automatic application, allowed paths
+and verification commands in an optional disclosure; the new-task panel does
+not, since a new task starts under review. Automatic mode requires explicit
+selection and at least one check. Run history displays
 the application outcome and verification output, including repaired, already
 included and undone work. Applied diffs use the final verified combination.
 An applied run offers undo through the same checks; unresolved undo leaves the
