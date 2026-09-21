@@ -109,9 +109,9 @@ roles:
 A node bound to it must say what to decide. Its typed `questions`, in the
 API's own shape, travel in the node's `params`; the rendered `system` and
 `prompt` become the one `state` the model is shown. The answers return as the
-node's text, as JSON keyed by question, each carrying the pick, the
-probabilities behind it and, for a choice or a score, a confidence. Read them
-the way any JSON answer is read:
+node's text, as JSON keyed by question: a yes/no question answers with one
+probability; a choice or a score answers with the pick, the probabilities over
+its options and a confidence. Read them the way any JSON answer is read:
 
 ```yaml
   - id: judge

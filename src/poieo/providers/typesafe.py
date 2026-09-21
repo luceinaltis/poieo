@@ -75,9 +75,15 @@ class TypeSafeProvider(_HttpProvider):
                 provider=self.name,
             )
 
-        payload = {"model": request.model, "state": _state(self.name, request), "questions": questions}
-        data = await self._post("/v1/systemone", payload)
-        answers = data.get("answers")
+        state = _state(self.name, request)
+        if not state:
+            raise ProviderError(
+                f"{self.name}: this node rendered nothing to decide on -- an empty prompt and no system block",
+                provider=self.name,
+            )
+
+        data = await self._post("/v1/systemone", {"model": request.model, "state": state, "questions": questions})
+        answers = data.get("answers") if isinstance(data, dict) else None
         if not isinstance(answers, dict):
             raise ProviderError(f"{self.name}: response contained no answers", provider=self.name)
 
@@ -86,10 +92,13 @@ class TypeSafeProvider(_HttpProvider):
             # Generation settings inherited from the binding's `default` --
             # max_tokens, temperature, a thinking budget -- describe writing,
             # and this model writes nothing, so each holds trivially rather
-            # than being dropped. The API rejects fields it does not know, so
-            # they are not sent; the run record says which ones were not.
+            # than being dropped. The API documents exactly three request
+            # fields, so nothing else is sent; the run record says which
+            # settings were not.
             meta["ignored_params"] = sorted(params)
-        usage = data.get("usage") or {}
+        usage = data.get("usage")
+        if not isinstance(usage, dict):
+            usage = {}
         return LLMResponse(
             text=json.dumps(answers, ensure_ascii=False),
             model=data.get("model") or request.model,
@@ -118,4 +127,6 @@ class TypeSafeProvider(_HttpProvider):
             )
         except ProviderError as exc:
             return False, str(exc).removeprefix(f"{self.name}: ")
+        if not isinstance(data, dict):
+            return False, "reachable, but the answer was not the API's shape"
         return True, f"reachable ({data.get('model') or _FLAGSHIP})"
