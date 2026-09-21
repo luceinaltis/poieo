@@ -42,14 +42,14 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.hidden).toBe(false)
   expect(sky.getAttribute("role")).toBe("img")
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon.png")
+  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
   expect(sky.getAttribute("aria-label")).toContain("05:59")
   expect(vi.getTimerCount()).toBe(1)
 
   // The boundary changes on the next clock minute, without a reload.
   vi.advanceTimersByTime(30_000)
   expect(sky.dataset.period).toBe("day")
-  expect(body.getAttribute("src")).toBe("img/sun.png")
+  expect(body.getAttribute("src")).toBe("img/sun-daylight.png")
   expect(sky.getAttribute("aria-label")).toBe("Sun at 06:00, your local time")
   const dawn = rise()
   // Movement follows seconds, not a frozen position between minute ticks.
@@ -72,7 +72,7 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   document.documentElement.dataset.theme = "dark"
   await settle()
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon.png")
+  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
   expect(sky.getAttribute("aria-label")).toContain("Moon at 12:00, your local time")
   expect(across()).toBeCloseTo(0.5)
   expect(sky.classList.contains("sky-jump")).toBe(true) // swapped in place, not carried across the sky
@@ -80,7 +80,7 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   document.documentElement.dataset.theme = "light"
   await settle()
   expect(sky.dataset.period).toBe("day")
-  expect(body.getAttribute("src")).toBe("img/sun.png")
+  expect(body.getAttribute("src")).toBe("img/sun-daylight.png")
 
   // A chosen light page keeps its sun into the evening, where it starts the evening arc.
   vi.setSystemTime(new Date(2026, 8, 13, 17, 59, 59))
@@ -127,39 +127,36 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.dataset.phase).toBe("New moon")
   expect(phaseAt("2025-02-05T08:02:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
-  const lunarMask = () => new DOMParser().parseFromString(
-    decodeURIComponent(body.style.maskImage.split(",").slice(1).join(",").replace(/["')]$/, "").replace(/["']$/, "")), "image/svg+xml",
-  )
-  const maskPoints = () => lunarMask().querySelector("polygon")!.getAttribute("points")!.split(" ").map(p => p.split(",").map(Number))
-  const area = () => {
-    const points = maskPoints()
-    return Math.abs(points.reduce((sum, p, i) => {
-      const q = points[(i + 1) % points.length]
-      return sum + p[0] * q[1] - p[1] * q[0]
-    }, 0)) / 2 / (Math.PI * 34.2 ** 2)
-  }
-  const meanX = () => maskPoints().reduce((sum, p) => sum + p[0], 0) / maskPoints().length
-  expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
-  expect(meanX()).toBeGreaterThan(50) // waxing: right side lit
-  const waxingMask = body.style.maskImage
-  expect(body.style.clipPath).toBe("") // the shadowed portion still belongs to a round moon
-  expect(Number(lunarMask().querySelector("circle[opacity]")!.getAttribute("opacity"))).toBeGreaterThan(0)
-  expect(Number(lunarMask().querySelector("circle[opacity]")!.getAttribute("opacity"))).toBeLessThan(0.08)
-  expect(Number(lunarMask().querySelector("feGaussianBlur")!.getAttribute("stdDeviation"))).toBeGreaterThan(0)
+  expect(body.getAttribute("src")).toBe("img/moon-quarter.png")
+  expect(sky.dataset.waning).toBe("false")
+  expect(body.style.maskImage).toBe("") // each phase is a generated image, not a cutout
   expect(phaseAt("2025-02-12T13:53:00Z")).toBeGreaterThan(0.98)
   expect(sky.dataset.phase).toBe("Full moon")
-  expect(area()).toBeGreaterThan(0.98)
+  expect(body.getAttribute("src")).toBe("img/moon-full.png")
   expect(phaseAt("2025-02-20T17:33:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
-  expect(body.style.maskImage).not.toBe(waxingMask)
-  expect(meanX()).toBeLessThan(50) // waning: left side lit
-  expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
+  expect(body.getAttribute("src")).toBe("img/moon-quarter.png")
+  expect(sky.dataset.waning).toBe("true")
+  expect(phaseAt("2025-02-02T00:00:00Z")).toBeLessThan(0.2)
+  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
+  expect(sky.dataset.waning).toBe("false")
+  phaseAt("2025-02-09T00:00:00Z")
+  expect(body.getAttribute("src")).toBe("img/moon-gibbous.png")
+  phaseAt("2025-02-16T00:00:00Z")
+  expect(body.getAttribute("src")).toBe("img/moon-gibbous.png")
+  expect(sky.dataset.waning).toBe("true")
+  phaseAt("2025-02-24T00:00:00Z")
+  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
+  expect(sky.dataset.waning).toBe("true")
   expect(phaseAt("2025-02-28T00:45:00Z")).toBeLessThan(0.01)
+  expect(sky.dataset.lunarImage).toBe("new")
   expect(phaseAt("2024-12-30T22:27:00Z")).toBeLessThan(0.01) // before the epoch
   document.documentElement.dataset.theme = "light"
   await settle()
-  expect(body.style.maskImage).toBe("")
+  expect(body.getAttribute("src")).toBe("img/sun-daylight.png")
   expect(sky.hasAttribute("data-phase")).toBe(false)
+  expect(sky.hasAttribute("data-waning")).toBe(false)
+  expect(sky.hasAttribute("data-lunar-image")).toBe(false)
 
   // Use the browser's local clock even when its hour differs from UTC.
   delete document.documentElement.dataset.theme
