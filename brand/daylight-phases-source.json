@@ -41,11 +41,12 @@
     },
     {
       "path": "site/img/day-garden.png",
-      "prompt": "Use case: photorealistic-natural. Asset type: atmospheric DAYTIME background for an elegant website about thoughtful work, combining natural daylight with a restrained East Asian ink-wash garden mood. Landscape 1536x1024. Camera looking up into a vast empty luminous pale blue-grey morning sky, gently warming to ivory mist toward the bottom. Soft natural aerial perspective, subtle photographic daylight, muted colors, no visible sun (it will be a separate moving element), no stars, no clouds (separate moving layer), no mountains, horizon, buildings, text or interface. Just a FEW SMALL persimmon leaves and one slender twig with one muted amber fruit entering from the extreme bottom-right edge. All botanical details are confined to the BOTTOM 18% of the canvas and RIGHT 25%, thin and delicate, not large or close to the camera. The rest is spacious empty sky; especially the central 70% must remain completely clear for typography. Botanical realism with faint ink-wash softness, sage and grey-green leaves, natural subtle backlit leaf veins, no plastic or paper cutout look. Top sky approximately #dce7ed, fading to warm near-white #f8f5ef at the bottom. No hard vignette and no black outlines.",
-      "sha256": "e581310231c0278d0c4cebbf66babc37cb6530706220735fcbdc09d478cc65e1",
+      "prompt": "Use case: lighting-weather. Edit target: attached night-garden image. Create the DAYLIGHT version of this EXACT persimmon branch composition for the same website. Preserve branch geometry, every leaf shape and position, delicate crinkled leaf texture, fruit location, empty upper/central sky, framing and 1536x1024 landscape canvas. Change only lighting and natural colors: softly sunlit warm gray-brown bark, muted sage/olive leaves with ochre autumn accents, warm natural persimmon orange fruit. Keep the sophisticated tactile ink-wash botanical realism of the original, crisp irregular leaf edges and fine veins. No simplified tiny twig, no sparse replacement plant, no plastic gloss. Background should be a calm nearly uniform very pale blue-gray daylight sky (#eaf0f1), subtle atmospheric variation only, lighter near bottom. No sun, moon, stars, clouds, text, UI, border or watermark. Main branch stays in lower quarter, fruit branch comes from right, central headline area remains completely empty. Natural restrained color and gentle daylight, not sepia or washed out. Preserve the existing tree's identity.",
+      "sha256": "1c57275a252c582a7939c77af0f29100240162790778e0d3aeed978050e5d70a",
       "width": 1536,
       "height": 1024,
-      "mode": "RGB"
+      "mode": "RGB",
+      "reference": "site/img/night-garden.png"
     },
     {
       "path": "site/img/sun-daylight.png",

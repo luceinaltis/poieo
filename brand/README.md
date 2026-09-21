@@ -92,7 +92,9 @@ persimmon branches. Its night backdrop is generated separately without a moon,
 stars or clouds, so the atmosphere never fixes their position. Both backdrops
 are capped at 1280px wide, centered and faded at the edges; widening the window
 does not enlarge branches into the headline. The light page has an airy blue-grey
-sky, a small botanical corner and soft white sunlight. Light always shows the sun; Dark
+sky and soft white sunlight. Its tree is a daylight edit of the night original,
+preserving the branch layout and detailed leaves with muted green/ochre foliage
+and orange fruit. Light always shows the sun; Dark
 always shows the moon; Auto uses the visitor's local 06:00–18:00 day convention.
 The body crosses left to right over each 12-hour arc, highest at noon/midnight.
 Positions refresh each second, so real-time motion is intentionally very slow.
@@ -152,7 +154,7 @@ clear wherever the corresponding feature is explained.
 | `site/img/persimmon-wash.webp` | Original paper illustration retained for the share card |
 | `site/img/sun.png`, `moon.png` | Earlier generated sky textures, retained as source references |
 | `site/img/moon-full.png`, `moon-crescent.png`, `moon-quarter.png`, `moon-gibbous.png` | Generated transparent lunar key phases |
-| `site/img/day-garden.png`, `sun-daylight.png` | Airy daylight backdrop and soft photographic sun |
+| `site/img/day-garden.png`, `sun-daylight.png` | Daylight relighting of the night persimmon composition and soft photographic sun |
 | `site/img/night-garden.png`, `moonlit-wisp.png` | Generated night backdrop and transparent moving cirrus layer |
 | `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
