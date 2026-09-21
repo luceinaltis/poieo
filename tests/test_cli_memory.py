@@ -423,20 +423,9 @@ def test_memory_is_still_read_only_with_connections(tmp_path):
 
 
 def test_editing_the_page_clears_the_suggestion(tmp_path):
-    import json
-
     _, project = _project(tmp_path)
-    log = at(project).cache()
-    log.mkdir(parents=True)
-    at(project).learning_log().write_text(
-        json.dumps(
-            {"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a", "error": None, "page": "Require ISO dates."}
-        )
-        + "\n",
-        encoding="utf-8",
-    )
     # The page is untouched since long before the pass: the suggestion shows.
-    _backdate(project, 30 * 86400)
+    _suggested(project)
     shown = runner.invoke(app, ["memory", str(project)])
     assert "Require ISO dates." in shown.stdout
 
@@ -566,10 +555,14 @@ def test_page_edit_opens_an_editor_and_keeps_what_comes_back(tmp_path, monkeypat
 
 def _suggested(project, line="Require ISO dates."):
     import json
+    from datetime import datetime, timedelta, timezone
 
+    # Keep the suggestion between the backdated page and a fresh user edit,
+    # regardless of the calendar date on which this test runs.
+    suggested_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     at(project).cache().mkdir(parents=True, exist_ok=True)
     at(project).learning_log().write_text(
-        json.dumps({"at": "2026-08-20T00:00:00+00:00", "read": 1, "upto": "a", "error": None, "page": line}) + "\n",
+        json.dumps({"at": suggested_at, "read": 1, "upto": "a", "error": None, "page": line}) + "\n",
         encoding="utf-8",
     )
     _backdate(project, 30 * 86400)
