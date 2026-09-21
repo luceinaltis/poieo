@@ -181,9 +181,8 @@ def _finish(
         **extra,
     }
     # A backend that could not send a setting the binding asked for says so,
-    # and the record carries it: `binding` above lists what was requested,
-    # and without this line a constraint the model never saw would read as
-    # honoured.
+    # and the record carries it: without this line a constraint the model
+    # never saw would read as honoured.
     if response.meta.get("ignored_params"):
         meta["ignored_params"] = response.meta["ignored_params"]
     return NodeResult(node_id=spec.id, next_node=spec.next, output=output, meta=meta)
