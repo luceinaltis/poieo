@@ -103,7 +103,6 @@ From the board a user can:
   and switch it on or off;
 - describe the work in a conversation with the project's model and put the
   card it proposes on the form, to check and save;
-- create a task with several steps and conditions without writing YAML;
 - rename a task or set it aside without destroying its file;
 - see task state, graph wiring, model assignments and run history, including
   whether a task applies its own checked changes and what its checks said;
@@ -112,10 +111,10 @@ From the board a user can:
 - inspect available models, declare an answering endpoint and choose which model
   serves a role.
 
-Advanced task fields beyond a one-line schedule, and editing existing graph
-wiring, remain file-based. New
-tasks can be written as steps on the board. The standalone graph viewer and
-editor operate on the same graph schema.
+Advanced task fields beyond a one-line schedule, and graph wiring, remain
+file-based: a task of several steps and conditions is drawn in the standalone
+graph editor, which operates on the same graph schema as the viewer, until the
+board hosts that canvas.
 
 ## Safety boundaries
 

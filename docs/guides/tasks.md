@@ -5,18 +5,21 @@ A task is a folder, instructions, and a schedule. Each run records what happened
 ## Create a task
 
 Choose **New task** on the board and say what it should do, in any language:
-“every night, run the tests and fix one failure”. Your project's model asks
-what it needs to know and proposes a card; **use this draft** fills it in for
-you to read over, change and save. Or choose **or write it yourself** and type
-the prompt; the name can stay blank and is taken from its first line. Choose
-**save and start**, or **save without starting** to inspect it first. Open
-**Task setup** to switch a saved task on or edit its instructions.
+“every night, run the tests and fix one failure”. Not sure what to ask for?
+Press one of the examples under the box. Your project's model asks what it
+needs to know and proposes a card; **use this draft** fills it in for you to
+read over, change and save. If the reply says no model could answer, **open
+models** takes you to where one is connected. Or choose **or write it
+yourself** and type the prompt; the name can stay blank and is taken from its
+first line. Choose **save and start**, or **save without starting** to inspect
+it first. Open **Task setup** to switch a saved task on or edit its
+instructions.
 
 A task works in your whole project and runs every hour. To limit it to one
-folder, choose when it runs, or write it as steps, open **more** under the
-prompt. The line above the save button always says which folder will change
-and whether poieo can undo it. Letting a task apply its own checked changes
-is switched on later, in **Task setup**, under [Changes](changes.md).
+folder or choose when it runs, open **more** under the prompt. The line above
+the save button always says which folder will change and whether poieo can
+undo it. Letting a task apply its own checked changes is switched on later,
+in **Task setup**, under [Changes](changes.md).
 
 Use a Git project for work you can [review and undo](changes.md). Without Git,
 a task edits the folder directly and poieo cannot undo it.
@@ -49,10 +52,10 @@ and switching a task on or off do not need a restart.
 
 ## Add steps
 
-For a new task, open **more** and choose **Write as steps**. Add model instructions, commands,
-conditions, or a question for you. **Insert result from…** passes an earlier
-answer into later instructions. Answer waiting questions on the board while
-the daemon is running.
+A task of several steps — model instructions, commands, conditions, or a
+question for you — is drawn in the standalone graph editor, `poieo edit`,
+until the board hosts that canvas; see the [graph reference](../graph.md).
+Answer waiting questions on the board while the daemon is running.
 
 Cards start collapsed, keeping their inputs, outputs and connections visible.
 Choose **Expand** on a card to see its steps, then **View steps** for a larger view.

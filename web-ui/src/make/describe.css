@@ -113,3 +113,47 @@
   gap: 10px;
   justify-content: flex-end;
 }
+
+/* Three things a first task tends to be, as quiet chips under the box. */
+.describe-examples {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.describe-examples > span {
+  color: var(--dim);
+  font-size: 0.78em;
+}
+
+.describe-examples button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--dim);
+  font-size: 0.78em;
+  padding: 2px 9px;
+}
+
+.describe-examples button:hover:not(:disabled) {
+  border-color: var(--ember);
+  color: var(--text);
+}
+
+/* The way to the models panel, inside the refusal that says no model could
+   answer: a word in the sentence, not a button beside it. */
+.describe-models {
+  background: none;
+  border: 0;
+  color: var(--stop);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.describe-models:hover {
+  color: var(--text);
+}
