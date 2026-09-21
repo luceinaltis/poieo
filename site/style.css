@@ -73,15 +73,18 @@ pre code { font-size: 0.875rem; line-height: 1.8; }
 main, .footer { max-width: var(--column); margin-inline: auto; }
 .section { padding-block: 88px; }
 .landing-page { position: relative; isolation: isolate; }
-.landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .74; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
-:root:not([data-theme="light"]) .landing-art { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; opacity: .4; }
+/* A diluted ink sky fades back to the shared page ground below the painting. */
+.landing-page::before { content: ""; position: absolute; inset: 0 0 auto; height: 904px; z-index: -4; pointer-events: none; background: radial-gradient(ellipse at 48% 16%, rgb(129 140 135 / .16), transparent 68%), linear-gradient(#1d2423, var(--ground)); }
+[data-theme="light"] .landing-page::before { background: radial-gradient(ellipse at 48% 16%, rgb(195 140 103 / .08), transparent 65%); }
+.landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .49; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
+:root:not([data-theme="light"]) .landing-art { filter: grayscale(1) invert(1); mix-blend-mode: screen; opacity: .14; }
 /* Three ink-wash cloud banks drift in front of the sun or moon and veil them as they pass. brand/clouds.py draws them,
    diluted ink for paper and pale ivory for dark ground, one tint with the tone in the transparency. */
 .landing-clouds { position: absolute; top: 0; left: 0; width: 100%; height: 420px; overflow: hidden; z-index: -1; pointer-events: none; }
-.cloud { position: absolute; right: 100%; background: center / 100% 100% no-repeat; animation: cloud-drift 150s linear infinite; }
-.cloud:nth-child(1) { top: 20px; width: clamp(300px, 40vw, 660px); aspect-ratio: 70 / 23; background-image: url("img/cloud-1.webp"); animation-delay: -46s; }
-.cloud:nth-child(2) { top: 96px; width: clamp(220px, 28vw, 460px); aspect-ratio: 50 / 21; background-image: url("img/cloud-2.webp"); animation-duration: 190s; animation-delay: -132s; }
-.cloud:nth-child(3) { top: 150px; width: clamp(320px, 46vw, 760px); aspect-ratio: 5 / 1; background-image: url("img/cloud-3.webp"); animation-duration: 120s; animation-delay: -84s; }
+.cloud { position: absolute; right: 100%; background: center / 100% 100% no-repeat; opacity: .19; transform: scaleY(.32); transform-origin: center; animation: cloud-drift 240s linear infinite; }
+.cloud:nth-child(1) { top: 20px; width: clamp(300px, 40vw, 660px); aspect-ratio: 70 / 23; background-image: url("img/cloud-1.webp"); animation-delay: -74s; }
+.cloud:nth-child(2) { top: 96px; width: clamp(220px, 28vw, 460px); aspect-ratio: 50 / 21; background-image: url("img/cloud-2.webp"); animation-duration: 290s; animation-delay: -201s; }
+.cloud:nth-child(3) { top: 150px; width: clamp(320px, 46vw, 760px); aspect-ratio: 5 / 1; background-image: url("img/cloud-3.webp"); animation-duration: 220s; animation-delay: -154s; }
 [data-theme="light"] .cloud:nth-child(1) { background-image: url("img/cloud-1-light.webp"); }
 [data-theme="light"] .cloud:nth-child(2) { background-image: url("img/cloud-2-light.webp"); }
 [data-theme="light"] .cloud:nth-child(3) { background-image: url("img/cloud-3-light.webp"); }
@@ -90,9 +93,9 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-sky { position: absolute; top: calc(204px - var(--sky-rise, 0) * 128px); left: calc(8% + var(--sky-progress, 0) * 84%); width: 144px; aspect-ratio: 1; transform: translate(-50%, -50%); transition: left 55s linear, top 55s linear; z-index: -2; pointer-events: none; }
 .landing-sky.sky-jump { transition: none; }
 .sky-body { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
-.landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; opacity: 0; background: rgb(240 231 217 / .06); box-shadow: 0 0 64px 40px rgb(240 231 217 / .08); }
-.landing-sky[data-period="night"]::before { opacity: 1; }
-.landing-sky[data-period="night"] .sky-body { filter: drop-shadow(0 0 12px rgb(240 231 217 / .28)); }
+/* Light is a broad wash in the paper, never a sharp ring around a photographic disc. */
+.landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: rgb(192 116 77 / .035); box-shadow: 0 0 70px 45px rgb(192 116 77 / .045); }
+.landing-sky[data-period="night"]::before { background: rgb(225 226 204 / .035); box-shadow: 0 0 70px 45px rgb(225 226 204 / .045); }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }
 .hero .button { margin-top: 30px; }

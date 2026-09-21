@@ -30,7 +30,7 @@
     previous = clock;
     if (sky.dataset.period !== period) {
       const body = sky.querySelector("img");
-      if (body) body.src = sun ? "img/sun.png" : "img/moon.png";
+      if (body) body.src = sun ? "img/sun-wash.svg" : "img/moon-wash.svg";
     }
     sky.dataset.period = period;
     sky.style.setProperty("--sky-progress", progress.toFixed(4));

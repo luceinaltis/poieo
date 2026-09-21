@@ -87,27 +87,22 @@ for that browser origin and reflect changes in other open tabs. If storage is
 unavailable, the control still changes the current page. The installed board
 keeps its separate Light/Dark control and system-preference fallback.
 
-The landing's photographic sun belongs to a light page and its full moon to a
+The landing's ink-wash sun belongs to a light page and its full moon to a
 dark one. In Auto that is the local clock: sun from 06:00 to 18:00, moon
 otherwise. A chosen Light or Dark keeps its own body at any hour. The arc keeps
 the clock either way: the body rises on the left, crosses the high middle at
 noon or midnight, and descends on the right, so a moon chosen at noon stands
 where the sun was. This is a clock convention, not astronomical sunrise or
 lunar-phase data. Keep the arc clear of text and controls, including on phones.
-A soft ivory halo makes the moon luminous on dark ground. Use the generated
-transparent assets; do not replace them with drawn icons. Only the current body
-is loaded.
+The sun is diluted vermilion pigment; the moon is warm paper reserved in an
+ink-grey sky. Both are small SVG washes with irregular, softly bleeding edges,
+not photographic surfaces. Only the current body is loaded. Broad, faint light
+and a desaturated branch keep the scene in one ink-and-paper vocabulary.
 
-Three ink-wash cloud banks drift slowly across the sky in front of the sun or
-moon and veil them as they pass, the way mist crosses a moon in a wash painting.
-`brand/clouds.py` draws them procedurally in the manner of the persimmon wash:
-one tint with the tone in the transparency, ink gathering toward a wet underside
-while the crown thins into the paper, a sideways bleed, a hint of dry brush, and
-paper grain. Paper gets diluted warm ink; dark ground gets the same wash as pale
-ivory. Run it to regenerate the six transparent WebP files. The layer is hidden
-from assistive technology and keeps to the sky band above the headline, behind
-the header and the text. Do not recolour or sharpen a bank in CSS; the tone is
-the drawing.
+Three existing wash clouds drift as thin, low-opacity mist ribbons. Their
+vertical compression and slow, staggered crossings leave the sky mostly empty.
+The layer stays behind the text, hidden from assistive technology. The source
+WebP washes remain reproducible with `brand/clouds.py`.
 
 Update each minute while visible. Resume from the current time after sleep or
 browser-history restoration. Reduced motion disables transitions and holds the
@@ -144,7 +139,8 @@ clear wherever the corresponding feature is explained.
 | `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
-| `site/img/sun.png`, `moon.png` | ChatGPT Image-generated transparent sun and moon; original alpha and resolution preserved |
+| `site/img/sun-wash.svg`, `moon-wash.svg` | Painted sun and reserved-paper moon used by the landing |
+| `site/img/sun.png`, `moon.png` | Earlier photographic assets, retained with their generation record |
 | `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
 | `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
