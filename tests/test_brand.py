@@ -122,10 +122,20 @@ def test_landing_clouds_drift_quietly_and_hold_still_for_reduced_motion():
 def test_landing_clouds_are_rendered_images_for_each_ground():
     css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
     images = re.findall(r'url\("(img/(?:moonlit-wisp\.png|cloud-[^\"]+-light\.webp))"\)', css)
-    assert set(images) == {"img/moonlit-wisp.png", *(f"img/cloud-{n}-light.webp" for n in (1, 2, 3))}
+    assert set(images) == {"img/moonlit-wisp.png"}
     for image in images:
         assert (ROOT / "site" / image).is_file(), image
-    assert "scale: -1 1" not in css
+    assert re.search(r'\[data-theme="light"\] \.cloud\s*\{[^}]*filter:', css)
+
+
+def test_landing_art_has_a_size_ceiling_and_daylight_scene():
+    page = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    assert 'src="img/day-garden.png"' in page
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    for selector in (r"\.landing-page \.landing-art", r"\.landing-night"):
+        rule = re.search(selector + r"\s*\{([^}]*)\}", css)
+        assert rule and "width: min(100%, 1280px)" in rule.group(1)
+    assert "--day-sky" in css
 
 
 def test_night_stars_are_decorative_and_hold_their_light_with_reduced_motion():

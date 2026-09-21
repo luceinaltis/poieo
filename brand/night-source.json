@@ -13,5 +13,5 @@
       "prompt_summary": "A single very thin irregular moonlit cirrus band on a true transparent background, based on the approved mockup. Delicate neutral silver/ivory wisps and ink-wash edges, transparent tips, no moon, stars, UI, branches or opaque sky. 1536x1024."
     }
   ],
-  "rendering": "Original generated PNGs, including the wisp alpha, preserved. Moon and sun remain separate original sky-source.json assets."
+  "rendering": "Original generated PNGs, including the wisp alpha, preserved. Active day and lunar assets are recorded separately in daylight-phases-source.json."
 }
