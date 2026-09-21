@@ -103,7 +103,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .sky-body { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
 .landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: rgb(240 213 160 / .08); box-shadow: 0 0 55px 24px rgb(240 213 160 / .10); }
 .landing-sky[data-period="night"]::before { opacity: var(--moon-light, 0); background: rgb(225 226 204 / .04); box-shadow: 0 0 65px 30px rgb(225 226 204 / .07); }
-.landing-sky[data-period="night"] { filter: drop-shadow(0 0 4px rgb(238 232 205 / .24)); }
+.landing-sky[data-period="night"] .sky-body { filter: saturate(.72); mask-size: 100% 100%; mask-repeat: no-repeat; }
 .landing-sky[data-period="day"] .sky-body { filter: saturate(.65) brightness(1.12); }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }

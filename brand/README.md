@@ -98,7 +98,9 @@ These are clock paths, not geographic sun/moon rise and set times.
 
 The moon's illuminated shape follows an approximate synodic cycle of 29.530588
 days from the 2025-01-29 12:36 UTC new moon. The curved terminator reveals the
-existing moon texture on the right while waxing, left while waning; new moon
+existing moon texture on the right while waxing, left while waning. A soft alpha
+mask retains a faint shadowed hemisphere, with the blur confined to the disc;
+this avoids a hard cutout or a bright full-disc outline. The exact new moon
 has no illuminated disc or full-moon halo. This northern-hemisphere convention
 does not account for the observer's latitude, tilt, libration, or lunar-orbit
 variations. Its label gives the approximate phase and illumination. The source
@@ -143,7 +145,7 @@ clear wherever the corresponding feature is explained.
 | `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
-| `site/img/sun.png`, `moon.png` | Generated sun and moon textures; the moon is clipped to its calendar phase at runtime |
+| `site/img/sun.png`, `moon.png` | Generated sun and moon textures; the moon is softly masked to its calendar phase at runtime |
 | `site/img/night-garden.png`, `moonlit-wisp.png` | Generated night backdrop and transparent moving cirrus layer |
 | `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |

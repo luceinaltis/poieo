@@ -23,7 +23,7 @@
     const terminator = Math.cos(2 * Math.PI * phase);
     const points = [];
     // The opaque lunar disc in moon.png is centred at (.5, .502), radius .342.
-    // Trace the visible limb then the projected terminator, avoiding a lit full-disc outline.
+    // Trace the visible limb then the projected terminator.
     for (let i = 0; i <= 64; i++) {
       const angle = -Math.PI / 2 + i * Math.PI / 64;
       points.push([.5 + side * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
@@ -32,7 +32,13 @@
       const angle = -Math.PI / 2 + i * Math.PI / 64;
       points.push([.5 + side * terminator * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
     }
-    if (body) body.style.clipPath = `polygon(${points.map(([x, y]) => `${(x * 100).toFixed(3)}% ${(y * 100).toFixed(3)}%`).join(",")})`;
+    // Keep a faint shadowed hemisphere and soften the terminator instead of
+    // cutting the texture into a hard-edged fragment. Clip the blur to the disc
+    // so the original PNG's baked halo cannot reveal a bright full-moon outline.
+    const outline = points.map(([x, y]) => `${(x * 100).toFixed(3)},${(y * 100).toFixed(3)}`).join(" ");
+    const shade = light < .001 ? "0" : ".035";
+    const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><clipPath id="disc"><circle cx="50" cy="50.2" r="34.2"/></clipPath><filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter></defs><g clip-path="url(#disc)" fill="white"><circle cx="50" cy="50.2" r="34.2" opacity="${shade}"/><polygon points="${outline}" filter="url(#soft)"/></g></svg>`;
+    if (body) body.style.maskImage = `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
     sky.style.setProperty("--moon-light", light.toFixed(4));
     const name = phases[Math.round(phase * 8) % 8];
     sky.dataset.phase = name;
@@ -70,7 +76,7 @@
     const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
     let label = `${sun ? "Sun" : "Moon"} at ${time}, your local time`;
     if (sun) {
-      if (body) body.style.clipPath = "";
+      if (body) body.style.maskImage = "";
       sky.style.removeProperty("--moon-light");
       delete sky.dataset.phase;
     } else {
