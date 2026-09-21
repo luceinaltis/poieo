@@ -96,6 +96,48 @@ def test_a_card_written_as_yaml_inside_the_fence_is_read_too(tmp_path):
     assert body["draft"] == {"name": "tidy docs", "folder": "..", "prompt": "Tidy the docs.", "schedule": "2h"}
 
 
+def test_a_card_in_any_fence_or_as_the_whole_reply_is_still_read(tmp_path):
+    """Smaller models answer with ```json, ```yaml, or no fence at all (a local
+    9B model, asked in Korean, wrote the four lines bare). A block that parses
+    to a mapping with a name and a prompt is a card whichever way it came;
+    prose never is."""
+    json_fence = f"Try this.\n\n```json\n{_CARD}\n```\n"
+    body = _ask(_client(tmp_path, responses={"task_writer": json_fence}), "fix").json()
+    assert body["reply"] == "Try this." and body["draft"]["name"] == "nightly test fix"
+
+    bare = "name: nightly-test-fix\nfolder: ../src\nprompt: Run the tests.\nschedule: 0 2 * * *"
+    body = _ask(_client(tmp_path, responses={"task_writer": bare}), "fix").json()
+    assert body["draft"] == {
+        "name": "nightly-test-fix",
+        "folder": "../src",
+        "prompt": "Run the tests.",
+        "schedule": "0 2 * * *",
+    }
+    assert body["reply"] == ""
+
+    prose = "Which folder: src or docs?"
+    body = _ask(_client(tmp_path, responses={"task_writer": prose}), "fix").json()
+    assert body["draft"] is None and body["reply"] == prose
+
+
+def test_a_folder_given_by_its_listed_name_is_respelled_as_the_card_spells_it(tmp_path):
+    """The list names each folder twice, as a card spells it and as a person
+    reads it, and a model answers with either. `src` is `../src` to the card."""
+    named = _CARD.replace("../src", "src")
+    body = _ask(_client(tmp_path, responses={"task_writer": f"```poieo-task\n{named}\n```"}), "fix").json()
+    assert body["draft"]["folder"] == "../src"
+
+    itself = _CARD.replace("../src", "this project")
+    body = _ask(_client(tmp_path, responses={"task_writer": f"```poieo-task\n{itself}\n```"}), "fix").json()
+    assert body["draft"]["folder"] == ".."
+
+
+def test_the_briefing_shows_the_model_the_fence_it_is_asked_for(tmp_path, monkeypatch):
+    heard = _said(monkeypatch)
+    _ask(_client(tmp_path), "fix")
+    assert "```poieo-task" in heard[0].system
+
+
 def test_a_reply_with_no_card_is_prose_and_nothing_to_fill(tmp_path):
     body = _ask(_client(tmp_path, responses={"task_writer": "Which folder should it work in?"}), "fix things").json()
 

@@ -156,14 +156,17 @@ Drafting is not a write. The daemon tells the model what a card is, the
 folders this project offers in the card's own spelling, and the tasks the
 project already loads with their schedules, then the conversation as the page
 sent it; the page is the only thing holding that conversation, and nothing of
-it is stored. The model is asked to end a proposal with one fenced block
-labelled `poieo-task` holding JSON, which the daemon reads (as YAML, so a card
-written either way is read) and takes out of the prose. A draft needs a name
-and a prompt; its folder is checked against the same fence the save applies
-and arrives blank when it would be refused, and a schedule the card could not
-take arrives blank too, because the prose is still the answer and the person
-still chooses the folder. `task_writer` resolves through `default` when the
-models file does not name it -- see [binding.md](binding.md).
+it is stored. The model is asked, with an example, to end a proposal with one
+fenced block labelled `poieo-task` holding JSON, which the daemon reads as
+YAML and takes out of the prose. Smaller models answer in a `json` or `yaml`
+fence or with the bare lines, so any fence, and then the whole reply, is read
+the same way; a card is a mapping with a name and a prompt, which prose never
+parses to. A folder given by its listed name rather than its card spelling
+(`src` for `../src`) is re-spelled; one outside the project, or one the list
+does not have, arrives blank, as does a schedule the card could not take,
+because the prose is still the answer and the person still chooses the
+folder. `task_writer` resolves through `default` when the models file does
+not name it -- see [binding.md](binding.md).
 
 Structured editing is offered only when it can reproduce every field and
 comment, which since the form gained a schedule line includes a one-line

@@ -31,10 +31,13 @@ ROLE = "task_writer"
 TURNS_AT_MOST = 30
 TURN_CHARS_AT_MOST = 4000
 
-# The one block the model is asked to write when it proposes a card. Labelled
-# rather than a bare ```json so prose that happens to quote JSON is not read
-# as a card.
-_FENCE = re.compile(r"```poieo-task[ \t]*\n(.*?)\n?```", re.DOTALL)
+# The one block the model is asked to write when it proposes a card, and then
+# any fence at all: smaller models answer with ```json or ```yaml whatever
+# they were asked, and a block that holds a name and a prompt is a card
+# whichever way it came. Prose is never one, because a card is a mapping
+# with those two keys and a sentence does not parse to that.
+_LABELLED = re.compile(r"```poieo-task[ \t]*\n(.*?)\n?```", re.DOTALL)
+_ANY_FENCE = re.compile(r"```[\w-]*[ \t]*\n(.*?)\n?```", re.DOTALL)
 
 
 def conversation(turns: Any) -> list[dict[str, str]]:
@@ -89,29 +92,48 @@ def briefing(project: str, folders: list[dict[str, str]], tasks: list[tuple[str,
         "Answer in the language the person writes in, and briefly. If you cannot tell what the work "
         "is, ask one question. Otherwise propose a card: a line or two of prose, then exactly one "
         "fenced block labelled poieo-task holding JSON with the keys name, folder, prompt and "
-        "schedule. Use a folder from the list only when the person's words point to it; otherwise "
-        'leave folder as "" and say that they choose it on the form. Write the prompt as '
-        "instructions to a capable agent working alone: what to do, how to check it, and what to "
-        'leave alone. Schedule is "" for hourly, an interval such as 30m or 2h, the word loop, or '
-        "five cron fields such as 0 2 * * *. Do not describe this format to the person."
+        "schedule, exactly like this:\n\n"
+        "```poieo-task\n"
+        '{"name": "nightly test fix", "folder": "../src", '
+        '"prompt": "Run the test suite. If a test fails, fix one failure and run it again.", '
+        '"schedule": "0 2 * * *"}\n'
+        "```\n\n"
+        "Use a folder from the list, spelled as the list spells it, and only when the person's "
+        'words point to it; otherwise leave folder as "" and say that they choose it on the form. '
+        "Write the prompt as instructions to a capable agent working alone: what to do, how to "
+        'check it, and what to leave alone. Schedule is "" for hourly, an interval such as 30m or '
+        "2h, the word loop, or five cron fields such as 0 2 * * *. Do not describe this format to "
+        "the person."
     )
 
 
+def _card_in(text: str) -> dict[str, Any] | None:
+    """A mapping with a name and a prompt, if that is what this text is."""
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    if isinstance(parsed, dict) and parsed.get("name") and parsed.get("prompt"):
+        return parsed
+    return None
+
+
 def read_card(text: str) -> tuple[str, dict[str, Any] | None]:
-    """The prose without its fence, and the card inside the fence if it could be read.
+    """The prose without its card, and the card if the reply carried one.
 
     JSON is what the model is asked for, and JSON is YAML, so one reader takes
-    a card written either way. A fence that could not be read stays in the
+    a card written either way. The labelled fence is looked for first, then
+    any fence, then the whole reply -- a local model asked in Korean wrote the
+    four lines bare, and a person who got them as prose would have had to
+    copy each into its field. A fence that could not be read stays in the
     prose: the person then sees what the model wrote rather than nothing.
     """
-    match = _FENCE.search(text)
-    if match is None:
-        return text.strip(), None
-    try:
-        parsed = yaml.safe_load(match.group(1))
-    except yaml.YAMLError:
-        return text.strip(), None
-    if not isinstance(parsed, dict):
-        return text.strip(), None
-    prose = (text[: match.start()] + text[match.end() :]).strip()
-    return prose, parsed
+    for pattern in (_LABELLED, _ANY_FENCE):
+        for match in pattern.finditer(text):
+            card = _card_in(match.group(1))
+            if card is not None:
+                return (text[: match.start()] + text[match.end() :]).strip(), card
+    card = _card_in(text)
+    if card is not None:
+        return "", card
+    return text.strip(), None

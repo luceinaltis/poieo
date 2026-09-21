@@ -2578,7 +2578,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             if name and prompt:
                 folder = str(card.get("folder") or "").strip()
                 if folder and _folder_inside(config, folder)[1] is not None:
-                    folder = ""
+                    # The list names each folder twice, as a card spells it
+                    # and as a person reads it, and a model answers with
+                    # either: `src` is `../src` to the card. Anything the
+                    # list does not have is left for the person.
+                    wanted = folder.removeprefix("./").strip("/").lower()
+                    folder = next((one["path"] for one in folders if one["name"].lower() == wanted), "")
                 schedule = " ".join(str(card.get("schedule") or "").split())
                 try:
                     _schedule_keys(schedule)
