@@ -42,7 +42,8 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.hidden).toBe(false)
   expect(sky.getAttribute("role")).toBe("img")
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
+  expect(sky.dataset.lunarImage).toBe("new")
+  expect(body.hasAttribute("src")).toBe(false)
   expect(sky.getAttribute("aria-label")).toContain("05:59")
   expect(vi.getTimerCount()).toBe(1)
 
@@ -50,6 +51,9 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   vi.advanceTimersByTime(30_000)
   expect(sky.dataset.period).toBe("day")
   expect(body.getAttribute("src")).toBe("img/sun-daylight.png")
+  expect(body.dataset.loading).toBe("true")
+  body.dispatchEvent(new Event("load"))
+  expect(body.hasAttribute("data-loading")).toBe(false)
   expect(sky.getAttribute("aria-label")).toBe("Sun at 06:00, your local time")
   const dawn = rise()
   // Movement follows seconds, not a frozen position between minute ticks.
@@ -72,7 +76,7 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   document.documentElement.dataset.theme = "dark"
   await settle()
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon-crescent.png")
+  expect(sky.dataset.lunarImage).toBe("new") // no visible sun remains at the new moon
   expect(sky.getAttribute("aria-label")).toContain("Moon at 12:00, your local time")
   expect(across()).toBeCloseTo(0.5)
   expect(sky.classList.contains("sky-jump")).toBe(true) // swapped in place, not carried across the sky

@@ -1,0 +1,60 @@
+{
+  "tool": "OpenAI built-in image_gen",
+  "assets": [
+    {
+      "path": "site/img/moon-full.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: transparent lunar sprite for an atmospheric night-sky website. Generate ONE realistic FULL MOON, front-facing circular lunar disc, entire near-side face illuminated with natural soft ivory-silver light. Recognizable dark lunar maria and fine restrained crater texture, no exaggerated relief, no yellow tint. True transparent background with alpha, NO stars, clouds, text, border, checkerboard or colored backdrop. Square canvas. The complete physical lunar circle is exactly centered at 50% x 50% and occupies about 70% of canvas width and height, with equal generous transparent padding. Very subtle local radiance only, no broad baked halo. A distant moon seen with a telephoto lens, gentle atmospheric softness at its edge, photographic realism compatible with a quiet ink-wash garden at night. Not a flat icon or a glowing ball. One moon only.",
+      "sha256": "82c1fd51b9375e1ea2bf9c11c6ef45ef8fd3282a6a70bc417da9180f97291415",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "site/img/moon-crescent.png",
+      "prompt": "Edit target: the attached full-moon sprite. Create its WAXING CRESCENT variant: about 18% illuminated, a delicate curved silver crescent on the RIGHT edge. Preserve exactly the full physical disc's center, diameter (70% of canvas), square canvas, texture geography and orientation. Illuminate lunar terrain naturally with a soft rocky terminator, not a hard flat crop. The shadowed hemisphere must be nearly invisible with extremely faint earthshine. Maintain actual transparent alpha outside the physical circle, NO opaque background, checkerboard, glow ring, text, stars or clouds. One moon only, no diagram. Natural telephoto moon photography, restrained ivory-silver.",
+      "alpha_cleanup_prompt": "Create a transparent background PNG cutout. Remove the entire checkerboard background from this lunar image and replace it with actual transparent alpha. Keep the moon itself, its lighting, surface texture, circular position and size pixel-faithful. Do not draw a checkerboard. Make empty surroundings genuinely transparent, including all four corners. Single isolated moon, no text or added background.",
+      "reference": "site/img/moon-full.png",
+      "sha256": "ed7633738eaf19426f4d74aacb1e2a934cf29d3c49d0845ecb5b15b962564c9f",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "site/img/moon-quarter.png",
+      "prompt": "Edit target: the attached full-moon sprite. Create its FIRST QUARTER variant: the RIGHT half is illuminated, LEFT half is deep shadow with extremely faint earthshine. Preserve exactly the full physical disc's center, diameter (70% of canvas), square canvas, texture geography and orientation. The central terminator is nearly vertical with softly shaded crater terrain, realistic lunar sunlight across the surface. The physical moon stays circular, not a stretched oval. Maintain actual transparent alpha outside the physical circle, NO opaque background, checkerboard, glow ring, text, stars or clouds. One moon only. Natural telephoto moon photography, restrained ivory-silver.",
+      "alpha_cleanup_prompt": "Create a transparent background PNG cutout. Remove the entire checkerboard background from this lunar image and replace it with actual transparent alpha. Keep the moon itself, its lighting, surface texture, circular position and size pixel-faithful. Do not draw a checkerboard. Make empty surroundings genuinely transparent, including all four corners. Single isolated moon, no text or added background.",
+      "reference": "site/img/moon-full.png",
+      "sha256": "5d7ee10346d6ff112da06a5404b9e4530f2f1bb91eed5b6445b1aae55679d317",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "site/img/moon-gibbous.png",
+      "prompt": "Edit target: the attached full-moon sprite. Create its WAXING GIBBOUS variant: about 78% illuminated, RIGHT side illuminated and a narrow curved shadow on LEFT. Preserve exactly the full physical disc's center, diameter (70% of canvas), square canvas, texture geography and orientation. Natural softly shaded crater terrain near the curved terminator, nearly invisible dark hemisphere with extremely faint earthshine. Do not make a cut-out egg shape: retain the sense of a spherical moon. Maintain actual transparent alpha outside the physical circle, NO opaque background, checkerboard, glow ring, text, stars or clouds. One moon only. Natural telephoto moon photography, restrained ivory-silver.",
+      "alpha_cleanup_prompt": "Create a transparent background PNG cutout. Remove the entire checkerboard background from this lunar image and replace it with actual transparent alpha. Keep the moon itself, its lighting, surface texture, circular position and size pixel-faithful. Do not draw a checkerboard. Make empty surroundings genuinely transparent, including all four corners. Single isolated moon, no text or added background.",
+      "reference": "site/img/moon-full.png",
+      "sha256": "dcfdeee29e8f3fe0021271dabeccd9d8d7834121c3ea0f1c0b9bc3d90fd7bb05",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "site/img/day-garden.png",
+      "prompt": "Use case: photorealistic-natural. Asset type: atmospheric DAYTIME background for an elegant website about thoughtful work, combining natural daylight with a restrained East Asian ink-wash garden mood. Landscape 1536x1024. Camera looking up into a vast empty luminous pale blue-grey morning sky, gently warming to ivory mist toward the bottom. Soft natural aerial perspective, subtle photographic daylight, muted colors, no visible sun (it will be a separate moving element), no stars, no clouds (separate moving layer), no mountains, horizon, buildings, text or interface. Just a FEW SMALL persimmon leaves and one slender twig with one muted amber fruit entering from the extreme bottom-right edge. All botanical details are confined to the BOTTOM 18% of the canvas and RIGHT 25%, thin and delicate, not large or close to the camera. The rest is spacious empty sky; especially the central 70% must remain completely clear for typography. Botanical realism with faint ink-wash softness, sage and grey-green leaves, natural subtle backlit leaf veins, no plastic or paper cutout look. Top sky approximately #dce7ed, fading to warm near-white #f8f5ef at the bottom. No hard vignette and no black outlines.",
+      "sha256": "e581310231c0278d0c4cebbf66babc37cb6530706220735fcbdc09d478cc65e1",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "site/img/sun-daylight.png",
+      "prompt": "Generate a transparent background PNG. Use case: photorealistic-natural. A single distant SUN seen through very thin morning atmospheric haze, isolated for compositing into a pale blue daytime sky. Square canvas. Small near-white luminous solar disc centered at 50% x 50%, diameter 40% of canvas, softly overexposed ivory center with barely warm edges. Extremely soft translucent pale warm-white radiance around it fading completely to real alpha before reaching the canvas edges. Natural photographic daylight, not an astronomical surface closeup, no surface texture, no orange outline, no yellow button, no rays, no lens flare streaks, no stars, no clouds, no scene, no checkerboard, no text. Surrounding pixels genuinely transparent. Quiet realistic sunlight that suits an airy muted ink-wash garden.",
+      "sha256": "826eb3bdf52cd5bcfc34c896bf1b62d903098b5f37177e3b88924b7bae865960",
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    }
+  ],
+  "rendering": "Original generated PNG files retained with their alpha. Lunar keyframes are selected by approximate calendar phase; waning phases mirror the corresponding waxing art. No runtime phase clipping or bitmap post-processing. Background artwork is capped at 1280px, centered and faded at the edges."
+}

@@ -89,26 +89,31 @@ keeps its separate Light/Dark control and system-preference fallback.
 
 The landing uses a distant textured moon, thin moonlit cloud wisps and close
 persimmon branches. Its night backdrop is generated separately without a moon,
-stars or clouds, so the atmosphere never fixes their position. The light page
-keeps its paper wash and photographic sun. Light always shows the sun; Dark
+stars or clouds, so the atmosphere never fixes their position. Both backdrops
+are capped at 1280px wide, centered and faded at the edges; widening the window
+does not enlarge branches into the headline. The light page has an airy blue-grey
+sky, a small botanical corner and soft white sunlight. Light always shows the sun; Dark
 always shows the moon; Auto uses the visitor's local 06:00–18:00 day convention.
 The body crosses left to right over each 12-hour arc, highest at noon/midnight.
 Positions refresh each second, so real-time motion is intentionally very slow.
 These are clock paths, not geographic sun/moon rise and set times.
 
 The moon's illuminated shape follows an approximate synodic cycle of 29.530588
-days from the 2025-01-29 12:36 UTC new moon. The curved terminator reveals the
-existing moon texture on the right while waxing, left while waning. A soft alpha
-mask retains a faint shadowed hemisphere, with the blur confined to the disc;
-this avoids a hard cutout or a bright full-disc outline. The exact new moon
-has no illuminated disc or full-moon halo. This northern-hemisphere convention
+days from the 2025-01-29 12:36 UTC new moon. Four generated transparent images
+depict crescent, quarter, gibbous and full phases with their own surface shading.
+The nearest of eight key phases selects an image; waning phases mirror the
+waxing art. This intentionally approximates both illumination and geography,
+rather than clipping a photograph into a continuously changing silhouette.
+The new-moon phase has no visible disc or halo. This northern-hemisphere convention
 does not account for the observer's latitude, tilt, libration, or lunar-orbit
 variations. Its label gives the approximate phase and illumination. The source
 is [NASA's phase table](https://eclipse.gsfc.nasa.gov/phase/phase2001gmt.html).
-Only the active sun/moon image is requested; no location or runtime service is used.
+Only the selected sun/moon image is requested, with the previous image hidden
+until its replacement loads; no location or runtime service is used.
 
 Thirty-two small decorative stars glow at different slow rhythms. They are
-absent in Light. Thin transparent clouds drift across the body, never over the
+absent in Light. The same transparent cirrus catches white daylight or moonlight.
+Clouds drift across the body, never over the
 text. Reduced motion holds stars and clouds still and disables body transitions.
 Hidden or cached pages pause; returning rereads the current clock and date.
 A time jump, mode change or arc reset places the body directly, without a long
@@ -144,8 +149,10 @@ clear wherever the corresponding feature is explained.
 | `site/img/mark.svg`, `mark-light.svg` | Copies of the symbol masters |
 | `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
-| `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
-| `site/img/sun.png`, `moon.png` | Generated sun and moon textures; the moon is softly masked to its calendar phase at runtime |
+| `site/img/persimmon-wash.webp` | Original paper illustration retained for the share card |
+| `site/img/sun.png`, `moon.png` | Earlier generated sky textures, retained as source references |
+| `site/img/moon-full.png`, `moon-crescent.png`, `moon-quarter.png`, `moon-gibbous.png` | Generated transparent lunar key phases |
+| `site/img/day-garden.png`, `sun-daylight.png` | Airy daylight backdrop and soft photographic sun |
 | `site/img/night-garden.png`, `moonlit-wisp.png` | Generated night backdrop and transparent moving cirrus layer |
 | `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
@@ -153,6 +160,8 @@ clear wherever the corresponding feature is explained.
 
 The illustration's generation record is [wash-source.json](wash-source.json).
 The night backdrop and wisp record is [night-source.json](night-source.json).
+The active day and lunar images, complete prompts and hashes are in
+[daylight-phases-source.json](daylight-phases-source.json).
 The sun and moon's prompts, asset paths, and hashes are in [sky-source.json](sky-source.json);
 the clouds have no prompt, and [clouds.py](clouds.py) is their record.
 The Korean design rationale and selected reference are in

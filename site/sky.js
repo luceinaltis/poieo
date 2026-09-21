@@ -19,30 +19,26 @@
   function moon(now) {
     const phase = ((now - epoch) % month + month) % month / month;
     const light = (1 - Math.cos(2 * Math.PI * phase)) / 2;
-    const side = phase < .5 ? 1 : -1;
-    const terminator = Math.cos(2 * Math.PI * phase);
-    const points = [];
-    // The opaque lunar disc in moon.png is centred at (.5, .502), radius .342.
-    // Trace the visible limb then the projected terminator.
-    for (let i = 0; i <= 64; i++) {
-      const angle = -Math.PI / 2 + i * Math.PI / 64;
-      points.push([.5 + side * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
-    }
-    for (let i = 64; i >= 0; i--) {
-      const angle = -Math.PI / 2 + i * Math.PI / 64;
-      points.push([.5 + side * terminator * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
-    }
-    // Keep a faint shadowed hemisphere and soften the terminator instead of
-    // cutting the texture into a hard-edged fragment. Clip the blur to the disc
-    // so the original PNG's baked halo cannot reveal a bright full-moon outline.
-    const outline = points.map(([x, y]) => `${(x * 100).toFixed(3)},${(y * 100).toFixed(3)}`).join(" ");
-    const shade = light < .001 ? "0" : ".035";
-    const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><clipPath id="disc"><circle cx="50" cy="50.2" r="34.2"/></clipPath><filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter></defs><g clip-path="url(#disc)" fill="white"><circle cx="50" cy="50.2" r="34.2" opacity="${shade}"/><polygon points="${outline}" filter="url(#soft)"/></g></svg>`;
-    if (body) body.style.maskImage = `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
-    sky.style.setProperty("--moon-light", light.toFixed(4));
-    const name = phases[Math.round(phase * 8) % 8];
+    const index = Math.round(phase * 8) % 8;
+    const name = phases[index];
+    const image = ["new", "crescent", "quarter", "gibbous", "full", "gibbous", "quarter", "crescent"][index];
+    sky.style.setProperty("--moon-light", index === 0 ? "0" : light.toFixed(4));
     sky.dataset.phase = name;
+    sky.dataset.lunarImage = image;
+    sky.dataset.waning = String(index > 4);
+    // Generated key phases carry their own natural shading. Waning phases mirror
+    // the same art; this is an illustration, not a geographic lunar observation.
+    if (image !== "new") setImage(`img/moon-${image}.png`);
     return `${name}, approximately ${Math.round(light * 100)}% illuminated`;
+  }
+
+  function setImage(src) {
+    if (!body || body.getAttribute("src") === src) return;
+    // Hide the previous theme/phase while a newly selected asset is loading.
+    body.dataset.loading = "true";
+    body.onload = function () { delete body.dataset.loading; };
+    body.src = src;
+    if (body.complete && body.naturalWidth) delete body.dataset.loading;
   }
 
   function pause() {
@@ -69,14 +65,15 @@
     sky.classList.toggle("sky-jump", jump);
     previousTime = stamp;
     previousProgress = progress;
-    if (changed && body) body.src = sun ? "img/sun.png" : "img/moon.png";
     sky.dataset.period = period;
     sky.style.setProperty("--sky-progress", progress.toFixed(6));
     sky.style.setProperty("--sky-rise", Math.sin(progress * Math.PI).toFixed(6));
     const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
     let label = `${sun ? "Sun" : "Moon"} at ${time}, your local time`;
     if (sun) {
-      if (body) body.style.maskImage = "";
+      setImage("img/sun-daylight.png");
+      delete sky.dataset.lunarImage;
+      delete sky.dataset.waning;
       sky.style.removeProperty("--moon-light");
       delete sky.dataset.phase;
     } else {

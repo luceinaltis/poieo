@@ -72,28 +72,28 @@ pre code { font-size: 0.875rem; line-height: 1.8; }
 .theme-mode:hover { border-color: var(--ember); color: var(--text); }
 main, .footer { max-width: var(--column); margin-inline: auto; }
 .section { padding-block: 88px; }
-.landing-page { position: relative; isolation: isolate; }
+.landing-page { position: relative; isolation: isolate; --day-sky: #dce7ed; }
 /* The generated night scene contains no moon, stars or clouds: each moves independently. */
 .landing-page::before { content: ""; position: absolute; inset: 0 0 auto; height: 904px; z-index: -4; pointer-events: none; background: linear-gradient(#080e12 55%, var(--ground)); }
-[data-theme="light"] .landing-page::before { background: radial-gradient(ellipse at 48% 16%, rgb(195 140 103 / .08), transparent 65%); }
+[data-theme="light"] .landing-page::before { background: linear-gradient(var(--day-sky), #eaf0f1 46%, var(--ground) 94%); }
 .landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .49; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { display: none; }
-.landing-night { position: absolute; inset: 0 0 auto; height: 904px; background: url("img/night-garden.png") center bottom / cover no-repeat; mask-image: linear-gradient(black 76%, transparent); z-index: -3; pointer-events: none; }
+.landing-page .landing-art { left: 50%; width: min(100%, 1280px); transform: translateX(-50%); object-fit: contain; mix-blend-mode: normal; opacity: 1; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent), linear-gradient(transparent 12%, black 35%, black 78%, transparent); mask-composite: intersect; }
+.landing-night { position: absolute; top: 0; left: 50%; width: min(100%, 1280px); transform: translateX(-50%); height: 904px; background: url("img/night-garden.png") center bottom / 100% auto no-repeat; opacity: .72; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent), linear-gradient(black 78%, transparent); mask-composite: intersect; z-index: -3; pointer-events: none; }
 [data-theme="light"] .landing-night { display: none; }
 .night-stars { position: absolute; inset: 80px 0 auto; height: 650px; overflow: hidden; z-index: -2; pointer-events: none; mask-image: linear-gradient(black 60%, transparent); }
 [data-theme="light"] .night-stars { display: none; }
 .star { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border-radius: 50%; background: #eee9dc; box-shadow: 0 0 4px 1px rgb(216 229 242 / .35); opacity: .55; animation: starlight var(--duration) ease-in-out var(--delay) infinite alternate; }
 @keyframes starlight { from { opacity: .24; } to { opacity: .82; } }
-/* Translucent cloud tips disappear before looping. The paper version retains its pale ink washes. */
+/* The same translucent cirrus catches moonlight at night and white daylight. */
 .landing-clouds { position: absolute; top: 0; left: 0; width: 100%; height: 420px; overflow: hidden; mask-image: linear-gradient(transparent, black 22%, black 80%, transparent); z-index: -1; pointer-events: none; }
 .cloud { position: absolute; right: 100%; background: url("img/moonlit-wisp.png") center / 100% 100% no-repeat; opacity: .22; animation: cloud-drift 240s linear infinite; }
 .cloud:nth-child(1) { top: -60px; width: clamp(560px, 62vw, 1040px); aspect-ratio: 3 / 2; animation-delay: -74s; }
 .cloud:nth-child(2) { top: -70px; width: clamp(460px, 55vw, 880px); aspect-ratio: 3 / 2; opacity: .07; animation-duration: 290s; animation-delay: -201s; }
 .cloud:nth-child(3) { top: 5px; width: clamp(540px, 64vw, 1040px); aspect-ratio: 3 / 2; opacity: .04; animation-duration: 220s; animation-delay: -154s; }
-[data-theme="light"] .cloud { opacity: .19; transform: scaleY(.32); }
-[data-theme="light"] .cloud:nth-child(1) { top: 20px; width: clamp(300px, 40vw, 660px); aspect-ratio: 70 / 23; background-image: url("img/cloud-1-light.webp"); }
-[data-theme="light"] .cloud:nth-child(2) { top: 96px; width: clamp(220px, 28vw, 460px); aspect-ratio: 50 / 21; background-image: url("img/cloud-2-light.webp"); }
-[data-theme="light"] .cloud:nth-child(3) { top: 150px; width: clamp(320px, 46vw, 760px); aspect-ratio: 5 / 1; background-image: url("img/cloud-3-light.webp"); }
+[data-theme="light"] .cloud { opacity: .48; filter: brightness(0) invert(1); }
+[data-theme="light"] .cloud:nth-child(2) { opacity: .3; }
+[data-theme="light"] .cloud:nth-child(3) { opacity: .22; }
 @keyframes cloud-drift { from { translate: 0 0; } to { translate: calc(100vw + 100%) 0; } }
 .sky-paused .star, .sky-paused .cloud { animation-play-state: paused; }
 
@@ -101,10 +101,15 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .landing-sky { position: absolute; top: calc(204px - var(--sky-rise, 0) * 128px); left: calc(8% + var(--sky-progress, 0) * 84%); width: 112px; aspect-ratio: 1; transform: translate(-50%, -50%); transition: left 1s linear, top 1s linear; z-index: -2; pointer-events: none; }
 .landing-sky.sky-jump { transition: none; }
 .sky-body { display: block; width: 100%; height: auto; position: relative; z-index: 1; }
+.sky-body[data-loading], .landing-sky[data-lunar-image="new"] .sky-body { visibility: hidden; }
 .landing-sky::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: rgb(240 213 160 / .08); box-shadow: 0 0 55px 24px rgb(240 213 160 / .10); }
 .landing-sky[data-period="night"]::before { opacity: var(--moon-light, 0); background: rgb(225 226 204 / .04); box-shadow: 0 0 65px 30px rgb(225 226 204 / .07); }
-.landing-sky[data-period="night"] .sky-body { filter: saturate(.72); mask-size: 100% 100%; mask-repeat: no-repeat; }
-.landing-sky[data-period="day"] .sky-body { filter: saturate(.65) brightness(1.12); }
+.landing-sky[data-period="night"] { mix-blend-mode: screen; }
+.landing-sky[data-period="night"] .sky-body { filter: brightness(.9) contrast(1.2); }
+.landing-sky[data-lunar-image="crescent"] .sky-body, .landing-sky[data-lunar-image="quarter"] .sky-body { filter: brightness(.82) contrast(1.7); }
+.landing-sky[data-waning="true"] .sky-body { transform: scaleX(-1); }
+.landing-sky[data-period="day"]::before { background: rgb(255 248 220 / .25); box-shadow: 0 0 100px 55px rgb(255 248 220 / .24); }
+.landing-sky[data-period="day"] .sky-body { transform: scale(1.35); }
 .hero h1 { max-width: 10ch; font-size: clamp(4rem, 7vw, 6rem); line-height: 1.06; letter-spacing: -0.055em; text-wrap: balance; }
 .descriptor { font-size: 1.1875rem; line-height: 1.5; margin-top: 26px; color: var(--dim); }
 .hero .button { margin-top: 30px; }
@@ -223,9 +228,10 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .landing-sky { top: calc(108px - var(--sky-rise, 0) * 48px); left: calc(18% + var(--sky-progress, 0) * 64%); width: 96px; }
   .landing-clouds { top: 44px; }
   .hero h1 { font-size: clamp(3.5rem, 9vw, 4.75rem); }
-  .landing-night { height: 816px; background-position: 65% bottom; }
+  .landing-night { height: 816px; background-size: 720px auto; background-position: 65% bottom; }
   .night-stars { height: 560px; }
   .landing-art { height: 816px; object-position: right bottom; opacity: .55; }
+  .landing-page .landing-art { object-fit: cover; object-position: 80% bottom; opacity: .8; }
   .section { padding-block: 56px; }
   .section-heading { grid-template-columns: 1fr; gap: 20px; }
   .principles { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }
