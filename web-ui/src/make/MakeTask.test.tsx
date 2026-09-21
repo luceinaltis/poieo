@@ -1,13 +1,14 @@
 /**
  * The form that writes a card.
  *
- * Three fields and no fourth, which is DESIGN.md's second principle: a name,
- * the folder it works in, and its prompt. What these defend is the folder --
- * it is required, it is never filled in, and the moment before saving says
- * plainly whose files are about to change. That sentence is principle 7's one
- * exception to hiding the machinery, and it is the whole reason a card may be
- * created already running -- and the whole reason it may also be created not
- * running, which is the second press.
+ * One question first, then a name and a prompt, which is DESIGN.md's second
+ * principle as it now reads: the common case is small, and a task works in
+ * the whole project unless it is narrowed under `more`. What the form still
+ * defends is the moment before saving, which says plainly whose files are
+ * about to change and whether that can be undone. That sentence is principle
+ * 7's one exception to hiding the machinery, and it is the whole reason a
+ * card may be created already running -- and the whole reason it may also be
+ * created not running, which is the second press.
  */
 
 import { act } from "react"
@@ -169,9 +170,14 @@ test("the fields wait behind the question until a draft comes or the person asks
   expect(fields().hidden).toBe(true)
   expect(host.querySelector('[data-do="make-task"]')).not.toBeNull()
 
-  act(() => host.querySelector<HTMLButtonElement>('[data-do="write-by-hand"]')!.click())
+  // Pressed from the keyboard, the link goes away under the focus. The name
+  // field is where the person is now, so that is where focus lands.
+  const link = host.querySelector<HTMLButtonElement>('[data-do="write-by-hand"]')!
+  act(() => link.focus())
+  act(() => link.click())
   expect(fields().hidden).toBe(false)
   expect(host.querySelector('[data-do="write-by-hand"]')).toBeNull()
+  expect(document.activeElement).toBe(field("name"))
 })
 
 test("a seed is a card already, so the panel opens on the fields", () => {

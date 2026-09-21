@@ -30,7 +30,7 @@
  * because making a task is what the page is for, not something one task does.
  */
 
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 
 import { createTask } from "../api"
 import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
@@ -110,6 +110,24 @@ export function MakeTask({
   const [filled, setFilled] = useState(false)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
+  // Where focus goes when the fields come out on a press. The link that
+  // brings them out leaves the page in the same update, and a focused
+  // element removed from under a keyboard drops focus to the page itself; the
+  // name field is where the person is now. Not on mount: a seeded panel is
+  // focused as a whole by the shell, like every other panel.
+  const nameRef = useRef<HTMLInputElement>(null)
+  const focusName = useRef(false)
+  const bringOut = () => {
+    focusName.current = true
+    setOpen(true)
+  }
+  useLayoutEffect(() => {
+    if (open && focusName.current) {
+      focusName.current = false
+      nameRef.current?.focus()
+    }
+  }, [open])
+
   // A card the model proposed, onto the fields. The folder is taken only
   // when the draft names one, and the field keeps what the person had
   // otherwise; the prompt lands in the first step once the form has become
@@ -123,7 +141,7 @@ export function MakeTask({
     )
     if (!steps) setPrompt(draft.prompt)
     setFilled(true)
-    setOpen(true)
+    bringOut()
   }
 
   // In the daemon's own spelling of the filename, so "Chores!" collides with
@@ -190,7 +208,7 @@ export function MakeTask({
           form, and the form is still what gets saved. */}
       <Describe project={project} disabled={busy} onDraft={fill} />
       {!open ? (
-        <button type="button" className="make-byhand" data-do="write-by-hand" onClick={() => setOpen(true)}>
+        <button type="button" className="make-byhand" data-do="write-by-hand" onClick={bringOut}>
           or write it yourself
         </button>
       ) : null}
@@ -203,6 +221,7 @@ export function MakeTask({
         <label className="make-field">
           name
           <input
+            ref={nameRef}
             name="name"
             className="make-input"
             value={name}
