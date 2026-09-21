@@ -10,6 +10,7 @@ from typing import Any
 
 from ..binding import ProviderSpec
 from ..errors import ProviderError
+from .presets import Preset
 
 
 def credential_for(name: str, spec: ProviderSpec) -> str | None:
@@ -161,6 +162,10 @@ class Provider(abc.ABC):
 
     type: str = "base"
     supports_embeddings: bool = False
+    # Where this backend lives when the binding does not say: the address and
+    # the key variable a binding may leave out, as a preset supplies them for
+    # the OpenAI-shaped endpoints. None for a backend that has to be told.
+    address: Preset | None = None
 
     def __init__(self, name: str, spec: ProviderSpec):
         self.name = name

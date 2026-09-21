@@ -25,7 +25,10 @@ from .base import (
     credential_for,
 )
 
-_RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
+# 529 is in no RFC. Anthropic and TypeSafe both answer it for "overloaded",
+# which is the server's mood rather than the request's shape, and worth a
+# second try like a 503.
+_RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504, 529}
 
 
 def _wire_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
@@ -88,7 +91,8 @@ def _check_embeddings(name: str, vectors: list[list[float]], expected: int) -> N
 
 
 class _HttpProvider(Provider):
-    """Shared httpx plumbing for the local backends."""
+    """Shared httpx plumbing for the backends that speak plain HTTP: the local
+    ones below, and TypeSafe's in ``typesafe``."""
 
     def __init__(self, name: str, spec: ProviderSpec):
         super().__init__(name, spec)
