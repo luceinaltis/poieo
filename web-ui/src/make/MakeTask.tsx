@@ -1,12 +1,13 @@
 /**
  * Writing a task, from the board.
  *
- * A name, the folder it works in, and a prompt remain the ordinary form.
- * "Write as steps" grows that prompt into connected instructions and
- * conditions, saved as the same graph the runtime reads from a file. Above
- * the fields, the work can be said in one's own words instead: the project's
- * model answers, and the card it proposes fills the same three fields for
- * the person to check -- nothing is saved that the person did not press.
+ * The panel opens on one question: what should it do. The project's model
+ * answers in kind and, when it can, proposes a card; "use this draft" puts
+ * that card on the fields below, which are also there for anyone who would
+ * rather write it themselves. A name and a prompt are the whole of the
+ * ordinary card. "Write as steps" grows that prompt into connected
+ * instructions and conditions, saved as the same graph the runtime reads from
+ * a file.
  *
  * **Two presses, though, and no third field.** Saving a card starts a
  * shell-capable agent over the reader's own files within seconds -- that is
@@ -16,14 +17,14 @@
  * is second and plainer for the same reason the warning below it exists: the
  * consequence belongs to the loud one.
  *
- * **The folder is required and has no default.** It is the one thing the
- * model's hands will touch, so a guess there would fill in the single moment
- * principle 7 keeps out of the machinery it otherwise hides. A draft from the
- * conversation may put a folder in the field, but only one inside the project
- * and only when the person's own words named it, and the field stays theirs
- * to change. That is also why the sentence above the button names the folder
- * rather than describing it: the card starts running when it is saved, and
- * this is where a person finds that out.
+ * **The folder is the project, unless narrowed.** A card made here may only
+ * work inside the project the board is showing -- the daemon refuses anything
+ * else -- so the whole project is the most a task can have, and the one
+ * question left is whether to give it less. That is a choice for the few
+ * tasks that need it and lives under `more`. What every task keeps is the
+ * sentence above the button: it names the place the model's hands will touch
+ * and says whether that can be undone, because the card starts running when
+ * it is saved, and this is where a person finds that out.
  *
  * Shell UI, so it may read the API. It hangs off the rail beside `models`
  * because making a task is what the page is for, not something one task does.
@@ -43,6 +44,9 @@ import { StepEditor } from "./StepEditor"
 import { graphOf, newStep, stepProblems } from "./steps"
 import type { StepDraft } from "./steps"
 import "./make.css"
+
+/** How a card spells the project itself: relative to the tasks folder. */
+const WHOLE_PROJECT = ".."
 
 export function MakeTask({
   project,
@@ -85,7 +89,7 @@ export function MakeTask({
   taken?: string[]
 }) {
   const [name, setName] = useState(seed?.name ?? "")
-  const [folder, setFolder] = useState(seed?.folder ?? "")
+  const [folder, setFolder] = useState(seed?.folder ?? WHOLE_PROJECT)
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [steps, setSteps] = useState<StepDraft[] | null>(null)
   /** One line, or nothing: the card then takes its hourly default. */
@@ -97,13 +101,17 @@ export function MakeTask({
   // is a sentence with consequences, and it must not be said of a card that
   // did not.
   const [started, setStarted] = useState(true)
+  // Whether the fields are out. They wait behind the one question until a
+  // draft arrives to fill them or the person asks to write the card
+  // themselves; a seed is a card already, so it opens on them.
+  const [open, setOpen] = useState(Boolean(seed))
   // Whether the fields were last filled from the conversation above them,
-  // so the form can say so -- and say what still has to be looked at.
+  // so the form can say so.
   const [filled, setFilled] = useState(false)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
   // A card the model proposed, onto the fields. The folder is taken only
-  // when the draft names one, and the field keeps what the person typed
+  // when the draft names one, and the field keeps what the person had
   // otherwise; the prompt lands in the first step once the form has become
   // steps, since that step is where the prompt went when it did.
   const fill = (draft: TaskDraft) => {
@@ -115,18 +123,24 @@ export function MakeTask({
     )
     if (!steps) setPrompt(draft.prompt)
     setFilled(true)
+    setOpen(true)
   }
 
   // In the daemon's own spelling of the filename, so "Chores!" collides with
   // "chores" exactly as it would on disk.
   const collides = taken.includes(slugOf(name))
   const problems = steps ? stepProblems(steps) : []
-  const ready = Boolean(name.trim() && folder.trim() && (steps ? steps.length && !problems.length : prompt.trim())) && !collides && applicationReady(application)
+  // Emptied by hand, the field means the whole project again, not nowhere.
+  const where = folder.trim() || WHOLE_PROJECT
+  const ready =
+    Boolean(name.trim() && (steps ? steps.length && !problems.length : prompt.trim())) &&
+    !collides &&
+    applicationReady(application)
 
   const send = (enabled: boolean) => () =>
     void act(async () => {
       const configured = JSON.stringify(application) !== JSON.stringify(draftOf())
-      const args = [project, name.trim(), folder.trim(), steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled] as const
+      const args = [project, name.trim(), where, steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled] as const
       // Only what was said: a blank schedule is not sent, so a card made
       // without one reads exactly as it did before there was a field.
       const when = schedule.trim()
@@ -152,7 +166,7 @@ export function MakeTask({
         // the moment the listing carries it. Until then this line stands.
         onMade?.(answer.task)
         setName("")
-        setFolder("")
+        setFolder(WHOLE_PROJECT)
         setPrompt("")
         setSchedule("")
         setSteps(null)
@@ -172,105 +186,145 @@ export function MakeTask({
         </button>
       </header>
 
-      {/* Above the fields, not beside the save: what it produces is a filled
+      {/* The one question, first and alone: what it produces is a filled
           form, and the form is still what gets saved. */}
       <Describe project={project} disabled={busy} onDraft={fill} />
-      {filled ? (
-        <p className="make-note">Filled in from the conversation. Check the folder, then save.</p>
+      {!open ? (
+        <button type="button" className="make-byhand" data-do="write-by-hand" onClick={() => setOpen(true)}>
+          or write it yourself
+        </button>
       ) : null}
 
-      <label className="make-field">
-        name
-        <input
-          name="name"
-          className="make-input"
-          value={name}
-          disabled={busy}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
+      {/* Hidden rather than absent while they wait: a draft lands on fields
+          that already exist, and nothing is lost by putting them away. */}
+      <div className="make-fields" hidden={!open}>
+        {filled ? <p className="make-note">Filled in from the conversation. Read it over, then save.</p> : null}
 
-      {collides ? (
-        <Refusal>this project already has a task called ‘{slugOf(name)}’</Refusal>
-      ) : null}
+        <label className="make-field">
+          name
+          <input
+            name="name"
+            className="make-input"
+            value={name}
+            disabled={busy}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
 
-      <label className="make-field">
-        folder
-        <input
-          name="folder"
-          className="make-input"
-          placeholder="../a-folder"
-          value={folder}
-          disabled={busy}
-          onChange={(event) => setFolder(event.target.value)}
-        />
-        {/* The choice, spelled out. `..` for the project itself was the one
-            thing a reader could not guess, and the field still fills in
-            nothing on its own. */}
-        <FolderPick project={project} value={folder} disabled={busy} onPick={setFolder} />
-      </label>
+        {collides ? (
+          <Refusal>this project already has a task called ‘{slugOf(name)}’</Refusal>
+        ) : null}
 
-      {steps ? <StepEditor steps={steps} onChange={setSteps} disabled={busy} /> : <>
-      <label className="make-field">
-        prompt
-        <textarea
-          name="prompt"
-          className="make-prompt"
-          rows={6}
-          value={prompt}
-          disabled={busy}
-          onChange={(event) => setPrompt(event.target.value)}
-        />
-      </label>
-      <button type="button" className="step-start" disabled={busy}
-        onClick={() => setSteps([newStep([], "agent", prompt)])}>Write as steps</button>
-      </>}
+        {steps ? (
+          <StepEditor steps={steps} onChange={setSteps} disabled={busy} />
+        ) : (
+          <label className="make-field">
+            prompt
+            <textarea
+              name="prompt"
+              className="make-prompt"
+              rows={6}
+              value={prompt}
+              disabled={busy}
+              onChange={(event) => setPrompt(event.target.value)}
+            />
+          </label>
+        )}
 
-      {/* The short form's schedule, as one line: an interval, the word loop,
-          or a cron line. Left blank the card says nothing and runs hourly,
-          which is what every card made here did before there was a field.
-          Jitter, a start rule or a run limit are still the file's. */}
-      <label className="make-field">
-        every
-        <input
-          name="schedule"
-          className="make-input"
-          placeholder="1h unless said — 30m, loop, or a cron line like 0 2 * * *"
-          value={schedule}
-          disabled={busy}
-          onChange={(event) => setSchedule(event.target.value)}
-        />
-      </label>
+        {problems.length > 0 && (
+          <ul className="step-problems" aria-label="Steps to fix">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        )}
 
-      {problems.length > 0 && <ul className="step-problems" aria-label="Steps to fix">
-        {problems.map(problem => <li key={problem}>{problem}</li>)}
-      </ul>}
+        {/* Everything an ordinary card takes from defaults. Folded, so the
+            fields above are the whole card for most people, and here for the
+            few tasks that need less of the project, another rhythm, steps, or
+            to apply their own checked work. */}
+        <details className="make-more">
+          <summary>more · where it works, when, steps, changes</summary>
+          <div className="make-more-body">
+            <label className="make-field">
+              works in
+              {/* The choice, spelled out, and standing on the whole project
+                  until it is narrowed: `..` for the project itself was the
+                  one thing a reader could not guess. */}
+              <FolderPick project={project} value={where} disabled={busy} onPick={setFolder} />
+              <input
+                name="folder"
+                className="make-input"
+                aria-label="or a folder path"
+                placeholder="or a path, relative to the tasks folder"
+                value={folder}
+                disabled={busy}
+                onChange={(event) => setFolder(event.target.value)}
+              />
+            </label>
 
-      <ApplySettings value={application} onChange={setApplication} disabled={busy} keepsCopies={keepsCopies} />
+            {/* The short form's schedule, as one line: an interval, the word
+                loop, or a cron line. Left blank the card says nothing and
+                runs hourly, which is what every card made here did before
+                there was a field. Jitter, a start rule or a run limit are
+                still the file's. */}
+            <label className="make-field">
+              every
+              <input
+                name="schedule"
+                className="make-input"
+                placeholder="1h unless said — 30m, loop, or a cron line like 0 2 * * *"
+                value={schedule}
+                disabled={busy}
+                onChange={(event) => setSchedule(event.target.value)}
+              />
+            </label>
 
-      {/* The one thing this panel says out loud. Everything else about a run
-          is machinery and stays hidden; this is not, because it is the reader's
-          own files.
+            {!steps ? (
+              <button
+                type="button"
+                className="step-start"
+                disabled={busy}
+                onClick={() => setSteps([newStep([], "agent", prompt)])}
+              >
+                Write as steps
+              </button>
+            ) : null}
 
-          Two sentences, and the second is the one that was missing. Whose
-          files change was already here; what becomes of the changes was not,
-          and it is the half a reader cannot find out afterwards without
-          having already started the task. The board carries the same fact on
-          the card, but a card exists because somebody pressed this button. */}
-      {folder.trim() ? (
+            <ApplySettings value={application} onChange={setApplication} disabled={busy} keepsCopies={keepsCopies} />
+          </div>
+        </details>
+
+        {/* The one thing this panel says out loud. Everything else about a run
+            is machinery and stays hidden; this is not, because it is the reader's
+            own files.
+
+            Two sentences, and the second is the one that was missing. Whose
+            files change was already here; what becomes of the changes was not,
+            and it is the half a reader cannot find out afterwards without
+            having already started the task. The board carries the same fact on
+            the card, but a card exists because somebody pressed this button. */}
         <p className="make-warning">
           Saving and starting runs this task. It will read and change files in{" "}
-          <code>{folder.trim()}</code>
-          {folder.trim().startsWith("/") || /^[A-Za-z]:/.test(folder.trim()) ? null : (
-            // A relative folder is read from the project's tasks folder, not
-            // from the project root -- so the sentence that names whose files
-            // change has to say which `work` it means.
-            <>, read from this project’s tasks folder</>
+          {where === WHOLE_PROJECT ? (
+            <>this project</>
+          ) : (
+            <>
+              <code>{where}</code>
+              {where.startsWith("/") || /^[A-Za-z]:/.test(where) ? null : (
+                // A relative folder is read from the project's tasks folder,
+                // not from the project root -- so the sentence that names
+                // whose files change has to say which `work` it means.
+                <>, read from this project’s tasks folder</>
+              )}
+            </>
           )}
           .{" "}
           {application.mode === "auto" ? (
-            <>The selected folder needs Git. Its work is kept in a private copy, checked,
-              then applied within your allowed files.</>
+            <>
+              The selected folder needs Git. Its work is kept in a private copy, checked, then applied within your
+              allowed files.
+            </>
           ) : keepsCopies ? (
             // Said even though it is the good news: without it the other
             // wording reads as boilerplate about files rather than as the one
@@ -278,52 +332,48 @@ export function MakeTask({
             <>Its work is kept in a private copy for you to accept or throw away.</>
           ) : (
             <strong className="make-undo">
-              This project is not a git repository, so there is no copy — it changes your files
-              directly, and there is no undo.
+              This project is not a git repository, so there is no copy — it changes your files directly, and there is
+              no undo.
             </strong>
           )}
         </p>
-      ) : (
-        <p className="make-note">
-          A task works in one folder, and there is no default for it.
-        </p>
-      )}
 
-      {refused ? <Refusal answer={refused} /> : null}
+        {refused ? <Refusal answer={refused} /> : null}
 
-      {made ? (
-        <p className="make-made">
-          Made “{made}”.{" "}
-          {started
-            ? "It starts on its own."
-            : "It is switched off — switch it on in its Task setup when it is ready."}
-        </p>
-      ) : null}
+        {made ? (
+          <p className="make-made">
+            Made “{made}”.{" "}
+            {started
+              ? "It starts on its own."
+              : "It is switched off — switch it on in its Task setup when it is ready."}
+          </p>
+        ) : null}
 
-      {/* Two presses, and the quiet one is second and plainer. Saving a card
-          starts a shell-capable agent over the reader's own files within
-          seconds, which is DESIGN.md's board and stays the default; what was
-          missing was any way to write one down and look at it first without
-          going and finding the file. */}
-      <div className="make-actions">
-        <button
-          type="button"
-          className="make-save"
-          data-do="make-task"
-          disabled={!ready || busy}
-          onClick={send(true)}
-        >
-          {busy ? "saving…" : "save and start"}
-        </button>
-        <button
-          type="button"
-          className="make-later"
-          data-do="make-task-off"
-          disabled={!ready || busy}
-          onClick={send(false)}
-        >
-          save without starting
-        </button>
+        {/* Two presses, and the quiet one is second and plainer. Saving a card
+            starts a shell-capable agent over the reader's own files within
+            seconds, which is DESIGN.md's board and stays the default; what was
+            missing was any way to write one down and look at it first without
+            going and finding the file. */}
+        <div className="make-actions">
+          <button
+            type="button"
+            className="make-save"
+            data-do="make-task"
+            disabled={!ready || busy}
+            onClick={send(true)}
+          >
+            {busy ? "saving…" : "save and start"}
+          </button>
+          <button
+            type="button"
+            className="make-later"
+            data-do="make-task-off"
+            disabled={!ready || busy}
+            onClick={send(false)}
+          >
+            save without starting
+          </button>
+        </div>
       </div>
     </aside>
   )

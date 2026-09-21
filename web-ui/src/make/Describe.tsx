@@ -10,8 +10,9 @@
  *
  * The conversation is the page's: sent whole with every message, kept
  * nowhere, gone when the panel closes. The daemon writes nothing for it, and
- * the folder a draft names is one the project has or is blank -- the form
- * keeps that choice with the person either way.
+ * the folder a draft names is one inside the project or is blank -- blank
+ * leaves the task working in the whole project, as any card made here does
+ * unless it is narrowed.
  */
 
 import { useState } from "react"
@@ -140,7 +141,7 @@ export function Describe({
             aria-label="Describe the work"
             rows={2}
             maxLength={4000}
-            placeholder="What should it do, where, and how often? e.g. every night, run the tests in src and fix one failure"
+            placeholder="What should it do? e.g. every night, run the tests and fix one failure"
             value={text}
             disabled={disabled}
             onChange={(event) => setText(event.target.value)}

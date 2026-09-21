@@ -141,7 +141,8 @@ Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
 `input_file:` — must stay inside the project.
 Both forms list the folders that fence would accept beside the folder field,
-in the card's own spelling; the field fills in nothing on its own.
+in the card's own spelling; the new-task form starts on the project itself
+(`..`) and the setup form on the card's own folder.
 Names are converted to safe filenames and never overwrite an existing card.
 Step creation uses the existing graph schema and preflight to check node fields,
 templates, conditions, connections, and model roles before writing. Every step
@@ -269,19 +270,26 @@ the answer first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
 
-Above the new-task form's fields, the person can describe the work in their
-own words. Each message sends the whole conversation to the draft route; the
-reply is shown under it, with the model that answered named once. A reply
-carrying a card shows that card and offers `use this draft`, which fills the
-name, prompt and schedule, and the folder only when the draft names one the
-project has -- the field keeps what the person typed otherwise -- and says so
-above the fields. Once the form has become steps, the draft's prompt becomes
-the first step's instructions. Enter sends, Shift+Enter breaks the line, and
-Enter during input-method composition does nothing. A refusal stays on screen
-with the message still in the box, so nothing typed is lost. The conversation
-lives in the panel and goes with it.
+The new-task panel opens on one question: the conversation, with the fields
+put away until a draft arrives or the person chooses `or write it yourself`.
+A seeded panel (make one like it) opens on the fields. Each message sends the
+whole conversation to the draft route; the reply is shown under it, with the
+model that answered named once. A reply carrying a card shows that card and
+offers `use this draft`, which brings the fields out and fills the name,
+prompt and schedule, and the folder only when the draft names one inside the
+project -- the field keeps what it had otherwise -- and says so above the
+fields. Once the form has become steps, the draft's prompt becomes the first
+step's instructions. Enter sends, Shift+Enter breaks the line, and Enter
+during input-method composition does nothing. A refusal stays on screen with
+the message still in the box, so nothing typed is lost. The conversation lives
+in the panel and goes with it.
 
-The new-task form starts with name, folder, and prompt. `Write as steps` keeps
+The fields are a name and a prompt. The folder, the schedule line, `Write as
+steps` and the application settings are under `more`. The folder starts on
+the whole project, `..`, offered as "this project" in the list, and a field
+emptied by hand means that again rather than nowhere; the sentence above the
+save names the folder that will change and whether there is a copy, and it is
+there before anything is typed. `Write as steps` keeps
 the prompt as the first step and adds model instructions, commands, conditions,
 or a question for a person. Results can be inserted into later instructions;
 conditions choose an earlier answer or command result, a comparison, a value,
