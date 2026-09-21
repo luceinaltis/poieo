@@ -236,7 +236,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .night-stars { height: 560px; }
   .landing-art { height: 816px; object-position: right bottom; opacity: .55; }
   .landing-day { height: 816px; }
-  .landing-page .landing-art { left: 65%; width: 720px; max-width: none; transform: translateX(-65%); }
+  .landing-page .landing-art { left: 65%; width: max(100%, 720px); max-width: none; transform: translateX(-65%); }
   .section { padding-block: 56px; }
   .section-heading { grid-template-columns: 1fr; gap: 20px; }
   .principles { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }

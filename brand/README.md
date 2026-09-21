@@ -96,7 +96,8 @@ sky and soft white sunlight. The Light landing ground is cool mist
 (`#f2f4f5`), with the sky sampled from the daylight image (`#d7e7f4`).
 The daylight image keeps its natural aspect ratio, aligned to the scene bottom;
 its top fade follows the image edge, while the outer scene fades at the sides
-and bottom. Mobile uses the same 720px artwork scale as night.
+and bottom. Mobile uses a minimum 720px artwork width, filling wider tablets
+so the image's side edges never fall inside the scene.
 Its tree is a daylight edit of the night original,
 preserving the branch layout and detailed leaves with muted green/ochre foliage
 and orange fruit. Light always shows the sun; Dark
