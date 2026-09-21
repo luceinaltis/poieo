@@ -815,7 +815,9 @@ test("switching projects puts a seeded make panel away with its seed", async () 
   // The other project has no tasks, so its board offers new task through the
   // invitation rather than the corner button.
   await act(async () => container.querySelector<HTMLElement>('[data-do="empty-new-task"]')!.click())
-  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("")
+  // The whole project, which is where every fresh card starts -- not board's
+  // `../work`.
+  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("..")
 })
 
 test("a memory named in the drawer opens the memory place at that entry", async () => {

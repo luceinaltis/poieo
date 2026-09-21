@@ -127,10 +127,10 @@ test("automatic application is optional and requires an explicit check before sa
   })
 })
 
-test("the folder can be chosen from the project, and is still never filled in", async () => {
-  // `..` for the project itself was the one thing nobody could guess. The
-  // daemon lists the project and what is under it, spelled as the card will
-  // spell them; the form offers them and fills nothing in on its own.
+test("the folder starts on the whole project and can be narrowed from the list", async () => {
+  // A card made here may only work inside this project, so the whole project
+  // is the most a task can have, and the field starts there: `..`, which the
+  // list spells as "this project". Narrowing is the choice, not naming.
   fetchFolders.mockResolvedValue([
     { path: "..", name: "this project" },
     { path: "../work", name: "work" },
@@ -140,8 +140,9 @@ test("the folder can be chosen from the project, and is still never filled in", 
 
   const pick = host.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
   expect(pick).not.toBeNull()
-  expect(field("folder").value).toBe("")
-  expect(pick.value).toBe("")
+  expect(field("folder").value).toBe("..")
+  expect(pick.value).toBe("..")
+  expect(host.textContent).toContain("files in this project")
 
   await act(async () => {
     pick.value = "../work"
@@ -153,6 +154,39 @@ test("the folder can be chosen from the project, and is still never filled in", 
   // Typing keeps the last word: a path the list does not have unselects it.
   type("folder", "../elsewhere")
   expect(pick.value).toBe("")
+
+  // Emptied by hand, it is the whole project again -- not nowhere.
+  type("folder", "")
+  expect(host.textContent).toContain("files in this project")
+  expect(pick.value).toBe("..")
+})
+
+test("the fields wait behind the question until a draft comes or the person asks for them", () => {
+  // One question first. The fields are put away rather than absent, so a
+  // draft lands on fields that already exist.
+  show()
+  const fields = () => host.querySelector<HTMLElement>(".make-fields")!
+  expect(fields().hidden).toBe(true)
+  expect(host.querySelector('[data-do="make-task"]')).not.toBeNull()
+
+  act(() => host.querySelector<HTMLButtonElement>('[data-do="write-by-hand"]')!.click())
+  expect(fields().hidden).toBe(false)
+  expect(host.querySelector('[data-do="write-by-hand"]')).toBeNull()
+})
+
+test("a seed is a card already, so the panel opens on the fields", () => {
+  act(() => {
+    root.render(
+      <MakeTask
+        project="board"
+        keepsCopies={true}
+        onClose={() => {}}
+        seed={{ name: "Chores", folder: "../work", prompt: "tidy" }}
+      />,
+    )
+  })
+  expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(false)
+  expect(field("folder").value).toBe("../work")
 })
 
 test("with nothing to offer, the folder is typed as before", async () => {
@@ -179,21 +213,26 @@ test("a schedule typed on the form rides with the card, and a blank one is not s
   expect(field("schedule").value).toBe("")
 })
 
-test("saving is refused until the folder has been named", () => {
+test("a name and a prompt are the whole card, and it works in the whole project unless narrowed", async () => {
   show()
   type("name", "tidy up")
-  type("prompt", "look around")
   expect(save().disabled).toBe(true)
-
-  type("folder", "../work")
+  type("prompt", "look around")
   expect(save().disabled).toBe(false)
+
+  await act(async () => {
+    save().click()
+  })
+  expect(createTask).toHaveBeenCalledWith("board", "tidy up", "..", "look around", true)
 })
 
 test("it says whose files are about to change before the button is pressed", () => {
   show()
-  type("folder", "../work")
   // Principle 7's one exception: the machinery stays hidden, the moment the
-  // reader's own files are about to change does not.
+  // reader's own files are about to change does not -- and it is said before
+  // anything is typed, because the whole project is what a fresh card gets.
+  expect(host.textContent).toContain("files in this project")
+  type("folder", "../work")
   expect(host.textContent).toContain("../work")
   expect(host.textContent?.toLowerCase()).toContain("files")
 })
@@ -349,10 +388,10 @@ async function describe(text: string) {
   await act(async () => host.querySelector<HTMLButtonElement>('[data-do="describe"]')!.click())
 }
 
-test("a card the conversation proposed fills the form, and the folder stays the person's when it was not named", async () => {
+test("a card the conversation proposed brings the fields out filled, and a folder it did not name stays as it was", async () => {
   // The fields are what get saved, so a draft lands on them rather than
-  // beside them -- and the one field the person must choose is not taken
-  // from a draft that did not name it.
+  // beside them -- and a draft that did not name a folder does not touch the
+  // one the person had, whether that is the whole project or a narrowing.
   draftTask.mockResolvedValue({
     ok: true,
     reply: "Here is a card.",
@@ -360,15 +399,17 @@ test("a card the conversation proposed fills the form, and the folder stays the 
     model: "fake/m1",
   })
   show()
+  expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(true)
   type("folder", "../work")
   await describe("run the tests every night")
   await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
 
+  expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(false)
   expect(field("name").value).toBe("nightly")
   expect(field("prompt").value).toBe("Run the tests.")
   expect(field("schedule").value).toBe("0 2 * * *")
   expect(field("folder").value).toBe("../work")
-  expect(host.textContent).toContain("Check the folder")
+  expect(host.textContent).toContain("Filled in from the conversation")
   expect(save().disabled).toBe(false)
 
   // A draft that names a folder the project has fills that too.

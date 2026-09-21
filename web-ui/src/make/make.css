@@ -90,6 +90,59 @@
   margin: 0;
 }
 
+/* The way in for somebody who would rather type the card: a quiet line
+   under the question, gone once the fields are out. */
+.make-byhand {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82em;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.make-byhand:hover {
+  color: var(--text);
+}
+
+/* The fields, as one column with the panel's rhythm -- and, while they wait
+   behind the question, not there at all. An author `display` would otherwise
+   beat the browser's own rule for `hidden`. */
+.make-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.make-fields[hidden] {
+  display: none;
+}
+
+/* What an ordinary card takes from defaults, folded. */
+.make-more {
+  color: var(--dim);
+  font-size: 0.82em;
+}
+
+.make-more summary {
+  cursor: pointer;
+}
+
+.make-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.make-more-body .make-field {
+  font-size: 1em;
+}
+
 .make-made {
   color: var(--live);
   font-size: 0.82em;
