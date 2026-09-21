@@ -127,7 +127,10 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.dataset.phase).toBe("New moon")
   expect(phaseAt("2025-02-05T08:02:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
-  const maskPoints = () => [...body.style.clipPath.matchAll(/([\d.]+)% ([\d.]+)%/g)].map(m => [Number(m[1]), Number(m[2])])
+  const lunarMask = () => new DOMParser().parseFromString(
+    decodeURIComponent(body.style.maskImage.split(",").slice(1).join(",").replace(/["')]$/, "").replace(/["']$/, "")), "image/svg+xml",
+  )
+  const maskPoints = () => lunarMask().querySelector("polygon")!.getAttribute("points")!.split(" ").map(p => p.split(",").map(Number))
   const area = () => {
     const points = maskPoints()
     return Math.abs(points.reduce((sum, p, i) => {
@@ -138,21 +141,24 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   const meanX = () => maskPoints().reduce((sum, p) => sum + p[0], 0) / maskPoints().length
   expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
   expect(meanX()).toBeGreaterThan(50) // waxing: right side lit
-  const waxingMask = body.style.clipPath
-  expect(waxingMask).toMatch(/^polygon/)
+  const waxingMask = body.style.maskImage
+  expect(body.style.clipPath).toBe("") // the shadowed portion still belongs to a round moon
+  expect(Number(lunarMask().querySelector("circle[opacity]")!.getAttribute("opacity"))).toBeGreaterThan(0)
+  expect(Number(lunarMask().querySelector("circle[opacity]")!.getAttribute("opacity"))).toBeLessThan(0.08)
+  expect(Number(lunarMask().querySelector("feGaussianBlur")!.getAttribute("stdDeviation"))).toBeGreaterThan(0)
   expect(phaseAt("2025-02-12T13:53:00Z")).toBeGreaterThan(0.98)
   expect(sky.dataset.phase).toBe("Full moon")
   expect(area()).toBeGreaterThan(0.98)
   expect(phaseAt("2025-02-20T17:33:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
-  expect(body.style.clipPath).not.toBe(waxingMask)
+  expect(body.style.maskImage).not.toBe(waxingMask)
   expect(meanX()).toBeLessThan(50) // waning: left side lit
   expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
   expect(phaseAt("2025-02-28T00:45:00Z")).toBeLessThan(0.01)
   expect(phaseAt("2024-12-30T22:27:00Z")).toBeLessThan(0.01) // before the epoch
   document.documentElement.dataset.theme = "light"
   await settle()
-  expect(body.style.clipPath).toBe("")
+  expect(body.style.maskImage).toBe("")
   expect(sky.hasAttribute("data-phase")).toBe(false)
 
   // Use the browser's local clock even when its hour differs from UTC.
