@@ -1,49 +1,96 @@
-/* The landing's sun or moon. The body follows the page's theme, which Auto sets from the same
-   06:00–18:00 clock; the arc always keeps the local clock. The two 12-hour arcs are a visual
-   convention, not sunrise or moon-phase data. */
+/* A local-clock sky with a date-based lunar phase. Design: docs/branding.md.
+   The two 12-hour arcs are a visual convention, not geographic rise/set times. */
 (function () {
   const sky = document.getElementById("landing-sky");
   if (!sky) return;
+  const body = sky.querySelector("img");
   let timer;
-  let previous;
+  let previousTime;
+  let previousProgress;
+  let suspended = false;
+
+  // NASA's 2025-01-29 12:36 UT new moon and mean synodic month.
+  // This is an approximate calendar phase, not a local horizon/orientation calculation.
+  const epoch = Date.UTC(2025, 0, 29, 12, 36);
+  const month = 29.530588 * 86_400_000;
+  const phases = ["New moon", "Waxing crescent", "First quarter", "Waxing gibbous",
+    "Full moon", "Waning gibbous", "Last quarter", "Waning crescent"];
+
+  function moon(now) {
+    const phase = ((now - epoch) % month + month) % month / month;
+    const light = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+    const side = phase < .5 ? 1 : -1;
+    const terminator = Math.cos(2 * Math.PI * phase);
+    const points = [];
+    // The opaque lunar disc in moon.png is centred at (.5, .502), radius .342.
+    // Trace the visible limb then the projected terminator.
+    for (let i = 0; i <= 64; i++) {
+      const angle = -Math.PI / 2 + i * Math.PI / 64;
+      points.push([.5 + side * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
+    }
+    for (let i = 64; i >= 0; i--) {
+      const angle = -Math.PI / 2 + i * Math.PI / 64;
+      points.push([.5 + side * terminator * .342 * Math.cos(angle), .502 + .342 * Math.sin(angle)]);
+    }
+    // Keep a faint shadowed hemisphere and soften the terminator instead of
+    // cutting the texture into a hard-edged fragment. Clip the blur to the disc
+    // so the original PNG's baked halo cannot reveal a bright full-moon outline.
+    const outline = points.map(([x, y]) => `${(x * 100).toFixed(3)},${(y * 100).toFixed(3)}`).join(" ");
+    const shade = light < .001 ? "0" : ".035";
+    const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><clipPath id="disc"><circle cx="50" cy="50.2" r="34.2"/></clipPath><filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter></defs><g clip-path="url(#disc)" fill="white"><circle cx="50" cy="50.2" r="34.2" opacity="${shade}"/><polygon points="${outline}" filter="url(#soft)"/></g></svg>`;
+    if (body) body.style.maskImage = `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
+    sky.style.setProperty("--moon-light", light.toFixed(4));
+    const name = phases[Math.round(phase * 8) % 8];
+    sky.dataset.phase = name;
+    return `${name}, approximately ${Math.round(light * 100)}% illuminated`;
+  }
 
   function pause() {
     clearTimeout(timer);
+    document.body.classList.add("sky-paused");
   }
 
   function update() {
-    pause();
-    if (document.hidden) return;
+    clearTimeout(timer);
+    if (suspended || document.hidden) { pause(); return; }
+    document.body.classList.remove("sky-paused");
     const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    const clock = hour * 60 + minute;
-    const daytime = clock >= 360 && clock < 1080;
-    const progress = (daytime ? clock - 360 : (clock + 360) % 1440) / 720;
-    const time = String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+    const clock = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const daytime = clock >= 21600 && clock < 64800;
+    const progress = (daytime ? clock - 21600 : (clock + 21600) % 86400) / 43200;
     const theme = document.documentElement.dataset.theme;
     const sun = theme ? theme === "light" : daytime;
-
     const period = sun ? "day" : "night";
-    // Do not animate a whole crossing when the body changes or a sleeping tab returns.
-    sky.classList.toggle("sky-jump", sky.dataset.period !== period || previous === undefined || Math.abs(clock - previous) > 1);
-    previous = clock;
-    if (sky.dataset.period !== period) {
-      const body = sky.querySelector("img");
-      if (body) body.src = sun ? "img/sun.png" : "img/moon.png";
-    }
+    const changed = sky.dataset.period !== period;
+    const stamp = now.getTime();
+    // A mode swap, resumed tab, clock adjustment, or half-day wrap must not fly across the page.
+    const jump = changed || previousTime === undefined || stamp - previousTime > 2000 ||
+      stamp < previousTime || progress < previousProgress;
+    sky.classList.toggle("sky-jump", jump);
+    previousTime = stamp;
+    previousProgress = progress;
+    if (changed && body) body.src = sun ? "img/sun.png" : "img/moon.png";
     sky.dataset.period = period;
-    sky.style.setProperty("--sky-progress", progress.toFixed(4));
-    sky.style.setProperty("--sky-rise", Math.sin(progress * Math.PI).toFixed(4));
-    sky.setAttribute("aria-label", `${sun ? "Sun" : "Moon"} at ${time}, your local time`);
+    sky.style.setProperty("--sky-progress", progress.toFixed(6));
+    sky.style.setProperty("--sky-rise", Math.sin(progress * Math.PI).toFixed(6));
+    const time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    let label = `${sun ? "Sun" : "Moon"} at ${time}, your local time`;
+    if (sun) {
+      if (body) body.style.maskImage = "";
+      sky.style.removeProperty("--moon-light");
+      delete sky.dataset.phase;
+    } else {
+      label += ` — ${moon(stamp)}`;
+    }
+    // Do not produce an accessibility-tree change every second just for the clock position.
+    if (sky.getAttribute("aria-label") !== label) sky.setAttribute("aria-label", label);
     sky.hidden = false;
-    // Align to the next minute, including the 06:00 and 18:00 boundaries.
-    timer = setTimeout(update, 60_000 - now.getTime() % 60_000);
+    timer = setTimeout(update, 1000 - stamp % 1000);
   }
 
   new MutationObserver(update).observe(document.documentElement, { attributeFilter: ["data-theme"] });
-  document.addEventListener("visibilitychange", update);
-  window.addEventListener("pagehide", pause);
-  window.addEventListener("pageshow", update);
+  document.addEventListener("visibilitychange", function () { previousTime = undefined; update(); });
+  window.addEventListener("pagehide", function () { suspended = true; pause(); });
+  window.addEventListener("pageshow", function () { suspended = false; previousTime = undefined; update(); });
   update();
 })();

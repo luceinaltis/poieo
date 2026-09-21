@@ -121,15 +121,23 @@ def test_landing_clouds_drift_quietly_and_hold_still_for_reduced_motion():
 
 def test_landing_clouds_are_rendered_images_for_each_ground():
     css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
-    images = re.findall(r'url\("(img/cloud-[^"]+\.webp)"\)', css)
-    assert len(set(images)) == 6, images
+    images = re.findall(r'url\("(img/(?:moonlit-wisp\.png|cloud-[^\"]+-light\.webp))"\)', css)
+    assert set(images) == {"img/moonlit-wisp.png", *(f"img/cloud-{n}-light.webp" for n in (1, 2, 3))}
     for image in images:
         assert (ROOT / "site" / image).is_file(), image
-    # The paper ground gets its own rendering, in the -light naming the other assets use.
-    light = re.findall(r'\[data-theme="light"\][^{}]*\{[^{}]*?url\("(img/cloud-[^"]+\.webp)"\)', css)
-    assert {image for image in images if image.endswith("-light.webp")} == set(light)
-    # The wash carries its own direction and tone; CSS does not mirror it.
     assert "scale: -1 1" not in css
+
+
+def test_night_stars_are_decorative_and_hold_their_light_with_reduced_motion():
+    page = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    stars = re.search(r'<div class="night-stars"([^>]*)>(.*?)</div>', page, re.S)
+    assert stars and 'aria-hidden="true"' in stars.group(1)
+    assert 20 <= stars.group(2).count('class="star"') <= 40
+    css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
+    assert re.search(r'\[data-theme="light"\] \.night-stars\s*\{[^}]*display: none', css)
+    assert "box-shadow:" in css.split(".star {", 1)[1].split("}", 1)[0]
+    calm = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert re.search(r"\.star\s*\{[^}]*animation: none", calm)
 
 
 def test_running_tasks_use_live_green_not_the_review_accent():
