@@ -42,14 +42,14 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.hidden).toBe(false)
   expect(sky.getAttribute("role")).toBe("img")
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon.png")
+  expect(body.getAttribute("src")).toBe("img/moon-wash.svg")
   expect(sky.getAttribute("aria-label")).toContain("05:59")
   expect(vi.getTimerCount()).toBe(1)
 
   // The boundary changes on the next clock minute, without a reload.
   vi.advanceTimersByTime(30_000)
   expect(sky.dataset.period).toBe("day")
-  expect(body.getAttribute("src")).toBe("img/sun.png")
+  expect(body.getAttribute("src")).toBe("img/sun-wash.svg")
   expect(sky.getAttribute("aria-label")).toBe("Sun at 06:00, your local time")
   const dawn = rise()
   expect(across()).toBe(0)
@@ -68,7 +68,7 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   document.documentElement.dataset.theme = "dark"
   await settle()
   expect(sky.dataset.period).toBe("night")
-  expect(body.getAttribute("src")).toBe("img/moon.png")
+  expect(body.getAttribute("src")).toBe("img/moon-wash.svg")
   expect(sky.getAttribute("aria-label")).toBe("Moon at 12:00, your local time")
   expect(across()).toBeCloseTo(0.5)
   expect(sky.classList.contains("sky-jump")).toBe(true) // swapped in place, not carried across the sky
@@ -76,7 +76,7 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   document.documentElement.dataset.theme = "light"
   await settle()
   expect(sky.dataset.period).toBe("day")
-  expect(body.getAttribute("src")).toBe("img/sun.png")
+  expect(body.getAttribute("src")).toBe("img/sun-wash.svg")
 
   // A chosen light page keeps its sun into the evening, where it starts the evening arc.
   vi.setSystemTime(new Date(2026, 8, 13, 17, 59, 59))
