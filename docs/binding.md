@@ -92,10 +92,66 @@ The memory board uses only explicitly declared `memory_embedder` and
 must not silently choose a chat model, an expensive endpoint, or a model that
 cannot create embeddings. See [memory.md](memory.md).
 
+## A provider that decides
+
+`typesafe` reaches TypeSafe's System One API, whose model Jev answers typed
+questions instead of writing text. It is an ordinary provider: the binding
+declares it, a role chooses it, and the graph goes on naming roles.
+
+```yaml
+providers:
+  jev:
+    type: typesafe    # https://api.typesafe.ai and $TYPESAFE_API_KEY unless told otherwise
+roles:
+  judge: {provider: jev, model: jev-latest}
+```
+
+A node bound to it must say what to decide. Its typed `questions`, in the
+API's own shape, travel in the node's `params`; the rendered `system` and
+`prompt` become the one `state` the model is shown. The answers return as the
+node's text, as JSON keyed by question, each carrying the pick, the
+probabilities behind it and, for a choice or a score, a confidence. Read them
+the way any JSON answer is read:
+
+```yaml
+  - id: judge
+    type: agent
+    role: judge
+    prompt: "Proposal: {{ input.proposal }}"
+    params:
+      questions:
+        verdict:
+          type: choice
+          instructions: Is this proposal ready to build?
+          criteria: {NARROW: too big for one change, DROP: not wanted, BUILD: ready}
+    output: {as: verdict, format: json, path: verdict.choice}
+```
+
+A router then branches on `verdict == 'NARROW'`. Do not test the raw text with
+`in`: every option's name appears in the probabilities, so the substring check
+that works on a one-word answer would match whatever was asked.
+
+The contract is narrower than a text model's, and the provider refuses rather
+than pretends: a node with `tools`, a node with a history, and a node with no
+`questions` each fail before any request. Generation parameters inherited from
+`default` -- `max_tokens`, `temperature`, a thinking setting -- describe
+writing, which this model does not do; they are not sent, and the run record
+lists them under `ignored_params`. Nothing in the graph names the provider,
+but a node carrying `questions` only makes sense bound to a model that
+decides: rebind its role to a text model and prose comes back where JSON was
+declared, and the output rule fails the node.
+
+The endpoint publishes neither a context size nor a cost on the wire. Set
+`context:` on the role if a step should be checked against the window, and
+`prices` if spend should be tracked. `poieo check` probes it with one two-word
+question, the only request the API has. As with any hosted provider, the state
+is sent to the vendor's servers.
+
 ## Credentials and preflight
 
 Startup resolves the roles that tasks can actually use and checks only their
-required credentials. `poieo check` goes further by probing configured
+required credentials, including a key variable the binding left to a preset or
+to the provider's own address. `poieo check` goes further by probing configured
 endpoints. Model discovery records endpoint and model metadata but never the
 credential value; absence of reported context, size, or price remains unknown
 rather than becoming zero.

@@ -10,6 +10,7 @@ from .local import OllamaProvider, OpenAICompatibleProvider
 from .mock import MockProvider
 from .presets import PRESETS
 from .subscription import ClaudeCodeProvider, CodexProvider
+from .typesafe import TypeSafeProvider
 
 _REGISTRY: dict[str, type[Provider]] = {
     "anthropic": AnthropicProvider,
@@ -20,6 +21,9 @@ _REGISTRY: dict[str, type[Provider]] = {
     # drive, because that is what a person logs into and what a failure names.
     "claude_code": ClaudeCodeProvider,
     "codex": CodexProvider,
+    # The one that decides rather than writes: typed questions in, a pick and
+    # its probabilities out. Its own wire, so not a preset.
+    "typesafe": TypeSafeProvider,
 }
 
 # Every preset is the OpenAI wire format with its address filled in, so each
@@ -29,13 +33,18 @@ _REGISTRY.update({name: OpenAICompatibleProvider for name in PRESETS})
 
 
 def _addressed(spec: ProviderSpec) -> ProviderSpec:
-    """Fill in what a preset knows and the binding did not say.
+    """Fill in what a preset, or the backend itself, knows and the binding did
+    not say.
 
     Filled rather than forced: somebody who wrote a `base_url` meant it -- a
     proxy, a mirror, a gateway in front of the real thing -- and the same for a
     key variable. A preset is a starting point, not a cage.
     """
     preset = PRESETS.get(spec.type)
+    if preset is None:
+        # `register` takes anything that answers like a provider, and a test
+        # double need not inherit the base class to do so.
+        preset = getattr(_REGISTRY.get(spec.type), "address", None)
     if preset is None:
         return spec
     return spec.model_copy(
@@ -79,6 +88,10 @@ def check_credentials(binding: BindingSpec, roles: set[str]) -> None:
     binding but bound to nothing is not going to be called, and holding the
     daemon down for its key would make the binding file harder to keep than
     the tasks it serves.
+
+    Addressed the way the pool will build it, so a key variable the binding
+    left to a preset or to the backend's own address is checked here rather
+    than discovered when a trigger fires.
     """
     checked: set[str] = set()
     for role in sorted(roles):
@@ -86,7 +99,7 @@ def check_credentials(binding: BindingSpec, roles: set[str]) -> None:
         if resolved.provider_name in checked:
             continue
         checked.add(resolved.provider_name)
-        credential_for(resolved.provider_name, resolved.provider)
+        credential_for(resolved.provider_name, _addressed(resolved.provider))
 
 
 class ProviderPool:
