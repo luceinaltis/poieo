@@ -9,6 +9,12 @@ project folder, and a prompt such as “Run the tests. Fix failures and run
 them again.” Choose **save and start**, or **save without starting** to inspect
 it first. Open **Task setup** to switch a saved task on or edit its instructions.
 
+Not sure what to write? Describe the work in the box at the top of the form,
+in any language. Your project's model asks what it needs to know and proposes
+a card; **use this draft** fills the fields for you to check, change and save.
+Nothing is saved until you press save, and the folder is always yours to
+confirm.
+
 Use a Git project for work you can [review and undo](changes.md). Without Git,
 a task edits the folder directly and poieo cannot undo it.
 
