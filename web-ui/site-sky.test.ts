@@ -127,13 +127,27 @@ test("the sun belongs to a light page and the moon to a dark one, on an arc that
   expect(sky.dataset.phase).toBe("New moon")
   expect(phaseAt("2025-02-05T08:02:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
+  const maskPoints = () => [...body.style.clipPath.matchAll(/([\d.]+)% ([\d.]+)%/g)].map(m => [Number(m[1]), Number(m[2])])
+  const area = () => {
+    const points = maskPoints()
+    return Math.abs(points.reduce((sum, p, i) => {
+      const q = points[(i + 1) % points.length]
+      return sum + p[0] * q[1] - p[1] * q[0]
+    }, 0)) / 2 / (Math.PI * 34.2 ** 2)
+  }
+  const meanX = () => maskPoints().reduce((sum, p) => sum + p[0], 0) / maskPoints().length
+  expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
+  expect(meanX()).toBeGreaterThan(50) // waxing: right side lit
   const waxingMask = body.style.clipPath
   expect(waxingMask).toMatch(/^polygon/)
   expect(phaseAt("2025-02-12T13:53:00Z")).toBeGreaterThan(0.98)
   expect(sky.dataset.phase).toBe("Full moon")
+  expect(area()).toBeGreaterThan(0.98)
   expect(phaseAt("2025-02-20T17:33:00Z")).toBeGreaterThan(0.4)
   expect(Number(sky.style.getPropertyValue("--moon-light"))).toBeLessThan(0.6)
   expect(body.style.clipPath).not.toBe(waxingMask)
+  expect(meanX()).toBeLessThan(50) // waning: left side lit
+  expect(area()).toBeCloseTo(Number(sky.style.getPropertyValue("--moon-light")), 2)
   expect(phaseAt("2025-02-28T00:45:00Z")).toBeLessThan(0.01)
   expect(phaseAt("2024-12-30T22:27:00Z")).toBeLessThan(0.01) // before the epoch
   document.documentElement.dataset.theme = "light"

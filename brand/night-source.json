@@ -1,0 +1,17 @@
+{
+  "tool": "OpenAI built-in image_gen",
+  "reference": "User-approved night-sky mockup in this task",
+  "assets": [
+    {
+      "path": "site/img/night-garden.png",
+      "sha256": "ab771c21ff277c2ce6ff3d5a11c32ad93cee62bb2b4b312930e3b93389685a96",
+      "prompt_summary": "Extract the approved night-sky mockup into a background only: preserve dark persimmon branches and ink-blue empty sky. Remove all UI, typography, moon, stars and clouds; these are independent browser layers. Natural silvery leaf edges, large central negative space. 1536x1024."
+    },
+    {
+      "path": "site/img/moonlit-wisp.png",
+      "sha256": "6a4a9683817e217a24a7f2a539a2dd7a0e6779be79f7197b8c488a6df7adaf33",
+      "prompt_summary": "A single very thin irregular moonlit cirrus band on a true transparent background, based on the approved mockup. Delicate neutral silver/ivory wisps and ink-wash edges, transparent tips, no moon, stars, UI, branches or opaque sky. 1536x1024."
+    }
+  ],
+  "rendering": "Original generated PNGs, including the wisp alpha, preserved. Moon and sun remain separate original sky-source.json assets."
+}

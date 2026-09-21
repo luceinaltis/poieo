@@ -87,27 +87,31 @@ for that browser origin and reflect changes in other open tabs. If storage is
 unavailable, the control still changes the current page. The installed board
 keeps its separate Light/Dark control and system-preference fallback.
 
-The landing's ink-wash sun belongs to a light page and its full moon to a
-dark one. In Auto that is the local clock: sun from 06:00 to 18:00, moon
-otherwise. A chosen Light or Dark keeps its own body at any hour. The arc keeps
-the clock either way: the body rises on the left, crosses the high middle at
-noon or midnight, and descends on the right, so a moon chosen at noon stands
-where the sun was. This is a clock convention, not astronomical sunrise or
-lunar-phase data. Keep the arc clear of text and controls, including on phones.
-The sun is diluted vermilion pigment; the moon is warm paper reserved in an
-ink-grey sky. Both are small SVG washes with irregular, softly bleeding edges,
-not photographic surfaces. Only the current body is loaded. Broad, faint light
-and a desaturated branch keep the scene in one ink-and-paper vocabulary.
+The landing uses a distant textured moon, thin moonlit cloud wisps and close
+persimmon branches. Its night backdrop is generated separately without a moon,
+stars or clouds, so the atmosphere never fixes their position. The light page
+keeps its paper wash and photographic sun. Light always shows the sun; Dark
+always shows the moon; Auto uses the visitor's local 06:00–18:00 day convention.
+The body crosses left to right over each 12-hour arc, highest at noon/midnight.
+Positions refresh each second, so real-time motion is intentionally very slow.
+These are clock paths, not geographic sun/moon rise and set times.
 
-Three existing wash clouds drift as thin, low-opacity mist ribbons. Their
-vertical compression and slow, staggered crossings leave the sky mostly empty.
-The layer stays behind the text, hidden from assistive technology. The source
-WebP washes remain reproducible with `brand/clouds.py`.
+The moon's illuminated shape follows an approximate synodic cycle of 29.530588
+days from the 2025-01-29 12:36 UTC new moon. The curved terminator reveals the
+existing moon texture on the right while waxing, left while waning; new moon
+has no illuminated disc or full-moon halo. This northern-hemisphere convention
+does not account for the observer's latitude, tilt, libration, or lunar-orbit
+variations. Its label gives the approximate phase and illumination. The source
+is [NASA's phase table](https://eclipse.gsfc.nasa.gov/phase/phase2001gmt.html).
+Only the active sun/moon image is requested; no location or runtime service is used.
 
-Update each minute while visible. Resume from the current time after sleep or
-browser-history restoration. Reduced motion disables transitions and holds the
-clouds still; switching bodies or returning after a time jump also places the
-body immediately.
+Thirty-two small decorative stars glow at different slow rhythms. They are
+absent in Light. Thin transparent clouds drift across the body, never over the
+text. Reduced motion holds stars and clouds still and disables body transitions.
+Hidden or cached pages pause; returning rereads the current clock and date.
+A time jump, mode change or arc reset places the body directly, without a long
+crossing. The scene stays behind text and controls and outside accessibility
+navigation; the body retains its descriptive accessible label.
 
 ## Type and copy
 
@@ -139,13 +143,14 @@ clear wherever the corresponding feature is explained.
 | `site/img/wordmark.svg`, `wordmark-light.svg` | Copies of the lettering masters |
 | `site/img/favicon.svg`, `apple-touch-icon.png` | Reversed persimmon symbol on dark ground |
 | `site/img/persimmon-wash.webp` | Decorative landing illustration, generated from the approved page concept |
-| `site/img/sun-wash.svg`, `moon-wash.svg` | Painted sun and reserved-paper moon used by the landing |
-| `site/img/sun.png`, `moon.png` | Earlier photographic assets, retained with their generation record |
+| `site/img/sun.png`, `moon.png` | Generated sun and moon textures; the moon is clipped to its calendar phase at runtime |
+| `site/img/night-garden.png`, `moonlit-wisp.png` | Generated night backdrop and transparent moving cirrus layer |
 | `site/img/cloud-1.webp` … `cloud-3-light.webp` | Ink-wash cloud banks for dark ground and paper; regenerate with `brand/clouds.py` |
 | `site/img/task.png`, `task-light.png`, `board.png` | Actual board with scripted, cost-free work |
 | `site/social.html`, `site/img/social.png` | Source and 1280×640 share image |
 
 The illustration's generation record is [wash-source.json](wash-source.json).
+The night backdrop and wisp record is [night-source.json](night-source.json).
 The sun and moon's prompts, asset paths, and hashes are in [sky-source.json](sky-source.json);
 the clouds have no prompt, and [clouds.py](clouds.py) is their record.
 The Korean design rationale and selected reference are in
