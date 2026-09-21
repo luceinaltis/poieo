@@ -72,13 +72,17 @@ pre code { font-size: 0.875rem; line-height: 1.8; }
 .theme-mode:hover { border-color: var(--ember); color: var(--text); }
 main, .footer { max-width: var(--column); margin-inline: auto; }
 .section { padding-block: 88px; }
-.landing-page { position: relative; isolation: isolate; --day-sky: #dce7ed; }
+.landing-page { position: relative; isolation: isolate; --day-sky: #d7e7f4; }
+[data-theme="light"] .landing-page { --ground: #f2f4f5; --rule: #cdd6db; }
 /* The generated night scene contains no moon, stars or clouds: each moves independently. */
 .landing-page::before { content: ""; position: absolute; inset: 0 0 auto; height: 904px; z-index: -4; pointer-events: none; background: linear-gradient(#080e12 55%, var(--ground)); }
-[data-theme="light"] .landing-page::before { background: linear-gradient(var(--day-sky), #eaf0f1 46%, var(--ground) 94%); }
+[data-theme="light"] .landing-page::before { background: linear-gradient(var(--day-sky), #e2edf4 52%, var(--ground) 96%); }
 .landing-art { position: absolute; top: 0; left: 0; width: 100%; height: 904px; object-fit: cover; object-position: center bottom; mix-blend-mode: multiply; opacity: .49; z-index: -3; pointer-events: none; mask-image: linear-gradient(black 88%, transparent); }
 :root:not([data-theme="light"]) .landing-art { display: none; }
-.landing-page .landing-art { left: 50%; width: min(100%, 1280px); transform: translateX(-50%); object-fit: contain; mix-blend-mode: normal; opacity: 1; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent), linear-gradient(transparent 12%, black 35%, black 78%, transparent); mask-composite: intersect; }
+/* Fade the image's own top edge, not the empty space above a contained image. */
+.landing-day { position: absolute; top: 0; left: 50%; width: min(100%, 1280px); height: 904px; transform: translateX(-50%); overflow: hidden; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent), linear-gradient(black 78%, transparent); mask-composite: intersect; z-index: -3; pointer-events: none; }
+:root:not([data-theme="light"]) .landing-day { display: none; }
+.landing-page .landing-art { top: auto; bottom: 0; width: 100%; height: auto; mix-blend-mode: normal; opacity: 1; mask-image: linear-gradient(transparent, black 28%); }
 .landing-night { position: absolute; top: 0; left: 50%; width: min(100%, 1280px); transform: translateX(-50%); height: 904px; background: url("img/night-garden.png") center bottom / 100% auto no-repeat; opacity: .72; mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent), linear-gradient(black 78%, transparent); mask-composite: intersect; z-index: -3; pointer-events: none; }
 [data-theme="light"] .landing-night { display: none; }
 .night-stars { position: absolute; inset: 80px 0 auto; height: 650px; overflow: hidden; z-index: -2; pointer-events: none; mask-image: linear-gradient(black 60%, transparent); }
@@ -231,7 +235,8 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .landing-night { height: 816px; background-size: 720px auto; background-position: 65% bottom; }
   .night-stars { height: 560px; }
   .landing-art { height: 816px; object-position: right bottom; opacity: .55; }
-  .landing-page .landing-art { object-fit: cover; object-position: 80% bottom; opacity: .8; }
+  .landing-day { height: 816px; }
+  .landing-page .landing-art { left: 65%; width: 720px; max-width: none; transform: translateX(-65%); }
   .section { padding-block: 56px; }
   .section-heading { grid-template-columns: 1fr; gap: 20px; }
   .principles { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }

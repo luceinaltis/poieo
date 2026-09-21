@@ -92,7 +92,12 @@ persimmon branches. Its night backdrop is generated separately without a moon,
 stars or clouds, so the atmosphere never fixes their position. Both backdrops
 are capped at 1280px wide, centered and faded at the edges; widening the window
 does not enlarge branches into the headline. The light page has an airy blue-grey
-sky and soft white sunlight. Its tree is a daylight edit of the night original,
+sky and soft white sunlight. The Light landing ground is cool mist
+(`#f2f4f5`), with the sky sampled from the daylight image (`#d7e7f4`).
+The daylight image keeps its natural aspect ratio, aligned to the scene bottom;
+its top fade follows the image edge, while the outer scene fades at the sides
+and bottom. Mobile uses the same 720px artwork scale as night.
+Its tree is a daylight edit of the night original,
 preserving the branch layout and detailed leaves with muted green/ochre foliage
 and orange fruit. Light always shows the sun; Dark
 always shows the moon; Auto uses the visitor's local 06:00–18:00 day convention.

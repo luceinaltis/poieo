@@ -132,7 +132,7 @@ def test_landing_art_has_a_size_ceiling_and_daylight_scene():
     page = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
     assert 'src="img/day-garden.png"' in page
     css = (ROOT / "site" / "style.css").read_text(encoding="utf-8")
-    for selector in (r"\.landing-page \.landing-art", r"\.landing-night"):
+    for selector in (r"\.landing-day", r"\.landing-night"):
         rule = re.search(selector + r"\s*\{([^}]*)\}", css)
         assert rule and "width: min(100%, 1280px)" in rule.group(1)
     assert "--day-sky" in css
