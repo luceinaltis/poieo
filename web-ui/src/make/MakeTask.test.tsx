@@ -63,17 +63,13 @@ function show(props: Partial<Parameters<typeof MakeTask>[0]> = {}) {
 const field = (name: string) => host.querySelector<HTMLInputElement>(`[name="${name}"]`)!
 const save = () => host.querySelector<HTMLButtonElement>('[data-do="make-task"]')!
 
-test("a task may choose a Git subfolder even when its project folder is not Git", () => {
-  show({ keepsCopies: false })
-  type("folder", "../git-work")
-  act(() => host.querySelector<HTMLElement>(".apply-settings summary")!.click())
-  const automatic = host.querySelector<HTMLInputElement>('input[value="auto"]')!
-  expect(automatic.disabled).toBe(false)
-  act(() => automatic.click())
-  expect(automatic.checked).toBe(true)
-  expect(host.querySelector(".make-warning")?.textContent).toContain("private copy")
-  expect(host.querySelector(".make-warning")?.textContent).not.toContain("no undo")
-})
+function pick(name: string, value: string) {
+  const select = host.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!
+  act(() => {
+    select.value = value
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
 
 function type(name: string, value: string) {
   const input = field(name)
@@ -96,36 +92,48 @@ test("it is one of the panels on the right edge, not a third geometry", () => {
   expect(host.querySelector("aside")?.classList.contains("panel")).toBe(true)
 })
 
-test("it asks for a name, a folder and a prompt, and offers one line for when", () => {
-  // Three fields to fill, and no fourth to fill: the schedule line is
-  // optional and blank, so the common case is still the three, and a card
-  // made without touching it reads exactly as one made before there was a
-  // line. What changed is that the hourly default is no longer the only
-  // schedule a card can be given without opening the file.
+test("it asks for a prompt and a name, and the rest is chosen rather than typed", async () => {
+  // Two fields to fill and nothing else to type: where it works and when it
+  // runs are picked from lists that start on the defaults, so a card made
+  // without touching them reads exactly as one made before there were lists.
   show()
+  await act(async () => {})
   const named = [...host.querySelectorAll("[name]")].map((node) => node.getAttribute("name"))
-  expect(named.sort()).toEqual(["folder", "name", "prompt", "schedule"])
-  expect(field("schedule").value).toBe("")
-  expect(field("schedule").hasAttribute("required")).toBe(false)
+  expect(named.sort()).toEqual(["folder-pick", "name", "prompt", "when"])
+  expect(field("when").value).toBe("")
+  expect(field("folder-pick").value).toBe("..")
 })
 
-test("automatic application is optional and requires an explicit check before saving", async () => {
+test("how changes reach the project is not asked here", () => {
+  // A new task starts under review. Letting it apply its own checked work is
+  // a decision for a task that has run a few times, and Task setup is where
+  // that is switched on -- so the panel neither asks nor sends it.
   show()
-  type("name", "Tidy")
-  type("folder", "../work")
+  expect(host.querySelector(".apply-settings")).toBeNull()
   type("prompt", "keep it healthy")
-  const summary = host.querySelector<HTMLElement>(".apply-settings summary")
-  expect(summary).not.toBeNull()
-  await act(async () => summary!.click())
-  await act(async () => host.querySelector<HTMLInputElement>('[value="auto"]')!.click())
-  expect(save().disabled).toBe(true)
-  type("application-checks", "python -m pytest")
-  type("application-paths", "src\ntests")
+  act(() => save().click())
+  expect(createTask).toHaveBeenCalledWith("board", "keep it healthy", "..", "keep it healthy", true)
+})
+
+test("a name left blank is taken from the first line of the prompt", async () => {
+  show()
+  type("prompt", "Run the tests. Fix one failure.\nLeave the rest alone.")
+  // Shown before it is used: the placeholder is the name the card will get.
+  expect(field("name").placeholder).toBe("Run the tests")
   expect(save().disabled).toBe(false)
-  await act(async () => save().click())
-  expect(createTask).toHaveBeenCalledWith("board", "Tidy", "../work", "keep it healthy", true, {
-    mode: "auto", checks: ["python -m pytest"], paths: ["src", "tests"], timeout: 120,
+  await act(async () => {
+    save().click()
   })
+  expect(createTask).toHaveBeenCalledWith("board", "Run the tests", "..", "Run the tests. Fix one failure.\nLeave the rest alone.", true)
+})
+
+test("a name taken from the prompt collides like a typed one", () => {
+  act(() => {
+    root.render(<MakeTask project="board" keepsCopies={true} onClose={() => {}} taken={["tidy-up"]} />)
+  })
+  type("prompt", "Tidy up! Then stop.")
+  expect(host.textContent).toContain("already has a task called ‘tidy-up’")
+  expect(save().disabled).toBe(true)
 })
 
 test("the folder starts on the whole project and can be narrowed from the list", async () => {
@@ -139,27 +147,15 @@ test("the folder starts on the whole project and can be narrowed from the list",
   show()
   await act(async () => {})
 
-  const pick = host.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
-  expect(pick).not.toBeNull()
-  expect(field("folder").value).toBe("..")
-  expect(pick.value).toBe("..")
+  expect(field("folder-pick").value).toBe("..")
   expect(host.textContent).toContain("files in this project")
 
-  await act(async () => {
-    pick.value = "../work"
-    pick.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  expect(field("folder").value).toBe("../work")
+  pick("folder-pick", "../work")
+  expect(field("folder-pick").value).toBe("../work")
   expect(host.textContent).toContain("../work")
 
-  // Typing keeps the last word: a path the list does not have unselects it.
-  type("folder", "../elsewhere")
-  expect(pick.value).toBe("")
-
-  // Emptied by hand, it is the whole project again -- not nowhere.
-  type("folder", "")
+  pick("folder-pick", "..")
   expect(host.textContent).toContain("files in this project")
-  expect(pick.value).toBe("..")
 })
 
 test("the fields wait behind the question until a draft comes or the person asks for them", () => {
@@ -192,31 +188,43 @@ test("a seed is a card already, so the panel opens on the fields", () => {
     )
   })
   expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(false)
-  expect(field("folder").value).toBe("../work")
+  // The seed's folder, shown even though the daemon offered no list: the
+  // list is the field here, and a field cannot hide what it holds.
+  expect(field("folder-pick").value).toBe("../work")
+  expect(host.textContent).toContain("../work")
 })
 
-test("with nothing to offer, the folder is typed as before", async () => {
+test("with nothing to offer, the task still works in the whole project", async () => {
   show()
   await act(async () => {})
-  expect(host.querySelector('select[name="folder-pick"]')).toBeNull()
-  expect(field("folder")).not.toBeNull()
+  expect(field("folder-pick").value).toBe("..")
+  expect(host.querySelector('select[name="folder-pick"] option')?.textContent).toBe("this project")
 })
 
-test("a schedule typed on the form rides with the card, and a blank one is not sent", async () => {
-  // One line: an interval, the word loop, or a cron line. Blank means the
-  // card says nothing and takes its default, exactly as before.
+test("when it runs is chosen, and a blank choice is not sent", async () => {
+  // A person says "every night", not "0 2 * * *". The choices carry the
+  // card's own line; the last one opens that line for anything else. Blank
+  // means the card says nothing and takes its default, exactly as before.
   show()
   type("name", "nightly")
-  type("folder", "../work")
   type("prompt", "look around")
-  type("schedule", "0 2 * * *")
+  expect(host.querySelector('input[name="schedule"]')).toBeNull()
+  pick("when", "0 2 * * *")
 
   await act(async () => {
     save().click()
   })
+  expect(createTask).toHaveBeenCalledWith("board", "nightly", "..", "look around", true, undefined, "0 2 * * *")
+  expect(field("when").value).toBe("")
 
-  expect(createTask).toHaveBeenCalledWith("board", "nightly", "../work", "look around", true, undefined, "0 2 * * *")
-  expect(field("schedule").value).toBe("")
+  type("name", "often")
+  type("prompt", "look again")
+  pick("when", "custom")
+  type("schedule", "15m")
+  await act(async () => {
+    save().click()
+  })
+  expect(createTask).toHaveBeenLastCalledWith("board", "often", "..", "look again", true, undefined, "15m")
 })
 
 test("a name and a prompt are the whole card, and it works in the whole project unless narrowed", async () => {
@@ -232,20 +240,24 @@ test("a name and a prompt are the whole card, and it works in the whole project 
   expect(createTask).toHaveBeenCalledWith("board", "tidy up", "..", "look around", true)
 })
 
-test("it says whose files are about to change before the button is pressed", () => {
+test("it says whose files are about to change before the button is pressed", async () => {
+  fetchFolders.mockResolvedValue([
+    { path: "..", name: "this project" },
+    { path: "../work", name: "work" },
+  ])
   show()
+  await act(async () => {})
   // Principle 7's one exception: the machinery stays hidden, the moment the
   // reader's own files are about to change does not -- and it is said before
   // anything is typed, because the whole project is what a fresh card gets.
   expect(host.textContent).toContain("files in this project")
-  type("folder", "../work")
+  pick("folder-pick", "../work")
   expect(host.textContent).toContain("../work")
   expect(host.textContent?.toLowerCase()).toContain("files")
 })
 
 test("it says the work can be thrown away, where that is true", () => {
   show({ keepsCopies: true })
-  type("folder", "../work")
 
   // The reassuring half, and it is not decoration: it is what makes the
   // other half legible as the exception it is.
@@ -255,7 +267,6 @@ test("it says the work can be thrown away, where that is true", () => {
 
 test("it says there is nothing to undo, before the button that starts it", () => {
   show({ keepsCopies: false })
-  type("folder", "../work")
 
   // The board says this too, on the card -- but by then the task exists and
   // has been running. This is the moment the reader chooses, and until now
@@ -268,14 +279,13 @@ test("it says there is nothing to undo, before the button that starts it", () =>
 test("a saved card is sent as the three things, and says so in place", async () => {
   show()
   type("name", "tidy up")
-  type("folder", "../work")
   type("prompt", "look around")
 
   await act(async () => {
     save().click()
   })
 
-  expect(createTask).toHaveBeenCalledWith("board", "tidy up", "../work", "look around", true)
+  expect(createTask).toHaveBeenCalledWith("board", "tidy up", "..", "look around", true)
   // Said here, not by closing. Closing was the first shape, and it unmounted
   // the panel in the same batch that set the confirmation -- so a save gave
   // no sign at all that anything had happened.
@@ -290,7 +300,6 @@ test("a made card is handed up by the name the daemon filed it under", async () 
   const onMade = vi.fn()
   show({ onMade })
   type("name", "tidy up")
-  type("folder", "../work")
   type("prompt", "look around")
 
   await act(async () => {
@@ -304,7 +313,6 @@ test("a refusal is shown and the form keeps what was typed", async () => {
   createTask.mockResolvedValue({ ok: false, error: "the folder it would work in is not there" })
   show()
   type("name", "tidy up")
-  type("folder", "../gone")
   type("prompt", "look around")
 
   await act(async () => {
@@ -325,7 +333,6 @@ test("a refusal with nothing to say still says something", async () => {
   createTask.mockResolvedValue({ ok: false })
   show()
   type("name", "tidy up")
-  type("folder", "../work")
   type("prompt", "look around")
 
   await act(async () => {
@@ -342,7 +349,6 @@ test("an answer with no task is a refusal, not a card", async () => {
   createTask.mockResolvedValue({ ok: true })
   show()
   type("name", "tidy up")
-  type("folder", "../work")
   type("prompt", "look around")
 
   await act(async () => {
@@ -356,11 +362,19 @@ test("an answer with no task is a refusal, not a card", async () => {
 test("a relative folder says which folder it is relative to", async () => {
   // The server reads it from the project's tasks folder, not the project
   // root. The sentence naming whose files change has to say which `work`.
-  show()
-  type("folder", "work")
+  // Such a folder reaches this panel by seed, from a card written by hand.
+  const seeded = (folder: string) =>
+    act(() => {
+      root.render(
+        <MakeTask project="board" keepsCopies={true} onClose={() => {}} seed={{ name: "x", folder, prompt: "y" }} />,
+      )
+    })
+  seeded("work")
   expect(host.textContent).toContain("tasks folder")
 
-  type("folder", "/tmp/elsewhere")
+  act(() => root.unmount())
+  root = createRoot(host)
+  seeded("/tmp/elsewhere")
   expect(host.textContent).not.toContain("tasks folder")
 })
 
@@ -370,14 +384,13 @@ test("the quiet press writes a card that does not start", async () => {
   // write one down and look at it first without going and finding the file.
   show()
   type("name", "later")
-  type("folder", "../work")
   type("prompt", "go")
 
   await act(async () => {
     host.querySelector<HTMLElement>('[data-do="make-task-off"]')!.click()
   })
 
-  expect(createTask).toHaveBeenCalledWith("board", "later", "../work", "go", false)
+  expect(createTask).toHaveBeenCalledWith("board", "later", "..", "go", false)
   // And the confirmation says which of the two happened: "it starts on its
   // own" is a sentence with consequences, and must not be said of a card that
   // did not.
@@ -404,32 +417,42 @@ test("a card the conversation proposed brings the fields out filled, and a folde
     draft: { name: "nightly", folder: "", prompt: "Run the tests.", schedule: "0 2 * * *" },
     model: "fake/m1",
   })
+  fetchFolders.mockResolvedValue([
+    { path: "..", name: "this project" },
+    { path: "../work", name: "work" },
+    { path: "../docs", name: "docs" },
+  ])
   show()
+  await act(async () => {})
   expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(true)
-  type("folder", "../work")
+  pick("folder-pick", "../work")
   await describe("run the tests every night")
   await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
 
   expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(false)
   expect(field("name").value).toBe("nightly")
   expect(field("prompt").value).toBe("Run the tests.")
-  expect(field("schedule").value).toBe("0 2 * * *")
-  expect(field("folder").value).toBe("../work")
+  // A schedule the choices have is chosen; the line stays closed.
+  expect(field("when").value).toBe("0 2 * * *")
+  expect(host.querySelector('input[name="schedule"]')).toBeNull()
+  expect(field("folder-pick").value).toBe("../work")
   expect(host.textContent).toContain("Filled in from the conversation")
   expect(save().disabled).toBe(false)
 
-  // A draft that names a folder the project has fills that too.
+  // A draft that names a folder the project has fills that too, and a
+  // schedule the choices lack opens the line with it written out.
   draftTask.mockResolvedValue({
     ok: true,
     reply: "Or this.",
-    draft: { name: "docs", folder: "../docs", prompt: "Tidy the docs.", schedule: "" },
+    draft: { name: "docs", folder: "../docs", prompt: "Tidy the docs.", schedule: "2h" },
     model: "fake/m1",
   })
   await describe("in docs instead")
   const offered = host.querySelectorAll<HTMLButtonElement>('[data-do="use-draft"]')
   await act(async () => offered[offered.length - 1].click())
-  expect(field("folder").value).toBe("../docs")
-  expect(field("schedule").value).toBe("")
+  expect(field("folder-pick").value).toBe("../docs")
+  expect(field("when").value).toBe("custom")
+  expect(field("schedule").value).toBe("2h")
 })
 
 test("a draft's prompt becomes the first step once the form is steps", async () => {

@@ -4,10 +4,11 @@
  * The panel opens on one question: what should it do. The project's model
  * answers in kind and, when it can, proposes a card; "use this draft" puts
  * that card on the fields below, which are also there for anyone who would
- * rather write it themselves. A name and a prompt are the whole of the
- * ordinary card. "Write as steps" grows that prompt into connected
- * instructions and conditions, saved as the same graph the runtime reads from
- * a file.
+ * rather write it themselves. A prompt is the whole of the ordinary card: a
+ * name left blank is taken from its first line. Where it works and when it
+ * runs are chosen from lists that start on the defaults, under `more`, with
+ * "Write as steps", which grows the prompt into connected instructions and
+ * conditions saved as the same graph the runtime reads from a file.
  *
  * **Two presses, though, and no third field.** Saving a card starts a
  * shell-capable agent over the reader's own files within seconds -- that is
@@ -26,6 +27,10 @@
  * and says whether that can be undone, because the card starts running when
  * it is saved, and this is where a person finds that out.
  *
+ * **How changes reach the project is not asked here.** A new task starts
+ * under review, and letting it apply its own checked work is a decision for
+ * a task that has run a few times; Task setup is where that is switched on.
+ *
  * Shell UI, so it may read the API. It hangs off the rail beside `models`
  * because making a task is what the page is for, not something one task does.
  */
@@ -33,11 +38,10 @@
 import { useLayoutEffect, useRef, useState } from "react"
 
 import { createTask } from "../api"
-import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { MadeTask, TaskDraft } from "../api"
 import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
-import { slugOf } from "./slug"
+import { slugOf, titleOf } from "./slug"
 import { useAct } from "../useAct"
 import { Describe } from "./Describe"
 import { StepEditor } from "./StepEditor"
@@ -47,6 +51,19 @@ import "./make.css"
 
 /** How a card spells the project itself: relative to the tasks folder. */
 const WHOLE_PROJECT = ".."
+
+/**
+ * When a task runs, as a person would say it, and the one line the card
+ * takes for it. Blank is the card's own default, hourly. The last choice
+ * opens the line itself, for an interval, the word loop, or a cron line.
+ */
+const WHEN: { value: string; label: string }[] = [
+  { value: "", label: "every hour" },
+  { value: "30m", label: "every 30 minutes" },
+  { value: "24h", label: "every day" },
+  { value: "0 2 * * *", label: "every night at 2" },
+  { value: "custom", label: "at another time…" },
+]
 
 export function MakeTask({
   project,
@@ -60,7 +77,7 @@ export function MakeTask({
   /**
    * Whether a night made here could be thrown away in the morning.
    *
-   * A property of the project, not of the folder being typed: a card made
+   * A property of the project, not of the folder being chosen: a card made
    * here works inside the project, and a folder inside a work tree is in that
    * work tree. So it is answered before there is a path to answer about.
    */
@@ -92,9 +109,9 @@ export function MakeTask({
   const [folder, setFolder] = useState(seed?.folder ?? WHOLE_PROJECT)
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
   const [steps, setSteps] = useState<StepDraft[] | null>(null)
-  /** One line, or nothing: the card then takes its hourly default. */
+  // Which of the choices above, or "custom" with the line written out.
+  const [when, setWhen] = useState("")
   const [schedule, setSchedule] = useState("")
-  const [application, setApplication] = useState(draftOf())
   const [made, setMade] = useState<string | null>(null)
   // Which of the two presses made it, so the confirmation says which happened.
   // The whole reason the second button exists is that "it starts on its own"
@@ -129,13 +146,19 @@ export function MakeTask({
   }, [open])
 
   // A card the model proposed, onto the fields. The folder is taken only
-  // when the draft names one, and the field keeps what the person had
+  // when the draft names one, and the list keeps what the person had
   // otherwise; the prompt lands in the first step once the form has become
-  // steps, since that step is where the prompt went when it did.
+  // steps, since that step is where the prompt went when it did. A schedule
+  // the choices do not have opens the line with it written out.
   const fill = (draft: TaskDraft) => {
     setName(draft.name)
     if (draft.folder) setFolder(draft.folder)
-    setSchedule(draft.schedule)
+    if (WHEN.some((choice) => choice.value === draft.schedule && choice.value !== "custom")) {
+      setWhen(draft.schedule)
+    } else {
+      setWhen("custom")
+      setSchedule(draft.schedule)
+    }
     setSteps((current) =>
       current ? current.map((step, index) => (index === 0 ? { ...step, text: draft.prompt } : step)) : current,
     )
@@ -144,29 +167,23 @@ export function MakeTask({
     bringOut()
   }
 
-  // In the daemon's own spelling of the filename, so "Chores!" collides with
-  // "chores" exactly as it would on disk.
-  const collides = taken.includes(slugOf(name))
+  // The name the card will get: the one typed, or the first line of what it
+  // does. In the daemon's own spelling of the filename for the collision, so
+  // "Chores!" collides with "chores" exactly as it would on disk.
+  const title = name.trim() || titleOf(steps ? (steps[0]?.text ?? "") : prompt)
+  const collides = Boolean(title) && taken.includes(slugOf(title))
   const problems = steps ? stepProblems(steps) : []
-  // Emptied by hand, the field means the whole project again, not nowhere.
+  // Emptied, the list means the whole project again, not nowhere.
   const where = folder.trim() || WHOLE_PROJECT
-  const ready =
-    Boolean(name.trim() && (steps ? steps.length && !problems.length : prompt.trim())) &&
-    !collides &&
-    applicationReady(application)
+  const line = when === "custom" ? schedule.trim() : when
+  const ready = Boolean(title && (steps ? steps.length && !problems.length : prompt.trim())) && !collides
 
   const send = (enabled: boolean) => () =>
     void act(async () => {
-      const configured = JSON.stringify(application) !== JSON.stringify(draftOf())
-      const args = [project, name.trim(), where, steps ? graphOf(name.trim(), steps) : prompt.trim(), enabled] as const
+      const args = [project, title, where, steps ? graphOf(title, steps) : prompt.trim(), enabled] as const
       // Only what was said: a blank schedule is not sent, so a card made
-      // without one reads exactly as it did before there was a field.
-      const when = schedule.trim()
-      const answer = when
-        ? await createTask(...args, configured ? applicationOf(application) : undefined, when)
-        : configured
-          ? await createTask(...args, applicationOf(application))
-          : await createTask(...args)
+      // without one reads exactly as it did before there was a choice.
+      const answer = line ? await createTask(...args, undefined, line) : await createTask(...args)
       // `ok` alone is not enough: a 2xx whose body did not parse arrives as
       // {ok: true} with no task, and treating that as made would clear the
       // form over a card that may not exist -- and a second press would
@@ -186,9 +203,9 @@ export function MakeTask({
         setName("")
         setFolder(WHOLE_PROJECT)
         setPrompt("")
+        setWhen("")
         setSchedule("")
         setSteps(null)
-        setApplication(draftOf())
         setFilled(false)
         setStarted(enabled)
       }
@@ -218,22 +235,6 @@ export function MakeTask({
       <div className="make-fields" hidden={!open}>
         {filled ? <p className="make-note">Filled in from the conversation. Read it over, then save.</p> : null}
 
-        <label className="make-field">
-          name
-          <input
-            ref={nameRef}
-            name="name"
-            className="make-input"
-            value={name}
-            disabled={busy}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-
-        {collides ? (
-          <Refusal>this project already has a task called ‘{slugOf(name)}’</Refusal>
-        ) : null}
-
         {steps ? (
           <StepEditor steps={steps} onChange={setSteps} disabled={busy} />
         ) : (
@@ -250,6 +251,25 @@ export function MakeTask({
           </label>
         )}
 
+        {/* After the prompt, because it comes from the prompt: left blank,
+            the placeholder shows the name the card will get. */}
+        <label className="make-field">
+          name
+          <input
+            ref={nameRef}
+            name="name"
+            className="make-input"
+            placeholder={title || "from the first line of the prompt"}
+            value={name}
+            disabled={busy}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+
+        {collides ? (
+          <Refusal>this project already has a task called ‘{slugOf(title)}’</Refusal>
+        ) : null}
+
         {problems.length > 0 && (
           <ul className="step-problems" aria-label="Steps to fix">
             {problems.map((problem) => (
@@ -258,45 +278,49 @@ export function MakeTask({
           </ul>
         )}
 
-        {/* Everything an ordinary card takes from defaults. Folded, so the
-            fields above are the whole card for most people, and here for the
-            few tasks that need less of the project, another rhythm, steps, or
-            to apply their own checked work. */}
+        {/* What an ordinary card takes from defaults, folded, so the fields
+            above are the whole card for most people: here for the few tasks
+            that need less of the project, another rhythm, or steps. */}
         <details className="make-more">
-          <summary>more · where it works, when, steps, changes</summary>
+          <summary>more · where it works, when, steps</summary>
           <div className="make-more-body">
             <label className="make-field">
               works in
-              {/* The choice, spelled out, and standing on the whole project
-                  until it is narrowed: `..` for the project itself was the
-                  one thing a reader could not guess. */}
-              <FolderPick project={project} value={where} disabled={busy} onPick={setFolder} />
-              <input
-                name="folder"
-                className="make-input"
-                aria-label="or a folder path"
-                placeholder="or a path, relative to the tasks folder"
-                value={folder}
-                disabled={busy}
-                onChange={(event) => setFolder(event.target.value)}
-              />
+              {/* The choice, spelled out, standing on the whole project until
+                  it is narrowed: `..` for the project itself was the one
+                  thing a reader could not guess. */}
+              <FolderPick project={project} value={where} disabled={busy} alone onPick={setFolder} />
             </label>
 
-            {/* The short form's schedule, as one line: an interval, the word
-                loop, or a cron line. Left blank the card says nothing and
-                runs hourly, which is what every card made here did before
-                there was a field. Jitter, a start rule or a run limit are
-                still the file's. */}
+            {/* When it runs, as a person says it. The last choice opens the
+                card's own line: an interval, the word loop, or a cron line.
+                Jitter, a start rule or a run limit are still the file's. */}
             <label className="make-field">
-              every
-              <input
-                name="schedule"
+              when
+              <select
+                name="when"
                 className="make-input"
-                placeholder="1h unless said — 30m, loop, or a cron line like 0 2 * * *"
-                value={schedule}
+                value={when}
                 disabled={busy}
-                onChange={(event) => setSchedule(event.target.value)}
-              />
+                onChange={(event) => setWhen(event.target.value)}
+              >
+                {WHEN.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+              {when === "custom" ? (
+                <input
+                  name="schedule"
+                  className="make-input"
+                  aria-label="When, as the card spells it"
+                  placeholder="30m, loop, or a cron line like 0 2 * * *"
+                  value={schedule}
+                  disabled={busy}
+                  onChange={(event) => setSchedule(event.target.value)}
+                />
+              ) : null}
             </label>
 
             {!steps ? (
@@ -309,8 +333,6 @@ export function MakeTask({
                 Write as steps
               </button>
             ) : null}
-
-            <ApplySettings value={application} onChange={setApplication} disabled={busy} keepsCopies={keepsCopies} />
           </div>
         </details>
 
@@ -339,12 +361,7 @@ export function MakeTask({
             </>
           )}
           .{" "}
-          {application.mode === "auto" ? (
-            <>
-              The selected folder needs Git. Its work is kept in a private copy, checked, then applied within your
-              allowed files.
-            </>
-          ) : keepsCopies ? (
+          {keepsCopies ? (
             // Said even though it is the good news: without it the other
             // wording reads as boilerplate about files rather than as the one
             // project where the morning cannot help.

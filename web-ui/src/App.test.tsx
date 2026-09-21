@@ -771,7 +771,7 @@ test("make one like it opens the make panel already filled in", async () => {
   expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("Chores")
   expect(container.textContent).toContain("already has a task called")
   expect(container.querySelector<HTMLButtonElement>('[data-do="make-task"]')!.disabled).toBe(true)
-  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("../work")
+  expect(container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!.value).toBe("../work")
   expect(container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!.value).toBe(
     "tidy",
   )
@@ -801,7 +801,7 @@ test("switching projects puts a seeded make panel away with its seed", async () 
   await act(async () => {
     container.querySelector<HTMLElement>('[data-do="make-alike"]')!.click()
   })
-  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("../work")
+  expect(container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!.value).toBe("../work")
 
   const picker = container.querySelector<HTMLSelectElement>(".shell-project-pick")!
   await act(async () => {
@@ -811,13 +811,13 @@ test("switching projects puts a seeded make panel away with its seed", async () 
 
   // The panel is gone, and so is the seed: opening `new task` in the other
   // project starts from a blank page, not from board's folder.
-  expect(container.querySelector('input[name="folder"]')).toBeNull()
+  expect(container.querySelector('select[name="folder-pick"]')).toBeNull()
   // The other project has no tasks, so its board offers new task through the
   // invitation rather than the corner button.
   await act(async () => container.querySelector<HTMLElement>('[data-do="empty-new-task"]')!.click())
   // The whole project, which is where every fresh card starts -- not board's
   // `../work`.
-  expect(container.querySelector<HTMLInputElement>('input[name="folder"]')!.value).toBe("..")
+  expect(container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!.value).toBe("..")
 })
 
 test("a memory named in the drawer opens the memory place at that entry", async () => {
