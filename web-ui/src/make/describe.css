@@ -1,0 +1,115 @@
+/* The conversation above the fields. Same panel, one step quieter than the
+   form it fills, so the fields stay the thing being made; a rule under it
+   says where the talking stops and the card starts. */
+.describe {
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+/* The thread grows; the form must not be pushed off the screen by it. */
+.describe-turns {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.describe-turn {
+  display: grid;
+  gap: 3px;
+  font-size: 0.9em;
+}
+
+.describe-who {
+  color: var(--dim);
+  font-size: 0.78em;
+}
+
+.describe-turn[data-role="user"] .describe-who {
+  color: var(--ember);
+}
+
+/* Text worth copying: the page opts out of selection for the board, and a
+   reply is the one thing here a reader may want to take away. */
+.describe-said,
+.describe-card-prompt {
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.describe-card {
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px 10px;
+}
+
+.describe-card-name {
+  color: var(--text);
+}
+
+.describe-card-where {
+  color: var(--dim);
+  font-size: 0.85em;
+}
+
+.describe-card-where code {
+  color: var(--text);
+}
+
+.describe-card-prompt {
+  font-size: 0.92em;
+}
+
+.describe-use {
+  border-color: var(--ember);
+  justify-self: start;
+}
+
+.describe-thinking,
+.describe-model {
+  color: var(--dim);
+  font-size: 0.8em;
+  margin: 0;
+}
+
+.describe-ask {
+  display: grid;
+  gap: 6px;
+}
+
+.describe-label {
+  color: var(--line);
+  display: grid;
+  font-size: 0.82em;
+  gap: 4px;
+}
+
+.describe-box {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  padding: 4px 7px;
+  resize: vertical;
+}
+
+.describe-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

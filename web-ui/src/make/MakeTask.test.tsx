@@ -17,10 +17,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const createTask = vi.hoisted(() => vi.fn<typeof import("../api").createTask>())
 const fetchFolders = vi.hoisted(() => vi.fn<typeof import("../api").fetchFolders>())
+const draftTask = vi.hoisted(() => vi.fn<typeof import("../api").draftTask>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   createTask,
   fetchFolders,
+  draftTask,
 }))
 
 import { MakeTask } from "./MakeTask"
@@ -33,6 +35,7 @@ beforeEach(() => {
   createTask.mockResolvedValue({ ok: true, task: "tidy-up" })
   fetchFolders.mockReset()
   fetchFolders.mockResolvedValue([])
+  draftTask.mockReset()
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -335,4 +338,67 @@ test("the quiet press writes a card that does not start", async () => {
   // did not.
   expect(host.textContent).toContain("switched off")
   expect(host.textContent).not.toContain("starts on its own")
+})
+
+async function describe(text: string) {
+  const box = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Describe the work"]')!
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, text)
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="describe"]')!.click())
+}
+
+test("a card the conversation proposed fills the form, and the folder stays the person's when it was not named", async () => {
+  // The fields are what get saved, so a draft lands on them rather than
+  // beside them -- and the one field the person must choose is not taken
+  // from a draft that did not name it.
+  draftTask.mockResolvedValue({
+    ok: true,
+    reply: "Here is a card.",
+    draft: { name: "nightly", folder: "", prompt: "Run the tests.", schedule: "0 2 * * *" },
+    model: "fake/m1",
+  })
+  show()
+  type("folder", "../work")
+  await describe("run the tests every night")
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
+
+  expect(field("name").value).toBe("nightly")
+  expect(field("prompt").value).toBe("Run the tests.")
+  expect(field("schedule").value).toBe("0 2 * * *")
+  expect(field("folder").value).toBe("../work")
+  expect(host.textContent).toContain("Check the folder")
+  expect(save().disabled).toBe(false)
+
+  // A draft that names a folder the project has fills that too.
+  draftTask.mockResolvedValue({
+    ok: true,
+    reply: "Or this.",
+    draft: { name: "docs", folder: "../docs", prompt: "Tidy the docs.", schedule: "" },
+    model: "fake/m1",
+  })
+  await describe("in docs instead")
+  const offered = host.querySelectorAll<HTMLButtonElement>('[data-do="use-draft"]')
+  await act(async () => offered[offered.length - 1].click())
+  expect(field("folder").value).toBe("../docs")
+  expect(field("schedule").value).toBe("")
+})
+
+test("a draft's prompt becomes the first step once the form is steps", async () => {
+  draftTask.mockResolvedValue({
+    ok: true,
+    reply: "Here.",
+    draft: { name: "nightly", folder: "../work", prompt: "Run the tests.", schedule: "" },
+    model: "fake/m1",
+  })
+  show()
+  type("prompt", "look around")
+  act(() => host.querySelector<HTMLButtonElement>(".step-start")!.click())
+  await describe("run the tests")
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
+
+  const first = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Instructions for Step 1"]')!
+  expect(first.value).toBe("Run the tests.")
+  expect(field("name").value).toBe("nightly")
 })
