@@ -191,8 +191,8 @@ export function Describe({
         {/* Only before the first word: once there is a conversation, or
             something typed, the examples would be noise under it. */}
         {turns.length === 0 && !text && !busy ? (
-          <div className="describe-examples" aria-label="Examples">
-            <span>try</span>
+          <div className="describe-examples" role="group" aria-label="Examples to try">
+            <span aria-hidden="true">try</span>
             {EXAMPLES.map((example) => (
               <button
                 type="button"

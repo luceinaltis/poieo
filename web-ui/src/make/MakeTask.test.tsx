@@ -455,6 +455,22 @@ test("a card the conversation proposed brings the fields out filled, and a folde
   expect(field("schedule").value).toBe("2h")
 })
 
+test("a conversation the project has no model for offers the models panel through the form", async () => {
+  // The button lives in the conversation; the way to the panel is the
+  // form's, handed down, so the shell can open models in this panel's place.
+  const onModels = vi.fn()
+  act(() => {
+    root.render(<MakeTask project="board" keepsCopies={true} onClose={() => {}} onModels={onModels} />)
+  })
+  draftTask.mockResolvedValue({ ok: false, error: "this project has no models file for a draft to come from" })
+  await describe("fix the tests")
+
+  const open = host.querySelector<HTMLButtonElement>('[data-do="describe-models"]')!
+  expect(open).not.toBeNull()
+  act(() => open.click())
+  expect(onModels).toHaveBeenCalledWith(open)
+})
+
 test("a draft naming a folder the list lacks shows it as one more choice", async () => {
   // The daemon offered nothing here, and the draft still names a folder
   // inside the project: the list is the field, so it shows what it holds.

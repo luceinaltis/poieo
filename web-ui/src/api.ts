@@ -547,8 +547,8 @@ export function addEngine(project: string, what: EngineToAdd): Promise<ModelsAns
 /**
  * Making a task: the only call here that creates a file that did not exist.
  *
- * A prompt or a graph document describes the work. The folder is not optional
- * and has no default: it is the place every step may work.
+ * A prompt describes the work. The folder is the place the model may work:
+ * the whole project unless the form narrowed it, and always inside it.
  */
 export interface MadeTask extends Answer {
   task?: string
@@ -594,17 +594,19 @@ export function createTask(
   project: string,
   name: string,
   folder: string,
-  prompt: string | import("./make/steps").TaskGraph,
+  prompt: string,
   /** False makes the card switched off: written, on the board, not running. */
   enabled = true,
   apply?: import("./types").ApplySpec,
   /** One line: an interval, the word loop, or a cron line. Blank sends nothing. */
   schedule?: string,
 ): Promise<MadeTask> {
+  // The route also takes `graph` in place of `prompt`, for steps; nothing on
+  // the board writes those until it hosts the graph canvas.
   return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
     name,
     folder,
-    ...(typeof prompt === "string" ? { prompt } : { graph: prompt }),
+    prompt,
     enabled,
     ...(apply ? { apply } : {}),
     ...(schedule ? { schedule } : {}),

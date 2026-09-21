@@ -73,8 +73,10 @@ test("a message goes to the daemon with the conversation so far, and the reply i
   ])
   expect(host.textContent).toContain("every night run the tests and fix one failure")
   expect(host.textContent).toContain("Which folder should it work in?")
-  // The box is empty again for the next message.
+  // The box is empty again for the next message -- and the examples do not
+  // come back under a conversation that has begun.
   expect(box().value).toBe("")
+  expect(host.querySelectorAll('[data-do="describe-example"]').length).toBe(0)
 
   say("src")
   await send()
