@@ -80,6 +80,9 @@ WRITES = [
     "/api/projects/board/models/use",
     "/api/projects/board/models/add",
     "/api/projects/board/tasks",
+    # Drafting writes nothing, but it spends a model call on whatever a page
+    # sends, so it stands behind the same fence as the writes.
+    "/api/projects/board/tasks/draft",
     "/api/projects/board/tasks/f",
 ]
 
