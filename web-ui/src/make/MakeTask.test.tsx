@@ -166,14 +166,14 @@ test("the fields wait behind the question until a draft comes or the person asks
   expect(fields().hidden).toBe(true)
   expect(host.querySelector('[data-do="make-task"]')).not.toBeNull()
 
-  // Pressed from the keyboard, the link goes away under the focus. The name
-  // field is where the person is now, so that is where focus lands.
+  // Pressed from the keyboard, the link goes away under the focus. The
+  // prompt is where the person is now, so that is where focus lands.
   const link = host.querySelector<HTMLButtonElement>('[data-do="write-by-hand"]')!
   act(() => link.focus())
   act(() => link.click())
   expect(fields().hidden).toBe(false)
   expect(host.querySelector('[data-do="write-by-hand"]')).toBeNull()
-  expect(document.activeElement).toBe(field("name"))
+  expect(document.activeElement).toBe(field("prompt"))
 })
 
 test("a seed is a card already, so the panel opens on the fields", () => {
@@ -455,7 +455,9 @@ test("a card the conversation proposed brings the fields out filled, and a folde
   expect(field("schedule").value).toBe("2h")
 })
 
-test("a draft's prompt becomes the first step once the form is steps", async () => {
+test("a draft naming a folder the list lacks shows it as one more choice", async () => {
+  // The daemon offered nothing here, and the draft still names a folder
+  // inside the project: the list is the field, so it shows what it holds.
   draftTask.mockResolvedValue({
     ok: true,
     reply: "Here.",
@@ -463,12 +465,10 @@ test("a draft's prompt becomes the first step once the form is steps", async () 
     model: "fake/m1",
   })
   show()
-  type("prompt", "look around")
-  act(() => host.querySelector<HTMLButtonElement>(".step-start")!.click())
   await describe("run the tests")
   await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
 
-  const first = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Instructions for Step 1"]')!
-  expect(first.value).toBe("Run the tests.")
+  expect(field("folder-pick").value).toBe("../work")
+  expect(host.textContent).toContain("../work")
   expect(field("name").value).toBe("nightly")
 })

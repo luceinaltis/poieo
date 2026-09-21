@@ -291,7 +291,7 @@ The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes
 within sixty characters and at the last word that fits otherwise, shown as the
 field's placeholder before it is used and checked for collisions like a typed
-one. Under `more` are where it works, when it runs, and `Write as steps`. The
+one. Under `more` are where it works and when it runs. The
 folder is a list standing on the whole project, `..`, offered as "this
 project". When it runs is a list of plain words -- every hour, every 30
 minutes, every day, every night at 2 -- each carrying the card's own line,
@@ -300,19 +300,21 @@ cron line; blank sends nothing and the card takes its hourly default. How
 changes reach the project is not asked: a new task starts under review, and
 Task setup is where automatic application is switched on. The sentence above
 the save names the folder that will change and whether there is a copy, and
-it is there before anything is typed. `Write as steps` keeps
-the prompt as the first step and adds model instructions, commands, conditions,
-or a question for a person. Results can be inserted into later instructions;
-conditions choose an earlier answer or command result, a comparison, a value,
-and a destination, with a separate fallback. Conditions keep their first-match
-order. A question ends the run; task-level handoffs still belong in the card.
-New model steps use the ordinary 40-turn limit and include journal and memory
-input. Each graph limits a run to 100 steps including repeats.
+it is there before anything is typed. Failed saves retain the whole draft;
+successful saves clear it.
 
-The form checks empty instructions, unreachable steps, removed results, and
-result reads that could occur before their writer. Server validation remains
-authoritative. Failed saves retain the whole draft; successful saves clear it.
-This form creates new tasks; editing existing graphs remains file-based.
+Under the question, before the first word, three example sentences stand as
+buttons; pressing one puts it in the box to be changed or sent, and spends
+nothing. A refusal that names the model -- no models file, a role that
+resolves to nothing, an endpoint that did not answer -- carries `open models`,
+which opens the models panel in the panel's place.
+
+Steps are not written here. The step form -- `StepEditor` and the drafts in
+`steps.ts` that compile to the graph schema, with the checks for empty
+instructions, unreachable steps, removed results, and result reads before
+their writer -- stays in the tree for the canvas that will replace it, and
+the daemon's steps route and validation are unchanged; until the board hosts
+that canvas, a task of several steps is drawn in the standalone editor.
 
 A card whose task applies its checked changes itself says so on its face, with
 the checks on the tooltip. Fresh listings update this permission and its checks

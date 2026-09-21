@@ -6,9 +6,7 @@
  * that card on the fields below, which are also there for anyone who would
  * rather write it themselves. A prompt is the whole of the ordinary card: a
  * name left blank is taken from its first line. Where it works and when it
- * runs are chosen from lists that start on the defaults, under `more`, with
- * "Write as steps", which grows the prompt into connected instructions and
- * conditions saved as the same graph the runtime reads from a file.
+ * runs are chosen from lists that start on the defaults, under `more`.
  *
  * **Two presses, though, and no third field.** Saving a card starts a
  * shell-capable agent over the reader's own files within seconds -- that is
@@ -27,9 +25,13 @@
  * and says whether that can be undone, because the card starts running when
  * it is saved, and this is where a person finds that out.
  *
- * **How changes reach the project is not asked here.** A new task starts
- * under review, and letting it apply its own checked work is a decision for
- * a task that has run a few times; Task setup is where that is switched on.
+ * **What is not asked here.** How changes reach the project: a new task
+ * starts under review, and letting it apply its own checked work is a
+ * decision for a task that has run a few times, made in Task setup. And
+ * steps: a task of several steps and conditions is drawn in the standalone
+ * editor until the board hosts that canvas, because a form of drop-downs for
+ * a flow was the heaviest thing on this panel and the one a first reader
+ * could least make sense of.
  *
  * Shell UI, so it may read the API. It hangs off the rail beside `models`
  * because making a task is what the page is for, not something one task does.
@@ -44,9 +46,6 @@ import { Refusal } from "../Refusal"
 import { slugOf, titleOf } from "./slug"
 import { useAct } from "../useAct"
 import { Describe } from "./Describe"
-import { StepEditor } from "./StepEditor"
-import { graphOf, newStep, stepProblems } from "./steps"
-import type { StepDraft } from "./steps"
 import "./make.css"
 
 /** How a card spells the project itself: relative to the tasks folder. */
@@ -70,6 +69,7 @@ export function MakeTask({
   keepsCopies,
   onClose,
   onMade,
+  onModels,
   seed,
   taken = [],
 }: {
@@ -89,6 +89,8 @@ export function MakeTask({
    * says what it made.
    */
   onMade?(task: string): void
+  /** The models panel, for a conversation the project has no model for. */
+  onModels?(opener: HTMLElement): void
   /**
    * "Make one like it": the fields of an existing card, to start from.
    *
@@ -108,7 +110,6 @@ export function MakeTask({
   const [name, setName] = useState(seed?.name ?? "")
   const [folder, setFolder] = useState(seed?.folder ?? WHOLE_PROJECT)
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
-  const [steps, setSteps] = useState<StepDraft[] | null>(null)
   // Which of the choices above, or "custom" with the line written out.
   const [when, setWhen] = useState("")
   const [schedule, setSchedule] = useState("")
@@ -130,26 +131,25 @@ export function MakeTask({
   // Where focus goes when the fields come out on a press. The link that
   // brings them out leaves the page in the same update, and a focused
   // element removed from under a keyboard drops focus to the page itself; the
-  // name field is where the person is now. Not on mount: a seeded panel is
+  // prompt is where the person is now. Not on mount: a seeded panel is
   // focused as a whole by the shell, like every other panel.
-  const nameRef = useRef<HTMLInputElement>(null)
-  const focusName = useRef(false)
+  const promptRef = useRef<HTMLTextAreaElement>(null)
+  const focusPrompt = useRef(false)
   const bringOut = () => {
-    focusName.current = true
+    focusPrompt.current = true
     setOpen(true)
   }
   useLayoutEffect(() => {
-    if (open && focusName.current) {
-      focusName.current = false
-      nameRef.current?.focus()
+    if (open && focusPrompt.current) {
+      focusPrompt.current = false
+      promptRef.current?.focus()
     }
   }, [open])
 
   // A card the model proposed, onto the fields. The folder is taken only
   // when the draft names one, and the list keeps what the person had
-  // otherwise; the prompt lands in the first step once the form has become
-  // steps, since that step is where the prompt went when it did. A schedule
-  // the choices do not have opens the line with it written out.
+  // otherwise. A schedule the choices do not have opens the line with it
+  // written out.
   const fill = (draft: TaskDraft) => {
     setName(draft.name)
     if (draft.folder) setFolder(draft.folder)
@@ -159,10 +159,7 @@ export function MakeTask({
       setWhen("custom")
       setSchedule(draft.schedule)
     }
-    setSteps((current) =>
-      current ? current.map((step, index) => (index === 0 ? { ...step, text: draft.prompt } : step)) : current,
-    )
-    if (!steps) setPrompt(draft.prompt)
+    setPrompt(draft.prompt)
     setFilled(true)
     bringOut()
   }
@@ -170,17 +167,16 @@ export function MakeTask({
   // The name the card will get: the one typed, or the first line of what it
   // does. In the daemon's own spelling of the filename for the collision, so
   // "Chores!" collides with "chores" exactly as it would on disk.
-  const title = name.trim() || titleOf(steps ? (steps[0]?.text ?? "") : prompt)
+  const title = name.trim() || titleOf(prompt)
   const collides = Boolean(title) && taken.includes(slugOf(title))
-  const problems = steps ? stepProblems(steps) : []
   // Emptied, the list means the whole project again, not nowhere.
   const where = folder.trim() || WHOLE_PROJECT
   const line = when === "custom" ? schedule.trim() : when
-  const ready = Boolean(title && (steps ? steps.length && !problems.length : prompt.trim())) && !collides
+  const ready = Boolean(title && prompt.trim()) && !collides
 
   const send = (enabled: boolean) => () =>
     void act(async () => {
-      const args = [project, title, where, steps ? graphOf(title, steps) : prompt.trim(), enabled] as const
+      const args = [project, title, where, prompt.trim(), enabled] as const
       // Only what was said: a blank schedule is not sent, so a card made
       // without one reads exactly as it did before there was a choice.
       const answer = line ? await createTask(...args, undefined, line) : await createTask(...args)
@@ -205,7 +201,6 @@ export function MakeTask({
         setPrompt("")
         setWhen("")
         setSchedule("")
-        setSteps(null)
         setFilled(false)
         setStarted(enabled)
       }
@@ -223,7 +218,7 @@ export function MakeTask({
 
       {/* The one question, first and alone: what it produces is a filled
           form, and the form is still what gets saved. */}
-      <Describe project={project} disabled={busy} onDraft={fill} />
+      <Describe project={project} disabled={busy} onDraft={fill} onModels={onModels} />
       {!open ? (
         <button type="button" className="make-byhand" data-do="write-by-hand" onClick={bringOut}>
           or write it yourself
@@ -235,28 +230,25 @@ export function MakeTask({
       <div className="make-fields" hidden={!open}>
         {filled ? <p className="make-note">Filled in from the conversation. Read it over, then save.</p> : null}
 
-        {steps ? (
-          <StepEditor steps={steps} onChange={setSteps} disabled={busy} />
-        ) : (
-          <label className="make-field">
-            prompt
-            <textarea
-              name="prompt"
-              className="make-prompt"
-              rows={6}
-              value={prompt}
-              disabled={busy}
-              onChange={(event) => setPrompt(event.target.value)}
-            />
-          </label>
-        )}
+        <label className="make-field">
+          prompt
+          <textarea
+            ref={promptRef}
+            name="prompt"
+            className="make-prompt"
+            rows={6}
+            placeholder="what to do, how to check it, and what to leave alone"
+            value={prompt}
+            disabled={busy}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+        </label>
 
         {/* After the prompt, because it comes from the prompt: left blank,
             the placeholder shows the name the card will get. */}
         <label className="make-field">
           name
           <input
-            ref={nameRef}
             name="name"
             className="make-input"
             placeholder={title || "from the first line of the prompt"}
@@ -270,19 +262,11 @@ export function MakeTask({
           <Refusal>this project already has a task called ‘{slugOf(title)}’</Refusal>
         ) : null}
 
-        {problems.length > 0 && (
-          <ul className="step-problems" aria-label="Steps to fix">
-            {problems.map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
-        )}
-
         {/* What an ordinary card takes from defaults, folded, so the fields
             above are the whole card for most people: here for the few tasks
-            that need less of the project, another rhythm, or steps. */}
+            that need less of the project or another rhythm. */}
         <details className="make-more">
-          <summary>more · where it works, when, steps</summary>
+          <summary>more · where it works, when</summary>
           <div className="make-more-body">
             <label className="make-field">
               works in
@@ -322,17 +306,6 @@ export function MakeTask({
                 />
               ) : null}
             </label>
-
-            {!steps ? (
-              <button
-                type="button"
-                className="step-start"
-                disabled={busy}
-                onClick={() => setSteps([newStep([], "agent", prompt)])}
-              >
-                Write as steps
-              </button>
-            ) : null}
           </div>
         </details>
 

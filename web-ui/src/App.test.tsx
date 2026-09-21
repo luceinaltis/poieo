@@ -249,7 +249,7 @@ async function render(
 
 test("no tasks renders the invitation, not an error", async () => {
   await render(initialStage([]))
-  expect(container.textContent).toContain("No tasks yet. Create one to put your models to work.")
+  expect(container.textContent).toContain("No tasks yet. Say what you want done.")
 
   const start = container.querySelector<HTMLElement>('[data-do="empty-new-task"]')
   expect(start?.textContent).toBe("New task")
