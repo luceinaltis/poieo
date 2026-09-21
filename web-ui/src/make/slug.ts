@@ -23,7 +23,10 @@ export function slugOf(title: string): string {
  */
 export function titleOf(text: string): string {
   const line = text.split("\n").map((one) => one.trim()).find(Boolean) ?? ""
-  const stop = line.search(/[.!?。](\s|$)/u)
+  // A full stop ends a sentence only before a space or the end, or "v2.0"
+  // would be cut in half; the ideographic one is never followed by a space
+  // and is a boundary on its own.
+  const stop = line.search(/[.!?](\s|$)|。/u)
   let title = stop > 0 && stop <= 60 ? line.slice(0, stop) : line
   if (title.length > 60) {
     const cut = title.lastIndexOf(" ", 60)
