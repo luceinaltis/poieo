@@ -65,11 +65,13 @@ from ..memory.ask import ask_memory
 from ..memory.browse import entry_document, graph_snapshot, keyword_search, run_document
 from ..memory.entries import SLUG as MEMORY_SLUG
 from ..memory.semantic import semantic_search
-from ..providers import ProviderPool, credential_for, supports_embeddings
+from ..providers import LLMRequest, ProviderPool, credential_for, supports_embeddings
 from ..rebind import already, declare, point_at
-from ..task import parse_duration
+from ..task import humanize, parse_duration
 from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
+from .draft import ROLE as DRAFTING_ROLE
+from .draft import briefing, conversation, read_card
 from .events import CLOSED, BroadcastStore
 from .steps import publish_steps, validate_steps
 
@@ -248,6 +250,79 @@ _FOLDERS_DEEP = 2
 _FOLDERS_OFFERED = 200
 
 
+def _folders_offered(config: Any) -> list[dict[str, str]]:
+    """The folders a task made here may work in, spelled as a card spells them.
+
+    This project and what is under it, two levels down and a bounded count:
+    a list for a person to read, not a file tree. Hidden folders, dependency
+    folders, the tasks folder itself and the project's own runs, worktrees
+    and memory are left out -- none of them is a place to point a task at.
+    """
+    root = Path(config.base_dir).resolve()
+    cards = config.resolve_path(config.cards).resolve()
+    layout = config.layout()
+    kept_out = {cards, layout.runs().resolve(), layout.worktrees().resolve(), layout.memory().resolve()}
+
+    def _spelled(folder: Path) -> str:
+        return Path(os.path.relpath(folder, cards)).as_posix()
+
+    found = [{"path": _spelled(root), "name": "this project"}]
+
+    def visit(folder: Path, depth: int) -> None:
+        # Before the listing, not only between entries: a folder past
+        # the limit is not read at all, so one enormous directory
+        # costs one listing and its subfolders cost nothing.
+        if len(found) >= _FOLDERS_OFFERED:
+            return
+        try:
+            children = sorted(child for child in folder.iterdir() if child.is_dir())
+        except OSError:
+            return
+        for child in children:
+            if len(found) >= _FOLDERS_OFFERED:
+                return
+            if child.name.startswith(".") or child.name in _NOT_A_WORKPLACE:
+                continue
+            where = child.resolve()
+            if where in kept_out:
+                continue
+            # A link that leads out of the project is not a place a
+            # task made here may work, so it is not a place to list:
+            # the fence the write applies, applied to what is offered.
+            if where != root and root not in where.parents:
+                continue
+            found.append({"path": _spelled(child), "name": child.relative_to(root).as_posix()})
+            if depth < _FOLDERS_DEEP:
+                visit(child, depth + 1)
+
+    visit(root, 1)
+    return found
+
+
+def _folder_inside(config: Any, folder: str) -> tuple[Path, str | None]:
+    """Where a card's folder points, and why a card made here may not name it, or None.
+
+    **Inside this project, and nowhere else.** A card takes the files and
+    shell toolsets and fires within seconds of being written, so without this
+    one request starts a shell-capable agent anywhere on the machine -- over a
+    port any page in the browser can reach. Pointing a task at another
+    checkout is still done by writing the card by hand, which is a deliberate
+    act rather than a request.
+    """
+    cards = config.resolve_path(config.cards)
+    # expanduser, because a card does that when it reads this back; without
+    # it `~/code/x` is refused as a folder inside the tasks folder.
+    asked = Path(os.path.expanduser(folder))
+    # Relative to the card, because that is how a card reads it back.
+    where = (asked if asked.is_absolute() else cards / asked).resolve()
+    if not where.is_dir():
+        return where, f"the folder it would work in is not there: {where}"
+    root = Path(config.base_dir).resolve()
+    if root != where and root not in where.parents:
+        return where, f"a task made here works inside this project; {where} is outside {root}"
+    return where, None
+
+
 def _schedule_keys(value: str) -> dict[str, str]:
     """The card keys one schedule line stands for, or a SpecError.
 
@@ -282,6 +357,21 @@ def _schedule_line(every: Any, at: Any) -> str:
     if every is not None:
         return str(every)
     return str(at) if at is not None else ""
+
+
+def _schedule_words(trigger: Any) -> str:
+    """A task's schedule settings in the words a card would use.
+
+    From the settings rather than the daemon's trigger, which is built when a
+    runner is: the daemon imports this module, so this module cannot ask the
+    daemon.
+    """
+    if trigger.type == "interval":
+        every = trigger.every
+        return f"every {every if isinstance(every, str) else humanize(float(every))}" if every is not None else "every"
+    if trigger.type == "cron":
+        return f"at {trigger.expression}"
+    return str(trigger.type)
 
 
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
@@ -760,10 +850,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         offer it. Offering is not inferring: nothing is chosen here, and the
         reader still picks the place the model's hands may touch.
 
-        Two levels down and a bounded count: the list is for a person to read,
-        not a file tree. Hidden folders, dependency folders, the tasks folder
-        itself and the project's own runs, worktrees and memory are left out --
-        none of them is a place to point a task at.
+        The same list is what the model drafting a card is told, so a folder it
+        proposes is one the form could have offered.
         """
         project, missing = _asked_project(request)
         if missing is not None:
@@ -771,48 +859,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         config = project.config
         if not config.cards:
             return JSONResponse({"error": "this project names no tasks folder"}, status_code=409)
-        root = Path(config.base_dir).resolve()
-        cards = config.resolve_path(config.cards).resolve()
-        layout = config.layout()
-        kept_out = {cards, layout.runs().resolve(), layout.worktrees().resolve(), layout.memory().resolve()}
-
-        def _spelled(folder: Path) -> str:
-            return Path(os.path.relpath(folder, cards)).as_posix()
-
-        def _walk() -> list[dict[str, str]]:
-            found = [{"path": _spelled(root), "name": "this project"}]
-
-            def visit(folder: Path, depth: int) -> None:
-                # Before the listing, not only between entries: a folder past
-                # the limit is not read at all, so one enormous directory
-                # costs one listing and its subfolders cost nothing.
-                if len(found) >= _FOLDERS_OFFERED:
-                    return
-                try:
-                    children = sorted(child for child in folder.iterdir() if child.is_dir())
-                except OSError:
-                    return
-                for child in children:
-                    if len(found) >= _FOLDERS_OFFERED:
-                        return
-                    if child.name.startswith(".") or child.name in _NOT_A_WORKPLACE:
-                        continue
-                    where = child.resolve()
-                    if where in kept_out:
-                        continue
-                    # A link that leads out of the project is not a place a
-                    # task made here may work, so it is not a place to list:
-                    # the fence the write applies, applied to what is offered.
-                    if where != root and root not in where.parents:
-                        continue
-                    found.append({"path": _spelled(child), "name": child.relative_to(root).as_posix()})
-                    if depth < _FOLDERS_DEEP:
-                        visit(child, depth + 1)
-
-            visit(root, 1)
-            return found
-
-        return JSONResponse({"folders": await asyncio.to_thread(_walk)})
+        return JSONResponse({"folders": await asyncio.to_thread(_folders_offered, config)})
 
     async def project_models_undeclared(request: Request) -> JSONResponse:
         """Engines answering on this machine that this project cannot reach.
@@ -949,32 +996,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             )
 
         cards = config.resolve_path(config.cards)
-        # expanduser, because a card does that when it reads this back; without
-        # it `~/code/x` is refused as a folder inside the tasks folder.
-        asked = Path(os.path.expanduser(folder))
-        # Relative to the card, because that is how a card reads it back.
-        where = (asked if asked.is_absolute() else cards / asked).resolve()
-        if not where.is_dir():
-            return JSONResponse(
-                {"error": f"the folder it would work in is not there: {where}"},
-                status_code=400,
-            )
+        where, refused = _folder_inside(config, folder)
+        if refused is not None:
+            return JSONResponse({"error": refused}, status_code=400)
 
         if application.mode == "auto" and not await asyncio.to_thread(git_keeps_copies, where):
             return JSONResponse({"error": "automatic application needs a folder protected by Git"}, status_code=400)
 
-        # **Inside this project, and nowhere else.** A card takes the files and
-        # shell toolsets and fires within seconds of being written, so without
-        # this one request starts a shell-capable agent anywhere on the machine
-        # -- over a port any page in the browser can reach. Pointing a task at
-        # another checkout is still done by writing the card by hand, which is a
-        # deliberate act rather than a request.
-        root = Path(config.base_dir).resolve()
-        if root != where and root not in where.parents:
-            return JSONResponse(
-                {"error": f"a task made here works inside this project; {where} is outside {root}"},
-                status_code=400,
-            )
         # Windows answers exists() for these in every directory, and a write
         # would reach the console rather than a file.
         if slug.split(".")[0].upper() in _RESERVED:
@@ -2471,6 +2499,94 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             )
         return JSONResponse(answer)
 
+    async def project_tasks_draft(request: Request) -> JSONResponse:
+        """Put a conversation to a model and hand back a card for the form.
+
+        Not a write: nothing reaches the tasks folder, and the card that comes
+        back goes onto the form for the person to read, change and save
+        through the one door a card comes through. POST because a conversation
+        belongs in a body, as a memory search does.
+
+        The model hears what the project has -- its folders as a card spells
+        them, and the tasks already on the board -- and then the conversation,
+        which the page keeps and this stores nowhere. The folder and schedule
+        it proposes are held to the fences the save applies; one that would
+        be refused arrives blank rather than refusing the reply, because the
+        prose is still the answer and the person still chooses the folder.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        config = project.config
+        if not config.cards:
+            return JSONResponse({"error": "this project names no tasks folder"}, status_code=409)
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            payload = None
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "the conversation body must be JSON"}, status_code=400)
+        try:
+            turns = conversation(payload.get("messages"))
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        try:
+            spec = await asyncio.to_thread(_models_of, project)
+        except PoieoError:
+            spec = None
+        if spec is None:
+            return JSONResponse(
+                {"error": "this project has no models file for a draft to come from"},
+                status_code=409,
+            )
+        try:
+            writer = spec.resolve(DRAFTING_ROLE)
+        except BindingError:
+            return JSONResponse({"error": f"{DRAFTING_ROLE} does not resolve to a model"}, status_code=409)
+
+        folders = await asyncio.to_thread(_folders_offered, config)
+        # What the project loaded, not what the daemon is running: the two
+        # agree once it serves, and a project's tasks are there before that.
+        roster = []
+        for task in getattr(project, "tasks", ()):
+            card = config.cards_by_task.get(task.spec.name)
+            title = card.name if card is not None else task.spec.name
+            roster.append((title, task.spec.name, _schedule_words(task.spec.trigger)))
+        try:
+            async with ProviderPool(spec) as pool:
+                response = await pool.get(writer.provider_name).complete(
+                    LLMRequest(
+                        model=writer.model,
+                        system=briefing(config.display_name, folders, roster),
+                        messages=turns,
+                        params=writer.params,
+                        role=DRAFTING_ROLE,
+                    )
+                )
+        except PoieoError:
+            return JSONResponse(
+                {"error": f"{DRAFTING_ROLE} could not answer; try again, or point that role at another model"},
+                status_code=503,
+            )
+
+        reply, card = read_card(response.text)
+        draft = None
+        if card is not None:
+            name = str(card.get("name") or "").strip()
+            prompt = str(card.get("prompt") or "").strip()
+            if name and prompt:
+                folder = str(card.get("folder") or "").strip()
+                if folder and _folder_inside(config, folder)[1] is not None:
+                    folder = ""
+                schedule = " ".join(str(card.get("schedule") or "").split())
+                try:
+                    _schedule_keys(schedule)
+                except SpecError:
+                    schedule = ""
+                draft = {"name": name, "folder": folder, "prompt": prompt, "schedule": schedule}
+        return JSONResponse({"reply": reply, "draft": draft, "model": writer.ref, "usage": response.usage.as_dict()})
+
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")
         # Both, for the same reason `runs` takes both: `?task=chores` alone
@@ -2536,6 +2652,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             project_tasks_create,
             methods=["POST"],
         ),
+        # Drafting: a conversation put to a model, and a card handed back for
+        # the form to fill. It writes nothing. The fixed name comes before the
+        # task slug for the reason the memory names do.
+        Route("/api/projects/{project}/tasks/draft", project_tasks_draft, methods=["POST"]),
         Route("/api/events", events),
         # The review: the only routes that may touch the user's own files.
         # Every application, including undo, goes through verified private work.

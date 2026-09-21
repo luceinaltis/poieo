@@ -3,7 +3,10 @@
  *
  * A name, the folder it works in, and a prompt remain the ordinary form.
  * "Write as steps" grows that prompt into connected instructions and
- * conditions, saved as the same graph the runtime reads from a file.
+ * conditions, saved as the same graph the runtime reads from a file. Above
+ * the fields, the work can be said in one's own words instead: the project's
+ * model answers, and the card it proposes fills the same three fields for
+ * the person to check -- nothing is saved that the person did not press.
  *
  * **Two presses, though, and no third field.** Saving a card starts a
  * shell-capable agent over the reader's own files within seconds -- that is
@@ -28,11 +31,12 @@ import { useState } from "react"
 
 import { createTask } from "../api"
 import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
-import type { MadeTask } from "../api"
+import type { MadeTask, TaskDraft } from "../api"
 import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
 import { slugOf } from "./slug"
 import { useAct } from "../useAct"
+import { Describe } from "./Describe"
 import { StepEditor } from "./StepEditor"
 import { graphOf, newStep, stepProblems } from "./steps"
 import type { StepDraft } from "./steps"
@@ -91,7 +95,25 @@ export function MakeTask({
   // is a sentence with consequences, and it must not be said of a card that
   // did not.
   const [started, setStarted] = useState(true)
+  // Whether the fields were last filled from the conversation above them,
+  // so the form can say so -- and say what still has to be looked at.
+  const [filled, setFilled] = useState(false)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
+
+  // A card the model proposed, onto the fields. The folder is taken only
+  // when the draft names one, and the field keeps what the person typed
+  // otherwise; the prompt lands in the first step once the form has become
+  // steps, since that step is where the prompt went when it did.
+  const fill = (draft: TaskDraft) => {
+    setName(draft.name)
+    if (draft.folder) setFolder(draft.folder)
+    setSchedule(draft.schedule)
+    setSteps((current) =>
+      current ? current.map((step, index) => (index === 0 ? { ...step, text: draft.prompt } : step)) : current,
+    )
+    if (!steps) setPrompt(draft.prompt)
+    setFilled(true)
+  }
 
   // In the daemon's own spelling of the filename, so "Chores!" collides with
   // "chores" exactly as it would on disk.
@@ -133,6 +155,7 @@ export function MakeTask({
         setSchedule("")
         setSteps(null)
         setApplication(draftOf())
+        setFilled(false)
         setStarted(enabled)
       }
       return answer
@@ -146,6 +169,13 @@ export function MakeTask({
           close
         </button>
       </header>
+
+      {/* Above the fields, not beside the save: what it produces is a filled
+          form, and the form is still what gets saved. */}
+      <Describe project={project} disabled={busy} onDraft={fill} />
+      {filled ? (
+        <p className="make-note">Filled in from the conversation. Check the folder, then save.</p>
+      ) : null}
 
       <label className="make-field">
         name

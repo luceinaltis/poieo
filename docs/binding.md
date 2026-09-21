@@ -92,6 +92,12 @@ The memory board uses only explicitly declared `memory_embedder` and
 must not silently choose a chat model, an expensive endpoint, or a model that
 cannot create embeddings. See [memory.md](memory.md).
 
+The board's new-task conversation asks the `task_writer` role, and that one
+does fall through to `default`: a person typed the message and pressed the
+button, and the reply names the model that answered, so nothing is chosen in
+silence. Declaring `task_writer` moves that conversation to another model
+without touching any task. See [web.md](web.md).
+
 ## Credentials and preflight
 
 Startup resolves the roles that tasks can actually use and checks only their

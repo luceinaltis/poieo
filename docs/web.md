@@ -127,6 +127,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:` or five cron fields written as `at:`, and 400 when neither; creates one card, optionally its neighboring graph, and returns its task id and path |
+| `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, model, usage}`: the model's prose without its card, and the card it proposed as `{name, folder, prompt, schedule}` or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it; atomically validates and replaces one card, returning whether the edit is live |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
@@ -150,6 +151,19 @@ published without replacement, graph first and card last, so the task scan sees
 the complete task. A failed card publication removes the new graph. An existing
 graph is never overwritten, and no binding or credential is changed. A failure
 to clean up an ignored temporary file is logged without undoing publication.
+
+Drafting is not a write. The daemon tells the model what a card is, the
+folders this project offers in the card's own spelling, and the tasks the
+project already loads with their schedules, then the conversation as the page
+sent it; the page is the only thing holding that conversation, and nothing of
+it is stored. The model is asked to end a proposal with one fenced block
+labelled `poieo-task` holding JSON, which the daemon reads (as YAML, so a card
+written either way is read) and takes out of the prose. A draft needs a name
+and a prompt; its folder is checked against the same fence the save applies
+and arrives blank when it would be refused, and a schedule the card could not
+take arrives blank too, because the prose is still the answer and the person
+still chooses the folder. `task_writer` resolves through `default` when the
+models file does not name it -- see [binding.md](binding.md).
 
 Structured editing is offered only when it can reproduce every field and
 comment, which since the form gained a schedule line includes a one-line
@@ -251,6 +265,18 @@ per entry with its opening words and what became of it, the ones that shaped
 the answer first; each opens the memory place on that entry. Shared action
 handling prevents a double press from issuing two mutations and keeps refusals
 visible as results.
+
+Above the new-task form's fields, the person can describe the work in their
+own words. Each message sends the whole conversation to the draft route; the
+reply is shown under it, with the model that answered named once. A reply
+carrying a card shows that card and offers `use this draft`, which fills the
+name, prompt and schedule, and the folder only when the draft names one the
+project has -- the field keeps what the person typed otherwise -- and says so
+above the fields. Once the form has become steps, the draft's prompt becomes
+the first step's instructions. Enter sends, Shift+Enter breaks the line, and
+Enter during input-method composition does nothing. A refusal stays on screen
+with the message still in the box, so nothing typed is lost. The conversation
+lives in the panel and goes with it.
 
 The new-task form starts with name, folder, and prompt. `Write as steps` keeps
 the prompt as the first step and adds model instructions, commands, conditions,

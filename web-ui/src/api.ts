@@ -555,6 +555,41 @@ export interface MadeTask extends Answer {
   path?: string
 }
 
+/**
+ * A card the model proposed, in the form's own four fields.
+ *
+ * Blank where the daemon could not stand behind what the model said: a folder
+ * outside the project, a schedule the card could not take. The form keeps the
+ * folder with the person either way.
+ */
+export interface TaskDraft {
+  name: string
+  folder: string
+  prompt: string
+  schedule: string
+}
+
+export interface DraftAnswer extends Answer {
+  /** What the model said, without the card it proposed. */
+  reply?: string
+  draft?: TaskDraft | null
+  /** Which model answered, as `provider/model`. */
+  model?: string
+}
+
+/**
+ * The conversation so far, put to the project's model for a card.
+ *
+ * Not a write: the daemon keeps nothing and changes nothing. The whole
+ * conversation goes every time because the page is the only thing holding it.
+ */
+export function draftTask(
+  project: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+): Promise<DraftAnswer> {
+  return post(`/api/projects/${encodeURIComponent(project)}/tasks/draft`, { messages })
+}
+
 export function createTask(
   project: string,
   name: string,
