@@ -88,6 +88,56 @@ function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
 
 type ToolArguments = Record<string, unknown>
 
+type TimelineGroup =
+  | { kind: "one"; event: PoieoEvent }
+  | { kind: "tools"; events: PoieoEvent[] }
+
+/**
+ * Two or more tool calls in a row fold into one line. A step that reads six
+ * files before it speaks is six lines of the same shape, and what a reader
+ * wants from them at a glance is that six things were read and what for;
+ * each call is still there, whole, one line down.
+ */
+function groupTimeline(events: PoieoEvent[]): TimelineGroup[] {
+  const groups: TimelineGroup[] = []
+  for (const event of events) {
+    const last = groups[groups.length - 1]
+    if (event.type === "node_tool_call" && last?.kind === "tools") {
+      last.events.push(event)
+    } else if (event.type === "node_tool_call") {
+      groups.push({ kind: "tools", events: [event] })
+    } else {
+      groups.push({ kind: "one", event })
+    }
+  }
+  return groups.map((group) =>
+    group.kind === "tools" && group.events.length === 1 ? { kind: "one", event: group.events[0] } : group,
+  )
+}
+
+/** The folded line, open for the newest group while the run is in flight. */
+function ToolGroup({ events, open }: { events: PoieoEvent[]; open: boolean }) {
+  const purposes = events.map((event) => toolPurpose(event.data ?? {}))
+  const failed = events.filter((event) => event.data?.error === true).length
+  const said = purposes.slice(0, 2).join(" · ") + (purposes.length > 2 ? " · …" : "")
+  return (
+    <li className="drawer-entry" data-kind="tools">
+      <span className="drawer-when">{shortTime(events[0].at ?? "")}</span>
+      <details className="drawer-event drawer-group" open={open || undefined}>
+        <summary>
+          <span className="drawer-tool-purpose">{`${events.length} tool calls${failed ? `, ${failed} failed` : ""}`}</span>
+          <span className="drawer-tool-meta">{said}</span>
+        </summary>
+        <ol className="drawer-timeline drawer-timeline-folded">
+          {events.map((event, index) => (
+            <TimelineEntry key={`${event.type}-${index}`} event={event} />
+          ))}
+        </ol>
+      </details>
+    </li>
+  )
+}
+
 function parsedArguments(raw: unknown): ToolArguments | null {
   let value = raw
   if (typeof raw === "string") {
@@ -683,6 +733,8 @@ export const Drawer = memo(function Drawer({
   into = null,
   asking = null,
   liveRuns = [],
+  liveActivity = [],
+  liveRunId = null,
   runId = null,
   onClose,
   onDecided,
@@ -709,6 +761,13 @@ export const Drawer = memo(function Drawer({
   asking?: Asked | null
   /** The stage's live summary window, which can advance while this drawer is open. */
   liveRuns?: RunSummary[]
+  /**
+   * The newest run's timeline from the stage, event by event, and which run
+   * it is. What the drawer follows rather than fetches, so a reader watches
+   * the task act as it acts.
+   */
+  liveActivity?: PoieoEvent[]
+  liveRunId?: string | null
   /**
    * A run to open on, named by id -- how a memory entry's source run is
    * reached. It may be older than the short history holds, so its row is
@@ -792,13 +851,25 @@ export const Drawer = memo(function Drawer({
     if (selectedRunId && selectedAvailableRun) setSelectedRunSnapshot(selectedAvailableRun)
   }, [selectedAvailableRun, selectedRunId])
 
+  // A run in flight has no summary yet -- the index row is written when it
+  // ends -- so it is not in the list a reader picks from, and "the latest
+  // run" there is the one before it. Unless the reader picked an older run,
+  // the stage's newest run is the one the activity is about, and it stays
+  // so through the run's finish: the summary landing does not change which
+  // run is being read, so it must not reset what is open.
+  const watching = liveRunId !== null && (selectedRun?.run_id === liveRunId || selectedRunId === null)
+  const following = watching && status === "running"
+  // The run being followed, before it has a summary to be picked by.
+  const inFlight = following && selectedRun?.run_id !== liveRunId
+  const activityKey = watching ? liveRunId : selectedRunKey
+
   useLayoutEffect(() => {
     activityRequest.current += 1
     setActivityOpen(false)
     setEvents(null)
     setActivityLoading(false)
     setActivityError(false)
-  }, [selectedRunKey])
+  }, [activityKey])
 
   // The record is written when the run ends, so a run watched to its finish
   // is asked again once its status settles -- hence the status in the deps.
@@ -815,8 +886,18 @@ export const Drawer = memo(function Drawer({
 
   const selectedIsLatest = selectedRun?.run_id === latestRun?.run_id
   const tracked = into !== null
-  const attention = attentionOf({ asking, pending, stale, heldBecause, status, latest: latestRun })
-  const timelineEvents = events ? visibleTimelineEvents(events) : null
+  // Above a timeline streaming this run, the previous run's outcome would be
+  // the drawer contradicting itself: while a run is in flight the attention
+  // line and the brief speak of it, not of the one before.
+  const attentionSaid = attentionOf({ asking, pending, stale, heldBecause, status, latest: inFlight ? null : latestRun })
+  const attention = inFlight && attentionSaid.kind === "quiet" ? { kind: "quiet" as const, text: "Running now" } : attentionSaid
+  const startedAt = inFlight ? (liveActivity.find((event) => event.type === "run_started")?.at ?? "") : ""
+  // The newest run is read from the stage, which has its timeline from the
+  // start, rather than fetched: its record is still being written while it
+  // runs, and once it has finished the stage's copy is the whole of it.
+  // Older runs are fetched when opened.
+  const timelineSource = watching ? liveActivity : events
+  const timelineEvents = timelineSource ? visibleTimelineEvents(timelineSource) : null
   const reviewRunId =
     !selectedIsLatest && selectedRun?.change ? selectedRun.run_id : null
   const selectedSettled = ["applied", "discarded", "undone"].includes(selectedRun?.application?.status ?? "")
@@ -855,13 +936,21 @@ export const Drawer = memo(function Drawer({
       })
   }
 
+  // A reader who opened a running task came to watch it: its activity opens
+  // by itself, and again when the run list settles under it -- the reset on
+  // `selectedRunKey` above would otherwise close what nobody closed. A
+  // reader who closes it keeps it closed until the next run.
+  useEffect(() => {
+    if (following) setActivityOpen(true)
+  }, [following, activityKey])
+
   const toggleActivity = () => {
     if (activityOpen) {
       setActivityOpen(false)
       return
     }
     setActivityOpen(true)
-    if (events === null && !activityLoading) loadActivity()
+    if (events === null && !activityLoading && !watching) loadActivity()
   }
 
   return (
@@ -930,21 +1019,29 @@ export const Drawer = memo(function Drawer({
         <Direction key={`${project}/${task}`} project={project} task={task} />
 
         <div className="run-focus">
-          <RunBrief
-            into={into}
-            run={selectedRun}
-            latest={selectedIsLatest}
-            tracked={tracked}
-            headingId={briefId}
-            memory={memory}
-            onMemory={onMemory}
-          />
+          {inFlight ? (
+            <section className="run-brief" data-run={liveRunId ?? undefined} data-in-flight="true" aria-labelledby={briefId}>
+              <h3 id={briefId}>Run in flight</h3>
+              <p className="run-brief-what">{startedAt ? `Started ${shortTime(startedAt)}` : "Starting"}</p>
+              <p className="run-brief-meta">Its outcome and change arrive when it ends.</p>
+            </section>
+          ) : (
+            <RunBrief
+              into={into}
+              run={selectedRun}
+              latest={selectedIsLatest}
+              tracked={tracked}
+              headingId={briefId}
+              memory={memory}
+              onMemory={onMemory}
+            />
+          )}
 
           {canUndo && selectedRun ? <UndoChange key={selectedRun.run_id} project={project} task={task}
             runId={selectedRun.run_id} onDone={refreshAfterAction} /> : null}
           {selectedRun && (selectedRun.change || selectedRun.application?.before) ? <Diff runId={selectedRun.run_id} /> : null}
 
-          {selectedRun ? (
+          {selectedRun || watching ? (
             <section className="drawer-fold activity-fold">
               <button
                 type="button"
@@ -971,9 +1068,21 @@ export const Drawer = memo(function Drawer({
                     </div>
                   ) : timelineEvents?.length ? (
                     <ol className="drawer-timeline">
-                      {timelineEvents.map((event, index) => (
-                        <TimelineEntry key={`${event.type}-${index}`} event={event} />
-                      ))}
+                      {groupTimeline(timelineEvents).map((group, index, groups) =>
+                        group.kind === "tools" ? (
+                          <ToolGroup
+                            key={`tools-${index}`}
+                            events={group.events}
+                            // The newest group of calls is what the run is
+                            // doing now, so it stays open while the run is
+                            // in flight; a turn that spoke after it does not
+                            // close it.
+                            open={following && index === groups.findLastIndex((one) => one.kind === "tools")}
+                          />
+                        ) : (
+                          <TimelineEntry key={`${group.event.type}-${index}`} event={group.event} />
+                        ),
+                      )}
                     </ol>
                   ) : (
                     <p className="activity-empty">No activity was recorded for this run.</p>

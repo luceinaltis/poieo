@@ -15,6 +15,8 @@ export interface ToolCall {
   name: string
   /** What the call acted on -- the path, the pattern, the command line. */
   subject: string
+  /** The model's own sentence for why, or "" for a call recorded without one. */
+  purpose: string
   result: string
   failed: boolean
   at: string
@@ -77,6 +79,15 @@ export interface TaskState {
   lastText: string
   lastThinking: string
   recentToolCalls: ToolCall[]
+  /**
+   * The run in flight, event by event from its start, for a reader watching
+   * it act: what the model said each turn and each tool it reached for.
+   * Bounded to the newest, and kept for that run only; a finished run's
+   * whole story is in its record.
+   */
+  activity: PoieoEvent[]
+  /** Which run `activity` belongs to, or null before the first run since the page opened. */
+  activityRunId: string | null
   lastRun: LastRun | null
   /**
    * What this task has done lately, for the card line.
@@ -137,6 +148,9 @@ export interface StageState {
 }
 
 const TOOL_CALL_CAP = 8
+// Enough for a long night's step and small enough that a page left open on
+// a looping task does not grow without bound. The record has the rest.
+const ACTIVITY_CAP = 400
 
 const asString = (value: unknown, fallback = ""): string =>
   typeof value === "string" ? value : fallback
@@ -191,6 +205,8 @@ function createEmptyTaskState(): TaskState {
     lastText: "",
     lastThinking: "",
     recentToolCalls: [],
+    activity: [],
+    activityRunId: null,
     lastRun: null,
     recent: NOTHING,
     runs: [],
@@ -307,6 +323,12 @@ function taskKeyForEvent(state: StageState, event: PoieoEvent): string | null {
   return state.runTask[event.run_id] ?? null
 }
 
+/** The run's timeline with this event on the end, or as it was for another run's frame. */
+function withEvent(taskState: TaskState, event: PoieoEvent): PoieoEvent[] {
+  if (event.run_id !== taskState.activityRunId) return taskState.activity
+  return [...taskState.activity, event].slice(-ACTIVITY_CAP)
+}
+
 /** null = an event this build does not know; {} = known, but nothing to show. */
 function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> | null {
   const data = event.data ?? {}
@@ -321,6 +343,9 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
         lastText: "",
         lastThinking: "",
         recentToolCalls: [],
+        // A new run, a new timeline: the last one's is in its record now.
+        activity: [event],
+        activityRunId: event.run_id,
       }
 
     case "node_started":
@@ -328,6 +353,7 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
         currentNode: event.node_id ?? null,
         step: asNumber(data.step),
         turn: 0,
+        activity: withEvent(taskState, event),
       }
 
     case "node_turn":
@@ -335,6 +361,7 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
         turn: asNumber(data.turn),
         lastText: asString(data.text),
         lastThinking: asString(data.thinking),
+        activity: withEvent(taskState, event),
       }
 
     case "node_tool_call":
@@ -343,27 +370,34 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
           {
             name: asString(data.name),
             subject: subjectOf(data.arguments),
+            purpose: asString(data.purpose),
             result: asString(data.result),
             failed: data.error === true,
             at: event.at ?? "",
           },
           ...taskState.recentToolCalls,
         ].slice(0, TOOL_CALL_CAP),
+        activity: withEvent(taskState, event),
       }
 
     case "node_finished":
-      // Deliberately nothing: the next node_started replaces currentNode, and
+      // Only the timeline: the next node_started replaces currentNode, and
       // clearing it here would blink the board empty between every step.
-      return {}
+      return { activity: withEvent(taskState, event) }
 
     case "run_finished":
       // Back to whichever kind of not-running this task is. A pause pressed
       // mid-run is honoured the moment the run leaves, which is exactly what
       // the daemon does with it -- and what this used to undo.
-      return { status: taskState.held ? "paused" : "waiting", currentNode: null }
+      return {
+        status: taskState.held ? "paused" : "waiting",
+        currentNode: null,
+        activity: withEvent(taskState, event),
+      }
 
     case "run_asking":
       return {
+        activity: withEvent(taskState, event),
         status: taskState.held || data.node === "apply_changes" ? "paused" : "waiting",
         ...(data.node === "apply_changes" ? { held: true } : {}),
         currentNode: null,

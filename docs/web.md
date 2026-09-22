@@ -237,7 +237,9 @@ listing, recent-run tallies, catch-up, live ordering, and subscriptions.
 `state/stage.ts` is the only event interpreter. Its `StageState` keys tasks by
 `project/task` and keeps status, holds, enabled/stale state, current node and
 turn, recent model text and tool calls, recent runs, reviewability, schedule,
-handoffs, and graph shape. Unknown events are ignored so an older bundle keeps
+handoffs, and graph shape, and for the newest run its timeline event by event
+from its start, bounded to the newest 400, so a drawer can follow a run as it
+acts without a second transport. Unknown events are ignored so an older bundle keeps
 working with a newer daemon.
 
 The page's root type size follows the window's width, 16px up to a laptop's
@@ -271,10 +273,14 @@ task tried first when there was one -- then what its prompt was made of --
 the page and the memory entries against their budgets, the journal by size,
 with the same gauge the memory view uses -- and which memory it was shown. In
 the activity, a turn that knows its window puts its input tokens against it;
-one whose window nobody could say keeps the plain count. That run owns its lazily fetched
-activity before the full-history picker: each tool call leads with the model's
-short purpose, while its exact recorded input and result stay in a closed
-disclosure. Older calls without a purpose use a conservative description from
+one whose window nobody could say keeps the plain count. The newest run's activity is the stage's own
+timeline, followed as it comes rather than fetched, and it opens by itself
+while the run is in flight; an older run's activity is fetched when opened.
+Each tool call leads with the model's short purpose, while its exact recorded
+input and result stay in a closed disclosure, and two or more tool calls in a
+row fold into one line that says how many and what for -- open for the newest
+group while the run is in flight, closed otherwise. The card's tool lines say
+the model's purpose for each call when it wrote one. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
 A plain card's form carries its on/off switch beside the three fields, sent
