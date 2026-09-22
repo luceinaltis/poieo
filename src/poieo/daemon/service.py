@@ -258,6 +258,12 @@ RESULTS_KEPT = 20
 MAX_CHAIN = 10
 
 
+def _keep_spoken(result: RunResult, spoken: dict[str, str | None] | None) -> None:
+    """Put what a person said to start the run on its record."""
+    if spoken is not None:
+        result.message, result.thread = spoken["message"], spoken["thread"]
+
+
 def handoff_scope(result: RunResult) -> dict[str, Any]:
     """What a `then:` branch may test, and what the next run reads as `sender`.
 
@@ -391,6 +397,9 @@ class TaskRunner:
         # flags and an Event are the whole mechanism.
         self._hold = not self.armed
         self._kick = False
+        # What a person said with a run-now, for the run it starts: taken by
+        # that run and by no other, like a handoff.
+        self._spoken: dict[str, str | None] | None = None
         self._wake = asyncio.Event()
         self._manual_fires = 0
         # A handoff waiting for this task to be free, and the depth of the run
@@ -745,14 +754,19 @@ class TaskRunner:
         self._wake.set()
         return self.status
 
-    def run_now(self) -> bool:
+    def run_now(self, message: str | None = None, thread: str | None = None) -> bool:
         """One fire, immediately, outside the schedule -- or False mid-run:
         iterations never overlap, exactly as the triggers promise.
 
         And False on a task the file switched off, which no button may start.
+
+        A `message` is what a person said to start it: the run reads it as
+        `input.message`, and its record keeps it with the `thread` it belongs
+        to, so a conversation is its runs.
         """
         if self.status == "running" or not self.armed:
             return False
+        self._spoken = {"message": message, "thread": thread} if message is not None else None
         self._kick = True
         self._wake.set()
         return True
@@ -933,7 +947,12 @@ class TaskRunner:
             return True
 
         handed, self._handed = self._handed, None
+        spoken, self._spoken = self._spoken, None
         self._depth = handed.depth if handed is not None else 0
+
+        async def finish(result: RunResult) -> None:
+            _keep_spoken(result, spoken)
+            await self._close_change(result)
 
         # Beside `read_input` above, and for the same reason: what this run
         # needs is read now rather than remembered from startup. A file that
@@ -990,6 +1009,8 @@ class TaskRunner:
                     return self.task.spec.on_error != "stop"
                 if handed is not None:
                     payload["sender"] = handed.result
+                if spoken is not None:
+                    payload["message"] = spoken["message"]
                 self._run_input = payload
                 workdir = await self._open_change()
                 # Only now: the prompt above has read the journal, so words that
@@ -1012,7 +1033,7 @@ class TaskRunner:
                     workdir=workdir,
                     tool_context=self.tool_context,
                     direction=self.direction,
-                    finalize=self._close_change,
+                    finalize=finish,
                 )
                 self._remember(result)
                 deliver_notes(self)
@@ -1048,6 +1069,7 @@ class TaskRunner:
                 )
             )
             self._record_application(result, {"status": "blocked", "error": str(exc)})
+            _keep_spoken(result, spoken)
             self.store.record_summary(result.summary())
             self._remember(result)
         finally:

@@ -82,7 +82,8 @@ the network unexpectedly.
 Each event is one JSON object appended to
 `events/<run-id>.jsonl`. One summary per finished attempt—`completed`, `failed`,
 `aborted`, or `asking`—is appended to `index.jsonl`; a later revision of the
-same run appends another row. Readers scan newest-first and use the newest row
+same run appends another row. A run started with a message keeps it, and its
+`thread`, on the summary; the keys are absent otherwise. Readers scan newest-first and use the newest row
 for a duplicate run id, which preserves append-only recovery while allowing a
 pending question to be completed.
 

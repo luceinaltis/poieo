@@ -78,7 +78,7 @@ from .chat import ROLE as CHAT_ROLE
 from .chat import briefing as chat_briefing
 from .chat import cut_short
 from .draft import ROLE as DRAFTING_ROLE
-from .draft import briefing, conversation, read_cards
+from .draft import TURN_CHARS_AT_MOST, briefing, conversation, read_cards
 from .events import CLOSED, BroadcastStore
 from .steps import publish_steps, validate_steps
 
@@ -476,6 +476,30 @@ def _schedule_words(trigger: Any) -> str:
     if trigger.type == "cron":
         return f"at {trigger.expression}"
     return str(trigger.type)
+
+
+# A conversation's name, as the page makes one up: short, and nothing a path
+# or a log line could be made to trip over.
+_THREAD = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _spoken(payload: Any) -> dict[str, Any]:
+    """What a person said with a run-now, checked: `{message, thread?}`.
+
+    The message is held to one chat turn's length -- it is read into the
+    run's prompt, and a run is not the place to paste a book.
+    """
+    if not isinstance(payload, dict):
+        raise SpecError("a run is started with {message, thread}, or with no body")
+    message = payload.get("message")
+    if not isinstance(message, str) or not message.strip():
+        raise SpecError("say something to start the run with")
+    if len(message) > TURN_CHARS_AT_MOST:
+        raise SpecError(f"a message is at most {TURN_CHARS_AT_MOST} characters")
+    thread = payload.get("thread")
+    if thread is not None and (not isinstance(thread, str) or not _THREAD.fullmatch(thread)):
+        raise SpecError("a thread is 1 to 64 letters, digits, '-' or '_'")
+    return {"message": message, "thread": thread}
 
 
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
@@ -2233,7 +2257,19 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         runner, missing = _asked(request)
         if missing is not None:
             return missing
-        if not runner.run_now():
+        # A body is optional: the board's button sends none, and the chat
+        # sends what the person said and which conversation it continues.
+        spoken: dict[str, Any] = {}
+        if await request.body():
+            try:
+                payload = await request.json()
+            except (ValueError, UnicodeDecodeError):
+                payload = None
+            try:
+                spoken = _spoken(payload)
+            except SpecError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        if not runner.run_now(**spoken):
             # Iterations never overlap; the refusal names the run in the way.
             return JSONResponse(
                 {"error": "a run is in flight", "run_id": runner.current_run_id},

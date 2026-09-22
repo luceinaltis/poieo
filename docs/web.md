@@ -111,7 +111,7 @@ state is 409.
 | `POST /api/tasks/{project}/{task}/undo` | `{run_id}`; verifies and applies the inverse of an applied change, preserving later work, or returns why it was blocked |
 | `POST /api/tasks/{project}/{task}/pause` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/resume` | no body; returns resulting runtime status |
-| `POST /api/tasks/{project}/{task}/run` | no body; returns `starting`, or 409 with the in-flight run id |
+| `POST /api/tasks/{project}/{task}/run` | no body, or `{message, thread?}`: what a person says to start the run, at most 4,000 characters, and the conversation it continues, 1 to 64 letters, digits, `-` or `_`; the run reads the message as `input.message` and its record keeps both; returns `starting`, 400 for a body that is not that, or 409 with the in-flight run id |
 | `POST /api/tasks/{project}/{task}/answer` | `{choice}`; completes the persisted pending question or returns the currently offered choices |
 
 Accept and undo can update the checked-out project; discard removes pending

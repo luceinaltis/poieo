@@ -161,6 +161,11 @@ class RunResult:
     # What they answered, once they have. Until then the run is `asking` and
     # the card's `then:` has not been evaluated -- deferred, not skipped.
     answer: str | None = None
+    # What a person said to start this run, and the conversation it belongs
+    # to: the board's chat starts a run with a message, and a later message
+    # in the same thread reads the earlier ones back from these.
+    message: str | None = None
+    thread: str | None = None
 
     def said(self, fallback: str = "") -> str:
         """What the model said last: the last node on the path that produced text.
@@ -203,4 +208,8 @@ class RunResult:
             summary["application"] = self.application
         if self.cause is not None:
             summary["cause"] = self.cause
+        if self.message is not None:
+            summary["message"] = self.message
+            if self.thread is not None:
+                summary["thread"] = self.thread
         return summary
