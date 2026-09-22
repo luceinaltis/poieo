@@ -104,28 +104,6 @@
   padding: 7px 11px;
 }
 
-/* The model's thinking, behind a line: quiet, and no taller than a few
-   lines before it scrolls, so a long think does not push the words away. */
-.chat-thought {
-  color: var(--dim);
-  font-size: 0.85em;
-}
-
-.chat-thought summary {
-  cursor: pointer;
-}
-
-.chat-thought-text {
-  border-left: 2px solid var(--rule);
-  color: var(--dim);
-  font: inherit;
-  margin: 4px 0 2px;
-  max-height: 12em;
-  overflow-y: auto;
-  padding-left: 8px;
-  white-space: pre-wrap;
-}
-
 .chat-who {
   color: var(--dim);
   font-size: 0.78em;

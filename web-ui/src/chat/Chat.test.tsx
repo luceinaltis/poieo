@@ -234,7 +234,7 @@ test("a reply that came back empty or cut short says so rather than showing a bl
   expect(host.textContent).toContain("Done thinking.")
 })
 
-test("the reply is read as it is written: thinking first and open, then the words, then the thought behind a line", async () => {
+test("the reply is read as it is written, and the model's thinking is never shown", async () => {
   let release!: () => void
   const next = () => new Promise<void>((resolve) => (release = resolve))
   chat.mockImplementation(async (_project, _messages, onPiece) => {
@@ -250,32 +250,31 @@ test("the reply is read as it is written: thinking first and open, then the word
   say("what is 2 + 2?")
   await send()
 
-  // Thinking, and nothing else yet: shown open, as the one thing to read.
+  // Thinking, and nothing else yet: the reader hears that it is thinking,
+  // not what it thinks.
   const arriving = () => host.querySelector<HTMLElement>(".chat-arriving")!
   expect(arriving()).not.toBeNull()
-  expect(arriving().querySelector("details")!.open).toBe(true)
-  expect(arriving().querySelector("summary")!.textContent).toBe("thinking…")
-  expect(arriving().textContent).toContain("Let me see.")
+  expect(arriving().querySelector(".chat-thinking")!.textContent).toBe("thinking…")
+  expect(arriving().textContent).not.toContain("Let me see.")
   expect(arriving().querySelector(".chat-said")).toBeNull()
 
-  // The first words close the thinking and start the bubble.
+  // The first words replace the line and start the bubble.
   await act(async () => release())
-  expect(arriving().querySelector("details")!.open).toBe(false)
+  expect(arriving().querySelector(".chat-thinking")).toBeNull()
   expect(arriving().querySelector(".chat-said")!.textContent).toBe("Fo")
   await act(async () => release())
   expect(arriving().querySelector(".chat-said")!.textContent).toBe("Four.")
 
-  // Whole: the turn lands with its thought behind a closed line.
+  // Whole: the turn lands as its words alone.
   await act(async () => release())
   expect(host.querySelector(".chat-arriving")).toBeNull()
   const landed = host.querySelectorAll(".chat-turn")[1]
   expect(landed.querySelector(".chat-said")!.textContent).toBe("Four.")
-  expect(landed.querySelector("details")!.open).toBe(false)
-  expect(landed.querySelector("summary")!.textContent).toBe("thought")
-  expect(landed.querySelector(".chat-thought-text")!.textContent).toBe("Let me see.")
+  expect(landed.querySelector("details")).toBeNull()
+  expect(landed.textContent).not.toContain("Let me see.")
 })
 
-test("a model that does not think aloud lands without a thought line, and each side has its own bubble", async () => {
+test("each side has its own bubble", async () => {
   show()
   say("hello?")
   await send()
@@ -283,7 +282,6 @@ test("a model that does not think aloud lands without a thought line, and each s
   const [mine, theirs] = host.querySelectorAll(".chat-turn")
   expect(mine.getAttribute("data-role")).toBe("user")
   expect(theirs.getAttribute("data-role")).toBe("assistant")
-  expect(theirs.querySelector("details")).toBeNull()
 })
 
 const running = (activity: PoieoEvent[] = []): Steerable => ({ name: "chores", title: "chores", activity })
@@ -323,6 +321,38 @@ test("a running task can be spoken to: its timeline is the thread, and the box s
   expect(leaveDirection).toHaveBeenCalledWith("board", "chores", "Skip the drafts folder.")
   expect(chat).not.toHaveBeenCalled()
   expect(box().value).toBe("")
+})
+
+test("a run's timeline in the chat shows what the model said and did, not what it thought", async () => {
+  const activity = [
+    frame("run_started", { task: "chores", project: "board" }),
+    frame("node_turn", { turn: 1, text: "Reading the notes first.", thinking: "Hmm, where are they?" }),
+    frame("node_turn", { turn: 2, text: "", thinking: "Only thinking this turn." }),
+  ]
+  show({ steerable: [running(activity)] })
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(host.textContent).toContain("Reading the notes first.")
+  expect(host.textContent).not.toContain("Hmm, where are they?")
+  expect(host.textContent).not.toContain("Only thinking this turn.")
+  expect(host.querySelector(".drawer-thinking")).toBeNull()
+})
+
+test("a run that has only thought so far reads as nothing yet, not a blank", async () => {
+  const activity = [
+    frame("run_started", { task: "chores", project: "board" }),
+    frame("node_turn", { turn: 1, text: "", thinking: "Where to begin?" }),
+  ]
+  show({ steerable: [running(activity)] })
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(host.textContent).toContain("Nothing yet from this run.")
 })
 
 test("a refused direction stays on screen with the words still in the box", async () => {

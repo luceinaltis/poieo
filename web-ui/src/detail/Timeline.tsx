@@ -37,6 +37,17 @@ function turnKey(event: PoieoEvent): string | null {
   return event.node_id && Number.isFinite(turn) ? `${event.node_id}\u0000${turn}` : null
 }
 
+/**
+ * The same events with the model's thinking taken out, for a reader who
+ * wants what it said and did: a turn that only thought then shows nothing,
+ * and does not split the tool calls around it.
+ */
+export function withoutThinking(events: PoieoEvent[]): PoieoEvent[] {
+  return events.map((event) =>
+    event.type === "node_turn" && event.data?.thinking ? { ...event, data: { ...event.data, thinking: "" } } : event,
+  )
+}
+
 /** Fold a tool preamble only when every call it promised has its own record. */
 export function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
   const toolsByTurn = new Map<string, number>()
