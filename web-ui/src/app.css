@@ -87,6 +87,7 @@
   font: inherit;
   font-size: 0.9375rem;
   padding: 6px 8px 4px;
+  white-space: nowrap;
 }
 
 .shell-places button:hover:not(:disabled) {
@@ -125,6 +126,7 @@
   font-size: 0.875rem;
   gap: 5px;
   padding: 3px 8px;
+  white-space: nowrap;
 }
 
 .shell-toggle svg {
