@@ -1034,7 +1034,12 @@ class TaskRunner:
                 self._run_input = payload
                 attached = spoken.get("attachments") if spoken is not None else None
                 for one in attached or []:
-                    self.store.keep_file(run_id, one.name, one.body)
+                    try:
+                        self.store.keep_file(run_id, one.name, one.body)
+                    except (OSError, ValueError) as exc:
+                        # The model is still shown it; only the copy the board
+                        # would show again is lost, and that is not worth the run.
+                        log.warning("task '%s': could not keep attachment %s: %s", self.name, one.name, exc)
                 workdir = await self._open_change()
                 # Only now: the prompt above has read the journal, so words that
                 # arrive from here on are heard once, at the next turn, rather

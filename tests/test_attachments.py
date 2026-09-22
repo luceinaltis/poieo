@@ -60,6 +60,11 @@ def test_a_picture_and_a_text_file_are_taken():
         ([_png(".hidden.png")], "name"),
         ([_png("a\\b.png")], "name"),
         ([_png("same.png"), _png("same.png")], "twice"),
+        ([_png("notes.png:hidden")], "name"),
+        ([_png("shot.png.")], "name"),
+        ([_png("shot.png ")], "name"),
+        ([_png("CON.png")], "name"),
+        ([_png("nul")], "name"),
     ],
 )
 def test_what_is_not_a_fit_attachment_is_refused_by_name(raw, why):
@@ -93,6 +98,7 @@ def test_a_store_keeps_an_attachment_under_the_run_and_nowhere_else(tmp_path):
     assert store.kept_file("r1", "other.png") is None
     assert store.kept_file("r1", "../r1/shot.png") is None
     assert store.kept_file("../runs", "shot.png") is None
+    assert store.kept_file("r1", "shot.png:hidden") is None
 
     NullStore().keep_file("r1", "shot.png", PNG)
     assert NullStore().kept_file("r1", "shot.png") is None
@@ -173,3 +179,31 @@ async def test_a_picture_the_model_looked_at_is_kept_for_the_board_to_show(tmp_p
     preview = call["data"]["preview"]
     assert preview.endswith("shot.png")
     assert store.kept_file(result.run_id, preview) == PNG
+
+
+async def test_a_file_that_cannot_be_kept_costs_the_keeping_not_the_task(tmp_path):
+    (tmp_path / "work").mkdir()
+    card(tmp_path / "cards", "f", "folder: ../work\nprompt: go\ntools: []\ntrigger: {type: manual}\n")
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    (tmp_path / "poieo.yaml").write_text("binding: b.yaml\ntasks: cards\n", encoding="utf-8")
+    store = RunStore(tmp_path / "runs")
+
+    def full(*args):
+        raise OSError("no space left on device")
+
+    store.keep_file = full
+    daemon = Daemon(load_config(tmp_path / "poieo.yaml"), store=store)
+    serve = await up(daemon)
+    runner = daemon.runners[0]
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+            project = daemon.config.display_name
+            await client.post(f"/api/tasks/{project}/f/run", json={"message": "look", "attachments": [_png()]})
+            await until(lambda: len(runner.results) == 1, "the run whose file could not be kept")
+            assert runner.results[0].status == "completed"
+
+            await client.post(f"/api/tasks/{project}/f/run", json={"message": "again"})
+            await until(lambda: len(runner.results) == 2, "the next run, from a task still standing")
+    finally:
+        await down(daemon, serve)

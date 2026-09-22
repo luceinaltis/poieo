@@ -211,7 +211,8 @@ class RunStore:
 
     def _file_path(self, run_id: str, name: str) -> Path | None:
         """Where a run's kept file lives, or None for a name that would leave it."""
-        if Path(name).name != name or Path(run_id).name != run_id:
+        # A `:` would name a hidden stream of another file on Windows.
+        if Path(name).name != name or Path(run_id).name != run_id or ":" in name + run_id:
             return None
         folder = (self.files_dir / run_id).resolve()
         path = (folder / name).resolve()

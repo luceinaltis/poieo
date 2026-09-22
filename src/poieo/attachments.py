@@ -37,8 +37,11 @@ _PICTURES = (
 )
 _TEXTS = {"text/plain", "text/markdown", "text/csv", "application/json"}
 # One plain file name: no separators, no leading dot, nothing a path or a
-# header could be made to trip over.
-_NAME = re.compile(r"[^/\\.\x00-\x1f][^/\\\x00-\x1f]{0,99}")
+# header could be made to trip over. Windows adds its own: a `:` names a
+# hidden stream of another file, a trailing dot or space is silently dropped,
+# and a device name such as `CON` is no file at all.
+_NAME = re.compile(r"[^/\\:.\x00-\x1f][^/\\:\x00-\x1f]{0,98}[^/\\:. \x00-\x1f]|[^/\\:. \x00-\x1f]")
+_DEVICES = {"CON", "PRN", "AUX", "NUL"} | {f"{kind}{n}" for kind in ("COM", "LPT") for n in range(1, 10)}
 
 
 def picture_type(head: bytes) -> str | None:
@@ -62,7 +65,7 @@ def _one(raw: Any) -> Attachment:
     if not isinstance(raw, dict):
         raise SpecError("an attachment is {name, media_type, data}")
     name, media_type, data = raw.get("name"), raw.get("media_type"), raw.get("data")
-    if not isinstance(name, str) or not _NAME.fullmatch(name) or ".." in name:
+    if not isinstance(name, str) or not _NAME.fullmatch(name) or ".." in name or name.split(".")[0].upper() in _DEVICES:
         raise SpecError(f"an attachment's name is one plain file name, not {name!r}")
     if not isinstance(media_type, str) or not (media_type.startswith("image/") or media_type in _TEXTS):
         raise SpecError(f"{name}: attachments are pictures and text files, not {media_type!r}")
