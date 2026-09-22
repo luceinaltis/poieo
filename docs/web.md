@@ -276,13 +276,15 @@ The new-task panel opens on one question: the conversation, with the fields
 put away until a draft arrives or the person chooses `or write it yourself`.
 A seeded panel (make one like it) opens on the fields. Each message sends the
 whole conversation to the draft route; the reply is shown under it, with the
-model that answered named once. A reply carrying a card shows that card and
-offers `use this draft`, which brings the fields out and fills the name and
-prompt, the folder only when the draft names one inside the project (the list
-keeps what it had otherwise), and when it runs -- a schedule the choices have
-is chosen, any other opens the line with it written out -- and says so above
-the fields. Enter sends, Shift+Enter breaks the line, and Enter
-during input-method composition does nothing. A refusal stays on screen with
+model that answered named once. A reply carrying a card shows that card --
+its name, where it works, when it runs in the words the form's `when` list
+uses for the same line, and its prompt -- and offers `use this draft`, which
+brings the fields out and fills the name and prompt, the folder only when the
+draft names one inside the project (the list keeps what it had otherwise),
+and when it runs -- a schedule the choices have is chosen, any other opens
+the line with it written out -- and says so above the fields. Enter sends,
+Shift+Enter breaks the line, and Enter during input-method composition does
+nothing. A refusal stays on screen with
 the message still in the box, so nothing typed is lost. The conversation lives
 in the panel and goes with it. The thread is capped in height so the box under
 it stays put, and it scrolls to keep its newest turn in view -- the message on

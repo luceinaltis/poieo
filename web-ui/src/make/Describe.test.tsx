@@ -101,6 +101,11 @@ test("a reply carrying a card offers it, and pressing it hands the card over", a
   expect(use).not.toBeNull()
   expect(host.textContent).toContain("nightly test fix")
   expect(host.textContent).toContain("Run the tests.")
+  // When it runs, in the words the form's list uses for the same line: a
+  // person who reads "every night at 2" on the form three inches below
+  // should not have read "at 0 2 * * *" here.
+  expect(host.textContent).toContain("every night at 2")
+  expect(host.textContent).not.toContain("0 2 * * *")
   await act(async () => use.click())
   expect(taken).toHaveBeenCalledWith(card)
 })
