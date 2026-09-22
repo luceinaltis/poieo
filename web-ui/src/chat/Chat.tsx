@@ -14,14 +14,22 @@
  * The thread is the page's. The shell holds it, so a visit to a task's drawer
  * does not lose it, and it goes with the page. The daemon keeps none of it,
  * offers the model no tools, and starts no run for it.
+ *
+ * While a task runs, the same panel can speak to it instead: a picker names
+ * the running tasks, choosing one shows that run's timeline here, live, and
+ * the box then sends direction the run hears at its next model turn. That
+ * is the one road a person's words take into a run, and the timeline shows
+ * where they were heard.
  */
 
 import { useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 
-import { chat } from "../api"
-import type { ChatAnswer, ChatPiece } from "../api"
+import { chat, leaveDirection } from "../api"
+import type { Answer, ChatPiece } from "../api"
+import { Timeline, visibleTimelineEvents } from "../detail/Timeline"
 import { Refusal } from "../Refusal"
+import type { PoieoEvent } from "../types"
 import "./chat.css"
 
 export interface Turn {
@@ -44,6 +52,13 @@ interface Arriving {
 /** The most turns the daemon takes in one conversation. */
 export const TURNS_AT_MOST = 30
 
+/** A task the reader may speak to: it is running, and its timeline is live. */
+export interface Steerable {
+  name: string
+  title: string
+  activity: PoieoEvent[]
+}
+
 /**
  * The model's thinking, behind a line. Open while it is being written and
  * nothing else has arrived; closed once the words come, and afterwards, so
@@ -63,35 +78,64 @@ export function Chat({
   turns,
   onTurns,
   onClose,
+  steerable = [],
 }: {
   project: string
   turns: Turn[]
   onTurns(turns: Turn[]): void
   onClose(): void
+  /** The project's running tasks, for the picker; empty hides it. */
+  steerable?: Steerable[]
 }) {
   const [text, setText] = useState("")
-  // The message on its way, shown in the thread while the model answers. It
+  // Whom the box speaks to: the project's model, or one running task by name.
+  const [target, setTarget] = useState("model")
+  const steering = target === "model" ? null : (steerable.find((task) => task.name === target) ?? null)
+  // A run that ended takes its name out of the picker; the box goes back to
+  // the model rather than speaking to nothing.
+  useEffect(() => {
+    if (target !== "model" && !steering) setTarget("model")
+  }, [target, steering])
+  // The message on its way, and to whom. Words to the model are shown in
+  // the thread while it answers; words to a run appear on its timeline once
+  // it has heard them, so they are never drawn as a bubble here -- not even
+  // when that run ends before the words have landed. Either way the message
   // stays in the box until it was answered: a refusal must not eat it.
-  const [sending, setSending] = useState<string | null>(null)
+  const [sending, setSending] = useState<{ said: string; to: "model" | "run" } | null>(null)
   const [arriving, setArriving] = useState<Arriving | null>(null)
-  const [refused, setRefused] = useState<ChatAnswer | null>(null)
+  const [refused, setRefused] = useState<Answer | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const busy = sending !== null
   const full = turns.length >= TURNS_AT_MOST
-  const shown: Turn[] = sending === null ? turns : [...turns, { role: "user", content: sending }]
+  const shown: Turn[] = sending?.to === "model" ? [...turns, { role: "user", content: sending.said }] : turns
   const answeredBy = [...turns].reverse().find((turn) => turn.model)?.model ?? null
 
   // A thread is read from its newest line: keep that one in view, as it grows.
   useEffect(() => {
     const thread = threadRef.current
     if (thread) thread.scrollTop = thread.scrollHeight
-  }, [shown.length, arriving?.thinking.length, arriving?.text.length])
+  }, [shown.length, arriving?.thinking.length, arriving?.text.length, steering?.activity.length])
 
   const send = async () => {
     const said = text.trim()
-    if (!said || busy || full) return
+    if (!said || busy) return
+    if (steering) {
+      // To the run, not the model: it answers on its own timeline, where the
+      // words appear as `you said` once the run has heard them.
+      setSending({ said, to: "run" })
+      setRefused(null)
+      const answer = await leaveDirection(project, steering.name, said)
+      setSending(null)
+      if (!answer.ok) {
+        setRefused(answer)
+        return
+      }
+      setText("")
+      return
+    }
+    if (full) return
     const asked: Turn[] = [...turns, { role: "user", content: said }]
-    setSending(said)
+    setSending({ said, to: "model" })
     setArriving({ thinking: "", text: "" })
     setRefused(null)
     const answer = await chat(
@@ -131,10 +175,28 @@ export function Chat({
     <aside className="panel chat" aria-label="Chat">
       <header className="chat-head">
         <h2>chat</h2>
-        <span className="chat-model" title={answeredBy ?? undefined}>
-          {answeredBy ? `answered by ${answeredBy}` : ""}
+        {/* Only while something runs: a picker with one option in it is
+            furniture, the rule the project picker follows. */}
+        {steerable.length ? (
+          <select
+            className="chat-target"
+            aria-label="Talk to"
+            value={target}
+            disabled={busy}
+            onChange={(event) => setTarget(event.target.value)}
+          >
+            <option value="model">this project's model</option>
+            {steerable.map((task) => (
+              <option key={task.name} value={task.name}>
+                {task.title} · running
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <span className="chat-model" title={steering ? undefined : (answeredBy ?? undefined)}>
+          {steering ? "its run, live" : answeredBy ? `answered by ${answeredBy}` : ""}
         </span>
-        {turns.length ? (
+        {turns.length && !steering ? (
           <button
             type="button"
             className="chat-new"
@@ -153,7 +215,13 @@ export function Chat({
         </button>
       </header>
       <div className="chat-thread" ref={threadRef}>
-        {shown.length ? (
+        {steering ? (
+          steering.activity.length ? (
+            <Timeline events={visibleTimelineEvents(steering.activity)} following />
+          ) : (
+            <p className="chat-empty">Nothing yet from this run.</p>
+          )
+        ) : shown.length ? (
           <ol className="chat-turns">
             {shown.map((turn, index) => (
               <li className="chat-turn" data-role={turn.role} key={index}>
@@ -198,7 +266,7 @@ export function Chat({
           </p>
         )}
       </div>
-      {full ? (
+      {full && !steering ? (
         <p className="chat-full" role="status">
           This conversation is as long as one gets. Start a new one to go on.
         </p>
@@ -216,14 +284,18 @@ export function Chat({
           aria-label="Message"
           rows={2}
           maxLength={4000}
-          placeholder="Ask anything. Enter sends, Shift+Enter breaks the line."
+          placeholder={
+            steering
+              ? `Tell ${steering.title} something; it hears it at its next model turn.`
+              : "Ask anything. Enter sends, Shift+Enter breaks the line."
+          }
           value={text}
-          disabled={full}
+          disabled={full && !steering}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
         />
         <div className="chat-row">
-          <button type="submit" data-do="chat-send" disabled={busy || full || !text.trim()}>
+          <button type="submit" data-do="chat-send" disabled={busy || (full && !steering) || !text.trim()}>
             {busy ? "sending…" : "send"}
           </button>
         </div>

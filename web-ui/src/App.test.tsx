@@ -1032,3 +1032,14 @@ test("a bare board's line names the board without a count, and the invitation ca
   expect(head.querySelector('[data-do="open-make"]')).toBeNull()
   expect(container.querySelector('[data-do="empty-new-task"]')).not.toBeNull()
 })
+
+test("a task that is running is offered to the chat, with its live timeline", async () => {
+  const store = await render(initialStage(TASK_ROWS))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
+  expect(container.querySelector(".chat-target")).toBeNull()
+
+  await act(async () => store.push(replay(initialStage(TASK_ROWS), AGENT_RUN.slice(0, 2))))
+  const picker = container.querySelector<HTMLSelectElement>(".chat-target")!
+  expect(picker).not.toBeNull()
+  expect([...picker.options].map((option) => option.value)).toEqual(["model", "chores"])
+})

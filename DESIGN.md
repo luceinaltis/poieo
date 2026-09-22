@@ -114,7 +114,8 @@ From the board a user can:
 - inspect available models, declare an answering endpoint and choose which model
   serves a role;
 - talk with the project's model in a conversation the board keeps only while
-  the page is open; it starts no run and changes no file.
+  the page is open; it starts no run and changes no file -- or, while a task
+  runs, speak to that run from the same panel and watch it act.
 
 Advanced task fields beyond a one-line schedule, and graph wiring, remain
 file-based: a task of several steps and conditions is drawn in the standalone

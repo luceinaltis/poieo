@@ -212,3 +212,24 @@
   color: var(--stop);
   font-size: 0.8em;
 }
+
+/* Whom the box speaks to. Drawn like the filter box beside it in the models
+   panel: a control, one step quieter than the words. */
+.chat-target {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  flex: none;
+  font: inherit;
+  font-size: 0.82em;
+  max-width: 45%;
+  padding: 2px 6px;
+}
+
+/* A run's timeline in the chat: the drawer's lines, at the chat's size. */
+.chat-thread .drawer-timeline {
+  font-size: 0.9em;
+  -webkit-user-select: text;
+  user-select: text;
+}
