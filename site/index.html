@@ -77,7 +77,13 @@
     <h2 id="work-title">A little work.<br>A useful change.</h2>
     <p>Write a task. Choose its models. Let poieo keep it running.</p>
   </div>
-  <p class="story-caption">Scripted example · Keep the tests green</p>
+  <div class="story-toolbar">
+    <p class="story-caption">Scripted example · Keep the tests green</p>
+    <div class="story-playback" hidden>
+      <button class="story-play" type="button" aria-controls="story-task story-run story-change">Play example</button>
+      <span class="story-status" role="status" aria-atomic="true"></span>
+    </div>
+  </div>
   <div class="story-tabs" aria-label="Follow the example" hidden>
     <button type="button" id="tab-task" aria-controls="story-task"><span>task</span>What you ask</button>
     <button type="button" id="tab-run" aria-controls="story-run"><span>run</span>What happens</button>
