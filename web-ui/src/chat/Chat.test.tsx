@@ -341,6 +341,20 @@ test("a run's timeline in the chat shows what the model said and did, not what i
   expect(host.querySelector(".drawer-thinking")).toBeNull()
 })
 
+test("a run that has only thought so far reads as nothing yet, not a blank", async () => {
+  const activity = [
+    frame("run_started", { task: "chores", project: "board" }),
+    frame("node_turn", { turn: 1, text: "", thinking: "Where to begin?" }),
+  ]
+  show({ steerable: [running(activity)] })
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(host.textContent).toContain("Nothing yet from this run.")
+})
+
 test("a refused direction stays on screen with the words still in the box", async () => {
   leaveDirection.mockResolvedValue({ ok: false, error: "this task has no card to keep direction with" })
   show({ steerable: [running()] })

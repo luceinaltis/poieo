@@ -88,12 +88,14 @@ export function Chat({
   const full = turns.length >= TURNS_AT_MOST
   const shown: Turn[] = sending?.to === "model" ? [...turns, { role: "user", content: sending.said }] : turns
   const answeredBy = [...turns].reverse().find((turn) => turn.model)?.model ?? null
+  // What of the run a reader here sees: said and done, never thought.
+  const heard = steering ? visibleTimelineEvents(withoutThinking(steering.activity)) : []
 
   // A thread is read from its newest line: keep that one in view, as it grows.
   useEffect(() => {
     const thread = threadRef.current
     if (thread) thread.scrollTop = thread.scrollHeight
-  }, [shown.length, arriving?.length, steering?.activity.length])
+  }, [shown.length, arriving?.length, heard.length])
 
   const send = async () => {
     const said = text.trim()
@@ -188,8 +190,8 @@ export function Chat({
       </header>
       <div className="chat-thread" ref={threadRef}>
         {steering ? (
-          steering.activity.length ? (
-            <Timeline events={visibleTimelineEvents(withoutThinking(steering.activity))} following />
+          heard.length ? (
+            <Timeline events={heard} following />
           ) : (
             <p className="chat-empty">Nothing yet from this run.</p>
           )
