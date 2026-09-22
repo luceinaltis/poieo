@@ -134,15 +134,23 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .section-heading { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
 .section-heading > p { max-width: 39ch; color: var(--dim); padding-top: 4px; }
 .story-caption { color: var(--dim); font-size: .875rem; margin-top: 36px; }
-.story-tabs { display: flex; gap: 32px; margin-top: 16px; border-bottom: 1px solid var(--rule); }
+.story-tabs { --tab-gap: 32px; --tab-step: 0; position: relative; display: flex; gap: var(--tab-gap); margin-top: 16px; border-bottom: 1px solid var(--rule); }
+.story-tabs:has(button:nth-child(2)[aria-selected="true"]) { --tab-step: 1; }
+.story-tabs:has(button:nth-child(3)[aria-selected="true"]) { --tab-step: 2; }
+.story-tabs::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: calc((100% - 2 * var(--tab-gap)) / 3); background: var(--ember); transform: translateX(calc(var(--tab-step) * (100% + var(--tab-gap)))); pointer-events: none; }
 .story-tabs[hidden], .story-panel[hidden] { display: none; }
 .story-tabs button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 14px 0 18px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; text-align: left; color: var(--dim); cursor: pointer; font-size: 1rem; }
 .story-tabs button span { display: block; font-size: 1.375rem; color: var(--text); margin-bottom: 4px; }
-.story-tabs button[aria-selected="true"] { border-bottom-color: var(--ember); color: var(--text); }
+.story-tabs button[aria-selected="true"] { color: var(--text); }
 .story-tabs button[aria-selected="true"] span { color: var(--ember); }
 .story-tabs button:hover { color: var(--text); }
 .story-panel { display: grid; grid-template-columns: .8fr 1.2fr; align-items: start; gap: 72px; padding-block: 40px; min-height: 430px; }
 .story-panel > * { min-width: 0; }
+/* Reserve the tallest panel's space at every width, without measuring or clipping text.
+   Hidden panels are invisible and inert, including to assistive technology. */
+.story-panels[data-ready] { display: grid; }
+.story-panels[data-ready] > .story-panel { grid-area: 1 / 1; align-self: start; }
+.story-panels[data-ready] > .story-panel[hidden] { display: grid; visibility: hidden; pointer-events: none; }
 .story-copy h3 { font-family: var(--serif); font-weight: 400; font-size: 2rem; letter-spacing: -.025em; }
 .story-copy p { color: var(--dim); margin-top: 18px; max-width: 42ch; }
 .story-copy .text-link { margin-top: 20px; }
@@ -280,7 +288,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .landing-page .landing-art { left: 65%; bottom: 0; width: max(100%, 720px); max-width: none; transform: translateX(-65%); }
   .section { padding-block: 56px; }
   .section-heading { grid-template-columns: 1fr; gap: 20px; }
-  .story-tabs { gap: 16px; }
+  .story-tabs { --tab-gap: 16px; }
   .story-tabs button { font-size: .875rem; }
   .story-tabs button span { font-size: 1.125rem; }
   .story-panel { grid-template-columns: 1fr; gap: 28px; min-height: 0; padding-block: 28px; }
@@ -319,6 +327,14 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .bar a { display: inline-flex; align-items: center; }
   .doc-nav a { min-height: 44px; }
 }
+/* Only a visitor's selection starts the short walkthrough effects. */
+@media (prefers-reduced-motion: no-preference) {
+  .story-tabs::after { transition: transform 260ms cubic-bezier(.2, .7, .2, 1); }
+  .story-panels[data-interacted] > .story-panel:not([hidden]) > * { animation: story-reveal 220ms ease-out; }
+  .story-panels[data-interacted] > .story-panel:not([hidden]) .diff-added { animation: change-highlight 900ms ease-out; }
+}
+@keyframes story-reveal { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes change-highlight { from { background: color-mix(in srgb, var(--live) 28%, transparent); } to { background: color-mix(in srgb, var(--live) 9%, transparent); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
   .landing-sky { transition: none; }

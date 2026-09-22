@@ -5,12 +5,17 @@
   const list = story.querySelector(".story-tabs");
   const tabs = Array.from(list.querySelectorAll("button"));
   const panels = tabs.map(tab => document.getElementById(tab.getAttribute("aria-controls")));
+  const stage = story.querySelector(".story-panels");
+  let selected = 0;
 
   function select(index, focus) {
+    if (index !== selected) stage.setAttribute("data-interacted", "");
+    selected = index;
     tabs.forEach((tab, i) => {
       tab.setAttribute("aria-selected", String(i === index));
       tab.tabIndex = i === index ? 0 : -1;
       panels[i].hidden = i !== index;
+      panels[i].inert = i !== index;
     });
     if (focus) tabs[index].focus();
   }
@@ -35,5 +40,6 @@
     });
   });
   select(0, false);
+  stage.setAttribute("data-ready", "");
   list.hidden = false;
 })();
