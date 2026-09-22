@@ -85,6 +85,14 @@ SDK, while other built-in providers do not consume it. The runtime's node retry
 is a separate, provider-neutral outer policy. Authentication and invalid-request
 failures are not made plausible by repetition.
 
+An answer can be read as it is written. `Provider.stream` yields pieces
+of text and thinking and then the whole response, the same object
+`complete` returns; the Ollama and OpenAI-compatible providers stream on
+their own wires, every other backend answers in one piece through the same
+seam, and a call that offers tools is answered whole because a tool call
+arrives in fragments. A stream that stops before it is done is a provider
+error, not a shorter answer.
+
 Embedding is an optional provider capability. Ollama and OpenAI-compatible
 providers implement it; other providers refuse it through the common protocol.
 The memory board uses only explicitly declared `memory_embedder` and

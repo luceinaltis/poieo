@@ -73,10 +73,57 @@
   padding: 4px 0;
 }
 
+/* Bubbles: the reader's words to the right in the raised tone, the model's
+   to the left on the well, so a glance tells them apart before the small
+   name above each is read. */
 .chat-turn {
   display: grid;
   font-size: 0.9em;
   gap: 3px;
+  max-width: 88%;
+}
+
+.chat-turn[data-role="user"] {
+  justify-self: end;
+}
+
+.chat-turn[data-role="user"] .chat-who {
+  text-align: right;
+}
+
+.chat-turn[data-role="user"] .chat-said {
+  background: var(--raised);
+  border-radius: 12px 12px 3px 12px;
+  padding: 7px 11px;
+}
+
+.chat-turn[data-role="assistant"] .chat-said {
+  background: var(--well);
+  border: 1px solid var(--rule);
+  border-radius: 12px 12px 12px 3px;
+  padding: 7px 11px;
+}
+
+/* The model's thinking, behind a line: quiet, and no taller than a few
+   lines before it scrolls, so a long think does not push the words away. */
+.chat-thought {
+  color: var(--dim);
+  font-size: 0.85em;
+}
+
+.chat-thought summary {
+  cursor: pointer;
+}
+
+.chat-thought-text {
+  border-left: 2px solid var(--rule);
+  color: var(--dim);
+  font: inherit;
+  margin: 4px 0 2px;
+  max-height: 12em;
+  overflow-y: auto;
+  padding-left: 8px;
+  white-space: pre-wrap;
 }
 
 .chat-who {

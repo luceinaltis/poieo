@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -16,6 +17,7 @@ import httpx
 from ..binding import ProviderSpec
 from ..errors import ProviderError
 from .base import (
+    Delta,
     LLMRequest,
     LLMResponse,
     Provider,
@@ -153,6 +155,30 @@ class _HttpProvider(Provider):
                 provider=self.name,
             ) from exc
 
+    async def _stream_lines(self, path: str, payload: dict[str, Any]) -> AsyncIterator[str]:
+        """The lines of a streamed reply, with the same refusals `_post` gives.
+
+        The status is read before the first line, so an endpoint that refuses
+        refuses whole rather than as an empty answer.
+        """
+        try:
+            async with self.client.stream("POST", path, json=payload) as response:
+                if response.status_code >= 400:
+                    body = (await response.aread())[:400].decode("utf-8", "replace")
+                    raise ProviderError(
+                        f"{self.name}: HTTP {response.status_code}: {body}",
+                        provider=self.name,
+                        retryable=response.status_code in _RETRYABLE_STATUS,
+                    )
+                async for line in response.aiter_lines():
+                    yield line
+        except httpx.RequestError as exc:
+            raise ProviderError(
+                f"{self.name}: cannot reach {self.spec.base_url}: {exc}",
+                provider=self.name,
+                retryable=True,
+            ) from exc
+
     async def _list_health(self, path: str, key: str, field: str) -> tuple[bool, str]:
         """Is the server there, and what has it got?
 
@@ -184,7 +210,7 @@ class OpenAICompatibleProvider(_HttpProvider):
     type = "openai_compatible"
     supports_embeddings = True
 
-    async def complete(self, request: LLMRequest) -> LLMResponse:
+    def _payload(self, request: LLMRequest) -> dict[str, Any]:
         params = dict(request.params)
         payload: dict[str, Any] = {
             "model": request.model,
@@ -196,6 +222,83 @@ class OpenAICompatibleProvider(_HttpProvider):
         payload.update(params)
         if request.tools:
             payload["tools"] = _wire_tools(request.tools)
+        return payload
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[Delta]:
+        # A tool call arrives in fragments a reader would have to reassemble;
+        # nothing here streams to a person while tools are on the table, so a
+        # call that offers them is answered whole.
+        if request.tools:
+            async for delta in super().stream(request):
+                yield delta
+            return
+        payload = self._payload(request)
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
+        text: list[str] = []
+        thinking: list[str] = []
+        usage = Usage()
+        stop: str | None = None
+        model = request.model
+        # `[DONE]` is the end; a `finish_reason` is one too, for a server that
+        # never sends the marker. A stream that reaches neither has stopped
+        # short, and what it carried so far is not the answer.
+        finished = False
+        async for line in self._stream_lines("/chat/completions", payload):
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            body = line[len("data:") :].strip()
+            if body == "[DONE]":
+                finished = True
+                break
+            try:
+                data = json.loads(body)
+            except ValueError as exc:
+                raise ProviderError(
+                    f"{self.name}: stream chunk was not JSON: {body[:200]}", provider=self.name
+                ) from exc
+            if data.get("error"):
+                raise ProviderError(f"{self.name}: {data['error']}", provider=self.name)
+            model = data.get("model", model)
+            if data.get("usage"):
+                reported = data["usage"]
+                details = reported.get("prompt_tokens_details") or {}
+                usage = Usage(
+                    input_tokens=reported.get("prompt_tokens", 0) or 0,
+                    output_tokens=reported.get("completion_tokens", 0) or 0,
+                    cache_read_tokens=details.get("cached_tokens", 0) or 0,
+                    reasoning_tokens=(reported.get("completion_tokens_details") or {}).get("reasoning_tokens", 0) or 0,
+                    cost=reported.get("cost"),
+                )
+            choices = data.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta") or {}
+            piece_text = delta.get("content") or ""
+            piece_thinking = delta.get("reasoning_content") or delta.get("reasoning") or ""
+            if choices[0].get("finish_reason"):
+                stop = choices[0]["finish_reason"]
+                finished = True
+            if piece_text:
+                text.append(piece_text)
+            if piece_thinking:
+                thinking.append(piece_thinking)
+            if piece_text or piece_thinking:
+                yield Delta(text=piece_text, thinking=piece_thinking)
+        if not finished:
+            raise ProviderError(f"{self.name}: the stream ended before the answer was done", provider=self.name)
+        whole = LLMResponse(
+            text="".join(text),
+            model=model,
+            usage=usage,
+            stop_reason=stop,
+            meta={"thinking": "".join(thinking)} if thinking else {},
+        )
+        yield Delta(done=whole)
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        payload = self._payload(request)
 
         data = await self._post("/chat/completions", payload)
         choices = data.get("choices") or []
@@ -296,7 +399,7 @@ class OllamaProvider(_HttpProvider):
     type = "ollama"
     supports_embeddings = True
 
-    async def complete(self, request: LLMRequest) -> LLMResponse:
+    def _payload(self, request: LLMRequest) -> dict[str, Any]:
         params = dict(request.params)
         options: dict[str, Any] = dict(params.pop("options", {}) or {})
         # Map the harness's neutral names onto Ollama's `options` block.
@@ -316,6 +419,55 @@ class OllamaProvider(_HttpProvider):
         payload.update(params)
         if request.tools:
             payload["tools"] = _wire_tools(request.tools)
+        return payload
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[Delta]:
+        # See the OpenAI-shaped provider: tools are answered whole.
+        if request.tools:
+            async for delta in super().stream(request):
+                yield delta
+            return
+        payload = self._payload(request)
+        payload["stream"] = True
+        text: list[str] = []
+        thinking: list[str] = []
+        model = request.model
+        async for line in self._stream_lines("/api/chat", payload):
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+            except ValueError as exc:
+                raise ProviderError(f"{self.name}: stream line was not JSON: {line[:200]}", provider=self.name) from exc
+            if data.get("error"):
+                raise ProviderError(f"{self.name}: {data['error']}", provider=self.name)
+            model = data.get("model", model)
+            message = data.get("message") or {}
+            piece_text = message.get("content") or ""
+            piece_thinking = message.get("thinking") or ""
+            if piece_text:
+                text.append(piece_text)
+            if piece_thinking:
+                thinking.append(piece_thinking)
+            if data.get("done"):
+                whole = LLMResponse(
+                    text="".join(text),
+                    model=model,
+                    usage=Usage(
+                        input_tokens=data.get("prompt_eval_count", 0) or 0,
+                        output_tokens=data.get("eval_count", 0) or 0,
+                    ),
+                    stop_reason=data.get("done_reason"),
+                    meta={"thinking": "".join(thinking)} if thinking else {},
+                )
+                yield Delta(text=piece_text, thinking=piece_thinking, done=whole)
+                return
+            if piece_text or piece_thinking:
+                yield Delta(text=piece_text, thinking=piece_thinking)
+        raise ProviderError(f"{self.name}: the stream ended before the answer was done", provider=self.name)
+
+    async def complete(self, request: LLMRequest) -> LLMResponse:
+        payload = self._payload(request)
 
         data = await self._post("/api/chat", payload)
         message = data.get("message") or {}
