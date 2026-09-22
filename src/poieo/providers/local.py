@@ -24,7 +24,9 @@ from .base import (
     ToolCall,
     ToolDef,
     Usage,
+    blocks_of,
     credential_for,
+    text_of,
 )
 
 # 529 is in no RFC. Anthropic and TypeSafe both answer it for "overloaded",
@@ -48,11 +50,44 @@ def _wire_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
     ]
 
 
+def _data_url(block: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "image_url", "image_url": {"url": f"data:{block['media_type']};base64,{block['data']}"}}
+
+
+def _openai_content(message: dict[str, Any], held: list[dict[str, Any]]) -> dict[str, Any]:
+    """A message whose content is blocks, in the OpenAI shape.
+
+    A tool message here takes only text, so its pictures are put in `held`,
+    to be shown as the next user message once the turn's results are all in.
+    """
+    content = message.get("content")
+    if not isinstance(content, list):
+        return dict(message)
+    if message.get("role") == "tool":
+        held.extend(_data_url(block) for block in content if block.get("type") == "image")
+        return {**message, "content": text_of(content, picture="")}
+    return {**message, "content": [_data_url(b) if b.get("type") == "image" else b for b in content]}
+
+
+def _ollama_content(message: dict[str, Any]) -> dict[str, Any]:
+    """A message whose content is blocks, in Ollama's shape: the words as the
+    content and the pictures beside them, bare base64."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return dict(message)
+    images = [block["data"] for block in blocks_of(content) if block.get("type") == "image"]
+    return {**message, "content": text_of(content, picture=""), **({"images": images} if images else {})}
+
+
 def _translate_history(request: LLMRequest, arguments_as_json: bool) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     if request.system:
         messages.append({"role": "system", "content": request.system})
+    held: list[dict[str, Any]] = []
     for message in request.messages:
+        if held and message.get("role") != "tool":
+            messages.append({"role": "user", "content": held})
+            held = []
         if message.get("role") == "assistant" and message.get("tool_calls"):
             calls = []
             for call in message["tool_calls"]:
@@ -68,8 +103,12 @@ def _translate_history(request: LLMRequest, arguments_as_json: bool) -> list[dic
                     }
                 )
             messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
+        elif arguments_as_json:
+            messages.append(_openai_content(message, held))
         else:
-            messages.append(dict(message))
+            messages.append(_ollama_content(message))
+    if held:
+        messages.append({"role": "user", "content": held})
     return messages
 
 

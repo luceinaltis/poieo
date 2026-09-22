@@ -31,7 +31,7 @@ import signal
 from typing import Any
 
 from ..errors import ProviderError
-from .base import Hands, LLMRequest, LLMResponse, Provider, ToolCall, Usage
+from .base import Hands, LLMRequest, LLMResponse, Provider, ToolCall, Usage, refuse_images, text_of
 
 # The name poieo's own tools are offered under. A harness spells an MCP tool
 # `mcp__{server}__{tool}`, so the prefix is what an allow-list has to match.
@@ -167,16 +167,18 @@ class _Subscription(Provider):
         return None
 
 
-def _last_user_message(request: LLMRequest) -> str:
+def _last_user_message(request: LLMRequest, name: str) -> str:
     """What this step is being asked, as one string.
 
     A harness keeps its own history, so a poieo node hands it the turn it has
-    -- which for an agent node is exactly one, the rendered prompt.
+    -- which for an agent node is exactly one, the rendered prompt. It takes
+    a prompt as words only, so a picture is refused rather than left out.
     """
     for message in reversed(request.messages):
         if message.get("role") == "user":
             content = message.get("content")
-            return content if isinstance(content, str) else json.dumps(content)
+            refuse_images(name, content, "a harness takes its prompt as words and")
+            return text_of(content, joiner="\n\n")
     return ""
 
 
@@ -249,7 +251,7 @@ class ClaudeCodeProvider(_Subscription):
         result: dict[str, Any] = {}
         try:
             async for message in sdk.query(
-                prompt=_last_user_message(request),
+                prompt=_last_user_message(request, self.name),
                 options=sdk.ClaudeAgentOptions(**options),
             ):
                 if isinstance(message, sdk.ResultMessage):
@@ -379,7 +381,7 @@ class CodexProvider(_Subscription):
             # the user's folder, so what Codex writes still arrives as one
             # change to accept or discard in the morning.
             argv += ["--cd", working]
-        return argv, _last_user_message(request)
+        return argv, _last_user_message(request, self.name)
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
         argv, prompt = self.plan(request)
