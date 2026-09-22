@@ -11,6 +11,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from ..attachments import Attachment, attachment_blocks
 from ..binding import BindingSpec
 from ..errors import BindingError, Cause, PoieoError, RunAborted, SpecError, explain_failure
 from ..expr import unwrap
@@ -78,6 +79,7 @@ async def execute(
     tool_context: ToolContext | None = None,
     direction: asyncio.Queue[str] | None = None,
     finalize: Callable[[RunResult], Awaitable[None]] | None = None,
+    attachments: list[Attachment] | None = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -102,6 +104,7 @@ async def execute(
         workdir=workdir,
         tool_context=tool_context,
         direction=direction,
+        attachments=attachment_blocks(attachments or []),
     )
 
     started_at = utcnow()

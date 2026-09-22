@@ -88,6 +88,9 @@ class RunStore:
         self.root = Path(root) if root is not None else layout_for().runs()
         self.events_dir = self.root / "events"
         self.index_path = self.root / "index.jsonl"
+        # What a person attached to the message that started a run, one
+        # folder per run, so the board can show it again.
+        self.files_dir = self.root / "files"
         self._lock = threading.Lock()
         self._ensured = False
 
@@ -206,6 +209,31 @@ class RunStore:
                 return row  # newest first; a run may be re-recorded
         return None
 
+    def _file_path(self, run_id: str, name: str) -> Path | None:
+        """Where a run's kept file lives, or None for a name that would leave it."""
+        # A `:` would name a hidden stream of another file on Windows.
+        if Path(name).name != name or Path(run_id).name != run_id or ":" in name + run_id:
+            return None
+        folder = (self.files_dir / run_id).resolve()
+        path = (folder / name).resolve()
+        if folder.parent != self.files_dir.resolve() or path.parent != folder:
+            return None
+        return path
+
+    def keep_file(self, run_id: str, name: str, body: bytes) -> None:
+        """Keep a file with a run: what was attached to the message that started it."""
+        path = self._file_path(run_id, name)
+        if path is None:
+            raise ValueError(f"'{name}' is not a file name a run can keep")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+
+    def kept_file(self, run_id: str, name: str) -> bytes | None:
+        path = self._file_path(run_id, name)
+        if path is None or not path.is_file():
+            return None
+        return path.read_bytes()
+
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         path = self.events_dir / f"{run_id}.jsonl"
         if not path.exists():
@@ -242,3 +270,9 @@ class NullStore(RunStore):
 
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:  # noqa: D102
         return iter(())
+
+    def keep_file(self, run_id: str, name: str, body: bytes) -> None:  # noqa: D102
+        return
+
+    def kept_file(self, run_id: str, name: str) -> bytes | None:  # noqa: D102
+        return None

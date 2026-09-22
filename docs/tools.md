@@ -42,7 +42,9 @@ or WebP, told apart by the file's first bytes rather than its name, up to
 3,750,000 bytes so the base64 stays inside what an endpoint takes. The tool's
 result is then a line of text and the picture, and the provider puts both in
 its own shape (see `binding.md`); a model that cannot see answers with its
-provider's refusal. The run log records only the line of text. A harness that
+provider's refusal. The run log records only the line of text; the picture is
+kept with the run under `runs/files/<run-id>/`, and the tool call names it as
+`preview` so the board can draw it beside the call. A harness that
 runs poieo's tools for itself is handed that line alone.
 
 ## File boundary

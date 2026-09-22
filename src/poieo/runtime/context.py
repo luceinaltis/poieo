@@ -53,6 +53,10 @@ class RunContext:
     # between turns and says so in the record, so the board can show what
     # was said and when it was heard. None for a run nobody can speak to.
     direction: asyncio.Queue[str] | None = None
+    # What the person attached to the message that started the run, as
+    # content blocks. The first model step to ask takes them, and no other:
+    # a picture shown once is in that step's conversation from then on.
+    attachments: list[dict[str, Any]] = field(default_factory=list)
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)
@@ -69,6 +73,11 @@ class RunContext:
     # Set by a confirm node: the question this run stopped at. Its presence is
     # what turns a finished walk into a run that is waiting for a person.
     asked: dict[str, Any] | None = None
+
+    def take_attachments(self) -> list[dict[str, Any]]:
+        """The attachments, for the one step that shows them to its model."""
+        taken, self.attachments = self.attachments, []
+        return taken
 
     def scope(self) -> dict[str, Any]:
         """Names visible to prompt templates and router conditions."""
@@ -166,6 +175,8 @@ class RunResult:
     # in the same thread reads the earlier ones back from these.
     message: str | None = None
     thread: str | None = None
+    # The names of what was attached to that message, kept with the run.
+    attachments: list[str] | None = None
 
     def said(self, fallback: str = "") -> str:
         """What the model said last: the last node on the path that produced text.
@@ -212,4 +223,6 @@ class RunResult:
             summary["message"] = self.message
             if self.thread is not None:
                 summary["thread"] = self.thread
+            if self.attachments:
+                summary["attachments"] = self.attachments
         return summary

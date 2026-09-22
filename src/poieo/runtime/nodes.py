@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import base64
 import copy
 import json
 import re
@@ -511,7 +512,9 @@ class _AgentLoop:
     expires_at: float | None = field(init=False)
 
     def __post_init__(self) -> None:
-        self.messages = [{"role": "user", "content": self.bound.prompt}]
+        attached = self.ctx.take_attachments()
+        content: Any = [{"type": "text", "text": self.bound.prompt}, *attached] if attached else self.bound.prompt
+        self.messages = [{"role": "user", "content": content}]
         definitions = self.executor.definitions() if self.executor is not None else []
         self.offered_tools = _tools_with_activity_purpose(definitions)
 
@@ -703,6 +706,7 @@ class _AgentLoop:
         result = await self.executor.execute(executable)
         self.tool_call_count += 1
         self.reached_for[call.name] = self.reached_for.get(call.name, 0) + 1
+        seen = self._keep_picture(result, arguments)
         self.ctx.emit(
             "node_tool_call",
             node_id=self.spec.id,
@@ -713,8 +717,26 @@ class _AgentLoop:
             result=_clip(result.text),
             error=result.error,
             duration_ms=round((time.monotonic() - started) * 1000),
+            **({"preview": seen} if seen else {}),
         )
         return result
+
+    def _keep_picture(self, result: ToolResult, arguments: Any) -> str | None:
+        """Keep a picture the model was shown, with the run, and name it.
+
+        The board draws it small beside the tool call, so a reader sees what
+        the model saw; the run log keeps only the name, never the bytes.
+        """
+        if result.image is None:
+            return None
+        raw = arguments.get("path") if isinstance(arguments, dict) else None
+        base = Path(str(raw)).name if raw else ""
+        name = f"seen-{self.spec.id}-{self.tool_call_count}-{base or 'picture'}"
+        try:
+            self.ctx.store.keep_file(self.ctx.run_id, name, base64.b64decode(result.image["data"]))
+        except (OSError, ValueError):
+            return None  # a preview is worth less than the run it would stop
+        return name
 
     async def _append_tool_results(self, response: LLMResponse) -> None:
         assistant_turn: dict[str, Any] = {

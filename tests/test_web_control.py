@@ -51,7 +51,7 @@ class StubRunner:
             self.status = "waiting"
         return self.status
 
-    def run_now(self, message=None, thread=None):
+    def run_now(self, message=None, thread=None, attachments=None):
         self.calls.append("run_now" if message is None else ("run_now", message, thread))
         return self.status != "running"
 
