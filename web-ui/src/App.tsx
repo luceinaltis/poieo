@@ -596,6 +596,8 @@ export default function App({ store }: { store?: StageStore }) {
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
           liveRuns={selectedTaskState?.runs ?? []}
+          liveActivity={selectedTaskState?.activity ?? []}
+          liveRunId={selectedTaskState?.activityRunId ?? null}
           runId={activePanel.kind === "task" ? (activePanel.runId ?? null) : null}
           onClose={closePanel}
           onDecided={resyncAfterAction}

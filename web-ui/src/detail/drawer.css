@@ -832,3 +832,10 @@ p.run-checks[data-verdict="blocked"] {
   line-height: 1.45;
   margin: 0;
 }
+
+/* Tool calls in a row, folded: the same line a single call has, with the
+   count where the purpose goes, and the calls themselves one level in. */
+.drawer-timeline-folded {
+  margin: 6px 0 0;
+  padding-left: 0;
+}

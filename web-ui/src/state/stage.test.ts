@@ -569,3 +569,49 @@ test("a run finishing on a task nobody held leaves it waiting", () => {
   stage = reduce(stage, { run_id: "r1", type: "run_finished", at: "", data: { steps: 1 } })
   expect(stage.tasks["board/chores"].status).toBe("waiting")
 })
+
+test("the run in flight keeps its own timeline from its start, and a new run starts it over", () => {
+  const stage = replay(start(), AGENT_RUN)
+  const task = stage.tasks["board/chores"]
+  expect(task.activityRunId).toBe(AGENT_RUN[0].run_id)
+  expect(task.activity[0].type).toBe("run_started")
+  const kinds = (events: PoieoEvent[]) =>
+    events.filter((e) => e.type === "node_turn" || e.type === "node_tool_call").map((e) => e.type)
+  expect(kinds(task.activity)).toEqual(kinds(AGENT_RUN))
+
+  const again = replay(stage, [
+    { ...AGENT_RUN[0], run_id: "next-run", at: "2026-08-22T09:00:00+00:00" },
+  ])
+  expect(again.tasks["board/chores"].activityRunId).toBe("next-run")
+  expect(again.tasks["board/chores"].activity).toHaveLength(1)
+})
+
+test("the timeline is bounded to the newest 400 events", () => {
+  const many: PoieoEvent[] = [AGENT_RUN[0]]
+  for (let i = 1; i <= 450; i += 1) {
+    many.push({
+      run_id: AGENT_RUN[0].run_id,
+      type: "node_turn",
+      at: `2026-08-22T07:28:${String(i % 60).padStart(2, "0")}+00:00`,
+      node_id: "work",
+      data: { turn: i, text: `turn ${i}` },
+    })
+  }
+  const activity = replay(start(), many).tasks["board/chores"].activity
+  expect(activity).toHaveLength(400)
+  expect(activity.at(-1)!.data?.turn).toBe(450)
+})
+
+test("a tool call keeps the model's own sentence for it", () => {
+  const stage = replay(start(), [
+    AGENT_RUN[0],
+    {
+      run_id: AGENT_RUN[0].run_id,
+      type: "node_tool_call",
+      at: "2026-08-22T07:28:19.100+00:00",
+      node_id: "work",
+      data: { turn: 1, name: "read_file", purpose: "Read the notes first", arguments: { path: "notes.md" }, result: "", error: false },
+    },
+  ])
+  expect(stage.tasks["board/chores"].recentToolCalls[0].purpose).toBe("Read the notes first")
+})

@@ -345,8 +345,11 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
       // The subject and not the result: this row is one line of a card whose
       // height must not move, and what a tool answered can be long. The
       // drawer is where a reader goes for that.
-      item.textContent = call.subject ? `${call.name} ${call.subject}` : call.name
-      item.title = call.result || call.name
+      // The model's own sentence for the call when it wrote one; the tool
+      // and its subject otherwise, which is what older records have.
+      const plain = call.subject ? `${call.name} ${call.subject}` : call.name
+      item.textContent = call.purpose || plain
+      item.title = call.purpose ? `${plain}\n${call.result || ""}`.trim() : call.result || call.name
       return item
     }),
   )

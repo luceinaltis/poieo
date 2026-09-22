@@ -1125,3 +1125,100 @@ test("a part the record did not measure is left out rather than drawn empty", as
   expect(makeup.querySelector('[data-gauge="memory"]')).toBeNull()
   expect(makeup.querySelector('[data-gauge="journal"]')).toBeNull()
 })
+
+test("a run in flight is followed from the stage, opens by itself, and folds its tool calls with the newest group open", async () => {
+  const live: PoieoEvent[] = [
+    event("run_started", { data: { task: "chores", project: "board" } }),
+    event("node_started", { node_id: "work", data: { step: 1 } }),
+    // The model reaches for two tools, then speaks: a turn that only called
+    // tools is told by its calls, and the words come on the next turn.
+    event("node_turn", { node_id: "work", data: { turn: 1, text: "", tool_call_count: 2 } }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: { turn: 1, name: "read_file", purpose: "Read the notes", arguments: { path: "notes.md" }, result: "- sweep", error: false },
+    }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: { turn: 1, name: "run_command", purpose: "Run the tests", arguments: { command: "pytest" }, result: "ok", error: false },
+    }),
+    event("node_turn", { node_id: "work", data: { turn: 2, text: "Both fine.", tool_call_count: 0 } }),
+  ]
+  // The run in flight has no summary yet: the list holds only the run before
+  // it, and that is not the run to follow.
+  const before = { ...run, run_id: "r0", status: "failed" }
+  await draw([before], { status: "running", liveActivity: live, liveRunId: "r1" })
+
+  // Followed, not fetched, and open without a press. The brief and the
+  // attention line speak of this run, not of the failed one before it.
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+  expect(container.querySelector('[data-do="toggle-activity"]')!.getAttribute("aria-expanded")).toBe("true")
+  expect(container.querySelector(".run-brief h3")!.textContent).toBe("Run in flight")
+  expect(container.querySelector(".drawer-state")!.textContent).toBe("Running now")
+  expect(container.textContent).not.toContain("Latest run failed")
+  const group = container.querySelector<HTMLDetailsElement>(".drawer-group")!
+  expect(group).not.toBeNull()
+  expect(group.open).toBe(true)
+  expect(group.querySelector("summary")!.textContent).toContain("2 tool calls")
+  expect(group.querySelector("summary")!.textContent).toContain("Read the notes")
+  expect(group.querySelectorAll(".drawer-tool")).toHaveLength(2)
+  expect(container.textContent).toContain("Both fine.")
+})
+
+test("a single tool call between turns stays its own line, and the newest run's activity is the stage's even after it has finished", async () => {
+  const live: PoieoEvent[] = [
+    event("run_started", { data: { task: "chores", project: "board" } }),
+    event("node_turn", { node_id: "work", data: { turn: 1, text: "", tool_call_count: 1 } }),
+    event("node_tool_call", {
+      node_id: "work",
+      data: { turn: 1, name: "read_file", purpose: "Read the notes", arguments: { path: "notes.md" }, result: "", error: false },
+    }),
+    event("node_turn", { node_id: "work", data: { turn: 2, text: "Done.", tool_call_count: 0 } }),
+    event("run_finished"),
+  ]
+  await draw([run], { status: "waiting", liveActivity: live, liveRunId: "r1" })
+  await press('[data-do="toggle-activity"]')
+
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+  expect(container.querySelector(".drawer-group")).toBeNull()
+  expect(container.querySelectorAll(".drawer-tool")).toHaveLength(1)
+  expect(container.textContent).toContain("Done.")
+})
+
+test("an older run picked from history is still fetched while another runs", async () => {
+  const before = { ...run, run_id: "r0", status: "failed" }
+  const older = { ...run, run_id: "r-old", status: "completed" }
+  fetchRunEvents.mockResolvedValue([event("node_turn", { run_id: "r-old", node_id: "work", data: { turn: 1, text: "Long ago." } })])
+  await draw([before, older], { status: "running", liveActivity: [event("run_started")], liveRunId: "r1" })
+
+  await press('[data-do="toggle-runs"]')
+  await press('[data-run="r-old"] .run-open')
+  await press('[data-do="toggle-activity"]')
+
+  expect(fetchRunEvents).toHaveBeenCalledWith("r-old")
+  expect(container.textContent).toContain("Long ago.")
+})
+
+test("following survives the run's finish: the timeline stays, open, until its summary lands and after", async () => {
+  const before = { ...run, run_id: "r0", status: "failed" }
+  const live: PoieoEvent[] = [
+    event("run_started", { data: { task: "chores", project: "board" } }),
+    event("node_turn", { node_id: "work", data: { turn: 1, text: "Sweeping.", tool_call_count: 0 } }),
+  ]
+  await draw([before], { status: "running", liveActivity: live, liveRunId: "r1" })
+  expect(container.textContent).toContain("Sweeping.")
+
+  // The run ends: status leaves running before the index row exists.
+  const finished = [...live, event("run_finished")]
+  await draw([before], { status: "waiting", liveActivity: finished, liveRunId: "r1" })
+  expect(container.querySelector('[data-do="toggle-activity"]')!.getAttribute("aria-expanded")).toBe("true")
+  expect(container.textContent).toContain("Sweeping.")
+  expect(container.textContent).not.toContain("No activity was recorded")
+
+  // Then the summary lands: still the same run, still open, still not fetched.
+  const landed = { ...run, run_id: "r1", status: "completed", said: "Swept." }
+  await draw([before], { status: "waiting", liveActivity: finished, liveRunId: "r1", liveRuns: [landed, before] })
+  expect(container.querySelector('[data-do="toggle-activity"]')!.getAttribute("aria-expanded")).toBe("true")
+  expect(container.textContent).toContain("Sweeping.")
+  expect(container.querySelector(".run-brief h3")!.textContent).toBe("Latest run")
+  expect(fetchRunEvents).not.toHaveBeenCalled()
+})

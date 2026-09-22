@@ -105,7 +105,9 @@ From the board a user can:
   card it proposes on the form, to check and save;
 - rename a task or set it aside without destroying its file;
 - see task state, graph wiring, model assignments and run history, including
-  whether a task applies its own checked changes and what its checks said;
+  whether a task applies its own checked changes and what its checks said,
+  and watch a run act as it acts: what the model says each turn and each
+  tool it reaches for, with the reason it gave;
 - pause, resume or run a task now, and answer a decision it stopped to ask;
 - inspect, accept or discard a run's change;
 - inspect available models, declare an answering endpoint and choose which model
