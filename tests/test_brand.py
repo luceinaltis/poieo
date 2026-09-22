@@ -182,7 +182,7 @@ def test_memory_copy_has_a_readable_compact_floor():
 
 @pytest.mark.parametrize(
     "selector",
-    [".shell-project", ".shell-project-pick", ".shell-status", ".shell-pick", ".shell-rail button"],
+    [".shell-project", ".shell-project-pick", ".shell-pick", ".shell-places button", ".shell-toggle"],
 )
 def test_primary_shell_labels_stay_at_least_fourteen_pixels(selector: str):
     css = (ROOT / "web-ui" / "src" / "app.css").read_text(encoding="utf-8")
@@ -193,18 +193,20 @@ def test_primary_shell_labels_stay_at_least_fourteen_pixels(selector: str):
     assert float(size.group(1)) >= 0.875
 
 
-def test_phone_navigation_keeps_its_larger_labels_on_one_line():
+def test_the_bar_keeps_its_labels_on_one_line_and_wraps_only_below_a_laptop():
     css = (ROOT / "web-ui" / "src" / "app.css").read_text(encoding="utf-8")
-    buttons = re.search(r"\.shell-rail button\s*\{([^}]*)\}", css, re.S)
-    assert buttons
-    assert "white-space: nowrap" in buttons.group(1)
+    for selector in (".shell-places button", ".shell-toggle"):
+        rule = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.S)
+        assert rule, selector
+        assert "white-space: nowrap" in rule.group(1), selector
 
-    phone = css.split("@media (max-width: 720px)", 1)[1]
-    rail = re.search(r"\.shell-rail\s*\{([^}]*)\}", phone, re.S)
-    assert rail
-    assert "gap: 1px" in rail.group(1)
-    assert "padding: 0 4px" in rail.group(1)
-
-    phone_buttons = re.search(r"\.shell-rail button\s*\{([^}]*)\}", phone, re.S)
-    assert phone_buttons
-    assert "padding-inline: 4px" in phone_buttons.group(1)
+    # Below a laptop's width the tabs and toggles take a second row of the
+    # bar; the bar names that taller height so the panel starts under it.
+    narrow = css.split("@media (max-width: 900px)", 1)[1]
+    assert re.search(r":root\s*\{[^}]*--bar-height:\s*[\d.]+rem", narrow, re.S)
+    row = re.search(r"\.shell-row\s*\{([^}]*)\}", narrow, re.S)
+    assert row
+    assert "flex: 1 1 100%" in row.group(1)
+    tabs = re.search(r"\.shell-places button\s*\{([^}]*)\}", narrow, re.S)
+    assert tabs
+    assert "padding-inline: 6px" in tabs.group(1)

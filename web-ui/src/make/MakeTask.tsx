@@ -33,8 +33,9 @@
  * a flow was the heaviest thing on this panel and the one a first reader
  * could least make sense of.
  *
- * Shell UI, so it may read the API. It hangs off the rail beside `models`
- * because making a task is what the page is for, not something one task does.
+ * Shell UI, so it may read the API. It hangs off the board's own line under
+ * the bar, because making a task is what the page is for, not something one
+ * task does.
  */
 
 import { useLayoutEffect, useRef, useState } from "react"

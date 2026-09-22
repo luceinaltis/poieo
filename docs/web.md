@@ -241,7 +241,7 @@ handoffs, and graph shape. Unknown events are ignored so an older bundle keeps
 working with a newer daemon.
 
 The page's root type size follows the window's width, 16px up to a laptop's
-and 22px from a large desktop's, and the bar, rail, panels and buttons are
+and 22px from a large desktop's, and the bar, panels and buttons are
 sized in em or rem so they follow it. The board magnifies by the same factor
 and no further. Its initial view keeps a readable lower limit; fitting the
 whole board can shrink a wider or taller graph further.
@@ -250,12 +250,18 @@ whole board can shrink a wider or taller graph further.
 panel: task detail, models, chat, task creation, or closed. A card made from the
 creation panel opens in its drawer as soon as the listing carries it; until
 then the panel stays and says what it made. It shows one project's
-stage at a time and keeps only view preferences in local storage. The rail down
-the side lists only places, the views that take the whole stage: board, runs,
-and memory, with the current one marked. Panels are not places: models and chat
-open from buttons beside the project name on the bar, and new task from a
-button on the board itself (the empty board offers it in its invitation
-instead), and none of them moves the rail's mark. The task
+stage at a time and keeps only view preferences in local storage. Everything global is one
+bar, and the four kinds of thing on it have four looks: the places that take
+the whole stage -- board, runs, and memory -- are tabs, with the current one
+marked; the panels -- chat and models -- are toggles that show whether they
+are open, and opening one never moves the tabs' mark, because a panel is over
+a place, not a place; the daemon's connection is a dot, with the word for a
+screen reader and the tooltip; and the theme is an icon. Under the bar the
+stage leads with the place's own line: its name, how many tasks are on it,
+and the acts that land on it -- `new task` sits there on the board only (the
+empty board offers it in its invitation instead). Below a laptop's width the bar
+wraps into two rows, everything after the name as one group in the same
+order the keyboard reaches it, and a panel starts below both. The task
 drawer leads with whether the reader must act and the latest or selected run's
 result, time, duration, change, or usage -- and, for a change that was checked,
 whether it was applied, is waiting for review, or was not applied, with the

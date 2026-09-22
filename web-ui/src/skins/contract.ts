@@ -28,9 +28,9 @@ export interface Skin {
   id: string
   label: string
   /**
-   * A place of its own on the rail, rather than a rendering of the board.
+   * A place of its own among the bar's tabs, rather than a rendering of the board.
    *
-   * The picker on the bar answers "how should the board be drawn"; the rail
+   * The picker on the bar answers "how should the board be drawn"; the tabs
    * answers "what did you come to this page for". A skin that answers a
    * different question from the board -- runs answers *when*, the board
    * answers *what and where* -- is the second kind, and listing it among the

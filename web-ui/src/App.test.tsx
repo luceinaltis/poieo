@@ -294,10 +294,10 @@ test("one rendering means no picker, and the board carries the tasks", async () 
   expect(container.querySelectorAll("[data-task]")).toHaveLength(2)
 })
 
-test("runs is a place on the rail: there when you go, gone when you leave", async () => {
+test("runs is a place among the tabs: there when you go, gone when you leave", async () => {
   await render(initialStage(TASK_ROWS))
 
-  // The rail carries it beside board, models and new task.
+  // The tabs carry it beside board and memory.
   const go = container.querySelector<HTMLElement>('[data-do="open-runs"]')!
   expect(go).not.toBeNull()
   await act(async () => go.click())
@@ -318,7 +318,7 @@ test("runs is a place on the rail: there when you go, gone when you leave", asyn
   ).toBe("page")
 })
 
-test("memory is a project place on the rail, not a rendering of the task board", async () => {
+test("memory is a project place among the tabs, not a rendering of the task board", async () => {
   await render(initialStage(TASK_ROWS))
 
   const go = container.querySelector<HTMLElement>('[data-do="open-memory"]')!
@@ -342,7 +342,7 @@ test("a panel opens over runs without knocking it off the stage", async () => {
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
 
   // The panel holds the margin; the place behind it is still runs, and the
-  // rail goes on saying so.
+  // tabs go on saying so.
   expect(container.querySelector(".runs")).not.toBeNull()
   expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
   expect(
@@ -780,7 +780,7 @@ test("make one like it opens the make panel already filled in", async () => {
   await act(async () => container.querySelector<HTMLElement>(".make-close")!.click())
   expect(document.activeElement).toBe(opener)
 
-  // `new task` from the rail afterwards is a blank page again: the seed
+  // `new task` afterwards is a blank page again: the seed
   // belongs to the press that asked for it, not to the panel.
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-make"]')!.click())
   expect(container.querySelector<HTMLInputElement>('input[name="name"]')!.value).toBe("")
@@ -882,7 +882,7 @@ test("chat is a panel from the bar, and its thread outlives a visit to a task", 
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
 
-  // One margin: chat took it from models. The rail's mark stays on the
+  // One margin: chat took it from models. The tabs' mark stays on the
   // board, because a panel is over a place and not a place.
   expect(container.querySelector(".models")).toBeNull()
   expect(container.querySelector(".chat")).not.toBeNull()
@@ -969,4 +969,66 @@ test("a reply that lands while the panel is closed still reaches the thread", as
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
   expect(container.textContent).toContain("hello?")
   expect(container.textContent).toContain("Hello.")
+})
+
+test("one bar: tabs mark where you are, toggles show what is open, and neither moves the other", async () => {
+  await render(initialStage(TASK_ROWS))
+
+  // Everything global is on the one bar; there is no second strip.
+  expect(container.querySelector(".shell-rail")).toBeNull()
+  const bar = container.querySelector(".shell-bar")!
+  expect([...bar.querySelectorAll(".shell-places button")].map((b) => b.textContent)).toEqual([
+    "board",
+    "runs",
+    "memory",
+  ])
+  expect([...bar.querySelectorAll(".shell-tools button")].map((b) => b.getAttribute("data-do"))).toEqual([
+    "open-chat",
+    "open-models",
+  ])
+  // The daemon's state is a dot with its word for a screen reader, not a
+  // fourth tab.
+  expect(bar.querySelector(".shell-status")!.textContent).toBe("live")
+  expect(bar.querySelector(".shell-status")!.closest(".shell-places")).toBeNull()
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
+
+  // Opening a panel pressed its toggle and left the tab's mark on runs.
+  expect(container.querySelector('[data-do="open-chat"]')!.getAttribute("aria-expanded")).toBe("true")
+  expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+  expect(container.querySelector('[data-do="open-runs"]')!.getAttribute("aria-current")).toBe("page")
+
+  // And a tab pressed with a panel open puts the panel away.
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-board"]')!.click())
+  expect(container.querySelector(".chat")).toBeNull()
+  expect(container.querySelector('[data-do="open-chat"]')!.getAttribute("aria-expanded")).toBe("false")
+})
+
+test("the stage leads with the place's own line, and new task lives there on the board only", async () => {
+  await render(initialStage(TASK_ROWS))
+  const head = () => container.querySelector(".stage-head")!
+  const count = Object.keys(initialStage(TASK_ROWS).tasks).length
+
+  expect(head().querySelector(".stage-place")!.textContent).toBe("board")
+  expect(head().querySelector(".stage-count")!.textContent).toBe(count === 1 ? "1 task" : `${count} tasks`)
+  expect(head().querySelector('[data-do="open-make"]')).not.toBeNull()
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-runs"]')!.click())
+  expect(head().querySelector(".stage-place")!.textContent).toBe("runs")
+  expect(head().querySelector('[data-do="open-make"]')).toBeNull()
+
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-memory"]')!.click())
+  expect(head().querySelector(".stage-place")!.textContent).toBe("memory")
+  expect(head().querySelector(".stage-count")).toBeNull()
+  expect(head().querySelector('[data-do="open-make"]')).toBeNull()
+})
+
+test("a bare board's line names the board without a count, and the invitation carries new task", async () => {
+  await render(initialStage([]))
+  const head = container.querySelector(".stage-head")!
+  expect(head.querySelector(".stage-place")!.textContent).toBe("board")
+  expect(head.querySelector(".stage-count")).toBeNull()
+  expect(head.querySelector('[data-do="open-make"]')).toBeNull()
+  expect(container.querySelector('[data-do="empty-new-task"]')).not.toBeNull()
 })
