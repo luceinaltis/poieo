@@ -322,7 +322,12 @@ written: when the model thinks aloud its thinking shows first under a
 words arrive in the bubble under it as they come; afterwards the thinking
 waits closed behind a `thought` line the reader can open. The model that
 answered is named on its turn and once in the header, so a role moved in the
-terminal shows up on the next answer. Enter sends, Shift+Enter breaks the
+terminal shows up on the next answer. While a task runs, a picker in the
+header names it: chosen, that run's timeline is the thread, live and folded
+as in the drawer, and the box sends direction the run hears at its next
+model turn, appearing on the timeline as `you said` where it was heard; when
+the run ends the box goes back to the model. The timeline itself lives in
+`detail/Timeline.tsx`, read by the drawer and the chat alike. Enter sends, Shift+Enter breaks the
 line, and Enter during input-method composition does nothing. A refusal stays
 on screen with the message still in the box. The shell holds the thread
 rather than the panel, so a task picked off the board -- which takes the one

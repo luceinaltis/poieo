@@ -13,13 +13,16 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 const chat = vi.hoisted(() => vi.fn<typeof import("../api").chat>())
+const leaveDirection = vi.hoisted(() => vi.fn<typeof import("../api").leaveDirection>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   chat,
+  leaveDirection,
 }))
 
 import { Chat, TURNS_AT_MOST } from "./Chat"
-import type { Turn } from "./Chat"
+import type { Steerable, Turn } from "./Chat"
+import type { PoieoEvent } from "../types"
 
 let host: HTMLDivElement
 let root: Root
@@ -28,6 +31,8 @@ beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   chat.mockReset()
   chat.mockResolvedValue({ ok: true, reply: "Four.", model: "fake/m1" })
+  leaveDirection.mockReset()
+  leaveDirection.mockResolvedValue({ ok: true, status: "delivered" })
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -43,10 +48,12 @@ function Shell({
   initial = [],
   onTurns = () => {},
   onClose = () => {},
+  steerable = [],
 }: {
   initial?: Turn[]
   onTurns?: (turns: Turn[]) => void
   onClose?: () => void
+  steerable?: Steerable[]
 }) {
   const [turns, setTurns] = useState<Turn[]>(initial)
   return (
@@ -58,6 +65,7 @@ function Shell({
         onTurns(next)
       }}
       onClose={onClose}
+      steerable={steerable}
     />
   )
 }
@@ -276,4 +284,97 @@ test("a model that does not think aloud lands without a thought line, and each s
   expect(mine.getAttribute("data-role")).toBe("user")
   expect(theirs.getAttribute("data-role")).toBe("assistant")
   expect(theirs.querySelector("details")).toBeNull()
+})
+
+const running = (activity: PoieoEvent[] = []): Steerable => ({ name: "chores", title: "chores", activity })
+const frame = (type: string, data: Record<string, unknown> = {}): PoieoEvent => ({
+  run_id: "r1",
+  type,
+  at: "2026-08-26T02:00:01Z",
+  node_id: "work",
+  data,
+})
+
+test("nothing runs, nothing to pick: the box speaks to the model", () => {
+  show()
+  expect(host.querySelector(".chat-target")).toBeNull()
+})
+
+test("a running task can be spoken to: its timeline is the thread, and the box sends direction", async () => {
+  const activity = [
+    frame("run_started", { task: "chores", project: "board" }),
+    frame("node_turn", { turn: 1, text: "", tool_call_count: 1 }),
+    frame("node_tool_call", { turn: 1, name: "read_file", purpose: "Read the notes", arguments: { path: "notes.md" }, result: "", error: false }),
+  ]
+  show({ steerable: [running(activity)] })
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  expect([...picker.options].map((option) => option.textContent)).toEqual(["this project's model", "chores · running"])
+
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(host.textContent).toContain("its run, live")
+  expect(host.textContent).toContain("Read the notes")
+  expect(host.querySelector(".chat-turns")).toBeNull()
+
+  say("Skip the drafts folder.")
+  await send()
+  expect(leaveDirection).toHaveBeenCalledWith("board", "chores", "Skip the drafts folder.")
+  expect(chat).not.toHaveBeenCalled()
+  expect(box().value).toBe("")
+})
+
+test("a refused direction stays on screen with the words still in the box", async () => {
+  leaveDirection.mockResolvedValue({ ok: false, error: "this task has no card to keep direction with" })
+  show({ steerable: [running()] })
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  say("Stop.")
+  await send()
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("no card")
+  expect(box().value).toBe("Stop.")
+})
+
+test("when the run it was speaking to ends, the box goes back to the model", async () => {
+  act(() => root.render(<Shell steerable={[running()]} />))
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(host.textContent).toContain("its run, live")
+
+  act(() => root.render(<Shell steerable={[]} />))
+  await act(async () => {})
+  expect(host.querySelector(".chat-target")).toBeNull()
+  expect(host.textContent).not.toContain("its run, live")
+  expect(host.textContent).toContain("nothing is kept")
+})
+
+test("a direction still on its way when its run ends is not drawn as a bubble in the model thread", async () => {
+  let land: (answer: { ok: true; status: "delivered" | "saved" }) => void = () => {}
+  leaveDirection.mockReturnValue(new Promise((resolve) => { land = resolve }))
+  act(() => root.render(<Shell steerable={[running()]} />))
+  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
+  await act(async () => {
+    picker.value = "chores"
+    picker.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  say("Skip the drafts folder.")
+  await send()
+  expect(sendButton().textContent).toBe("sending…")
+
+  act(() => root.render(<Shell steerable={[]} />))
+  await act(async () => {})
+  expect(host.querySelector(".chat-target")).toBeNull()
+  expect(host.querySelector(".chat-turns")?.textContent ?? "").not.toContain("Skip the drafts folder.")
+  expect(host.querySelector('.chat-turn[data-role="user"]')).toBeNull()
+
+  await act(async () => land({ ok: true, status: "saved" }))
+  expect(box().value).toBe("")
+  expect(host.querySelector('.chat-turn[data-role="user"]')).toBeNull()
 })

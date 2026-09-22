@@ -552,6 +552,11 @@ export default function App({ store }: { store?: StageStore }) {
           turns={chatThread.project === project.name ? chatThread.turns : []}
           onTurns={(turns) => keepChatTurns(project.name, turns)}
           onClose={closePanel}
+          // The running tasks, with their live timelines: what the chat may
+          // speak to instead of the model.
+          steerable={Object.values(projectStage.tasks)
+            .filter((task) => task.status === "running")
+            .map((task) => ({ name: task.name, title: task.title, activity: task.activity }))}
         />
       ) : null}
 
