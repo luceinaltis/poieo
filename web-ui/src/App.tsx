@@ -15,6 +15,7 @@ import {
 } from "react"
 
 import { ThemeSwitch } from "./shell/ThemeSwitch"
+import { ChatIcon, ModelsIcon } from "./shell/icons"
 import { Drawer } from "./detail/Drawer"
 import { createSkinHost, readSkinPreference, writeSkinPreference } from "./shell/skinHost"
 import type { SkinHost } from "./shell/skinHost"
@@ -33,8 +34,8 @@ import "./app.css"
 
 const PROJECT_KEY = "poieo.project"
 // The rendering the *board* was last drawn with, apart from `poieo.skin`
-// (which may name a standalone place): it is what the board rail item comes
-// back to after a visit to runs.
+// (which may name a standalone place): it is what the board tab comes back
+// to after a visit to runs.
 const BOARD_SKIN_KEY = "poieo.skin.board"
 const MEMORY_PLACE_KEY = "poieo.place.memory"
 
@@ -96,7 +97,7 @@ export default function App({ store }: { store?: StageStore }) {
   const panelIsOpen = activePanel.kind !== "closed"
 
   // Capture this before opening changes the DOM: on a phone that render hides
-  // the rail and stage, and a browser is then free to drop their focus. An
+  // the stage, and a browser is then free to drop its focus. An
   // opener inside the current panel is deliberately ignored so a handoff such
   // as "make one like it" still returns to the card that began the visit.
   const rememberPanelOpener = useCallback((opener: Element | null) => {
@@ -120,7 +121,7 @@ export default function App({ store }: { store?: StageStore }) {
         panel.focus()
       }
     } else if (panelWasOpenRef.current) {
-      // A rail or board click has already put focus exactly where the reader
+      // A tab or board click has already put focus exactly where the reader
       // asked to go. Restore only when closing removed the focused panel and
       // the browser fell back to the page itself.
       if (document.activeElement === document.body) {
@@ -151,8 +152,8 @@ export default function App({ store }: { store?: StageStore }) {
   }, [stageStore])
 
   // The stage reserves one margin. A task picked on the board takes it, so a
-  // panel that was holding it has to let go -- the rail already does this for
-  // its own two, and this is the third way in.
+  // panel that was holding it has to let go -- the tabs already do this for
+  // their own, and this is the other way in.
   const selectTask = useCallback(
     (taskKey: string | null, opener?: HTMLElement) => {
       if (taskKey) rememberPanelOpener(opener ?? null)
@@ -210,15 +211,15 @@ export default function App({ store }: { store?: StageStore }) {
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
-  // rail item will come back to.
+  // tab will come back to.
   const chooseSkin = (id: string) => {
     setSkinId(id)
     writeSkinPreference(id)
     remember(BOARD_SKIN_KEY, id)
   }
 
-  // Standing somewhere other than the board -- a rail place drawn on the
-  // stage, like runs -- rather than a rendering of it.
+  // Standing somewhere other than the board -- a place of its own drawn on
+  // the stage, like runs -- rather than a rendering of it.
   const standaloneViewId = skinById(skinId).standalone ? skinById(skinId).id : null
   const memoryOpen = Boolean(showMemory && project)
 
@@ -238,8 +239,9 @@ export default function App({ store }: { store?: StageStore }) {
   const closePanel = useCallback(() => setActivePanel(CLOSED_PANEL), [])
   const resyncAfterAction = useCallback(() => void stageStore.resync(), [stageStore])
 
-  // Board closes a rail panel but leaves a task drawer over its underlying view.
-  const closeRailPanel = useCallback(() => {
+  // The board tab puts a toggled panel away but leaves a task drawer over its
+  // underlying view.
+  const closeToolPanel = useCallback(() => {
     setActivePanel((current) =>
       current.kind === "models" || current.kind === "make" || current.kind === "chat"
         ? CLOSED_PANEL
@@ -327,7 +329,8 @@ export default function App({ store }: { store?: StageStore }) {
     [],
   )
 
-  const empty = Object.keys(projectStage.tasks).length === 0
+  const taskCount = Object.keys(projectStage.tasks).length
+  const empty = taskCount === 0
   const selectedTaskKey = activePanel.kind === "task" ? activePanel.taskKey : null
   // `selectedTaskKey` is the board's key -- the project and the task -- because a
   // name alone stopped picking out one task.
@@ -363,38 +366,89 @@ export default function App({ store }: { store?: StageStore }) {
             {project.name}
           </span>
         ) : null}
-        {/* Beside the project's name, because that is what it is about: which
-            models this project can reach. It opens a panel over whatever is
-            on the stage rather than taking the reader somewhere, so it is a
-            control on the bar and not an item on the rail -- the rail says
-            where you are, and a panel over the board is still the board. */}
-        <button
-          type="button"
-          className="shell-models"
-          data-do="open-models"
-          aria-expanded={activePanel.kind === "models"}
-          // Nothing to ask about until the daemon has named a project.
-          disabled={!project}
-          onClick={(event) => openModels(event.currentTarget)}
-        >
-          models
-        </button>
-        {/* And a word with one of them. Beside models for the reason models
-            is beside the name: it is about this project's model, and it is a
-            panel over whatever is on the stage rather than a place to go. */}
-        <button
-          type="button"
-          className="shell-chat"
-          data-do="open-chat"
-          aria-expanded={activePanel.kind === "chat"}
-          disabled={!project}
-          onClick={(event) => openChat(event.currentTarget)}
-        >
-          chat
-        </button>
-        <span className="shell-status" data-status={status}>
-          {STATUS_LABEL[status] ?? status}
-        </span>
+        {/* One row, and four kinds of thing on it, each with its own look.
+            The tabs say where the reader is: the places that take the whole
+            stage. The toggles say what is open over it: a panel is over a
+            place, not a place, so opening one never moves the tabs' mark.
+            Then the daemon's state, and a preference. These used to be split
+            between this bar and a rail down the side, in the same lettering,
+            which read as two menus whose difference nobody could see.
+
+            One group from here to the end of the bar, so that on a screen too
+            narrow for one row the whole group wraps under the name and the
+            keyboard's order down the bar stays the order the eye reads. */}
+        <div className="shell-row">
+        <nav className="shell-nav" aria-label="Views">
+          <div className="shell-places">
+            {/* `board` is the page with no place over it: a tab rather than a
+                close box, because closing is not a place. */}
+            <button
+              type="button"
+              data-do="open-board"
+              aria-current={standaloneViewId || memoryOpen ? undefined : "page"}
+              onClick={() => {
+                setShowMemory(false)
+                remember(MEMORY_PLACE_KEY, "false")
+                closeToolPanel()
+                // Coming back from a place, the board wears the rendering it
+                // was left in, not a hard-coded one.
+                if (standaloneViewId) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
+              }}
+            >
+              board
+            </button>
+            {/* The skins that are places rather than renderings: "what has
+                it been doing" is a thing to come for, where one drawing of
+                the board against another would be a taste. */}
+            {SKINS.filter((skin) => skin.standalone).map((skin) => (
+              <button
+                key={skin.id}
+                type="button"
+                data-do={`open-${skin.id}`}
+                aria-current={!memoryOpen && standaloneViewId === skin.id ? "page" : undefined}
+                onClick={() => openStandaloneView(skin.id)}
+              >
+                {skin.id}
+              </button>
+            ))}
+            <button
+              type="button"
+              data-do="open-memory"
+              aria-current={memoryOpen ? "page" : undefined}
+              disabled={!project}
+              onClick={openMemory}
+            >
+              memory
+            </button>
+          </div>
+          <div className="shell-tools">
+            {/* Both about this project's models -- a word with one, and which
+                ones it can reach -- and both nothing to ask about until the
+                daemon has named a project. */}
+            <button
+              type="button"
+              className="shell-toggle"
+              data-do="open-chat"
+              aria-expanded={activePanel.kind === "chat"}
+              disabled={!project}
+              onClick={(event) => openChat(event.currentTarget)}
+            >
+              <ChatIcon />
+              chat
+            </button>
+            <button
+              type="button"
+              className="shell-toggle"
+              data-do="open-models"
+              aria-expanded={activePanel.kind === "models"}
+              disabled={!project}
+              onClick={(event) => openModels(event.currentTarget)}
+            >
+              <ModelsIcon />
+              models
+            </button>
+          </div>
+        </nav>
         {/* Renderings of the board. One is a fact and not a choice, so the
             picker only exists when there are two -- the furniture rule the
             project name follows -- and it leaves the bar while the stage is
@@ -417,78 +471,42 @@ export default function App({ store }: { store?: StageStore }) {
             </select>
           </label>
         )}
+        {/* A dot, with the word for a screen reader and the tooltip. */}
+        <span
+          className="shell-status"
+          data-status={status}
+          role="status"
+          title={`daemon: ${STATUS_LABEL[status] ?? status}`}
+        >
+          <span className="sr-only">{STATUS_LABEL[status] ?? status}</span>
+        </span>
         <ThemeSwitch />
+        </div>
       </header>
 
-      {/* Where the reader can *be*: the places that take the whole stage, and
-          nothing else. Models and new task used to sit here too, and pressing
-          one moved the "you are here" mark onto a panel while the board went
-          on showing behind it. A panel is over a place, not a place, so those
-          two live where they act -- the bar and the board -- and the mark
-          stays on the stage. `board` is the page with no panel over it: a
-          rail item rather than a close box, because closing is not a place. */}
-      <nav
-        className="shell-rail"
-        aria-label="Views"
-        data-covered={String(panelIsOpen)}
-      >
-        <button
-          type="button"
-          data-do="open-board"
-          aria-current={standaloneViewId || memoryOpen ? undefined : "page"}
-          onClick={() => {
-            setShowMemory(false)
-            remember(MEMORY_PLACE_KEY, "false")
-            closeRailPanel()
-            // Coming back from a place, the board wears the rendering it was
-            // left in, not a hard-coded one.
-            if (standaloneViewId) chooseSkin(recall(BOARD_SKIN_KEY, DEFAULT_SKIN_ID))
-          }}
-        >
-          board
-        </button>
-        {/* The skins that are places rather than renderings. The rail is the
-            list of what this page is for, and "what has it been doing" is a
-            thing to come for -- where one drawing of the board against
-            another would be a taste. */}
-        {SKINS.filter((skin) => skin.standalone).map((skin) => (
-          <button
-            key={skin.id}
-            type="button"
-            data-do={`open-${skin.id}`}
-            aria-current={!memoryOpen && standaloneViewId === skin.id ? "page" : undefined}
-            onClick={() => openStandaloneView(skin.id)}
-          >
-            {skin.id}
-          </button>
-        ))}
-        <button
-          type="button"
-          data-do="open-memory"
-          aria-current={memoryOpen ? "page" : undefined}
-          disabled={!project}
-          onClick={openMemory}
-        >
-          memory
-        </button>
-      </nav>
-
       <div className="shell-stage" data-drawer={String(panelIsOpen)}>
-        {/* On the board and only there: a task is made onto the board, not
-            onto runs or memory, so the button goes where the act lands and
-            leaves with it. The bare board carries its own, in the invitation,
-            and two on one screen would be one too many. */}
-        {!standaloneViewId && !memoryOpen && !empty ? (
-          <button
-            type="button"
-            className="shell-make"
-            data-do="open-make"
-            aria-expanded={activePanel.kind === "make"}
-            onClick={(event) => openMake(event.currentTarget)}
-          >
-            new task
-          </button>
-        ) : null}
+        {/* The place's own line: its name, what is on it, and the acts that
+            land on it. A task is made onto the board, not onto runs or
+            memory, so `new task` sits here and leaves with the board; the
+            bare board carries its own, in the invitation, and two on one
+            screen would be one too many. */}
+        <div className="stage-head">
+          <span className="stage-place">{memoryOpen ? "memory" : (standaloneViewId ?? "board")}</span>
+          {!memoryOpen && taskCount > 0 ? (
+            <span className="stage-count">{taskCount === 1 ? "1 task" : `${taskCount} tasks`}</span>
+          ) : null}
+          {!standaloneViewId && !memoryOpen && !empty ? (
+            <button
+              type="button"
+              className="shell-make"
+              data-do="open-make"
+              aria-expanded={activePanel.kind === "make"}
+              onClick={(event) => openMake(event.currentTarget)}
+            >
+              new task
+            </button>
+          ) : null}
+        </div>
         <div className="shell-board" data-hidden={String(memoryOpen)} ref={boardRef} />
         {memoryOpen && project ? (
           <Memory key={project.name} project={project.name} focus={memoryFocus} onOpenRun={openRun} />

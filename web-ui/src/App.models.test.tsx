@@ -1,7 +1,7 @@
 /**
- * The rail down the left, and the panel it opens.
+ * The bar's tabs and toggles, and the panel a toggle opens.
  *
- * The rail is what the page is *for* rather than what one task is doing, so it
+ * The tabs are what the page is *for* rather than what one task is doing, so it
  * is nav and not a control on the bar -- and it is where the next view lands
  * beside `models`. The panel is about a project, so what these defend is that
  * it asks about the project actually on screen, and that it does not fight the
@@ -148,20 +148,21 @@ async function open() {
 const button = (name: string) =>
   container.querySelector<HTMLElement>(`[data-do="${name}"]`)
 
-const railed = () =>
-  [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
+const tabs = () =>
+  [...container.querySelectorAll(".shell-places button")].map((b) => b.textContent)
 
-test("the rail lists only the places there are to be, board first", async () => {
+test("the tabs are only the places there are to be, board first; models is a toggle", async () => {
   await open()
 
-  // `board` is the page with no panel over it, which is why it is a rail item
+  // `board` is the page with no panel over it, which is why it is a tab
   // rather than a close box. Models is not a place: it is a panel about the
-  // project, so its button sits on the bar beside the project's name.
-  expect(railed()).toEqual(["board", "runs", "memory"])
-  expect(button("open-models")!.closest(".shell-bar")).not.toBeNull()
+  // project, so it is a toggle in the bar's tools rather than a tab.
+  expect(tabs()).toEqual(["board", "runs", "memory"])
+  expect(button("open-models")!.closest(".shell-tools")).not.toBeNull()
+  expect(button("open-models")!.closest(".shell-places")).toBeNull()
 })
 
-test("the bar opens the models panel for the project on screen, and the rail stays put", async () => {
+test("the toggle opens the models panel for the project on screen, and the tabs stay put", async () => {
   await open()
 
   await act(async () => button("open-models")!.click())
@@ -221,7 +222,7 @@ test("closing the panel restores the control that opened it", async () => {
   expect(document.activeElement).toBe(panel)
   expect(panel.tabIndex).toBe(-1)
   expect(
-    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+    container.querySelector<HTMLElement>(".shell-stage")!.dataset.drawer,
   ).toBe("true")
 
   await act(async () => {
@@ -231,7 +232,7 @@ test("closing the panel restores the control that opened it", async () => {
   expect(container.querySelector(".models")).toBeNull()
   expect(document.activeElement).toBe(opener)
   expect(
-    container.querySelector<HTMLElement>(".shell-rail")!.dataset.covered,
+    container.querySelector<HTMLElement>(".shell-stage")!.dataset.drawer,
   ).toBe("false")
 })
 

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useState } from "react"
 
+import { MoonIcon, SunIcon } from "./icons"
+
 type Theme = "light" | "dark"
 const KEY = "poieo.theme"
 
@@ -28,12 +30,14 @@ export function ThemeSwitch() {
       className="shell-theme"
       type="button"
       aria-label={`Switch to ${next} theme`}
+      title={`Switch to ${next} theme`}
       onClick={() => {
         try { localStorage.setItem(KEY, next) } catch { /* Keep the in-memory choice. */ }
         setTheme(next)
       }}
     >
-      {next === "light" ? "Light" : "Dark"}
+      {/* Drawn as the theme it would switch to, which is what the word said. */}
+      {next === "light" ? <SunIcon /> : <MoonIcon />}
     </button>
   )
 }

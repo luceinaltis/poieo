@@ -223,7 +223,7 @@ function paint(row: Row, taskState: TaskState, span: Span): void {
 export const runs: Skin = {
   id: "runs",
   label: "Runs",
-  // A place, not a rendering: the rail carries it, the picker does not.
+  // A place, not a rendering: the tabs carry it, the picker does not.
   standalone: true,
 
   mount(el: HTMLElement, callbacks: SkinCallbacks): SkinHandle {
