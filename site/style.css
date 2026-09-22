@@ -124,10 +124,9 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
 .text-link { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9375rem; font-weight: 550; text-decoration: none; }
 .text-link:hover { text-decoration: underline; }
 .approach { border-top: 1px solid var(--rule); }
-.model-roles { margin-top: 40px; }
-.model-roles article { display: grid; grid-template-columns: 1fr 1.5fr 1fr; align-items: baseline; gap: 40px; border-top: 1px solid var(--rule); padding-block: 24px; }
-.model-roles p { color: var(--dim); font-size: 1rem; max-width: 44ch; }
-.model-roles article > span { font-size: .875rem; color: var(--dim); text-align: right; }
+.strengths { margin-top: 40px; }
+.strengths article { display: grid; grid-template-columns: 1fr 2fr; align-items: baseline; gap: 40px; border-top: 1px solid var(--rule); padding-block: 28px; }
+.strengths p { color: var(--dim); font-size: 1rem; max-width: 66ch; }
 .approach-note { margin-top: 32px; font-size: 0.875rem; color: var(--dim); }
 .approach .text-link { margin-top: 14px; }
 .work-section { border-top: 1px solid var(--rule); }
@@ -302,8 +301,7 @@ main, .footer { max-width: var(--column); margin-inline: auto; }
   .story-detail { grid-row: 1; padding: 22px; }
   .story-playback { column-gap: 12px; }
   .story-play { min-width: 128px; padding-inline: 12px; }
-  .model-roles article { grid-template-columns: 1fr; gap: 10px; }
-  .model-roles article > span { text-align: left; }
+  .strengths article { grid-template-columns: 1fr; gap: 10px; }
   .product-shot figcaption { padding: 12px; }
   .start { grid-template-columns: 1fr; gap: 36px; }
   .start-intro > p { max-width: 44ch; }
