@@ -327,20 +327,23 @@ def _folder_inside(config: Any, folder: str) -> tuple[Path, str | None]:
     return where, None
 
 
-def _schedule_keys(value: str) -> dict[str, str]:
+def _schedule_keys(value: str) -> dict[str, Any]:
     """The card keys one schedule line stands for, or a SpecError.
 
     The form has one field where the card has two keys: an interval like
     `30m`, or the word `loop`, is `every:`; five cron fields are `at:`. The
     same parsers the daemon arms a trigger with decide which, so a line the
     form accepts is a line the card will load. Blank is no key at all, and
-    the card takes its default.
+    the card takes its default. `manual` is the one trigger block a line can
+    say: a task nothing starts but run-now or another task finishing.
     """
     line = " ".join(value.split())
     if not line:
         return {}
     if line.lower() == "loop":
         return {"every": "loop"}
+    if line.lower() == "manual":
+        return {"trigger": {"type": "manual"}}
     if len(line.split(" ")) == 5:
         try:
             CronSchedule(line)
@@ -356,11 +359,18 @@ def _schedule_keys(value: str) -> dict[str, str]:
     return {"every": line}
 
 
-def _schedule_line(every: Any, at: Any) -> str:
-    """The one line the form shows for a card's `every:` or `at:`."""
+def _schedule_line(every: Any, at: Any, trigger: Any = None) -> str:
+    """The one line the form shows for a card's `every:`, `at:` or manual trigger."""
     if every is not None:
         return str(every)
-    return str(at) if at is not None else ""
+    if at is not None:
+        return str(at)
+    return "manual" if _is_manual(trigger) else ""
+
+
+def _is_manual(trigger: Any) -> bool:
+    """Whether a card's `trigger:` is exactly `{type: manual}` and nothing more."""
+    return isinstance(trigger, dict) and trigger == {"type": "manual"}
 
 
 def _with_then(text: str, then: list[dict[str, Any]], as_json: bool) -> str:
@@ -1172,8 +1182,11 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         policy = data.get("apply") or {}
         if isinstance(policy, dict) and any("\n" in str(command) for command in policy.get("checks") or []):
             return False
-        # A one-line schedule is the form's to show; a `trigger:` block is not.
-        return set(data) <= {"name", "folder", "prompt", "enabled", "apply", "every", "at"}
+        # A one-line schedule is the form's to show; a `trigger:` block is not,
+        # except the manual one, which the form says as the word `manual`.
+        if "trigger" in data and not _is_manual(data["trigger"]):
+            return False
+        return set(data) <= {"name", "folder", "prompt", "enabled", "apply", "every", "at", "trigger"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -1246,7 +1259,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     "enabled": fresh.enabled,
                     # The one line the form shows for `every:` or `at:`, or
                     # nothing when the card leaves its schedule to the default.
-                    "schedule": _schedule_line(fresh.every, fresh.at),
+                    "schedule": _schedule_line(fresh.every, fresh.at, fresh.trigger),
                     "apply": fresh.apply.model_dump(),
                     # The wiring with its conditions, which the listing draws
                     # only as words on arrows: an editor has to show a
@@ -1337,7 +1350,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 except SpecError as exc:
                     return JSONResponse({"error": str(exc)}, status_code=400)
             else:
-                schedule = {key: kept[key] for key in ("every", "at") if key in kept}
+                schedule = {key: kept[key] for key in ("every", "at", "trigger") if key in kept}
             text = yaml.safe_dump(
                 {
                     "name": str(body.get("name") or spec.slug),

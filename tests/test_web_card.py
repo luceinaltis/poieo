@@ -528,6 +528,37 @@ def test_fields_refuse_a_card_that_is_not_plain(tmp_path):
     assert (cards / "already.yaml").read_text(encoding="utf-8") == kept
 
 
+def test_a_manual_card_stays_plain_and_keeps_its_trigger_through_the_form(tmp_path):
+    """`trigger: {type: manual}` is the one trigger block the form can show,
+    as the schedule `manual`: absent from a save it is kept, and another
+    schedule replaces it."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\ntrigger: {type: manual}\n", encoding="utf-8"
+    )
+    body = _get(client).json()
+    assert body["plain"] is True
+    assert body["schedule"] == "manual"
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper"},
+    )
+    assert answer.status_code == 200, answer.text
+    assert yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))["trigger"] == {"type": "manual"}
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper", "schedule": "30m"},
+    )
+    assert answer.status_code == 200, answer.text
+    written = yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))
+    assert written["every"] == "30m"
+    assert "trigger" not in written
+
+
 def test_a_field_save_after_a_set_aside_answers_not_raises(tmp_path):
     """The same race the text path already answers: drawer open, task set
     aside, save pressed. Field-mode reads the card before rebuilding it, and
