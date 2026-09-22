@@ -15,6 +15,7 @@ from .base import (
     ToolCall,
     ToolDef,
     Usage,
+    blocks_of,
     credential_for,
 )
 
@@ -53,6 +54,22 @@ def _anthropic_tools(tools: list[ToolDef]) -> list[dict[str, Any]]:
     return [{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools]
 
 
+def _anthropic_blocks(content: Any) -> Any:
+    """Neutral content -> this API's: a string stays one, a picture becomes a
+    base64 image block."""
+    if not isinstance(content, list):
+        return content
+    return [
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": block["media_type"], "data": block["data"]},
+        }
+        if block.get("type") == "image"
+        else block
+        for block in content
+    ]
+
+
 def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Neutral history -> Anthropic content blocks.
 
@@ -87,7 +104,7 @@ def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
             block = {
                 "type": "tool_result",
                 "tool_use_id": message["tool_call_id"],
-                "content": message["content"],
+                "content": _anthropic_blocks(message["content"]),
             }
             if out and out[-1]["role"] == "user" and isinstance(out[-1]["content"], list):
                 out[-1]["content"].append(block)
@@ -97,13 +114,14 @@ def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
             # Two user messages in a row -- the person's words heard after a
             # turn's tool results -- are one user turn to this API, which
             # refuses the same role twice running.
-            block = {"type": "text", "text": message.get("content") or ""}
+            blocks = _anthropic_blocks(blocks_of(message.get("content")) or [{"type": "text", "text": ""}])
             previous = out[-1]["content"]
-            out[-1]["content"] = (
-                [*previous, block] if isinstance(previous, list) else [{"type": "text", "text": previous}, block]
-            )
+            out[-1]["content"] = [
+                *(previous if isinstance(previous, list) else [{"type": "text", "text": previous}]),
+                *blocks,
+            ]
         else:
-            out.append(dict(message))
+            out.append({**message, "content": _anthropic_blocks(message.get("content"))})
     return out
 
 

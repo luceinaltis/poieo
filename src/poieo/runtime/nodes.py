@@ -18,7 +18,7 @@ from ..errors import ExpressionError, NodeError, ProviderError, RunAborted
 from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
-from ..providers.base import Hands, ToolCall, ToolDef
+from ..providers.base import IMAGE_WEIGHT, Hands, ToolCall, ToolDef, blocks_of, text_of
 from ..tools import Executor, ToolError, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
@@ -315,9 +315,8 @@ def _conversation_size(messages: list[dict[str, Any]]) -> int:
     """
     total = 0
     for message in messages:
-        content = message.get("content")
-        if isinstance(content, str):
-            total += len(content)
+        for block in blocks_of(message.get("content")):
+            total += IMAGE_WEIGHT if block.get("type") == "image" else len(block.get("text") or "")
         calls = message.get("tool_calls")
         if calls:
             total += len(json.dumps(calls, ensure_ascii=False, default=str))
@@ -388,7 +387,7 @@ def _transcript(messages: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for message in messages:
         role = message.get("role")
-        content = message.get("content") or ""
+        content = text_of(message.get("content"))
         if role == "assistant":
             calls = ", ".join(
                 f"{c['name']}({json.dumps(c.get('arguments'), ensure_ascii=False, default=str)})"

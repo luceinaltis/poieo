@@ -93,6 +93,20 @@ seam, and a call that offers tools is answered whole because a tool call
 arrives in fragments. A stream that stops before it is done is a provider
 error, not a shorter answer.
 
+A message's content is words, or a list of blocks when it carries a picture:
+`{"type": "text", "text"}` and `{"type": "image", "media_type", "data"}`, the
+data in base64, in a user message or a tool's result. Each provider puts the
+picture in its own wire shape -- an Anthropic image block, inside the
+`tool_result` when a tool returned it; an OpenAI-shaped `image_url` data URL,
+shown as the next user message after a turn's tool results because that API
+takes only text in a tool message; Ollama's `images` beside the words. A
+harness and Jev take words only and refuse a picture rather than drop it: a
+model told about an image it was never shown answers about nothing. Whether
+the model behind a provider can see is the binding's business; one that
+cannot answers with the provider's own refusal. A picture weighs a fixed
+amount in the measure a node keeps of its conversation, never its encoded
+length, and a folded history names it as `[image]`.
+
 Embedding is an optional provider capability. Ollama and OpenAI-compatible
 providers implement it; other providers refuse it through the common protocol.
 The memory board uses only explicitly declared `memory_embedder` and

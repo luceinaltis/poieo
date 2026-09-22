@@ -21,7 +21,7 @@ import json
 from typing import Any
 
 from ..errors import ProviderError
-from .base import LLMRequest, LLMResponse, Usage
+from .base import LLMRequest, LLMResponse, Usage, refuse_images
 from .local import _HttpProvider
 from .presets import Preset
 
@@ -49,6 +49,7 @@ def _state(name: str, request: LLMRequest) -> str:
                 provider=name,
             )
         content = message.get("content")
+        refuse_images(name, content, "Jev reads one text state and")
         if content is None or content == "":
             continue
         parts.append(content if isinstance(content, str) else json.dumps(content, ensure_ascii=False))

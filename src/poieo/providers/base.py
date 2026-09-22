@@ -30,6 +30,42 @@ def credential_for(name: str, spec: ProviderSpec) -> str | None:
     return key
 
 
+# A message's `content` is a string, or a list of blocks when it carries more
+# than words: `{"type": "text", "text"}` and `{"type": "image", "media_type",
+# "data"}`, the data in base64. Each backend puts the blocks in its own wire
+# shape; one that cannot be shown a picture refuses rather than drop it.
+
+# What a picture weighs in the measure a node keeps of its conversation, in
+# characters: about what a model charges for one, never its encoded length,
+# which would call a screenshot a small book.
+IMAGE_WEIGHT = 6_000
+
+
+def blocks_of(content: Any) -> list[dict[str, Any]]:
+    """The content as blocks, whichever way it was written."""
+    if isinstance(content, list):
+        return content
+    return [{"type": "text", "text": content}] if content else []
+
+
+def text_of(content: Any, picture: str = "[image]", joiner: str = " ") -> str:
+    """The words in the content, with each picture as a mark in its place."""
+    if not isinstance(content, list):
+        return content or ""
+    parts = [block.get("text") or "" if block.get("type") == "text" else picture for block in content]
+    return joiner.join(part for part in parts if part)
+
+
+def has_image(content: Any) -> bool:
+    return isinstance(content, list) and any(block.get("type") == "image" for block in content)
+
+
+def refuse_images(name: str, content: Any, why: str) -> None:
+    """Refuse a picture a backend cannot be shown, rather than lose it."""
+    if has_image(content):
+        raise ProviderError(f"{name}: {why} cannot be shown a picture; bind a model that sees images", provider=name)
+
+
 @dataclass(slots=True)
 class Usage:
     input_tokens: int = 0
