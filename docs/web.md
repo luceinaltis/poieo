@@ -337,7 +337,12 @@ with `{message, thread}`, and the runs that share a thread are the
 conversation: the header's picker names each by its first message, most
 recently spoken-in first, and `new conversation` starts another. A
 conversation is read back from the task's run records in the stage, so it is
-there after a reload and in the next session. Each turn is a bubble, the
+there after a reload and in the next session -- as far back as the stage's
+window of the chat's newest fifty runs reaches. A first message said before
+the card exists is held by the shell and sent once the daemon has picked the
+card up, so closing the panel meanwhile does not lose it, and a refusal then
+is shown when the panel is next open. A message the task is then held back
+from answering -- a spend limit reached -- says why instead of waiting. Each turn is a bubble, the
 reader's to the right and the answer -- the run's `said` -- to the left, with
 `what it did` folded under it: opened, it fetches that run's events and draws
 its timeline. While the answer is being worked on, the run's live timeline

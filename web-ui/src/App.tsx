@@ -22,7 +22,10 @@ import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
+import { runNow } from "./api"
+import type { Answer } from "./api"
 import { Chat } from "./chat/Chat"
+import type { Queued } from "./chat/Chat"
 import { Memory } from "./memory/Memory"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
@@ -87,6 +90,22 @@ export default function App({ store }: { store?: StageStore }) {
   // close it. The conversation itself is the chat task's runs, which the
   // daemon keeps; this is only which of them is on screen.
   const [chatThread, setChatThread] = useState<string | null>(null)
+  // A first message said before the project's chat card existed. Held here
+  // for the same reason, and sent from here once the daemon has the card: the
+  // panel may be closed by then, and the message must not go with it.
+  const [chatQueued, setChatQueued] = useState<Queued | null>(null)
+  // And what the daemon said if it refused that message, for the panel to
+  // show whenever it is next open: the reader may have closed it meanwhile.
+  const [chatLate, setChatLate] = useState<Answer | null>(null)
+  useEffect(() => {
+    if (!chatQueued) return
+    const task = chatTaskOf(stage, chatQueued.project)
+    if (!task) return
+    setChatQueued(null)
+    void runNow(chatQueued.project, task.name, { message: chatQueued.message, thread: chatQueued.thread }).then(
+      (answer) => setChatLate(answer.ok ? null : answer),
+    )
+  }, [chatQueued, stage])
   const panelOpenerRef = useRef<HTMLElement | null>(null)
   const panelWasOpenRef = useRef(false)
   const panelIsOpen = activePanel.kind !== "closed"
@@ -535,6 +554,10 @@ export default function App({ store }: { store?: StageStore }) {
           chatTask={chatTaskOf(stage, project.name)}
           thread={chatThread}
           onThread={setChatThread}
+          queued={chatQueued}
+          onQueue={setChatQueued}
+          refusedLater={chatLate}
+          onRefusalSeen={() => setChatLate(null)}
           onClose={closePanel}
           // The other running tasks, with their live timelines: what the
           // chat may speak to instead of the conversation.

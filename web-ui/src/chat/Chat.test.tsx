@@ -24,7 +24,7 @@ vi.mock("../api", async (importOriginal) => ({
 }))
 
 import { Chat } from "./Chat"
-import type { Steerable } from "./Chat"
+import type { Queued, Steerable } from "./Chat"
 import { initialStage } from "../state/stage"
 import type { TaskState } from "../state/stage"
 import type { PoieoEvent, RunSummary, TaskRow } from "../types"
@@ -103,19 +103,22 @@ const frame = (type: string, data: Record<string, unknown> = {}, run_id = "r9"):
   data,
 })
 
-/** The shell's half: it holds which conversation is open. */
+/** The shell's half: it holds which conversation is open, and a first message waiting for its card. */
 function Shell({
   task = null,
   steerable = [],
   initial = null,
   onThread = () => {},
+  onQueue = () => {},
 }: {
   task?: TaskState | null
   steerable?: Steerable[]
   initial?: string | null
   onThread?: (thread: string | null) => void
+  onQueue?: (queued: Queued | null) => void
 }) {
   const [thread, setThread] = useState<string | null>(initial)
+  const [queued, setQueued] = useState<Queued | null>(null)
   return (
     <Chat
       project="board"
@@ -124,6 +127,11 @@ function Shell({
       onThread={(next) => {
         setThread(next)
         onThread(next)
+      }}
+      queued={queued}
+      onQueue={(next) => {
+        setQueued(next)
+        onQueue(next)
       }}
       onClose={() => {}}
       steerable={steerable}
@@ -166,21 +174,33 @@ test("it is one of the panels on the right edge, and says a conversation is kept
   expect(host.textContent).toContain("kept")
 })
 
-test("the first message makes the project's chat, then asks it", async () => {
-  const threads: (string | null)[] = []
-  show({ onThread: (thread) => threads.push(thread) })
+test("the first message makes the project's chat, and leaves the message with the shell until it is there", async () => {
+  const queued: Queued[] = []
+  show({ onQueue: (one) => one && queued.push(one) })
 
   say("what is in src?")
   await send()
+
   expect(createChatCard).toHaveBeenCalledWith("board")
   expect(runNow).not.toHaveBeenCalled()
+  expect(queued).toEqual([{ project: "board", thread: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/), message: "what is in src?" }])
   // Shown as said while the daemon is still picking the card up.
   expect(host.textContent).toContain("what is in src?")
+  expect(box().value).toBe("")
+})
 
-  const [thread] = threads
-  expect(thread).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
-  await act(async () => root.render(<Shell task={chatTask()} initial={thread} />))
-  expect(runNow).toHaveBeenCalledWith("board", "chat", { message: "what is in src?", thread })
+test("a message the task was held back from answering says why, rather than waiting forever", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  say("hello?")
+  await send()
+  expect(host.textContent).toContain("starting…")
+
+  await act(async () =>
+    root.render(<Shell task={chatTask({ held: true, heldBecause: "0.5 spent in the last 1d, and the limit is 0.5" })} initial="t-1" />),
+  )
+
+  expect(host.textContent).not.toContain("starting…")
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("the limit is 0.5")
 })
 
 test("a message in an open conversation continues it", async () => {

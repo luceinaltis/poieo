@@ -48,12 +48,24 @@ interface Live {
   activity: PoieoEvent[]
 }
 
+/**
+ * A first message, said before the project's chat card existed: held by the
+ * shell, which outlives this panel, and sent once the daemon has the card.
+ */
+export interface Queued {
+  project: string
+  thread: string
+  message: string
+}
+
 /** A message on its way, drawn where it will land until its run shows up. */
 interface Pending {
   thread: string
   message: string
   /** How many runs the thread had when it was sent: one more means it landed. */
   had: number
+  /** Why the task was held when it was sent: a run-now goes through a hold, so only a new reason refuses. */
+  held: string
 }
 
 const TITLE_AT_MOST = 60
@@ -142,6 +154,10 @@ export function Chat({
   chatTask,
   thread,
   onThread,
+  queued = null,
+  onQueue = () => {},
+  refusedLater = null,
+  onRefusalSeen = () => {},
   onClose,
   steerable = [],
 }: {
@@ -151,6 +167,12 @@ export function Chat({
   /** The conversation open in the panel, or null for a new one. */
   thread: string | null
   onThread(thread: string | null): void
+  /** The first message waiting for the chat's card, held by the shell. */
+  queued?: Queued | null
+  onQueue?(queued: Queued | null): void
+  /** What the daemon said when the shell sent that message and it was refused. */
+  refusedLater?: Answer | null
+  onRefusalSeen?(): void
   onClose(): void
   /** The project's other running tasks, for the picker; empty hides it. */
   steerable?: Steerable[]
@@ -168,25 +190,29 @@ export function Chat({
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<Answer | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
-  // A message said before the chat's card existed, waiting for the daemon to
-  // pick the card up: it is sent the moment the task appears.
-  const [awaitingCard, setAwaitingCard] = useState(false)
 
   const runs = chatTask?.runs ?? []
   const live = liveOf(chatTask)
   const past = thread ? runs.filter((run) => run.thread === thread && run.run_id !== live?.runId).reverse() : []
   const liveHere = live && thread !== null && live.thread === thread ? live : null
 
-  // A pending message has landed once its run is live or on the record.
+  // A pending message has landed once its run is live or on the record --
+  // or will not, because the task was held back from starting it, which the
+  // daemon says only on the task: a run-now it accepted is not a run begun.
+  const heldBecause = chatTask?.heldBecause ?? ""
   useEffect(() => {
-    if (!pending || awaitingCard) return
+    if (!pending) return
     const landed = runs.filter((run) => run.thread === pending.thread).length > pending.had
     if (landed || (live && live.thread === pending.thread)) setPending(null)
-  }, [pending, awaitingCard, runs, live])
+    else if (heldBecause && heldBecause !== pending.held) {
+      setPending(null)
+      setRefused({ ok: false, error: heldBecause })
+    }
+  }, [pending, runs, live, heldBecause])
 
   const start = async (task: TaskState, said: string, into: string): Promise<boolean> => {
     const had = task.runs.filter((run) => run.thread === into).length
-    setPending({ thread: into, message: said, had })
+    setPending({ thread: into, message: said, had, held: task.heldBecause })
     const answer = await runNow(project, task.name, { message: said, thread: into })
     if (!answer.ok) {
       setPending(null)
@@ -196,20 +222,11 @@ export function Chat({
     return true
   }
 
-  // The card has appeared: send what was said while it was being made.
-  useEffect(() => {
-    if (!awaitingCard || !chatTask || !pending) return
-    setAwaitingCard(false)
-    setBusy(true)
-    void start(chatTask, pending.message, pending.thread).finally(() => setBusy(false))
-    // `start` only reads what it is handed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awaitingCard, chatTask, pending])
-
   const send = async () => {
     const said = text.trim()
-    if (!said || busy || awaitingCard) return
+    if (!said || busy || queued) return
     setRefused(null)
+    onRefusalSeen()
     setBusy(true)
     try {
       if (steering || liveHere) {
@@ -229,8 +246,9 @@ export function Chat({
           setRefused(made)
           return
         }
-        setPending({ thread: into, message: said, had: 0 })
-        setAwaitingCard(true)
+        // Sent by the shell once the daemon has picked the card up, so a
+        // panel closed in the meantime does not take the message with it.
+        onQueue({ project, thread: into, message: said })
         setText("")
         return
       }
@@ -252,7 +270,8 @@ export function Chat({
   const conversations = conversationsOf(runs, live)
   const heard = steering ? visibleTimelineEvents(withoutThinking(steering.activity), { keepWords: true }) : []
   const working = liveHere ? visibleTimelineEvents(withoutThinking(liveHere.activity), { keepWords: true }) : []
-  const shownPending = pending && pending.thread === thread && !liveHere ? pending : null
+  const waiting = pending ?? (queued && queued.project === project ? queued : null)
+  const shownPending = waiting && waiting.thread === thread && !liveHere ? waiting : null
 
   return (
     <aside className="panel chat" aria-label="Chat">
@@ -339,7 +358,7 @@ export function Chat({
           </p>
         )}
       </div>
-      {refused ? <Refusal answer={refused} /> : null}
+      {refused || refusedLater ? <Refusal answer={(refused ?? refusedLater)!} /> : null}
       <form
         className="chat-ask"
         onSubmit={(event) => {
@@ -364,7 +383,7 @@ export function Chat({
           onKeyDown={onKeyDown}
         />
         <div className="chat-row">
-          <button type="submit" data-do="chat-send" disabled={busy || awaitingCard || !text.trim()}>
+          <button type="submit" data-do="chat-send" disabled={busy || queued !== null || !text.trim()}>
             {busy ? "sending…" : "send"}
           </button>
         </div>

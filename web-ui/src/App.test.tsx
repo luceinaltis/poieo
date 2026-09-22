@@ -4,6 +4,8 @@ import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 vi.mock("./api", () => ({
+  createChatCard: vi.fn<typeof import("./api").createChatCard>(async () => ({ ok: true, task: "chat" })),
+  runNow: vi.fn<typeof import("./api").runNow>(async () => ({ ok: true, status: "starting" })),
   fetchTasks: vi.fn<typeof import("./api").fetchTasks>(async () => ({
     projects: [],
     tasks: [],
@@ -928,6 +930,54 @@ test("chat is a panel from the bar, and the open conversation outlives a visit t
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
   expect(container.textContent).toContain("hello?")
   expect(container.textContent).toContain("Hello.")
+})
+
+test("a first message waits with the shell for the chat's card, even with the panel closed", async () => {
+  const { createChatCard, runNow } = await import("./api")
+  const store = await render(initialStage(TASK_ROWS))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
+  const box = container.querySelector<HTMLTextAreaElement>(".chat-box")!
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
+    setter.call(box, "hello?")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => container.querySelector<HTMLElement>('[data-do="chat-send"]')!.click())
+  expect(createChatCard).toHaveBeenCalledWith("board")
+
+  // A task picked off the board takes the margin before the daemon has
+  // noticed the new card...
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+  expect(container.querySelector(".chat")).toBeNull()
+  expect(runNow).not.toHaveBeenCalled()
+
+  // ...and when it does, the message is sent all the same.
+  await act(async () => store.push(initialStage([...TASK_ROWS, CHAT_ROW])))
+  expect(runNow).toHaveBeenCalledWith("board", "chat", { message: "hello?", thread: expect.stringMatching(/^t-/) })
+})
+
+test("a first message the daemon then refuses says so when the chat is opened again", async () => {
+  const { runNow } = await import("./api")
+  vi.mocked(runNow).mockResolvedValueOnce({ ok: false, error: "task 'chat' is switched off" })
+  const store = await render(initialStage(TASK_ROWS))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
+  const box = container.querySelector<HTMLTextAreaElement>(".chat-box")!
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
+    setter.call(box, "hello?")
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => container.querySelector<HTMLElement>('[data-do="chat-send"]')!.click())
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
+  })
+
+  await act(async () => store.push(initialStage([...TASK_ROWS, CHAT_ROW])))
+  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
+
+  expect(container.querySelector('.chat [role="alert"]')?.textContent).toContain("switched off")
 })
 
 test("a switch of project leaves the conversation it had open behind", async () => {
