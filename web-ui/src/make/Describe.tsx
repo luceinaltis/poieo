@@ -23,6 +23,7 @@ import type { KeyboardEvent } from "react"
 import { draftTask } from "../api"
 import type { DraftAnswer, TaskDraft } from "../api"
 import { Refusal } from "../Refusal"
+import { saidOf } from "./schedule"
 import "./describe.css"
 
 interface Turn {
@@ -38,13 +39,6 @@ const EXAMPLES = [
   "tidy the docs and fix what is out of date",
   "read the newest open issue and draft an answer",
 ]
-
-/** A draft's schedule in the words the card would use. */
-function whenOf(schedule: string): string {
-  if (!schedule) return "hourly"
-  if (schedule === "loop") return "loop"
-  return schedule.split(" ").length === 5 ? `at ${schedule}` : `every ${schedule}`
-}
 
 /**
  * Whether a refusal is about the model rather than the message. The daemon's
@@ -142,7 +136,7 @@ export function Describe({
                       "in this project"
                     )}
                     {" · "}
-                    {whenOf(turn.draft.schedule)}
+                    {saidOf(turn.draft.schedule)}
                   </span>
                   <p className="describe-card-prompt">{turn.draft.prompt}</p>
                   <button

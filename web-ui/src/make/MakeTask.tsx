@@ -43,6 +43,7 @@ import { createTask } from "../api"
 import type { MadeTask, TaskDraft } from "../api"
 import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
+import { WHEN } from "./schedule"
 import { slugOf, titleOf } from "./slug"
 import { useAct } from "../useAct"
 import { Describe } from "./Describe"
@@ -50,19 +51,6 @@ import "./make.css"
 
 /** How a card spells the project itself: relative to the tasks folder. */
 const WHOLE_PROJECT = ".."
-
-/**
- * When a task runs, as a person would say it, and the one line the card
- * takes for it. Blank is the card's own default, hourly. The last choice
- * opens the line itself, for an interval, the word loop, or a cron line.
- */
-const WHEN: { value: string; label: string }[] = [
-  { value: "", label: "every hour" },
-  { value: "30m", label: "every 30 minutes" },
-  { value: "24h", label: "every day" },
-  { value: "0 2 * * *", label: "every night at 2" },
-  { value: "custom", label: "at another time…" },
-]
 
 export function MakeTask({
   project,
