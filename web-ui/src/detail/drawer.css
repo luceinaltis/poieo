@@ -839,3 +839,14 @@ p.run-checks[data-verdict="blocked"] {
   margin: 6px 0 0;
   padding-left: 0;
 }
+
+/* What the person said, heard: marked in the accent, because it is the one
+   line on the timeline that came from this side of the screen. */
+.drawer-directed {
+  border-left: 2px solid var(--ember);
+  padding-left: 8px;
+}
+
+.drawer-directed .drawer-text {
+  margin: 2px 0 0;
+}

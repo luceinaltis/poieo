@@ -308,7 +308,10 @@ export function initialStage(rows: TaskRow[]): StageState {
  */
 function keyOf(event: PoieoEvent): string {
   const data = event.data ?? {}
-  const ordinal = data.step ?? data.turn ?? ""
+  // The one event that can repeat within a turn in the same millisecond is
+  // the person's words, two of them said while one tool ran; the words are
+  // what tells them apart.
+  const ordinal = event.type === "node_directed" ? `${data.turn ?? ""}:${data.text ?? ""}` : (data.step ?? data.turn ?? "")
   return [event.run_id, event.type, event.node_id ?? "", ordinal, event.at ?? ""].join("|")
 }
 
@@ -379,6 +382,10 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
         ].slice(0, TOOL_CALL_CAP),
         activity: withEvent(taskState, event),
       }
+
+    case "node_directed":
+      // Words from the person, heard: on the timeline, for the drawer.
+      return { activity: withEvent(taskState, event) }
 
     case "node_finished":
       // Only the timeline: the next node_started replaces currentNode, and

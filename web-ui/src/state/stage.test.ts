@@ -615,3 +615,33 @@ test("a tool call keeps the model's own sentence for it", () => {
   ])
   expect(stage.tasks["board/chores"].recentToolCalls[0].purpose).toBe("Read the notes first")
 })
+
+test("words the person said to the run in flight join its timeline", () => {
+  const stage = replay(start(), [
+    AGENT_RUN[0],
+    {
+      run_id: AGENT_RUN[0].run_id,
+      type: "node_directed",
+      at: "2026-08-22T07:28:19.200+00:00",
+      node_id: "work",
+      data: { turn: 1, text: "Skip the drafts folder." },
+    },
+  ])
+  const activity = stage.tasks["board/chores"].activity
+  expect(activity.at(-1)!.type).toBe("node_directed")
+  expect(activity.at(-1)!.data?.text).toBe("Skip the drafts folder.")
+})
+
+test("two things said while one tool ran are two lines, even in the same millisecond", () => {
+  const at = "2026-08-22T07:28:19.300+00:00"
+  const said = (text: string): PoieoEvent => ({
+    run_id: AGENT_RUN[0].run_id,
+    type: "node_directed",
+    at,
+    node_id: "work",
+    data: { turn: 1, text },
+  })
+  const stage = replay(start(), [AGENT_RUN[0], said("Skip the drafts."), said("And keep the heading.")])
+  const words = stage.tasks["board/chores"].activity.filter((e) => e.type === "node_directed").map((e) => e.data?.text)
+  expect(words).toEqual(["Skip the drafts.", "And keep the heading."])
+})

@@ -1222,3 +1222,18 @@ test("following survives the run's finish: the timeline stays, open, until its s
   expect(container.querySelector(".run-brief h3")!.textContent).toBe("Latest run")
   expect(fetchRunEvents).not.toHaveBeenCalled()
 })
+
+test("what the person said to a running task is on its timeline, marked as theirs", async () => {
+  const live: PoieoEvent[] = [
+    event("run_started", { data: { task: "chores", project: "board" } }),
+    event("node_directed", { node_id: "work", data: { turn: 1, text: "Skip the drafts folder." } }),
+    event("node_turn", { node_id: "work", data: { turn: 2, text: "Skipping it.", tool_call_count: 0 } }),
+  ]
+  await draw([], { status: "running", liveActivity: live, liveRunId: "r1" })
+
+  const said = container.querySelector('.drawer-entry[data-kind="directed"]')!
+  expect(said).not.toBeNull()
+  expect(said.textContent).toContain("you said")
+  expect(said.textContent).toContain("Skip the drafts folder.")
+  expect(container.textContent).toContain("Skipping it.")
+})

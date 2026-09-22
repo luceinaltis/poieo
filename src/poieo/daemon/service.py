@@ -330,6 +330,10 @@ class TaskRunner:
         self.pool = pool
         self.store = store
         self.cancel = cancel
+        # What the person says while a run is going, for that run only: made
+        # when a run starts and let go when it ends, so a note left between
+        # runs takes the durable road instead.
+        self.direction: asyncio.Queue[str] | None = None
         self.on_run = on_run
         self.trigger = build_trigger(task.spec.trigger)
         self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
@@ -982,6 +986,10 @@ class TaskRunner:
                     payload["sender"] = handed.result
                 self._run_input = payload
                 workdir = await self._open_change()
+                # Only now: the prompt above has read the journal, so words that
+                # arrive from here on are heard once, at the next turn, rather
+                # than read at the start and heard again.
+                self.direction = asyncio.Queue()
                 result = await execute(
                     self.task.graph,
                     self.task.binding,
@@ -997,6 +1005,7 @@ class TaskRunner:
                     cancel=self.cancel,
                     workdir=workdir,
                     tool_context=self.tool_context,
+                    direction=self.direction,
                     finalize=self._close_change,
                 )
                 self._remember(result)
@@ -1037,6 +1046,7 @@ class TaskRunner:
             self._remember(result)
         finally:
             self.status, self.current_run_id = "waiting", None
+            self.direction = None
         self.results.append(result)
         if self.task.spec.carry_state:
             self.state = result.state

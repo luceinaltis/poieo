@@ -480,8 +480,11 @@ selection and at least one check. Run history displays
 the application outcome and verification output, including repaired, already
 included and undone work. Applied diffs use the final verified combination.
 An applied run offers undo through the same checks; unresolved undo leaves the
-project intact. Optional direction is saved through the task's `/note` route for
-the next run. Successful application decisions announce a fresh task listing so
+project intact. Optional direction goes through the task's `/note` route: to the run in
+flight, which hears it at its next model turn if it has one (`delivered`; the
+journal keeps the words either way), or else kept for the next run (`saved`);
+the form says which. On the timeline the words appear as
+`you said`, where the model heard them. Successful application decisions announce a fresh task listing so
 all open boards update pending counts, holds and their reasons together. Fresh
 listings replace or clear previous hold reasons.
 

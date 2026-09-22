@@ -27,3 +27,24 @@ test("direction is optional and saves for the next run", async () => {
     vi.unstubAllGlobals()
   }
 })
+
+test("direction given to a run in flight says it was delivered, not saved", async () => {
+  const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "delivered" }) })
+  vi.stubGlobal("fetch", fetch)
+  const host = document.createElement("div")
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<Direction project="board" task="chores" />))
+    await act(async () => {
+      const area = host.querySelector("textarea")!
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(area, "Skip the drafts folder")
+      area.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await act(async () => host.querySelector("button")!.click())
+    expect(host.textContent).toContain("Delivered to the run in flight")
+    expect(host.textContent).not.toContain("Saved for the next run")
+  } finally {
+    act(() => root.unmount())
+    vi.unstubAllGlobals()
+  }
+})

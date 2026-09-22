@@ -545,6 +545,24 @@ class _AgentLoop:
             )
         self.turns += 1
 
+    def _hear_direction(self) -> None:
+        """Take in what the person said while the model was working.
+
+        Between turns, where the cancel signal is read: words that arrived
+        while a tool ran are part of what the model reads next, and the
+        record says so before the model answers, so a run that changed
+        course shows where it was told to.
+        """
+        queue = self.ctx.direction
+        if queue is None:
+            return
+        while not queue.empty():
+            text = queue.get_nowait()
+            if not isinstance(text, str) or not text.strip():
+                continue
+            self.messages.append({"role": "user", "content": text})
+            self.ctx.emit("node_directed", node_id=self.spec.id, turn=self.turns, text=_clip(text))
+
     async def _make_context_room(self, window: int | None) -> None:
         # Only past the cap, and then all at once. Clearing on every turn would
         # move the cached prompt prefix on every turn too.
@@ -720,6 +738,7 @@ class _AgentLoop:
 
         while True:
             self._start_turn()
+            self._hear_direction()
             await self._make_context_room(window)
             response = await self._ask_model()
             self._record_response(response)

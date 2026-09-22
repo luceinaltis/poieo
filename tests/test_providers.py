@@ -1103,3 +1103,22 @@ async def test_mock_has_no_latency_by_default():
     await provider.complete(LLMRequest(model="m", messages=[]))
 
     assert time.monotonic() - started < 0.02
+
+
+def test_anthropic_folds_the_persons_words_after_tool_results_into_that_user_turn():
+    """Direction heard between turns lands right after the tool results, and
+    this API refuses two user messages in a row: they are one turn here."""
+    from poieo.providers.anthropic_provider import _anthropic_messages
+
+    turns = _anthropic_messages(
+        [
+            {"role": "user", "content": "tidy the notes"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "list_dir", "arguments": {}}]},
+            {"role": "tool", "tool_call_id": "c1", "content": "notes.md"},
+            {"role": "user", "content": "Skip the drafts folder."},
+        ]
+    )
+
+    assert [turn["role"] for turn in turns] == ["user", "assistant", "user"]
+    assert turns[-1]["content"][0]["type"] == "tool_result"
+    assert turns[-1]["content"][-1] == {"type": "text", "text": "Skip the drafts folder."}
