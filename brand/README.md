@@ -150,8 +150,19 @@ share a grid cell so the tallest reserves space even on phones; inactive panels
 remain invisible and inert. A moving gold underline follows selection (260 ms),
 content appears softly (220 ms), and added code briefly catches green light
 (900 ms). Content effects start only after a different tab is selected. Reduced
-motion removes all three effects; switching stays immediate. No autoplay,
-network request, or local storage is needed. Model roles follow as readable rows,
+motion removes all three effects; switching stays immediate. **Play example**
+starts one 8.4-second walkthrough: task (2.4 s), three recorded steps (1.8,
+1.8, 2.4 s), then change. Records appear in their reserved space and the result
+border catches gold light once (1.2 s). Nothing starts automatically or loops.
+Stop, manual tab selection, focusing/touching panel content, leaving the browser
+tab, or changing the motion preference cancels playback and reveals every record.
+Focus never follows the timer. **Replay example** starts from the task again.
+With reduced motion, **Next step** advances through complete panels only on click;
+there are no playback timers. The landscape alone fades in over 800 ms on entry;
+text and actions are immediately visible. All new effects respect reduced motion.
+On phones, the example detail sits above its explanation so playback is visible
+near the controls; both remain readable in the document's explanation-first order.
+No network request or local storage is needed. Model roles follow as readable rows,
 with the user's choice explicit. The installation example expands on demand
 and explains that the offline scripted model does not repair a project.
 Documentation prioritizes the article,
