@@ -452,8 +452,13 @@ def _connections_refused(then: Any, slug: str, known: Any, cards: Path) -> str |
         # its schedule is for.
         if to == slug:
             return "a task cannot start itself when it finishes"
-        on_disk = isinstance(to, str) and any((cards / f"{to}{suffix}").is_file() for suffix in _CARD_SUFFIXES)
-        if to not in known and not on_disk:
+        if to in known:
+            continue
+        # A card's name, never a path: the disk is only asked about a card in
+        # the tasks folder, or it would answer about any file on the machine.
+        if not isinstance(to, str) or not re.fullmatch(r"[\w-]+", to):
+            return f"this project has no task '{to}' to start"
+        if not any((cards / f"{to}{suffix}").is_file() for suffix in _CARD_SUFFIXES):
             return f"this project has no task '{to}' to start"
     return None
 

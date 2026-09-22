@@ -267,6 +267,7 @@ export function MakeTask({
         disabled={busy || chainAct.busy}
         onDraft={(draft) => {
           setChain(null)
+          setChainMade(null)
           fill(draft)
         }}
         onChain={(drafts) => {

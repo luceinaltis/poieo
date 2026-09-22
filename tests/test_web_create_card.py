@@ -306,3 +306,18 @@ def test_a_new_card_connected_to_nothing_or_itself_is_refused_and_not_written(tm
         answer = _make(client, {**body, "then": then})
         assert answer.status_code == 400, (then, answer.text)
     assert not (cards / "watch.yaml").exists()
+
+
+def test_a_connection_names_a_task_never_a_path(tmp_path):
+    """A target not yet loaded is looked for on disk, as a card in the tasks
+    folder. A name that is a path would look anywhere on the machine, and
+    answer whether a file is there."""
+    client, cards = _client(tmp_path)
+    (tmp_path / "outside.yaml").write_text("name: x\n", encoding="utf-8")
+
+    for to in ("../outside", str(tmp_path / "outside"), "..\outside"):
+        answer = _make(
+            client, {"name": "watch", "folder": "../work", "prompt": "x", "then": [{"when": "true", "to": to}]}
+        )
+        assert answer.status_code == 400, (to, answer.text)
+    assert not (cards / "watch.yaml").exists()
