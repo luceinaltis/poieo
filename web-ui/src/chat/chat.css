@@ -1,0 +1,167 @@
+/* Geometry is `.panel` in index.css, shared with the drawer, models and the
+   new-task form. A column, and only the thread grows: the header keeps its
+   line and the box keeps its place at the bottom, where a chat box is. */
+.chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-head {
+  align-items: baseline;
+  display: flex;
+  flex: none;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.chat-head h2 {
+  font-size: 1em;
+  margin: 0;
+}
+
+/* The model that last answered, and no more of the bar than it needs: a
+   routed model's name can be longer than the panel, and the buttons after it
+   must not be pushed off the edge. */
+.chat-model {
+  color: var(--line);
+  flex: 1;
+  font-size: 0.82em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-new,
+.chat-close {
+  background: none;
+  border: 0;
+  color: var(--line);
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.chat-new {
+  font-size: 0.82em;
+}
+
+.chat-new:hover:not(:disabled),
+.chat-close:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* The one child that grows, and `min-height: 0` so it may also shrink --
+   without it a long thread pushes the box past the viewport instead of
+   scrolling above it. A reply is the one thing here a reader may want to take
+   away, so the page's opt-out of selection is undone for the thread. */
+.chat-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.chat-turns {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.chat-turn {
+  display: grid;
+  font-size: 0.9em;
+  gap: 3px;
+}
+
+.chat-who {
+  color: var(--dim);
+  font-size: 0.78em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-turn[data-role="user"] .chat-who {
+  color: var(--ember);
+}
+
+.chat-said {
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-empty,
+.chat-thinking,
+.chat-full {
+  color: var(--dim);
+  font-size: 0.82em;
+  margin: 0;
+}
+
+.chat-empty {
+  padding-top: 4px;
+}
+
+.chat-thinking {
+  padding: 8px 0 4px;
+}
+
+.chat-full {
+  flex: none;
+  padding-bottom: 6px;
+}
+
+.chat .refusal {
+  flex: none;
+  padding-bottom: 6px;
+}
+
+.chat-ask {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  flex: none;
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.chat-box {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.chat-box:focus-visible {
+  border-color: var(--line);
+  outline: none;
+}
+
+.chat-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.chat-nothing {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.chat-cut {
+  color: var(--stop);
+  font-size: 0.8em;
+}

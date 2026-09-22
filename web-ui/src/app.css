@@ -70,7 +70,8 @@
 /* A quiet word beside the project's name. Same size as the status so the bar
    reads as one line about the project; brightens when open, since the panel
    it opened is now the thing beside it. */
-.shell-models {
+.shell-models,
+.shell-chat {
   background: none;
   border: 0;
   border-radius: 4px;
@@ -82,15 +83,19 @@
 }
 
 .shell-models:hover:not(:disabled),
-.shell-models[aria-expanded="true"] {
+.shell-models[aria-expanded="true"],
+.shell-chat:hover:not(:disabled),
+.shell-chat[aria-expanded="true"] {
   color: var(--text);
 }
 
-.shell-models[aria-expanded="true"] {
+.shell-models[aria-expanded="true"],
+.shell-chat[aria-expanded="true"] {
   background: var(--raised);
 }
 
-.shell-models:disabled {
+.shell-models:disabled,
+.shell-chat:disabled {
   cursor: default;
   opacity: 0.4;
 }
@@ -289,9 +294,9 @@
   .shell-bar { gap: 7px; padding-inline: 10px; }
   .shell-lockup { height: 2rem; }
   .shell-theme { padding-inline: 9px; }
-  .shell-models, .shell-status { flex: none; }
+  .shell-models, .shell-chat, .shell-status { flex: none; }
 
-  /* Four words on a 393px bar: the project's name is the one that can be
+  /* Five words on a 393px bar: the project's name is the one that can be
      long, so it is the one that gives. */
   .shell-project,
   .shell-project-pick {

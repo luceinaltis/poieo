@@ -127,6 +127,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 |---|---|
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
+| `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:` or five cron fields written as `at:`, and 400 when neither; creates one card, optionally its neighboring graph, and returns its task id and path |
 | `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, model, usage}`: the model's prose without its card, and the card it proposed as `{name, folder, prompt, schedule}` or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it; atomically validates and replaces one card, returning whether the edit is live |
@@ -137,6 +138,15 @@ Model routes write only the project's default binding and never accept or return
 a credential value; `key_env` is a variable name. Rebind validates before
 keeping a write and reports separately whether the resident daemon accepted the
 new binding.
+
+Chat is not a write. The daemon tells the model only which project's board it
+is being asked from and that a chat is not a task -- it has no tools, so it
+can neither read the project nor change a file -- and then the conversation
+as the page sent it; the page is the only thing holding that conversation,
+and nothing of it is stored or recorded as a run. The `default` role answers,
+which is what a plain card gets, so the person hears the model their tasks
+use, and the reply names it. The route stands behind the same origin fence as
+the writes because it spends a model call on whatever a page sends.
 
 Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
@@ -237,15 +247,15 @@ and no further. Its initial view keeps a readable lower limit; fitting the
 whole board can shrink a wider or taller graph further.
 
 `App.tsx` owns project selection, the memory place, and the single active side
-panel: task detail, models, task creation, or closed. A card made from the
+panel: task detail, models, chat, task creation, or closed. A card made from the
 creation panel opens in its drawer as soon as the listing carries it; until
 then the panel stays and says what it made. It shows one project's
 stage at a time and keeps only view preferences in local storage. The rail down
 the side lists only places, the views that take the whole stage: board, runs,
-and memory, with the current one marked. Panels are not places: models opens
-from a button beside the project name on the bar, and new task from a button on
-the board itself (the empty board offers it in its invitation instead), and
-neither moves the rail's mark. The task
+and memory, with the current one marked. Panels are not places: models and chat
+open from buttons beside the project name on the bar, and new task from a
+button on the board itself (the empty board offers it in its invitation
+instead), and none of them moves the rail's mark. The task
 drawer leads with whether the reader must act and the latest or selected run's
 result, time, duration, change, or usage -- and, for a change that was checked,
 whether it was applied, is waiting for review, or was not applied, with the
@@ -291,6 +301,23 @@ it stays put, and it scrolls to keep its newest turn in view -- the message on
 its way, then the reply -- with the least movement that shows it; taking a
 draft, or choosing to write by hand, brings the fields into view the same way
 before focus lands on the prompt.
+
+The chat panel is a thread and a box. Each message sends the whole
+conversation to the chat route; the reply is shown under it, and the model
+that answered is named on its turn and once in the header, so a role moved in
+the terminal shows up on the next answer. Enter sends, Shift+Enter breaks the
+line, and Enter during input-method composition does nothing. A refusal stays
+on screen with the message still in the box. The shell holds the thread
+rather than the panel, so a task picked off the board -- which takes the one
+margin -- does not lose it; `new conversation`, switching project and leaving
+the page empty it, and at thirty turns the panel asks for a new one rather
+than sending a message the daemon would refuse. The thread is tagged with the
+project it was said in: a reply that lands after a switch of project is
+dropped rather than shown as the new project's, while one that lands with
+the panel merely closed still reaches the thread. A reply that came back
+empty, or that stopped at the model's token limit, says so under the turn
+instead of showing a blank: a thinking model can spend its whole budget
+thinking.
 
 The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes

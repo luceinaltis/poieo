@@ -109,7 +109,9 @@ From the board a user can:
 - pause, resume or run a task now, and answer a decision it stopped to ask;
 - inspect, accept or discard a run's change;
 - inspect available models, declare an answering endpoint and choose which model
-  serves a role.
+  serves a role;
+- talk with the project's model in a conversation the board keeps only while
+  the page is open; it starts no run and changes no file.
 
 Advanced task fields beyond a one-line schedule, and graph wiring, remain
 file-based: a task of several steps and conditions is drawn in the standalone
