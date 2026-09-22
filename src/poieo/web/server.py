@@ -47,7 +47,7 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..attachments import checked_attachments, picture_type
 from ..binding import load_binding, split_ref
-from ..card import expand, load_card
+from ..card import expand, load_card, load_cards
 from ..cron import CronSchedule
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
 from ..graph import Branch
@@ -504,6 +504,18 @@ def _spoken(payload: Any) -> dict[str, Any]:
     if "attachments" in payload:
         spoken["attachments"] = checked_attachments(payload["attachments"])
     return spoken
+
+
+def _has_chat_card(folder: Path) -> bool:
+    """Whether a project's tasks folder already holds its chat card.
+
+    Read from the folder rather than the daemon's list: a card written a
+    moment ago is on disk before the daemon has noticed it.
+    """
+    try:
+        return any(card.chat for card in load_cards(folder))
+    except PoieoError:
+        return False
 
 
 def _is_chat(runner: Any) -> bool:
@@ -1131,13 +1143,25 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": "choose a prompt or steps, not both"}, status_code=400)
         if not prompt and not has_steps:
             return JSONResponse({"error": "a task needs a prompt"}, status_code=400)
+        # The chat card talks about the whole project, so its folder is the
+        # project's own -- written relative to the card, as a card reads it.
+        if body.get("chat") is True and not folder and config.cards:
+            folder = Path(os.path.relpath(config.base_dir, config.resolve_path(config.cards))).as_posix()
         if not folder:
             return JSONResponse(
                 {"error": "a task needs the folder it works in; there is no default"},
                 status_code=400,
             )
+        # The chat card: the task the board's chat speaks to, written the
+        # first time the chat is used. It waits to be spoken to, hands work to
+        # nobody, and starts able only to look.
+        chat = body.get("chat") is True
+        if chat and (has_steps or schedule or body.get("then")):
+            return JSONResponse({"error": "a chat card has no steps, schedule or connections"}, status_code=400)
 
         cards = config.resolve_path(config.cards)
+        if chat and await asyncio.to_thread(_has_chat_card, cards):
+            return JSONResponse({"error": "this project already has a chat card"}, status_code=409)
         where, refused = _folder_inside(config, folder)
         if refused is not None:
             return JSONResponse({"error": refused}, status_code=400)
@@ -1188,6 +1212,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 "name": title,
                 "folder": folder,
                 **({"graph": f"{slug}.graph.yaml"} if graph is not None else {"prompt": prompt}),
+                **({"chat": True, "tools": ["read"]} if chat else {}),
                 # One line on the form, spelled as the card spells it.
                 **schedule,
                 **({} if enabled else {"enabled": False}),

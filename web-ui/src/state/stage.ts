@@ -128,6 +128,8 @@ export interface TaskState {
   applies: "auto" | "review"
   /** The commands that must pass first, for the card to name. */
   applyChecks: string[]
+  /** The task the chat speaks to: kept here for the chat, never drawn on the board. */
+  chat: boolean
 }
 
 /**
@@ -213,6 +215,7 @@ function createEmptyTaskState(): TaskState {
     tracked: false,
     applies: "review",
     applyChecks: [],
+    chat: false,
     then: [],
     shape: { entry: "", nodes: [] },
     trigger: "",
@@ -240,12 +243,18 @@ export function keyOfTask(project: string, task: string): string {
  * the whole board, not a filtered one.
  */
 export function onlyProject(stage: StageState, project: string | null): StageState {
-  if (project === null) return stage
   const tasks: Record<string, TaskState> = {}
   for (const [key, task] of Object.entries(stage.tasks)) {
-    if (task.project === project) tasks[key] = task
+    // The chat's task is a conversation, not work: not drawn, counted, or
+    // offered as a place to hand work to.
+    if ((project === null || task.project === project) && !task.chat) tasks[key] = task
   }
   return { ...stage, tasks }
+}
+
+/** The task a project's chat speaks to, or null before the chat has made one. */
+export function chatTaskOf(stage: StageState, project: string): TaskState | null {
+  return Object.values(stage.tasks).find((task) => task.project === project && task.chat) ?? null
 }
 
 /**
@@ -277,6 +286,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       trigger: row.trigger,
       applies: row.apply?.mode ?? "review",
       applyChecks: row.apply?.checks ?? [],
+      chat: row.chat ?? false,
       status: drawnStatus(row),
       held: row.holding,
       heldBecause: row.held_because ?? "",

@@ -549,6 +549,17 @@ p.run-checks[data-verdict="blocked"] {
   font-size: 0.72em;
 }
 
+/* What the model looked at, small enough to sit on the call's own line. */
+.drawer-preview {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  display: block;
+  margin-top: 4px;
+  max-height: 72px;
+  max-width: 128px;
+  object-fit: cover;
+}
+
 .drawer-entry[data-error="true"] .drawer-tool-purpose,
 .drawer-entry[data-error="true"] .drawer-tool-meta {
   color: var(--stop);

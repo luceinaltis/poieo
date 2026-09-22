@@ -20,20 +20,6 @@
   margin: 0;
 }
 
-/* The model that last answered, and no more of the bar than it needs: a
-   routed model's name can be longer than the panel, and the buttons after it
-   must not be pushed off the edge. */
-.chat-model {
-  color: var(--line);
-  flex: 1;
-  font-size: 0.82em;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-new,
 .chat-close {
   background: none;
   border: 0;
@@ -44,11 +30,6 @@
   padding: 0 2px;
 }
 
-.chat-new {
-  font-size: 0.82em;
-}
-
-.chat-new:hover:not(:disabled),
 .chat-close:hover:not(:disabled) {
   color: var(--text);
 }
@@ -57,7 +38,7 @@
    without it a long thread pushes the box past the viewport instead of
    scrolling above it. A reply is the one thing here a reader may want to take
    away, so the page's opt-out of selection is undone for the thread. */
-.chat-thread {
+.chat-thread-view {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -191,8 +172,16 @@
   font-size: 0.8em;
 }
 
-/* Whom the box speaks to. Drawn like the filter box beside it in the models
-   panel: a control, one step quieter than the words. */
+/* Which conversation, and whom the box speaks to. Drawn like the filter box
+   in the models panel: a control, one step quieter than the words. The
+   conversation picker takes the room left; a long first message is cut. */
+.chat-thread {
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.chat-thread,
 .chat-target {
   background: var(--panel);
   border: 1px solid var(--rule);
@@ -206,8 +195,19 @@
 }
 
 /* A run's timeline in the chat: the drawer's lines, at the chat's size. */
-.chat-thread .drawer-timeline {
+.chat-thread-view .drawer-timeline {
   font-size: 0.9em;
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* What an answer did, folded under it: a past run's record, opened on request. */
+.chat-work {
+  color: var(--dim);
+  font-size: 0.82em;
+  margin-top: 4px;
+}
+
+.chat-work summary {
+  cursor: pointer;
 }

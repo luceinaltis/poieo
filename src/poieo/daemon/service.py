@@ -1020,6 +1020,8 @@ class TaskRunner:
                     payload["sender"] = handed.result
                 if spoken is not None:
                     payload["message"] = spoken["message"]
+                    if spoken["thread"] is not None:
+                        payload["thread"] = spoken["thread"]
                     if card is not None and card.chat:
                         # What was said before, in this conversation: read
                         # back from this task's own records, by thread.

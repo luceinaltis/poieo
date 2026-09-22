@@ -877,8 +877,28 @@ test("a memory named in the drawer opens the memory place at that entry", async 
   expect(drawer.querySelector(".run-brief")?.getAttribute("data-run")).toBe("newest-but-quiet")
 })
 
-test("chat is a panel from the bar, and its thread outlives a visit to a task", async () => {
-  await render(initialStage(TASK_ROWS))
+const CHAT_ROW: TaskRow = { ...TASK_ROWS[0], name: "chat", trigger: "manual", chat: true }
+
+const CHAT_RUN: RunSummary = {
+  run_id: "c1",
+  task: "chat",
+  project: "board",
+  graph: "chat",
+  status: "completed",
+  started_at: "2026-09-23T01:00:00Z",
+  finished_at: "2026-09-23T01:00:05Z",
+  steps: 1,
+  iteration: 1,
+  trigger: "run now",
+  usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+  error: null,
+  said: "Hello.",
+  message: "hello?",
+  thread: "t-1",
+}
+
+test("chat is a panel from the bar, and the open conversation outlives a visit to a task", async () => {
+  await render(setRuns(initialStage([...TASK_ROWS, CHAT_ROW]), "board/chat", [CHAT_RUN]))
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-models"]')!.click())
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
 
@@ -888,14 +908,14 @@ test("chat is a panel from the bar, and its thread outlives a visit to a task", 
   expect(container.querySelector(".chat")).not.toBeNull()
   expect(container.querySelector('[data-do="open-chat"]')!.getAttribute("aria-expanded")).toBe("true")
   expect(container.querySelector('[data-do="open-board"]')!.getAttribute("aria-current")).toBe("page")
+  // The chat's own task is a conversation, not a card on the board.
+  expect(container.querySelector('[data-task="board/chat"]')).toBeNull()
 
-  const box = container.querySelector<HTMLTextAreaElement>(".chat-box")!
+  const conversation = container.querySelector<HTMLSelectElement>('select[aria-label="Conversation"]')!
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
-    setter.call(box, "hello?")
-    box.dispatchEvent(new Event("input", { bubbles: true }))
+    conversation.value = "t-1"
+    conversation.dispatchEvent(new Event("change", { bubbles: true }))
   })
-  await act(async () => container.querySelector<HTMLElement>('[data-do="chat-send"]')!.click())
   expect(container.textContent).toContain("Hello.")
 
   // A task picked off the board takes the margin...
@@ -903,72 +923,34 @@ test("chat is a panel from the bar, and its thread outlives a visit to a task", 
     container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
   })
   expect(container.querySelector(".chat")).toBeNull()
-  expect(container.querySelector(".drawer")).not.toBeNull()
 
-  // ...and the thread is still there when chat is opened again.
+  // ...and the conversation is still open when chat is opened again.
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
   expect(container.textContent).toContain("hello?")
   expect(container.textContent).toContain("Hello.")
 })
 
-/** Type into the chat box and press send; the reply is whatever `chat` answers. */
-async function sayInChat(text: string) {
-  const box = container.querySelector<HTMLTextAreaElement>(".chat-box")!
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
-    setter.call(box, text)
-    box.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-  await act(async () => container.querySelector<HTMLElement>('[data-do="chat-send"]')!.click())
-}
-
-test("a reply that lands after a switch of project does not become the new project's thread", async () => {
-  const { chat } = await import("./api")
-  let answer!: (value: Awaited<ReturnType<typeof chat>>) => void
-  vi.mocked(chat).mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
-  await render(initialStage(TASK_ROWS), [
+test("a switch of project leaves the conversation it had open behind", async () => {
+  await render(setRuns(initialStage([...TASK_ROWS, CHAT_ROW]), "board/chat", [CHAT_RUN]), [
     { name: "board", root: "/home/k/chores", keeps_copies: true },
     { name: "other", root: "/home/k/other", keeps_copies: true },
   ])
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
-  await sayInChat("hello from board")
-  expect(container.textContent).toContain("thinking…")
+  const conversation = container.querySelector<HTMLSelectElement>('select[aria-label="Conversation"]')!
+  await act(async () => {
+    conversation.value = "t-1"
+    conversation.dispatchEvent(new Event("change", { bubbles: true }))
+  })
 
   const picker = container.querySelector<HTMLSelectElement>(".shell-project-pick")!
   await act(async () => {
     picker.value = "other"
     picker.dispatchEvent(new Event("change", { bubbles: true }))
   })
-  expect(container.querySelector(".chat")).toBeNull()
-
-  // The model answers board's question after the reader has left for other.
-  await act(async () => answer({ ok: true, reply: "Late.", model: "fake/m1" }))
   await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
 
-  expect(container.querySelector(".chat")).not.toBeNull()
   expect(container.querySelectorAll(".chat-turn")).toHaveLength(0)
-  expect(container.textContent).not.toContain("Late.")
-})
-
-test("a reply that lands while the panel is closed still reaches the thread", async () => {
-  const { chat } = await import("./api")
-  let answer!: (value: Awaited<ReturnType<typeof chat>>) => void
-  vi.mocked(chat).mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
-  await render(initialStage(TASK_ROWS))
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
-  await sayInChat("hello?")
-
-  // A task picked off the board takes the margin while the model thinks...
-  await act(async () => {
-    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-pick')!.click()
-  })
-  expect(container.querySelector(".chat")).toBeNull()
-  await act(async () => answer({ ok: true, reply: "Hello.", model: "fake/m1" }))
-
-  // ...and the exchange is there when chat is opened again.
-  await act(async () => container.querySelector<HTMLElement>('[data-do="open-chat"]')!.click())
-  expect(container.textContent).toContain("hello?")
-  expect(container.textContent).toContain("Hello.")
+  expect(container.textContent).not.toContain("Hello.")
 })
 
 test("one bar: tabs mark where you are, toggles show what is open, and neither moves the other", async () => {
@@ -1041,5 +1023,5 @@ test("a task that is running is offered to the chat, with its live timeline", as
   await act(async () => store.push(replay(initialStage(TASK_ROWS), AGENT_RUN.slice(0, 2))))
   const picker = container.querySelector<HTMLSelectElement>(".chat-target")!
   expect(picker).not.toBeNull()
-  expect([...picker.options].map((option) => option.value)).toEqual(["model", "chores"])
+  expect([...picker.options].map((option) => option.value)).toEqual(["chat", "chores"])
 })

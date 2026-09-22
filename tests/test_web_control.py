@@ -258,6 +258,8 @@ async def test_the_message_reaches_the_run_and_its_record(tmp_path):
             assert first["message"] == "Tidy the notes."
             assert first["thread"] == "t-1"
             assert runner._run_input["message"] == "Tidy the notes."
+            # And which conversation, so a page opened mid-run can place it.
+            assert runner._run_input["thread"] == "t-1"
 
             # A plain run-now afterwards carries nothing over from the last one.
             await client.post(f"/api/tasks/{daemon.config.display_name}/f/run")
