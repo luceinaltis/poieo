@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
 from ..binding import BindingSpec, load_binding
-from ..card import CardSpec, expand, load_card, record_run
+from ..card import CardSpec, chat_transcript, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
 from ..expr import evaluate, wrap
 from ..graph import Branch, GraphSpec, load_graph
@@ -1014,6 +1014,17 @@ class TaskRunner:
                     payload["sender"] = handed.result
                 if spoken is not None:
                     payload["message"] = spoken["message"]
+                    if card is not None and card.chat:
+                        # What was said before, in this conversation: read
+                        # back from this task's own records, by thread.
+                        runs = self.store.list_runs(limit=200, task=self.name, project=self.config.display_name)
+                        payload["transcript"] = chat_transcript(runs, spoken["thread"])
+                if card is not None and card.chat and not str(payload.get("message") or "").strip():
+                    # Every road here is refused before it starts -- the
+                    # route, a handoff, the CLI -- so this is the last net:
+                    # a run answering nobody costs a model call and says nothing.
+                    log.warning("task '%s' is a chat card and was started with nothing said to it", self.name)
+                    return True
                 self._run_input = payload
                 workdir = await self._open_change()
                 # Only now: the prompt above has read the journal, so words that

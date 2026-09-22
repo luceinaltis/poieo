@@ -254,6 +254,8 @@ export interface TaskRow {
   shape: GraphShape
   /** How its work reaches the project. Absent from an older daemon, which only reviewed. */
   apply?: ApplyPermission
+  /** The task the chat speaks to, which the board leaves off its stage. */
+  chat?: boolean
 }
 
 /**

@@ -35,13 +35,23 @@ log = logging.getLogger("poieo.card")
 DEFAULT_EVERY = "1h"
 DEFAULT_MAX_TURNS = 40
 
+# How much of a conversation a chat card's run reads back: its newest turns,
+# and no more characters than this in all. Each run reads it whole, and a
+# run's input is kept on its record, so it has to stay small.
+CHAT_TURNS = 20
+CHAT_CHARS = 24_000
+_CHAT_START = "(this is the start of the conversation)"
+
 
 def system_block(task: CardSpec, roster: list[str] | None = None) -> str:
     """The generated node's system prompt. User-visible, so it is fixed here.
 
     The journal arrives as run input rather than baked in, because it is
     re-read before every run -- a note written at 8am is in effect at 9am.
+    A chat card reads its conversation instead: see `chat_block`.
     """
+    if task.chat:
+        return chat_block(task)
     return (
         f"You are working on {task.name}, in {task.folder_path()}.\n\n"
         + _memory_section(task)
@@ -50,6 +60,43 @@ def system_block(task: CardSpec, roster: list[str] | None = None) -> str:
         "Finish by saying in one line what you did. If there was nothing worth\n"
         "doing, say that in one line instead." + _roster_block(task, roster)
     )
+
+
+def chat_block(task: CardSpec) -> str:
+    """What a chat card's run is told: who it is talking with, the card's own
+    words, and the conversation so far. The message itself is the prompt."""
+    opening = f"You are talking with a person on the poieo board, about {task.folder_path()}.\n\n{task.prompt}\n\n"
+    return (
+        opening
+        + _memory_section(task)
+        + "The conversation so far:\n{{ input.transcript }}\n\n"
+        + "Answer their newest message. Answer in the language they write in."
+    )
+
+
+def chat_transcript(runs: list[dict[str, Any]], thread: str | None) -> str:
+    """One conversation, read back from the runs that made it.
+
+    ``runs`` are run summaries newest first, as the store lists them; the
+    turns are this thread's, oldest first, and only the newest of them when
+    the whole would not fit.
+    """
+    turns: list[str] = []
+    size = 0
+    for run in runs:
+        if thread is None or run.get("thread") != thread or run.get("message") is None:
+            continue
+        turn = f"person: {run['message']}\nyou: {run.get('said') or '(no answer)'}"
+        if not turns and len(turn) > CHAT_CHARS:
+            # The newest turn is the one the reply follows from: kept, cut,
+            # rather than left out for being long.
+            turn = turn[: CHAT_CHARS - len(" [cut]")] + " [cut]"
+        if len(turns) >= CHAT_TURNS or size + len(turn) > CHAT_CHARS:
+            turns.append("(earlier turns left out)")
+            break
+        turns.append(turn)
+        size += len(turn)
+    return "\n\n".join(reversed(turns)) or _CHAT_START
 
 
 def _memory_section(task: CardSpec) -> str:
@@ -127,6 +174,9 @@ class CardSpec(BaseModel):
     # about: "this fires hourly, so it must not take an hour".
     deadline: float | None = Field(default=None, gt=0)
     enabled: bool = True
+    # The task the board's chat speaks to: it never fires by itself, and each
+    # message starts one of its runs, which answers it.
+    chat: bool = False
     binding: str | None = None
     # Where this task's commands may run. Absent means the host, as before.
     # Not a node key: it describes the task, so `poieo eject` keeps it.
@@ -153,6 +203,12 @@ class CardSpec(BaseModel):
             if named:
                 raise ValueError(f"{', '.join(named)} belong in the graph once a task names one")
         named = [k for k in ("every", "at", "trigger") if getattr(self, k) is not None]
+        if self.chat and self.graph:
+            raise ValueError("a chat card is a prompt card; it cannot name a graph")
+        if self.chat and named:
+            raise ValueError(f"a chat card waits to be spoken to, so it takes no {named[0]}")
+        if self.chat and "notes" in (self.tools or []):
+            raise ValueError("a chat card answers the person in front of it; it takes no notes toolset")
         if len(named) > 1:
             raise ValueError(f"a task is scheduled by one of every / at / trigger, not {' and '.join(named)}")
         return self
@@ -260,6 +316,8 @@ def is_card_file(path: str | Path) -> bool:
 
 
 def _trigger(task: CardSpec) -> Any:
+    if task.chat:
+        return {"type": "manual"}
     if task.trigger is not None:
         return task.trigger
     if task.at is not None:
@@ -296,7 +354,9 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
                 max_turns=task.max_turns,
                 deadline=task.deadline,
                 system=system_block(task, roster),
-                prompt=task.prompt,
+                # A chat card's prompt is the standing instruction in its
+                # system block; what the run answers is what was said.
+                prompt="{{ input.message }}" if task.chat else task.prompt,
                 output=OutputSpec(as_="summary"),
             )
         ],
@@ -385,6 +445,10 @@ def record_run(task: CardSpec, result: Any, replace: bool = False) -> None:
     """
     # Both writes swallow their own failures, so neither can cost the other.
     write_result(task, result, replace=replace)
+    if task.chat:
+        # Its history is its runs, read back by thread; a journal would say
+        # every answer twice, and to no one.
+        return
     if result.status == "completed":
         kind, text = "did", closing_line(result)
     elif result.status == "asking":
@@ -417,7 +481,9 @@ def card_payload(task: CardSpec) -> dict[str, Any]:
     daemon -- which have to agree. Re-read on every call, never cached: a note
     left at 8am is in effect at 9am.
     """
-    payload: dict[str, Any] = {"journal": read_journal(task.journal_path())}
+    payload: dict[str, Any] = (
+        {"transcript": _CHAT_START, "message": ""} if task.chat else {"journal": read_journal(task.journal_path())}
+    )
     try:
         memory = read_memory(task.dir, task)
     except (sqlite3.Error, SpecError, OSError) as exc:

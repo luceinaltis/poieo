@@ -31,6 +31,7 @@ to work. Its optional fields are:
 - data: `input`, `input_file`;
 - flow after completion: `then`, `on_error`;
 - state: `enabled`;
+- conversation: `chat`, described below;
 - applying changes: `apply`, described below.
 
 Unknown keys are rejected. A graph-backed card cannot also declare
@@ -80,6 +81,28 @@ card. That makes a misspelled card field a validation error instead of a task
 that silently disappears. A document mixing graph and card markers is rejected
 as ambiguous -- whether it was found in the folder or named on the command line,
 since one rule cannot give two answers.
+
+## Chat cards
+
+`chat: true` makes a prompt card the task the board's chat speaks to: a
+conversation is this task, and each message is one of its runs. It expands to a
+manual trigger, so it takes no `every`, `at` or `trigger`, and it cannot name a
+graph. The generated node's prompt is `{{ input.message }}`; the card's own
+`prompt` becomes its standing instruction, in a system block that carries the
+conversation so far as `{{ input.transcript }}` instead of the journal.
+
+A run started with a message and a thread (see `daemon.md`) reads its
+transcript from this task's own run records: the earlier runs of the same
+thread, oldest first, as `person:` and `you:` turns, at most the newest 20 and
+24,000 characters. A new thread reads `(this is the start of the
+conversation)`. A chat card writes no journal line, because its history is its
+runs. The board lists it with `chat: true` and leaves it off the stage.
+
+A chat card is only ever a conversation. It takes no `notes` toolset and is
+left off every other card's note roster, since it reads no journal; no `then:`
+may hand work to it; `poieo eject` refuses it, having no graph it could keep
+`chat:` beside; and a run with nothing said is refused before it starts -- a
+bare run-now is a 400, and `poieo run` asks for `--set message=...`.
 
 ## Run input and journal
 

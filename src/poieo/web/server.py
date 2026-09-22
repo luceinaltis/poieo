@@ -502,6 +502,13 @@ def _spoken(payload: Any) -> dict[str, Any]:
     return {"message": message, "thread": thread}
 
 
+def _is_chat(runner: Any) -> bool:
+    # A task loaded from a graph file has no card, and neither has a project
+    # built without a tasks folder.
+    card = getattr(runner.config, "cards_by_task", {}).get(runner.name)
+    return bool(card is not None and card.chat)
+
+
 def _runner_for(daemon: Any, project: str | None, task: str | None) -> Any:
     """The one runner a project and a task name between them pick out.
 
@@ -808,6 +815,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # of quiet cards must say which of them do the second.
                     "apply": _permission(runner.task.spec.apply),
                     "shape": _shape(runner.task),
+                    # The task the chat speaks to, which the board leaves off
+                    # its stage: its runs are a conversation, not work.
+                    "chat": _is_chat(runner),
                 }
             )
         # Whose board this is -- all of them. Two daemons on two ports serve
@@ -2269,6 +2279,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 spoken = _spoken(payload)
             except SpecError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
+        if not spoken and _is_chat(runner):
+            return JSONResponse({"error": "this task answers a message: send {message, thread}"}, status_code=400)
         if not runner.run_now(**spoken):
             # Iterations never overlap; the refusal names the run in the way.
             return JSONResponse(

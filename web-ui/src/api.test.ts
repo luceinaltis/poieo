@@ -98,6 +98,12 @@ test("fetchTasks keeps the whole listing, project and all", async () => {
   expect(await fetchTasks()).toEqual({ projects, tasks: [{ name: "triage" }] })
 })
 
+test("the task the chat speaks to is kept off the board's tasks", async () => {
+  const projects = [{ name: "night shift", root: "/home/k/chores" }]
+  stubFetch({ "/api/tasks": { body: { projects, tasks: [{ name: "triage" }, { name: "chat", chat: true }] } } })
+  expect(await fetchTasks()).toEqual({ projects, tasks: [{ name: "triage" }] })
+})
+
 test("a listing the daemon did not answer is an empty board, not a crash", async () => {
   stubFetch({})
   expect(await fetchTasks()).toEqual({ projects: [], tasks: [] })

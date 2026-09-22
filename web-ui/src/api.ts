@@ -30,7 +30,10 @@ export async function fetchTasks(): Promise<Listing> {
   // the listing rather than on each row, because the listing a reader can
   // recognise least -- the one with no tasks in it -- needs naming most.
   const body = await getJson<Listing>("/api/tasks")
-  return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
+  // The task the chat speaks to is a conversation, not work: it is not
+  // drawn on the stage, counted, or picked as a place to hand work to.
+  const tasks = (body?.tasks ?? []).filter((task) => !task.chat)
+  return { projects: body?.projects ?? [], tasks }
 }
 
 const memoryUrl = (project: string, tail = "") =>
