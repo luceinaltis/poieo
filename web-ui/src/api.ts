@@ -726,6 +726,15 @@ export interface Card {
    * schedule to the default. Absent from an older daemon.
    */
   schedule?: string
+  /** Which task starts when a run of this one ends, and on what condition. Absent from an older daemon. */
+  then?: Connection[]
+}
+
+/** One `then:` arrow as the card spells it: the condition, the task it starts, and its word. */
+export interface Connection {
+  when: string
+  to: string | null
+  label?: string | null
 }
 
 export async function fetchCard(project: string, task: string): Promise<Card | null> {
@@ -773,6 +782,21 @@ export function rewriteCard(
     "PUT",
     `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
     typeof card === "string" ? { text: card } : card,
+  )
+}
+
+/**
+ * Replacing the card's connections, and nothing else in it.
+ *
+ * The daemon splices them into the card's own text, so any card can be
+ * connected -- one full of comments too -- and the whole list is sent each
+ * time: an empty one takes the last connection away.
+ */
+export function connect(project: string, task: string, then: Connection[]): Promise<RewrittenCard> {
+  return withBody(
+    "PUT",
+    `/api/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}`,
+    { then },
   )
 }
 

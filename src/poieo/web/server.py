@@ -46,6 +46,7 @@ from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..cron import CronSchedule
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
+from ..graph import Branch
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
@@ -360,6 +361,59 @@ def _schedule_line(every: Any, at: Any) -> str:
     if every is not None:
         return str(every)
     return str(at) if at is not None else ""
+
+
+def _with_then(text: str, then: list[dict[str, Any]], as_json: bool) -> str:
+    """The card's own text with its `then:` replaced, and nothing else moved.
+
+    A connection is made on the board, but the card is still the reader's
+    file: its comments and the fields no form shows are bytes, not a parse, and
+    a dump would lose them. So the block is cut out of the text by its lines
+    and the new one written where it stood, or at the end. An empty list takes
+    the block away.
+
+    Checked, not trusted: the result must parse to the old card with only
+    `then` different, or this raises and the caller says to edit the file. A
+    JSON card has no comments to keep and is written whole.
+    """
+    arrows = [{key: arrow[key] for key in ("when", "to", "label") if arrow.get(key) is not None} for arrow in then]
+    if as_json:
+        data = json.loads(text)
+        data.pop("then", None)
+        if arrows:
+            data["then"] = arrows
+        return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+    before = yaml.safe_load(text)
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    start = next((i for i, line in enumerate(lines) if re.match(r"then\s*:", line)), None)
+    block = yaml.safe_dump({"then": arrows}, allow_unicode=True, sort_keys=False) if arrows else ""
+    if start is None:
+        lines.append(block)
+    else:
+        end = start + 1
+        while end < len(lines):
+            line = lines[end]
+            if line.startswith(("---", "...")):
+                break
+            if not line.strip() or line[0] in " \t-#":
+                end += 1
+                continue
+            break
+        # Blank lines and comments at the block's foot belong to what follows.
+        while end > start + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+            end -= 1
+        lines[start:end] = [block]
+    result = "".join(lines)
+
+    expected = {key: value for key, value in before.items() if key != "then"}
+    if arrows:
+        expected["then"] = arrows
+    if yaml.safe_load(result) != expected:
+        raise ValueError("the card's text could not be rewritten around its connections")
+    return result
 
 
 def _schedule_words(trigger: Any) -> str:
@@ -1194,6 +1248,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # nothing when the card leaves its schedule to the default.
                     "schedule": _schedule_line(fresh.every, fresh.at),
                     "apply": fresh.apply.model_dump(),
+                    # The wiring with its conditions, which the listing draws
+                    # only as words on arrows: an editor has to show a
+                    # condition and send one it did not change back as it was.
+                    "then": [branch.model_dump() for branch in fresh.then],
                     "keeps_copies": bool(
                         fresh.folder_path() and await asyncio.to_thread(git_keeps_copies, fresh.folder_path())
                     ),
@@ -1207,6 +1265,45 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             body = {}
         body = body or {}
         text = str(body.get("text") or "")
+        # The third spelling: only the connections, spliced into the card's
+        # own text so every other byte of it stays the reader's. Any card may
+        # be connected -- a plain one and one full of comments alike.
+        if not text and "then" in body:
+            then = body["then"]
+            if not isinstance(then, list) or not all(isinstance(arrow, dict) for arrow in then):
+                return JSONResponse({"error": "then is a list of connections"}, status_code=400)
+            try:
+                for arrow in then:
+                    Branch.model_validate(arrow)
+            except Exception as exc:
+                return JSONResponse(
+                    {"error": f"a connection needs a condition it can read: {describe_invalid(exc)}"},
+                    status_code=400,
+                )
+            # Said now rather than dropped at run time with a log line.
+            for arrow in then:
+                # The loader refuses this at startup; a task's own next run is
+                # what its schedule is for.
+                if arrow.get("to") == spec.slug:
+                    return JSONResponse({"error": "a task cannot start itself when it finishes"}, status_code=400)
+                if arrow.get("to") is not None and arrow["to"] not in config.cards_by_task:
+                    return JSONResponse(
+                        {"error": f"this project has no task '{arrow['to']}' to start"}, status_code=400
+                    )
+            try:
+                current = await asyncio.to_thread(path.read_text, encoding="utf-8")
+            except FileNotFoundError:
+                return JSONResponse(
+                    {"error": f"task '{spec.slug}' was set aside; its card is no longer here"},
+                    status_code=409,
+                )
+            try:
+                text = _with_then(current, then, path.suffix == ".json")
+            except Exception:
+                return JSONResponse(
+                    {"error": f"the card of '{spec.slug}' could not be connected here, so it is edited as a file"},
+                    status_code=409,
+                )
         # The other spelling of a rewrite: the three fields, serialised here
         # through the same dump make uses -- so a person edits values and
         # never the spelling. Only for a card the dump can rebuild whole; a
@@ -1392,9 +1489,12 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
 
                     # The folder scan can switch an idle task and adopt its
                     # permission together. Permission-only changes take effect
-                    # at the next run. Neither needs a rebuilt trigger.
+                    # at the next run, and connections when a run ends. None
+                    # needs a rebuilt trigger.
                     def _same(old: Any, new: Any) -> bool:
-                        return old.model_copy(update={"enabled": new.enabled, "apply": new.apply}) == new
+                        return (
+                            old.model_copy(update={"enabled": new.enabled, "apply": new.apply, "then": new.then}) == new
+                        )
 
                     if loaded is not None:
                         live = _same(loaded.spec, new_spec)

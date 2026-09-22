@@ -104,6 +104,8 @@ From the board a user can:
 - describe the work in a conversation with the project's model and put the
   card it proposes on the form, to check and save;
 - rename a task or set it aside without destroying its file;
+- connect a task to the next one it starts when it finishes -- whenever, on
+  success, on failure, or when its answer says a word;
 - see task state, graph wiring, model assignments and run history, including
   whether a task applies its own checked changes and what its checks said,
   and watch a run act as it acts: what the model says each turn and each
@@ -117,7 +119,7 @@ From the board a user can:
   the page is open; it starts no run and changes no file -- or, while a task
   runs, speak to that run from the same panel and watch it act.
 
-Advanced task fields beyond a one-line schedule, and graph wiring, remain
+Advanced task fields beyond a one-line schedule, and the wiring of steps inside a task, remain
 file-based: a task of several steps and conditions is drawn in the standalone
 graph editor, which operates on the same graph schema as the viewer, until the
 board hosts that canvas.

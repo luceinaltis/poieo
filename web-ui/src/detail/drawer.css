@@ -689,6 +689,54 @@ p.run-checks[data-verdict="blocked"] {
   transform: rotate(90deg);
 }
 
+/* What starts when this task finishes: its connections, then a way to add one. */
+.next-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.next-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.next-row {
+  align-items: center;
+  display: flex;
+  font-size: 0.9em;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.next-none,
+.next-note {
+  color: var(--dim);
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.next-add {
+  display: grid;
+  gap: 8px;
+}
+
+.next-add select {
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+}
+
+.next-connect {
+  justify-self: start;
+}
+
 /* The file as it is, in the file's own face. */
 .card-text {
   background: var(--ground);
