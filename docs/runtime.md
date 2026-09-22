@@ -15,7 +15,11 @@ persisted question before the final summary is written.
 ## Run context
 
 `RunContext` holds the graph, binding, provider pool, run store, input, graph
-state, iteration, cancellation signal, work directory, and opaque tool context.
+state, iteration, cancellation signal, work directory, opaque tool context, and
+an optional direction queue: words from the person while the run is going,
+which an agent node drains between turns, as it reads the cancel signal, into
+its conversation as the person's next message, recording `node_directed` for
+each before the turn that reads them.
 During execution it accumulates node outputs, output aliases, usage, the visited
 path, and an optional question.
 

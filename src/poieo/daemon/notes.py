@@ -1,4 +1,5 @@
-"""Keep direction durable until it can be read by the next run.
+"""Keep direction durable until a run can read it: the one in flight, at its
+next turn, or else the next one at its start.
 
 Design: docs/tasks.md
 """
@@ -22,6 +23,15 @@ def leave_note(driver: Any, text: str) -> dict:
     card = driver.config.cards_by_task.get(driver.name)
     if card is None:
         raise SpecError("this task has no card to keep direction with")
+    queue = getattr(driver, "direction", None)
+    if queue is not None:
+        # A run is going: the words reach it at its next model turn, if it has
+        # one, and the journal keeps them now, as `deliver_notes` would have at
+        # the next start -- so they are not lost when the run has no turn left
+        # to hear them, and the record of what was said precedes any act on it.
+        append_journal(card.journal_path(), "you", text.strip(), title=card.name)
+        queue.put_nowait(text.strip())
+        return {"status": "delivered"}
     folder = driver.config.layout().notes(card.slug)
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{time.time_ns()}-{new_run_id()}.json"

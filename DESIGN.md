@@ -107,7 +107,8 @@ From the board a user can:
 - see task state, graph wiring, model assignments and run history, including
   whether a task applies its own checked changes and what its checks said,
   and watch a run act as it acts: what the model says each turn and each
-  tool it reaches for, with the reason it gave;
+  tool it reaches for, with the reason it gave, and tell it something while
+  it works, which it hears at its next model turn;
 - pause, resume or run a task now, and answer a decision it stopped to ask;
 - inspect, accept or discard a run's change;
 - inspect available models, declare an answering endpoint and choose which model

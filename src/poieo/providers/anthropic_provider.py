@@ -93,6 +93,15 @@ def _anthropic_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 out[-1]["content"].append(block)
             else:
                 out.append({"role": "user", "content": [block]})
+        elif role == "user" and out and out[-1]["role"] == "user":
+            # Two user messages in a row -- the person's words heard after a
+            # turn's tool results -- are one user turn to this API, which
+            # refuses the same role twice running.
+            block = {"type": "text", "text": message.get("content") or ""}
+            previous = out[-1]["content"]
+            out[-1]["content"] = (
+                [*previous, block] if isinstance(previous, list) else [{"type": "text", "text": previous}, block]
+            )
         else:
             out.append(dict(message))
     return out

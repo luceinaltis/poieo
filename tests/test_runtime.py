@@ -1997,3 +1997,47 @@ async def test_a_run_that_asks_spends_no_model_turn_on_the_question():
 
     assert result.outputs["confirm"] == "Merge it? x"
     assert result.status == "asking"
+
+
+async def test_direction_queued_for_a_run_is_heard_at_the_next_turn_and_recorded(tmp_path):
+    """Words from the person reach the model as its next user message, between
+    turns, and the record says so before the turn that read them."""
+    import asyncio
+
+    from poieo.providers.mock import MockProvider
+    from poieo.store import RunStore
+
+    graph = load_graph(EXAMPLES / "tasks/agent-task.graph.yaml")
+    binding = mock_binding(
+        {
+            "worker": [
+                {"tool_calls": [{"name": "list_dir", "arguments": {}}]},
+                "Skipped the drafts, as told.",
+            ]
+        }
+    )
+    heard: list[list[dict]] = []
+    queue: asyncio.Queue = asyncio.Queue()
+    original = MockProvider.complete
+
+    async def complete(self, request):
+        heard.append(list(request.messages))
+        # Said while the first turn's tool ran: heard on the second.
+        if len(heard) == 1:
+            queue.put_nowait("Skip the drafts folder.")
+        return await original(self, request)
+
+    MockProvider.complete = complete
+    try:
+        store = RunStore(tmp_path / "runs")
+        result = await run_graph(graph, binding, store=store, direction=queue, workdir=tmp_path)
+    finally:
+        MockProvider.complete = original
+
+    assert result.status == "completed"
+    assert all(m.get("content") != "Skip the drafts folder." for m in heard[0])
+    assert {"role": "user", "content": "Skip the drafts folder."} in heard[1]
+    directed = [e for e in store.events(result.run_id) if e["type"] == "node_directed"]
+    assert len(directed) == 1
+    assert directed[0]["data"]["text"] == "Skip the drafts folder."
+    assert directed[0]["data"]["turn"] == 2

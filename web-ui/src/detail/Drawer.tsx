@@ -41,6 +41,7 @@ function appearsInTimeline(event: PoieoEvent): boolean {
   }
   return [
     "node_tool_call",
+    "node_directed",
     "node_context_cleared",
     "node_input_dropped",
     "run_change_failed",
@@ -489,6 +490,20 @@ function TimelineEntry({ event }: { event: PoieoEvent }) {
       <li className="drawer-entry" data-kind="node">
         <span className="drawer-when">{shortTime(event.at ?? "")}</span>
         <div className="drawer-event drawer-label">{event.node_id}</div>
+      </li>
+    )
+  }
+
+  if (event.type === "node_directed") {
+    // The person's words, where the model heard them: after the calls that
+    // were running when they were said, before the turn that read them.
+    return (
+      <li className="drawer-entry" data-kind="directed">
+        <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+        <div className="drawer-event drawer-directed">
+          <span className="drawer-tool-purpose">you said</span>
+          <p className="drawer-text">{String(data.text ?? "")}</p>
+        </div>
       </li>
     )
   }

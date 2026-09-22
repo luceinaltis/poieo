@@ -48,6 +48,11 @@ class RunContext:
     # it and never opens it -- which is how it stays unaware that containers,
     # or journals, exist at all.
     tool_context: ToolContext | None = None
+    # Words from the person while the run is going, for the next turn of
+    # whichever agent node is running. The daemon fills it; a node drains it
+    # between turns and says so in the record, so the board can show what
+    # was said and when it was heard. None for a run nobody can speak to.
+    direction: asyncio.Queue[str] | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

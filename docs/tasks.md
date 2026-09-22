@@ -106,7 +106,16 @@ forge the sender, wake the recipient, or send outside the fixed roster. See
 
 ## Failure and extension
 
-The board's optional direction is stored before acknowledging it. Notes arriving
+The board's optional direction reaches the run in flight, when there is one:
+it is queued for that run, which hears it at its next model turn, if it has
+one, as the person's own message and records `node_directed` before the turn
+that read it; the journal keeps the words at once, so nothing is lost when
+the run has no turn left. The queue exists only once the run's prompt has
+been read from the journal, so words are never both in that prompt and heard
+again. Words that arrive after the run's
+last model turn stay in the journal for the next run to read, as history
+rather than as news. Between runs, the board's optional direction is stored
+before acknowledging it. Notes arriving
 during a run wait under `runs/notes/<task>/`, then join the journal after that run's
 bookmark. A restart delivers queued notes before the next input is read.
 All delivery, input construction and the closing journal entry use the same task

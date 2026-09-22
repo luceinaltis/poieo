@@ -420,7 +420,15 @@ export function undo(project: string, task: string, runId: string): Promise<Deci
   return post(taskUrl(project, task, "undo"), { run_id: runId })
 }
 
-export function leaveDirection(project: string, task: string, text: string): Promise<Answer> {
+/**
+ * Where the direction went: to the run in flight, heard at its next turn, or
+ * kept for the next run to read at its start.
+ */
+export interface DirectionAnswer extends Answer {
+  status?: "delivered" | "saved"
+}
+
+export function leaveDirection(project: string, task: string, text: string): Promise<DirectionAnswer> {
   return post(taskUrl(project, task, "note"), { text })
 }
 
