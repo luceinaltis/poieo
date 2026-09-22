@@ -154,3 +154,20 @@ def test_a_folded_history_mentions_the_picture_without_its_bytes():
     assert PIXEL not in folded
     assert "user: what is this? [image]" in folded
     assert "the tool answered: a.png, 1 KB [image]" in folded
+
+
+def test_clearing_reaches_a_tool_result_that_carries_a_picture():
+    """A picture a tool returned is resent every turn like any result, so the
+    room-saving that empties old results must be able to empty it too."""
+    from poieo.runtime.nodes import _CLEARED, _KEEP_RESULTS, _TOO_BIG, _clear_old_results, _drop_newest_result
+
+    newer = [{"role": "tool", "tool_call_id": f"n{i}", "content": "ok"} for i in range(_KEEP_RESULTS)]
+    messages = [{"role": "user", "content": "go"}, CALLED, SEEN, *newer]
+    freed = _clear_old_results(messages)
+
+    assert messages[2]["content"] == _CLEARED
+    assert freed == _conversation_size([SEEN]) - len(_CLEARED)
+
+    messages = [{"role": "user", "content": "go"}, CALLED, SEEN]
+    assert _drop_newest_result(messages) > 0
+    assert messages[-1]["content"] == _TOO_BIG

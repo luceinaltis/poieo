@@ -270,10 +270,10 @@ def _drop_newest_result(messages: list[dict[str, Any]]) -> int:
         if message.get("role") != "tool":
             continue
         content = message.get("content")
-        if not isinstance(content, str) or content in (_CLEARED, _TOO_BIG):
+        if not content or content in (_CLEARED, _TOO_BIG):
             return 0
         messages[index] = {**message, "content": _TOO_BIG}
-        return len(content) - len(_TOO_BIG)
+        return _conversation_size([message]) - len(_TOO_BIG)
     return 0
 
 
@@ -348,9 +348,11 @@ def _clear_old_results(messages: list[dict[str, Any]]) -> int:
     freed = 0
     for index in results[:-_KEEP_RESULTS] if _KEEP_RESULTS else results:
         content = messages[index].get("content")
-        if not isinstance(content, str) or content == _CLEARED:
+        if not content or content == _CLEARED:
             continue
-        freed += len(content) - len(_CLEARED)
+        # A result may be blocks, a picture among them; it weighs what the
+        # conversation's measure says, so what is freed agrees with it.
+        freed += _conversation_size([messages[index]]) - len(_CLEARED)
         messages[index] = {**messages[index], "content": _CLEARED}
     return freed
 
