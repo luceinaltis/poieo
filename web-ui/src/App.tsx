@@ -372,7 +372,12 @@ export default function App({ store }: { store?: StageStore }) {
             place, not a place, so opening one never moves the tabs' mark.
             Then the daemon's state, and a preference. These used to be split
             between this bar and a rail down the side, in the same lettering,
-            which read as two menus whose difference nobody could see. */}
+            which read as two menus whose difference nobody could see.
+
+            One group from here to the end of the bar, so that on a screen too
+            narrow for one row the whole group wraps under the name and the
+            keyboard's order down the bar stays the order the eye reads. */}
+        <div className="shell-row">
         <nav className="shell-nav" aria-label="Views">
           <div className="shell-places">
             {/* `board` is the page with no place over it: a tab rather than a
@@ -476,6 +481,7 @@ export default function App({ store }: { store?: StageStore }) {
           <span className="sr-only">{STATUS_LABEL[status] ?? status}</span>
         </span>
         <ThemeSwitch />
+        </div>
       </header>
 
       <div className="shell-stage" data-drawer={String(panelIsOpen)}>

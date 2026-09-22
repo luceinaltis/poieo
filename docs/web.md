@@ -259,9 +259,9 @@ a place, not a place; the daemon's connection is a dot, with the word for a
 screen reader and the tooltip; and the theme is an icon. Under the bar the
 stage leads with the place's own line: its name, how many tasks are on it,
 and the acts that land on it -- `new task` sits there on the board only (the
-empty board offers it in its invitation instead). On a phone the bar wraps
-into two rows, tabs and toggles under the name, and a panel starts below
-both. The task
+empty board offers it in its invitation instead). Below a laptop's width the bar
+wraps into two rows, everything after the name as one group in the same
+order the keyboard reaches it, and a panel starts below both. The task
 drawer leads with whether the reader must act and the latest or selected run's
 result, time, duration, change, or usage -- and, for a change that was checked,
 whether it was applied, is waiting for review, or was not applied, with the

@@ -204,9 +204,9 @@ def test_the_bar_keeps_its_labels_on_one_line_and_wraps_only_below_a_laptop():
     # bar; the bar names that taller height so the panel starts under it.
     narrow = css.split("@media (max-width: 900px)", 1)[1]
     assert re.search(r":root\s*\{[^}]*--bar-height:\s*[\d.]+rem", narrow, re.S)
-    nav = re.search(r"\.shell-nav\s*\{([^}]*)\}", narrow, re.S)
-    assert nav
-    assert "flex: 1 1 100%" in nav.group(1)
+    row = re.search(r"\.shell-row\s*\{([^}]*)\}", narrow, re.S)
+    assert row
+    assert "flex: 1 1 100%" in row.group(1)
     tabs = re.search(r"\.shell-places button\s*\{([^}]*)\}", narrow, re.S)
     assert tabs
     assert "padding-inline: 6px" in tabs.group(1)

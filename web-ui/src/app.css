@@ -57,9 +57,20 @@
   color: var(--text);
 }
 
+/* Everything after the project's name, as one group: the navigation, the
+   dot and the theme. It is what wraps under the name on a narrow screen,
+   whole, so the keyboard's order down the bar is the order the eye reads. */
+.shell-row {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
 /* Where you can be and what you can open: one navigation, two groups, and
    the gap between them is what keeps the second from reading as more
-   places. The group grows to hold the bar's middle so the tools sit at its
+   places. The group grows to hold the row's middle so the tools sit at its
    far end, beside the dot and the theme. */
 .shell-nav {
   align-items: center;
@@ -341,10 +352,9 @@
     height: 2rem;
   }
 
-  /* The second row. */
-  .shell-nav {
+  /* The second row: the whole group, in the order it is written. */
+  .shell-row {
     flex: 1 1 100%;
-    order: 9;
   }
 
   .shell-places button {
