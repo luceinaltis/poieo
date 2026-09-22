@@ -272,3 +272,17 @@ def test_a_refused_conversation_is_refused_before_any_stream_starts(tmp_path, mo
     assert response.status_code == 400
     assert response.headers["content-type"].startswith("application/json")
     assert heard == []
+
+
+def test_a_model_that_fails_before_its_first_piece_is_a_503_even_when_a_stream_was_asked_for(tmp_path, monkeypatch):
+    _streamed(monkeypatch, [("", "Fo")], fail_after=0)
+
+    response = _client(tmp_path).post(
+        "/api/projects/board/chat",
+        json={"messages": [{"role": "user", "content": "2 + 2?"}]},
+        headers={"accept": "text/event-stream"},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/json")
+    assert "did not answer" in response.json()["error"]

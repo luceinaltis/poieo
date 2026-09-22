@@ -240,12 +240,17 @@ class OpenAICompatibleProvider(_HttpProvider):
         usage = Usage()
         stop: str | None = None
         model = request.model
+        # `[DONE]` is the end; a `finish_reason` is one too, for a server that
+        # never sends the marker. A stream that reaches neither has stopped
+        # short, and what it carried so far is not the answer.
+        finished = False
         async for line in self._stream_lines("/chat/completions", payload):
             line = line.strip()
             if not line.startswith("data:"):
                 continue
             body = line[len("data:") :].strip()
             if body == "[DONE]":
+                finished = True
                 break
             try:
                 data = json.loads(body)
@@ -274,12 +279,15 @@ class OpenAICompatibleProvider(_HttpProvider):
             piece_thinking = delta.get("reasoning_content") or delta.get("reasoning") or ""
             if choices[0].get("finish_reason"):
                 stop = choices[0]["finish_reason"]
+                finished = True
             if piece_text:
                 text.append(piece_text)
             if piece_thinking:
                 thinking.append(piece_thinking)
             if piece_text or piece_thinking:
                 yield Delta(text=piece_text, thinking=piece_thinking)
+        if not finished:
+            raise ProviderError(f"{self.name}: the stream ended before the answer was done", provider=self.name)
         whole = LLMResponse(
             text="".join(text),
             model=model,

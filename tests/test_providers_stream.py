@@ -151,3 +151,26 @@ async def test_a_call_that_offers_tools_is_answered_whole_because_a_stream_would
 
     assert seen["body"]["stream"] is False
     assert len(deltas) == 1 and deltas[0].done.text == "done"
+
+
+async def test_an_openai_stream_that_ends_without_its_end_marker_is_a_provider_error():
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chunk = {"choices": [{"delta": {"content": "Fo"}, "finish_reason": None}]}
+        return httpx.Response(200, content=f"data: {json.dumps(chunk)}\n\n".encode())
+
+    with pytest.raises(ProviderError) as cut:
+        await _collect(_mock_client(provider, handler), _request())
+    assert "before the answer was done" in str(cut.value)
+
+
+async def test_an_openai_stream_may_end_with_a_finish_reason_and_no_marker():
+    provider = build_provider("vllm", ProviderSpec(type="openai_compatible", base_url="http://x/v1"))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chunk = {"choices": [{"delta": {"content": "Four."}, "finish_reason": "stop"}]}
+        return httpx.Response(200, content=f"data: {json.dumps(chunk)}\n\n".encode())
+
+    deltas = await _collect(_mock_client(provider, handler), _request())
+    assert deltas[-1].done is not None and deltas[-1].done.text == "Four."

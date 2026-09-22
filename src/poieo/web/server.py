@@ -2657,20 +2657,37 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # Asked for as a stream, the answer comes as it is written: `thinking`
         # and `text` frames carry each piece, `done` the whole reply as the
         # JSON answer would have said it, and `error` what a refusal would
-        # have said -- a failure after the first frame cannot be a status
-        # code any more, so it is a frame instead.
+        # have said. The first piece is waited for before the stream is
+        # opened, so a model that fails at once is still a 503 and not a 200
+        # with an apology inside; only a failure after that first piece has
+        # to be a frame, because the status has gone out by then.
         if "text/event-stream" in request.headers.get("accept", ""):
+            pool = ProviderPool(spec)
+            try:
+                deltas = pool.get(answerer.provider_name).stream(asked)
+                first = await deltas.__anext__()
+            except (PoieoError, StopAsyncIteration):
+                await pool.aclose()
+                return JSONResponse({"error": did_not_answer}, status_code=503)
+
+            def framed(delta: Any) -> list[str]:
+                out = []
+                if delta.thinking:
+                    out.append(sse_frame({"type": "thinking", "text": delta.thinking}))
+                if delta.text:
+                    out.append(sse_frame({"type": "text", "text": delta.text}))
+                if delta.done is not None:
+                    out.append(sse_frame({"type": "done", **whole(delta.done)}))
+                return out
 
             async def frames() -> AsyncIterator[str]:
                 try:
-                    async with ProviderPool(spec) as pool:
-                        async for delta in pool.get(answerer.provider_name).stream(asked):
-                            if delta.thinking:
-                                yield sse_frame({"type": "thinking", "text": delta.thinking})
-                            if delta.text:
-                                yield sse_frame({"type": "text", "text": delta.text})
-                            if delta.done is not None:
-                                yield sse_frame({"type": "done", **whole(delta.done)})
+                    async with pool:
+                        for frame in framed(first):
+                            yield frame
+                        async for delta in deltas:
+                            for frame in framed(delta):
+                                yield frame
                 except PoieoError:
                     yield sse_frame({"type": "error", "error": did_not_answer})
 
