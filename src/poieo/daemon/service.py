@@ -167,6 +167,10 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
     # startup: one is read before applying, the other when a run ends.
     if spec != task.spec.model_copy(update={"apply": spec.apply, "then": spec.then}):
         return None, STALE_CARD, fresh
+    # The one connection the loader refuses outright. Adopted, it would start
+    # this task again after every run, up to the chain limit.
+    if any(branch.to == task.spec.name for branch in spec.then):
+        return None, f"the card hands off to itself, which a restart would refuse; {STALE_CARD}", fresh
     return graph, None, fresh
 
 

@@ -225,3 +225,20 @@ async def test_a_connection_edited_in_the_card_is_adopted_not_reported(tmp_path,
     await until(lambda: not queue.empty(), "the board to be told")
     assert queue.get_nowait()["type"] == "tasks_changed"
     await down(daemon, task)
+
+
+async def test_a_connection_to_itself_is_reported_not_adopted(tmp_path, monkeypatch):
+    """The loader refuses a task handing off to itself at startup. Adopted
+    live, it would start itself again up to the chain limit after every run,
+    so it is drift instead: said on the task, and left for a restart that
+    will say no."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    daemon = Daemon(_project(tmp_path, _AT_THREE), store=NullStore())
+    task = await up(daemon)
+
+    card(tmp_path / "cards", "chores", _AT_THREE + 'then:\n  - {when: "true", to: chores}\n')
+
+    await until(lambda: _named(daemon, "chores").stale is not None, "the edit to be noticed")
+    assert "itself" in _named(daemon, "chores").stale
+    assert _named(daemon, "chores").task.spec.then == []
+    await down(daemon, task)

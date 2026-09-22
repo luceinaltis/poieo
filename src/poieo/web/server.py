@@ -1282,6 +1282,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 )
             # Said now rather than dropped at run time with a log line.
             for arrow in then:
+                # The loader refuses this at startup; a task's own next run is
+                # what its schedule is for.
+                if arrow.get("to") == spec.slug:
+                    return JSONResponse({"error": "a task cannot start itself when it finishes"}, status_code=400)
                 if arrow.get("to") is not None and arrow["to"] not in config.cards_by_task:
                     return JSONResponse(
                         {"error": f"this project has no task '{arrow['to']}' to start"}, status_code=400

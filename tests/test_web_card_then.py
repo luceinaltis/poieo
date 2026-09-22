@@ -133,6 +133,18 @@ def test_a_task_the_project_does_not_have_is_refused_and_nothing_changes(tmp_pat
     assert (cards / "watch.yaml").read_text(encoding="utf-8") == before
 
 
+def test_a_task_cannot_be_connected_to_itself(tmp_path):
+    """The loader refuses it at startup -- a task's own next run is what a
+    schedule is for -- so the board must not write one the daemon would adopt
+    live and then refuse on its next start."""
+    client, cards = _client(tmp_path)
+    before = (cards / "watch.yaml").read_text(encoding="utf-8")
+    answer = _connect(client, [{"when": "true", "to": "watch"}])
+
+    assert answer.status_code == 400, answer.text
+    assert (cards / "watch.yaml").read_text(encoding="utf-8") == before
+
+
 def test_a_condition_that_does_not_parse_is_refused_and_nothing_changes(tmp_path):
     client, cards = _client(tmp_path)
     before = (cards / "watch.yaml").read_text(encoding="utf-8")
