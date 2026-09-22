@@ -152,9 +152,9 @@ Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,
 `input_file:` — must stay inside the project.
 Both forms list the folders that fence would accept, in the card's own
-spelling: beside the setup form's folder field, and as the new-task panel's
-only folder control, standing on the project itself (`..`) until narrowed and
-showing a seed's or draft's folder as one more choice when the list lacks it.
+spelling, as their only folder control, standing on the card's folder -- the
+project itself (`..`) for a new one -- and showing a folder the list lacks as
+one more choice.
 Names are converted to safe filenames and never overwrite an existing card.
 Step creation uses the existing graph schema and preflight to check node fields,
 templates, conditions, connections, and model roles before writing. Every step
@@ -283,7 +283,11 @@ group while the run is in flight, closed otherwise. The card's tool lines say
 the model's purpose for each call when it wrote one. Older calls without a purpose use a conservative description from
 their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
-A plain card's form carries its on/off switch beside the three fields, sent
+A plain card's form is the new-task panel's, in its order: prompt, name, where
+it works from the folder list, and when from the same plain-word choices
+(a line they lack opens as written). Below it, `file name` moves the card's
+file, which is the task's identity; `name` is only its title.
+It carries its on/off switch beside those fields, sent
 only when it moved; because the folder scan adopts that field without a
 restart, the saved line then promises the daemon's next look rather than the
 next run, and a switched-off task's controls point at that switch.

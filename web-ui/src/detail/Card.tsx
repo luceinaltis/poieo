@@ -12,6 +12,7 @@ import { fetchCard, renameCard, rewriteCard, setAside } from "../api"
 import { ApplySettings, applicationOf, applicationReady, draftOf } from "../ApplySettings"
 import type { Card as CardFields, RenamedCard, RewrittenCard, SetAside } from "../api"
 import { FolderPick } from "../FolderPick"
+import { WhenPick } from "../make/WhenPick"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
 
@@ -163,42 +164,10 @@ export function Card({
                falls through to the file below, because a form must never
                drop what it cannot show. */
             <div className="card-form">
-              <label className="card-field">
-                name
-                <input
-                  className="card-field-name"
-                  value={name}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setName(event.target.value)
-                    setSaveResult(null)
-                    setIsSetAsideArmed(false)
-                  }}
-                />
-              </label>
-              <label className="card-field">
-                folder
-                <input
-                  className="card-field-folder"
-                  value={folder}
-                  disabled={busy}
-                  onChange={(event) => {
-                    setFolder(event.target.value)
-                    setSaveResult(null)
-                    setIsSetAsideArmed(false)
-                  }}
-                />
-                <FolderPick
-                  project={project}
-                  value={folder}
-                  disabled={busy}
-                  onPick={(path) => {
-                    setFolder(path)
-                    setSaveResult(null)
-                    setIsSetAsideArmed(false)
-                  }}
-                />
-              </label>
+              {/* The new-task panel's fields, in its order and with its
+                  controls: the words first, the name they give, then where it
+                  works and when -- so a task reads the same where it is made
+                  and where it is changed. */}
               <label className="card-field">
                 prompt
                 <textarea
@@ -214,19 +183,42 @@ export function Card({
                   }}
                 />
               </label>
-              {/* One line for `every:` or `at:`. A schedule reaches a trigger
-                  built at startup, so a change here waits for a restart, and
-                  the saved line says so; the field is here so that finding
-                  that out no longer means opening the file. */}
               <label className="card-field">
-                every
+                name
                 <input
-                  className="card-field-schedule"
-                  placeholder="1h unless said — 30m, loop, manual, or a cron line"
-                  value={schedule}
+                  className="card-field-name"
+                  value={name}
                   disabled={busy}
                   onChange={(event) => {
-                    setSchedule(event.target.value)
+                    setName(event.target.value)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+              </label>
+              <label className="card-field">
+                works in
+                <FolderPick
+                  project={project}
+                  value={folder}
+                  disabled={busy}
+                  alone
+                  onPick={(path) => {
+                    setFolder(path)
+                    setSaveResult(null)
+                    setIsSetAsideArmed(false)
+                  }}
+                />
+              </label>
+              {/* A schedule reaches a trigger built at startup, so a change
+                  here waits for a restart, and the saved line says so. */}
+              <label className="card-field">
+                when
+                <WhenPick
+                  value={schedule}
+                  disabled={busy}
+                  onChange={(line) => {
+                    setSchedule(line)
                     setSaveResult(null)
                     setIsSetAsideArmed(false)
                   }}
@@ -322,7 +314,7 @@ export function Card({
               daemon spells it, and refuses one that reads like a path. */}
           <div className="card-rename">
             <label className="card-field">
-              rename to
+              file name
               <input
                 className="card-rename-to"
                 value={newTaskName}

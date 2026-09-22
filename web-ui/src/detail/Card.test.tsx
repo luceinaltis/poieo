@@ -287,7 +287,10 @@ test("a plain card opens as the three fields, not as a file", async () => {
   const prompt = container.querySelector<HTMLTextAreaElement>(".card-field-prompt")!
   expect(prompt.value).toBe("tidy")
   expect(container.querySelector<HTMLInputElement>(".card-field-name")!.value).toBe("Chores")
-  expect(container.querySelector<HTMLInputElement>(".card-field-folder")!.value).toBe("../work")
+  // The folder as the new-task panel shows it: the list, standing on the
+  // card's folder, and no box asking for `..` by hand.
+  expect(container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!.value).toBe("../work")
+  expect(container.querySelector(".card-field-folder")).toBeNull()
 
   // Nothing changed, nothing to save -- same rule as the file mode.
   const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
@@ -370,14 +373,19 @@ test("a switch flipped beside a moved folder does not talk over the restart", as
     plain: true,
     enabled: false,
   })
+  fetchFolders.mockResolvedValue([
+    { path: "../work", name: "work" },
+    { path: "../other", name: "other" },
+  ])
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
   await open()
+  await act(async () => {})
 
   await act(async () => container.querySelector<HTMLInputElement>(".card-field-switch")!.click())
   await act(async () => {
-    const folder = container.querySelector<HTMLInputElement>(".card-field-folder")!
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(folder, "../other")
-    folder.dispatchEvent(new Event("input", { bubbles: true }))
+    const pick = container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
+    pick.value = "../other"
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
   })
   await act(async () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.click())
 
@@ -424,7 +432,7 @@ test("a plain card's folder can be chosen from the project", async () => {
     pick.value = ".."
     pick.dispatchEvent(new Event("change", { bubbles: true }))
   })
-  expect(container.querySelector<HTMLInputElement>(".card-field-folder")!.value).toBe("..")
+  expect(pick.value).toBe("..")
   expect(save().disabled).toBe(false)
   await act(async () => save().click())
   expect(rewriteCard).toHaveBeenCalledWith("board", "chores", {
@@ -448,15 +456,19 @@ test("a plain card shows its schedule, and a changed one is sent and waits for a
   rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
   await open()
 
-  const schedule = () => container.querySelector<HTMLInputElement>(".card-field-schedule")!
-  expect(schedule().value).toBe("15m")
+  // The new-task panel's picker: 15m is not one of its choices, so the line
+  // is open with it written out.
+  const when = () => container.querySelector<HTMLSelectElement>('select[name="when"]')!
+  expect(when().value).toBe("custom")
+  expect(container.querySelector<HTMLInputElement>('input[name="schedule"]')!.value).toBe("15m")
   const save = () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!
   expect(save().disabled).toBe(true)
 
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(schedule(), "0 2 * * *")
-    schedule().dispatchEvent(new Event("input", { bubbles: true }))
+    when().value = "0 2 * * *"
+    when().dispatchEvent(new Event("change", { bubbles: true }))
   })
+  expect(container.querySelector('input[name="schedule"]')).toBeNull()
   expect(save().disabled).toBe(false)
   await act(async () => save().click())
 

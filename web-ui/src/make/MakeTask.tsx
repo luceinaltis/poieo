@@ -44,11 +44,11 @@ import { createTask } from "../api"
 import type { MadeTask, TaskDraft } from "../api"
 import { FolderPick } from "../FolderPick"
 import { Refusal } from "../Refusal"
-import { WHEN } from "./schedule"
 import { slugOf, titleOf } from "./slug"
 import { useAct } from "../useAct"
 import { written } from "../connection"
 import { Describe, startsWhen } from "./Describe"
+import { WhenPick } from "./WhenPick"
 import "./make.css"
 
 /** How a card spells the project itself: relative to the tasks folder. */
@@ -100,9 +100,10 @@ export function MakeTask({
   const [name, setName] = useState(seed?.name ?? "")
   const [folder, setFolder] = useState(seed?.folder ?? WHOLE_PROJECT)
   const [prompt, setPrompt] = useState(seed?.prompt ?? "")
-  // Which of the choices above, or "custom" with the line written out.
-  const [when, setWhen] = useState("")
+  // The card's schedule line: "" for the default, or what the picker chose.
   const [schedule, setSchedule] = useState("")
+  // Bumped on each save, so the picker starts over with the fields.
+  const [cleared, setCleared] = useState(0)
   const [made, setMade] = useState<string | null>(null)
   // Which of the two presses made it, so the confirmation says which happened.
   // The whole reason the second button exists is that "it starts on its own"
@@ -193,16 +194,11 @@ export function MakeTask({
   // A card the model proposed, onto the fields. The folder is taken only
   // when the draft names one, and the list keeps what the person had
   // otherwise. A schedule the choices do not have opens the line with it
-  // written out.
+  // written out, which the picker does on its own.
   const fill = (draft: TaskDraft) => {
     setName(draft.name)
     if (draft.folder) setFolder(draft.folder)
-    if (WHEN.some((choice) => choice.value === draft.schedule && choice.value !== "custom")) {
-      setWhen(draft.schedule)
-    } else {
-      setWhen("custom")
-      setSchedule(draft.schedule)
-    }
+    setSchedule(draft.schedule)
     setPrompt(draft.prompt)
     setFilled(true)
     bringOut()
@@ -215,7 +211,7 @@ export function MakeTask({
   const collides = Boolean(title) && taken.includes(slugOf(title))
   // Emptied, the list means the whole project again, not nowhere.
   const where = folder.trim() || WHOLE_PROJECT
-  const line = when === "custom" ? schedule.trim() : when
+  const line = schedule.trim()
   const ready = Boolean(title && prompt.trim()) && !collides
 
   const send = (enabled: boolean) => () =>
@@ -243,8 +239,8 @@ export function MakeTask({
         setName("")
         setFolder(WHOLE_PROJECT)
         setPrompt("")
-        setWhen("")
         setSchedule("")
+        setCleared((times) => times + 1)
         setFilled(false)
         setStarted(enabled)
       }
@@ -391,30 +387,7 @@ export function MakeTask({
                 Jitter, a start rule or a run limit are still the file's. */}
             <label className="make-field">
               when
-              <select
-                name="when"
-                className="make-input"
-                value={when}
-                disabled={busy}
-                onChange={(event) => setWhen(event.target.value)}
-              >
-                {WHEN.map((choice) => (
-                  <option key={choice.value} value={choice.value}>
-                    {choice.label}
-                  </option>
-                ))}
-              </select>
-              {when === "custom" ? (
-                <input
-                  name="schedule"
-                  className="make-input"
-                  aria-label="When, as the card spells it"
-                  placeholder="30m, loop, or a cron line like 0 2 * * *"
-                  value={schedule}
-                  disabled={busy}
-                  onChange={(event) => setSchedule(event.target.value)}
-                />
-              ) : null}
+              <WhenPick key={cleared} value={schedule} disabled={busy} onChange={setSchedule} />
             </label>
           </div>
         </details>
