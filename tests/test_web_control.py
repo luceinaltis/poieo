@@ -269,6 +269,33 @@ async def test_the_message_reaches_the_run_and_its_record(tmp_path):
         await down(daemon, serve)
 
 
+async def test_a_message_held_back_by_the_budget_does_not_ride_into_a_later_run(tmp_path):
+    daemon = Daemon(_config(tmp_path, "{type: manual}"), store=NullStore())
+    serve = await up(daemon)
+    runner = daemon.runners[0]
+    over = {"now": True}
+    real = runner._over_budget
+    runner._over_budget = lambda *args: "over the limit" if over["now"] else real(*args)
+
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+            said = {"message": "Tidy the notes.", "thread": "t-1"}
+            await client.post(f"/api/tasks/{daemon.config.display_name}/f/run", json=said)
+            await until(lambda: runner.status == "over budget", "the budget hold")
+
+            # The next fire is not a run-now -- a handoff or the schedule --
+            # so nothing overwrites what was left behind.
+            over["now"] = False
+            runner._kick = True
+            runner._wake.set()
+            await until(lambda: len(runner.results) == 1, "the later fire")
+            assert "message" not in runner.results[0].summary()
+            assert "message" not in runner._run_input
+    finally:
+        await down(daemon, serve)
+
+
 # -- answering a question a run left ------------------------------------------
 
 

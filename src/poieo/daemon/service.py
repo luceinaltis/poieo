@@ -938,6 +938,10 @@ class TaskRunner:
         """One firing, end to end. False when the runner should stand down."""
         # Taken whether or not the read below succeeds: a handoff left parked
         # would ride along with whatever fired next, which is not what it was.
+        # Taken before the budget can turn this fire away: a message is for
+        # the run it asked for, and one the budget held back must not be
+        # read by whatever fires next.
+        spoken, self._spoken = self._spoken, None
         held_back = self._over_budget()
         if held_back is not None:
             log.warning("task '%s': %s", self.name, held_back)
@@ -947,7 +951,6 @@ class TaskRunner:
             return True
 
         handed, self._handed = self._handed, None
-        spoken, self._spoken = self._spoken, None
         self._depth = handed.depth if handed is not None else 0
 
         async def finish(result: RunResult) -> None:
