@@ -45,6 +45,7 @@ task; the daemon extends it when it intends to run them.
   runs/                          or the explicit store path
     index.jsonl                  append-only run summaries
     events/<run-id>.jsonl        append-only event streams
+    files/<run-id>/<name>        attachments and pictures a run's model looked at
     results/<run-id>.json        complete records used by memory
     asking/<task>.json           pending questions
     notes/<task>/<id>.json       direction waiting for the next run

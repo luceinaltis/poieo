@@ -113,6 +113,12 @@ class BroadcastStore(RunStore):
     def events(self, run_id: str) -> Iterator[dict[str, Any]]:
         return self._inner.events(run_id)
 
+    def keep_file(self, run_id: str, name: str, body: bytes) -> None:
+        self._inner.keep_file(run_id, name, body)
+
+    def kept_file(self, run_id: str, name: str) -> bytes | None:
+        return self._inner.kept_file(run_id, name)
+
 
 class MergedStore(RunStore):
     """Several projects' histories, read as one.
@@ -177,6 +183,13 @@ class MergedStore(RunStore):
             if found:
                 return iter(found)
         return iter(())
+
+    def kept_file(self, run_id: str, name: str) -> bytes | None:
+        for store in self._stores:
+            found = store.kept_file(run_id, name)
+            if found is not None:
+                return found
+        return None
 
     # -- the live feed -------------------------------------------------------
 

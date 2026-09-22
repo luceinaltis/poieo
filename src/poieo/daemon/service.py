@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable, Sequence
 
+from ..attachments import Attachment
 from ..binding import BindingSpec, load_binding
 from ..card import CardSpec, chat_transcript, expand, load_card, record_run
 from ..errors import ExpressionError, PoieoError, SpecError
@@ -258,10 +259,11 @@ RESULTS_KEPT = 20
 MAX_CHAIN = 10
 
 
-def _keep_spoken(result: RunResult, spoken: dict[str, str | None] | None) -> None:
+def _keep_spoken(result: RunResult, spoken: dict[str, Any] | None) -> None:
     """Put what a person said to start the run on its record."""
     if spoken is not None:
         result.message, result.thread = spoken["message"], spoken["thread"]
+        result.attachments = [one.name for one in spoken.get("attachments") or []] or None
 
 
 def handoff_scope(result: RunResult) -> dict[str, Any]:
@@ -399,7 +401,7 @@ class TaskRunner:
         self._kick = False
         # What a person said with a run-now, for the run it starts: taken by
         # that run and by no other, like a handoff.
-        self._spoken: dict[str, str | None] | None = None
+        self._spoken: dict[str, Any] | None = None
         self._wake = asyncio.Event()
         self._manual_fires = 0
         # A handoff waiting for this task to be free, and the depth of the run
@@ -754,7 +756,9 @@ class TaskRunner:
         self._wake.set()
         return self.status
 
-    def run_now(self, message: str | None = None, thread: str | None = None) -> bool:
+    def run_now(
+        self, message: str | None = None, thread: str | None = None, attachments: list[Attachment] | None = None
+    ) -> bool:
         """One fire, immediately, outside the schedule -- or False mid-run:
         iterations never overlap, exactly as the triggers promise.
 
@@ -766,7 +770,9 @@ class TaskRunner:
         """
         if self.status == "running" or not self.armed:
             return False
-        self._spoken = {"message": message, "thread": thread} if message is not None else None
+        self._spoken = (
+            {"message": message, "thread": thread, "attachments": attachments or []} if message is not None else None
+        )
         self._kick = True
         self._wake.set()
         return True
@@ -1026,6 +1032,9 @@ class TaskRunner:
                     log.warning("task '%s' is a chat card and was started with nothing said to it", self.name)
                     return True
                 self._run_input = payload
+                attached = spoken.get("attachments") if spoken is not None else None
+                for one in attached or []:
+                    self.store.keep_file(run_id, one.name, one.body)
                 workdir = await self._open_change()
                 # Only now: the prompt above has read the journal, so words that
                 # arrive from here on are heard once, at the next turn, rather
@@ -1048,6 +1057,7 @@ class TaskRunner:
                     tool_context=self.tool_context,
                     direction=self.direction,
                     finalize=finish,
+                    attachments=attached,
                 )
                 self._remember(result)
                 deliver_notes(self)

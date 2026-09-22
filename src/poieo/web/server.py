@@ -45,6 +45,7 @@ _CHAIN_AT_MOST = 4
 _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {f"LPT{n}" for n in range(1, 10)}
 
 from .. import detect as engines
+from ..attachments import checked_attachments, picture_type
 from ..binding import load_binding, split_ref
 from ..card import expand, load_card
 from ..cron import CronSchedule
@@ -499,7 +500,10 @@ def _spoken(payload: Any) -> dict[str, Any]:
     thread = payload.get("thread")
     if thread is not None and (not isinstance(thread, str) or not _THREAD.fullmatch(thread)):
         raise SpecError("a thread is 1 to 64 letters, digits, '-' or '_'")
-    return {"message": message, "thread": thread}
+    spoken: dict[str, Any] = {"message": message, "thread": thread}
+    if "attachments" in payload:
+        spoken["attachments"] = checked_attachments(payload["attachments"])
+    return spoken
 
 
 def _is_chat(runner: Any) -> bool:
@@ -2057,6 +2061,18 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         project = request.query_params.get("project")
         return JSONResponse({"runs": daemon.store.list_runs(limit=limit, task=task, project=project)})
 
+    def run_file(request: Request) -> Response:
+        """A file kept with a run: what was attached to the message that started it.
+
+        Served as the picture it was checked to be, or as plain text -- never
+        as anything a browser would run -- so a kept file cannot become a page.
+        """
+        body = daemon.store.kept_file(request.path_params["run_id"], request.path_params["name"])
+        if body is None:
+            return JSONResponse({"error": "no such file with this run"}, status_code=404)
+        media_type = picture_type(body[:16]) or "text/plain; charset=utf-8"
+        return Response(body, media_type=media_type, headers={"x-content-type-options": "nosniff"})
+
     def run_detail(request: Request) -> JSONResponse:
         run_id = request.path_params["run_id"]
         events = list(daemon.store.events(run_id))
@@ -2950,6 +2966,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/runs", runs),
         Route("/api/runs/{run_id}", run_detail),
         Route("/api/runs/{run_id}/diff", run_diff),
+        Route("/api/runs/{run_id}/files/{name}", run_file),
         Route("/api/runs/{run_id}/memory", run_memory),
         Route("/api/projects/{project}/models", project_models),
         Route("/api/projects/{project}/memory", project_memory),
