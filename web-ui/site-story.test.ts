@@ -34,6 +34,8 @@ it("switches between the task, run and change with matching accessible tabs", ()
     expect(tabs.filter(t => t.tabIndex === 0)).toEqual([tab])
     const panels = [...document.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
     expect(panels.filter(panel => !panel.hidden).map(panel => panel.id)).toEqual([tab.getAttribute("aria-controls")])
+    // Inactive panels keep their layout space, but must never accept input.
+    expect(panels.filter(panel => !panel.inert).map(panel => panel.id)).toEqual([tab.getAttribute("aria-controls")])
     expect(document.getElementById(tab.getAttribute("aria-controls")!)?.getAttribute("aria-labelledby")).toBe(tab.id)
   }
 })

@@ -145,7 +145,12 @@ run or a performance claim. The full board remains in an expandable preview.
 
 `site/story.js` enhances three readable articles into tabs. Click, Left/Right,
 Home and End select a panel; Tab reaches its content. Without JavaScript the
-controls stay hidden and all three articles remain readable. No autoplay,
+controls stay hidden and all three articles remain readable. Enhanced panels
+share a grid cell so the tallest reserves space even on phones; inactive panels
+remain invisible and inert. A moving gold underline follows selection (260 ms),
+content appears softly (220 ms), and added code briefly catches green light
+(900 ms). Content effects start only after a different tab is selected. Reduced
+motion removes all three effects; switching stays immediate. No autoplay,
 network request, or local storage is needed. Model roles follow as readable rows,
 with the user's choice explicit. The installation example expands on demand
 and explains that the offline scripted model does not repair a project.
