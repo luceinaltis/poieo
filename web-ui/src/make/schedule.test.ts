@@ -12,6 +12,7 @@ test("a line the form offers is said in the form's words", () => {
   expect(saidOf("30m")).toBe("every 30 minutes")
   expect(saidOf("24h")).toBe("every day")
   expect(saidOf("0 2 * * *")).toBe("every night at 2")
+  expect(saidOf("manual")).toBe("only when another task starts it")
 })
 
 test("any other line is said as the card spells it", () => {

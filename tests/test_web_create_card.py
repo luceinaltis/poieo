@@ -77,6 +77,21 @@ def test_a_schedule_is_written_as_every_or_at_by_its_shape(tmp_path):
     assert "every" not in text and "at:" not in text
 
 
+def test_manual_makes_a_task_that_only_another_task_starts(tmp_path):
+    """A task connected after another must not also run hourly on its own,
+    which is what a card without a schedule does. `manual` is the card's own
+    word for it: nothing but run-now or a handoff starts it."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    answer = _make(client, {"name": "follow", "folder": "../work", "prompt": "x", "schedule": "manual"})
+
+    assert answer.status_code == 200, answer.text
+    written = yaml.safe_load((cards / "follow.yaml").read_text(encoding="utf-8"))
+    assert written["trigger"] == {"type": "manual"}
+    assert "every" not in written and "at" not in written
+
+
 def test_a_schedule_that_is_neither_is_refused_before_anything_is_written(tmp_path):
     client, cards = _client(tmp_path)
     answer = _make(client, {"name": "odd", "folder": "../work", "prompt": "x", "schedule": "whenever"})

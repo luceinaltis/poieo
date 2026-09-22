@@ -222,7 +222,7 @@ export function Card({
                 every
                 <input
                   className="card-field-schedule"
-                  placeholder="1h unless said — 30m, loop, or a cron line"
+                  placeholder="1h unless said — 30m, loop, manual, or a cron line"
                   value={schedule}
                   disabled={busy}
                   onChange={(event) => {

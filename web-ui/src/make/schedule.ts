@@ -16,6 +16,8 @@ export const WHEN: { value: string; label: string }[] = [
   { value: "30m", label: "every 30 minutes" },
   { value: "24h", label: "every day" },
   { value: "0 2 * * *", label: "every night at 2" },
+  // Never on its own: for a task another one starts when it finishes.
+  { value: "manual", label: "only when another task starts it" },
   { value: "custom", label: "at another time…" },
 ]
 

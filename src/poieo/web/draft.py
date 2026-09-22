@@ -102,8 +102,8 @@ def briefing(project: str, folders: list[dict[str, str]], tasks: list[tuple[str,
         'words point to it; otherwise leave folder as "" and say that they choose it on the form. '
         "Write the prompt as instructions to a capable agent working alone: what to do, how to "
         'check it, and what to leave alone. Schedule is "" for hourly, an interval such as 30m or '
-        "2h, the word loop, or five cron fields such as 0 2 * * *. Do not describe this format to "
-        "the person."
+        "2h, the word loop, the word manual for a task that runs only when another task starts it, "
+        "or five cron fields such as 0 2 * * *. Do not describe this format to the person."
     )
 
 
