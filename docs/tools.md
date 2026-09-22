@@ -23,7 +23,8 @@ environment.
 
 | toolset | model-visible tools | default for a prompt card |
 |---|---|---|
-| `files` | `read_file`, `write_file`, `edit_file`, `append_file`, `list_dir`, `glob_files`, `search_files` | yes |
+| `files` | `read_file`, `write_file`, `edit_file`, `append_file`, `list_dir`, `glob_files`, `search_files`, `view_image` | yes |
+| `read` | `read_file`, `list_dir`, `glob_files`, `search_files`, `view_image` | no |
 | `shell` | `run_command` | yes |
 | `notes` | `tell` | no |
 
@@ -32,6 +33,17 @@ card with no `tools` field receives `files` and `shell`; an empty list means no
 tools. `TOOLSETS` is the extension registry. A fixed toolset is a list of tool
 definitions and coroutines; a context-dependent toolset, such as notes, is a
 factory built for each executor.
+
+`read` is the half of `files` that only looks. A task given `read` and nothing
+else can read the project and cannot change a file or run a command.
+
+`view_image` shows the model a picture from the work directory: PNG, JPEG, GIF
+or WebP, told apart by the file's first bytes rather than its name, up to
+3,750,000 bytes so the base64 stays inside what an endpoint takes. The tool's
+result is then a line of text and the picture, and the provider puts both in
+its own shape (see `binding.md`); a model that cannot see answers with its
+provider's refusal. The run log records only the line of text. A harness that
+runs poieo's tools for itself is handed that line alone.
 
 ## File boundary
 

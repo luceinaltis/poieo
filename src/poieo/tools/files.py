@@ -2,17 +2,31 @@
 
 from __future__ import annotations
 
+import base64
 import re
 from pathlib import Path
 from typing import Any
 
 from ..providers.base import ToolDef
-from . import Tool, ToolError
+from . import Tool, ToolError, ToolResult
 
 _READ_CAP = 200_000  # characters
 _GLOB_CAP = 500  # paths
 _SEARCH_CAP = 200  # matches
 _LINE_CAP = 300  # characters of any one matched line
+# The most a picture may weigh, in bytes. A model endpoint takes about 5 MB
+# of image once it is base64, which is four thirds of this.
+_IMAGE_CAP = 3_750_000
+
+# What a picture is, read from its first bytes rather than its name: a file
+# called `.png` that holds words is not a picture, and saying it was would
+# have the endpoint refuse the whole turn.
+_PICTURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
 
 
 def resolve_path(workdir: Path, raw: str) -> Path:
@@ -217,6 +231,32 @@ async def _list_dir(workdir: Path, args: dict[str, Any]) -> str:
     return "\n".join(lines) or "(empty)"
 
 
+def _picture_type(head: bytes) -> str | None:
+    for magic, media_type in _PICTURES:
+        if head.startswith(magic):
+            return media_type
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+async def _view_image(workdir: Path, args: dict[str, Any]) -> ToolResult:
+    path = resolve_path(workdir, args["path"])
+    if not path.is_file():
+        raise ToolError(f"no such file: {args['path']}")
+    size = path.stat().st_size
+    if size > _IMAGE_CAP:
+        raise ToolError(f"{args['path']} is too large to show ({size} bytes; at most {_IMAGE_CAP})")
+    body = path.read_bytes()
+    media_type = _picture_type(body[:16])
+    if media_type is None:
+        raise ToolError(f"{args['path']} is not a PNG, JPEG, GIF or WebP picture")
+    return ToolResult(
+        f"{args['path']} ({media_type}, {size} bytes)",
+        image={"media_type": media_type, "data": base64.b64encode(body).decode("ascii")},
+    )
+
+
 def _checked_glob(pattern: str) -> str:
     """A glob may not climb out of the workdir, the way a path may not.
 
@@ -401,3 +441,22 @@ FILES_TOOLS: list[Tool] = [
         _search_files,
     ),
 ]
+FILES_TOOLS.append(
+    Tool(
+        ToolDef(
+            name="view_image",
+            description=(
+                "Look at a picture in the working directory -- a screenshot, a diagram, "
+                "a photo. PNG, JPEG, GIF or WebP, up to about 3.7 MB. You are shown "
+                "the picture itself, not a description of it."
+            ),
+            input_schema=_schema({"path": {"type": "string"}}, ["path"]),
+        ),
+        _view_image,
+    )
+)
+
+# The half of `files` that only looks: a task given these can read the
+# project and cannot change it.
+_LOOKING = {"read_file", "list_dir", "glob_files", "search_files", "view_image"}
+READ_TOOLS: list[Tool] = [tool for tool in FILES_TOOLS if tool.definition.name in _LOOKING]

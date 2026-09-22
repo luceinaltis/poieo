@@ -491,7 +491,7 @@ from poieo.tools import DEFAULT_TOOLSETS, TOOLSETS, LocalExecutor
 
 
 def test_registry_names():
-    assert set(TOOLSETS) == {"files", "shell", "notes"}
+    assert set(TOOLSETS) == {"files", "read", "shell", "notes"}
     # notes stays out of the default: on by default would let every task
     # write into every other task's memory from the day it is created.
     assert DEFAULT_TOOLSETS == ["files", "shell"]

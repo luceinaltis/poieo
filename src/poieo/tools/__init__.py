@@ -29,6 +29,9 @@ class ToolError(PoieoError):
 class ToolResult:
     text: str
     error: bool = False
+    # A picture the tool is showing the model, `{media_type, data}` with the
+    # data in base64, beside the text that says what it is.
+    image: dict[str, str] | None = None
 
 
 # How to hand a script to an interpreter: the argv that reads it from stdin.
@@ -119,7 +122,8 @@ class Tool:
     """A declaration plus the coroutine that executes it inside a workdir."""
 
     definition: ToolDef
-    run: Callable[[Path, dict[str, Any]], Awaitable[str]]
+    # Words, or a whole ToolResult when the tool has a picture to show.
+    run: Callable[[Path, dict[str, Any]], Awaitable["str | ToolResult"]]
 
 
 class Isolation(BaseModel):
@@ -187,7 +191,8 @@ class Executor:
         if tool is None:
             return ToolResult(f"unknown tool '{call.name}'", error=True)
         try:
-            return ToolResult(await tool.run(self.workdir, call.arguments))
+            answer = await tool.run(self.workdir, call.arguments)
+            return answer if isinstance(answer, ToolResult) else ToolResult(answer)
         except ToolError as exc:
             return ToolResult(str(exc), error=True)
         except Exception as exc:  # a bad argument shape must not kill the run
@@ -381,13 +386,14 @@ def make_executor(workdir: Path, toolsets: "Sequence[str]", tool_context: ToolCo
 
 
 # Imported after Tool is defined, since they import Tool from this module.
-from .files import FILES_TOOLS  # noqa: E402
+from .files import FILES_TOOLS, READ_TOOLS  # noqa: E402
 from .notes import notes_tools  # noqa: E402
 from .shell import SHELL_TOOLS  # noqa: E402
 
 # A fixed list, or a factory taking the postbox (see Executor._load).
 TOOLSETS: dict[str, Any] = {
     "files": FILES_TOOLS,
+    "read": READ_TOOLS,
     "shell": SHELL_TOOLS,
     "notes": notes_tools,
 }
