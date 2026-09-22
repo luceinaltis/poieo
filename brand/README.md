@@ -162,8 +162,15 @@ there are no playback timers. The landscape alone fades in over 800 ms on entry;
 text and actions are immediately visible. All new effects respect reduced motion.
 On phones, the example detail sits above its explanation so playback is visible
 near the controls; both remain readable in the document's explanation-first order.
-No network request or local storage is needed. Model roles follow as readable rows,
-with the user's choice explicit. The installation example expands on demand
+No network request or local storage is needed. Five strengths follow as readable
+rows under **Built to work together**: local and frontier model collaboration,
+shared long-term memory, task handoffs and notes, mixed model/code execution,
+and Claude Code/Codex integration. Each names the mechanism and the benefit it
+serves. Model choice and workflow are user-configured; memory and learning are
+opt-in, notes are read on the recipient's next run, and agent integrations differ
+in project-memory, tool and isolation support. These are product strengths, not
+claims of exclusivity or measured savings. Rows use two columns on desktop and
+stack on phones. The installation example expands on demand
 and explains that the offline scripted model does not repair a project.
 Documentation prioritizes the article,
 quiet navigation, and horizontally scrollable code. Five short guides each
