@@ -771,7 +771,9 @@ async def test_an_endpoint_that_drops_our_conversation_is_noticed(tmp_path, monk
     graph = agent_graph(tmp_path)
     store = _CapturingStore()
 
-    await run_graph(graph, truncating_binding(reading_script(6), ceiling=1_500), store=store)
+    # Above the first turn -- the prompt and every tool's definition -- so the
+    # endpoint keeps it whole, and below the turns after a few reads.
+    await run_graph(graph, truncating_binding(reading_script(6), ceiling=1_800), store=store)
 
     dropped = [e for e in store.events if e.type == "node_input_dropped"]
     assert dropped

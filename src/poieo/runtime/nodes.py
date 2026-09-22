@@ -19,7 +19,7 @@ from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
 from ..providers.base import IMAGE_WEIGHT, Hands, ToolCall, ToolDef, blocks_of, text_of
-from ..tools import Executor, ToolError, is_compiled, make_executor
+from ..tools import Executor, ToolError, ToolResult, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -681,6 +681,11 @@ class _AgentLoop:
         )
 
     async def _execute_tool(self, call: ToolCall) -> tuple[str, bool]:
+        """Run and record one call for a harness, which takes words only."""
+        result = await self._run_tool(call)
+        return result.text, result.error
+
+    async def _run_tool(self, call: ToolCall) -> ToolResult:
         """Run and record one call, whoever owns the surrounding tool loop."""
         if self.executor is None:  # Hands is never built in this state.
             raise NodeError(f"node '{self.spec.id}': no executor for tool call", node_id=self.spec.id)
@@ -709,7 +714,7 @@ class _AgentLoop:
             error=result.error,
             duration_ms=round((time.monotonic() - started) * 1000),
         )
-        return result.text, result.error
+        return result
 
     async def _append_tool_results(self, response: LLMResponse) -> None:
         assistant_turn: dict[str, Any] = {
@@ -726,8 +731,13 @@ class _AgentLoop:
             assistant_turn["raw_content"] = raw_content
         self.messages.append(assistant_turn)
         for call in response.tool_calls:
-            text, _failed = await self._execute_tool(call)
-            self.messages.append({"role": "tool", "tool_call_id": call.id, "content": text})
+            result = await self._run_tool(call)
+            content: Any = result.text
+            if result.image is not None:
+                # A picture goes to the model as one, beside the words that
+                # say what it is; the provider puts it in its own wire shape.
+                content = [{"type": "text", "text": result.text}, {"type": "image", **result.image}]
+            self.messages.append({"role": "tool", "tool_call_id": call.id, "content": content})
 
     async def run(self) -> LLMResponse:
         # The binding's deliberate limit wins. Otherwise ask the endpoint once;
