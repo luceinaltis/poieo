@@ -22,8 +22,8 @@ export function WhenPick({
   disabled?: boolean
   onChange(line: string): void
 }) {
-  // "Another time" chosen with nothing written yet reads as the default line,
-  // so which of the two the person meant is held here.
+  // "Another time" opens the line the task has, written out, and changes
+  // nothing until it is edited -- so opening it is never a silent reset.
   const [writing, setWriting] = useState(false)
   const offered = WHEN.some((choice) => choice.value === value && choice.value !== "custom")
   const custom = writing || !offered
@@ -38,7 +38,7 @@ export function WhenPick({
         onChange={(event) => {
           const picked = event.target.value
           setWriting(picked === "custom")
-          onChange(picked === "custom" ? (offered ? "" : value) : picked)
+          if (picked !== "custom") onChange(picked)
         }}
       >
         {WHEN.map((choice) => (

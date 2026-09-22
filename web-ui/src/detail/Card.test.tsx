@@ -552,3 +552,62 @@ test("a card is not renamed to the name it already has", async () => {
   const button = () => container.querySelector<HTMLButtonElement>('[data-do="rename"]')!
   expect(button().disabled).toBe(true)
 })
+
+test("choosing another time opens the schedule the card has, and does not blank it", async () => {
+  // A card started only by another task must not quietly go hourly because
+  // the picker was opened on the line and left alone.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\ntrigger: {type: manual}\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: true,
+    schedule: "manual",
+  })
+  await open()
+
+  const when = container.querySelector<HTMLSelectElement>('select[name="when"]')!
+  expect(when.value).toBe("manual")
+  await act(async () => {
+    when.value = "custom"
+    when.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  expect(container.querySelector<HTMLInputElement>('input[name="schedule"]')!.value).toBe("manual")
+  expect(container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.disabled).toBe(true)
+})
+
+test("a folder deeper than the list goes can still be written", async () => {
+  // The list stops two levels down; the daemon's fence does not. What the
+  // setup form's own box used to allow is one more choice away.
+  fetchCard.mockResolvedValue({
+    task: "chores",
+    text: "name: Chores\nfolder: ../work\nprompt: tidy\n",
+    name: "Chores",
+    folder: "../work",
+    prompt: "tidy",
+    plain: true,
+    enabled: true,
+  })
+  fetchFolders.mockResolvedValue([{ path: "../work", name: "work" }])
+  rewriteCard.mockResolvedValue({ ok: true, task: "chores", live: false })
+  await open()
+  await act(async () => {})
+
+  const pick = container.querySelector<HTMLSelectElement>('select[name="folder-pick"]')!
+  const another = [...pick.options].find((option) => option.textContent === "another folder…")!
+  await act(async () => {
+    pick.value = another.value
+    pick.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  const typed = container.querySelector<HTMLInputElement>('input[name="folder"]')!
+  expect(typed.value).toBe("../work")
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(typed, "../work/a/b/c")
+    typed.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-do="save-card"]')!.click())
+
+  expect(rewriteCard).toHaveBeenCalledWith("board", "chores", { name: "Chores", folder: "../work/a/b/c", prompt: "tidy" })
+})

@@ -154,7 +154,9 @@ folder, and every path they name — work folder, explicit graph, `binding:`,
 Both forms list the folders that fence would accept, in the card's own
 spelling, as their only folder control, standing on the card's folder -- the
 project itself (`..`) for a new one -- and showing a folder the list lacks as
-one more choice.
+one more choice. The list stops two levels down; its last choice, `another
+folder…`, opens the folder written out for one deeper, which the fence still
+judges.
 Names are converted to safe filenames and never overwrite an existing card.
 Step creation uses the existing graph schema and preflight to check node fields,
 templates, conditions, connections, and model roles before writing. Every step
@@ -285,7 +287,8 @@ their tool and subject. Full history and `Task setup` remain closed below;
 selecting an older run keeps that run in view while live summaries continue.
 A plain card's form is the new-task panel's, in its order: prompt, name, where
 it works from the folder list, and when from the same plain-word choices
-(a line they lack opens as written). Below it, `file name` moves the card's
+(a line they lack opens as written; `at another time…` opens the line the
+task has rather than blanking it). Below it, `file name` moves the card's
 file, which is the task's identity; `name` is only its title.
 It carries its on/off switch beside those fields, sent
 only when it moved; because the folder scan adopts that field without a
