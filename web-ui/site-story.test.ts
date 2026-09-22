@@ -1,8 +1,15 @@
-import { afterEach, expect, it } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 const site = resolve(process.cwd(), "../site")
+let motion: EventTarget & { matches: boolean }
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  motion = Object.assign(new EventTarget(), { matches: false })
+  vi.stubGlobal("matchMedia", () => motion)
+})
 
 function load(enhance = true) {
   const page = new DOMParser().parseFromString(readFileSync(resolve(site, "index.html"), "utf8"), "text/html")
@@ -13,7 +20,13 @@ function load(enhance = true) {
   }
 }
 
-afterEach(() => { document.body.innerHTML = "" })
+afterEach(() => {
+  window.dispatchEvent(new Event("pagehide"))
+  document.body.innerHTML = ""
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 it("keeps the complete example readable when JavaScript is unavailable", () => {
   load(false)
@@ -21,7 +34,83 @@ it("keeps the complete example readable when JavaScript is unavailable", () => {
   expect(panels).toHaveLength(3)
   expect(panels.every(panel => !panel.hidden)).toBe(true)
   expect(document.querySelector<HTMLElement>(".story-tabs")?.hidden).toBe(true)
+  expect(document.querySelector<HTMLElement>(".story-playback")?.hidden).toBe(true)
   expect(document.querySelector("#story")?.textContent).toContain("Scripted example")
+})
+
+const play = () => document.querySelector<HTMLButtonElement>(".story-play")!
+const selectedPanel = () => document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("aria-controls")
+const revealedRecords = () => [...document.querySelectorAll<HTMLLIElement>(".run-record li")].filter(row => !row.hasAttribute("data-pending"))
+
+it("plays one finite scripted example on request, reveals its records, and can replay without moving focus", () => {
+  load()
+  vi.advanceTimersByTime(30000)
+  expect(selectedPanel()).toBe("story-task")
+  play().focus()
+  play().click()
+  expect(play().textContent).toContain("Stop example")
+  vi.advanceTimersByTime(2400)
+  expect(selectedPanel()).toBe("story-run")
+  expect(revealedRecords()).toHaveLength(1)
+  vi.advanceTimersByTime(1800)
+  expect(revealedRecords()).toHaveLength(2)
+  vi.advanceTimersByTime(1800)
+  expect(revealedRecords()).toHaveLength(3)
+  vi.advanceTimersByTime(2400)
+  expect(selectedPanel()).toBe("story-change")
+  expect(play().textContent).toContain("Replay example")
+  expect(document.querySelector('[role="status"]')?.textContent).toContain("Ready to review")
+  expect(document.activeElement).toBe(play())
+  expect(vi.getTimerCount()).toBe(0)
+  play().click()
+  expect(selectedPanel()).toBe("story-task")
+  vi.advanceTimersByTime(2400)
+  expect(revealedRecords()).toHaveLength(1)
+})
+
+it.each(["stop", "tab", "keyboard", "content", "hidden", "pagehide"])("cancels playback on %s and leaves the example readable", action => {
+  load()
+  play().click()
+  vi.advanceTimersByTime(2400)
+  if (action === "stop") play().click()
+  if (action === "tab") document.getElementById("tab-task")!.click()
+  if (action === "keyboard") document.getElementById("tab-run")!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
+  if (action === "content") document.getElementById("story-run")!.focus()
+  if (action === "hidden") {
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true)
+    document.dispatchEvent(new Event("visibilitychange"))
+  }
+  if (action === "pagehide") window.dispatchEvent(new Event("pagehide"))
+  const stoppedAt = selectedPanel()
+  vi.advanceTimersByTime(30000)
+  expect(selectedPanel()).toBe(stoppedAt)
+  expect(play().textContent).toContain("Replay example")
+  expect(revealedRecords()).toHaveLength(3)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it("lets reduced-motion visitors advance at their own pace, including when the preference changes during playback", () => {
+  motion.matches = true
+  load()
+  expect(play().textContent).toContain("Next step")
+  play().click()
+  expect(selectedPanel()).toBe("story-run")
+  expect(revealedRecords()).toHaveLength(3)
+  vi.advanceTimersByTime(30000)
+  expect(selectedPanel()).toBe("story-run")
+  play().click()
+  expect(selectedPanel()).toBe("story-change")
+  play().click()
+  expect(selectedPanel()).toBe("story-task")
+  motion.matches = false
+  motion.dispatchEvent(new Event("change"))
+  play().click()
+  vi.advanceTimersByTime(2400)
+  motion.matches = true
+  motion.dispatchEvent(new Event("change"))
+  expect(play().textContent).toContain("Next step")
+  expect(revealedRecords()).toHaveLength(3)
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 it("switches between the task, run and change with matching accessible tabs", () => {
