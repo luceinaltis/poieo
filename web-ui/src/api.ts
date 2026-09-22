@@ -590,6 +590,30 @@ export function draftTask(
   return post(`/api/projects/${encodeURIComponent(project)}/tasks/draft`, { messages })
 }
 
+export interface ChatAnswer extends Answer {
+  /** What the model said. */
+  reply?: string
+  /** Which model answered, as `provider/model`. */
+  model?: string
+  usage?: Record<string, number | null> | null
+  /** True when the model stopped at its token limit, not at the end of its answer. */
+  cut_short?: boolean
+}
+
+/**
+ * The conversation so far, put to the project's model.
+ *
+ * Not a write: the daemon keeps nothing, changes nothing and runs nothing.
+ * The whole conversation goes every time because the page is the only thing
+ * holding it.
+ */
+export function chat(
+  project: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+): Promise<ChatAnswer> {
+  return post(`/api/projects/${encodeURIComponent(project)}/chat`, { messages })
+}
+
 export function createTask(
   project: string,
   name: string,

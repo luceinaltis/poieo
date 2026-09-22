@@ -27,6 +27,17 @@ in environment variables; model files store their names, not secret values.
 For an endpoint discovery does not find, see
 [provider configuration](../binding.md#configuration).
 
+## Try a model from the board
+
+The board's `chat` button, beside the project name, opens a conversation
+with the project's default model, the one a plain task uses. Each reply says
+which model answered, so a change made with `config use` shows up on the
+next message. Use it to check that an endpoint answers, and how a model
+handles your language, before giving it a task.
+
+The conversation stays on the page. Nothing is saved, no run is recorded,
+and the model has no tools there, so it cannot read or change your files.
+
 ## Use small and large models together
 
 A simple prompt uses the default model. For [a task with steps](tasks.md#add-steps),

@@ -21,6 +21,8 @@ import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
+import { Chat } from "./chat/Chat"
+import type { Turn } from "./chat/Chat"
 import { Memory } from "./memory/Memory"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
@@ -50,6 +52,7 @@ type PanelState =
   // source -- rather than on the task's latest.
   | { kind: "task"; taskKey: string; runId?: string }
   | { kind: "models" }
+  | { kind: "chat" }
   | { kind: "make"; initialFields?: TaskFields }
 
 const CLOSED_PANEL: PanelState = { kind: "closed" }
@@ -72,13 +75,22 @@ export default function App({ store }: { store?: StageStore }) {
   const boardRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<SkinHost | null>(null)
   const [skinId, setSkinId] = useState(readSkinPreference)
-  // These three panels share one margin, so only one can be open at a time.
+  // These panels share one margin, so only one can be open at a time.
   // Unlike the skin and project, the open panel is not remembered across reloads.
   const [activePanel, setActivePanel] = useState<PanelState>(CLOSED_PANEL)
   // A card the form just wrote, by the key the stage will file it under. The
   // daemon looks at the folder the moment it is written and says "ask again";
   // when the listing then carries it, it opens where the form was.
   const [awaitedTaskKey, setAwaitedTaskKey] = useState<string | null>(null)
+  // The chat's thread, held here rather than in its panel so a task picked off
+  // the board -- which takes the one margin -- does not lose it, and tagged
+  // with the project it was said in: a reply can land after the reader has
+  // switched project, and it must not become the new project's thread. Not
+  // remembered across reloads: the daemon keeps none of it either.
+  const [chatThread, setChatThread] = useState<{ project: string | null; turns: Turn[] }>({
+    project: null,
+    turns: [],
+  })
   const panelOpenerRef = useRef<HTMLElement | null>(null)
   const panelWasOpenRef = useRef(false)
   const panelIsOpen = activePanel.kind !== "closed"
@@ -193,6 +205,8 @@ export default function App({ store }: { store?: StageStore }) {
     setActivePanel((current) => (current.kind === "models" ? current : CLOSED_PANEL))
     // As does an entry in focus: a slug names something in one memory.
     setMemoryFocus(null)
+    // And a conversation: it was had with that project's model.
+    setChatThread({ project: name, turns: [] })
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
@@ -214,7 +228,9 @@ export default function App({ store }: { store?: StageStore }) {
     setSkinId(id)
     writeSkinPreference(id)
     setActivePanel((current) =>
-      current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
+      current.kind === "models" || current.kind === "make" || current.kind === "chat"
+        ? CLOSED_PANEL
+        : current,
     )
   }, [])
 
@@ -225,7 +241,9 @@ export default function App({ store }: { store?: StageStore }) {
   // Board closes a rail panel but leaves a task drawer over its underlying view.
   const closeRailPanel = useCallback(() => {
     setActivePanel((current) =>
-      current.kind === "models" || current.kind === "make" ? CLOSED_PANEL : current,
+      current.kind === "models" || current.kind === "make" || current.kind === "chat"
+        ? CLOSED_PANEL
+        : current,
     )
   }, [])
   const openMemory = useCallback(() => {
@@ -266,6 +284,25 @@ export default function App({ store }: { store?: StageStore }) {
     },
     [rememberPanelOpener],
   )
+  const openChat = useCallback(
+    (opener: HTMLElement) => {
+      rememberPanelOpener(opener)
+      setActivePanel({ kind: "chat" })
+    },
+    [rememberPanelOpener],
+  )
+  // From the panel, which may be gone by the time a reply lands: kept only
+  // while the thread on screen is still the one it was said in, so a reply
+  // that arrives after a switch of project is dropped, and one that arrives
+  // with the panel merely closed still reaches the thread. `null` is the
+  // thread nobody has begun, which the first reply may claim.
+  const keepChatTurns = useCallback((forProject: string, turns: Turn[]) => {
+    setChatThread((current) =>
+      current.project === null || current.project === forProject
+        ? { project: forProject, turns }
+        : current,
+    )
+  }, [])
   const openOnceMade = useCallback(
     (task: string) => {
       if (project) setAwaitedTaskKey(keyOfTask(project.name, task))
@@ -341,6 +378,19 @@ export default function App({ store }: { store?: StageStore }) {
           onClick={(event) => openModels(event.currentTarget)}
         >
           models
+        </button>
+        {/* And a word with one of them. Beside models for the reason models
+            is beside the name: it is about this project's model, and it is a
+            panel over whatever is on the stage rather than a place to go. */}
+        <button
+          type="button"
+          className="shell-chat"
+          data-do="open-chat"
+          aria-expanded={activePanel.kind === "chat"}
+          disabled={!project}
+          onClick={(event) => openChat(event.currentTarget)}
+        >
+          chat
         </button>
         <span className="shell-status" data-status={status}>
           {STATUS_LABEL[status] ?? status}
@@ -473,6 +523,18 @@ export default function App({ store }: { store?: StageStore }) {
         // forgotten typing reads as "this project has nothing", which is the
         // worse of the two ways to be wrong.
         <Models key={project.name} project={project.name} onClose={closePanel} />
+      ) : null}
+
+      {activePanel.kind === "chat" && project ? (
+        // Keyed on the project, as models is: the thread is that project's,
+        // and switching projects has already emptied it.
+        <Chat
+          key={project.name}
+          project={project.name}
+          turns={chatThread.project === project.name ? chatThread.turns : []}
+          onTurns={(turns) => keepChatTurns(project.name, turns)}
+          onClose={closePanel}
+        />
       ) : null}
 
       {activePanel.kind === "make" && project ? (

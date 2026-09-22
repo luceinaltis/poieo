@@ -70,6 +70,9 @@ from ..rebind import already, declare, point_at
 from ..task import humanize, parse_duration
 from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
+from .chat import ROLE as CHAT_ROLE
+from .chat import briefing as chat_briefing
+from .chat import cut_short
 from .draft import ROLE as DRAFTING_ROLE
 from .draft import briefing, conversation, read_card
 from .events import CLOSED, BroadcastStore
@@ -2592,6 +2595,72 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 draft = {"name": name, "folder": folder, "prompt": prompt, "schedule": schedule}
         return JSONResponse({"reply": reply, "draft": draft, "model": writer.ref, "usage": response.usage.as_dict()})
 
+    async def project_chat(request: Request) -> JSONResponse:
+        """Put a conversation to the project's model and hand back its reply.
+
+        Not a write: nothing is kept and nothing changes. POST because a
+        conversation belongs in a body, as a memory search does. The page
+        holds the conversation and sends the whole of it every time; the
+        daemon stores none of it, and no run comes of it.
+
+        The `default` role answers, which is what a plain card gets, so a
+        person can hear the model their tasks will be using. A models file
+        that names none is a refusal rather than a guess -- the memory board's
+        rule -- and the reply names the model that did answer.
+        """
+        project, missing = _asked_project(request)
+        if missing is not None:
+            return missing
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            payload = None
+        if not isinstance(payload, dict):
+            return JSONResponse({"error": "the conversation body must be JSON"}, status_code=400)
+        try:
+            turns = conversation(payload.get("messages"))
+        except SpecError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+        try:
+            spec = await asyncio.to_thread(_models_of, project)
+        except PoieoError:
+            spec = None
+        if spec is None:
+            return JSONResponse(
+                {"error": "this project has no models file for a reply to come from"},
+                status_code=409,
+            )
+        try:
+            answerer = spec.resolve(CHAT_ROLE)
+        except BindingError:
+            return JSONResponse({"error": f"{CHAT_ROLE} does not resolve to a model"}, status_code=409)
+
+        try:
+            async with ProviderPool(spec) as pool:
+                response = await pool.get(answerer.provider_name).complete(
+                    LLMRequest(
+                        model=answerer.model,
+                        system=chat_briefing(project.config.display_name),
+                        messages=turns,
+                        params=answerer.params,
+                        role=CHAT_ROLE,
+                    )
+                )
+        except PoieoError:
+            return JSONResponse(
+                {"error": f"the model did not answer; try again, or point {CHAT_ROLE} at another model"},
+                status_code=503,
+            )
+        return JSONResponse(
+            {
+                "reply": response.text,
+                "model": answerer.ref,
+                "usage": response.usage.as_dict(),
+                "cut_short": cut_short(response.stop_reason),
+            }
+        )
+
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")
         # Both, for the same reason `runs` takes both: `?task=chores` alone
@@ -2635,6 +2704,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # not wait on its own footnote.
         Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
         Route("/api/projects/{project}/folders", project_folders),
+        # Chat: a conversation put to the project's model, its reply handed
+        # back. It writes nothing and starts no run.
+        Route("/api/projects/{project}/chat", project_chat, methods=["POST"]),
         # Models: the fourth kind. They write the project's binding file and
         # nothing else, and never accept or return a credential. `add` declares
         # an endpoint; `use` chooses among the models of one already declared.
