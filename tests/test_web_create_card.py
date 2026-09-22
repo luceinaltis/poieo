@@ -262,3 +262,47 @@ def test_switching_a_card_on_through_the_form_is_promised_as_live(tmp_path):
     assert answer.status_code == 200, answer.text
     assert answer.json()["live"] is True
     assert "enabled" not in cards.joinpath("already.yaml").read_text(encoding="utf-8")
+
+
+def test_a_card_can_be_made_already_connected(tmp_path):
+    """A chain the conversation proposed is made last card first, each with
+    its connection in the file from the start -- so the first task never
+    finishes a run before the ones it starts exist."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    answer = _make(
+        client,
+        {
+            "name": "watch",
+            "folder": "../work",
+            "prompt": "x",
+            "then": [{"when": "run.status == 'failed'", "to": "already", "label": "failed"}],
+        },
+    )
+
+    assert answer.status_code == 200, answer.text
+    written = yaml.safe_load((cards / "watch.yaml").read_text(encoding="utf-8"))
+    assert written["then"] == [{"when": "run.status == 'failed'", "to": "already", "label": "failed"}]
+
+
+def test_a_card_just_made_can_be_the_one_a_new_card_starts(tmp_path):
+    """The daemon's scan may not have looked yet; the card on disk is enough."""
+    client, cards = _client(tmp_path)
+    second = {"name": "second", "folder": "../work", "prompt": "y", "schedule": "manual"}
+    assert _make(client, second).status_code == 200
+    answer = _make(
+        client, {"name": "first", "folder": "../work", "prompt": "x", "then": [{"when": "true", "to": "second"}]}
+    )
+
+    assert answer.status_code == 200, answer.text
+
+
+def test_a_new_card_connected_to_nothing_or_itself_is_refused_and_not_written(tmp_path):
+    client, cards = _client(tmp_path)
+
+    body = {"name": "watch", "folder": "../work", "prompt": "x"}
+    for then in ([{"when": "true", "to": "ghost"}], [{"when": "true", "to": "watch"}], [{"to": "already"}]):
+        answer = _make(client, {**body, "then": then})
+        assert answer.status_code == 400, (then, answer.text)
+    assert not (cards / "watch.yaml").exists()

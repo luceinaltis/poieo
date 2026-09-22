@@ -157,3 +157,11 @@
 .describe-models:hover {
   color: var(--text);
 }
+
+/* Several cards proposed as one: a numbered list, one button for all. */
+.describe-chain-list {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding-left: 1.2em;
+}

@@ -575,12 +575,20 @@ export interface TaskDraft {
   folder: string
   prompt: string
   schedule: string
+  /**
+   * In a proposed chain, the earlier card that starts this one -- by its
+   * place in the list -- and on what condition. Null for the first card and
+   * for a single proposal; absent from an older daemon.
+   */
+  after?: { task: number; when: "always" | "succeeded" | "failed" | "says"; word: string } | null
 }
 
 export interface DraftAnswer extends Answer {
   /** What the model said, without the card it proposed. */
   reply?: string
   draft?: TaskDraft | null
+  /** Every card proposed, in order: several when the work came in stages. */
+  drafts?: TaskDraft[]
   /** Which model answered, as `provider/model`. */
   model?: string
 }
@@ -682,8 +690,10 @@ export function createTask(
   /** False makes the card switched off: written, on the board, not running. */
   enabled = true,
   apply?: import("./types").ApplySpec,
-  /** One line: an interval, the word loop, or a cron line. Blank sends nothing. */
+  /** One line: an interval, the word loop, manual, or a cron line. Blank sends nothing. */
   schedule?: string,
+  /** What it starts when it finishes, written with the card. */
+  then?: Connection[],
 ): Promise<MadeTask> {
   // The route also takes `graph` in place of `prompt`, for steps; nothing on
   // the board writes those until it hosts the graph canvas.
@@ -694,6 +704,7 @@ export function createTask(
     enabled,
     ...(apply ? { apply } : {}),
     ...(schedule ? { schedule } : {}),
+    ...(then?.length ? { then } : {}),
   })
 }
 

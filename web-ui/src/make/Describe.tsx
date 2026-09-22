@@ -22,6 +22,7 @@ import type { KeyboardEvent } from "react"
 
 import { draftTask } from "../api"
 import type { DraftAnswer, TaskDraft } from "../api"
+import { saidWhen } from "../connection"
 import { Refusal } from "../Refusal"
 import { saidOf } from "./schedule"
 import "./describe.css"
@@ -31,6 +32,8 @@ interface Turn {
   content: string
   /** The card the model proposed with this reply, if it did. */
   draft?: TaskDraft | null
+  /** Every card it proposed, when the work came in stages: more than one. */
+  drafts?: TaskDraft[]
 }
 
 /** What a first task tends to be, for somebody who does not know what to ask for. */
@@ -50,16 +53,25 @@ function aboutTheModel(answer: DraftAnswer): boolean {
   return /model/i.test(answer.error ?? "")
 }
 
+/** When a card in a proposed chain runs: on its own clock, or after an earlier card. */
+export function startsWhen(drafts: TaskDraft[], draft: TaskDraft): string {
+  if (!draft.after) return saidOf(draft.schedule)
+  return `after ${drafts[draft.after.task]?.name ?? "the one before"}, ${saidWhen(draft.after.when, draft.after.word)}`
+}
+
 export function Describe({
   project,
   disabled = false,
   onDraft,
+  onChain,
   onModels,
 }: {
   project: string
   disabled?: boolean
   /** A card the model proposed, for the form to fill itself from. */
   onDraft(draft: TaskDraft): void
+  /** Several connected cards the model proposed, for the panel to read over and make. */
+  onChain?(drafts: TaskDraft[]): void
   /** The models panel, for a refusal that says no model could answer. */
   onModels?(opener: HTMLElement): void
 }) {
@@ -89,7 +101,10 @@ export function Describe({
       setRefused(answer)
       return
     }
-    setTurns([...asked, { role: "assistant", content: answer.reply ?? "", draft: answer.draft ?? null }])
+    setTurns([
+      ...asked,
+      { role: "assistant", content: answer.reply ?? "", draft: answer.draft ?? null, drafts: answer.drafts ?? [] },
+    ])
     setModel(answer.model ?? null)
     setText("")
   }
@@ -124,7 +139,29 @@ export function Describe({
             <li className="describe-turn" data-role={turn.role} key={index}>
               <span className="describe-who">{turn.role === "user" ? "you" : "poieo"}</span>
               <div className="describe-said">{turn.content}</div>
-              {turn.draft ? (
+              {turn.drafts && turn.drafts.length > 1 && onChain ? (
+                /* Stages, as one proposal: each card after the one that
+                   starts it, read over and made together below. */
+                <div className="describe-card describe-chain" role="group" aria-label="Connected cards the model proposed">
+                  <ol className="describe-chain-list">
+                    {turn.drafts.map((draft, at) => (
+                      <li key={at}>
+                        <strong className="describe-card-name">{draft.name}</strong>{" "}
+                        <span className="describe-card-where">{startsWhen(turn.drafts!, draft)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <button
+                    type="button"
+                    className="describe-use"
+                    data-do="use-chain"
+                    disabled={disabled}
+                    onClick={() => onChain(turn.drafts!)}
+                  >
+                    use these {turn.drafts.length} drafts
+                  </button>
+                </div>
+              ) : turn.draft ? (
                 <div className="describe-card" role="group" aria-label="A card the model proposed">
                   <strong className="describe-card-name">{turn.draft.name}</strong>
                   <span className="describe-card-where">
