@@ -135,9 +135,21 @@ Grotesk carries prose and interface labels; DM Mono carries code and exact
 data. The latter two are self-hosted with their OFL licences. The board keeps
 its compact sans serif labels for scanning. The logo is drawn, not typeset.
 
-The first screen has one headline, one descriptor, and **Get started**. Do
-not add a paragraph repeating the promise. Supporting sections explain model
-choices and show the actual board. Documentation prioritizes the article,
+The first screen keeps the headline and descriptor, adds a short explanation
+of recurring work on the user's machine, and offers **Get started** and
+**See a task unfold**. The daylight and night branches sit lower on desktop
+to leave the actions clear. The first supporting section follows one scripted
+test-fix example through **task**, **run**, and **change**. Its text and diff
+adapt the existing scripted board screenshot; it is a walkthrough, not a live
+run or a performance claim. The full board remains in an expandable preview.
+
+`site/story.js` enhances three readable articles into tabs. Click, Left/Right,
+Home and End select a panel; Tab reaches its content. Without JavaScript the
+controls stay hidden and all three articles remain readable. No autoplay,
+network request, or local storage is needed. Model roles follow as readable rows,
+with the user's choice explicit. The installation example expands on demand
+and explains that the offline scripted model does not repair a project.
+Documentation prioritizes the article,
 quiet navigation, and horizontally scrollable code. Five short guides each
 open as a separate page: Get started, Models, Tasks, Changes, and Troubleshooting.
 Keep the current page selected while reading; do not expand its headings into

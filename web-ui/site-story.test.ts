@@ -54,4 +54,8 @@ it("supports arrow keys, Home and End without moving focus outside the example",
   expect(document.activeElement).toBe(tabs[0])
   key("ArrowRight")
   expect(document.activeElement).toBe(tabs[1])
+  const pageHome = new KeyboardEvent("keydown", { key: "Home", ctrlKey: true, bubbles: true, cancelable: true })
+  tabs[1].dispatchEvent(pageHome)
+  expect(pageHome.defaultPrevented).toBe(false)
+  expect(tabs[1].getAttribute("aria-selected")).toBe("true")
 })
