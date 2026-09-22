@@ -600,6 +600,9 @@ export default function App({ store }: { store?: StageStore }) {
           pending={selectedTaskState?.pending ?? selectedTask?.pending ?? 0}
           into={selectedTask?.into ?? null}
           asking={selectedTaskState?.asking ?? selectedTask?.asking ?? null}
+          others={tasks
+            .filter((row) => row.project === selectedTask?.project)
+            .map((row) => ({ name: row.name, title: row.title || row.name }))}
           liveRuns={selectedTaskState?.runs ?? []}
           liveActivity={selectedTaskState?.activity ?? []}
           liveRunId={selectedTaskState?.activityRunId ?? null}

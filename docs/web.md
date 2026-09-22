@@ -130,7 +130,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 | `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, thinking, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; asked with `Accept: text/event-stream`, the same answer comes as it is written: `thinking` and `text` frames carry each piece, `done` the whole reply with those same fields, and `error` what a refusal would have said once the stream has begun; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:` or five cron fields written as `at:`, and 400 when neither; creates one card, optionally its neighboring graph, and returns its task id and path |
 | `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, model, usage}`: the model's prose without its card, and the card it proposed as `{name, folder, prompt, schedule}` or null; writes nothing; 409 without a models file, 503 when the model does not answer |
-| `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it; atomically validates and replaces one card, returning whether the edit is live |
+| `PUT /api/projects/{project}/tasks/{task}` | `{text}`, simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it, or `{then}`, the card's whole list of connections, spliced into its own text so comments and other fields are kept (an empty list removes the block; a target outside the project or a condition that does not parse is 400, a card whose text cannot be rewritten that way is 409); atomically validates and replaces one card, returning whether the edit is live. The GET beside it returns `then` with each connection's condition |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
 
@@ -287,6 +287,13 @@ A plain card's form carries its on/off switch beside the three fields, sent
 only when it moved; because the folder scan adopts that field without a
 restart, the saved line then promises the daemon's next look rather than the
 next run, and a switched-off task's controls point at that switch.
+Above Task setup, **When it finishes** lists what this task starts after a
+run -- the other task's title and the condition in words -- and adds one from
+a list of the project's other tasks and four conditions: whenever it finishes,
+if it succeeded, if it failed, or if its answer says a word. A condition
+written by hand shows its label and is sent back unchanged. Any card can be
+connected, including one edited as a file, and the wire appears on the board
+at the scan's next look without a restart.
 Inside the run's own box, one closed line says what it started with from
 memory: the count and how many shaped the answer. Opening it lists one row
 per entry with its opening words and what became of it, the ones that shaped

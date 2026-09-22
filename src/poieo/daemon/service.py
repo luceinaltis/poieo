@@ -163,7 +163,9 @@ def reread_card(config: "DaemonConfig", task: "LoadedTask") -> "tuple[GraphSpec 
         spec, graph = expand(fresh, roster=roster)
     except PoieoError as exc:
         return None, str(exc), None
-    if spec != task.spec.model_copy(update={"apply": spec.apply}):
+    # Neither the permission nor the connections reach anything built at
+    # startup: one is read before applying, the other when a run ends.
+    if spec != task.spec.model_copy(update={"apply": spec.apply, "then": spec.then}):
         return None, STALE_CARD, fresh
     return graph, None, fresh
 
@@ -949,7 +951,7 @@ class TaskRunner:
             try:
                 fresh, _ = expand(load_card(card.source_path), roster=list(self.config.cards_by_task))
                 if fresh.apply != self.task.spec.apply and fresh == self.task.spec.model_copy(
-                    update={"apply": fresh.apply}
+                    update={"apply": fresh.apply, "then": fresh.then}
                 ):
                     self.task.spec.apply = fresh.apply
                     self._say_changed()
@@ -1629,7 +1631,13 @@ class Daemon:
         # Only the switch and permission. A structural edit still needs a
         # restart, and saying so is `_note_drift`'s job rather than this one's.
         if (
-            task.spec.model_copy(update={"enabled": runner.task.spec.enabled, "apply": runner.task.spec.apply})
+            task.spec.model_copy(
+                update={
+                    "enabled": runner.task.spec.enabled,
+                    "apply": runner.task.spec.apply,
+                    "then": runner.task.spec.then,
+                }
+            )
             != runner.task.spec
         ):
             return None
@@ -1688,6 +1696,12 @@ class Daemon:
             # title edited at noon must not read as the old one all day.
             if fresh is not None and fresh.name != runner.title:
                 runner.title = fresh.name
+                moved = True
+            # Connections, likewise: read only when a run ends, so adopted
+            # here and in effect from the next run's end -- the board's own
+            # way of wiring one task to the next, and a hand edit alike.
+            if drift is None and fresh is not None and list(fresh.then) != runner.task.spec.then:
+                runner.task.spec.then = list(fresh.then)
                 moved = True
         return moved
 

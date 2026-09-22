@@ -10,6 +10,7 @@ import { memo, useEffect, useId, useLayoutEffect, useRef, useState } from "react
 import { fetchRunEvents, fetchRunMemory, fetchRuns, fetchRunSummary } from "../api"
 import { Gauge } from "../Gauge"
 import { Card } from "./Card"
+import { Next } from "./Next"
 import { Control } from "./Control"
 import { Direction } from "./Direction"
 import { Question } from "./Question"
@@ -260,6 +261,7 @@ export const Drawer = memo(function Drawer({
   pending = 0,
   into = null,
   asking = null,
+  others = [],
   liveRuns = [],
   liveActivity = [],
   liveRunId = null,
@@ -287,6 +289,8 @@ export const Drawer = memo(function Drawer({
   pending?: number
   into?: string | null
   asking?: Asked | null
+  /** The tasks of this project, which this one may start when it finishes. */
+  others?: { name: string; title: string }[]
   /** The stage's live summary window, which can advance while this drawer is open. */
   liveRuns?: RunSummary[]
   /**
@@ -629,6 +633,8 @@ export const Drawer = memo(function Drawer({
             ) : null}
           </section>
         ) : null}
+
+        <Next project={project} task={task} others={others} onConnected={refreshAfterAction} />
 
         <Card
           project={project}

@@ -203,3 +203,25 @@ async def test_a_card_naming_its_own_graph_is_judged_too(tmp_path, monkeypatch):
     await until(lambda: _named(daemon, "chores").stale is not None, "the edit to be noticed")
     assert "restart" in _named(daemon, "chores").stale
     await down(daemon, task)
+
+
+async def test_a_connection_edited_in_the_card_is_adopted_not_reported(tmp_path, monkeypatch):
+    """`then:` is read when a run ends, never by anything built at startup, so
+    a task connected to another -- by hand or from the board -- hands off to it
+    from its next run on, and the board is told to draw the wire."""
+    monkeypatch.setattr("poieo.daemon.service.SCAN_SECONDS", 0.05)
+    _project(tmp_path, _AT_THREE)
+    card(tmp_path / "cards", "mend", "folder: .\nprompt: fix it\ntrigger: {type: manual}\n")
+    daemon = Daemon(load_config(tmp_path / "poieo.yaml"), store=BroadcastStore(NullStore()))
+    task = await up(daemon)
+    assert _named(daemon, "chores").task.spec.then == []
+    queue = daemon.projects[0].store.subscribe()
+
+    card(tmp_path / "cards", "chores", _AT_THREE + 'then:\n  - {when: "true", to: mend}\n')
+
+    await until(lambda: _named(daemon, "chores").task.spec.then, "the connection to be adopted")
+    assert _named(daemon, "chores").task.spec.then[0].to == "mend"
+    assert _named(daemon, "chores").stale is None
+    await until(lambda: not queue.empty(), "the board to be told")
+    assert queue.get_nowait()["type"] == "tasks_changed"
+    await down(daemon, task)

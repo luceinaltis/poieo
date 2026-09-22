@@ -176,6 +176,10 @@ a restart. The board exposes the stale reason. A board write knocks so the
 scan's next look is immediate; the scan remains the only code that loads a card. A card's `name:` is a title
 rather than a setting: the scan carries a hand-edited one to the listing and
 announces it, without a warning, because it reaches nothing built at startup.
+A card's `then:` is the same: it is read only when a run ends, so the scan
+adopts an edited one onto the running task -- alone or beside a switch or an
+application edit -- and announces it, and the next run to end hands off by the
+new wiring.
 
 Repeated identical failures pause a task after the safety threshold
 instead of spending indefinitely. A successful run or a run waiting on a
