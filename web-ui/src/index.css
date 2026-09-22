@@ -216,3 +216,14 @@ body {
   max-width: 100%;
   padding: 4px 6px;
 }
+
+/* A folder deeper than the list goes, written as the card spells it. */
+.folder-typed {
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  margin-top: 4px;
+  padding: 4px 6px;
+}

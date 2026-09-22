@@ -35,6 +35,8 @@ export function FolderPick({
   onPick(path: string): void
 }) {
   const [folders, setFolders] = useState<Folder[]>([])
+  // Whether the folder is being written out rather than chosen.
+  const [writing, setWriting] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -53,15 +55,17 @@ export function FolderPick({
 
   const current = value.trim()
   const known = folders.some((folder) => folder.path === current)
-  return (
+  const select = (
     <select
       name="folder-pick"
       className="folder-pick"
       aria-label="Choose a folder in this project"
-      value={alone || known ? current : ""}
+      value={writing ? OTHER : alone || known ? current : ""}
       disabled={disabled}
       onChange={(event) => {
-        if (event.target.value) onPick(event.target.value)
+        const picked = event.target.value
+        setWriting(picked === OTHER)
+        if (picked && picked !== OTHER) onPick(picked)
       }}
     >
       {alone ? null : <option value="">choose from this project…</option>}
@@ -73,6 +77,27 @@ export function FolderPick({
           {folder.name}
         </option>
       ))}
+      {/* The list stops two levels down and the daemon's fence does not: a
+          deeper folder is written out, as the card spells it. */}
+      {alone ? <option value={OTHER}>another folder…</option> : null}
     </select>
   )
+  if (!writing) return select
+  return (
+    <>
+      {select}
+      <input
+        name="folder"
+        className="folder-typed"
+        aria-label="The folder, as the card spells it"
+        placeholder="../src/deep/folder"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onPick(event.target.value)}
+      />
+    </>
+  )
 }
+
+/** The list's last choice, which opens the folder as written. Not a path a card could hold. */
+const OTHER = "::another"

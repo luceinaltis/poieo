@@ -834,6 +834,7 @@ p.run-checks[data-verdict="blocked"] {
 }
 
 .card-field input,
+.card-field select,
 .card-field textarea {
   background: var(--ground);
   border: 1px solid var(--rule);
