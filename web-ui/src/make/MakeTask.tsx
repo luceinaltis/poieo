@@ -128,23 +128,30 @@ export function MakeTask({
   const [filled, setFilled] = useState(false)
   const { busy, refused, act } = useAct<MadeTask>(() => {})
 
-  // Where focus goes when the fields come out on a press. The link that
-  // brings them out leaves the page in the same update, and a focused
-  // element removed from under a keyboard drops focus to the page itself; the
-  // prompt is where the person is now. Not on mount: a seeded panel is
-  // focused as a whole by the shell, like every other panel.
+  // Where the page goes when the fields come out on a press, and again each
+  // time a draft lands on them: the fields into view, then focus on the
+  // prompt. The press was "use this draft" at the bottom of a thread that
+  // keeps its height, and what it filled was below the fold -- the name, the
+  // sentence naming whose files change, the save -- so the person went
+  // looking for what the press had done. The link that brings the fields out
+  // by hand leaves the page in the same update, and a focused element
+  // removed from under a keyboard drops focus to the page itself; the prompt
+  // is where the person is now. Not on mount: a seeded panel is focused as
+  // a whole by the shell, like every other panel.
+  const fieldsRef = useRef<HTMLDivElement>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const focusPrompt = useRef(false)
+  const [revealed, setRevealed] = useState(0)
   const bringOut = () => {
-    focusPrompt.current = true
     setOpen(true)
+    setRevealed((times) => times + 1)
   }
   useLayoutEffect(() => {
-    if (open && focusPrompt.current) {
-      focusPrompt.current = false
-      promptRef.current?.focus()
-    }
-  }, [open])
+    if (!revealed) return
+    // The least movement that shows the whole of them: the thread above
+    // scrolls away only as far as it must.
+    fieldsRef.current?.scrollIntoView({ block: "nearest" })
+    promptRef.current?.focus({ preventScroll: true })
+  }, [revealed])
 
   // A card the model proposed, onto the fields. The folder is taken only
   // when the draft names one, and the list keeps what the person had
@@ -227,7 +234,7 @@ export function MakeTask({
 
       {/* Hidden rather than absent while they wait: a draft lands on fields
           that already exist, and nothing is lost by putting them away. */}
-      <div className="make-fields" hidden={!open}>
+      <div className="make-fields" hidden={!open} ref={fieldsRef}>
         {filled ? <p className="make-note">Filled in from the conversation. Read it over, then save.</p> : null}
 
         <label className="make-field">

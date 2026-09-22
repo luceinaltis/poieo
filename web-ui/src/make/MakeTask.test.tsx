@@ -37,6 +37,8 @@ beforeEach(() => {
   fetchFolders.mockReset()
   fetchFolders.mockResolvedValue([])
   draftTask.mockReset()
+  // jsdom lays nothing out and has no scrolling; the panel asks for it.
+  Element.prototype.scrollIntoView = vi.fn()
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -487,4 +489,34 @@ test("a draft naming a folder the list lacks shows it as one more choice", async
   expect(field("folder-pick").value).toBe("../work")
   expect(host.textContent).toContain("../work")
   expect(field("name").value).toBe("nightly")
+})
+
+test("a draft brings the filled fields into view, each time one is taken", async () => {
+  // The fields come out under a thread that keeps its height, so on a laptop
+  // the name, the sentence naming whose files change and the save were all
+  // below the fold: the person had pressed "use this draft" at the bottom of
+  // the thread and then had to go looking for what the press did.
+  draftTask.mockResolvedValue({
+    ok: true,
+    reply: "Here.",
+    draft: { name: "nightly", folder: "", prompt: "Run the tests.", schedule: "" },
+    model: "fake/m1",
+  })
+  const brought = vi.mocked(Element.prototype.scrollIntoView)
+  show()
+  await describe("run the tests")
+  brought.mockClear()
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-draft"]')!.click())
+
+  const fields = host.querySelector(".make-fields")!
+  expect(brought.mock.contexts).toContain(fields)
+  expect(document.activeElement).toBe(field("prompt"))
+
+  // Taken again with the fields already out: the person is at the bottom
+  // of the thread again, and the fields have changed under them.
+  await describe("make it nightly")
+  brought.mockClear()
+  const offered = host.querySelectorAll<HTMLButtonElement>('[data-do="use-draft"]')
+  await act(async () => offered[offered.length - 1].click())
+  expect(brought.mock.contexts).toContain(fields)
 })

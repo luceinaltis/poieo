@@ -17,7 +17,7 @@
  * unless it is narrowed.
  */
 
-import { useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 
 import { draftTask } from "../api"
@@ -77,6 +77,7 @@ export function Describe({
   const [refused, setRefused] = useState<DraftAnswer | null>(null)
   const [model, setModel] = useState<string | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
+  const thread = useRef<HTMLOListElement>(null)
   const busy = sending !== null
 
   const send = async () => {
@@ -110,10 +111,21 @@ export function Describe({
 
   const shown: Turn[] = sending === null ? turns : [...turns, { role: "user", content: sending }]
 
+  // The newest turn, into view. The thread is capped so the box under it
+  // stays put, and a capped thread scrolls: after the model's one question
+  // and its answer, the reply carrying the card landed under the fold with
+  // nothing on screen to say a card had come -- the person saw the question
+  // again, and a scrollbar. The least movement that shows it, so the panel
+  // around the thread and the box the person is typing in stay where they
+  // were.
+  useLayoutEffect(() => {
+    thread.current?.lastElementChild?.scrollIntoView({ block: "nearest" })
+  }, [shown.length])
+
   return (
     <section className="describe" aria-label="Describe the work">
       {shown.length > 0 ? (
-        <ol className="describe-turns">
+        <ol className="describe-turns" ref={thread}>
           {shown.map((turn, index) => (
             <li className="describe-turn" data-role={turn.role} key={index}>
               <span className="describe-who">{turn.role === "user" ? "you" : "poieo"}</span>

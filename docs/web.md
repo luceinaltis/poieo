@@ -284,7 +284,11 @@ is chosen, any other opens the line with it written out -- and says so above
 the fields. Enter sends, Shift+Enter breaks the line, and Enter
 during input-method composition does nothing. A refusal stays on screen with
 the message still in the box, so nothing typed is lost. The conversation lives
-in the panel and goes with it.
+in the panel and goes with it. The thread is capped in height so the box under
+it stays put, and it scrolls to keep its newest turn in view -- the message on
+its way, then the reply -- with the least movement that shows it; taking a
+draft, or choosing to write by hand, brings the fields into view the same way
+before focus lands on the prompt.
 
 The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes

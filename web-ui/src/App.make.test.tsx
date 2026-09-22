@@ -97,6 +97,9 @@ beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
   localStorage.clear()
   localStorage.setItem("poieo.skin", "basic")
+  // jsdom lays nothing out and has no scrolling; the new-task panel asks
+  // for it when a message is sent.
+  Element.prototype.scrollIntoView = vi.fn()
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)

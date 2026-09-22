@@ -116,6 +116,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Room above and below when the panel scrolls them into view, so they
+     land with the panel's own padding rather than against its edges. */
+  scroll-margin: 12px 0;
 }
 
 .make-fields[hidden] {
