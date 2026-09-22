@@ -244,3 +244,75 @@ def test_drafting_writes_nothing_and_names_only_this_project(tmp_path):
 
     assert _ask(client, "fix").status_code == 200
     assert sorted(p.name for p in (tmp_path / "cards").iterdir()) == ["keep-tidy.yaml"]
+
+
+_CHAIN = """Three tasks, each started by the one before.
+
+```poieo-task
+{"name": "nightly tests", "folder": "", "prompt": "Run the tests. Say RED or GREEN.", "schedule": "0 2 * * *"}
+```
+
+```poieo-task
+{"name": "mend the suite", "folder": "", "prompt": "Fix the failing test.", "schedule": "",
+ "after": {"task": "nightly tests", "when": "says", "word": "RED"}}
+```
+
+```poieo-task
+{"name": "tell me", "folder": "", "prompt": "Say what was fixed.", "schedule": "1h",
+ "after": {"task": "mend the suite", "when": "succeeded"}}
+```
+"""
+
+
+def test_work_in_stages_is_proposed_as_a_chain_of_cards(tmp_path):
+    """A person who describes stages -- test, then fix if red, then tell me --
+    gets one card per stage, each after the one that starts it, rather than
+    one prompt that tries to say all three."""
+    body = _ask(_client(tmp_path, responses={"task_writer": _CHAIN}), "test, fix, tell me").json()
+
+    assert body["reply"] == "Three tasks, each started by the one before."
+    drafts = body["drafts"]
+    assert [d["name"] for d in drafts] == ["nightly tests", "mend the suite", "tell me"]
+    assert drafts[0]["after"] is None
+    assert drafts[0]["schedule"] == "0 2 * * *"
+    assert drafts[1]["after"] == {"task": 0, "when": "says", "word": "red"}
+    assert drafts[2]["after"] == {"task": 1, "when": "succeeded", "word": ""}
+    # Started by another, so never on a clock of its own, whatever it said.
+    assert drafts[1]["schedule"] == "manual" and drafts[2]["schedule"] == "manual"
+    # The single-card field stays the first card, for an older page.
+    assert body["draft"]["name"] == "nightly tests"
+
+
+def test_a_chain_link_to_a_card_not_before_it_is_dropped(tmp_path):
+    """Only an earlier card in the same reply can start a later one; anything
+    else would be a loop or a task that does not exist yet."""
+    reply = (
+        '```poieo-task\n{"name": "a", "prompt": "x", "after": {"task": "b", "when": "failed"}}\n```\n'
+        '```poieo-task\n{"name": "b", "prompt": "y", "after": {"task": "ghost", "when": "failed"}}\n```\n'
+    )
+    drafts = _ask(_client(tmp_path, responses={"task_writer": reply}), "x").json()["drafts"]
+
+    assert [d["after"] for d in drafts] == [None, None]
+
+
+def test_an_unknown_condition_falls_back_to_whenever_it_finishes(tmp_path):
+    reply = (
+        '```poieo-task\n{"name": "a", "prompt": "x"}\n```\n'
+        '```poieo-task\n{"name": "b", "prompt": "y", "after": {"task": "a", "when": "maybe"}}\n```\n'
+    )
+    drafts = _ask(_client(tmp_path, responses={"task_writer": reply}), "x").json()["drafts"]
+
+    assert drafts[1]["after"] == {"task": 0, "when": "always", "word": ""}
+
+
+def test_a_chain_is_at_most_four_cards(tmp_path):
+    reply = "\n".join(f'```poieo-task\n{{"name": "t{i}", "prompt": "p"}}\n```' for i in range(6))
+    drafts = _ask(_client(tmp_path, responses={"task_writer": reply}), "x").json()["drafts"]
+
+    assert [d["name"] for d in drafts] == ["t0", "t1", "t2", "t3"]
+
+
+def test_the_briefing_says_how_to_propose_stages(tmp_path, monkeypatch):
+    heard = _said(monkeypatch)
+    _ask(_client(tmp_path), "fix")
+    assert '"after"' in heard[0].system

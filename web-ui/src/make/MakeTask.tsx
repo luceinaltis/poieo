@@ -47,7 +47,8 @@ import { Refusal } from "../Refusal"
 import { WHEN } from "./schedule"
 import { slugOf, titleOf } from "./slug"
 import { useAct } from "../useAct"
-import { Describe } from "./Describe"
+import { written } from "../connection"
+import { Describe, startsWhen } from "./Describe"
 import "./make.css"
 
 /** How a card spells the project itself: relative to the tasks folder. */
@@ -142,6 +143,53 @@ export function MakeTask({
     promptRef.current?.focus({ preventScroll: true })
   }, [revealed])
 
+  // Several connected cards the model proposed, read over here rather than
+  // on the fields: the fields are one card, and a chain is made together.
+  const [chain, setChain] = useState<TaskDraft[] | null>(null)
+  const [chainMade, setChainMade] = useState<{ names: string[]; started: boolean } | null>(null)
+  const chainAct = useAct<MadeTask>(() => {})
+
+  // Last card first, each written already connected to the one it starts:
+  // the first task can then never finish a run before its followers exist.
+  // The quiet press leaves only the first switched off -- a follower that is
+  // off drops the handoff, and the first card is the one switch to throw.
+  const makeChain = (enabled: boolean) => () =>
+    void chainAct.act(async () => {
+      if (!chain) return { ok: false }
+      const slugs: string[] = []
+      for (let at = chain.length - 1; at >= 0; at -= 1) {
+        const draft = chain[at]
+        const then = chain.flatMap((later, index) =>
+          later.after && later.after.task === at
+            ? [{ ...written(later.after.when, later.after.word), to: slugs[index] }]
+            : [],
+        )
+        const answer = await createTask(
+          project,
+          draft.name,
+          draft.folder || WHOLE_PROJECT,
+          draft.prompt,
+          at === 0 ? enabled : true,
+          undefined,
+          draft.schedule || undefined,
+          then,
+        )
+        if (!answer.ok || !answer.task) {
+          const done = slugs.filter(Boolean)
+          const error = answer.error || "the daemon answered, but not with a task"
+          return {
+            ok: false,
+            error: done.length ? `${error} — ${done.join(", ")} ${done.length > 1 ? "were" : "was"} made` : error,
+          }
+        }
+        slugs[at] = answer.task
+      }
+      setChainMade({ names: slugs, started: enabled })
+      setChain(null)
+      onMade?.(slugs[0])
+      return { ok: true, task: slugs[0] }
+    })
+
   // A card the model proposed, onto the fields. The folder is taken only
   // when the draft names one, and the list keeps what the person had
   // otherwise. A schedule the choices do not have opens the line with it
@@ -214,8 +262,74 @@ export function MakeTask({
 
       {/* The one question, first and alone: what it produces is a filled
           form, and the form is still what gets saved. */}
-      <Describe project={project} disabled={busy} onDraft={fill} onModels={onModels} />
-      {!open ? (
+      <Describe
+        project={project}
+        disabled={busy || chainAct.busy}
+        onDraft={(draft) => {
+          setChain(null)
+          setChainMade(null)
+          fill(draft)
+        }}
+        onChain={(drafts) => {
+          setOpen(false)
+          setChainMade(null)
+          setChain(drafts)
+        }}
+        onModels={onModels}
+      />
+
+      {/* A chain, read over whole: which card runs when, and the same
+          sentence every save says about whose files change -- every card
+          here works inside this project. */}
+      {chain ? (
+        <section className="make-chain" aria-label="Connected tasks to make">
+          <ol className="make-chain-list">
+            {chain.map((draft, at) => (
+              <li key={at}>
+                <strong>{draft.name}</strong> <span className="make-chain-when">{startsWhen(chain, draft)}</span>
+                <p className="make-chain-prompt">{draft.prompt}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="make-note">Each connection starts a new run of the next task, with its own change to review.</p>
+          <p className="make-warning">
+            Saving and starting runs the first of these tasks. They will read and change files in this project.{" "}
+            {keepsCopies ? (
+              <>Their work is kept in private copies for you to accept or throw away.</>
+            ) : (
+              <strong className="make-undo">
+                This project is not a git repository, so there is no copy — they change your files directly, and there
+                is no undo.
+              </strong>
+            )}
+          </p>
+          {chainAct.refused ? <Refusal answer={chainAct.refused} /> : null}
+          <div className="make-actions">
+            <button type="button" className="make-save" data-do="make-chain" disabled={chainAct.busy} onClick={makeChain(true)}>
+              {chainAct.busy ? "saving…" : "save and start"}
+            </button>
+            <button
+              type="button"
+              className="make-later"
+              data-do="make-chain-off"
+              disabled={chainAct.busy}
+              onClick={makeChain(false)}
+            >
+              save without starting
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {chainMade ? (
+        <p className="make-made">
+          Made {chainMade.names.length} tasks, each connected to the next.{" "}
+          {chainMade.started
+            ? "The first starts on its own."
+            : "The first is switched off — switch it on in its Task setup when it is ready."}
+        </p>
+      ) : null}
+
+      {!open && !chain ? (
         <button type="button" className="make-byhand" data-do="write-by-hand" onClick={bringOut}>
           or write it yourself
         </button>

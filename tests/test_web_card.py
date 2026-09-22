@@ -559,6 +559,28 @@ def test_a_manual_card_stays_plain_and_keeps_its_trigger_through_the_form(tmp_pa
     assert "trigger" not in written
 
 
+def test_a_connected_card_stays_plain_and_a_field_save_keeps_its_connections(tmp_path):
+    """Connections are edited in their own section, so the setup form can
+    show a connected card and carry its `then:` through a save untouched."""
+    import yaml
+
+    client, cards = _client(tmp_path)
+    card(tmp_path / "cards", "next", "folder: ../work\nprompt: y\ntrigger: {type: manual}\n")
+    (cards / "already.yaml").write_text(
+        "name: Already\nfolder: ../work\nprompt: x\nthen:\n- {when: 'true', to: next}\n", encoding="utf-8"
+    )
+    assert _get(client).json()["plain"] is True
+
+    answer = client.put(
+        "/api/projects/board/tasks/already",
+        json={"name": "Already", "folder": "../work", "prompt": "sharper"},
+    )
+    assert answer.status_code == 200, answer.text
+    written = yaml.safe_load((cards / "already.yaml").read_text(encoding="utf-8"))
+    assert written["prompt"] == "sharper"
+    assert written["then"] == [{"when": "true", "to": "next"}]
+
+
 def test_a_field_save_after_a_set_aside_answers_not_raises(tmp_path):
     """The same race the text path already answers: drawer open, task set
     aside, save pressed. Field-mode reads the card before rebuilding it, and

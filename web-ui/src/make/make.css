@@ -195,3 +195,28 @@
   cursor: default;
   opacity: 0.5;
 }
+
+/* A proposed chain, read over before it is made: each card and when it runs. */
+.make-chain {
+  display: grid;
+  gap: 10px;
+}
+
+.make-chain-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.make-chain-when {
+  color: var(--dim);
+  font-size: 0.85em;
+}
+
+.make-chain-prompt {
+  color: var(--dim);
+  font-size: 0.85em;
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}

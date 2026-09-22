@@ -38,6 +38,9 @@ from starlette.staticfiles import StaticFiles
 
 # Every suffix `card.load_cards` reads, so one name is refused in every spelling.
 _CARD_SUFFIXES = {".yaml", ".yml", ".json"}
+
+# How many cards one proposed chain may hold: a flow a person can still read.
+_CHAIN_AT_MOST = 4
 # Windows keeps these in every directory, whatever the extension is.
 _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {f"LPT{n}" for n in range(1, 10)}
 
@@ -75,7 +78,7 @@ from .chat import ROLE as CHAT_ROLE
 from .chat import briefing as chat_briefing
 from .chat import cut_short
 from .draft import ROLE as DRAFTING_ROLE
-from .draft import briefing, conversation, read_card
+from .draft import briefing, conversation, read_cards
 from .events import CLOSED, BroadcastStore
 from .steps import publish_steps, validate_steps
 
@@ -424,6 +427,40 @@ def _with_then(text: str, then: list[dict[str, Any]], as_json: bool) -> str:
     if yaml.safe_load(result) != expected:
         raise ValueError("the card's text could not be rewritten around its connections")
     return result
+
+
+def _connections_refused(then: Any, slug: str, known: Any, cards: Path) -> str | None:
+    """Why these connections cannot be written on task `slug`, or None.
+
+    A list of arrows each with a condition the evaluator can read, naming a
+    task this project has -- loaded, or on disk and not yet looked at by the
+    scan, which is how a chain made last card first finds the card made a
+    moment ago -- and never the task itself, which the loader refuses.
+    """
+    if not isinstance(then, list) or not all(isinstance(arrow, dict) for arrow in then):
+        return "then is a list of connections"
+    try:
+        for arrow in then:
+            Branch.model_validate(arrow)
+    except Exception as exc:
+        return f"a connection needs a condition it can read: {describe_invalid(exc)}"
+    for arrow in then:
+        to = arrow.get("to")
+        if to is None:
+            continue
+        # The loader refuses this at startup; a task's own next run is what
+        # its schedule is for.
+        if to == slug:
+            return "a task cannot start itself when it finishes"
+        if to in known:
+            continue
+        # A card's name, never a path: the disk is only asked about a card in
+        # the tasks folder, or it would answer about any file on the machine.
+        if not isinstance(to, str) or not re.fullmatch(r"[\w-]+", to):
+            return f"this project has no task '{to}' to start"
+        if not any((cards / f"{to}{suffix}").is_file() for suffix in _CARD_SUFFIXES):
+            return f"this project has no task '{to}' to start"
+    return None
 
 
 def _schedule_words(trigger: Any) -> str:
@@ -1087,6 +1124,14 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 status_code=409,
             )
 
+        # Connections written with the card, so a chain made last card first
+        # has every link in place before its first task can run.
+        then = body.get("then") or []
+        refusal = _connections_refused(then, slug, config.cards_by_task, cards)
+        if refusal is not None:
+            return JSONResponse({"error": refusal}, status_code=400)
+        arrows = [{key: arrow[key] for key in ("when", "to", "label") if arrow.get(key) is not None} for arrow in then]
+
         graph = None
         if has_steps:
             try:
@@ -1109,6 +1154,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 **schedule,
                 **({} if enabled else {"enabled": False}),
                 **({"apply": application.model_dump()} if "apply" in body else {}),
+                **({"then": arrows} if arrows else {}),
             },
             allow_unicode=True,
             sort_keys=False,
@@ -1186,7 +1232,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # except the manual one, which the form says as the word `manual`.
         if "trigger" in data and not _is_manual(data["trigger"]):
             return False
-        return set(data) <= {"name", "folder", "prompt", "enabled", "apply", "every", "at", "trigger"}
+        # Connections have their own section and ride through a save unread.
+        return set(data) <= {"name", "folder", "prompt", "enabled", "apply", "every", "at", "trigger", "then"}
 
     def _switch(text: str) -> bool:
         """Whether the card on disk is switched on, read from its own bytes.
@@ -1283,26 +1330,10 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # be connected -- a plain one and one full of comments alike.
         if not text and "then" in body:
             then = body["then"]
-            if not isinstance(then, list) or not all(isinstance(arrow, dict) for arrow in then):
-                return JSONResponse({"error": "then is a list of connections"}, status_code=400)
-            try:
-                for arrow in then:
-                    Branch.model_validate(arrow)
-            except Exception as exc:
-                return JSONResponse(
-                    {"error": f"a connection needs a condition it can read: {describe_invalid(exc)}"},
-                    status_code=400,
-                )
             # Said now rather than dropped at run time with a log line.
-            for arrow in then:
-                # The loader refuses this at startup; a task's own next run is
-                # what its schedule is for.
-                if arrow.get("to") == spec.slug:
-                    return JSONResponse({"error": "a task cannot start itself when it finishes"}, status_code=400)
-                if arrow.get("to") is not None and arrow["to"] not in config.cards_by_task:
-                    return JSONResponse(
-                        {"error": f"this project has no task '{arrow['to']}' to start"}, status_code=400
-                    )
+            refusal = _connections_refused(then, spec.slug, config.cards_by_task, config.resolve_path(config.cards))
+            if refusal is not None:
+                return JSONResponse({"error": refusal}, status_code=400)
             try:
                 current = await asyncio.to_thread(path.read_text, encoding="utf-8")
             except FileNotFoundError:
@@ -1372,6 +1403,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                         if "apply" in yaml.safe_load(current)
                         else {}
                     ),
+                    # Kept as it was: the form does not show connections.
+                    **({"then": kept["then"]} if kept.get("then") else {}),
                 },
                 allow_unicode=True,
                 sort_keys=False,
@@ -2686,27 +2719,59 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 status_code=503,
             )
 
-        reply, card = read_card(response.text)
-        draft = None
-        if card is not None:
+        reply, cards = read_cards(response.text)
+        drafts: list[dict[str, Any]] = []
+        for card in cards:
+            if len(drafts) == _CHAIN_AT_MOST:
+                break
             name = str(card.get("name") or "").strip()
             prompt = str(card.get("prompt") or "").strip()
-            if name and prompt:
-                folder = str(card.get("folder") or "").strip()
-                if folder and _folder_inside(config, folder)[1] is not None:
-                    # The list names each folder twice, as a card spells it
-                    # and as a person reads it, and a model answers with
-                    # either: `src` is `../src` to the card. Anything the
-                    # list does not have is left for the person.
-                    wanted = folder.removeprefix("./").strip("/").lower()
-                    folder = next((one["path"] for one in folders if one["name"].lower() == wanted), "")
-                schedule = " ".join(str(card.get("schedule") or "").split())
-                try:
-                    _schedule_keys(schedule)
-                except SpecError:
-                    schedule = ""
-                draft = {"name": name, "folder": folder, "prompt": prompt, "schedule": schedule}
-        return JSONResponse({"reply": reply, "draft": draft, "model": writer.ref, "usage": response.usage.as_dict()})
+            if not (name and prompt):
+                continue
+            folder = str(card.get("folder") or "").strip()
+            if folder and _folder_inside(config, folder)[1] is not None:
+                # The list names each folder twice, as a card spells it
+                # and as a person reads it, and a model answers with
+                # either: `src` is `../src` to the card. Anything the
+                # list does not have is left for the person.
+                wanted = folder.removeprefix("./").strip("/").lower()
+                folder = next((one["path"] for one in folders if one["name"].lower() == wanted), "")
+            schedule = " ".join(str(card.get("schedule") or "").split())
+            try:
+                _schedule_keys(schedule)
+            except SpecError:
+                schedule = ""
+            # Which earlier card starts this one, by its place in the reply.
+            # Only an earlier one: a later one would be a loop, and a name
+            # the reply does not have is a task that does not exist yet.
+            after = None
+            asked = card.get("after")
+            if isinstance(asked, dict):
+                earlier = next(
+                    (at for at, one in enumerate(drafts) if one["name"] == str(asked.get("task") or "").strip()),
+                    None,
+                )
+                if earlier is not None:
+                    when = str(asked.get("when") or "")
+                    when = when if when in {"always", "succeeded", "failed", "says"} else "always"
+                    word = re.sub(r"['\\]", "", str(asked.get("word") or "")).strip().lower()
+                    if when == "says" and not word:
+                        when = "always"
+                    after = {"task": earlier, "when": when, "word": word if when == "says" else ""}
+                    # Started by the one before it, never on a clock of its own.
+                    schedule = "manual"
+            drafts.append({"name": name, "folder": folder, "prompt": prompt, "schedule": schedule, "after": after})
+        # `draft` is the first card alone, as an older page reads it.
+        draft = {key: value for key, value in drafts[0].items() if key != "after"} if drafts else None
+        return JSONResponse(
+            {
+                "reply": reply,
+                "draft": draft,
+                "drafts": drafts,
+                "model": writer.ref,
+                "usage": response.usage.as_dict(),
+            }
+        )
 
     async def project_chat(request: Request) -> JSONResponse:
         """Put a conversation to the project's model and hand back its reply.

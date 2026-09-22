@@ -20,38 +20,10 @@ import { useState } from "react"
 
 import { connect, fetchCard } from "../api"
 import type { Connection, RewrittenCard } from "../api"
+import { CONDITIONS as WHEN, said, wordOf, written } from "../connection"
+import type { Condition as When } from "../connection"
 import { Refusal } from "../Refusal"
 import { useAct } from "../useAct"
-
-/** The conditions as the form offers them, and the expression each one writes. */
-const WHEN = [
-  { value: "always", label: "whenever it finishes" },
-  { value: "succeeded", label: "if it succeeded" },
-  { value: "failed", label: "if it failed" },
-  { value: "says", label: "if its answer says…" },
-] as const
-
-type When = (typeof WHEN)[number]["value"]
-
-/** A word as a condition can quote it: lower case, and nothing that ends the quote. */
-const wordOf = (text: string) => text.trim().toLowerCase().replace(/['\\]/g, "")
-
-function written(when: When, word: string): Pick<Connection, "when" | "label"> {
-  if (when === "succeeded") return { when: "run.status == 'completed'", label: "succeeded" }
-  if (when === "failed") return { when: "run.status == 'failed'", label: "failed" }
-  if (when === "says") return { when: `'${wordOf(word)}' in str(run.outputs).lower()`, label: wordOf(word) }
-  return { when: "true", label: null }
-}
-
-/** A connection's condition in words: one this form wrote, or the word it was given. */
-function said(arrow: Connection): string {
-  if (arrow.when === "true") return "whenever it finishes"
-  if (arrow.when === "run.status == 'completed'") return "if it succeeded"
-  if (arrow.when === "run.status == 'failed'") return "if it failed"
-  const word = /^'(.*)' in str\(run\.outputs\)\.lower\(\)$/.exec(arrow.when)
-  if (word) return `if its answer says “${word[1]}”`
-  return arrow.label ? `when “${arrow.label}”` : `when ${arrow.when}`
-}
 
 export function Next({
   project,

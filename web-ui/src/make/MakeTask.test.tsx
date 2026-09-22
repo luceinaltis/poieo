@@ -520,3 +520,85 @@ test("a draft brings the filled fields into view, each time one is taken", async
   await act(async () => offered[offered.length - 1].click())
   expect(brought.mock.contexts).toContain(fields)
 })
+
+const CHAIN = [
+  { name: "nightly tests", folder: "", prompt: "Run the tests. Say RED or GREEN.", schedule: "0 2 * * *", after: null },
+  {
+    name: "mend the suite",
+    folder: "",
+    prompt: "Fix the failing test.",
+    schedule: "manual",
+    after: { task: 0, when: "says" as const, word: "red" },
+  },
+  {
+    name: "tell me",
+    folder: "",
+    prompt: "Say what was fixed.",
+    schedule: "manual",
+    after: { task: 1, when: "succeeded" as const, word: "" },
+  },
+]
+
+async function proposeChain() {
+  draftTask.mockResolvedValue({ ok: true, reply: "Three tasks.", draft: CHAIN[0], drafts: CHAIN, model: "fake/m1" })
+  show()
+  await describe("test, fix if red, tell me")
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="use-chain"]')!.click())
+}
+
+test("work in stages is proposed as connected cards and read over before saving", async () => {
+  await proposeChain()
+
+  const chain = host.querySelector(".make-chain")!
+  expect(chain.textContent).toContain("nightly tests")
+  expect(chain.textContent).toContain("every night at 2")
+  expect(chain.textContent).toContain("after nightly tests, if its answer says “red”")
+  expect(chain.textContent).toContain("after mend the suite, if it succeeded")
+  // The one sentence every save says, said here too.
+  expect(host.textContent).toContain("It will read and change files in")
+  expect(host.querySelector<HTMLElement>(".make-fields")!.hidden).toBe(true)
+})
+
+test("a chain is made last card first, each already connected to the one it starts", async () => {
+  createTask.mockImplementation(async (_project, name) => ({ ok: true, task: name.replace(/ /g, "-") }))
+  await proposeChain()
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="make-chain"]')!.click())
+
+  expect(createTask).toHaveBeenCalledTimes(3)
+  expect(createTask).toHaveBeenNthCalledWith(1, "board", "tell me", "..", "Say what was fixed.", true, undefined, "manual", [])
+  expect(createTask).toHaveBeenNthCalledWith(2, "board", "mend the suite", "..", "Fix the failing test.", true, undefined, "manual", [
+    { when: "run.status == 'completed'", label: "succeeded", to: "tell-me" },
+  ])
+  expect(createTask).toHaveBeenNthCalledWith(
+    3,
+    "board",
+    "nightly tests",
+    "..",
+    "Run the tests. Say RED or GREEN.",
+    true,
+    undefined,
+    "0 2 * * *",
+    [{ when: "'red' in str(run.outputs).lower()", label: "red", to: "mend-the-suite" }],
+  )
+  expect(host.textContent).toContain("Made 3 tasks")
+})
+
+test("the quiet press leaves only the first card switched off, so switching it on starts the chain", async () => {
+  createTask.mockImplementation(async (_project, name) => ({ ok: true, task: name.replace(/ /g, "-") }))
+  await proposeChain()
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="make-chain-off"]')!.click())
+
+  expect(createTask.mock.calls.map((call) => call[4])).toEqual([true, true, false])
+})
+
+test("a refusal part way says what was made and stops", async () => {
+  createTask
+    .mockResolvedValueOnce({ ok: true, task: "tell-me" })
+    .mockResolvedValueOnce({ ok: false, error: "this project already has a task called 'mend-the-suite'" })
+  await proposeChain()
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="make-chain"]')!.click())
+
+  expect(createTask).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain("already has a task called 'mend-the-suite'")
+  expect(host.textContent).toContain("tell-me was made")
+})

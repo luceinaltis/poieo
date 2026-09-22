@@ -102,7 +102,8 @@ From the board a user can:
 - create a basic task, edit its name, folder, prompt and one-line schedule,
   and switch it on or off;
 - describe the work in a conversation with the project's model and put the
-  card it proposes on the form, to check and save;
+  card it proposes on the form, to check and save -- or, for work in stages,
+  make the connected cards it proposes together;
 - rename a task or set it aside without destroying its file;
 - connect a task to the next one it starts when it finishes -- whenever, on
   success, on failure, or when its answer says a word;

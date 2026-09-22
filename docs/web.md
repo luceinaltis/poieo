@@ -128,8 +128,8 @@ daemon state only. An answer persists with its run and may start a task handoff.
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
 | `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, thinking, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; asked with `Accept: text/event-stream`, the same answer comes as it is written: `thinking` and `text` frames carry each piece, `done` the whole reply with those same fields, and `error` what a refusal would have said once the stream has begun; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
-| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:`, five cron fields written as `at:`, or `manual` written as `trigger: {type: manual}`, and 400 when none; creates one card, optionally its neighboring graph, and returns its task id and path |
-| `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, model, usage}`: the model's prose without its card, and the card it proposed as `{name, folder, prompt, schedule}` or null; writes nothing; 409 without a models file, 503 when the model does not answer |
+| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:`, five cron fields written as `at:`, or `manual` written as `trigger: {type: manual}`, and 400 when none; an optional `then` is written with the card and checked as the rewrite checks it, except that a target may be a card on disk the scan has not loaded yet; creates one card, optionally its neighboring graph, and returns its task id and path |
+| `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, drafts, model, usage}`: the model's prose without its cards, every card it proposed in order as `{name, folder, prompt, schedule, after}` (at most four; `after` is `{task, when, word}` naming an earlier card by its place and one of `always`, `succeeded`, `failed`, `says`, or null, and a card with one is `manual`), and `draft`, the first of them without `after`, or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}`, simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it, or `{then}`, the card's whole list of connections, spliced into its own text so comments and other fields are kept (an empty list removes the block; a target outside the project or a condition that does not parse is 400, a card whose text cannot be rewritten that way is 409); atomically validates and replaces one card, returning whether the edit is live. The GET beside it returns `then` with each connection's condition |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
 | `DELETE /api/projects/{project}/tasks/{task}` | moves the whole card under `tasks/.set-aside/` and pauses its resident runner |
@@ -370,6 +370,17 @@ buttons; pressing one puts it in the box to be changed or sent, and spends
 nothing. A refusal that names the model -- no models file, a role that
 resolves to nothing, an endpoint that did not answer -- carries `open models`,
 which opens the models panel in the panel's place.
+
+Work described in stages -- test, then fix if it failed, then report -- may
+come back as a chain of up to four cards, each after the one that starts it.
+The thread lists them with when each runs and offers `use these drafts`,
+which puts the chain in place of the fields to be read over with the same
+sentence about whose files change. Saving makes the cards last first, each
+written already connected to the card it starts, so the first task cannot
+finish a run before its followers exist; the quiet press leaves only the
+first switched off. A refusal part way says which cards were already made.
+Each card is then an ordinary card: its setup form shows it, and its
+connections are kept through a form save and edited under When it finishes.
 
 Steps are not written here. The step form that compiled drop-downs to the
 graph schema is gone from the tree (git history has it); the daemon's steps

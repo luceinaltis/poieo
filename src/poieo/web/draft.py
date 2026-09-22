@@ -103,7 +103,14 @@ def briefing(project: str, folders: list[dict[str, str]], tasks: list[tuple[str,
         "Write the prompt as instructions to a capable agent working alone: what to do, how to "
         'check it, and what to leave alone. Schedule is "" for hourly, an interval such as 30m or '
         "2h, the word loop, the word manual for a task that runs only when another task starts it, "
-        "or five cron fields such as 0 2 * * *. Do not describe this format to the person."
+        "or five cron fields such as 0 2 * * *. Do not describe this format to the person.\n\n"
+        "When the work has stages where a later one should run only depending on how an earlier "
+        "one ended -- test, then fix if it failed, then report -- propose one card per stage, at "
+        "most four, each in its own poieo-task block, in order. Every card after the first adds "
+        '"after": {"task": "<name of an earlier card in this reply>", "when": "always", '
+        '"succeeded", "failed" or "says", "word": "<a word its answer will contain, for says>"}, '
+        "and its prompt tells the model what to say when a later card waits on a word. "
+        "Work one model can do in one go stays one card."
     )
 
 
@@ -137,3 +144,23 @@ def read_card(text: str) -> tuple[str, dict[str, Any] | None]:
     if card is not None:
         return "", card
     return text.strip(), None
+
+
+def read_cards(text: str) -> tuple[str, list[dict[str, Any]]]:
+    """The prose without its cards, and every card the reply carried, in order.
+
+    Several when the model proposed work in stages, one block each. The
+    labelled fences are read if there are any, otherwise any fence; a reply
+    with no fenced card at all falls back to `read_card`'s bare reading.
+    """
+    for pattern in (_LABELLED, _ANY_FENCE):
+        found = [(match, _card_in(match.group(1))) for match in pattern.finditer(text)]
+        cards = [card for _, card in found if card is not None]
+        if cards:
+            prose = text
+            for match, card in reversed(found):
+                if card is not None:
+                    prose = prose[: match.start()] + prose[match.end() :]
+            return re.sub(r"\n{3,}", "\n\n", prose).strip(), cards
+    prose, card = read_card(text)
+    return prose, [card] if card is not None else []
