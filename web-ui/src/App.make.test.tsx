@@ -1,8 +1,8 @@
 /**
- * The rail's third item, and the panel it opens.
+ * The board's own act, and the panel it opens.
  *
  * Making a task is what the page is *for* rather than what one task is doing,
- * which is the rail's own rule -- so it lands beside `models` and not on the
+ * which is the tabs' own rule -- so it lands beside `models` and not on the
  * bar. What these defend is that one thing is open at a time: the stage
  * reserves a single margin, and two panels in it is a bug you only see on a
  * narrow window.
@@ -121,15 +121,15 @@ async function open(tasks?: TaskRow[]) {
 const button = (name: string) => container.querySelector<HTMLElement>(`[data-do="${name}"]`)
 const panel = (label: string) => container.querySelector(`[aria-label="${label}"]`)
 
-test("making one is offered on the board, not on the rail", async () => {
+test("making one is offered on the board's own line, not among the tabs", async () => {
   await open()
-  // The rail is where you can *be*; making a task is something you do to the
-  // board, so its button sits on the board and goes with it.
-  const railed = [...container.querySelectorAll(".shell-rail button")].map((b) => b.textContent)
-  expect(railed).toEqual(["board", "runs", "memory"])
+  // The tabs are where you can *be*; making a task is something you do to
+  // the board, so its button sits on the board's header line and goes with it.
+  const tabs = [...container.querySelectorAll(".shell-places button")].map((b) => b.textContent)
+  expect(tabs).toEqual(["board", "runs", "memory"])
   const make = button("open-make")!
   expect(make.textContent).toBe("new task")
-  expect(make.closest(".shell-stage")).not.toBeNull()
+  expect(make.closest(".stage-head")).not.toBeNull()
 
   await act(async () => button("open-runs")!.click())
   expect(button("open-make")).toBeNull()
@@ -185,7 +185,7 @@ test("picking a task on the board takes the margin back", async () => {
   })
 
   // The third way into the one margin the stage reserves, and the one the
-  // rail cannot defend on its own: a task picked on the board opens the
+  // tabs cannot defend on their own: a task picked on the board opens the
   // drawer, so whatever was holding the margin has to let go of it.
   expect(panel("New task")).toBeNull()
   expect(container.querySelector(".drawer")).not.toBeNull()

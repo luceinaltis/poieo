@@ -1,3 +1,9 @@
+/* The bar: one row, and everything global on it. Four kinds of thing sit
+   here and each has its own look, so that where the reader is (a tab), what
+   they have opened (a toggle), how the daemon is (a dot) and what they prefer
+   (an icon) do not read as one menu. They used to be split between this bar
+   and a rail down the side, in the same lettering, which read as two menus
+   whose difference nobody could see. */
 .shell-bar {
   align-items: center;
   border-bottom: 1px solid var(--rule);
@@ -19,24 +25,8 @@
   content: url("../../site/img/lockup-light.svg");
 }
 
-.shell-theme {
-  background: none;
-  border-color: var(--line);
-  border-radius: 999px;
-  color: var(--dim);
-  flex: none;
-  font-size: 0.875rem;
-  min-height: 32px;
-  padding: 3px 12px;
-}
-
-.shell-theme:hover {
-  color: var(--text);
-  border-color: var(--ember);
-}
-
 /* The subject of the page, beside the name of the tool. Reads brighter than
-   the status because it is the one thing on the bar that differs between two
+   the tabs because it is the one thing on the bar that differs between two
    boards -- and dimmer than the title, which is not what a reader is here
    for. */
 .shell-project {
@@ -67,51 +57,146 @@
   color: var(--text);
 }
 
-/* A quiet word beside the project's name. Same size as the status so the bar
-   reads as one line about the project; brightens when open, since the panel
-   it opened is now the thing beside it. */
-.shell-models,
-.shell-chat {
+/* Where you can be and what you can open: one navigation, two groups, and
+   the gap between them is what keeps the second from reading as more
+   places. The group grows to hold the bar's middle so the tools sit at its
+   far end, beside the dot and the theme. */
+.shell-nav {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
+.shell-places {
+  display: flex;
+  gap: 2px;
+}
+
+/* A tab: a word with a line under it when it is where you are. The line is
+   the whole mark, so a tab and a toggle cannot be mistaken for each other
+   even in the same lettering. */
+.shell-places button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9375rem;
+  padding: 6px 8px 4px;
+}
+
+.shell-places button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.shell-places button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Where you are, not what you last pressed. */
+.shell-places button[aria-current="page"] {
+  border-bottom-color: var(--ember);
+  color: var(--text);
+}
+
+.shell-tools {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* A toggle: an icon and a word that look pressed while their panel is open.
+   Pressed, not underlined -- a panel is over a place, not a place, and
+   opening one must not look like going somewhere. */
+.shell-toggle {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--dim);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.875rem;
+  gap: 5px;
+  padding: 3px 8px;
+}
+
+.shell-toggle svg {
+  height: 0.95em;
+  width: 0.95em;
+}
+
+.shell-toggle:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.shell-toggle[aria-expanded="true"] {
+  background: var(--raised);
+  border-color: var(--rule);
+  color: var(--text);
+}
+
+.shell-toggle:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* The daemon's state as a dot: a fact to glance at, not a place to go, which
+   is what the word `live` beside three page names looked like. The word is
+   still there, for a screen reader and the tooltip. */
+.shell-status {
+  background: var(--dim);
+  border-radius: 50%;
+  flex: none;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+.shell-status[data-status="live"] {
+  background: var(--live);
+}
+
+.shell-status[data-status="lost"] {
+  background: var(--stop);
+}
+
+.sr-only {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* The theme as an icon: a preference, and the one control on the bar that
+   is about the page rather than the project. Drawn as the theme it would
+   switch to, which is what the old word said too. */
+.shell-theme {
+  align-items: center;
   background: none;
   border: 0;
   border-radius: 4px;
   color: var(--dim);
   cursor: pointer;
-  font: inherit;
-  font-size: 0.875rem;
-  padding: 3px 7px;
+  display: inline-flex;
+  flex: none;
+  padding: 4px;
 }
 
-.shell-models:hover:not(:disabled),
-.shell-models[aria-expanded="true"],
-.shell-chat:hover:not(:disabled),
-.shell-chat[aria-expanded="true"] {
+.shell-theme svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.shell-theme:hover {
   color: var(--text);
-}
-
-.shell-models[aria-expanded="true"],
-.shell-chat[aria-expanded="true"] {
-  background: var(--raised);
-}
-
-.shell-models:disabled,
-.shell-chat:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.shell-status {
-  color: var(--dim);
-  font-size: 0.875rem;
-  margin-right: auto;
-}
-
-.shell-status[data-status="live"] {
-  color: var(--live);
-}
-
-.shell-status[data-status="lost"] {
-  color: var(--stop);
 }
 
 .shell-pick {
@@ -131,54 +216,8 @@
   padding: 3px 6px;
 }
 
-/* Down the side, because these are the places the page has -- a list that
-   grows as views are added, where the bar's controls are a fixed handful
-   about the project already on screen. Narrow on purpose: it is navigation,
-   not content. */
-.shell-rail {
-  border-right: 1px solid var(--rule);
-  bottom: 0;
-  display: grid;
-  align-content: start;
-  gap: 2px;
-  left: 0;
-  padding: 10px 8px;
-  position: fixed;
-  top: var(--bar-height);
-  width: var(--rail-width);
-}
-
-.shell-rail button {
-  background: none;
-  border: 0;
-  border-radius: 4px;
-  color: var(--dim);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.9375rem;
-  padding: 6px 8px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.shell-rail button:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.shell-rail button:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-/* Where you are, not what you last pressed. */
-.shell-rail button[aria-current="page"] {
-  background: var(--raised);
-  color: var(--text);
-}
-
 .shell-stage {
   height: calc(100vh - var(--bar-height));
-  margin-left: var(--rail-width);
   position: relative;
 }
 
@@ -186,26 +225,46 @@
   margin-right: var(--panel-width);
 }
 
-.shell-board {
-  inset: 0;
-  overflow: auto;
+/* The place's own line, under the bar: its name, what is on it, and the acts
+   that land on it. Held at one height so the board, the invitation and the
+   memory place all start under it by the same amount. */
+.stage-head {
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+  box-sizing: border-box;
+  display: flex;
+  gap: 10px;
+  height: var(--stage-head);
+  left: 0;
+  padding: 0 16px;
   position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 2;
 }
 
-/* Reserve the control's row so a card at reading size cannot sit underneath. */
-.shell-make + .shell-board {
-  top: 52px;
+.stage-place {
+  color: var(--text);
+  font-size: 0.9375rem;
 }
 
+.stage-count {
+  color: var(--dim);
+  font-size: 0.875rem;
+}
+
+.stage-count::before {
+  content: "·";
+  margin-right: 10px;
+}
+
+/* At the far end of the line, because it is the one act here. */
 .shell-make {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
-  padding: 5px 11px;
-  position: absolute;
-  right: 16px;
-  top: 12px;
-  z-index: 2;
+  margin-left: auto;
+  padding: 4px 11px;
 }
 
 .shell-make:hover:not(:disabled),
@@ -214,9 +273,20 @@
   color: var(--ground);
 }
 
+.shell-board {
+  inset: 0;
+  overflow: auto;
+  position: absolute;
+  top: var(--stage-head);
+}
+
 .shell-board[data-hidden="true"] {
   pointer-events: none;
   visibility: hidden;
+}
+
+.shell-stage > .memory {
+  top: var(--stage-head);
 }
 
 .shell-empty {
@@ -230,6 +300,7 @@
   padding: 32px 16px;
   position: absolute;
   text-align: center;
+  top: var(--stage-head);
 }
 
 .shell-empty p {
@@ -247,6 +318,54 @@
   color: var(--ground);
 }
 
+/* Below a laptop's width the one row no longer holds its five words and
+   two names, so the bar wraps into two rows, the tabs and toggles under the
+   name, and it is named that tall so the panel and the stage both start
+   under the second row. Wrapping is allowed only here: above this width a
+   bar held to one row's height must not silently grow a second. */
+@media (max-width: 900px) {
+  :root {
+    --bar-height: 5.875rem;
+  }
+
+  .shell-bar {
+    align-content: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .shell-lockup {
+    height: 2rem;
+  }
+
+  /* The second row. */
+  .shell-nav {
+    flex: 1 1 100%;
+    order: 9;
+  }
+
+  .shell-places button {
+    padding-inline: 6px;
+  }
+
+  /* Four things on a 393px row: the project's name is the one that can be
+     long, so it is the one that gives. */
+  .shell-project,
+  .shell-project-pick {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shell-status,
+  .shell-theme {
+    flex: none;
+  }
+}
+
 /* On a phone the drawer takes the whole screen, so there is nothing to make
    room beside -- and reserving 100vw of margin left the board zero wide. */
 @media (max-width: 720px) {
@@ -257,58 +376,8 @@
   /* A phone panel is the whole work surface below the bar. `visibility`
      removes the covered controls from pointer and keyboard navigation while
      preserving the stage's dimensions for the skin that is still mounted. */
-  .shell-rail[data-covered="true"],
-  .shell-stage[data-drawer="true"] {
-    visibility: hidden;
-  }
-
   .shell-stage[data-drawer="true"] {
     margin-right: 0;
-  }
-
-  /* And the rail lies down. Two words down the side cost 92px of a 393px
-     phone -- a quarter of the screen, permanently, for a list that is three
-     items long. Across the top it costs a line. */
-  .shell-rail {
-    align-content: center;
-    border-bottom: 1px solid var(--rule);
-    border-right: 0;
-    bottom: auto;
-    box-sizing: border-box;
-    grid-auto-flow: column;
-    justify-content: start;
-    gap: 1px;
-    /* Held to the height the stage reserves rather than taking whatever the
-       buttons come to. Two numbers that have to agree is how the board ends
-       up under it, which is the note on `--rail-width` one line up. */
-    height: var(--rail-lying-down);
-    padding: 0 4px;
-    right: 0;
-    width: auto;
-  }
-
-  .shell-rail button {
-    padding-inline: 4px;
-  }
-
-  .shell-bar { gap: 7px; padding-inline: 10px; }
-  .shell-lockup { height: 2rem; }
-  .shell-theme { padding-inline: 9px; }
-  .shell-models, .shell-chat, .shell-status { flex: none; }
-
-  /* Five words on a 393px bar: the project's name is the one that can be
-     long, so it is the one that gives. */
-  .shell-project,
-  .shell-project-pick {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .shell-stage {
-    height: calc(100vh - var(--bar-height) - var(--rail-lying-down));
-    margin-left: 0;
-    margin-top: var(--rail-lying-down);
+    visibility: hidden;
   }
 }
