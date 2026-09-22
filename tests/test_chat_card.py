@@ -130,3 +130,107 @@ async def test_the_second_message_hears_the_first(tmp_path):
             assert runner._run_input["message"] == "and then?"
     finally:
         await down(daemon, serve)
+
+
+# -- a chat card is only ever a conversation ------------------------------------
+
+
+def test_eject_refuses_a_chat_card(tmp_path):
+    from typer.testing import CliRunner
+
+    from poieo.cli import app
+
+    path = write_card(tmp_path, "chat", "name: chat\nchat: true\nprompt: Help.\n")
+
+    result = CliRunner().invoke(app, ["eject", str(path)])
+
+    assert result.exit_code == 1
+    assert "chat" in result.stderr
+    assert not (tmp_path / "tasks" / "chat.graph.yaml").exists()
+
+
+def test_a_chat_card_takes_no_notes_toolset(tmp_path):
+    path = write_card(tmp_path, "chat", "name: chat\nchat: true\nprompt: Help.\ntools: [files, notes]\n")
+
+    with pytest.raises(SpecError, match="notes"):
+        load_card(path)
+
+
+def _project(tmp_path, *cards):
+    for stem, body in cards:
+        write_card(tmp_path, stem, body)
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    (tmp_path / "poieo.yaml").write_text("binding: b.yaml\ntasks: tasks\n", encoding="utf-8")
+    return tmp_path / "poieo.yaml"
+
+
+def test_no_task_is_told_it_can_leave_a_chat_card_a_note(tmp_path):
+    config = load_config(
+        _project(
+            tmp_path,
+            ("chat", "name: chat\nchat: true\nprompt: Help.\n"),
+            ("chores", "name: chores\nprompt: Tidy.\ntools: [files, notes]\n"),
+            ("triage", "name: triage\nprompt: Sort.\n"),
+        )
+    )
+    system = config.card_graphs["chores"].nodes[0].system
+
+    assert "triage" in system
+    assert "chat" not in system.split("leave a note for:")[1]
+
+
+def test_no_task_may_hand_work_to_a_chat_card(tmp_path):
+    path = _project(
+        tmp_path,
+        ("chat", "name: chat\nchat: true\nprompt: Help.\n"),
+        ("chores", "name: chores\nprompt: Tidy.\nthen: [{when: 'true', to: chat}]\n"),
+    )
+
+    with pytest.raises(SpecError, match="chat"):
+        load_config(path)
+
+
+def test_poieo_run_on_a_chat_card_asks_for_the_message(tmp_path):
+    from typer.testing import CliRunner
+
+    from poieo.cli import app
+
+    (tmp_path / "b.yaml").write_text(_MOCK, encoding="utf-8")
+    path = write_card(
+        tmp_path,
+        "chat",
+        f"name: chat\nchat: true\nprompt: Help.\ntools: []\nbinding: {(tmp_path / 'b.yaml').as_posix()}\n",
+    )
+
+    refused = CliRunner().invoke(app, ["run", str(path), "--no-log"])
+    assert refused.exit_code == 1
+    assert "message" in refused.stderr
+
+    answered = CliRunner().invoke(app, ["run", str(path), "--no-log", "--set", "message=hello"])
+    assert answered.exit_code == 0, answered.output
+
+
+async def test_a_chat_task_is_not_started_without_something_said(tmp_path):
+    daemon = Daemon(
+        load_config(_project(tmp_path, ("chat", "name: chat\nchat: true\nprompt: Help.\ntools: []\n"))),
+        store=RunStore(tmp_path / "runs"),
+    )
+    serve = await up(daemon)
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+            response = await client.post(f"/api/tasks/{daemon.config.display_name}/chat/run")
+            assert response.status_code == 400
+            assert "message" in response.json()["error"]
+    finally:
+        await down(daemon, serve)
+
+
+def test_a_single_turn_too_long_to_keep_whole_is_kept_cut_not_dropped():
+    from poieo.card import CHAT_CHARS
+
+    kept = chat_transcript([_row("x" * (CHAT_CHARS + 500), "short")], "t-1")
+
+    assert kept.startswith("person: xxx")
+    assert len(kept) <= CHAT_CHARS + 100
+    assert "(earlier turns left out)" not in kept

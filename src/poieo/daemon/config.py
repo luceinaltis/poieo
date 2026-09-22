@@ -194,7 +194,9 @@ def _load_cards(config: DaemonConfig) -> None:
     # Two passes: a card's generated prompt names the tasks it may tell, and
     # that is not known until the whole folder has been read.
     cards = load_cards(folder)
-    roster = [card.slug for card in cards]
+    # A chat card is left off: it reads no journal, so a note left for it
+    # would be written and never read.
+    roster = [card.slug for card in cards if not card.chat]
     for card in cards:
         task, graph = expand(card, roster=roster)
         if task.name in taken:
@@ -295,6 +297,12 @@ def check_handoffs(config: DaemonConfig) -> None:
                 raise SpecError(
                     f"task '{task.name}' then[{index}] hands off to unknown task "
                     f"'{branch.to}'. There is: {roster or '(nothing else)'}"
+                )
+            card = config.cards_by_task.get(branch.to)
+            if card is not None and card.chat:
+                raise SpecError(
+                    f"task '{task.name}' then[{index}] hands off to '{branch.to}', a chat card. "
+                    "A chat card answers what a person says, not another task's work."
                 )
             if not target.enabled:
                 log.warning(

@@ -674,6 +674,8 @@ def run(
     card_input = card_payload(task) if task is not None else {}
     overrides = _parse_input(input_json, set_)
     payload = {**declared, **card_input, **overrides}
+    if task is not None and task.chat and not str(payload.get("message") or "").strip():
+        _fail(f"{task.slug} is a chat card and answers a message: give it one with --set message=...")
     if store is None:
         # Asked from the card's own folder, not the cwd: a card run by hand and
         # the same card run by the daemon write one history, not two.
@@ -1642,6 +1644,10 @@ def eject(
 
     if task.graph:
         _fail(f"{task_path} already names a graph: {task.graph}")
+    if task.chat:
+        # A chat card cannot name a graph, so writing one out would have to
+        # drop `chat:` and leave an hourly task answering nobody.
+        _fail(f"{task_path} is a chat card: it is a conversation, with no graph to write out")
     # Beside the card, under its name: `load_cards` tells the two apart by
     # shape, so one folder holds both.
     target = to or (task.dir / f"{task.slug}.graph.yaml")

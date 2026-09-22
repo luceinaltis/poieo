@@ -2279,6 +2279,8 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                 spoken = _spoken(payload)
             except SpecError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
+        if not spoken and _is_chat(runner):
+            return JSONResponse({"error": "this task answers a message: send {message, thread}"}, status_code=400)
         if not runner.run_now(**spoken):
             # Iterations never overlap; the refusal names the run in the way.
             return JSONResponse(

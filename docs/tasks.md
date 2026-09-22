@@ -98,6 +98,12 @@ thread, oldest first, as `person:` and `you:` turns, at most the newest 20 and
 conversation)`. A chat card writes no journal line, because its history is its
 runs. The board lists it with `chat: true` and leaves it off the stage.
 
+A chat card is only ever a conversation. It takes no `notes` toolset and is
+left off every other card's note roster, since it reads no journal; no `then:`
+may hand work to it; `poieo eject` refuses it, having no graph it could keep
+`chat:` beside; and a run with nothing said is refused before it starts -- a
+bare run-now is a 400, and `poieo run` asks for `--set message=...`.
+
 ## Run input and journal
 
 Each run starts with the card's `input`; a mapping from `input_file` is reread

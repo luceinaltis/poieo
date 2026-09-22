@@ -1019,6 +1019,12 @@ class TaskRunner:
                         # back from this task's own records, by thread.
                         runs = self.store.list_runs(limit=200, task=self.name, project=self.config.display_name)
                         payload["transcript"] = chat_transcript(runs, spoken["thread"])
+                if card is not None and card.chat and not str(payload.get("message") or "").strip():
+                    # Every road here is refused before it starts -- the
+                    # route, a handoff, the CLI -- so this is the last net:
+                    # a run answering nobody costs a model call and says nothing.
+                    log.warning("task '%s' is a chat card and was started with nothing said to it", self.name)
+                    return True
                 self._run_input = payload
                 workdir = await self._open_change()
                 # Only now: the prompt above has read the journal, so words that

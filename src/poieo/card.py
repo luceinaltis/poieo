@@ -87,6 +87,10 @@ def chat_transcript(runs: list[dict[str, Any]], thread: str | None) -> str:
         if thread is None or run.get("thread") != thread or run.get("message") is None:
             continue
         turn = f"person: {run['message']}\nyou: {run.get('said') or '(no answer)'}"
+        if not turns and len(turn) > CHAT_CHARS:
+            # The newest turn is the one the reply follows from: kept, cut,
+            # rather than left out for being long.
+            turn = turn[: CHAT_CHARS - len(" [cut]")] + " [cut]"
         if len(turns) >= CHAT_TURNS or size + len(turn) > CHAT_CHARS:
             turns.append("(earlier turns left out)")
             break
@@ -203,6 +207,8 @@ class CardSpec(BaseModel):
             raise ValueError("a chat card is a prompt card; it cannot name a graph")
         if self.chat and named:
             raise ValueError(f"a chat card waits to be spoken to, so it takes no {named[0]}")
+        if self.chat and "notes" in (self.tools or []):
+            raise ValueError("a chat card answers the person in front of it; it takes no notes toolset")
         if len(named) > 1:
             raise ValueError(f"a task is scheduled by one of every / at / trigger, not {' and '.join(named)}")
         return self
