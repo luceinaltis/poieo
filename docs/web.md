@@ -317,14 +317,14 @@ before focus lands on the prompt.
 The chat panel is a thread and a box. Each turn is a bubble, the reader's to
 the right in the raised tone and the model's to the left. Each message sends
 the whole conversation to the chat route and reads the reply as it is
-written: when the model thinks aloud its thinking shows first under a
-`thinking…` line, open while it is the only thing there is to read, and the
-words arrive in the bubble under it as they come; afterwards the thinking
-waits closed behind a `thought` line the reader can open. The model that
+written: a `thinking…` line holds the place until the first words come,
+and they arrive in the bubble as they are written. What the model thinks is
+never shown in the chat, the route's `thinking` pieces included -- the reader
+wants the answer -- and a running task's thinking stays in its drawer. The model that
 answered is named on its turn and once in the header, so a role moved in the
 terminal shows up on the next answer. While a task runs, a picker in the
 header names it: chosen, that run's timeline is the thread, live and folded
-as in the drawer, and the box sends direction the run hears at its next
+as in the drawer but without the model's thinking, and the box sends direction the run hears at its next
 model turn, appearing on the timeline as `you said` where it was heard; when
 the run ends the box goes back to the model. The timeline itself lives in
 `detail/Timeline.tsx`, read by the drawer and the chat alike. Enter sends, Shift+Enter breaks the

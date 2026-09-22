@@ -6,10 +6,10 @@
  * names -- what a plain card gets -- and the reply says which model that was,
  * so a switch made in the terminal shows up in the next answer.
  *
- * The reply is read as it is written: when the model thinks aloud its
- * thinking shows first, open while it is the only thing there is to read,
- * and its words arrive under it as they come. Afterwards the thinking waits
- * closed behind a line the reader can open, so the answer leads.
+ * The reply is read as it is written: a `thinking…` line holds its place
+ * until the first words come, and they arrive in the bubble as they are
+ * written. What the model thinks is never shown here -- the reader wants
+ * the answer, and a running task's thinking stays in its drawer.
  *
  * The thread is the page's. The shell holds it, so a visit to a task's drawer
  * does not lose it, and it goes with the page. The daemon keeps none of it,
@@ -27,7 +27,7 @@ import type { KeyboardEvent } from "react"
 
 import { chat, leaveDirection } from "../api"
 import type { Answer, ChatPiece } from "../api"
-import { Timeline, visibleTimelineEvents } from "../detail/Timeline"
+import { Timeline, visibleTimelineEvents, withoutThinking } from "../detail/Timeline"
 import { Refusal } from "../Refusal"
 import type { PoieoEvent } from "../types"
 import "./chat.css"
@@ -39,14 +39,6 @@ export interface Turn {
   model?: string
   /** The model stopped at its token limit rather than at the end of what it had to say. */
   cutShort?: boolean
-  /** What the model thought before it answered, when it thinks aloud. */
-  thinking?: string
-}
-
-/** The reply on its way: what has arrived so far. */
-interface Arriving {
-  thinking: string
-  text: string
 }
 
 /** The most turns the daemon takes in one conversation. */
@@ -57,20 +49,6 @@ export interface Steerable {
   name: string
   title: string
   activity: PoieoEvent[]
-}
-
-/**
- * The model's thinking, behind a line. Open while it is being written and
- * nothing else has arrived; closed once the words come, and afterwards, so
- * the answer leads and the thinking waits for a reader who wants it.
- */
-function Thought({ text, live }: { text: string; live: boolean }) {
-  return (
-    <details className="chat-thought" open={live || undefined}>
-      <summary>{live ? "thinking…" : "thought"}</summary>
-      <pre className="chat-thought-text">{text}</pre>
-    </details>
-  )
 }
 
 export function Chat({
@@ -102,7 +80,8 @@ export function Chat({
   // when that run ends before the words have landed. Either way the message
   // stays in the box until it was answered: a refusal must not eat it.
   const [sending, setSending] = useState<{ said: string; to: "model" | "run" } | null>(null)
-  const [arriving, setArriving] = useState<Arriving | null>(null)
+  // The reply on its way: the words that have arrived so far.
+  const [arriving, setArriving] = useState<string | null>(null)
   const [refused, setRefused] = useState<Answer | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const busy = sending !== null
@@ -114,7 +93,7 @@ export function Chat({
   useEffect(() => {
     const thread = threadRef.current
     if (thread) thread.scrollTop = thread.scrollHeight
-  }, [shown.length, arriving?.thinking.length, arriving?.text.length, steering?.activity.length])
+  }, [shown.length, arriving?.length, steering?.activity.length])
 
   const send = async () => {
     const said = text.trim()
@@ -136,18 +115,12 @@ export function Chat({
     if (full) return
     const asked: Turn[] = [...turns, { role: "user", content: said }]
     setSending({ said, to: "model" })
-    setArriving({ thinking: "", text: "" })
+    setArriving("")
     setRefused(null)
     const answer = await chat(
       project,
       asked.map(({ role, content }) => ({ role, content })),
-      (piece: ChatPiece) =>
-        setArriving((current) =>
-          current && {
-            thinking: current.thinking + (piece.thinking ?? ""),
-            text: current.text + (piece.text ?? ""),
-          },
-        ),
+      (piece: ChatPiece) => setArriving((current) => (current === null ? null : current + (piece.text ?? ""))),
     )
     setSending(null)
     setArriving(null)
@@ -156,7 +129,6 @@ export function Chat({
       return
     }
     const reply: Turn = { role: "assistant", content: answer.reply ?? "", model: answer.model }
-    if (answer.thinking) reply.thinking = answer.thinking
     if (answer.cut_short) reply.cutShort = true
     onTurns([...asked, reply])
     setText("")
@@ -217,7 +189,7 @@ export function Chat({
       <div className="chat-thread" ref={threadRef}>
         {steering ? (
           steering.activity.length ? (
-            <Timeline events={visibleTimelineEvents(steering.activity)} following />
+            <Timeline events={visibleTimelineEvents(withoutThinking(steering.activity))} following />
           ) : (
             <p className="chat-empty">Nothing yet from this run.</p>
           )
@@ -228,7 +200,6 @@ export function Chat({
                 <span className="chat-who">
                   {turn.role === "user" ? "you" : (turn.model ?? "model")}
                 </span>
-                {turn.thinking ? <Thought text={turn.thinking} live={false} /> : null}
                 {/* An empty bubble reads as broken. A thinking model can spend
                     its whole budget thinking and say nothing, and the words
                     for that are the fix: raise the limit in the models file. */}
@@ -243,15 +214,14 @@ export function Chat({
                 ) : null}
               </li>
             ))}
-            {arriving ? (
+            {arriving !== null ? (
               // The reply on its way, drawn where it will land. `aria-live`
               // so a screen reader hears the words as they come.
               <li className="chat-turn chat-arriving" data-role="assistant" aria-live="polite">
                 <span className="chat-who">{answeredBy ?? "model"}</span>
-                {arriving.thinking ? <Thought text={arriving.thinking} live={!arriving.text} /> : null}
-                {arriving.text ? (
-                  <div className="chat-said">{arriving.text}</div>
-                ) : arriving.thinking ? null : (
+                {arriving ? (
+                  <div className="chat-said">{arriving}</div>
+                ) : (
                   <p className="chat-thinking" role="status">
                     thinking…
                   </p>
