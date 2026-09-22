@@ -97,7 +97,7 @@ test("a message goes with the conversation so far, and the reply is shown under 
   say("what is 2 + 2?")
   await send()
 
-  expect(chat).toHaveBeenCalledWith("board", [{ role: "user", content: "what is 2 + 2?" }])
+  expect(chat).toHaveBeenCalledWith("board", [{ role: "user", content: "what is 2 + 2?" }], expect.any(Function))
   expect(host.textContent).toContain("what is 2 + 2?")
   expect(host.textContent).toContain("Four.")
   expect(host.textContent).toContain("answered by fake/m1")
@@ -111,11 +111,15 @@ test("a message goes with the conversation so far, and the reply is shown under 
   chat.mockResolvedValue({ ok: true, reply: "Five.", model: "fake/m1" })
   say("and one more?")
   await send()
-  expect(chat).toHaveBeenLastCalledWith("board", [
-    { role: "user", content: "what is 2 + 2?" },
-    { role: "assistant", content: "Four." },
-    { role: "user", content: "and one more?" },
-  ])
+  expect(chat).toHaveBeenLastCalledWith(
+    "board",
+    [
+      { role: "user", content: "what is 2 + 2?" },
+      { role: "assistant", content: "Four." },
+      { role: "user", content: "and one more?" },
+    ],
+    expect.any(Function),
+  )
   expect(host.textContent).toContain("Five.")
 })
 
@@ -143,7 +147,7 @@ test("a refusal stays on screen and the message stays in the box", async () => {
   // Nothing was said in reply, so the next message is still the first turn.
   chat.mockResolvedValue({ ok: true, reply: "Hello.", model: "fake/m1" })
   await send()
-  expect(chat).toHaveBeenLastCalledWith("board", [{ role: "user", content: "hello?" }])
+  expect(chat).toHaveBeenLastCalledWith("board", [{ role: "user", content: "hello?" }], expect.any(Function))
   expect(host.querySelector('[role="alert"]')).toBeNull()
 })
 
@@ -220,4 +224,56 @@ test("a reply that came back empty or cut short says so rather than showing a bl
   await send()
   expect(host.querySelectorAll(".chat-cut")).toHaveLength(1)
   expect(host.textContent).toContain("Done thinking.")
+})
+
+test("the reply is read as it is written: thinking first and open, then the words, then the thought behind a line", async () => {
+  let release!: () => void
+  const next = () => new Promise<void>((resolve) => (release = resolve))
+  chat.mockImplementation(async (_project, _messages, onPiece) => {
+    onPiece?.({ thinking: "Let me see." })
+    await next()
+    onPiece?.({ text: "Fo" })
+    await next()
+    onPiece?.({ text: "ur." })
+    await next()
+    return { ok: true, reply: "Four.", thinking: "Let me see.", model: "fake/m1" }
+  })
+  show()
+  say("what is 2 + 2?")
+  await send()
+
+  // Thinking, and nothing else yet: shown open, as the one thing to read.
+  const arriving = () => host.querySelector<HTMLElement>(".chat-arriving")!
+  expect(arriving()).not.toBeNull()
+  expect(arriving().querySelector("details")!.open).toBe(true)
+  expect(arriving().querySelector("summary")!.textContent).toBe("thinking…")
+  expect(arriving().textContent).toContain("Let me see.")
+  expect(arriving().querySelector(".chat-said")).toBeNull()
+
+  // The first words close the thinking and start the bubble.
+  await act(async () => release())
+  expect(arriving().querySelector("details")!.open).toBe(false)
+  expect(arriving().querySelector(".chat-said")!.textContent).toBe("Fo")
+  await act(async () => release())
+  expect(arriving().querySelector(".chat-said")!.textContent).toBe("Four.")
+
+  // Whole: the turn lands with its thought behind a closed line.
+  await act(async () => release())
+  expect(host.querySelector(".chat-arriving")).toBeNull()
+  const landed = host.querySelectorAll(".chat-turn")[1]
+  expect(landed.querySelector(".chat-said")!.textContent).toBe("Four.")
+  expect(landed.querySelector("details")!.open).toBe(false)
+  expect(landed.querySelector("summary")!.textContent).toBe("thought")
+  expect(landed.querySelector(".chat-thought-text")!.textContent).toBe("Let me see.")
+})
+
+test("a model that does not think aloud lands without a thought line, and each side has its own bubble", async () => {
+  show()
+  say("hello?")
+  await send()
+
+  const [mine, theirs] = host.querySelectorAll(".chat-turn")
+  expect(mine.getAttribute("data-role")).toBe("user")
+  expect(theirs.getAttribute("data-role")).toBe("assistant")
+  expect(theirs.querySelector("details")).toBeNull()
 })

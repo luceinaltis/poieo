@@ -2636,30 +2636,52 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except BindingError:
             return JSONResponse({"error": f"{CHAT_ROLE} does not resolve to a model"}, status_code=409)
 
-        try:
-            async with ProviderPool(spec) as pool:
-                response = await pool.get(answerer.provider_name).complete(
-                    LLMRequest(
-                        model=answerer.model,
-                        system=chat_briefing(project.config.display_name),
-                        messages=turns,
-                        params=answerer.params,
-                        role=CHAT_ROLE,
-                    )
-                )
-        except PoieoError:
-            return JSONResponse(
-                {"error": f"the model did not answer; try again, or point {CHAT_ROLE} at another model"},
-                status_code=503,
-            )
-        return JSONResponse(
-            {
+        asked = LLMRequest(
+            model=answerer.model,
+            system=chat_briefing(project.config.display_name),
+            messages=turns,
+            params=answerer.params,
+            role=CHAT_ROLE,
+        )
+        did_not_answer = f"the model did not answer; try again, or point {CHAT_ROLE} at another model"
+
+        def whole(response: Any) -> dict[str, Any]:
+            return {
                 "reply": response.text,
+                "thinking": str(response.meta.get("thinking") or ""),
                 "model": answerer.ref,
                 "usage": response.usage.as_dict(),
                 "cut_short": cut_short(response.stop_reason),
             }
-        )
+
+        # Asked for as a stream, the answer comes as it is written: `thinking`
+        # and `text` frames carry each piece, `done` the whole reply as the
+        # JSON answer would have said it, and `error` what a refusal would
+        # have said -- a failure after the first frame cannot be a status
+        # code any more, so it is a frame instead.
+        if "text/event-stream" in request.headers.get("accept", ""):
+
+            async def frames() -> AsyncIterator[str]:
+                try:
+                    async with ProviderPool(spec) as pool:
+                        async for delta in pool.get(answerer.provider_name).stream(asked):
+                            if delta.thinking:
+                                yield sse_frame({"type": "thinking", "text": delta.thinking})
+                            if delta.text:
+                                yield sse_frame({"type": "text", "text": delta.text})
+                            if delta.done is not None:
+                                yield sse_frame({"type": "done", **whole(delta.done)})
+                except PoieoError:
+                    yield sse_frame({"type": "error", "error": did_not_answer})
+
+            return StreamingResponse(frames(), media_type="text/event-stream", headers={"cache-control": "no-cache"})
+
+        try:
+            async with ProviderPool(spec) as pool:
+                response = await pool.get(answerer.provider_name).complete(asked)
+        except PoieoError:
+            return JSONResponse({"error": did_not_answer}, status_code=503)
+        return JSONResponse(whole(response))
 
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")

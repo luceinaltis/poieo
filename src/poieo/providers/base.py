@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -157,6 +157,21 @@ class LLMResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class Delta:
+    """One piece of an answer as it is being written.
+
+    `text` and `thinking` are what arrived since the last piece, never the
+    whole so far. `done` is the complete response, on the last piece only:
+    the same object `complete` would have returned, so a reader that wants
+    the answer whole takes that and ignores the pieces.
+    """
+
+    text: str = ""
+    thinking: str = ""
+    done: LLMResponse | None = None
+
+
 class Provider(abc.ABC):
     """A physical endpoint. One instance per declared provider, reused per run."""
 
@@ -174,6 +189,18 @@ class Provider(abc.ABC):
     @abc.abstractmethod
     async def complete(self, request: LLMRequest) -> LLMResponse:
         """Run one completion. Raise ProviderError on failure."""
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[Delta]:
+        """The answer as it is written, piece by piece, then whole.
+
+        A backend with a streaming wire overrides this; every other backend
+        answers in one piece through the same seam, so a reader never has to
+        ask which kind it is talking to. Raise ProviderError on failure, at
+        whatever point the failure came: a stream that stops is not an
+        answer that stopped.
+        """
+        response = await self.complete(request)
+        yield Delta(text=response.text, thinking=str(response.meta.get("thinking") or ""), done=response)
 
     async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
         """Embed text when this endpoint has a documented embedding wire."""

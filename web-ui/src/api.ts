@@ -593,6 +593,8 @@ export function draftTask(
 export interface ChatAnswer extends Answer {
   /** What the model said. */
   reply?: string
+  /** What it thought first, when it thinks aloud; empty otherwise. */
+  thinking?: string
   /** Which model answered, as `provider/model`. */
   model?: string
   usage?: Record<string, number | null> | null
@@ -600,18 +602,68 @@ export interface ChatAnswer extends Answer {
   cut_short?: boolean
 }
 
+/** A piece of the answer as it is written: what arrived since the last piece. */
+export interface ChatPiece {
+  thinking?: string
+  text?: string
+}
+
 /**
- * The conversation so far, put to the project's model.
+ * The conversation so far, put to the project's model, and read as it is
+ * written: `onPiece` hears each piece of thinking and text, and the promise
+ * is the whole answer -- or the refusal, which travels the same road.
  *
  * Not a write: the daemon keeps nothing, changes nothing and runs nothing.
  * The whole conversation goes every time because the page is the only thing
- * holding it.
+ * holding it. A daemon that answers whole rather than as a stream (an older
+ * one, or any refusal) resolves the same way, so the panel has one path.
  */
-export function chat(
+export async function chat(
   project: string,
   messages: { role: "user" | "assistant"; content: string }[],
+  onPiece?: (piece: ChatPiece) => void,
 ): Promise<ChatAnswer> {
-  return post(`/api/projects/${encodeURIComponent(project)}/chat`, { messages })
+  try {
+    const response = await fetch(`/api/projects/${encodeURIComponent(project)}/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "text/event-stream" },
+      body: JSON.stringify({ messages }),
+    })
+    const streamed = response.headers.get("content-type")?.includes("text/event-stream") ?? false
+    if (!response.ok || !streamed || !response.body) {
+      const payload = await response.json().catch(() => ({}))
+      return { ok: response.ok, ...payload } as ChatAnswer
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffered = ""
+    let whole: ChatAnswer | null = null
+    for (;;) {
+      const { value, done } = await reader.read()
+      buffered += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+      // A frame ends at a blank line; a chunk may end mid-frame.
+      let cut = buffered.indexOf("\n\n")
+      while (cut >= 0) {
+        const frame = buffered.slice(0, cut)
+        buffered = buffered.slice(cut + 2)
+        cut = buffered.indexOf("\n\n")
+        const line = frame.split("\n").find((one) => one.startsWith("data: "))
+        if (!line) continue
+        const { type, ...record } = JSON.parse(line.slice("data: ".length)) as {
+          type: string
+          [key: string]: unknown
+        }
+        if (type === "thinking") onPiece?.({ thinking: String(record.text ?? "") })
+        else if (type === "text") onPiece?.({ text: String(record.text ?? "") })
+        else if (type === "done") whole = { ok: true, ...record } as ChatAnswer
+        else if (type === "error") return { ok: false, error: String(record.error ?? "") }
+      }
+      if (done) break
+    }
+    return whole ?? { ok: false, error: "the daemon stopped answering" }
+  } catch {
+    return { ok: false, error: "the daemon did not answer" }
+  }
 }
 
 export function createTask(

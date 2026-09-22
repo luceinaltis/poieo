@@ -127,7 +127,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 |---|---|
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
-| `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
+| `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, thinking, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; asked with `Accept: text/event-stream`, the same answer comes as it is written: `thinking` and `text` frames carry each piece, `done` the whole reply with those same fields, and `error` what a refusal would have said once the stream has begun; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:` or five cron fields written as `at:`, and 400 when neither; creates one card, optionally its neighboring graph, and returns its task id and path |
 | `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, model, usage}`: the model's prose without its card, and the card it proposed as `{name, folder, prompt, schedule}` or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}` or simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it; atomically validates and replaces one card, returning whether the edit is live |
@@ -308,10 +308,15 @@ its way, then the reply -- with the least movement that shows it; taking a
 draft, or choosing to write by hand, brings the fields into view the same way
 before focus lands on the prompt.
 
-The chat panel is a thread and a box. Each message sends the whole
-conversation to the chat route; the reply is shown under it, and the model
-that answered is named on its turn and once in the header, so a role moved in
-the terminal shows up on the next answer. Enter sends, Shift+Enter breaks the
+The chat panel is a thread and a box. Each turn is a bubble, the reader's to
+the right in the raised tone and the model's to the left. Each message sends
+the whole conversation to the chat route and reads the reply as it is
+written: when the model thinks aloud its thinking shows first under a
+`thinking…` line, open while it is the only thing there is to read, and the
+words arrive in the bubble under it as they come; afterwards the thinking
+waits closed behind a `thought` line the reader can open. The model that
+answered is named on its turn and once in the header, so a role moved in the
+terminal shows up on the next answer. Enter sends, Shift+Enter breaks the
 line, and Enter during input-method composition does nothing. A refusal stays
 on screen with the message still in the box. The shell holds the thread
 rather than the panel, so a task picked off the board -- which takes the one

@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..binding import KNOWN_PROVIDER_TYPES, BindingSpec, ProviderSpec
 from ..errors import ProviderError
 from .anthropic_provider import AnthropicProvider
-from .base import LLMRequest, LLMResponse, Provider, Usage, credential_for
+from .base import Delta, LLMRequest, LLMResponse, Provider, Usage, credential_for
 from .local import OllamaProvider, OpenAICompatibleProvider
 from .mock import MockProvider
 from .presets import PRESETS
@@ -137,6 +137,7 @@ class ProviderPool:
 
 
 __all__ = [
+    "Delta",
     "LLMRequest",
     "LLMResponse",
     "Provider",

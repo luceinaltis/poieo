@@ -8,6 +8,8 @@ nothing here writes a file or starts a run.
 Design: docs/web.md
 """
 
+import json
+
 import pytest
 import yaml
 from starlette.testclient import TestClient
@@ -176,3 +178,97 @@ def test_a_reply_that_ran_out_of_room_says_so(tmp_path, monkeypatch, stop, cut):
 
     assert body["reply"] == ""
     assert body["cut_short"] is cut
+
+
+# -- the answer as it is written -------------------------------------------
+
+
+def _frames(response):
+    """The stream's frames, as the page reads them."""
+    return [json.loads(line[len("data: ") :]) for line in response.text.splitlines() if line.startswith("data: ")]
+
+
+def _streamed(monkeypatch, deltas, *, fail_after=None):
+    """Script what the provider streams: (thinking, text) pieces, then the whole."""
+    from poieo.providers import Delta
+
+    async def stream(self, request):
+        for index, (thinking, text) in enumerate(deltas):
+            if fail_after is not None and index == fail_after:
+                raise ProviderError("the endpoint went away", provider=self.name)
+            yield Delta(thinking=thinking, text=text)
+        whole = LLMResponse(
+            text="".join(text for _, text in deltas),
+            model=request.model,
+            usage=Usage(input_tokens=10, output_tokens=5),
+            stop_reason="stop",
+            meta={"thinking": "".join(thinking for thinking, _ in deltas)},
+        )
+        yield Delta(done=whole)
+
+    monkeypatch.setattr(MockProvider, "stream", stream)
+
+
+def test_asked_for_a_stream_the_chat_answers_piece_by_piece_and_then_whole(tmp_path, monkeypatch):
+    _streamed(monkeypatch, [("Let me see.", ""), ("", "Fo"), ("", "ur.")])
+
+    response = _client(tmp_path).post(
+        "/api/projects/board/chat",
+        json={"messages": [{"role": "user", "content": "2 + 2?"}]},
+        headers={"accept": "text/event-stream"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    frames = _frames(response)
+    assert frames[:-1] == [
+        {"type": "thinking", "text": "Let me see."},
+        {"type": "text", "text": "Fo"},
+        {"type": "text", "text": "ur."},
+    ]
+    done = frames[-1]
+    assert done["type"] == "done"
+    assert done["reply"] == "Four."
+    assert done["thinking"] == "Let me see."
+    assert done["model"] == "fake/m1"
+    assert done["cut_short"] is False
+    assert done["usage"]["input_tokens"] == 10
+
+
+def test_without_asking_for_a_stream_the_chat_still_answers_in_one_json_reply(tmp_path, monkeypatch):
+    _streamed(monkeypatch, [("", "Four.")])
+
+    response = _say(_client(tmp_path), "2 + 2?")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["reply"] == _REPLY
+
+
+def test_a_model_that_stops_answering_mid_stream_says_so_in_the_stream(tmp_path, monkeypatch):
+    _streamed(monkeypatch, [("", "Fo"), ("", "ur.")], fail_after=1)
+
+    response = _client(tmp_path).post(
+        "/api/projects/board/chat",
+        json={"messages": [{"role": "user", "content": "2 + 2?"}]},
+        headers={"accept": "text/event-stream"},
+    )
+
+    frames = _frames(response)
+    assert frames[0] == {"type": "text", "text": "Fo"}
+    assert frames[-1]["type"] == "error"
+    assert "did not answer" in frames[-1]["error"]
+
+
+def test_a_refused_conversation_is_refused_before_any_stream_starts(tmp_path, monkeypatch):
+    heard = _heard(monkeypatch)
+
+    response = _client(tmp_path).post(
+        "/api/projects/board/chat",
+        json={"messages": []},
+        headers={"accept": "text/event-stream"},
+    )
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/json")
+    assert heard == []
