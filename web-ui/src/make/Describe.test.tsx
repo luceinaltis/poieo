@@ -21,7 +21,7 @@ vi.mock("../api", async (importOriginal) => ({
 }))
 
 import { Describe } from "./Describe"
-import type { TaskDraft } from "../api"
+import type { DraftAnswer, TaskDraft } from "../api"
 
 let host: HTMLDivElement
 let root: Root
@@ -30,6 +30,8 @@ const card: TaskDraft = { name: "nightly test fix", folder: "../src", prompt: "R
 beforeEach(() => {
   draftTask.mockReset()
   draftTask.mockResolvedValue({ ok: true, reply: "Which folder should it work in?", draft: null, model: "fake/m1" })
+  // jsdom lays nothing out and has no scrolling; the thread asks for it.
+  Element.prototype.scrollIntoView = vi.fn()
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -178,4 +180,30 @@ test("nothing is sent while the box is blank, and Enter sends what is there", as
     box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }))
   })
   expect(draftTask).toHaveBeenCalledTimes(1)
+})
+
+test("the newest turn is brought into view, so a reply under the thread's fold is seen", async () => {
+  // The thread is capped so the box under it stays put, and a capped thread
+  // scrolls. Seen on a laptop: after the model's one question and its
+  // answer, the reply that carried the card landed under the fold with
+  // nothing on screen to say a card had come -- the person saw the question
+  // again and a scrollbar.
+  let answer!: (value: DraftAnswer) => void
+  draftTask.mockReturnValue(new Promise<DraftAnswer>((resolve) => (answer = resolve)))
+  const brought = vi.mocked(Element.prototype.scrollIntoView)
+  show()
+  say("fix the tests in src every night")
+  await send()
+
+  // While the model thinks, the message on its way is the newest turn.
+  const turns = () => [...host.querySelectorAll(".describe-turn")]
+  expect(brought.mock.contexts.at(-1)).toBe(turns().at(-1))
+  expect(turns().at(-1)?.getAttribute("data-role")).toBe("user")
+
+  await act(async () => answer({ ok: true, reply: "Here is a card for that.", draft: card, model: "fake/m1" }))
+  expect(turns().at(-1)?.getAttribute("data-role")).toBe("assistant")
+  expect(brought.mock.contexts.at(-1)).toBe(turns().at(-1))
+  // The least movement that shows it: the panel around the thread, and the
+  // box the person is typing in, stay where they were.
+  expect(brought.mock.calls.at(-1)).toEqual([{ block: "nearest" }])
 })
