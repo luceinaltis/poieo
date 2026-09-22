@@ -162,7 +162,11 @@ copy to accept or discard. See [workspace.md](workspace.md).
 
 Pause is runtime state. It takes effect between runs, skips scheduled firings,
 and may be cleared by resume. Run-now is an explicit kick but refuses an
-in-flight or disabled task. A handoff is dropped for a paused or disabled target;
+in-flight or disabled task. It may carry a message and the conversation it
+belongs to: the run it starts, and no other, reads the message as
+`input.message`, and its summary keeps `message` and `thread`, so a
+conversation is the runs that share a thread. A message the spend limit turns
+away is dropped with that fire, never read by a later one. A handoff is dropped for a paused or disabled target;
 when the target is busy, one handoff is parked and a newer one replaces it. A
 task never accumulates a queue of missed scheduled work.
 

@@ -51,8 +51,8 @@ class StubRunner:
             self.status = "waiting"
         return self.status
 
-    def run_now(self):
-        self.calls.append("run_now")
+    def run_now(self, message=None, thread=None):
+        self.calls.append("run_now" if message is None else ("run_now", message, thread))
         return self.status != "running"
 
     def asking(self):
@@ -125,6 +125,45 @@ def test_run_mid_run_is_409_and_names_the_run():
     response = client.post(f"/api/tasks/{BOARD.display_name}/triage/run")
     assert response.status_code == 409
     assert response.json() == {"error": "a run is in flight", "run_id": "r7"}
+
+
+def test_a_run_can_be_started_with_something_said_to_it():
+    runner = StubRunner()
+    client = _client(runner)
+
+    response = client.post(
+        f"/api/tasks/{BOARD.display_name}/triage/run", json={"message": "Tidy the notes.", "thread": "t-1"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "starting"}
+    assert runner.calls == [("run_now", "Tidy the notes.", "t-1")]
+
+    # The thread is optional: a message alone starts a conversation of one.
+    client.post(f"/api/tasks/{BOARD.display_name}/triage/run", json={"message": "And again."})
+    assert runner.calls[-1] == ("run_now", "And again.", None)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [],
+        {"message": ""},
+        {"message": "   "},
+        {"message": 7},
+        {"message": "x" * 4001},
+        {"thread": "t-1"},
+        {"message": "hi", "thread": "../t"},
+        {"message": "hi", "thread": "t" * 65},
+    ],
+)
+def test_what_is_said_to_a_run_is_checked_before_anything_starts(body):
+    runner = StubRunner()
+    client = _client(runner)
+
+    response = client.post(f"/api/tasks/{BOARD.display_name}/triage/run", json=body)
+    assert response.status_code == 400
+    assert response.json()["error"]
+    assert runner.calls == []
 
 
 def test_all_three_verbs_404_on_an_unknown_flow():
@@ -200,6 +239,59 @@ async def test_the_verbs_change_what_the_flows_endpoint_reports(tmp_path):
                 "status": "waiting"
             }
             assert await board_status() == "waiting"
+    finally:
+        await down(daemon, serve)
+
+
+async def test_the_message_reaches_the_run_and_its_record(tmp_path):
+    daemon = Daemon(_config(tmp_path, "{type: manual}"), store=NullStore())
+    serve = await up(daemon)
+    runner = daemon.runners[0]
+
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+            said = {"message": "Tidy the notes.", "thread": "t-1"}
+            assert (await client.post(f"/api/tasks/{daemon.config.display_name}/f/run", json=said)).status_code == 200
+            await until(lambda: len(runner.results) == 1, "the run that was spoken to")
+            first = runner.results[0].summary()
+            assert first["message"] == "Tidy the notes."
+            assert first["thread"] == "t-1"
+            assert runner._run_input["message"] == "Tidy the notes."
+
+            # A plain run-now afterwards carries nothing over from the last one.
+            await client.post(f"/api/tasks/{daemon.config.display_name}/f/run")
+            await until(lambda: len(runner.results) == 2, "the plain run")
+            second = runner.results[1].summary()
+            assert "message" not in second and "thread" not in second
+            assert "message" not in runner._run_input
+    finally:
+        await down(daemon, serve)
+
+
+async def test_a_message_held_back_by_the_budget_does_not_ride_into_a_later_run(tmp_path):
+    daemon = Daemon(_config(tmp_path, "{type: manual}"), store=NullStore())
+    serve = await up(daemon)
+    runner = daemon.runners[0]
+    over = {"now": True}
+    real = runner._over_budget
+    runner._over_budget = lambda *args: "over the limit" if over["now"] else real(*args)
+
+    try:
+        transport = httpx.ASGITransport(app=create_app(daemon))
+        async with httpx.AsyncClient(transport=transport, base_url="http://poieo") as client:
+            said = {"message": "Tidy the notes.", "thread": "t-1"}
+            await client.post(f"/api/tasks/{daemon.config.display_name}/f/run", json=said)
+            await until(lambda: runner.status == "over budget", "the budget hold")
+
+            # The next fire is not a run-now -- a handoff or the schedule --
+            # so nothing overwrites what was left behind.
+            over["now"] = False
+            runner._kick = True
+            runner._wake.set()
+            await until(lambda: len(runner.results) == 1, "the later fire")
+            assert "message" not in runner.results[0].summary()
+            assert "message" not in runner._run_input
     finally:
         await down(daemon, serve)
 
