@@ -286,3 +286,27 @@
   font-size: 0.8em;
   margin: 0 0 6px;
 }
+
+/* What an answer changed, and the choice to take it, under its bubble. */
+.chat-change {
+  color: var(--dim);
+  font-size: 0.8em;
+  margin-top: 4px;
+}
+
+.chat-change-said {
+  display: block;
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.chat-change .decide {
+  margin-top: 4px;
+}
+
+/* Said before a decision reaches past the conversation on screen. */
+.chat-change-reach {
+  color: var(--line);
+  display: block;
+  margin-top: 2px;
+}

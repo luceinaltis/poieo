@@ -17,6 +17,7 @@ const leaveDirection = vi.hoisted(() => vi.fn<typeof import("../api").leaveDirec
 const fetchRunEvents = vi.hoisted(() => vi.fn<typeof import("../api").fetchRunEvents>())
 const setPermission = vi.hoisted(() => vi.fn<typeof import("../api").setPermission>())
 const approve = vi.hoisted(() => vi.fn<typeof import("../api").approve>())
+const accept = vi.hoisted(() => vi.fn<typeof import("../api").accept>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   createChatCard,
@@ -25,6 +26,7 @@ vi.mock("../api", async (importOriginal) => ({
   fetchRunEvents,
   setPermission,
   approve,
+  accept,
 }))
 
 import { Chat } from "./Chat"
@@ -50,6 +52,8 @@ beforeEach(() => {
   setPermission.mockResolvedValue({ ok: true, permission: "ask" })
   approve.mockReset()
   approve.mockResolvedValue({ ok: true, status: "answered" })
+  accept.mockReset()
+  accept.mockResolvedValue({ ok: true, accepted: 1 })
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -480,6 +484,49 @@ test("opened with no conversation chosen, the chat shows the one being answered"
   await pick(conversations(), "")
   expect(threads.at(-1)).toBeNull()
   expect(host.querySelector(".chat-turn")).toBeNull()
+})
+
+test("an answer that changed files says which, and the change is taken or thrown away from the chat", async () => {
+  const change = { base: "a", head: "b", files: ["notes.md", "src/app.py"], insertions: 3, deletions: 1, message: "tidy" }
+  const runs = [ran("r1", "t-1", "tidy the notes", "tidied", { change })]
+  show({ task: chatTask({ runs, pending: 1 }), initial: "t-1" })
+
+  const changed = host.querySelector(".chat-change")!
+  expect(changed.textContent).toContain("notes.md")
+  expect(changed.textContent).toContain("src/app.py")
+  expect(changed.textContent).toContain("+3")
+
+  await act(async () => changed.querySelector<HTMLButtonElement>('[data-do="accept"]')!.click())
+  expect(accept).toHaveBeenCalledWith("board", "chat", "r1")
+})
+
+test("a change already taken asks for nothing", () => {
+  const change = { base: "a", head: "b", files: ["notes.md"], insertions: 1, deletions: 0, message: "tidy" }
+  const runs = [ran("r1", "t-1", "tidy", "tidied", { change, application: { status: "applied" } })]
+  show({ task: chatTask({ runs }), initial: "t-1" })
+
+  expect(host.querySelector('.chat-change [data-do="accept"]')).toBeNull()
+  expect(host.querySelector(".chat-change")?.textContent).toContain("taken")
+})
+
+test("a decision that would reach another conversation's change says so first", () => {
+  const change = { base: "a", head: "b", files: ["notes.md"], insertions: 1, deletions: 0, message: "x" }
+  // Newest first, as the stage keeps them: one change from another
+  // conversation sits between this conversation's two.
+  const runs = [
+    ran("r3", "t-1", "and the readme", "done", { change }),
+    ran("r2", "t-2", "elsewhere", "done", { change }),
+    ran("r1", "t-1", "tidy", "done", { change }),
+  ]
+  show({ task: chatTask({ runs, pending: 3 }), initial: "t-1" })
+
+  const [first, second] = [...host.querySelectorAll(".chat-change")]
+  // Taking the later one takes what came before it, the other conversation's too.
+  expect(second.querySelector(".chat-change-reach")?.textContent).toContain("accepting also takes 1 change from another conversation")
+  // Throwing the first away throws away what came after it.
+  expect(first.querySelector(".chat-change-reach")?.textContent).toContain(
+    "discarding also throws away 1 change from another conversation",
+  )
 })
 
 // -- what the chat may do -----------------------------------------------------------

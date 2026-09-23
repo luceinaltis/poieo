@@ -354,22 +354,29 @@ choosing allow all says plainly that commands then run on this machine
 unasked. A call the answer is waiting on appears on its timeline as what the
 step wants to do, with allow and deny, which answer it through the approve
 route; once answered the line says which, and the drawer shows the same line
-without the buttons. What the model thinks is never shown in the chat; a
-task's thinking stays in its drawer. A message sent while the answer is being
-worked on is direction, heard at the run's next model turn and drawn on the
-timeline as `you said`. The stage keeps the chat's task, so its live events
-arrive, and leaves it off the board: it is not drawn, counted, or offered as a
-place to hand work to. While another task runs, a picker in the header names
-it: chosen, that run's timeline is the thread, live and folded, and the box
-sends it direction; when the run ends the box goes back to the conversation.
-The timeline itself lives in `detail/Timeline.tsx`, read by the drawer and the
-chat alike. Enter sends, Shift+Enter breaks the line, and Enter during
-input-method composition does nothing. A refusal stays on screen with the
-message still in the box. The shell holds which conversation is open rather
-than the panel, so a task picked off the board -- which takes the one margin
--- does not close it; switching project does. An answer that came back empty
-says so instead of showing a blank, and a failed run shows its error under the
-turn.
+without the buttons. An answer that changed files in a project with private
+copies says which, under its bubble, and while the change waits offers accept
+up to this run and discard from this run onward -- the review's own control,
+and the one place the chat task's changes are reviewed, since the board leaves
+the task off; once decided the line says taken, thrown away or undone. Every
+conversation's changes wait in one line, in the order they were made, so a
+decision can reach another conversation's change; when it would, the line says
+how many it would also take or throw away before either is pressed. What the
+model thinks is never shown in the chat; a task's thinking stays in its
+drawer. A message sent while the answer is being worked on is direction, heard
+at the run's next model turn and drawn on the timeline as `you said`. The
+stage keeps the chat's task, so its live events arrive, and leaves it off the
+board: it is not drawn, counted, or offered as a place to hand work to. While
+another task runs, a picker in the header names it: chosen, that run's
+timeline is the thread, live and folded, and the box sends it direction; when
+the run ends the box goes back to the conversation. The timeline itself lives
+in `detail/Timeline.tsx`, read by the drawer and the chat alike. Enter sends,
+Shift+Enter breaks the line, and Enter during input-method composition does
+nothing. A refusal stays on screen with the message still in the box. The
+shell holds which conversation is open rather than the panel, so a task picked
+off the board -- which takes the one margin -- does not close it; switching
+project does. An answer that came back empty says so instead of showing a
+blank, and a failed run shows its error under the turn.
 
 The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes
