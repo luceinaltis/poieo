@@ -147,6 +147,8 @@ async def test_attachments_ride_the_run_now_and_are_kept_with_the_run(tmp_path):
 
             summary = runner.results[0].summary()
             assert summary["attachments"] == ["shot.png", "notes.md"]
+            # On the run's input too, by name: a page opened mid-run draws them.
+            assert runner._run_input["attachments"] == ["shot.png", "notes.md"]
             run_id = summary["run_id"]
 
             kept = await client.get(f"/api/runs/{run_id}/files/shot.png")

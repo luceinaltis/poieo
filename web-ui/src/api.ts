@@ -449,10 +449,18 @@ export function resume(project: string, task: string): Promise<ControlAnswer> {
   return post(taskUrl(project, task, "resume"))
 }
 
-/** What a person says with a run-now: the words, and the conversation they continue. */
+/** A file sent with a message: a picture or a text file, its bytes in base64. */
+export interface Attaching {
+  name: string
+  media_type: string
+  data: string
+}
+
+/** What a person says with a run-now: the words, the conversation they continue, and what is attached. */
 export interface Spoken {
   message: string
   thread: string
+  attachments?: Attaching[]
 }
 
 export function runNow(project: string, task: string, spoken?: Spoken): Promise<ControlAnswer> {

@@ -211,3 +211,69 @@
 .chat-work summary {
   cursor: pointer;
 }
+
+/* What rides with the next message, as chips above the send row. */
+.chat-attached {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.chat-attached li {
+  align-items: center;
+  background: var(--raised);
+  border-radius: 10px;
+  display: flex;
+  font-size: 0.78em;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+}
+
+.chat-attached button,
+.chat-attach {
+  background: none;
+  border: 0;
+  color: var(--line);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.chat-attach {
+  font-size: 0.82em;
+  margin-right: auto;
+}
+
+.chat-attached button:hover,
+.chat-attach:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* What a message carried: pictures small, text files by name, under its bubble. */
+.chat-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.chat-picture {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  display: block;
+  max-height: 96px;
+  max-width: 160px;
+  object-fit: cover;
+}
+
+.chat-file {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 0.75em;
+}
