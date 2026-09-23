@@ -17,6 +17,12 @@ import type { StageState } from "../state/stage"
 export interface SkinCallbacks {
   /** The control is the place focus returns when the task panel closes. */
   onSelectTask(task: string, opener: HTMLElement): void
+  /**
+   * The one thing a card may do without opening the task: run it now, or
+   * resume it when it is held. Answers with the daemon's refusal, if any, for
+   * the card to say. A shell that cannot act leaves it out and no button shows.
+   */
+  onAct?(task: string, verb: "run" | "resume"): Promise<{ ok: boolean; error?: string }>
 }
 
 export interface SkinHandle {

@@ -262,6 +262,37 @@
   flex: none;
 }
 
+/* Run it now, or resume it: the card's one act, beside Expand and the same
+   size, in ink rather than amber so the two do not read as one control. */
+.basic-act {
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  font-size: .8em;
+  line-height: 1.4;
+  min-height: 28px;
+  padding: 3px 10px;
+}
+
+.basic-act:hover:not(:disabled) {
+  border-color: var(--text);
+}
+
+.basic-act[hidden] {
+  display: none;
+}
+
+/* Why the daemon refused the card's button, until the next press. */
+.basic-refused {
+  color: var(--stop);
+  font-size: .8em;
+  margin: 0;
+}
+
 .basic-toggle:hover {
   border-color: var(--ember);
   color: var(--text);

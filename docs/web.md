@@ -430,8 +430,10 @@ without claiming it ran.
 Task cards start collapsed, showing a compact **Start / Input → step count →
 End run / Output** flow -- left out for a one-step task nothing is connected
 to, where it would say only "1 step". The card's name, marked with a `›` and
-underlined on hover, opens the task; **Expand**, a bordered button at least
-28px tall, reveals only that card's full graph, live text
+underlined on hover, opens the task. Beside it, **run now** -- or **resume**
+for a held task -- does that without opening it, and says the daemon's refusal
+on the card when there is one; a running or switched-off task offers neither.
+**Expand**, a bordered button at least 28px tall, reveals only that card's full graph, live text
 and tool calls; **Collapse** gives its space back. The chosen state survives live
 updates, and running a task never opens its card automatically. Status and standing
 warnings remain visible in either state. Handoff wires keep connecting the visible

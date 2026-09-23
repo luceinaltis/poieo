@@ -12,7 +12,7 @@ export function Direction({ project, task }: { project: string; task: string }) 
     setText("")
     setHeard(answer.status === "delivered" ? "delivered" : "saved")
   })
-  return <details className="task-direction">
+  return <details className="task-direction drawer-card">
     <summary>Give direction (optional)</summary>
     <label className="apply-field">
       What should the next run keep in mind?

@@ -48,3 +48,12 @@ test("direction given to a run in flight says it was delivered, not saved", asyn
     vi.unstubAllGlobals()
   }
 })
+
+test("its fold opens like the panel's other folds", async () => {
+  // It alone kept the browser's own triangle beside the others' chevron.
+  const host = document.createElement("div")
+  const root = createRoot(host)
+  await act(async () => root.render(<Direction project="board" task="chores" />))
+  expect(host.querySelector("details")!.classList.contains("drawer-card")).toBe(true)
+  act(() => root.unmount())
+})

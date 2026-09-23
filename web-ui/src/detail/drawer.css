@@ -100,6 +100,19 @@
   gap: 6px;
 }
 
+/* The one act that moves the task along, in the colour the bar's own act
+   ("new task") wears. */
+.control .control-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.control .control-primary:hover:not(:disabled) {
+  background: var(--ember);
+  color: var(--ground);
+}
+
 /* Its own row under the buttons, not squeezed in beside them. */
 .control .refusal {
   flex-basis: 100%;
