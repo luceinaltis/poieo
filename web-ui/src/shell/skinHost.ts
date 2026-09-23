@@ -21,6 +21,8 @@ export function writeSkinPreference(id: string): void {
 export interface SkinHost {
   show(id: string): void
   update(stage: StageState): void
+  /** The task open in the panel, told to whichever skin is showing now or later. */
+  select(task: string | null): void
   destroy(): void
 }
 
@@ -32,6 +34,7 @@ export function createSkinHost(
   let handle: SkinHandle | null = null
   let currentId = ""
   let latest: StageState | null = null
+  let picked: string | null = null
 
   return {
     show(id: string) {
@@ -43,6 +46,12 @@ export function createSkinHost(
       currentId = skin.id
       // Hand over what is on the board now; the next event may be minutes off.
       if (latest) handle.update(latest)
+      if (picked !== null) handle.select?.(picked)
+    },
+
+    select(task: string | null) {
+      picked = task
+      handle?.select?.(task)
     },
 
     update(stage: StageState) {

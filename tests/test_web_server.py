@@ -289,7 +289,9 @@ def test_a_flow_serves_the_handoffs_it_declared(tmp_path):
     client = TestClient(create_app(daemon))
 
     row = client.get("/api/tasks").json()["tasks"][0]
-    assert row["then"] == [{"to": "review", "label": "changed"}]
+    # The condition rides along, so the board can tell a label somebody wrote
+    # from one it fell back to -- a word "true" is not the condition `true`.
+    assert row["then"] == [{"to": "review", "label": "changed", "when": "run.change"}]
 
 
 def test_a_branch_with_no_label_is_drawn_with_its_condition(tmp_path):
@@ -300,7 +302,7 @@ def test_a_branch_with_no_label_is_drawn_with_its_condition(tmp_path):
     client = TestClient(create_app(daemon))
 
     row = client.get("/api/tasks").json()["tasks"][0]
-    assert row["then"] == [{"to": "review", "label": "run.steps > 2"}]
+    assert row["then"] == [{"to": "review", "label": "run.steps > 2", "when": "run.steps > 2"}]
 
 
 def test_the_wiring_carries_no_prompts(tmp_path):

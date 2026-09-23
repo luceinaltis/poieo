@@ -444,12 +444,52 @@ export const basic: Skin = {
     // a window that changes size needs a new one. Guarded: the observer is not
     // in jsdom, and a skin that cannot watch simply keeps the fit it has.
     const watching =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => show())
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            // A view the board only nudged to show the open card is still the
+            // board's, not the reader's, so a new window gets a new fit.
+            if (revealed) {
+              chosen = null
+              revealed = false
+            }
+            show()
+          })
     watching?.observe(viewport)
 
     // Null until the reader moves the board themselves; after that it is their
     // view, and `show` stops fitting.
     let chosen: View | null = null
+    // The task open in the panel, whose card is marked and kept in view.
+    let selected: string | null = null
+    // Whether `chosen` is only the board's nudge to show that card, rather
+    // than a view the reader made by moving the board.
+    let revealed = false
+
+    /**
+     * The least movement that shows a card whole: none when it already is,
+     * otherwise just far enough past the nearer edge. The card being read in
+     * the panel was otherwise wherever the board last left it -- often half
+     * under the bottom of the window.
+     */
+    function reveal(task: string): void {
+      const box = boxes.get(task)
+      const width = viewport.clientWidth
+      const height = viewport.clientHeight
+      if (!box || !width || !height) return
+      const view = where()
+      const edge = 16
+      const left = view.x + parseFloat(box.root.style.left) * view.zoom
+      const top = view.y + parseFloat(box.root.style.top) * view.zoom
+      const right = left + (box.root.offsetWidth || BOX.width) * view.zoom
+      const bottom = top + (box.root.offsetHeight || BOX.height) * view.zoom
+      const dx = left < edge ? edge - left : right > width - edge ? Math.max(edge - left, width - edge - right) : 0
+      const dy = top < edge ? edge - top : bottom > height - edge ? Math.max(edge - top, height - edge - bottom) : 0
+      if (!dx && !dy) return
+      chosen = { ...view, x: view.x + dx, y: view.y + dy }
+      show()
+      revealed = true
+    }
 
     // Only expanded independent graphs scroll locally; compact flows move with the board.
     const grabbable = (event: Event): boolean =>
@@ -459,6 +499,7 @@ export const basic: Skin = {
       event.stopPropagation()
       const go = (to: PointerEvent) => {
         const box = map.getBoundingClientRect()
+        revealed = false
         chosen = centreOn(
           where(),
           { x: (to.clientX - box.left) / mapped.zoom, y: (to.clientY - box.top) / mapped.zoom },
@@ -509,7 +550,10 @@ export const basic: Skin = {
       })
       .on("zoom", (event: D3ZoomEvent<HTMLDivElement, unknown>) => {
         const view = { x: event.transform.x, y: event.transform.y, zoom: event.transform.k }
-        if (!settling) chosen = view
+        if (!settling) {
+          chosen = view
+          revealed = false
+        }
         draw(view)
       })
 
@@ -523,6 +567,7 @@ export const basic: Skin = {
     // recoverable by reloading the page.
     viewport.addEventListener("dblclick", (event) => {
       if (!grabbable(event)) return
+      revealed = false
       chosen = fit(
         { width: board.offsetWidth, height: board.offsetHeight },
         { width: viewport.clientWidth, height: viewport.clientHeight },
@@ -623,6 +668,7 @@ export const basic: Skin = {
       const box = boxes.get(task)
       if (!box) return
       const current = where()
+      revealed = false
       chosen = { ...current,
         x: viewport.clientWidth / 2 - input.x * current.zoom,
         y: Math.min(160, viewport.clientHeight / 2) - input.y * current.zoom,
@@ -751,6 +797,7 @@ export const basic: Skin = {
             moved = true
           }
           paint(box, taskState, isOpen(task, taskState))
+          box.root.dataset.selected = String(task === selected)
         }
         for (const [task, box] of boxes) {
           if (!(task in stage.tasks)) {
@@ -774,6 +821,12 @@ export const basic: Skin = {
           key = fresh
           relayout(stage)
         }
+      },
+
+      select(task: string | null) {
+        selected = task
+        for (const [key, box] of boxes) box.root.dataset.selected = String(key === task)
+        if (task !== null) reveal(task)
       },
 
       destroy() {

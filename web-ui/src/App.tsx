@@ -342,6 +342,12 @@ export default function App({ store }: { store?: StageStore }) {
     : undefined
   const selectedTaskState = selectedTaskKey ? stage.tasks[selectedTaskKey] : undefined
 
+  // The board marks the task the panel is showing and brings it into view,
+  // so the card being read is never a guess or half off the screen.
+  useEffect(() => {
+    hostRef.current?.select(selectedTaskKey)
+  }, [selectedTaskKey])
+
   return (
     <>
       <header className="shell-bar">

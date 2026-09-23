@@ -838,7 +838,13 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # What it is waiting to be told, if anything. Without
                     # this the answer route is a button with no label on it.
                     "asking": _question(runner),
-                    "then": _branches(runner.task.spec.then),
+                    # With each condition: the board says its own conditions
+                    # in words, and only the condition tells a fallback label
+                    # from one a person wrote that happens to read the same.
+                    "then": [
+                        {**arrow, "when": branch.when}
+                        for arrow, branch in zip(_branches(runner.task.spec.then), runner.task.spec.then)
+                    ],
                     # How this task's work reaches the project: waiting for a
                     # decision, or landing itself once its checks pass. A board
                     # of quiet cards must say which of them do the second.

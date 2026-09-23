@@ -104,3 +104,19 @@ test("a hostile storage does not take the page down", () => {
   expect(readSkinPreference()).toBe(DEFAULT_SKIN_ID)
   boom.mockRestore()
 })
+
+test("the open task reaches the skin, and a skin switched to later is told it too", () => {
+  const select = vi.fn()
+  const withSelect: Skin = { id: "s", label: "s", mount: vi.fn((): SkinHandle => ({ update: vi.fn(), destroy: vi.fn(), select })) }
+  const other = fakeSkin("o")
+  const host = createSkinHost(document.createElement("div"), { onSelectTask: () => {} }, (id) =>
+    id === "s" ? withSelect : other.skin,
+  )
+  host.show("o")
+  host.select("board/chores")
+  host.show("s")
+
+  expect(select).toHaveBeenCalledWith("board/chores")
+  host.select(null)
+  expect(select).toHaveBeenLastCalledWith(null)
+})

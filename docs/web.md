@@ -40,7 +40,7 @@ the project's display name; task parameters use the card filename stem.
 
 | request | response |
 |---|---|
-| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, `title` (the card's own `name:`, or the task name without a card), graph, trigger, status, hold and why it is held (`held_because`, the daemon's own sentence or null), enabled/stale state, current and last run, review state, pending question, handoffs, graph shape, `apply`, the task's permission to apply its own work (`mode`, `paths`, `checks`), `chat`, true for the task the chat speaks to, which the board leaves off its stage, and `permission`, which of the chat's settings its card on disk holds -- `read`, `ask`, `edits`, `all`, or `custom` for a hand-written mix -- and null for every other task |
+| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, `title` (the card's own `name:`, or the task name without a card), graph, trigger, status, hold and why it is held (`held_because`, the daemon's own sentence or null), enabled/stale state, current and last run, review state, pending question, handoffs (`then`, each `{to, label, when}`; `label` falls back to the condition), graph shape, `apply`, the task's permission to apply its own work (`mode`, `paths`, `checks`), `chat`, true for the task the chat speaks to, which the board leaves off its stage, and `permission`, which of the chat's settings its card on disk holds -- `read`, `ask`, `edits`, `all`, or `custom` for a hand-written mix -- and null for every other task |
 | `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
 | `GET /api/runs/{run_id}` | `{run_id, summary, events}` or 404; `summary` is the index row, null while the run is in flight |
 | `GET /api/runs/{run_id}/files/{name}` | a file kept with the run: what was attached to the message that started it, or a picture the model looked at (named by `preview` on its tool call); served as the picture its bytes say it is, otherwise as plain text, with `nosniff`, never as a page; 404 for any other name |
@@ -467,7 +467,11 @@ something stands in the way of. Hovering or focusing a
 terminal or wire highlights its connections and both cards. Clicking a wire, or
 pressing Enter/Space on it, brings the receiving card into view and focuses Input.
 Title updates preserve focused terminals and wires while allowing the board to
-remeasure a wrapped title.
+remeasure a wrapped title. A wire's word is the connection's label, and the
+board's own conditions are said as the task panel says them -- `always`,
+`succeeded`, `failed`, or the word an answer must contain -- rather than as the
+expression. The task open in the panel is ringed on the board, and opening one
+moves the board only as far as it takes to show that card whole.
 
 Expanded card graphs measure their labels before Dagre places nodes from top to
 bottom. Expanded connected cards grow to fit the complete graph without internal

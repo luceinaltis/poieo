@@ -103,6 +103,12 @@
 .basic-task[data-linked="false"] { opacity: 0.4; }
 .basic-task[data-linked="true"] { outline: 2px solid var(--ember); outline-offset: 2px; }
 
+/* The task open in the panel: ringed in ink and lifted, so the card being read
+   is plain at a glance -- and not amber, which says a wire is being traced. */
+.basic-task[data-selected="true"] {
+  box-shadow: 0 0 0 2px var(--text), 0 8px 22px rgb(0 0 0 / 0.14);
+}
+
 /* The most important line on the board: it is the one that says where a run
    ends. Drawn at the weight of a border it read as one, and a reader could
    not tell a handoff from two boxes that happened to sit side by side. */

@@ -1,6 +1,7 @@
 /** Task handoffs join the actual graph terminals, through the space between cards. */
 import { keyOfTask, type StageState } from "../../state/stage"
 import type { Placed } from "../wiring"
+import { wireWord } from "../../connection"
 import { edgePath } from "./graph"
 
 export interface ConnectedBox { root: HTMLElement; steps: HTMLElement }
@@ -19,7 +20,7 @@ export function taskConnections(stage: StageState) {
     if (!stage.tasks[to]) return
     const key = JSON.stringify([from, to])
     const connection = connections.get(key) ?? { from, to, labels: [] }
-    connection.labels.push(`${task.then.length > 1 ? `${index + 1}. ` : ""}${way.label}`)
+    connection.labels.push(`${task.then.length > 1 ? `${index + 1}. ` : ""}${wireWord(way.label, way.when)}`)
     connections.set(key, connection)
   })
   return [...connections.values()]

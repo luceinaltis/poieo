@@ -118,6 +118,8 @@ export interface RunSummary {
 export interface Arrow {
   to: string | null
   label: string
+  /** The condition itself; `label` falls back to it when nobody named the arrow. Absent from an older daemon. */
+  when?: string
 }
 
 /** One node of a graph, as much of it as a drawing needs. */
