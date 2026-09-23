@@ -84,9 +84,6 @@ WRITES = [
     # sends, so it stands behind the same fence as the writes.
     "/api/projects/board/tasks/draft",
     "/api/projects/board/tasks/f",
-    # Chat writes nothing, but it spends a model call on whatever a page
-    # sends, so it stands behind the same fence as the writes.
-    "/api/projects/board/chat",
 ]
 
 

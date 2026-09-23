@@ -128,7 +128,6 @@ daemon state only. An answer persists with its run and may start a task handoff.
 |---|---|
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
-| `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, thinking, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; asked with `Accept: text/event-stream`, the same answer comes as it is written: `thinking` and `text` frames carry each piece, `done` the whole reply with those same fields, and `error` what a refusal would have said once the stream has begun; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
 | `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:`, five cron fields written as `at:`, or `manual` written as `trigger: {type: manual}`, and 400 when none; an optional `then` is written with the card and checked as the rewrite checks it, except that a target may be a card on disk the scan has not loaded yet; creates one card, optionally its neighboring graph, and returns its task id and path; with `chat: true` it writes the project's chat card instead -- no steps, schedule or `then`, the folder the project's own when none is given, the `read` toolset, and 409 when the project already has one |
 | `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, drafts, model, usage}`: the model's prose without its cards, every card it proposed in order as `{name, folder, prompt, schedule, after}` (at most four; `after` is `{task, when, word}` naming an earlier card by its place and one of `always`, `succeeded`, `failed`, `says`, or null, and a card with one is `manual`), and `draft`, the first of them without `after`, or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}`, simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it, or `{then}`, the card's whole list of connections, spliced into its own text so comments and other fields are kept (an empty list removes the block; a target outside the project or a condition that does not parse is 400, a card whose text cannot be rewritten that way is 409); atomically validates and replaces one card, returning whether the edit is live. The GET beside it returns `then` with each connection's condition |
@@ -139,15 +138,6 @@ Model routes write only the project's default binding and never accept or return
 a credential value; `key_env` is a variable name. Rebind validates before
 keeping a write and reports separately whether the resident daemon accepted the
 new binding.
-
-Chat is not a write. The daemon tells the model only which project's board it
-is being asked from and that a chat is not a task -- it has no tools, so it
-can neither read the project nor change a file -- and then the conversation
-as the page sent it; the page is the only thing holding that conversation,
-and nothing of it is stored or recorded as a run. The `default` role answers,
-which is what a plain card gets, so the person hears the model their tasks
-use, and the reply names it. The route stands behind the same origin fence as
-the writes because it spends a model call on whatever a page sends.
 
 Browser-created and browser-edited cards are confined to the project's task
 folder, and every path they name — work folder, explicit graph, `binding:`,

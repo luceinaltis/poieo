@@ -75,9 +75,6 @@ from ..rebind import already, declare, point_at
 from ..task import humanize, parse_duration
 from ..workspace import ApplySpec
 from ..workspace import usable as git_keeps_copies
-from .chat import ROLE as CHAT_ROLE
-from .chat import briefing as chat_briefing
-from .chat import cut_short
 from .draft import ROLE as DRAFTING_ROLE
 from .draft import TURN_CHARS_AT_MOST, briefing, conversation, read_cards
 from .events import CLOSED, BroadcastStore
@@ -2862,111 +2859,6 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             }
         )
 
-    async def project_chat(request: Request) -> JSONResponse:
-        """Put a conversation to the project's model and hand back its reply.
-
-        Not a write: nothing is kept and nothing changes. POST because a
-        conversation belongs in a body, as a memory search does. The page
-        holds the conversation and sends the whole of it every time; the
-        daemon stores none of it, and no run comes of it.
-
-        The `default` role answers, which is what a plain card gets, so a
-        person can hear the model their tasks will be using. A models file
-        that names none is a refusal rather than a guess -- the memory board's
-        rule -- and the reply names the model that did answer.
-        """
-        project, missing = _asked_project(request)
-        if missing is not None:
-            return missing
-        try:
-            payload = await request.json()
-        except (ValueError, UnicodeDecodeError):
-            payload = None
-        if not isinstance(payload, dict):
-            return JSONResponse({"error": "the conversation body must be JSON"}, status_code=400)
-        try:
-            turns = conversation(payload.get("messages"))
-        except SpecError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
-
-        try:
-            spec = await asyncio.to_thread(_models_of, project)
-        except PoieoError:
-            spec = None
-        if spec is None:
-            return JSONResponse(
-                {"error": "this project has no models file for a reply to come from"},
-                status_code=409,
-            )
-        try:
-            answerer = spec.resolve(CHAT_ROLE)
-        except BindingError:
-            return JSONResponse({"error": f"{CHAT_ROLE} does not resolve to a model"}, status_code=409)
-
-        asked = LLMRequest(
-            model=answerer.model,
-            system=chat_briefing(project.config.display_name),
-            messages=turns,
-            params=answerer.params,
-            role=CHAT_ROLE,
-        )
-        did_not_answer = f"the model did not answer; try again, or point {CHAT_ROLE} at another model"
-
-        def whole(response: Any) -> dict[str, Any]:
-            return {
-                "reply": response.text,
-                "thinking": str(response.meta.get("thinking") or ""),
-                "model": answerer.ref,
-                "usage": response.usage.as_dict(),
-                "cut_short": cut_short(response.stop_reason),
-            }
-
-        # Asked for as a stream, the answer comes as it is written: `thinking`
-        # and `text` frames carry each piece, `done` the whole reply as the
-        # JSON answer would have said it, and `error` what a refusal would
-        # have said. The first piece is waited for before the stream is
-        # opened, so a model that fails at once is still a 503 and not a 200
-        # with an apology inside; only a failure after that first piece has
-        # to be a frame, because the status has gone out by then.
-        if "text/event-stream" in request.headers.get("accept", ""):
-            pool = ProviderPool(spec)
-            try:
-                deltas = pool.get(answerer.provider_name).stream(asked)
-                first = await deltas.__anext__()
-            except (PoieoError, StopAsyncIteration):
-                await pool.aclose()
-                return JSONResponse({"error": did_not_answer}, status_code=503)
-
-            def framed(delta: Any) -> list[str]:
-                out = []
-                if delta.thinking:
-                    out.append(sse_frame({"type": "thinking", "text": delta.thinking}))
-                if delta.text:
-                    out.append(sse_frame({"type": "text", "text": delta.text}))
-                if delta.done is not None:
-                    out.append(sse_frame({"type": "done", **whole(delta.done)}))
-                return out
-
-            async def frames() -> AsyncIterator[str]:
-                try:
-                    async with pool:
-                        for frame in framed(first):
-                            yield frame
-                        async for delta in deltas:
-                            for frame in framed(delta):
-                                yield frame
-                except PoieoError:
-                    yield sse_frame({"type": "error", "error": did_not_answer})
-
-            return StreamingResponse(frames(), media_type="text/event-stream", headers={"cache-control": "no-cache"})
-
-        try:
-            async with ProviderPool(spec) as pool:
-                response = await pool.get(answerer.provider_name).complete(asked)
-        except PoieoError:
-            return JSONResponse({"error": did_not_answer}, status_code=503)
-        return JSONResponse(whole(response))
-
     async def events(request: Request) -> StreamingResponse:
         task = request.query_params.get("task")
         # Both, for the same reason `runs` takes both: `?task=chores` alone
@@ -3011,9 +2903,6 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # not wait on its own footnote.
         Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
         Route("/api/projects/{project}/folders", project_folders),
-        # Chat: a conversation put to the project's model, its reply handed
-        # back. It writes nothing and starts no run.
-        Route("/api/projects/{project}/chat", project_chat, methods=["POST"]),
         # Models: the fourth kind. They write the project's binding file and
         # nothing else, and never accept or return a credential. `add` declares
         # an endpoint; `use` chooses among the models of one already declared.
