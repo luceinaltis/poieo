@@ -869,3 +869,55 @@ test("the card's name says it opens the task", () => {
   expect(/\.basic-name::after \{([^}]*)\}/.exec(css)![1]).toMatch(/content: " ›" \/ ""/)
   expect(css).toMatch(/\.basic-pick:hover \.basic-name,\s*\.basic-pick:focus-visible \.basic-name \{[^}]*text-decoration: underline/)
 })
+
+const actButton = (task: string) => el.querySelector<HTMLButtonElement>(`[data-task="board/${task}"] .basic-act`)!
+// d3 swallows the one click that follows a drag, until the next tick; an
+// earlier test that drags leaves that armed, so a press here waits it out.
+const settled = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+test("a card offers the one thing to do from the board: run it now, or resume it", async () => {
+  const onAct = vi.fn(async () => ({ ok: true }))
+  const handle = basic.mount(el, { onSelectTask: vi.fn(), onAct })
+  handle.update(initialStage([
+    row("waits"),
+    { ...row("held"), status: "paused", holding: true },
+    { ...row("busy"), status: "running" },
+    { ...row("off"), enabled: false },
+  ]))
+
+  expect(actButton("waits").hidden).toBe(false)
+  expect(actButton("waits").textContent).toBe("run now")
+  expect(actButton("held").textContent).toBe("resume")
+  // Running already, or switched off in its file: nothing a press could do.
+  expect(actButton("busy").hidden).toBe(true)
+  expect(actButton("off").hidden).toBe(true)
+
+  await settled()
+  actButton("waits").click()
+  expect(onAct).toHaveBeenCalledWith("board/waits", "run")
+  actButton("held").click()
+  expect(onAct).toHaveBeenLastCalledWith("board/held", "resume")
+  handle.destroy()
+})
+
+test("a refused press says why on the card, and the next press clears it", async () => {
+  const onAct = vi.fn(async (): Promise<{ ok: boolean; error?: string }> => ({ ok: false, error: "the daemon is busy" }))
+  const handle = basic.mount(el, { onSelectTask: vi.fn(), onAct })
+  handle.update(initialStage([row("waits")]))
+
+  await settled()
+  actButton("waits").click()
+  await vi.waitFor(() => expect(el.querySelector('[data-task="board/waits"] .basic-refused')!.textContent).toBe("the daemon is busy"))
+
+  onAct.mockResolvedValueOnce({ ok: true })
+  actButton("waits").click()
+  await vi.waitFor(() => expect(el.querySelector<HTMLElement>('[data-task="board/waits"] .basic-refused')!.hidden).toBe(true))
+  handle.destroy()
+})
+
+test("a board that cannot act offers no button", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage([row("waits")]))
+  expect(actButton("waits").hidden).toBe(true)
+  handle.destroy()
+})

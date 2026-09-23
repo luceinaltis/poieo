@@ -45,6 +45,10 @@ const MAP = { width: 200, height: 140 }
 interface Box {
   structure: string
   root: HTMLElement
+  act: HTMLButtonElement
+  /** What the card's button does now, or null when it offers nothing. */
+  verb: "run" | "resume" | null
+  refused: HTMLElement
   name: HTMLElement
   toggle: HTMLElement
   when: HTMLElement
@@ -145,12 +149,25 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
   element("span", "basic-dot", pick)
   const name = element("span", "basic-name", pick)
 
+  // Run it now, or resume it: the one act worth not opening the task for.
+  const act = element("button", "basic-act", head) as HTMLButtonElement
+  act.type = "button"
+  act.dataset.can = String(Boolean(callbacks.onAct))
+
   const toggle = element("button", "basic-toggle", head)
   ;(toggle as HTMLButtonElement).type = "button"
+
+  // Why the daemon refused the last press, until the next one.
+  const refused = element("p", "basic-refused", root)
+  refused.hidden = true
+  refused.setAttribute("role", "alert")
 
   const box: Box = {
     structure: "",
     root,
+    act,
+    verb: null,
+    refused,
     toggle,
     when: element("div", "basic-when", root),
     // Under the schedule, because it is the same kind of fact -- what this
@@ -181,6 +198,17 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
     tools: element("ul", "basic-tools", root),
     tally: element("div", "basic-tally", root),
   }
+  act.addEventListener("click", () => {
+    const verb = box.verb
+    if (!verb || !callbacks.onAct) return
+    refused.hidden = true
+    act.disabled = true
+    void callbacks.onAct(task, verb).then((answer) => {
+      act.disabled = false
+      refused.textContent = answer.ok ? "" : answer.error || "That didn't work."
+      refused.hidden = answer.ok
+    })
+  })
   box.viewSteps.textContent = "View steps"
   box.viewSteps.setAttribute("type", "button")
   box.viewSteps.addEventListener("click", () => onView(box.viewSteps))
@@ -312,6 +340,18 @@ function paint(box: Box, taskState: TaskState, open: boolean): void {
   box.name.textContent = taskState.title
   box.root.dataset.status = taskState.status
   box.root.dataset.open = String(open)
+  // Nothing to offer while it runs, when its file switches it off, or when
+  // the shell cannot act at all; resume when it is held, run now otherwise.
+  box.verb =
+    box.act.dataset.can !== "true" || !taskState.enabled || taskState.status === "running"
+      ? null
+      : taskState.status === "paused"
+        ? "resume"
+        : "run"
+  box.act.hidden = box.verb === null
+  box.act.textContent = box.verb === "resume" ? "resume" : "run now"
+  box.act.dataset.do = box.verb ?? ""
+  box.act.setAttribute("aria-label", `${box.verb === "resume" ? "Resume" : "Run"} ${taskState.title}${box.verb === "run" ? " now" : ""}`)
   box.toggle.textContent = open ? "Collapse ▴" : "Expand ▾"
   box.toggle.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} steps in ${taskState.title}`)
   box.toggle.setAttribute("aria-expanded", String(open))

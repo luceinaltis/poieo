@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 vi.mock("./api", () => ({
   createChatCard: vi.fn<typeof import("./api").createChatCard>(async () => ({ ok: true, task: "chat" })),
   runNow: vi.fn<typeof import("./api").runNow>(async () => ({ ok: true, status: "starting" })),
+  resume: vi.fn<typeof import("./api").resume>(async () => ({ ok: true, status: "waiting" })),
   fetchTasks: vi.fn<typeof import("./api").fetchTasks>(async () => ({
     projects: [],
     tasks: [],
@@ -1073,4 +1074,18 @@ test("a task that is running is offered to the chat, with its live timeline", as
   const picker = container.querySelector<HTMLSelectElement>(".chat-target")!
   expect(picker).not.toBeNull()
   expect([...picker.options].map((option) => option.value)).toEqual(["chat", "chores"])
+})
+
+test("a card's run now asks the daemon to run that task, in its own project", async () => {
+  const { runNow } = await import("./api")
+  vi.mocked(runNow).mockClear()
+  await render(initialStage(TASK_ROWS))
+  // d3 swallows the click after a drag until the next tick.
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+
+  await act(async () => {
+    container.querySelector<HTMLElement>('[data-task="board/chores"] .basic-act')!.click()
+  })
+
+  expect(runNow).toHaveBeenCalledWith("board", "chores")
 })

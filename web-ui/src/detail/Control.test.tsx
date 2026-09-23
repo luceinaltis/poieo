@@ -116,3 +116,14 @@ test("a task its card switched off offers no button, and says why", () => {
   expect(container.textContent).not.toContain("enabled: true")
   expect(container.textContent).not.toContain("restart")
 })
+
+test("the one act that moves the task along is the primary button", () => {
+  // Three beige buttons in a row said nothing about which to press.
+  render({ status: "waiting" })
+  expect(button("run-now")!.classList.contains("control-primary")).toBe(true)
+  expect(button("pause")!.classList.contains("control-primary")).toBe(false)
+
+  render({ status: "paused" })
+  expect(button("resume")!.classList.contains("control-primary")).toBe(true)
+  expect(button("run-now")!.classList.contains("control-primary")).toBe(false)
+})

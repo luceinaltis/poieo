@@ -22,7 +22,7 @@ import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
-import { runNow } from "./api"
+import { resume, runNow } from "./api"
 import type { Answer } from "./api"
 import { Chat } from "./chat/Chat"
 import type { Queued } from "./chat/Chat"
@@ -183,14 +183,27 @@ export default function App({ store }: { store?: StageStore }) {
     [rememberPanelOpener],
   )
 
+  // A card's own button: run it now, or resume it, without opening the task.
+  // The listing is read again after, so the card says what the daemon did.
+  const actOnTask = useCallback(
+    async (taskKey: string, verb: "run" | "resume") => {
+      const task = stageStore.getStage().tasks[taskKey]
+      if (!task) return { ok: false, error: "that task is no longer on the board" }
+      const answer = await (verb === "resume" ? resume(task.project, task.name) : runNow(task.project, task.name))
+      if (answer.ok) void stageStore.resync()
+      return answer
+    },
+    [stageStore],
+  )
+
   useEffect(() => {
-    const host = createSkinHost(boardRef.current!, { onSelectTask: selectTask })
+    const host = createSkinHost(boardRef.current!, { onSelectTask: selectTask, onAct: actOnTask })
     hostRef.current = host
     return () => {
       host.destroy()
       hostRef.current = null
     }
-  }, [selectTask])
+  }, [selectTask, actOnTask])
 
   useEffect(() => {
     hostRef.current?.show(skinId)

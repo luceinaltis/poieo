@@ -44,8 +44,11 @@ export function Control({
   return (
     <div className="control">
       {/* Pause stays offered while running: it takes effect between runs. */}
+      {/* The act that moves the task along is the primary one: resume when
+          it is held, run now otherwise. Pause stays offered, plainer. */}
       <button
         type="button"
+        className={paused ? "control-primary" : undefined}
         data-do={paused ? "resume" : "pause"}
         disabled={busy}
         onClick={() => void act(() => (paused ? resume(project, task) : pause(project, task)))}
@@ -56,6 +59,7 @@ export function Control({
       <button
         type="button"
         data-do="run-now"
+        className={paused ? undefined : "control-primary"}
         disabled={busy || running}
         onClick={() => void act(() => runNow(project, task))}
       >
