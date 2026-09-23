@@ -219,16 +219,39 @@ const SETTLED: Record<string, string> = { applied: "taken", discarded: "thrown a
  * private copy -- the choice to take it or throw it away. The chat's task is
  * off the board, so this is the one place its changes are reviewed.
  */
-function Changed({ run, project, task }: { run: RunSummary; project: string; task: string }) {
+function Changed({
+  run,
+  project,
+  task,
+  runs,
+}: {
+  run: RunSummary
+  project: string
+  task: string
+  /** All of the chat task's runs, newest first: its changes wait in one line. */
+  runs: RunSummary[]
+}) {
   const change = run.change
   if (!change) return null
   const settled = SETTLED[run.application?.status ?? ""]
+  // Every conversation's changes wait in one line, in the order they were
+  // made, and a decision takes that line up to a run or throws it away from
+  // one -- so it can reach another conversation's change. Said before it does.
+  const at = runs.findIndex((one) => one.run_id === run.run_id)
+  const elsewhere = (one: RunSummary) => one.thread !== run.thread && pendingChange(one)
+  const before = runs.slice(at + 1).filter(elsewhere).length
+  const after = runs.slice(0, Math.max(at, 0)).filter(elsewhere).length
+  const reach = [
+    before ? `accepting also takes ${before} change${before === 1 ? "" : "s"} from another conversation` : "",
+    after ? `discarding also throws away ${after} change${after === 1 ? "" : "s"} from another conversation` : "",
+  ].filter(Boolean)
   return (
     <div className="chat-change">
       <span className="chat-change-said">
         {`changed ${change.files.join(", ")} (+${change.insertions} −${change.deletions})`}
         {settled ? ` · ${settled}` : ""}
       </span>
+      {pendingChange(run) && reach.length ? <span className="chat-change-reach">{reach.join("; ")}</span> : null}
       {pendingChange(run) ? (
         <Decide project={project} task={task} pending={0} into={null} runId={run.run_id} onDone={() => {}} />
       ) : null}
@@ -236,14 +259,24 @@ function Changed({ run, project, task }: { run: RunSummary; project: string; tas
   )
 }
 
-function Answered({ run, project, task }: { run: RunSummary; project: string; task: string }) {
+function Answered({
+  run,
+  project,
+  task,
+  runs,
+}: {
+  run: RunSummary
+  project: string
+  task: string
+  runs: RunSummary[]
+}) {
   return (
     <li className="chat-turn" data-role="assistant">
       <span className="chat-who">answer</span>
       {/* An empty bubble reads as broken; say what happened instead. */}
       <div className="chat-said">{run.said || <span className="chat-nothing">the model said nothing</span>}</div>
       {run.status === "failed" && run.error ? <span className="chat-cut">{run.error}</span> : null}
-      <Changed run={run} project={project} task={task} />
+      <Changed run={run} project={project} task={task} runs={runs} />
       <RunWork runId={run.run_id} />
     </li>
   )
@@ -539,7 +572,13 @@ export function Chat({
                 attachments={run.attachments}
                 runId={run.run_id}
               />,
-              <Answered key={`${run.run_id}-answered`} run={run} project={project} task={chatTask?.name ?? "chat"} />,
+              <Answered
+                key={`${run.run_id}-answered`}
+                run={run}
+                project={project}
+                task={chatTask?.name ?? "chat"}
+                runs={runs}
+              />,
             ])}
             {liveHere ? (
               <Asked message={liveHere.message} attachments={liveHere.attachments} runId={liveHere.runId} />

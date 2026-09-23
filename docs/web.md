@@ -358,8 +358,11 @@ without the buttons. An answer that changed files in a project with private
 copies says which, under its bubble, and while the change waits offers accept
 up to this run and discard from this run onward -- the review's own control,
 and the one place the chat task's changes are reviewed, since the board leaves
-the task off; once decided the line says taken, thrown away or undone. What
-the model thinks is never shown in the chat; a task's thinking stays in its
+the task off; once decided the line says taken, thrown away or undone. Every
+conversation's changes wait in one line, in the order they were made, so a
+decision can reach another conversation's change; when it would, the line says
+how many it would also take or throw away before either is pressed. What the
+model thinks is never shown in the chat; a task's thinking stays in its
 drawer. A message sent while the answer is being worked on is direction, heard
 at the run's next model turn and drawn on the timeline as `you said`. The
 stage keeps the chat's task, so its live events arrive, and leaves it off the

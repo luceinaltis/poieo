@@ -303,3 +303,10 @@
 .chat-change .decide {
   margin-top: 4px;
 }
+
+/* Said before a decision reaches past the conversation on screen. */
+.chat-change-reach {
+  color: var(--line);
+  display: block;
+  margin-top: 2px;
+}

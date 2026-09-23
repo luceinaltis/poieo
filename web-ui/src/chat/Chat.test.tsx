@@ -509,6 +509,26 @@ test("a change already taken asks for nothing", () => {
   expect(host.querySelector(".chat-change")?.textContent).toContain("taken")
 })
 
+test("a decision that would reach another conversation's change says so first", () => {
+  const change = { base: "a", head: "b", files: ["notes.md"], insertions: 1, deletions: 0, message: "x" }
+  // Newest first, as the stage keeps them: one change from another
+  // conversation sits between this conversation's two.
+  const runs = [
+    ran("r3", "t-1", "and the readme", "done", { change }),
+    ran("r2", "t-2", "elsewhere", "done", { change }),
+    ran("r1", "t-1", "tidy", "done", { change }),
+  ]
+  show({ task: chatTask({ runs, pending: 3 }), initial: "t-1" })
+
+  const [first, second] = [...host.querySelectorAll(".chat-change")]
+  // Taking the later one takes what came before it, the other conversation's too.
+  expect(second.querySelector(".chat-change-reach")?.textContent).toContain("accepting also takes 1 change from another conversation")
+  // Throwing the first away throws away what came after it.
+  expect(first.querySelector(".chat-change-reach")?.textContent).toContain(
+    "discarding also throws away 1 change from another conversation",
+  )
+})
+
 // -- what the chat may do -----------------------------------------------------------
 
 const permission = () => host.querySelector<HTMLSelectElement>('select[aria-label="Permission"]')
