@@ -20,7 +20,7 @@ from ..expr import evaluate, render, unwrap
 from ..graph import NodeSpec
 from ..providers import LLMRequest, LLMResponse
 from ..providers.base import IMAGE_WEIGHT, Hands, ToolCall, ToolDef, blocks_of, text_of
-from ..tools import Executor, ToolError, ToolResult, is_compiled, make_executor
+from ..tools import Executor, ToolError, ToolResult, asks_for, is_compiled, make_executor
 from .context import NodeResult, RunContext
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
@@ -703,7 +703,8 @@ class _AgentLoop:
         purpose = raw_purpose.strip() if isinstance(raw_purpose, str) else ""
         executable = ToolCall(id=call.id, name=call.name, arguments=arguments)
         started = time.monotonic()
-        result = await self.executor.execute(executable)
+        refused = await self._refused(call, purpose, arguments)
+        result = refused if refused is not None else await self.executor.execute(executable)
         self.tool_call_count += 1
         self.reached_for[call.name] = self.reached_for.get(call.name, 0) + 1
         seen = self._keep_picture(result, arguments)
@@ -720,6 +721,43 @@ class _AgentLoop:
             **({"preview": seen} if seen else {}),
         )
         return result
+
+    async def _refused(self, call: ToolCall, purpose: str, arguments: Any) -> ToolResult | None:
+        """Ask a person before a call this step waits on; the refusal, or None to go ahead.
+
+        The question is on the record before the wait and the answer after it,
+        so a board watching the run can show what is being asked and offer
+        the choice, and anyone reading the run later sees who allowed what.
+        """
+        kind = asks_for(call.name)
+        if kind is None or kind not in self.spec.ask_before:
+            return None
+        approvals = self.ctx.approvals
+        if approvals is None:
+            return ToolResult(
+                f"This {kind[:-1]} needs a person's say-so, and nobody is here to give it. "
+                "Say what you would have done instead.",
+                error=True,
+            )
+        self.ctx.emit(
+            "node_tool_asking",
+            node_id=self.spec.id,
+            turn=self.turns,
+            call_id=call.id,
+            name=call.name,
+            kind=kind,
+            purpose=_clip(purpose, 240) if purpose else "",
+            arguments=_clip(arguments),
+        )
+        allowed = await approvals.ask(call.id, self.ctx.cancel)
+        self.ctx.emit("node_tool_answered", node_id=self.spec.id, turn=self.turns, call_id=call.id, allowed=allowed)
+        if allowed:
+            return None
+        return ToolResult(
+            "The person did not allow this call, so it did not run. Do not try the same thing another "
+            "way; say what you wanted to do and why, and let them decide.",
+            error=True,
+        )
 
     def _keep_picture(self, result: ToolResult, arguments: Any) -> str | None:
         """Keep a picture the model was shown, with the run, and name it.

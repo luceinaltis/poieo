@@ -19,6 +19,7 @@ from ..graph import GraphSpec
 from ..providers import ProviderPool
 from ..store import RunStore, utcnow
 from ..tools import ToolContext
+from .approvals import Approvals
 from .context import RunContext, RunResult, new_run_id
 from .nodes import build_node
 
@@ -80,6 +81,7 @@ async def execute(
     direction: asyncio.Queue[str] | None = None,
     finalize: Callable[[RunResult], Awaitable[None]] | None = None,
     attachments: list[Attachment] | None = None,
+    approvals: Approvals | None = None,
 ) -> RunResult:
     """Run ``graph`` once and return the outcome.
 
@@ -105,6 +107,7 @@ async def execute(
         tool_context=tool_context,
         direction=direction,
         attachments=attachment_blocks(attachments or []),
+        approvals=approvals,
     )
 
     started_at = utcnow()

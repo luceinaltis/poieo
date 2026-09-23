@@ -19,7 +19,9 @@ state, iteration, cancellation signal, work directory, opaque tool context, and
 an optional direction queue: words from the person while the run is going,
 which an agent node drains between turns, as it reads the cancel signal, into
 its conversation as the person's next message, recording `node_directed` for
-each before the turn that reads them.
+each before the turn that reads them. It may also hold an approval channel:
+tool calls a step asks about wait there, by call id, for a person's answer,
+and a run without one answers every such question no (see `graph.md`).
 During execution it accumulates node outputs, output aliases, usage, the visited
 path, and an optional question.
 

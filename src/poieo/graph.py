@@ -122,6 +122,10 @@ class NodeSpec(_Spec):
     # glance which of its steps can. Principle 2 keeps the folder explicit for
     # the same reason, and hands are that rule one level up.
     tools: list[str] | None = None
+    # The kinds of tool call this step stops at and waits for a person to
+    # allow: `edits` (writing, editing or appending to a file) and `commands`
+    # (running one). Reading never waits. Empty means none do.
+    ask_before: list[Literal["edits", "commands"]] = Field(default_factory=list)
     # Upper bound on model calls in one node execution.
     max_turns: int = Field(default=20, ge=1, le=200)
     # How long this node may work, as a duration. `None` means only `max_turns`
@@ -277,6 +281,8 @@ class NodeSpec(_Spec):
                     validate_template(self.workdir)
                 except ExpressionError as exc:
                     raise ValueError(f"node '{self.id}': {exc}") from exc
+        if self.ask_before and self.type != "agent":
+            raise ValueError(f"{self.type} node '{self.id}' does not take ask_before: it has no tools to ask about")
         if self.type == "agent":
             if not self.prompt:
                 raise ValueError(f"{self.type} node '{self.id}' requires a prompt")

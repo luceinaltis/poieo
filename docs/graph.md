@@ -62,7 +62,16 @@ Whatever its type, a node may have:
 
 An agent renders `system` and `prompt`, resolves its role through the binding,
 and requests a completion. It may declare generation `params`, `retry`,
-`workdir`, `tools`, `max_turns`, and `deadline`.
+`workdir`, `tools`, `ask_before`, `max_turns`, and `deadline`.
+
+`ask_before` names the kinds of tool call the step stops at and waits for a
+person to allow: `edits` (`write_file`, `edit_file`, `append_file`) and
+`commands` (`run_command`). Reading, listing, searching and notes never wait.
+The run records `node_tool_asking` before the wait and `node_tool_answered`
+after it; a call not allowed never runs, and the model is told so as the
+call's result, which the run records as a failed call. A run with nobody to
+ask -- `poieo run`, where no approval channel exists -- is answered no. Only
+agent nodes take the key.
 
 No `tools` field means no tools for an explicit graph node. An empty list also
 means no tools. Tool results are fed back to the model until it gives a final

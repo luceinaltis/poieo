@@ -83,6 +83,8 @@ WRITES = [
     # Drafting writes nothing, but it spends a model call on whatever a page
     # sends, so it stands behind the same fence as the writes.
     "/api/projects/board/tasks/draft",
+    # Lets one tool call a step asked about go ahead.
+    "/api/tasks/board/f/approve",
     "/api/projects/board/tasks/f",
 ]
 
