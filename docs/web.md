@@ -453,6 +453,12 @@ field. Question endings say **After answer** before Output. A null task handoff
 ends at **Stop here**. Several conditions to the same task share a board wire and
 retain their authored priority. Only tasks in the sender's project can receive it.
 
+Tasks joined by handoffs are a flow, and each flow is a band at the top of the
+board in the order its first task is listed: each task one column past its
+furthest sender, on the row of the sender that starts it or the first free row
+below. Tasks nothing joins stand in a grid under every flow, as wide as the
+window allows; with no handoffs at all the whole board is that grid.
+
 Board wires attach to the measured Output and Input, even after pan/zoom or a card
 resize. Forward wires use the gaps between columns; returns are dashed and run
 below the cards, as do forward wires that skip columns. Hovering or focusing a

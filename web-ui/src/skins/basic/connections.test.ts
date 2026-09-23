@@ -188,3 +188,34 @@ test("leaving a hovered Output restores the connection to the focused Input", ()
   expect(card("Draft").dataset.linked).toBe("true")
   expect(card("Other").dataset.linked).toBe("false")
 })
+
+test("a wire that skips a column runs straight across when nothing stands in its row", () => {
+  // Every card is 150 tall here. Keep → Tell skips column 1, and the only card
+  // in column 1 (Mend) is on the row above, so the way across is clear.
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(150)
+  const route = (from: string, to: string) =>
+    host.querySelector<SVGElement>(`.basic-connection[data-from="demo/${from}"][data-to="demo/${to}"]`)!.dataset.route
+  handle.update(initialStage([
+    { ...task("Watch"), then: [{ to: "Mend", label: "red" }] },
+    { ...task("Mend"), then: [{ to: "Tell", label: "fixed" }] },
+    task("Tell"),
+    { ...task("Keep"), then: [{ to: "Tell", label: "done" }] },
+  ]))
+
+  expect(route("Watch", "Mend")).toBe("across")
+  expect(route("Keep", "Tell")).toBe("across")
+})
+
+test("a wire that skips a column goes under the board when a card stands in its row", () => {
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(150)
+  const route = (from: string, to: string) =>
+    host.querySelector<SVGElement>(`.basic-connection[data-from="demo/${from}"][data-to="demo/${to}"]`)!.dataset.route
+  // Watch → Mend → Tell, and Watch → Tell too: Mend sits on Watch's row.
+  handle.update(initialStage([
+    { ...task("Watch"), then: [{ to: "Mend", label: "red" }, { to: "Tell", label: "green" }] },
+    { ...task("Mend"), then: [{ to: "Tell", label: "fixed" }] },
+    task("Tell"),
+  ]))
+
+  expect(route("Watch", "Tell")).toBe("under")
+})

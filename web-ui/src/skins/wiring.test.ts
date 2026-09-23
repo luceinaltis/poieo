@@ -137,6 +137,57 @@ test("a cycle of three unrolls in the order they were declared", () => {
   expect(placed.map((one) => one.column)).toEqual([0, 1, 2])
 })
 
+test("a flow sits at the top in one line, and independent tasks fill a grid under it", () => {
+  // The flow was declared last, so it used to start at the bottom of a tall
+  // first column, and its arrows climbed the whole board to reach the tasks
+  // it starts, which sat at the top of the next one.
+  const placed = place(["a", "b", "c", "watch", "mend", "tell"], { watch: ["mend"], mend: ["tell"] }, 3)
+  const at = (task: string) => placed.find((p) => p.task === task)!
+
+  expect([at("watch"), at("mend"), at("tell")].map((p) => [p.column, p.row])).toEqual([
+    [0, 0],
+    [1, 0],
+    [2, 0],
+  ])
+  expect([at("a"), at("b"), at("c")].map((p) => [p.column, p.row])).toEqual([
+    [0, 1],
+    [1, 1],
+    [2, 1],
+  ])
+  // Still in the order they were given, so the board's own order holds.
+  expect(placed.map((p) => p.task)).toEqual(["a", "b", "c", "watch", "mend", "tell"])
+})
+
+test("separate flows are separate bands, each read on its own line", () => {
+  const placed = place(["x", "p", "y", "q"], { x: ["y"], p: ["q"] })
+  const at = (task: string) => placed.find((p) => p.task === task)!
+
+  expect([at("x"), at("y")].map((p) => [p.column, p.row])).toEqual([
+    [0, 0],
+    [1, 0],
+  ])
+  expect([at("p"), at("q")].map((p) => [p.column, p.row])).toEqual([
+    [0, 1],
+    [1, 1],
+  ])
+})
+
+test("a task sits level with the task that starts it, not at the top of its column", () => {
+  // a starts b and c; c starts d. d belongs beside c, one row down, so the
+  // arrow between them runs straight across.
+  const placed = place(["a", "b", "c", "d"], { a: ["b", "c"], c: ["d"] })
+  const at = (task: string) => placed.find((p) => p.task === task)!
+
+  expect(at("c")).toMatchObject({ column: 1, row: 1 })
+  expect(at("d")).toMatchObject({ column: 2, row: 1 })
+})
+
+test("the grid of independent tasks starts under the tallest flow", () => {
+  const placed = place(["a", "b", "c", "solo"], { a: ["b", "c"] }, 4)
+
+  expect(placed.find((p) => p.task === "solo")).toMatchObject({ column: 0, row: 2 })
+})
+
 test("a handoff naming a task that is not on the board is ignored", () => {
   const placed = place(["chores"], { chores: ["gone"] })
 

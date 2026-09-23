@@ -76,10 +76,21 @@ export function drawConnections(
     const before = positions.get(connection.from)!, after = positions.get(connection.to)!
     // The lane must clear every card in this column, including wider siblings.
     const fromRight = columnRight.get(before.column)!
-    const outer = after.column !== before.column + 1
     const returning = after.column <= before.column
+    // A forward wire that skips columns runs straight along its own row when
+    // no card in the columns between stands on that row, and turns into the
+    // gap just before its target. Only a wire with something in its way, or
+    // one going back, takes the long road under the board.
+    const skips = after.column > before.column + 1
+    const clear = skips && !placed.some((at) => {
+      if (at.column <= before.column || at.column >= after.column) return false
+      const root = boxes.get(at.task)!.root
+      const top = parseFloat(root.style.top)
+      return start.y >= top - 12 && start.y <= top + root.offsetHeight + 12
+    })
+    const outer = after.column !== before.column + 1 && !clear
     const words = connection.labels.flatMap(wrap)
-    const turn = (fromRight + toLeft) / 2
+    const turn = clear ? toLeft - 20 : (fromRight + toLeft) / 2
     const under = floor + words.length * 7.5
     const points = outer ? [start, { x: fromRight + 20, y: start.y },
       { x: fromRight + 20, y: under }, { x: toLeft - 20, y: under },
@@ -88,7 +99,7 @@ export function drawConnections(
     if (outer) floor = under + words.length * 7.5 + 24
     const description = `${stage.tasks[connection.from].name} output → ${stage.tasks[connection.to].name} input: ${connection.labels.join("; ")}`
     const group = svg("g", { class: "basic-connection", "data-from": connection.from, "data-to": connection.to,
-      "data-return": String(returning), role: "button", tabindex: "0", "aria-label": description })
+      "data-return": String(returning), "data-route": outer ? "under" : "across", role: "button", tabindex: "0", "aria-label": description })
     const title = svg("title", {})
     title.textContent = `${description}. Follow this connection to the receiving task. The first matching condition wins.`
     group.append(title,
@@ -97,9 +108,12 @@ export function drawConnections(
       svg("path", { class: "basic-tip", d: `M ${end.x - 8} ${end.y - 4} L ${end.x} ${end.y} L ${end.x - 8} ${end.y + 4} Z` }),
       svg("circle", { class: "basic-socket", cx: String(start.x), cy: String(start.y), r: "3.5" }),
     )
-    const label = svg("text", { class: "basic-word", x: String(turn), y: String(outer ? under : (start.y + end.y) / 2) })
+    // Beside a straight run, the words sit on it halfway along the row.
+    const wordX = clear ? (fromRight + toLeft - 20) / 2 : turn
+    const wordY = outer ? under : clear ? start.y : (start.y + end.y) / 2
+    const label = svg("text", { class: "basic-word", x: String(wordX), y: String(wordY) })
     words.forEach((word, index) => {
-      const line = svg("tspan", { x: String(turn), dy: String(index ? 15 : -(words.length - 1) * 7.5) })
+      const line = svg("tspan", { x: String(wordX), dy: String(index ? 15 : -(words.length - 1) * 7.5) })
       line.textContent = word
       label.append(line)
     })

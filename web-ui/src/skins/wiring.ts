@@ -22,7 +22,8 @@ export interface Placed {
  * rather than its nearest -- otherwise a long arrow that skips a task would
  * point backwards on screen.
  *
- * Tasks nothing points at start on the left. A board where *nothing* hands to
+ * Tasks joined by arrows are a flow, and each flow is a band at the top, read
+ * along one line; tasks nothing joins stand in a grid under them. A board where *nothing* hands to
  * anything is laid out as a grid instead of a column: the axis only carries
  * depth when something points somewhere, so with nothing pointing it is free,
  * and a single column of independent work reads as a failure to lay anything
@@ -92,12 +93,65 @@ export function place(tasks: string[], handoffs: Record<string, string[]>, acros
     depth += 1
   }
 
-  const filled = new Map<number, number>()
+  // **Each flow is a band of its own, at the top.** Tasks joined by any arrow
+  // are one flow, read along one line: a task sits level with the first task
+  // that starts it, or as near under it as its column allows. Stacked one
+  // column deep instead, a flow declared after the independent tasks started
+  // at the bottom of the board, and its arrows climbed the whole height to
+  // reach the tasks it starts at the top of the next column.
+  const senders = new Map<string, string[]>(tasks.map((task) => [task, []]))
+  for (const task of tasks) for (const to of targets(task)) senders.get(to)!.push(task)
+  const joined = (task: string) => targets(task).length > 0 || senders.get(task)!.length > 0
+
+  // Flows by who is joined to whom, either way along an arrow, in the order
+  // their first task was declared.
+  const flowOf = new Map<string, number>()
+  const flows: string[][] = []
+  for (const task of tasks) {
+    if (!joined(task) || flowOf.has(task)) continue
+    const members: string[] = []
+    const reach = [task]
+    flowOf.set(task, flows.length)
+    while (reach.length) {
+      const at = reach.pop()!
+      members.push(at)
+      for (const next of [...targets(at), ...senders.get(at)!]) {
+        if (flowOf.has(next)) continue
+        flowOf.set(next, flows.length)
+        reach.push(next)
+      }
+    }
+    flows.push(members)
+  }
+
+  const row = new Map<string, number>()
+  let top = 0
+  for (const members of flows) {
+    const taken = new Set<string>()
+    let bottom = top
+    // Left to right, so a sender has its row before anything it starts asks.
+    const order = [...members].sort((a, b) => column.get(a)! - column.get(b)! || rank.get(a)! - rank.get(b)!)
+    for (const task of order) {
+      const levels = senders
+        .get(task)!
+        .filter((from) => row.has(from) && column.get(from)! < column.get(task)!)
+        .map((from) => row.get(from)!)
+      let at = levels.length ? Math.min(...levels) : top
+      while (taken.has(`${column.get(task)}:${at}`)) at += 1
+      taken.add(`${column.get(task)}:${at}`)
+      row.set(task, at)
+      bottom = Math.max(bottom, at + 1)
+    }
+    top = bottom
+  }
+
+  // What nothing joins stands in a grid under every flow.
+  const wide = Math.max(1, across)
+  let alone = 0
   return tasks.map((task) => {
-    const at = column.get(task)!
-    const row = filled.get(at) ?? 0
-    filled.set(at, row + 1)
-    return { task, column: at, row }
+    if (flowOf.has(task)) return { task, column: column.get(task)!, row: row.get(task)! }
+    const index = alone++
+    return { task, column: index % wide, row: top + Math.floor(index / wide) }
   })
 }
 
