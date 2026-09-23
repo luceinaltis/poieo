@@ -76,3 +76,53 @@ test("the chat keeps what the model said between its steps; the drawer folds it 
     "node_tool_call",
   ])
 })
+
+const asking = (extra: Record<string, unknown> = {}): PoieoEvent => ({
+  run_id: "r1",
+  type: "node_tool_asking",
+  at: "2026-09-23T02:00:02Z",
+  node_id: "work",
+  data: { turn: 1, call_id: "c1", name: "write_file", kind: "edits", purpose: "Save the fix", ...extra },
+})
+const answered = (allowed: boolean): PoieoEvent => ({
+  run_id: "r1",
+  type: "node_tool_answered",
+  at: "2026-09-23T02:00:05Z",
+  node_id: "work",
+  data: { turn: 1, call_id: "c1", allowed },
+})
+
+test("a call waiting on a person is offered to them, and their answer goes back by its id", async () => {
+  const answers: [string, boolean][] = []
+  act(() =>
+    root.render(<Timeline events={[asking()]} following onAnswer={(call, allow) => answers.push([call, allow])} />),
+  )
+
+  const entry = host.querySelector('[data-kind="asking"]')!
+  expect(entry.textContent).toContain("Save the fix")
+  expect(entry.textContent).toContain("edit")
+  await act(async () => entry.querySelector<HTMLButtonElement>('[data-do="allow"]')!.click())
+  await act(async () => entry.querySelector<HTMLButtonElement>('[data-do="deny"]')!.click())
+  expect(answers).toEqual([
+    ["c1", true],
+    ["c1", false],
+  ])
+})
+
+test("an answered question says what was answered, and offers nothing", () => {
+  act(() => root.render(<Timeline events={[asking(), answered(false)]} following onAnswer={() => {}} />))
+
+  const entry = host.querySelector('[data-kind="asking"]')!
+  expect(entry.textContent).toContain("not allowed")
+  expect(entry.querySelector("button")).toBeNull()
+  // The answer is folded into the question, not a line of its own.
+  expect(host.querySelectorAll(".drawer-entry")).toHaveLength(1)
+})
+
+test("where nobody can answer, a waiting question says it waits", () => {
+  act(() => root.render(<Timeline events={[asking()]} following={false} />))
+
+  const entry = host.querySelector('[data-kind="asking"]')!
+  expect(entry.textContent).toContain("waiting for a person")
+  expect(entry.querySelector("button")).toBeNull()
+})

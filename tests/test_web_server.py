@@ -254,6 +254,7 @@ def test_flows_lists_runner_state(tmp_path):
                 ],
             },
             "chat": False,
+            "permission": None,
         }
     ]
 

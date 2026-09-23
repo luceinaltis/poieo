@@ -130,6 +130,8 @@ export interface TaskState {
   applyChecks: string[]
   /** The task the chat speaks to: kept here for the chat, never drawn on the board. */
   chat: boolean
+  /** Which of the chat's settings its card holds, or null for any other task. */
+  permission: string | null
 }
 
 /**
@@ -216,6 +218,7 @@ function createEmptyTaskState(): TaskState {
     applies: "review",
     applyChecks: [],
     chat: false,
+    permission: null,
     then: [],
     shape: { entry: "", nodes: [] },
     trigger: "",
@@ -287,6 +290,7 @@ export function initialStage(rows: TaskRow[]): StageState {
       applies: row.apply?.mode ?? "review",
       applyChecks: row.apply?.checks ?? [],
       chat: row.chat ?? false,
+      permission: row.permission ?? null,
       status: drawnStatus(row),
       held: row.holding,
       heldBecause: row.held_because ?? "",

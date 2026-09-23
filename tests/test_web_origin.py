@@ -85,6 +85,7 @@ WRITES = [
     "/api/projects/board/tasks/draft",
     # Lets one tool call a step asked about go ahead.
     "/api/tasks/board/f/approve",
+    "/api/tasks/board/f/permission",
     "/api/projects/board/tasks/f",
 ]
 

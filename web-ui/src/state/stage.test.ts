@@ -655,3 +655,8 @@ test("the chat's task is off the board, and found by its own name", async () => 
   expect(chatTaskOf(stage, "board")?.name).toBe("chat")
   expect(chatTaskOf(stage, "elsewhere")).toBeNull()
 })
+
+test("the chat's task carries which setting its card holds", () => {
+  const stage = initialStage([{ ...TASK_ROWS[0], name: "chat", chat: true, permission: "edits" }])
+  expect(Object.values(stage.tasks)[0].permission).toBe("edits")
+})

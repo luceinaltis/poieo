@@ -15,12 +15,16 @@ const createChatCard = vi.hoisted(() => vi.fn<typeof import("../api").createChat
 const runNow = vi.hoisted(() => vi.fn<typeof import("../api").runNow>())
 const leaveDirection = vi.hoisted(() => vi.fn<typeof import("../api").leaveDirection>())
 const fetchRunEvents = vi.hoisted(() => vi.fn<typeof import("../api").fetchRunEvents>())
+const setPermission = vi.hoisted(() => vi.fn<typeof import("../api").setPermission>())
+const approve = vi.hoisted(() => vi.fn<typeof import("../api").approve>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   createChatCard,
   runNow,
   leaveDirection,
   fetchRunEvents,
+  setPermission,
+  approve,
 }))
 
 import { Chat } from "./Chat"
@@ -42,6 +46,10 @@ beforeEach(() => {
   leaveDirection.mockResolvedValue({ ok: true, status: "delivered" })
   fetchRunEvents.mockReset()
   fetchRunEvents.mockResolvedValue([])
+  setPermission.mockReset()
+  setPermission.mockResolvedValue({ ok: true, permission: "ask" })
+  approve.mockReset()
+  approve.mockResolvedValue({ ok: true, status: "answered" })
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -458,6 +466,59 @@ test("nothing is attached to words for a run already going", async () => {
   show({ task: chatTask({ status: "running", activity, activityRunId: "r9" }), initial: "t-1" })
 
   expect(attachButton().disabled).toBe(true)
+})
+
+// -- what the chat may do -----------------------------------------------------------
+
+const permission = () => host.querySelector<HTMLSelectElement>('select[aria-label="Permission"]')
+
+test("what the chat may do is chosen in the chat, and written to its card", async () => {
+  show({ task: chatTask({ permission: "read" }), initial: "t-1" })
+  expect(permission()!.value).toBe("read")
+  expect([...permission()!.options].map((option) => option.textContent)).toEqual([
+    "read only",
+    "ask each time",
+    "accept edits",
+    "allow all",
+  ])
+
+  await pick(permission()!, "ask")
+
+  expect(setPermission).toHaveBeenCalledWith("board", "chat", "ask")
+  expect(permission()!.value).toBe("ask")
+})
+
+test("allowing everything says plainly that commands run unasked", async () => {
+  show({ task: chatTask({ permission: "all" }), initial: "t-1" })
+
+  expect(host.querySelector(".chat-caution")?.textContent).toContain("without asking")
+})
+
+test("a setting that could not be saved says why and goes back", async () => {
+  setPermission.mockResolvedValue({ ok: false, error: "the setting could not be saved" })
+  show({ task: chatTask({ permission: "read" }), initial: "t-1" })
+
+  await pick(permission()!, "all")
+
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("could not be saved")
+  expect(permission()!.value).toBe("read")
+})
+
+test("before the chat has a card there is nothing to set", () => {
+  show()
+  expect(permission()).toBeNull()
+})
+
+test("a call the answer is waiting on is allowed from the chat", async () => {
+  const activity = [
+    frame("run_started", { task: "chat", project: "board", input: { message: "fix it", thread: "t-1" } }),
+    frame("node_tool_asking", { turn: 1, call_id: "c7", name: "write_file", kind: "edits", purpose: "Save the fix" }),
+  ]
+  show({ task: chatTask({ status: "running", activity, activityRunId: "r9", permission: "ask" }), initial: "t-1" })
+
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="allow"]')!.click())
+
+  expect(approve).toHaveBeenCalledWith("board", "chat", "c7", true)
 })
 
 // -- speaking to another running task ------------------------------------------

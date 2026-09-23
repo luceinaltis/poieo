@@ -620,6 +620,23 @@ export function draftTask(
   return post(`/api/projects/${encodeURIComponent(project)}/tasks/draft`, { messages })
 }
 
+/** What the chat may do: one of the four settings its card can hold. */
+export type ChatPermission = "read" | "ask" | "edits" | "all"
+
+export interface PermissionAnswer extends Answer {
+  permission?: string
+}
+
+/** Write one of the chat's settings into its card; the next run reads it. */
+export function setPermission(project: string, task: string, mode: ChatPermission): Promise<PermissionAnswer> {
+  return post(taskUrl(project, task, "permission"), { mode })
+}
+
+/** A person's answer to a tool call the run in flight is waiting on. */
+export function approve(project: string, task: string, call: string, allow: boolean): Promise<ControlAnswer> {
+  return post(taskUrl(project, task, "approve"), { call, allow })
+}
+
 /** What the chat's task is told to be, once, when the chat first makes it. */
 export const CHAT_PROMPT =
   "Help the person with this project: answer what they ask, and look at the project when the answer is there."

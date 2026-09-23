@@ -62,6 +62,26 @@ def system_block(task: CardSpec, roster: list[str] | None = None) -> str:
     )
 
 
+# What the chat may do, as the four settings its picker offers, each one a
+# card's `tools` and `ask_before`: look only; edit and run commands, asking
+# before each; edit without asking, and ask before a command; ask about nothing.
+CHAT_PERMISSIONS: dict[str, tuple[list[str], list[str]]] = {
+    "read": (["read"], []),
+    "ask": (["files", "shell"], ["edits", "commands"]),
+    "edits": (["files", "shell"], ["commands"]),
+    "all": (["files", "shell"], []),
+}
+
+
+def chat_permission(task: CardSpec) -> str | None:
+    """Which of the chat's settings a card holds; `custom` for a hand-written
+    mix, None for a card that is not the chat's."""
+    if not task.chat:
+        return None
+    held = (list(task.tools if task.tools is not None else DEFAULT_TOOLSETS), list(task.ask_before))
+    return next((mode for mode, setting in CHAT_PERMISSIONS.items() if setting == held), "custom")
+
+
 def chat_block(task: CardSpec) -> str:
     """What a chat card's run is told: who it is talking with, the card's own
     words, and the conversation so far. The message itself is the prompt."""
