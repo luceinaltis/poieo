@@ -119,7 +119,6 @@ vi.mock("./api", () => ({
     ok: true,
     results: [],
   })),
-  chat: vi.fn<typeof import("./api").chat>(async () => ({ ok: true, reply: "Hello.", model: "fake/m1" })),
   askMemory: vi.fn<typeof import("./api").askMemory>(async () => ({
     ok: true,
     citations: [],
