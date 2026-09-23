@@ -99,6 +99,11 @@ export interface RunSummary {
   change?: Change
   /** What became of that change under the task's permission, when it was checked. */
   application?: Application
+  /** What a person said to start this run, and the conversation it belongs to. */
+  message?: string
+  thread?: string
+  /** The names of what was attached to that message, kept with the run. */
+  attachments?: string[]
 }
 
 /**

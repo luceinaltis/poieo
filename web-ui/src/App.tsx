@@ -22,13 +22,15 @@ import type { SkinHost } from "./shell/skinHost"
 import { recall, remember } from "./shell/remember"
 import { Models } from "./models/Models"
 import { MakeTask } from "./make/MakeTask"
+import { runNow } from "./api"
+import type { Answer } from "./api"
 import { Chat } from "./chat/Chat"
-import type { Turn } from "./chat/Chat"
+import type { Queued } from "./chat/Chat"
 import { Memory } from "./memory/Memory"
 import { createStageStore } from "./shell/stageStore"
 import type { StageStore } from "./shell/stageStore"
 import { DEFAULT_SKIN_ID, SKINS, skinById } from "./skins/registry"
-import { keyOfTask, onlyProject } from "./state/stage"
+import { chatTaskOf, keyOfTask, onlyProject } from "./state/stage"
 import lockupUrl from "../../site/img/lockup.svg"
 import "./app.css"
 
@@ -83,15 +85,27 @@ export default function App({ store }: { store?: StageStore }) {
   // daemon looks at the folder the moment it is written and says "ask again";
   // when the listing then carries it, it opens where the form was.
   const [awaitedTaskKey, setAwaitedTaskKey] = useState<string | null>(null)
-  // The chat's thread, held here rather than in its panel so a task picked off
-  // the board -- which takes the one margin -- does not lose it, and tagged
-  // with the project it was said in: a reply can land after the reader has
-  // switched project, and it must not become the new project's thread. Not
-  // remembered across reloads: the daemon keeps none of it either.
-  const [chatThread, setChatThread] = useState<{ project: string | null; turns: Turn[] }>({
-    project: null,
-    turns: [],
-  })
+  // Which conversation the chat has open, held here rather than in its panel
+  // so a task picked off the board -- which takes the one margin -- does not
+  // close it. The conversation itself is the chat task's runs, which the
+  // daemon keeps; this is only which of them is on screen.
+  const [chatThread, setChatThread] = useState<string | null>(null)
+  // A first message said before the project's chat card existed. Held here
+  // for the same reason, and sent from here once the daemon has the card: the
+  // panel may be closed by then, and the message must not go with it.
+  const [chatQueued, setChatQueued] = useState<Queued | null>(null)
+  // And what the daemon said if it refused that message, for the panel to
+  // show whenever it is next open: the reader may have closed it meanwhile.
+  const [chatLate, setChatLate] = useState<Answer | null>(null)
+  useEffect(() => {
+    if (!chatQueued) return
+    const task = chatTaskOf(stage, chatQueued.project)
+    if (!task) return
+    setChatQueued(null)
+    void runNow(chatQueued.project, task.name, { message: chatQueued.message, thread: chatQueued.thread }).then(
+      (answer) => setChatLate(answer.ok ? null : answer),
+    )
+  }, [chatQueued, stage])
   const panelOpenerRef = useRef<HTMLElement | null>(null)
   const panelWasOpenRef = useRef(false)
   const panelIsOpen = activePanel.kind !== "closed"
@@ -206,8 +220,8 @@ export default function App({ store }: { store?: StageStore }) {
     setActivePanel((current) => (current.kind === "models" ? current : CLOSED_PANEL))
     // As does an entry in focus: a slug names something in one memory.
     setMemoryFocus(null)
-    // And a conversation: it was had with that project's model.
-    setChatThread({ project: name, turns: [] })
+    // And a conversation: it was had with that project.
+    setChatThread(null)
   }, [])
 
   // From the picker: a rendering of the board, so it is also what the board
@@ -293,18 +307,6 @@ export default function App({ store }: { store?: StageStore }) {
     },
     [rememberPanelOpener],
   )
-  // From the panel, which may be gone by the time a reply lands: kept only
-  // while the thread on screen is still the one it was said in, so a reply
-  // that arrives after a switch of project is dropped, and one that arrives
-  // with the panel merely closed still reaches the thread. `null` is the
-  // thread nobody has begun, which the first reply may claim.
-  const keepChatTurns = useCallback((forProject: string, turns: Turn[]) => {
-    setChatThread((current) =>
-      current.project === null || current.project === forProject
-        ? { project: forProject, turns }
-        : current,
-    )
-  }, [])
   const openOnceMade = useCallback(
     (task: string) => {
       if (project) setAwaitedTaskKey(keyOfTask(project.name, task))
@@ -549,11 +551,16 @@ export default function App({ store }: { store?: StageStore }) {
         <Chat
           key={project.name}
           project={project.name}
-          turns={chatThread.project === project.name ? chatThread.turns : []}
-          onTurns={(turns) => keepChatTurns(project.name, turns)}
+          chatTask={chatTaskOf(stage, project.name)}
+          thread={chatThread}
+          onThread={setChatThread}
+          queued={chatQueued}
+          onQueue={setChatQueued}
+          refusedLater={chatLate}
+          onRefusalSeen={() => setChatLate(null)}
           onClose={closePanel}
-          // The running tasks, with their live timelines: what the chat may
-          // speak to instead of the model.
+          // The other running tasks, with their live timelines: what the
+          // chat may speak to instead of the conversation.
           steerable={Object.values(projectStage.tasks)
             .filter((task) => task.status === "running")
             .map((task) => ({ name: task.name, title: task.title, activity: task.activity }))}

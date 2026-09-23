@@ -116,9 +116,11 @@ From the board a user can:
 - inspect, accept or discard a run's change;
 - inspect available models, declare an answering endpoint and choose which model
   serves a role;
-- talk with the project's model in a conversation the board keeps only while
-  the page is open; it starts no run and changes no file -- or, while a task
-  runs, speak to that run from the same panel and watch it act.
+- talk with the project in conversations kept with it and there to return to:
+  a conversation is a task and each message one of its runs, so what the model
+  does while it answers is watched as any run is, and a change it makes is a
+  change like any other -- or, while a task runs, speak to that run from the
+  same panel and watch it act.
 
 Advanced task fields beyond a one-line schedule, and the wiring of steps inside a task, remain
 file-based: a task of several steps and conditions is drawn in the standalone

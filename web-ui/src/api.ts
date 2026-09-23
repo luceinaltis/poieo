@@ -30,10 +30,7 @@ export async function fetchTasks(): Promise<Listing> {
   // the listing rather than on each row, because the listing a reader can
   // recognise least -- the one with no tasks in it -- needs naming most.
   const body = await getJson<Listing>("/api/tasks")
-  // The task the chat speaks to is a conversation, not work: it is not
-  // drawn on the stage, counted, or picked as a place to hand work to.
-  const tasks = (body?.tasks ?? []).filter((task) => !task.chat)
-  return { projects: body?.projects ?? [], tasks }
+  return { projects: body?.projects ?? [], tasks: body?.tasks ?? [] }
 }
 
 const memoryUrl = (project: string, tail = "") =>
@@ -452,8 +449,14 @@ export function resume(project: string, task: string): Promise<ControlAnswer> {
   return post(taskUrl(project, task, "resume"))
 }
 
-export function runNow(project: string, task: string): Promise<ControlAnswer> {
-  return post(taskUrl(project, task, "run"))
+/** What a person says with a run-now: the words, and the conversation they continue. */
+export interface Spoken {
+  message: string
+  thread: string
+}
+
+export function runNow(project: string, task: string, spoken?: Spoken): Promise<ControlAnswer> {
+  return post(taskUrl(project, task, "run"), spoken)
 }
 
 /**
@@ -683,6 +686,23 @@ export async function chat(
   } catch {
     return { ok: false, error: "the daemon did not answer" }
   }
+}
+
+/** What the chat's task is told to be, once, when the chat first makes it. */
+export const CHAT_PROMPT =
+  "Help the person with this project: answer what they ask, and look at the project when the answer is there."
+
+/**
+ * The project's chat card, made the first time the chat is used. The daemon
+ * gives it the project's own folder and a hand that can only look; the chat's
+ * permission is widened from there.
+ */
+export function createChatCard(project: string): Promise<MadeTask> {
+  return post(`/api/projects/${encodeURIComponent(project)}/tasks`, {
+    name: "chat",
+    prompt: CHAT_PROMPT,
+    chat: true,
+  })
 }
 
 export function createTask(

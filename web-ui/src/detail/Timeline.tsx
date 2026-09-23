@@ -48,8 +48,17 @@ export function withoutThinking(events: PoieoEvent[]): PoieoEvent[] {
   )
 }
 
-/** Fold a tool preamble only when every call it promised has its own record. */
-export function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
+/**
+ * Fold a tool preamble only when every call it promised has its own record.
+ *
+ * `keepWords` keeps a preamble that said something: the chat reads what the
+ * model says between its steps as the thread of what it is doing, where the
+ * drawer lets each call's own purpose say it.
+ */
+export function visibleTimelineEvents(
+  events: PoieoEvent[],
+  { keepWords = false }: { keepWords?: boolean } = {},
+): PoieoEvent[] {
   const toolsByTurn = new Map<string, number>()
   for (const event of events) {
     if (event.type !== "node_tool_call") continue
@@ -62,7 +71,7 @@ export function visibleTimelineEvents(events: PoieoEvent[]): PoieoEvent[] {
       const key = turnKey(event)
       if (expected > 0) {
         const recorded = key ? (toolsByTurn.get(key) ?? 0) : 0
-        if (recorded >= expected) return []
+        if (recorded >= expected) return keepWords && String(event.data?.text ?? "") ? [event] : []
         return [
           {
             ...event,
@@ -107,6 +116,23 @@ export function groupTimeline(events: PoieoEvent[]): TimelineGroup[] {
   )
 }
 
+/**
+ * A picture the model looked at, small, from the file kept with its run. The
+ * call's purpose is its alt text: it says what the model was looking for.
+ */
+function Preview({ event }: { event: PoieoEvent }) {
+  const name = event.data?.preview
+  if (typeof name !== "string" || !name) return null
+  return (
+    <img
+      className="drawer-preview"
+      src={`/api/runs/${encodeURIComponent(event.run_id)}/files/${encodeURIComponent(name)}`}
+      alt={toolPurpose(event.data ?? {})}
+      loading="lazy"
+    />
+  )
+}
+
 /** The folded line, open for the newest group while the run is in flight. */
 export function ToolGroup({ events, open }: { events: PoieoEvent[]; open: boolean }) {
   const purposes = events.map((event) => toolPurpose(event.data ?? {}))
@@ -119,6 +145,9 @@ export function ToolGroup({ events, open }: { events: PoieoEvent[]; open: boolea
         <summary>
           <span className="drawer-tool-purpose">{`${events.length} tool calls${failed ? `, ${failed} failed` : ""}`}</span>
           <span className="drawer-tool-meta">{said}</span>
+          {events.map((event, index) => (
+            <Preview key={index} event={event} />
+          ))}
         </summary>
         <ol className="drawer-timeline drawer-timeline-folded">
           {events.map((event, index) => (
@@ -383,6 +412,7 @@ export function TimelineEntry({ event }: { event: PoieoEvent }) {
             <span className="drawer-tool-meta">
               {`${name || "tool"} · ${failed ? "failed" : "completed"}${slow}`}
             </span>
+            <Preview event={event} />
           </summary>
           <div className="drawer-tool-raw">
             <div className="drawer-tool-part">

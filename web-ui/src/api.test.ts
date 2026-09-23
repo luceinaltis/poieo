@@ -8,6 +8,7 @@ import {
   fetchRunMemory,
   fetchRuns,
   fetchRunSummary,
+  createChatCard,
   fetchTasks,
   keepMemory,
   openFeed,
@@ -98,10 +99,21 @@ test("fetchTasks keeps the whole listing, project and all", async () => {
   expect(await fetchTasks()).toEqual({ projects, tasks: [{ name: "triage" }] })
 })
 
-test("the task the chat speaks to is kept off the board's tasks", async () => {
-  const projects = [{ name: "night shift", root: "/home/k/chores" }]
-  stubFetch({ "/api/tasks": { body: { projects, tasks: [{ name: "triage" }, { name: "chat", chat: true }] } } })
-  expect(await fetchTasks()).toEqual({ projects, tasks: [{ name: "triage" }] })
+test("a run-now can carry what was said, and which conversation it continues", async () => {
+  const fetchStub = stubFetch({ "/api/tasks/night%20shift/chat/run": { body: { status: "starting" } } })
+  expect(await runNow("night shift", "chat", { message: "hi", thread: "t-1" })).toEqual({ ok: true, status: "starting" })
+  const [, init] = fetchStub.mock.calls[0]
+  expect(JSON.parse(String(init?.body))).toEqual({ message: "hi", thread: "t-1" })
+})
+
+test("the chat's card is made once, asking the daemon for its project's folder", async () => {
+  const fetchStub = stubFetch({ "/api/projects/night%20shift/tasks": { body: { task: "chat" } } })
+  expect(await createChatCard("night shift")).toEqual({ ok: true, task: "chat" })
+  const [, init] = fetchStub.mock.calls[0]
+  const body = JSON.parse(String(init?.body))
+  expect(body.chat).toBe(true)
+  expect(body.name).toBe("chat")
+  expect(body.folder).toBeUndefined()
 })
 
 test("a listing the daemon did not answer is an empty board, not a crash", async () => {

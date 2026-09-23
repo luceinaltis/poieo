@@ -1,10 +1,9 @@
 /**
- * Hearing the project's model, beside the board.
- *
- * The models panel says which models this project can reach; this panel is
- * where a person talks to one. The whole conversation goes with each message
- * because the page is the only thing holding it, the reply names the model
- * that answered, and nothing is written or run for it.
+ * The chat is a conversation with the project, and a conversation is a task:
+ * each message starts one of its runs, and the runs that share a thread are
+ * the conversation. So the thread is read from the task's own run records,
+ * what the model does while it answers is that run's live timeline, and a
+ * past conversation is there to go back to.
  */
 
 import { act, useState } from "react"
@@ -12,27 +11,37 @@ import { createRoot } from "react-dom/client"
 import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
-const chat = vi.hoisted(() => vi.fn<typeof import("../api").chat>())
+const createChatCard = vi.hoisted(() => vi.fn<typeof import("../api").createChatCard>())
+const runNow = vi.hoisted(() => vi.fn<typeof import("../api").runNow>())
 const leaveDirection = vi.hoisted(() => vi.fn<typeof import("../api").leaveDirection>())
+const fetchRunEvents = vi.hoisted(() => vi.fn<typeof import("../api").fetchRunEvents>())
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
-  chat,
+  createChatCard,
+  runNow,
   leaveDirection,
+  fetchRunEvents,
 }))
 
-import { Chat, TURNS_AT_MOST } from "./Chat"
-import type { Steerable, Turn } from "./Chat"
-import type { PoieoEvent } from "../types"
+import { Chat } from "./Chat"
+import type { Queued, Steerable } from "./Chat"
+import { initialStage } from "../state/stage"
+import type { TaskState } from "../state/stage"
+import type { PoieoEvent, RunSummary, TaskRow } from "../types"
 
 let host: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
-  chat.mockReset()
-  chat.mockResolvedValue({ ok: true, reply: "Four.", model: "fake/m1" })
+  createChatCard.mockReset()
+  createChatCard.mockResolvedValue({ ok: true, task: "chat" })
+  runNow.mockReset()
+  runNow.mockResolvedValue({ ok: true, status: "starting" })
   leaveDirection.mockReset()
   leaveDirection.mockResolvedValue({ ok: true, status: "delivered" })
+  fetchRunEvents.mockReset()
+  fetchRunEvents.mockResolvedValue([])
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -43,41 +52,100 @@ afterEach(() => {
   host.remove()
 })
 
-/** The shell's half: it holds the thread, and this stands in for it. */
+const ROW: TaskRow = {
+  name: "chat",
+  project: "board",
+  graph: "chat",
+  trigger: "manual",
+  status: "waiting",
+  holding: false,
+  held_because: null,
+  enabled: true,
+  stale: null,
+  current_run_id: null,
+  last_run: null,
+  pending: 0,
+  into: null,
+  asking: null,
+  then: [],
+  shape: { entry: "", nodes: [] },
+  chat: true,
+}
+
+function chatTask(changes: Partial<TaskState> = {}): TaskState {
+  return { ...Object.values(initialStage([ROW]).tasks)[0], ...changes }
+}
+
+const ran = (run_id: string, thread: string, message: string, said: string, extra: Partial<RunSummary> = {}): RunSummary => ({
+  run_id,
+  task: "chat",
+  project: "board",
+  graph: "chat",
+  status: "completed",
+  started_at: `2026-09-23T0${run_id.slice(1)}:00:00Z`,
+  finished_at: `2026-09-23T0${run_id.slice(1)}:00:05Z`,
+  steps: 1,
+  iteration: 1,
+  trigger: "run now",
+  usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 },
+  error: null,
+  said,
+  message,
+  thread,
+  ...extra,
+})
+
+const frame = (type: string, data: Record<string, unknown> = {}, run_id = "r9"): PoieoEvent => ({
+  run_id,
+  type,
+  at: "2026-09-23T02:00:01Z",
+  node_id: "work",
+  data,
+})
+
+/** The shell's half: it holds which conversation is open, and a first message waiting for its card. */
 function Shell({
-  initial = [],
-  onTurns = () => {},
-  onClose = () => {},
+  task = null,
   steerable = [],
+  initial = null,
+  onThread = () => {},
+  onQueue = () => {},
 }: {
-  initial?: Turn[]
-  onTurns?: (turns: Turn[]) => void
-  onClose?: () => void
+  task?: TaskState | null
   steerable?: Steerable[]
+  initial?: string | null
+  onThread?: (thread: string | null) => void
+  onQueue?: (queued: Queued | null) => void
 }) {
-  const [turns, setTurns] = useState<Turn[]>(initial)
+  const [thread, setThread] = useState<string | null>(initial)
+  const [queued, setQueued] = useState<Queued | null>(null)
   return (
     <Chat
       project="board"
-      turns={turns}
-      onTurns={(next) => {
-        setTurns(next)
-        onTurns(next)
+      chatTask={task}
+      thread={thread}
+      onThread={(next) => {
+        setThread(next)
+        onThread(next)
       }}
-      onClose={onClose}
+      queued={queued}
+      onQueue={(next) => {
+        setQueued(next)
+        onQueue(next)
+      }}
+      onClose={() => {}}
       steerable={steerable}
     />
   )
 }
 
 function show(props: Parameters<typeof Shell>[0] = {}) {
-  act(() => {
-    root.render(<Shell {...props} />)
-  })
+  act(() => root.render(<Shell {...props} />))
 }
 
 const box = () => host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!
 const sendButton = () => host.querySelector<HTMLButtonElement>('[data-do="chat-send"]')!
+const conversations = () => host.querySelector<HTMLSelectElement>('select[aria-label="Conversation"]')!
 
 function say(text: string) {
   act(() => {
@@ -93,318 +161,206 @@ async function send() {
   })
 }
 
-test("it is one of the panels on the right edge, not a third geometry", () => {
+async function pick(select: HTMLSelectElement, value: string) {
+  await act(async () => {
+    select.value = value
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
+
+test("it is one of the panels on the right edge, and says a conversation is kept", () => {
   show()
   expect(host.querySelector("aside")?.classList.contains("panel")).toBe(true)
-  expect(host.textContent).toContain("nothing is kept")
+  expect(host.textContent).toContain("kept")
 })
 
-test("a message goes with the conversation so far, and the reply is shown under it with its model named", async () => {
-  const kept = vi.fn()
-  show({ onTurns: kept })
-  say("what is 2 + 2?")
+test("the first message makes the project's chat, and leaves the message with the shell until it is there", async () => {
+  const queued: Queued[] = []
+  show({ onQueue: (one) => one && queued.push(one) })
+
+  say("what is in src?")
   await send()
 
-  expect(chat).toHaveBeenCalledWith("board", [{ role: "user", content: "what is 2 + 2?" }], expect.any(Function))
-  expect(host.textContent).toContain("what is 2 + 2?")
-  expect(host.textContent).toContain("Four.")
-  expect(host.textContent).toContain("answered by fake/m1")
-  // The box is empty again for the next message.
+  expect(createChatCard).toHaveBeenCalledWith("board")
+  expect(runNow).not.toHaveBeenCalled()
+  expect(queued).toEqual([{ project: "board", thread: expect.stringMatching(/^[A-Za-z0-9_-]{1,64}$/), message: "what is in src?" }])
+  // Shown as said while the daemon is still picking the card up.
+  expect(host.textContent).toContain("what is in src?")
   expect(box().value).toBe("")
-  expect(kept).toHaveBeenLastCalledWith([
-    { role: "user", content: "what is 2 + 2?" },
-    { role: "assistant", content: "Four.", model: "fake/m1" },
-  ])
-
-  chat.mockResolvedValue({ ok: true, reply: "Five.", model: "fake/m1" })
-  say("and one more?")
-  await send()
-  expect(chat).toHaveBeenLastCalledWith(
-    "board",
-    [
-      { role: "user", content: "what is 2 + 2?" },
-      { role: "assistant", content: "Four." },
-      { role: "user", content: "and one more?" },
-    ],
-    expect.any(Function),
-  )
-  expect(host.textContent).toContain("Five.")
 })
 
-test("a thread the shell hands over is drawn, so a visit elsewhere does not lose it", () => {
-  show({
-    initial: [
-      { role: "user", content: "earlier" },
-      { role: "assistant", content: "Yes, earlier.", model: "fake/m1" },
-    ],
+test("a message the task was held back from answering says why, rather than waiting forever", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  say("hello?")
+  await send()
+  expect(host.textContent).toContain("starting…")
+
+  await act(async () =>
+    root.render(<Shell task={chatTask({ held: true, heldBecause: "0.5 spent in the last 1d, and the limit is 0.5" })} initial="t-1" />),
+  )
+
+  expect(host.textContent).not.toContain("starting…")
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("the limit is 0.5")
+})
+
+test("a message in an open conversation continues it", async () => {
+  show({ task: chatTask({ runs: [ran("r1", "t-1", "what is here?", "a package")] }), initial: "t-1" })
+
+  say("and the tests?")
+  await send()
+
+  expect(runNow).toHaveBeenCalledWith("board", "chat", { message: "and the tests?", thread: "t-1" })
+  expect(box().value).toBe("")
+})
+
+test("a conversation reads back from its runs, oldest first, each side its own bubble", () => {
+  const runs = [ran("r3", "t-1", "and then?", "then this"), ran("r2", "t-2", "other", "elsewhere"), ran("r1", "t-1", "first?", "first answer")]
+  show({ task: chatTask({ runs }), initial: "t-1" })
+
+  const turns = [...host.querySelectorAll(".chat-turn")].map((turn) => [
+    turn.getAttribute("data-role"),
+    turn.querySelector(".chat-said")?.textContent,
+  ])
+  expect(turns).toEqual([
+    ["user", "first?"],
+    ["assistant", "first answer"],
+    ["user", "and then?"],
+    ["assistant", "then this"],
+  ])
+})
+
+test("past conversations are there to go back to, named by how they began", async () => {
+  const runs = [ran("r3", "t-1", "and then?", "then this"), ran("r2", "t-2", "a new question", "an answer"), ran("r1", "t-1", "first?", "first answer")]
+  show({ task: chatTask({ runs }) })
+
+  expect([...conversations().options].map((option) => option.textContent)).toEqual([
+    "new conversation",
+    "first?",
+    "a new question",
+  ])
+  await pick(conversations(), "t-2")
+  expect(host.textContent).toContain("an answer")
+  expect(host.textContent).not.toContain("first answer")
+
+  await pick(conversations(), "")
+  expect(host.querySelector(".chat-turn")).toBeNull()
+})
+
+test("while it answers, the reader watches what it says and does, never what it thinks", () => {
+  const activity = [
+    frame("run_started", { task: "chat", project: "board", input: { message: "look at src", thread: "t-1" } }),
+    frame("node_turn", { turn: 1, text: "Reading the package first.", thinking: "hmm", tool_call_count: 1 }),
+    frame("node_tool_call", { turn: 1, name: "list_dir", purpose: "See what src holds", result: "a.py", error: false }),
+  ]
+  show({ task: chatTask({ status: "running", activity, activityRunId: "r9" }), initial: "t-1" })
+
+  expect(host.querySelector('.chat-turn[data-role="user"] .chat-said')?.textContent).toBe("look at src")
+  expect(host.textContent).toContain("Reading the package first.")
+  expect(host.textContent).toContain("See what src holds")
+  expect(host.textContent).not.toContain("hmm")
+  expect(host.querySelector('[role="status"]')?.textContent).toContain("working")
+})
+
+test("a message while it answers is heard at its next turn", async () => {
+  const activity = [frame("run_started", { task: "chat", project: "board", input: { message: "go", thread: "t-1" } })]
+  show({ task: chatTask({ status: "running", activity, activityRunId: "r9" }), initial: "t-1" })
+
+  say("skip the tests")
+  await send()
+
+  expect(leaveDirection).toHaveBeenCalledWith("board", "chat", "skip the tests")
+  expect(runNow).not.toHaveBeenCalled()
+})
+
+test("what a past answer did is opened on request, from its run's record", async () => {
+  fetchRunEvents.mockResolvedValue([
+    frame("node_tool_call", { turn: 1, name: "read_file", purpose: "Read the readme", result: "", error: false }, "r1"),
+  ])
+  show({ task: chatTask({ runs: [ran("r1", "t-1", "what is this?", "a tool")] }), initial: "t-1" })
+
+  const work = host.querySelector<HTMLDetailsElement>("details.chat-work")!
+  await act(async () => {
+    work.open = true
+    work.dispatchEvent(new Event("toggle"))
   })
 
-  expect(host.textContent).toContain("earlier")
-  expect(host.textContent).toContain("Yes, earlier.")
-  expect(host.textContent).toContain("answered by fake/m1")
+  expect(fetchRunEvents).toHaveBeenCalledWith("r1")
+  expect(work.textContent).toContain("Read the readme")
+})
+
+test("an answer that came back empty, or a run that failed, says so", () => {
+  const runs = [
+    ran("r2", "t-1", "again", "", { status: "failed", error: "the model did not answer" }),
+    ran("r1", "t-1", "hello", ""),
+  ]
+  show({ task: chatTask({ runs }), initial: "t-1" })
+
+  expect(host.textContent).toContain("the model said nothing")
+  expect(host.textContent).toContain("the model did not answer")
 })
 
 test("a refusal stays on screen and the message stays in the box", async () => {
-  chat.mockResolvedValue({ ok: false, error: "the model did not answer" })
-  show()
+  runNow.mockResolvedValue({ ok: false, error: "a run is in flight" })
+  show({ task: chatTask(), initial: "t-1" })
+
   say("hello?")
   await send()
 
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain("the model did not answer")
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("in flight")
   expect(box().value).toBe("hello?")
-  // Nothing was said in reply, so the next message is still the first turn.
-  chat.mockResolvedValue({ ok: true, reply: "Hello.", model: "fake/m1" })
+})
+
+test("a chat card that cannot be made says why, and keeps the message", async () => {
+  createChatCard.mockResolvedValue({ ok: false, error: "this project already has a task called 'chat'" })
+  show()
+
+  say("hello?")
   await send()
-  expect(chat).toHaveBeenLastCalledWith("board", [{ role: "user", content: "hello?" }], expect.any(Function))
-  expect(host.querySelector('[role="alert"]')).toBeNull()
+
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("already has a task")
+  expect(box().value).toBe("hello?")
 })
 
 test("nothing is sent while the box is blank, and Enter sends what is there", async () => {
-  show()
-  expect(sendButton().disabled).toBe(true)
-  say("   ")
+  show({ task: chatTask(), initial: "t-1" })
   expect(sendButton().disabled).toBe(true)
 
-  say("hello?")
-  expect(sendButton().disabled).toBe(false)
+  say("hi")
   await act(async () => {
     box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
   })
-  expect(chat).toHaveBeenCalledTimes(1)
-
-  // Shift+Enter is a new line, not a send; so is the Enter that commits an
-  // input method's composition.
-  say("more")
-  await act(async () => {
-    box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }))
-  })
-  await act(async () => {
-    box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }))
-  })
-  expect(chat).toHaveBeenCalledTimes(1)
+  expect(runNow).toHaveBeenCalledWith("board", "chat", { message: "hi", thread: "t-1" })
 })
 
-test("a new conversation empties the thread, and the shell is told", async () => {
-  const kept = vi.fn()
-  show({ onTurns: kept })
-  say("hello?")
-  await send()
-  expect(host.textContent).toContain("Four.")
-
-  await act(async () => host.querySelector<HTMLButtonElement>('[data-do="chat-new"]')!.click())
-
-  expect(host.textContent).not.toContain("Four.")
-  expect(host.querySelector('[data-do="chat-new"]')).toBeNull()
-  expect(kept).toHaveBeenLastCalledWith([])
-})
-
-test("at its longest a conversation asks for a new one and sends nothing more", () => {
-  const long: Turn[] = Array.from({ length: TURNS_AT_MOST }, (_, i) => ({
-    role: i % 2 ? "assistant" : "user",
-    content: `turn ${i}`,
-  }))
-  show({ initial: long })
-
-  expect(host.textContent).toContain("Start a new one")
-  expect(box().disabled).toBe(true)
-  expect(sendButton().disabled).toBe(true)
-})
-
-test("closing is the panel's own button", () => {
-  const close = vi.fn()
-  show({ onClose: close })
-  act(() => host.querySelector<HTMLButtonElement>(".chat-close")!.click())
-  expect(close).toHaveBeenCalled()
-})
-
-test("a reply that came back empty or cut short says so rather than showing a blank", async () => {
-  chat.mockResolvedValue({ ok: true, reply: "", model: "fake/m1", cut_short: true })
-  show()
-  say("think hard about this")
-  await send()
-
-  expect(host.textContent).toContain("the model said nothing")
-  expect(host.textContent).toContain("cut short at the model's token limit")
-
-  // A whole answer carries no such note.
-  chat.mockResolvedValue({ ok: true, reply: "Done thinking.", model: "fake/m1", cut_short: false })
-  say("and now?")
-  await send()
-  expect(host.querySelectorAll(".chat-cut")).toHaveLength(1)
-  expect(host.textContent).toContain("Done thinking.")
-})
-
-test("the reply is read as it is written, and the model's thinking is never shown", async () => {
-  let release!: () => void
-  const next = () => new Promise<void>((resolve) => (release = resolve))
-  chat.mockImplementation(async (_project, _messages, onPiece) => {
-    onPiece?.({ thinking: "Let me see." })
-    await next()
-    onPiece?.({ text: "Fo" })
-    await next()
-    onPiece?.({ text: "ur." })
-    await next()
-    return { ok: true, reply: "Four.", thinking: "Let me see.", model: "fake/m1" }
-  })
-  show()
-  say("what is 2 + 2?")
-  await send()
-
-  // Thinking, and nothing else yet: the reader hears that it is thinking,
-  // not what it thinks.
-  const arriving = () => host.querySelector<HTMLElement>(".chat-arriving")!
-  expect(arriving()).not.toBeNull()
-  expect(arriving().querySelector(".chat-thinking")!.textContent).toBe("thinking…")
-  expect(arriving().textContent).not.toContain("Let me see.")
-  expect(arriving().querySelector(".chat-said")).toBeNull()
-
-  // The first words replace the line and start the bubble.
-  await act(async () => release())
-  expect(arriving().querySelector(".chat-thinking")).toBeNull()
-  expect(arriving().querySelector(".chat-said")!.textContent).toBe("Fo")
-  await act(async () => release())
-  expect(arriving().querySelector(".chat-said")!.textContent).toBe("Four.")
-
-  // Whole: the turn lands as its words alone.
-  await act(async () => release())
-  expect(host.querySelector(".chat-arriving")).toBeNull()
-  const landed = host.querySelectorAll(".chat-turn")[1]
-  expect(landed.querySelector(".chat-said")!.textContent).toBe("Four.")
-  expect(landed.querySelector("details")).toBeNull()
-  expect(landed.textContent).not.toContain("Let me see.")
-})
-
-test("each side has its own bubble", async () => {
-  show()
-  say("hello?")
-  await send()
-
-  const [mine, theirs] = host.querySelectorAll(".chat-turn")
-  expect(mine.getAttribute("data-role")).toBe("user")
-  expect(theirs.getAttribute("data-role")).toBe("assistant")
-})
+// -- speaking to another running task ------------------------------------------
 
 const running = (activity: PoieoEvent[] = []): Steerable => ({ name: "chores", title: "chores", activity })
-const frame = (type: string, data: Record<string, unknown> = {}): PoieoEvent => ({
-  run_id: "r1",
-  type,
-  at: "2026-08-26T02:00:01Z",
-  node_id: "work",
-  data,
-})
-
-test("nothing runs, nothing to pick: the box speaks to the model", () => {
-  show()
-  expect(host.querySelector(".chat-target")).toBeNull()
-})
 
 test("a running task can be spoken to: its timeline is the thread, and the box sends direction", async () => {
   const activity = [
     frame("run_started", { task: "chores", project: "board" }),
-    frame("node_turn", { turn: 1, text: "", tool_call_count: 1 }),
-    frame("node_tool_call", { turn: 1, name: "read_file", purpose: "Read the notes", arguments: { path: "notes.md" }, result: "", error: false }),
+    frame("node_tool_call", { turn: 1, name: "read_file", purpose: "Read the notes", result: "", error: false }),
   ]
-  show({ steerable: [running(activity)] })
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  expect([...picker.options].map((option) => option.textContent)).toEqual(["this project's model", "chores · running"])
+  show({ task: chatTask(), steerable: [running(activity)] })
+  const target = host.querySelector<HTMLSelectElement>(".chat-target")!
+  expect([...target.options].map((option) => option.textContent)).toEqual(["this conversation", "chores · running"])
 
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  expect(host.textContent).toContain("its run, live")
+  await pick(target, "chores")
   expect(host.textContent).toContain("Read the notes")
-  expect(host.querySelector(".chat-turns")).toBeNull()
+  expect(conversations()).toBeNull()
 
   say("Skip the drafts folder.")
   await send()
   expect(leaveDirection).toHaveBeenCalledWith("board", "chores", "Skip the drafts folder.")
-  expect(chat).not.toHaveBeenCalled()
-  expect(box().value).toBe("")
+  expect(runNow).not.toHaveBeenCalled()
 })
 
-test("a run's timeline in the chat shows what the model said and did, not what it thought", async () => {
-  const activity = [
-    frame("run_started", { task: "chores", project: "board" }),
-    frame("node_turn", { turn: 1, text: "Reading the notes first.", thinking: "Hmm, where are they?" }),
-    frame("node_turn", { turn: 2, text: "", thinking: "Only thinking this turn." }),
-  ]
-  show({ steerable: [running(activity)] })
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  expect(host.textContent).toContain("Reading the notes first.")
-  expect(host.textContent).not.toContain("Hmm, where are they?")
-  expect(host.textContent).not.toContain("Only thinking this turn.")
-  expect(host.querySelector(".drawer-thinking")).toBeNull()
-})
+test("when the run it was speaking to ends, the box goes back to the conversation", async () => {
+  act(() => root.render(<Shell task={chatTask()} steerable={[running()]} />))
+  await pick(host.querySelector<HTMLSelectElement>(".chat-target")!, "chores")
 
-test("a run that has only thought so far reads as nothing yet, not a blank", async () => {
-  const activity = [
-    frame("run_started", { task: "chores", project: "board" }),
-    frame("node_turn", { turn: 1, text: "", thinking: "Where to begin?" }),
-  ]
-  show({ steerable: [running(activity)] })
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  expect(host.textContent).toContain("Nothing yet from this run.")
-})
-
-test("a refused direction stays on screen with the words still in the box", async () => {
-  leaveDirection.mockResolvedValue({ ok: false, error: "this task has no card to keep direction with" })
-  show({ steerable: [running()] })
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  say("Stop.")
-  await send()
-  expect(host.querySelector('[role="alert"]')?.textContent).toContain("no card")
-  expect(box().value).toBe("Stop.")
-})
-
-test("when the run it was speaking to ends, the box goes back to the model", async () => {
-  act(() => root.render(<Shell steerable={[running()]} />))
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  expect(host.textContent).toContain("its run, live")
-
-  act(() => root.render(<Shell steerable={[]} />))
+  act(() => root.render(<Shell task={chatTask()} steerable={[]} />))
   await act(async () => {})
   expect(host.querySelector(".chat-target")).toBeNull()
-  expect(host.textContent).not.toContain("its run, live")
-  expect(host.textContent).toContain("nothing is kept")
-})
-
-test("a direction still on its way when its run ends is not drawn as a bubble in the model thread", async () => {
-  let land: (answer: { ok: true; status: "delivered" | "saved" }) => void = () => {}
-  leaveDirection.mockReturnValue(new Promise((resolve) => { land = resolve }))
-  act(() => root.render(<Shell steerable={[running()]} />))
-  const picker = host.querySelector<HTMLSelectElement>(".chat-target")!
-  await act(async () => {
-    picker.value = "chores"
-    picker.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  say("Skip the drafts folder.")
-  await send()
-  expect(sendButton().textContent).toBe("sending…")
-
-  act(() => root.render(<Shell steerable={[]} />))
-  await act(async () => {})
-  expect(host.querySelector(".chat-target")).toBeNull()
-  expect(host.querySelector(".chat-turns")?.textContent ?? "").not.toContain("Skip the drafts folder.")
-  expect(host.querySelector('.chat-turn[data-role="user"]')).toBeNull()
-
-  await act(async () => land({ ok: true, status: "saved" }))
-  expect(box().value).toBe("")
-  expect(host.querySelector('.chat-turn[data-role="user"]')).toBeNull()
+  expect(conversations()).not.toBeNull()
 })

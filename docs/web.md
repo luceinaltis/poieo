@@ -129,7 +129,7 @@ daemon state only. An answer persists with its run and may start a task handoff.
 | `POST /api/projects/{project}/models/use` | `{target: "provider/model", role: "default"}`; edits the project binding and reports whether the running daemon adopted it |
 | `POST /api/projects/{project}/models/add` | either `{engine}` from detection or `{url, name?, key_env?}`; declares an answering endpoint but does not select it |
 | `POST /api/projects/{project}/chat` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `default` role and returns `{reply, thinking, model, usage, cut_short}`, the last true when the model stopped at its token limit rather than at the end of its answer; asked with `Accept: text/event-stream`, the same answer comes as it is written: `thinking` and `text` frames carry each piece, `done` the whole reply with those same fields, and `error` what a refusal would have said once the stream has begun; writes nothing and starts no run; 409 without a models file or a default that resolves, 503 when the model does not answer |
-| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:`, five cron fields written as `at:`, or `manual` written as `trigger: {type: manual}`, and 400 when none; an optional `then` is written with the card and checked as the rewrite checks it, except that a target may be a card on disk the scan has not loaded yet; creates one card, optionally its neighboring graph, and returns its task id and path |
+| `POST /api/projects/{project}/tasks` | `{name, folder, prompt, enabled?, schedule?}` or `{name, folder, graph, enabled?, schedule?}` with a graph document; `schedule` is one line, an interval or `loop` written as `every:`, five cron fields written as `at:`, or `manual` written as `trigger: {type: manual}`, and 400 when none; an optional `then` is written with the card and checked as the rewrite checks it, except that a target may be a card on disk the scan has not loaded yet; creates one card, optionally its neighboring graph, and returns its task id and path; with `chat: true` it writes the project's chat card instead -- no steps, schedule or `then`, the folder the project's own when none is given, the `read` toolset, and 409 when the project already has one |
 | `POST /api/projects/{project}/tasks/draft` | `{messages: [{role: "user" \| "assistant", content}]}`, at most 30 turns of 4,000 characters each, the last one the person's; puts the conversation to the `task_writer` role and returns `{reply, draft, drafts, model, usage}`: the model's prose without its cards, every card it proposed in order as `{name, folder, prompt, schedule, after}` (at most four; `after` is `{task, when, word}` naming an earlier card by its place and one of `always`, `succeeded`, `failed`, `says`, or null, and a card with one is `manual`), and `draft`, the first of them without `after`, or null; writes nothing; 409 without a models file, 503 when the model does not answer |
 | `PUT /api/projects/{project}/tasks/{task}` | `{text}`, simple `{name, folder, prompt, enabled?, schedule?}` where an absent `schedule` keeps the card's and an empty one drops it, or `{then}`, the card's whole list of connections, spliced into its own text so comments and other fields are kept (an empty list removes the block; a target outside the project or a condition that does not parse is 400, a card whose text cannot be rewritten that way is 409); atomically validates and replaces one card, returning whether the edit is live. The GET beside it returns `then` with each connection's condition |
 | `PATCH /api/projects/{project}/tasks/{task}` | `{name}`; renames only the card file and therefore the task id |
@@ -329,32 +329,42 @@ its way, then the reply -- with the least movement that shows it; taking a
 draft, or choosing to write by hand, brings the fields into view the same way
 before focus lands on the prompt.
 
-The chat panel is a thread and a box. Each turn is a bubble, the reader's to
-the right in the raised tone and the model's to the left. Each message sends
-the whole conversation to the chat route and reads the reply as it is
-written: a `thinking…` line holds the place until the first words come,
-and they arrive in the bubble as they are written. What the model thinks is
-never shown in the chat, the route's `thinking` pieces included -- the reader
-wants the answer -- and a running task's thinking stays in its drawer. The
-model that answered is named on its turn and once in the header, so a role
-moved in the terminal shows up on the next answer. While a task runs, a
-picker in the header names it: chosen, that run's timeline is the thread,
-live and folded as in the drawer but without the model's thinking, and the
-box sends direction the run hears at its next model turn, appearing on the timeline as `you said` where it was heard; when
-the run ends the box goes back to the model. The timeline itself lives in
-`detail/Timeline.tsx`, read by the drawer and the chat alike. Enter sends, Shift+Enter breaks the
-line, and Enter during input-method composition does nothing. A refusal stays
-on screen with the message still in the box. The shell holds the thread
-rather than the panel, so a task picked off the board -- which takes the one
-margin -- does not lose it; `new conversation`, switching project and leaving
-the page empty it, and at thirty turns the panel asks for a new one rather
-than sending a message the daemon would refuse. The thread is tagged with the
-project it was said in: a reply that lands after a switch of project is
-dropped rather than shown as the new project's, while one that lands with
-the panel merely closed still reaches the thread. A reply that came back
-empty, or that stopped at the model's token limit, says so under the turn
-instead of showing a blank: a thinking model can spend its whole budget
-thinking.
+The chat panel is a conversation with the project, and a conversation is a
+task: the project's chat card (`chat: true`, see `tasks.md`), which the panel
+makes with the create route the first time a message is sent -- in the
+project's own folder, able only to look. Each message starts one of its runs
+with `{message, thread}`, and the runs that share a thread are the
+conversation: the header's picker names each by its first message, most
+recently spoken-in first, and `new conversation` starts another. A
+conversation is read back from the task's run records in the stage, so it is
+there after a reload and in the next session -- as far back as the stage's
+window of the chat's newest fifty runs reaches. A first message said before
+the card exists is held by the shell and sent once the daemon has picked the
+card up, so closing the panel meanwhile does not lose it, and a refusal then
+is shown when the panel is next open. A message the task is then held back
+from answering -- a spend limit reached -- says why instead of waiting. Each turn is a bubble, the
+reader's to the right and the answer -- the run's `said` -- to the left, with
+`what it did` folded under it: opened, it fetches that run's events and draws
+its timeline. While the answer is being worked on, the run's live timeline
+stands in its place: what the model says between steps, which the drawer
+folds into the calls but the chat keeps, and each tool it reaches for, folded,
+with a picture it looked at drawn small on the call's line; a `working…` line
+closes it. What the model thinks is never shown in the chat; a task's
+thinking stays in its drawer. A message sent while the answer is being worked
+on is direction, heard at the run's next model turn and drawn on the timeline
+as `you said`. The stage keeps the chat's task, so its live events arrive,
+and leaves it off the board: it is not drawn, counted, or offered as a place
+to hand work to. While another task runs, a picker in the header names it:
+chosen, that run's timeline is the thread, live and folded, and the box sends
+it direction; when the run ends the box goes back to the conversation. The
+timeline itself lives in `detail/Timeline.tsx`, read by the drawer and the
+chat alike. Enter sends, Shift+Enter breaks the line, and Enter during
+input-method composition does nothing. A refusal stays on screen with the
+message still in the box. The shell holds which conversation is open rather
+than the panel, so a task picked off the board -- which takes the one margin
+-- does not close it; switching project does. An answer that came back empty
+says so instead of showing a blank, and a failed run shows its error under
+the turn.
 
 The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes

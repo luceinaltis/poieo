@@ -645,3 +645,13 @@ test("two things said while one tool ran are two lines, even in the same millise
   const words = stage.tasks["board/chores"].activity.filter((e) => e.type === "node_directed").map((e) => e.data?.text)
   expect(words).toEqual(["Skip the drafts.", "And keep the heading."])
 })
+
+test("the chat's task is off the board, and found by its own name", async () => {
+  const { onlyProject, chatTaskOf } = await import("./stage")
+  const stage = initialStage([...TASK_ROWS, { ...TASK_ROWS[0], name: "chat", chat: true }])
+
+  expect(Object.keys(onlyProject(stage, "board").tasks)).not.toContain("board/chat")
+  expect(Object.values(onlyProject(stage, "board").tasks).map((task) => task.name)).not.toContain("chat")
+  expect(chatTaskOf(stage, "board")?.name).toBe("chat")
+  expect(chatTaskOf(stage, "elsewhere")).toBeNull()
+})
