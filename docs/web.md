@@ -428,7 +428,10 @@ checks retain their output, and a repair refused before starting says why
 without claiming it ran.
 
 Task cards start collapsed, showing a compact **Start / Input → step count →
-End run / Output** flow. **Expand** reveals only that card's full graph, live text
+End run / Output** flow -- left out for a one-step task nothing is connected
+to, where it would say only "1 step". The card's name, marked with a `›` and
+underlined on hover, opens the task; **Expand**, a bordered button at least
+28px tall, reveals only that card's full graph, live text
 and tool calls; **Collapse** gives its space back. The chosen state survives live
 updates, and running a task never opens its card automatically. Status and standing
 warnings remain visible in either state. Handoff wires keep connecting the visible

@@ -292,7 +292,10 @@ function fillInside(box: Box, taskState: TaskState, receives: boolean, open: boo
   box.root.dataset.connected = String(connected)
   box.root.dataset.open = String(open)
   box.root.style.width = `${BOX.width}px`
-  box.inside.hidden = taskState.shape.nodes.length === 0 && !connected
+  // Shut, a lone step with no wire to hold says only "Start → 1 step → End
+  // run", the same on every quiet card; it is left out until opened.
+  const bare = taskState.shape.nodes.length <= 1 && !connected && !open
+  box.inside.hidden = (taskState.shape.nodes.length === 0 && !connected) || bare
   box.inside.tabIndex = 0
   box.inside.setAttribute("role", "region")
   const width = (open ? drawCardSteps : drawCardSummary)(box.steps, taskState, receives)
