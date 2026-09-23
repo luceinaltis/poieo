@@ -16,11 +16,11 @@
  * and the box sends direction it hears at its next model turn.
  */
 
-import { useEffect, useState } from "react"
-import type { KeyboardEvent } from "react"
+import { useEffect, useRef, useState } from "react"
+import type { ChangeEvent, KeyboardEvent } from "react"
 
 import { createChatCard, fetchRunEvents, leaveDirection, runNow } from "../api"
-import type { Answer } from "../api"
+import type { Answer, Attaching } from "../api"
 import { Timeline, visibleTimelineEvents, withoutThinking } from "../detail/Timeline"
 import { Refusal } from "../Refusal"
 import type { TaskState } from "../state/stage"
@@ -45,6 +45,7 @@ interface Live {
   runId: string
   thread: string | null
   message: string
+  attachments: string[]
   activity: PoieoEvent[]
 }
 
@@ -56,12 +57,14 @@ export interface Queued {
   project: string
   thread: string
   message: string
+  attachments?: Attaching[]
 }
 
 /** A message on its way, drawn where it will land until its run shows up. */
 interface Pending {
   thread: string
   message: string
+  attachments?: Attaching[]
   /** How many runs the thread had when it was sent: one more means it landed. */
   had: number
   /** Why the task was held when it was sent: a run-now goes through a hold, so only a new reason refuses. */
@@ -69,6 +72,40 @@ interface Pending {
 }
 
 const TITLE_AT_MOST = 60
+
+// What a message may carry: the daemon's own limits, said here first so a
+// file it would refuse is refused before anything is sent.
+const ATTACH_AT_MOST = 4
+const IMAGE_CAP = 3_750_000
+const TEXT_CAP = 200_000
+const PICTURES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+const TEXTS: Record<string, string> = {
+  txt: "text/plain",
+  log: "text/plain",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+}
+
+/** What a chosen file is, as the daemon names it, or null for what it will not take. */
+function mediaTypeOf(file: File): string | null {
+  if (PICTURES.has(file.type)) return file.type
+  if (Object.values(TEXTS).includes(file.type)) return file.type
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? ""
+  return TEXTS[extension] ?? null
+}
+
+function base64Of(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "")
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+const isPicture = (name: string) => /\.(png|jpe?g|gif|webp)$/i.test(name)
 
 function newThread(): string {
   return `t-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -101,6 +138,7 @@ function liveOf(task: TaskState | null): Live | null {
     runId: task.activityRunId,
     thread: typeof input.thread === "string" ? input.thread : null,
     message: typeof input.message === "string" ? input.message : "",
+    attachments: Array.isArray(input.attachments) ? input.attachments.map(String) : [],
     activity: task.activity,
   }
 }
@@ -128,11 +166,38 @@ function RunWork({ runId }: { runId: string }) {
   )
 }
 
-function Asked({ message }: { message: string }) {
+/**
+ * What was attached to a message: a picture drawn small from the file kept
+ * with its run, a text file by name. Before the run exists, names only.
+ */
+function Attached({ names, runId }: { names: string[]; runId?: string }) {
+  if (!names.length) return null
+  return (
+    <ul className="chat-files">
+      {names.map((name) => (
+        <li key={name}>
+          {runId && isPicture(name) ? (
+            <img
+              className="chat-picture"
+              src={`/api/runs/${encodeURIComponent(runId)}/files/${encodeURIComponent(name)}`}
+              alt={name}
+              loading="lazy"
+            />
+          ) : (
+            <span className="chat-file">{name}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function Asked({ message, attachments = [], runId }: { message: string; attachments?: string[]; runId?: string }) {
   return (
     <li className="chat-turn" data-role="user">
       <span className="chat-who">you</span>
       <div className="chat-said">{message}</div>
+      <Attached names={attachments} runId={runId} />
     </li>
   )
 }
@@ -190,6 +255,9 @@ export function Chat({
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<Answer | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
+  // What the next message will carry, read and checked as it is chosen.
+  const [attached, setAttached] = useState<Attaching[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const runs = chatTask?.runs ?? []
   const live = liveOf(chatTask)
@@ -210,10 +278,14 @@ export function Chat({
     }
   }, [pending, runs, live, heldBecause])
 
-  const start = async (task: TaskState, said: string, into: string): Promise<boolean> => {
+  const start = async (task: TaskState, said: string, into: string, files: Attaching[]): Promise<boolean> => {
     const had = task.runs.filter((run) => run.thread === into).length
-    setPending({ thread: into, message: said, had, held: task.heldBecause })
-    const answer = await runNow(project, task.name, { message: said, thread: into })
+    setPending({ thread: into, message: said, attachments: files, had, held: task.heldBecause })
+    const answer = await runNow(project, task.name, {
+      message: said,
+      thread: into,
+      ...(files.length ? { attachments: files } : {}),
+    })
     if (!answer.ok) {
       setPending(null)
       setRefused(answer)
@@ -248,14 +320,56 @@ export function Chat({
         }
         // Sent by the shell once the daemon has picked the card up, so a
         // panel closed in the meantime does not take the message with it.
-        onQueue({ project, thread: into, message: said })
+        onQueue({ project, thread: into, message: said, ...(attached.length ? { attachments: attached } : {}) })
         setText("")
+        setAttached([])
         return
       }
-      if (await start(chatTask, said, into)) setText("")
+      if (await start(chatTask, said, into, attached)) {
+        setText("")
+        setAttached([])
+      }
     } finally {
       setBusy(false)
     }
+  }
+
+  const choose = async (event: ChangeEvent<HTMLInputElement>) => {
+    const chosen = [...(event.target.files ?? [])]
+    event.target.value = ""
+    setRefused(null)
+    const taken: Attaching[] = []
+    const refuse = (error: string) => setRefused({ ok: false, error })
+    for (const file of chosen) {
+      const media_type = mediaTypeOf(file)
+      if (media_type === null) {
+        refuse(`${file.name}: a message takes pictures and text files`)
+        break
+      }
+      if (attached.length + taken.length >= ATTACH_AT_MOST) {
+        refuse(`a message takes at most ${ATTACH_AT_MOST} attachments`)
+        break
+      }
+      if ([...attached, ...taken].some((one) => one.name === file.name)) {
+        refuse(`${file.name} is attached already`)
+        break
+      }
+      // Before reading: a file the daemon would refuse is not read into
+      // memory, encoded and sent only to be turned away. Bytes for a text
+      // file bound its characters from above, so the daemon has the last word.
+      const cap = PICTURES.has(media_type) ? IMAGE_CAP : TEXT_CAP * 4
+      if (file.size > cap) {
+        refuse(`${file.name} is too large to send (${file.size} bytes)`)
+        break
+      }
+      try {
+        taken.push({ name: file.name, media_type, data: await base64Of(file) })
+      } catch {
+        refuse(`${file.name} could not be read`)
+        break
+      }
+    }
+    if (taken.length) setAttached((current) => [...current, ...taken])
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -328,10 +442,17 @@ export function Chat({
         ) : past.length || liveHere || shownPending ? (
           <ol className="chat-turns">
             {past.map((run) => [
-              <Asked key={`${run.run_id}-asked`} message={run.message ?? ""} />,
+              <Asked
+                key={`${run.run_id}-asked`}
+                message={run.message ?? ""}
+                attachments={run.attachments}
+                runId={run.run_id}
+              />,
               <Answered key={`${run.run_id}-answered`} run={run} />,
             ])}
-            {liveHere ? <Asked message={liveHere.message} /> : null}
+            {liveHere ? (
+              <Asked message={liveHere.message} attachments={liveHere.attachments} runId={liveHere.runId} />
+            ) : null}
             {liveHere ? (
               // The answer being worked on, drawn where it will land.
               // `aria-live` so a screen reader hears it as it comes.
@@ -343,7 +464,12 @@ export function Chat({
                 </p>
               </li>
             ) : null}
-            {shownPending ? <Asked message={shownPending.message} /> : null}
+            {shownPending ? (
+              <Asked
+                message={shownPending.message}
+                attachments={(shownPending.attachments ?? []).map((one) => one.name)}
+              />
+            ) : null}
             {shownPending ? (
               <li className="chat-turn chat-arriving" data-role="assistant">
                 <p className="chat-thinking" role="status">
@@ -382,7 +508,42 @@ export function Chat({
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
         />
+        {attached.length ? (
+          <ul className="chat-attached" aria-label="Attached">
+            {attached.map((one) => (
+              <li key={one.name}>
+                {one.name}
+                <button
+                  type="button"
+                  aria-label={`Remove ${one.name}`}
+                  onClick={() => setAttached((current) => current.filter((other) => other.name !== one.name))}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div className="chat-row">
+          {/* Pictures and text files ride with a new message; words for a
+              run already going are direction, which carries none. */}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            hidden
+            accept="image/png,image/jpeg,image/gif,image/webp,.txt,.log,.md,.markdown,.csv,.json"
+            onChange={(event) => void choose(event)}
+          />
+          <button
+            type="button"
+            className="chat-attach"
+            data-do="chat-attach"
+            disabled={busy || queued !== null || steering !== null || liveHere !== null}
+            onClick={() => fileRef.current?.click()}
+          >
+            attach
+          </button>
           <button type="submit" data-do="chat-send" disabled={busy || queued !== null || !text.trim()}>
             {busy ? "sending…" : "send"}
           </button>

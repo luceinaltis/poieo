@@ -102,7 +102,8 @@ export default function App({ store }: { store?: StageStore }) {
     const task = chatTaskOf(stage, chatQueued.project)
     if (!task) return
     setChatQueued(null)
-    void runNow(chatQueued.project, task.name, { message: chatQueued.message, thread: chatQueued.thread }).then(
+    const { message, thread, attachments } = chatQueued
+    void runNow(chatQueued.project, task.name, { message, thread, ...(attachments ? { attachments } : {}) }).then(
       (answer) => setChatLate(answer.ok ? null : answer),
     )
   }, [chatQueued, stage])

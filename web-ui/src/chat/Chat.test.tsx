@@ -332,6 +332,134 @@ test("nothing is sent while the box is blank, and Enter sends what is there", as
   expect(runNow).toHaveBeenCalledWith("board", "chat", { message: "hi", thread: "t-1" })
 })
 
+// -- attaching -------------------------------------------------------------------
+
+const attachButton = () => host.querySelector<HTMLButtonElement>('[data-do="chat-attach"]')!
+const picker = () => host.querySelector<HTMLInputElement>('input[type="file"]')!
+
+async function choose(...files: File[]) {
+  await act(async () => {
+    Object.defineProperty(picker(), "files", { value: files, configurable: true })
+    picker().dispatchEvent(new Event("change", { bubbles: true }))
+  })
+  // FileReader finishes on its own clock: wait for the chips, or the refusal.
+  const before = host.querySelectorAll(".chat-attached li").length
+  const settled = () =>
+    host.querySelector('[role="alert"]') !== null || host.querySelectorAll(".chat-attached li").length !== before
+  for (let tries = 0; tries < 100 && !settled(); tries++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+}
+
+const png = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "shot.png", { type: "image/png" })
+const notes = () => new File(["# notes"], "notes.md", { type: "" })
+
+test("pictures and text files ride with the message, and are cleared once it is sent", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  expect(attachButton().disabled).toBe(false)
+
+  await choose(png(), notes())
+  expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual([
+    "shot.png✕",
+    "notes.md✕",
+  ])
+
+  say("what are these?")
+  await send()
+
+  expect(runNow).toHaveBeenCalledWith("board", "chat", {
+    message: "what are these?",
+    thread: "t-1",
+    attachments: [
+      { name: "shot.png", media_type: "image/png", data: "iVBORw==" },
+      { name: "notes.md", media_type: "text/markdown", data: "IyBub3Rlcw==" },
+    ],
+  })
+  expect(host.querySelector(".chat-attached")).toBeNull()
+})
+
+test("an attachment can be taken back before sending", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  await choose(png(), notes())
+
+  await act(async () => host.querySelector<HTMLButtonElement>('.chat-attached li button[aria-label="Remove shot.png"]')!.click())
+
+  expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual(["notes.md✕"])
+})
+
+test("what cannot be attached is refused by name, before anything is sent", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+
+  await choose(new File(["PK"], "bundle.zip", { type: "application/zip" }))
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("bundle.zip")
+  expect(host.querySelector(".chat-attached")).toBeNull()
+
+  await choose(png(), notes(), new File(["a"], "a.txt"), new File(["b"], "b.txt"), new File(["c"], "c.txt"))
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("at most 4")
+  expect(host.querySelectorAll(".chat-attached li")).toHaveLength(4)
+})
+
+test("a picture too large to send is refused before it is read", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  const big = new File([new Uint8Array(8)], "huge.png", { type: "image/png" })
+  Object.defineProperty(big, "size", { value: 3_750_001 })
+
+  await choose(big)
+
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("huge.png is too large")
+  expect(host.querySelector(".chat-attached")).toBeNull()
+})
+
+test("the same name chosen twice is refused, and taking one back leaves the other", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  await choose(png(), notes())
+
+  await choose(png())
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("shot.png is attached already")
+  expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual([
+    "shot.png✕",
+    "notes.md✕",
+  ])
+})
+
+test("a file that cannot be read says so, and keeps what was read before it", async () => {
+  const real = FileReader.prototype.readAsDataURL
+  FileReader.prototype.readAsDataURL = function (this: FileReader, file: Blob) {
+    if ((file as File).name === "broken.txt") {
+      setTimeout(() => this.onerror?.(new ProgressEvent("error") as ProgressEvent<FileReader>), 0)
+      return
+    }
+    real.call(this, file)
+  }
+  try {
+    show({ task: chatTask(), initial: "t-1" })
+    await choose(png(), new File(["x"], "broken.txt"))
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("broken.txt could not be read")
+    expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual(["shot.png✕"])
+  } finally {
+    FileReader.prototype.readAsDataURL = real
+  }
+})
+
+test("a message's attachments are drawn with it: pictures small, text files by name", () => {
+  const runs = [ran("r1", "t-1", "look", "seen", { attachments: ["shot.png", "notes.md"] })]
+  show({ task: chatTask({ runs }), initial: "t-1" })
+
+  const asked = host.querySelector('.chat-turn[data-role="user"]')!
+  expect(asked.querySelector("img")?.getAttribute("src")).toBe("/api/runs/r1/files/shot.png")
+  expect(asked.textContent).toContain("notes.md")
+})
+
+test("nothing is attached to words for a run already going", async () => {
+  const activity = [frame("run_started", { task: "chat", project: "board", input: { message: "go", thread: "t-1" } })]
+  show({ task: chatTask({ status: "running", activity, activityRunId: "r9" }), initial: "t-1" })
+
+  expect(attachButton().disabled).toBe(true)
+})
+
 // -- speaking to another running task ------------------------------------------
 
 const running = (activity: PoieoEvent[] = []): Steerable => ({ name: "chores", title: "chores", activity })
