@@ -343,7 +343,10 @@ async function choose(...files: File[]) {
     picker().dispatchEvent(new Event("change", { bubbles: true }))
   })
   // FileReader finishes on its own clock: wait for the chips, or the refusal.
-  for (let tries = 0; tries < 100 && !host.querySelector('.chat-attached, [role="alert"]'); tries++) {
+  const before = host.querySelectorAll(".chat-attached li").length
+  const settled = () =>
+    host.querySelector('[role="alert"]') !== null || host.querySelectorAll(".chat-attached li").length !== before
+  for (let tries = 0; tries < 100 && !settled(); tries++) {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     })
@@ -396,6 +399,49 @@ test("what cannot be attached is refused by name, before anything is sent", asyn
   await choose(png(), notes(), new File(["a"], "a.txt"), new File(["b"], "b.txt"), new File(["c"], "c.txt"))
   expect(host.querySelector('[role="alert"]')?.textContent).toContain("at most 4")
   expect(host.querySelectorAll(".chat-attached li")).toHaveLength(4)
+})
+
+test("a picture too large to send is refused before it is read", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  const big = new File([new Uint8Array(8)], "huge.png", { type: "image/png" })
+  Object.defineProperty(big, "size", { value: 3_750_001 })
+
+  await choose(big)
+
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("huge.png is too large")
+  expect(host.querySelector(".chat-attached")).toBeNull()
+})
+
+test("the same name chosen twice is refused, and taking one back leaves the other", async () => {
+  show({ task: chatTask(), initial: "t-1" })
+  await choose(png(), notes())
+
+  await choose(png())
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain("shot.png is attached already")
+  expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual([
+    "shot.png✕",
+    "notes.md✕",
+  ])
+})
+
+test("a file that cannot be read says so, and keeps what was read before it", async () => {
+  const real = FileReader.prototype.readAsDataURL
+  FileReader.prototype.readAsDataURL = function (this: FileReader, file: Blob) {
+    if ((file as File).name === "broken.txt") {
+      setTimeout(() => this.onerror?.(new ProgressEvent("error") as ProgressEvent<FileReader>), 0)
+      return
+    }
+    real.call(this, file)
+  }
+  try {
+    show({ task: chatTask(), initial: "t-1" })
+    await choose(png(), new File(["x"], "broken.txt"))
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("broken.txt could not be read")
+    expect([...host.querySelectorAll(".chat-attached li")].map((one) => one.textContent)).toEqual(["shot.png✕"])
+  } finally {
+    FileReader.prototype.readAsDataURL = real
+  }
 })
 
 test("a message's attachments are drawn with it: pictures small, text files by name", () => {

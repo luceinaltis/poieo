@@ -76,6 +76,8 @@ const TITLE_AT_MOST = 60
 // What a message may carry: the daemon's own limits, said here first so a
 // file it would refuse is refused before anything is sent.
 const ATTACH_AT_MOST = 4
+const IMAGE_CAP = 3_750_000
+const TEXT_CAP = 200_000
 const PICTURES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 const TEXTS: Record<string, string> = {
   txt: "text/plain",
@@ -337,17 +339,35 @@ export function Chat({
     event.target.value = ""
     setRefused(null)
     const taken: Attaching[] = []
+    const refuse = (error: string) => setRefused({ ok: false, error })
     for (const file of chosen) {
       const media_type = mediaTypeOf(file)
       if (media_type === null) {
-        setRefused({ ok: false, error: `${file.name}: a message takes pictures and text files` })
+        refuse(`${file.name}: a message takes pictures and text files`)
         break
       }
       if (attached.length + taken.length >= ATTACH_AT_MOST) {
-        setRefused({ ok: false, error: `a message takes at most ${ATTACH_AT_MOST} attachments` })
+        refuse(`a message takes at most ${ATTACH_AT_MOST} attachments`)
         break
       }
-      taken.push({ name: file.name, media_type, data: await base64Of(file) })
+      if ([...attached, ...taken].some((one) => one.name === file.name)) {
+        refuse(`${file.name} is attached already`)
+        break
+      }
+      // Before reading: a file the daemon would refuse is not read into
+      // memory, encoded and sent only to be turned away. Bytes for a text
+      // file bound its characters from above, so the daemon has the last word.
+      const cap = PICTURES.has(media_type) ? IMAGE_CAP : TEXT_CAP * 4
+      if (file.size > cap) {
+        refuse(`${file.name} is too large to send (${file.size} bytes)`)
+        break
+      }
+      try {
+        taken.push({ name: file.name, media_type, data: await base64Of(file) })
+      } catch {
+        refuse(`${file.name} could not be read`)
+        break
+      }
     }
     if (taken.length) setAttached((current) => [...current, ...taken])
   }
