@@ -942,3 +942,28 @@ test("a refusal that makes a card taller moves the card under it down", async ()
   handle.destroy()
   vi.restoreAllMocks()
 })
+
+test("cards in the grid stand close together, not a wire's gap apart", () => {
+  // The gap between flow columns is room for wires; nothing wires grid cards.
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
+  Object.defineProperty(viewport, "clientWidth", { value: 1200, configurable: true })
+  Object.defineProperty(viewport, "clientHeight", { value: 800, configurable: true })
+  handle.update(initialStage([row("a"), row("b"), row("c")]))
+  const left = (task: string) => parseFloat(el.querySelector<HTMLElement>(`[data-task="board/${task}"]`)!.style.left)
+
+  expect(left("b") - left("a")).toBe(BOX.width + BOX.gridGap)
+  // Closer, so a laptop window holds three across where it held two.
+  expect(left("c")).toBeGreaterThan(left("b"))
+  expect(parseFloat(el.querySelector<HTMLElement>('[data-task="board/c"]')!.style.top)).toBe(
+    parseFloat(el.querySelector<HTMLElement>('[data-task="board/a"]')!.style.top),
+  )
+  handle.destroy()
+})
+
+test("the minimap lets the cards under it show through until it is reached for", () => {
+  // It sits over the board's corner, and the cards there were hidden by it.
+  const css = readFileSync("src/skins/basic/basic.css", "utf8")
+  expect(/\.basic-minimap \{([^}]*)\}/.exec(css)![1]).toMatch(/opacity: 0\.4/)
+  expect(css).toMatch(/\.basic-minimap:hover,\s*\.basic-minimap:focus-visible \{[^}]*opacity: 1/)
+})

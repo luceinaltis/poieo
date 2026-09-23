@@ -29,6 +29,15 @@
   border-radius: 4px;
   cursor: pointer;
   display: none;
+  /* Faint until reached for: it sits over the board's corner, and the cards
+     there were hidden behind a solid map of themselves. */
+  opacity: 0.4;
+  transition: opacity 120ms ease;
+}
+
+.basic-minimap:hover,
+.basic-minimap:focus-visible {
+  opacity: 1;
 }
 
 .basic-minimap[data-needed="true"] {

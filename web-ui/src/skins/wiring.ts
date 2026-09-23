@@ -13,6 +13,8 @@ export interface Placed {
   task: string
   column: number
   row: number
+  /** Stands in the grid of tasks nothing joins, which is spaced on its own. */
+  grid?: boolean
 }
 
 /**
@@ -51,6 +53,7 @@ export function place(tasks: string[], handoffs: Record<string, string[]>, acros
       task,
       column: index % wide,
       row: Math.floor(index / wide),
+      grid: true,
     }))
   }
 
@@ -151,7 +154,7 @@ export function place(tasks: string[], handoffs: Record<string, string[]>, acros
   return tasks.map((task) => {
     if (flowOf.has(task)) return { task, column: column.get(task)!, row: row.get(task)! }
     const index = alone++
-    return { task, column: index % wide, row: top + Math.floor(index / wide) }
+    return { task, column: index % wide, row: top + Math.floor(index / wide), grid: true }
   })
 }
 
@@ -231,7 +234,7 @@ export function exits(shape: GraphShape): string[] {
  * drawn on a shut border now, and at 260 a chain of four wrapped onto three
  * lines and stopped reading as a sequence.
  */
-export const BOX = { width: 348, height: 132, gapX: 104, gapY: 22, head: 21, around: 34 }
+export const BOX = { width: 348, height: 132, gapX: 104, gapY: 22, head: 21, around: 34, gridGap: 28 }
 
 export interface Anchor {
   x: number
