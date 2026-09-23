@@ -173,3 +173,20 @@ test.each([false, true])("a focused wire still follows its connection after a ti
   expect(document.activeElement).toBe(card("Review").querySelector('[data-port="input"]'))
   expect(card("Review").dataset.open).toBe(String(open))
 })
+
+test("a one-step task nothing is connected to leaves out the picture that says only that", () => {
+  // "Start → 1 step → End run" on every quiet card said the same thing eleven
+  // times and made each card half again as tall. Expanded, it is still there.
+  const single = task("Single")
+  single.shape.nodes = [{ ...single.shape.nodes[0], next: null }]
+  handle.update(initialStage([source, task("Review"), task("Other"), single]))
+
+  expect(card("Single").querySelector<HTMLElement>(".basic-inside")!.hidden).toBe(true)
+  // Connected, the picture holds the ends its wires attach to; several steps
+  // are worth the summary.
+  expect(card("Draft").querySelector<HTMLElement>(".basic-inside")!.hidden).toBe(false)
+  expect(card("Other").querySelector<HTMLElement>(".basic-inside")!.hidden).toBe(false)
+
+  toggle("Single").click()
+  expect(card("Single").querySelector<HTMLElement>(".basic-inside")!.hidden).toBe(false)
+})

@@ -207,6 +207,22 @@
   overflow-wrap: anywhere;
 }
 
+/* The name opens the task, and says so: a quiet chevron after it, and the
+   underline a link gets on hover and focus. It looked like a caption, and
+   the one way into a task was something a reader had to be told. */
+.basic-name::after {
+  color: var(--dim);
+  /* Decoration only: a screen reader hears the name, not an arrow. */
+  content: " ›" / "";
+  font-weight: 400;
+}
+
+.basic-pick:hover .basic-name,
+.basic-pick:focus-visible .basic-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .basic-dot {
   border-radius: 50%;
   flex: none;
@@ -230,19 +246,24 @@
   background: var(--paused);
 }
 
+/* A button that looks like one, and big enough to hit: it was a 22px line
+   of small amber type that read as a label. */
 .basic-toggle {
   background: none;
-  border: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
   color: var(--ember);
   cursor: pointer;
   font: inherit;
-  font-size: .74em;
-  line-height: 1.5;
-  padding: 4px;
+  font-size: .8em;
+  line-height: 1.4;
+  min-height: 28px;
+  padding: 3px 10px;
   flex: none;
 }
 
 .basic-toggle:hover {
+  border-color: var(--ember);
   color: var(--text);
 }
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { readFileSync } from "node:fs"
 
 import { basic } from "./index"
 import { AGENT_RUN } from "../../state/fixtures"
@@ -853,4 +854,18 @@ test("a move made only to show the open card does not stop the board refitting w
   expect(transform()).not.toBe(revealed)
   handle.destroy()
   vi.unstubAllGlobals()
+})
+
+test("the card's expand button is big enough to hit", () => {
+  // It was a 22px line of small type; 24px is the least a pointer target
+  // should be, and 28 leaves room for a finger.
+  const css = readFileSync("src/skins/basic/basic.css", "utf8")
+  const rule = /\.basic-toggle \{([^}]*)\}/.exec(css)![1]
+  expect(rule).toMatch(/min-height: 28px/)
+})
+
+test("the card's name says it opens the task", () => {
+  const css = readFileSync("src/skins/basic/basic.css", "utf8")
+  expect(/\.basic-name::after \{([^}]*)\}/.exec(css)![1]).toMatch(/content: " ›" \/ ""/)
+  expect(css).toMatch(/\.basic-pick:hover \.basic-name,\s*\.basic-pick:focus-visible \.basic-name \{[^}]*text-decoration: underline/)
 })
