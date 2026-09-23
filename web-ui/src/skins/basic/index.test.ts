@@ -863,3 +863,9 @@ test("the card's expand button is big enough to hit", () => {
   const rule = /\.basic-toggle \{([^}]*)\}/.exec(css)![1]
   expect(rule).toMatch(/min-height: 28px/)
 })
+
+test("the card's name says it opens the task", () => {
+  const css = readFileSync("src/skins/basic/basic.css", "utf8")
+  expect(/\.basic-name::after \{([^}]*)\}/.exec(css)![1]).toMatch(/content: " ›" \/ ""/)
+  expect(css).toMatch(/\.basic-pick:hover \.basic-name,\s*\.basic-pick:focus-visible \.basic-name \{[^}]*text-decoration: underline/)
+})
