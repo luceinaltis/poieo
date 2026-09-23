@@ -176,3 +176,26 @@ async def test_a_person_answers_from_the_board(tmp_path):
             assert (work / "out.txt").read_text() == "hi"
     finally:
         await down(daemon, serve)
+
+
+async def test_a_calls_time_is_the_tools_not_the_persons(tmp_path, monkeypatch):
+    """Time spent waiting for a person is not time the tool took."""
+    from poieo.runtime import nodes
+
+    now = {"t": 1000.0}
+    monkeypatch.setattr(nodes.time, "monotonic", lambda: now["t"])
+    graph = agent_graph(tmp_path, tools=["files"], ask_before=["edits"])
+    binding = mock_binding({"worker": [WRITE, "done"]})
+    store = _CapturingStore()
+    approvals = Approvals()
+
+    async def answered_after_half_an_hour(call_id, cancel=None):
+        now["t"] += 1800
+        return True
+
+    approvals.ask = answered_after_half_an_hour
+    async with ProviderPool(binding) as pool:
+        await execute(graph, binding, pool, store, approvals=approvals)
+
+    [call] = [event for event in store.events if event.type == "node_tool_call"]
+    assert call.data["duration_ms"] < 60_000

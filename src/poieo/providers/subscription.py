@@ -28,6 +28,7 @@ import asyncio
 import json
 import os
 import signal
+import uuid
 from typing import Any
 
 from ..errors import ProviderError
@@ -165,6 +166,15 @@ class _Subscription(Provider):
     async def context_for(self, model: str) -> int | None:
         """Nothing to ask. A harness does its own context management."""
         return None
+
+
+def _bridged_call(name: str, arguments: dict[str, Any]) -> ToolCall:
+    """A call the harness made through poieo's tools, under an id of its own.
+
+    The SDK hands the tool no id, and a call a person may be asked about is
+    answered by its id -- so two of them must never share one.
+    """
+    return ToolCall(id=f"bridged_{uuid.uuid4().hex[:12]}", name=name, arguments=arguments)
 
 
 def _last_user_message(request: LLMRequest, name: str) -> str:
@@ -327,6 +337,13 @@ class CodexProvider(_Subscription):
                 f"'{step}' asked to be fenced, and provider '{self.name}' cannot be put inside "
                 f"poieo's container -- it runs its own sandbox on this machine instead. Drop "
                 f"`isolation:` from this task, or bind this step to an endpoint with a key",
+                provider=self.name,
+            )
+        if hands.asks:
+            raise ProviderError(
+                f"'{step}' asks before it {' or '.join(hands.asks)}, and provider '{self.name}' makes "
+                f"its own edits and runs its own commands, which never stop for that question. Drop "
+                f"`ask_before:` from this step, or bind it to a model poieo runs the tools for",
                 provider=self.name,
             )
         asked = set(hands.toolsets)
@@ -610,7 +627,7 @@ def _lend(sdk: Any, tools: list[Any], hands: Hands) -> Any:
 
     def _bridge(spec: Any) -> Any:
         async def handler(arguments: dict[str, Any]) -> dict[str, Any]:
-            text, failed = await hands.run(ToolCall(id="", name=spec.name, arguments=arguments))
+            text, failed = await hands.run(_bridged_call(spec.name, arguments))
             # `is_error` rather than a raised exception, because a tool that
             # failed is something the model should read and work around --
             # which is the rule the node's own loop already follows.

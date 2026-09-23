@@ -162,6 +162,10 @@ class Hands:
     # A provider that cannot honour it refuses: half a fence is worse than
     # none, because nobody knows which half.
     boxed: bool = False
+    # The kinds of call the step stops at for a person's say-so (`edits`,
+    # `commands`). A harness that acts through its own tools, never through
+    # `run`, cannot stop there, and has to refuse rather than act unasked.
+    asks: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)

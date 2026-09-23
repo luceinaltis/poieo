@@ -385,3 +385,22 @@ def test_a_step_with_tools_and_no_way_to_run_them_is_still_refused(monkeypatch):
 
     with pytest.raises(ProviderError):
         provider.plan(_request(tools=[HANDS], role="builder"))
+
+
+def test_codex_refuses_a_step_that_asks_before_it_acts(monkeypatch):
+    """Codex runs its own edits and commands, which never pass through poieo's
+    question -- so a step told to ask first cannot be handed to it."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = build_provider("subscription", ProviderSpec(type="codex"))
+
+    with pytest.raises(ProviderError, match="ask_before"):
+        provider.plan(_request(tools=[HANDS], hands=_lent(asks=("edits",)), role="builder"))
+
+
+async def test_claude_code_gives_each_bridged_call_its_own_id():
+    """A call a person may be asked about is answered by its id, so two of
+    them must never share one."""
+    from poieo.providers.subscription import _bridged_call
+
+    first, second = _bridged_call("write_file", {}), _bridged_call("write_file", {})
+    assert first.id and second.id and first.id != second.id

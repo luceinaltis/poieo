@@ -534,6 +534,7 @@ class _AgentLoop:
                 max_turns=self.spec.max_turns,
                 toolsets=self.toolsets,
                 boxed=bool(self.ctx.tool_context and self.ctx.tool_context.isolation),
+                asks=tuple(self.spec.ask_before),
             )
             if self.executor is not None
             else None
@@ -702,8 +703,9 @@ class _AgentLoop:
             raw_purpose = arguments.pop(_ACTIVITY_PURPOSE, "")
         purpose = raw_purpose.strip() if isinstance(raw_purpose, str) else ""
         executable = ToolCall(id=call.id, name=call.name, arguments=arguments)
-        started = time.monotonic()
         refused = await self._refused(call, purpose, arguments)
+        # After the question: time a person took to answer is not the tool's.
+        started = time.monotonic()
         result = refused if refused is not None else await self.executor.execute(executable)
         self.tool_call_count += 1
         self.reached_for[call.name] = self.reached_for.get(call.name, 0) + 1
