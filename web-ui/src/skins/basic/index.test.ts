@@ -967,3 +967,28 @@ test("the minimap lets the cards under it show through until it is reached for",
   expect(/\.basic-minimap \{([^}]*)\}/.exec(css)![1]).toMatch(/opacity: 0\.4/)
   expect(css).toMatch(/\.basic-minimap:hover,\s*\.basic-minimap:focus-visible \{[^}]*opacity: 1/)
 })
+
+test("a wider card in the grid pushes its neighbour along rather than lying over it", () => {
+  // A handoff to a task the board does not have leaves its sender in the grid
+  // but drawn as connected, which is wider than the grid's usual card.
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
+  Object.defineProperty(viewport, "clientWidth", { value: 1600, configurable: true })
+  Object.defineProperty(viewport, "clientHeight", { value: 800, configurable: true })
+  const wide = { ...row("wide"), then: [{ to: "gone", label: "gone" }] }
+  wide.shape = { entry: "a", nodes: [
+    { id: "a", description: "a", type: "router", next: null, default: null, model: null, tools: [],
+      branches: [{ to: null, label: "one" }, { to: null, label: "two" }, { to: null, label: "three" }] },
+  ] }
+  handle.update(initialStage([wide, row("next")]))
+  const box = (task: string) => el.querySelector<HTMLElement>(`[data-task="board/${task}"]`)!
+  // jsdom lays nothing out, so the width its steps would need is set here,
+  // and the board asked to lay itself out again as a card would.
+  box("wide").style.width = "520px"
+  box("wide").dispatchEvent(new Event("basic-resized", { bubbles: true }))
+
+  expect(parseFloat(box("next").style.left)).toBeGreaterThanOrEqual(
+    parseFloat(box("wide").style.left) + parseFloat(box("wide").style.width),
+  )
+  handle.destroy()
+})

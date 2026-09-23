@@ -679,13 +679,19 @@ export const basic: Skin = {
       let left = outer ? 24 : 0
       for (const width of widths) { lefts.push(left); left += width + BOX.gapX }
       const start = outer ? 24 : 0
+      // One pitch for the grid, as wide as its widest card: a card drawn wider
+      // -- one whose handoff names a task the board lacks -- would otherwise
+      // lie over its neighbour.
+      const pitch =
+        Math.max(BOX.width, ...placed.filter(one => one.grid).map(one => parseFloat(boxes.get(one.task)!.root.style.width) || BOX.width)) +
+        BOX.gridGap
       let gridRight = 0
       for (const one of placed) {
         const box = boxes.get(one.task)!
-        const x = one.grid ? start + one.column * (BOX.width + BOX.gridGap) : lefts[one.column]
+        const x = one.grid ? start + one.column * pitch : lefts[one.column]
         box.root.style.left = `${x}px`
         box.root.style.top = `${corner(one, rows).y}px`
-        if (one.grid) gridRight = Math.max(gridRight, x + BOX.width)
+        if (one.grid) gridRight = Math.max(gridRight, x + parseFloat(box.root.style.width))
       }
       const flowRight = flowing.length ? left - BOX.gapX : 0
       board.style.width = `${Math.max(flowRight, gridRight) + (outer ? 24 : 0)}px`
