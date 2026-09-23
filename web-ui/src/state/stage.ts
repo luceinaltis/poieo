@@ -457,7 +457,7 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
  * fields sit beside `type` rather than under `data`, and it names its own task.
  * It is also the last word on a run, so it retires that run's bookkeeping.
  */
-function pendingChange(summary: RunSummary): boolean {
+export function pendingChange(summary: RunSummary): boolean {
   return Boolean(summary.change) && (summary.status === "completed" || summary.application?.status === "blocked") &&
     !["applied", "discarded", "undone"].includes(summary.application?.status ?? "")
 }
