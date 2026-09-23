@@ -2903,8 +2903,6 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         # not wait on its own footnote.
         Route("/api/projects/{project}/models/undeclared", project_models_undeclared),
         Route("/api/projects/{project}/folders", project_folders),
-        # Chat: a conversation put to the project's model, its reply handed
-        # back. It writes nothing and starts no run.
         # Models: the fourth kind. They write the project's binding file and
         # nothing else, and never accept or return a credential. `add` declares
         # an endpoint; `use` chooses among the models of one already declared.
