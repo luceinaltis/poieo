@@ -21,6 +21,9 @@ function appearsInTimeline(event: PoieoEvent): boolean {
   }
   return [
     "node_tool_call",
+    "node_tool_asking",
+    // Kept so the question it answers can say what was answered; drawn as nothing.
+    "node_tool_answered",
     "node_directed",
     "node_context_cleared",
     "node_input_dropped",
@@ -60,8 +63,15 @@ export function visibleTimelineEvents(
   { keepWords = false }: { keepWords?: boolean } = {},
 ): PoieoEvent[] {
   const toolsByTurn = new Map<string, number>()
+  // A call waiting on a person is accounted for -- it is on the record as a
+  // question, and its own record follows the answer -- so a question not yet
+  // answered counts as that call, and one answered does not count twice.
+  const answered = new Set(
+    events.filter((event) => event.type === "node_tool_answered").map((event) => String(event.data?.call_id ?? "")),
+  )
   for (const event of events) {
-    if (event.type !== "node_tool_call") continue
+    const waiting = event.type === "node_tool_asking" && !answered.has(String(event.data?.call_id ?? ""))
+    if (event.type !== "node_tool_call" && !waiting) continue
     const key = turnKey(event)
     if (key) toolsByTurn.set(key, (toolsByTurn.get(key) ?? 0) + 1)
   }
@@ -329,8 +339,55 @@ function RunOutput({ text }: { text: string }) {
  * The step's name stays, because the author chose it and it is on the board
  * too; what goes is everything that describes the loop rather than the work.
  */
-export function TimelineEntry({ event }: { event: PoieoEvent }) {
+/** A person's answer to a call a step asked about, by call id: true, false, or absent while it waits. */
+type Answers = Record<string, boolean>
+
+/** A person's say-so on one call, or null where nobody here can give it. */
+type OnAnswer = ((call: string, allow: boolean) => void) | null
+
+export function TimelineEntry({
+  event,
+  answers = {},
+  onAnswer = null,
+}: {
+  event: PoieoEvent
+  answers?: Answers
+  onAnswer?: OnAnswer
+}) {
   const data = event.data ?? {}
+
+  if (event.type === "node_tool_answered") return null
+
+  if (event.type === "node_tool_asking") {
+    // The step's question, with the answer folded in once it comes: a line
+    // of its own for the answer would say twice what one line can.
+    const call = String(data.call_id ?? "")
+    const answer = answers[call]
+    const kind = data.kind === "commands" ? "run a command" : "edit a file"
+    return (
+      <li className="drawer-entry" data-kind="asking" data-answer={answer === undefined ? "waiting" : String(answer)}>
+        <span className="drawer-when">{shortTime(event.at ?? "")}</span>
+        <div className="drawer-event drawer-asking">
+          <span className="drawer-tool-purpose">{`wants to ${kind}: ${toolPurpose(data)}`}</span>
+          <span className="drawer-tool-meta">{String(data.name ?? "")}</span>
+          {answer !== undefined ? (
+            <p className="drawer-text">{answer ? "allowed" : "not allowed"}</p>
+          ) : onAnswer ? (
+            <div className="drawer-answer">
+              <button type="button" data-do="allow" onClick={() => onAnswer(call, true)}>
+                allow
+              </button>
+              <button type="button" data-do="deny" onClick={() => onAnswer(call, false)}>
+                deny
+              </button>
+            </div>
+          ) : (
+            <p className="drawer-text">waiting for a person to allow it</p>
+          )}
+        </div>
+      </li>
+    )
+  }
 
   if (event.type === "node_turn") {
     const text = String(data.text ?? "")
@@ -545,7 +602,20 @@ export function TimelineEntry({ event }: { event: PoieoEvent }) {
  * The grouped list. `following` says the run is in flight: the newest group
  * of tool calls then stays open, because it is what the run is doing now.
  */
-export function Timeline({ events, following }: { events: PoieoEvent[]; following: boolean }) {
+export function Timeline({
+  events,
+  following,
+  onAnswer = null,
+}: {
+  events: PoieoEvent[]
+  following: boolean
+  /** Answers a call a step is waiting on; absent where nobody here can. */
+  onAnswer?: OnAnswer
+}) {
+  const answers: Answers = {}
+  for (const event of events) {
+    if (event.type === "node_tool_answered") answers[String(event.data?.call_id ?? "")] = event.data?.allowed === true
+  }
   const groups = groupTimeline(events)
   const newest = groups.findLastIndex((group) => group.kind === "tools")
   return (
@@ -554,7 +624,7 @@ export function Timeline({ events, following }: { events: PoieoEvent[]; followin
         group.kind === "tools" ? (
           <ToolGroup key={`tools-${index}`} events={group.events} open={following && index === newest} />
         ) : (
-          <TimelineEntry key={`${group.event.type}-${index}`} event={group.event} />
+          <TimelineEntry key={`${group.event.type}-${index}`} event={group.event} answers={answers} onAnswer={onAnswer} />
         ),
       )}
     </ol>

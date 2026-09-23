@@ -47,10 +47,10 @@ _RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"COM{n}" for n in range(1, 10)} | {
 from .. import detect as engines
 from ..attachments import checked_attachments, picture_type
 from ..binding import load_binding, split_ref
-from ..card import expand, load_card, load_cards
+from ..card import CHAT_PERMISSIONS, chat_permission, expand, load_card, load_cards
 from ..cron import CronSchedule
 from ..errors import BindingError, PoieoError, SpecError, describe_invalid
-from ..graph import Branch
+from ..graph import Branch, load_document
 from ..learn import last_suggestion, learner_load, recent_passes, settle_suggestion
 from ..memory import (
     entry_named,
@@ -515,6 +515,22 @@ def _has_chat_card(folder: Path) -> bool:
         return False
 
 
+def _chat_setting(runner: Any) -> str | None:
+    """Which of the chat's settings its card on disk holds, or None for any other task.
+
+    Read from the file rather than the running graph: a setting chosen in the
+    chat is on disk at once and read by the next run, and the picker must not
+    flip back in between.
+    """
+    card = getattr(runner.config, "cards_by_task", {}).get(runner.name)
+    if card is None or not card.chat or card.source_path is None:
+        return None
+    try:
+        return chat_permission(load_card(card.source_path))
+    except PoieoError:
+        return chat_permission(card)
+
+
 def _is_chat(runner: Any) -> bool:
     # A task loaded from a graph file has no card, and neither has a project
     # built without a tasks folder.
@@ -831,6 +847,9 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
                     # The task the chat speaks to, which the board leaves off
                     # its stage: its runs are a conversation, not work.
                     "chat": _is_chat(runner),
+                    # Which of its settings the chat's card holds; null for
+                    # every other task.
+                    "permission": _chat_setting(runner),
                 }
             )
         # Whose board this is -- all of them. Two daemons on two ports serve
@@ -2245,6 +2264,63 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": "nothing is waiting on that call"}, status_code=409)
         return JSONResponse({"status": "answered"})
 
+    async def flow_permission(request: Request) -> JSONResponse:
+        """Choose what the chat may do: one of its four settings, written into its card.
+
+        A write of the fifth kind -- it changes a card file -- kept to the two
+        keys the setting is made of, so the rest of the card is as it was.
+        The next run reads it, as a card's tools always are.
+        """
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        mode = body.get("mode") if isinstance(body, dict) else None
+        if mode not in CHAT_PERMISSIONS:
+            return JSONResponse({"error": f"a setting is one of {', '.join(CHAT_PERMISSIONS)}"}, status_code=400)
+        card = getattr(runner.config, "cards_by_task", {}).get(runner.name)
+        if card is None or not card.chat or card.source_path is None:
+            return JSONResponse({"error": "only the chat's card is set this way"}, status_code=409)
+        path = card.source_path
+        tools, asks = CHAT_PERMISSIONS[mode]
+        # Rebuilt from its parse, a card keeps its data and nothing else: a
+        # comment would be dropped, and a JSON card written back as YAML would
+        # stop loading. Either is a card edited by hand, and stays so.
+        raw = await asyncio.to_thread(path.read_text, encoding="utf-8")
+        if path.suffix.lower() not in (".yaml", ".yml") or "#" in raw:
+            return JSONResponse(
+                {"error": "this chat card is written by hand; set `tools` and `ask_before` in the file"},
+                status_code=409,
+            )
+
+        def _write() -> str | None:
+            document = load_document(path)
+            document["tools"] = tools
+            if asks:
+                document["ask_before"] = asks
+            else:
+                document.pop("ask_before", None)
+            text = yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
+            scratch = path.with_name(f".{path.name}.permission")
+            try:
+                scratch.write_text(text, encoding="utf-8")
+                load_card(scratch)  # the card it would become still loads
+                os.replace(scratch, path)
+            except (PoieoError, OSError) as exc:
+                return str(exc)
+            finally:
+                scratch.unlink(missing_ok=True)
+            return None
+
+        failed = await asyncio.to_thread(_write)
+        if failed is not None:
+            return JSONResponse({"error": f"the setting could not be saved: {failed}"}, status_code=409)
+        _look_now(daemon)
+        return JSONResponse({"permission": mode})
+
     def _task_changed(runner: Any) -> None:
         if isinstance(getattr(runner, "store", None), BroadcastStore):
             runner.store.announce({"type": "tasks_changed", "project": runner.config.display_name})
@@ -2970,6 +3046,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/run", flow_run, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/approve", flow_approve, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/permission", flow_permission, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/answer", flow_answer, methods=["POST"]),
         Route("/", index),
     ]

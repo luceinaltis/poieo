@@ -261,6 +261,8 @@ export interface TaskRow {
   apply?: ApplyPermission
   /** The task the chat speaks to, which the board leaves off its stage. */
   chat?: boolean
+  /** Which of the chat's settings its card holds -- read, ask, edits, all or custom; null for other tasks. */
+  permission?: string | null
 }
 
 /**

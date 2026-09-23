@@ -19,8 +19,8 @@
 import { useEffect, useRef, useState } from "react"
 import type { ChangeEvent, KeyboardEvent } from "react"
 
-import { createChatCard, fetchRunEvents, leaveDirection, runNow } from "../api"
-import type { Answer, Attaching } from "../api"
+import { approve, createChatCard, fetchRunEvents, leaveDirection, runNow, setPermission } from "../api"
+import type { Answer, Attaching, ChatPermission } from "../api"
 import { Timeline, visibleTimelineEvents, withoutThinking } from "../detail/Timeline"
 import { Refusal } from "../Refusal"
 import type { TaskState } from "../state/stage"
@@ -72,6 +72,14 @@ interface Pending {
 }
 
 const TITLE_AT_MOST = 60
+
+// What the chat may do, in the picker's words: the card's own four settings.
+const PERMISSIONS: [ChatPermission, string][] = [
+  ["read", "read only"],
+  ["ask", "ask each time"],
+  ["edits", "accept edits"],
+  ["all", "allow all"],
+]
 
 // What a message may carry: the daemon's own limits, said here first so a
 // file it would refuse is refused before anything is sent.
@@ -255,6 +263,13 @@ export function Chat({
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<Answer | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
+  // The setting just chosen, shown until the card on disk says the same.
+  const [choosing, setChoosing] = useState<string | null>(null)
+  const held = chatTask?.permission ?? null
+  useEffect(() => {
+    if (choosing !== null && choosing === held) setChoosing(null)
+  }, [choosing, held])
+  const shownPermission = choosing ?? held
   // What the next message will carry, read and checked as it is chosen.
   const [attached, setAttached] = useState<Attaching[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -263,6 +278,15 @@ export function Chat({
   const live = liveOf(chatTask)
   const past = thread ? runs.filter((run) => run.thread === thread && run.run_id !== live?.runId).reverse() : []
   const liveHere = live && thread !== null && live.thread === thread ? live : null
+
+  // Opened with no conversation chosen while one is being answered -- after a
+  // reload, say -- the panel shows that one. A new conversation chosen on
+  // purpose stays chosen.
+  const picked = useRef(false)
+  const liveThread = live?.thread ?? null
+  useEffect(() => {
+    if (thread === null && liveThread !== null && !picked.current) onThread(liveThread)
+  }, [thread, liveThread, onThread])
 
   // A pending message has landed once its run is live or on the record --
   // or will not, because the task was held back from starting it, which the
@@ -372,6 +396,24 @@ export function Chat({
     if (taken.length) setAttached((current) => [...current, ...taken])
   }
 
+  const choosePermission = async (mode: ChatPermission) => {
+    if (!chatTask) return
+    setRefused(null)
+    setChoosing(mode)
+    const answer = await setPermission(project, chatTask.name, mode)
+    if (!answer.ok) {
+      setChoosing(null)
+      setRefused(answer)
+    }
+  }
+
+  // A person's say-so on a call the answer is waiting on.
+  const answerCall = async (call: string, allow: boolean) => {
+    if (!chatTask) return
+    const answer = await approve(project, chatTask.name, call, allow)
+    if (!answer.ok) setRefused(answer)
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends and Shift+Enter breaks the line, as a chat box does -- but
     // not while an input method is still composing, where Enter commits the
@@ -398,6 +440,7 @@ export function Chat({
             value={thread ?? ""}
             disabled={busy}
             onChange={(event) => {
+              picked.current = true
               setRefused(null)
               onThread(event.target.value || null)
             }}
@@ -428,10 +471,31 @@ export function Chat({
             ))}
           </select>
         ) : null}
+        {chatTask && !steering ? (
+          <select
+            className="chat-permission"
+            aria-label="Permission"
+            value={shownPermission ?? "read"}
+            onChange={(event) => void choosePermission(event.target.value as ChatPermission)}
+          >
+            {PERMISSIONS.map(([mode, label]) => (
+              <option key={mode} value={mode}>
+                {label}
+              </option>
+            ))}
+            {shownPermission === "custom" ? <option value="custom">as its card says</option> : null}
+          </select>
+        ) : null}
         <button type="button" className="chat-close" aria-label="Close" onClick={onClose}>
           ✕
         </button>
       </header>
+      {shownPermission === "all" && !steering ? (
+        // Said where it is chosen: nothing on this machine fences a command in.
+        <p className="chat-caution" role="note">
+          Edits and commands run without asking. Commands run on this machine as you.
+        </p>
+      ) : null}
       <div className="chat-thread-view">
         {steering ? (
           heard.length ? (
@@ -458,7 +522,9 @@ export function Chat({
               // `aria-live` so a screen reader hears it as it comes.
               <li className="chat-turn chat-arriving" data-role="assistant" aria-live="polite">
                 <span className="chat-who">answer</span>
-                {working.length ? <Timeline events={working} following /> : null}
+                {working.length ? (
+                  <Timeline events={working} following onAnswer={(call, allow) => void answerCall(call, allow)} />
+                ) : null}
                 <p className="chat-thinking" role="status">
                   working…
                 </p>

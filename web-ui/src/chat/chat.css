@@ -182,7 +182,8 @@
 }
 
 .chat-thread,
-.chat-target {
+.chat-target,
+.chat-permission {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -276,4 +277,12 @@
   color: var(--dim);
   font-family: var(--mono);
   font-size: 0.75em;
+}
+
+/* Said where "allow all" is chosen, in the tone of a warning, not an error. */
+.chat-caution {
+  color: var(--line);
+  flex: none;
+  font-size: 0.8em;
+  margin: 0 0 6px;
 }

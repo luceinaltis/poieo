@@ -40,7 +40,7 @@ the project's display name; task parameters use the card filename stem.
 
 | request | response |
 |---|---|
-| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, `title` (the card's own `name:`, or the task name without a card), graph, trigger, status, hold and why it is held (`held_because`, the daemon's own sentence or null), enabled/stale state, current and last run, review state, pending question, handoffs, graph shape, `apply`, the task's permission to apply its own work (`mode`, `paths`, `checks`), and `chat`, true for the task the chat speaks to, which the board leaves off its stage |
+| `GET /api/tasks` | `{projects, tasks}`; projects include `name`, `root`, and `keeps_copies`; tasks include identity, `title` (the card's own `name:`, or the task name without a card), graph, trigger, status, hold and why it is held (`held_because`, the daemon's own sentence or null), enabled/stale state, current and last run, review state, pending question, handoffs, graph shape, `apply`, the task's permission to apply its own work (`mode`, `paths`, `checks`), `chat`, true for the task the chat speaks to, which the board leaves off its stage, and `permission`, which of the chat's settings its card on disk holds -- `read`, `ask`, `edits`, `all`, or `custom` for a hand-written mix -- and null for every other task |
 | `GET /api/runs?project=&task=&limit=` | `{runs}` newest first; project and task filters may be combined; `limit` defaults to 20, is clamped from 1 to 50, and is 400 when not a number |
 | `GET /api/runs/{run_id}` | `{run_id, summary, events}` or 404; `summary` is the index row, null while the run is in flight |
 | `GET /api/runs/{run_id}/files/{name}` | a file kept with the run: what was attached to the message that started it, or a picture the model looked at (named by `preview` on its tool call); served as the picture its bytes say it is, otherwise as plain text, with `nosniff`, never as a page; 404 for any other name |
@@ -114,6 +114,7 @@ state is 409.
 | `POST /api/tasks/{project}/{task}/resume` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/run` | no body, or `{message, thread?}`: what a person says to start the run, at most 4,000 characters, and the conversation it continues, 1 to 64 letters, digits, `-` or `_`; with `attachments`, at most 4 `{name, media_type, data}` in base64 -- PNG, JPEG, GIF or WebP up to 3,750,000 bytes each, told apart by their bytes, or UTF-8 `text/plain`, `text/markdown`, `text/csv` or `application/json` up to 200,000 characters, each under one plain file name; the run reads the message as `input.message`, its first model step is shown the attachments beside its prompt, a picture as one and a text file as its words, and its record keeps the message, the thread and the attachments' names, the files themselves kept under `runs/files/<run-id>/`; returns `starting`, 400 for a body that is not that, or 409 with the in-flight run id |
 | `POST /api/tasks/{project}/{task}/approve` | `{call, allow}`: a person's answer to a tool call the run in flight is waiting on (`node_tool_asking` names the call); returns `answered`, 400 for a body that is not that, or 409 when nothing is waiting on that call |
+| `POST /api/tasks/{project}/{task}/permission` | `{mode}`, one of `read`, `ask`, `edits` or `all`: what the chat may do, written into the chat card's `tools` and `ask_before` and read by its next run -- `read` looks only; `ask` edits and runs commands, asking before each; `edits` edits unasked and asks before a command; `all` asks about nothing; everything else on the card is kept; returns `{permission}`, 400 for another mode, 409 for a task that is not the chat's or a chat card written by hand -- a JSON card, or one carrying a comment, which a rebuild would break or lose |
 | `POST /api/tasks/{project}/{task}/answer` | `{choice}`; completes the persisted pending question or returns the currently offered choices |
 
 Accept and undo can update the checked-out project; discard removes pending
@@ -326,34 +327,42 @@ makes with the create route the first time a message is sent -- in the
 project's own folder, able only to look. Each message starts one of its runs
 with `{message, thread}`, and the runs that share a thread are the
 conversation: the header's picker names each by its first message, most
-recently spoken-in first, and `new conversation` starts another. A
-conversation is read back from the task's run records in the stage, so it is
-there after a reload and in the next session -- as far back as the stage's
-window of the chat's newest fifty runs reaches. A first message said before
-the card exists is held by the shell and sent once the daemon has picked the
-card up, so closing the panel meanwhile does not lose it, and a refusal then
-is shown when the panel is next open. A message the task is then held back
-from answering -- a spend limit reached -- says why instead of waiting. Each
-turn is a bubble, the reader's to the right and the answer -- the run's `said`
--- to the left, with `what it did` folded under it: opened, it fetches that
-run's events and draws its timeline. While the answer is being worked on, the
-run's live timeline stands in its place: what the model says between steps,
-which the drawer folds into the calls but the chat keeps, and each tool it
-reaches for, folded, with a picture it looked at drawn small on the call's
-line; a `working…` line closes it. `attach` picks pictures and text files for
-the next message -- at most four, checked against what the daemon takes before
-anything is sent, shown as chips that can be taken back -- and they ride with
-its run-now; a sent message draws its pictures small and its text files by
-name, from the files kept with its run. Words for a run already going carry
-none. What the model thinks is never shown in the chat; a task's thinking
-stays in its drawer. A message sent while the answer is being worked on is
-direction, heard at the run's next model turn and drawn on the timeline as
-`you said`. The stage keeps the chat's task, so its live events arrive, and
-leaves it off the board: it is not drawn, counted, or offered as a place to
-hand work to. While another task runs, a picker in the header names it:
-chosen, that run's timeline is the thread, live and folded, and the box sends
-it direction; when the run ends the box goes back to the conversation. The
-timeline itself lives in `detail/Timeline.tsx`, read by the drawer and the
+recently spoken-in first, and `new conversation` starts another; opened with
+none chosen while one is being answered -- after a reload, say -- the panel
+shows that one. A conversation is read back from the task's run records in the
+stage, so it is there after a reload and in the next session -- as far back as
+the stage's window of the chat's newest fifty runs reaches. A first message
+said before the card exists is held by the shell and sent once the daemon has
+picked the card up, so closing the panel meanwhile does not lose it, and a
+refusal then is shown when the panel is next open. A message the task is then
+held back from answering -- a spend limit reached -- says why instead of
+waiting. Each turn is a bubble, the reader's to the right and the answer --
+the run's `said` -- to the left, with `what it did` folded under it: opened,
+it fetches that run's events and draws its timeline. While the answer is being
+worked on, the run's live timeline stands in its place: what the model says
+between steps, which the drawer folds into the calls but the chat keeps, and
+each tool it reaches for, folded, with a picture it looked at drawn small on
+the call's line; a `working…` line closes it. `attach` picks pictures and text
+files for the next message -- at most four, checked against what the daemon
+takes before anything is sent, shown as chips that can be taken back -- and
+they ride with its run-now; a sent message draws its pictures small and its
+text files by name, from the files kept with its run. Words for a run already
+going carry none. The header's permission picker says what the chat may do --
+read only, ask each time, accept edits, allow all -- and writes it into the
+chat card through the permission route; the next message runs under it, and
+choosing allow all says plainly that commands then run on this machine
+unasked. A call the answer is waiting on appears on its timeline as what the
+step wants to do, with allow and deny, which answer it through the approve
+route; once answered the line says which, and the drawer shows the same line
+without the buttons. What the model thinks is never shown in the chat; a
+task's thinking stays in its drawer. A message sent while the answer is being
+worked on is direction, heard at the run's next model turn and drawn on the
+timeline as `you said`. The stage keeps the chat's task, so its live events
+arrive, and leaves it off the board: it is not drawn, counted, or offered as a
+place to hand work to. While another task runs, a picker in the header names
+it: chosen, that run's timeline is the thread, live and folded, and the box
+sends it direction; when the run ends the box goes back to the conversation.
+The timeline itself lives in `detail/Timeline.tsx`, read by the drawer and the
 chat alike. Enter sends, Shift+Enter breaks the line, and Enter during
 input-method composition does nothing. A refusal stays on screen with the
 message still in the box. The shell holds which conversation is open rather

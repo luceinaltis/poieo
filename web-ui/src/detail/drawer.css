@@ -910,3 +910,42 @@ p.run-checks[data-verdict="blocked"] {
 .drawer-directed .drawer-text {
   margin: 2px 0 0;
 }
+
+/* A call waiting on a person, and the two answers they can give. */
+.drawer-answer {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.drawer-answer button {
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82em;
+  padding: 2px 10px;
+}
+
+.drawer-answer button[data-do="allow"] {
+  border-color: var(--line);
+}
+
+.drawer-entry[data-kind="asking"][data-answer="false"] .drawer-text {
+  color: var(--stop);
+}
+
+/* The question on one line, the answer or the choice under it. */
+.drawer-asking {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.drawer-asking > .drawer-text,
+.drawer-asking > .drawer-answer {
+  flex-basis: 100%;
+}
