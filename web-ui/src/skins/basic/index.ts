@@ -205,8 +205,12 @@ function buildBox(task: string, callbacks: SkinCallbacks, onView: (opener: HTMLE
     act.disabled = true
     void callbacks.onAct(task, verb).then((answer) => {
       act.disabled = false
+      const was = refused.hidden
       refused.textContent = answer.ok ? "" : answer.error || "That didn't work."
       refused.hidden = answer.ok
+      // A line shown or taken away changes the card's height, and cards are
+      // placed from measured heights: the board lays itself out again.
+      if (was !== refused.hidden) root.dispatchEvent(new Event("basic-resized", { bubbles: true }))
     })
   })
   box.viewSteps.textContent = "View steps"
@@ -483,6 +487,11 @@ export const basic: Skin = {
     // The last stage drawn, so a border opened by hand can lay the board out
     // again -- it just changed a height, and the arrows are drawn off those.
     let last: StageState | null = null
+    // A card that changed its own height outside a frame -- a refusal shown
+    // or cleared -- asks for the rows to be measured again.
+    board.addEventListener("basic-resized", () => {
+      if (last !== null) relayout(last)
+    })
     // A fit is only true of the board and the window it was measured from, so
     // a window that changes size needs a new one. Guarded: the observer is not
     // in jsdom, and a skin that cannot watch simply keeps the fit it has.

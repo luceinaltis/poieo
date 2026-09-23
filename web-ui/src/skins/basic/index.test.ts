@@ -921,3 +921,24 @@ test("a board that cannot act offers no button", () => {
   expect(actButton("waits").hidden).toBe(true)
   handle.destroy()
 })
+
+test("a refusal that makes a card taller moves the card under it down", async () => {
+  // Cards are placed from measured heights, so a card that grows a line must
+  // have the board measured again, or it lies over the next row.
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+    if (!this.classList.contains("basic-task")) return 0
+    const refused = this.querySelector<HTMLElement>(".basic-refused")
+    return refused && !refused.hidden ? 190 : 150
+  })
+  const onAct = vi.fn(async () => ({ ok: false, error: "a run is already in flight" }))
+  const handle = basic.mount(el, { onSelectTask: vi.fn(), onAct })
+  handle.update(initialStage([row("first"), row("second")]))
+  const top = () => parseFloat(el.querySelector<HTMLElement>('[data-task="board/second"]')!.style.top)
+  const before = top()
+
+  await settled()
+  actButton("first").click()
+  await vi.waitFor(() => expect(top()).toBeGreaterThan(before))
+  handle.destroy()
+  vi.restoreAllMocks()
+})
