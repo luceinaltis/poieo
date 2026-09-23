@@ -63,8 +63,15 @@ export function visibleTimelineEvents(
   { keepWords = false }: { keepWords?: boolean } = {},
 ): PoieoEvent[] {
   const toolsByTurn = new Map<string, number>()
+  // A call waiting on a person is accounted for -- it is on the record as a
+  // question, and its own record follows the answer -- so a question not yet
+  // answered counts as that call, and one answered does not count twice.
+  const answered = new Set(
+    events.filter((event) => event.type === "node_tool_answered").map((event) => String(event.data?.call_id ?? "")),
+  )
   for (const event of events) {
-    if (event.type !== "node_tool_call") continue
+    const waiting = event.type === "node_tool_asking" && !answered.has(String(event.data?.call_id ?? ""))
+    if (event.type !== "node_tool_call" && !waiting) continue
     const key = turnKey(event)
     if (key) toolsByTurn.set(key, (toolsByTurn.get(key) ?? 0) + 1)
   }

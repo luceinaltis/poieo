@@ -279,6 +279,15 @@ export function Chat({
   const past = thread ? runs.filter((run) => run.thread === thread && run.run_id !== live?.runId).reverse() : []
   const liveHere = live && thread !== null && live.thread === thread ? live : null
 
+  // Opened with no conversation chosen while one is being answered -- after a
+  // reload, say -- the panel shows that one. A new conversation chosen on
+  // purpose stays chosen.
+  const picked = useRef(false)
+  const liveThread = live?.thread ?? null
+  useEffect(() => {
+    if (thread === null && liveThread !== null && !picked.current) onThread(liveThread)
+  }, [thread, liveThread, onThread])
+
   // A pending message has landed once its run is live or on the record --
   // or will not, because the task was held back from starting it, which the
   // daemon says only on the task: a run-now it accepted is not a run begun.
@@ -431,6 +440,7 @@ export function Chat({
             value={thread ?? ""}
             disabled={busy}
             onChange={(event) => {
+              picked.current = true
               setRefused(null)
               onThread(event.target.value || null)
             }}

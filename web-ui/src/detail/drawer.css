@@ -936,3 +936,16 @@ p.run-checks[data-verdict="blocked"] {
 .drawer-entry[data-kind="asking"][data-answer="false"] .drawer-text {
   color: var(--stop);
 }
+
+/* The question on one line, the answer or the choice under it. */
+.drawer-asking {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.drawer-asking > .drawer-text,
+.drawer-asking > .drawer-answer {
+  flex-basis: 100%;
+}

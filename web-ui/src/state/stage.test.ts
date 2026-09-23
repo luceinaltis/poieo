@@ -660,3 +660,28 @@ test("the chat's task carries which setting its card holds", () => {
   const stage = initialStage([{ ...TASK_ROWS[0], name: "chat", chat: true, permission: "edits" }])
   expect(Object.values(stage.tasks)[0].permission).toBe("edits")
 })
+
+test("a call waiting on a person, and the answer, join the run's timeline -- two in one turn are two", () => {
+  const at = "2026-08-22T07:28:19.400+00:00"
+  const asked = (call: string): PoieoEvent => ({
+    run_id: AGENT_RUN[0].run_id,
+    type: "node_tool_asking",
+    at,
+    node_id: "work",
+    data: { turn: 1, call_id: call, name: "write_file", kind: "edits" },
+  })
+  const answered: PoieoEvent = {
+    run_id: AGENT_RUN[0].run_id,
+    type: "node_tool_answered",
+    at,
+    node_id: "work",
+    data: { turn: 1, call_id: "c1", allowed: true },
+  }
+  const stage = replay(start(), [AGENT_RUN[0], asked("c1"), asked("c2"), answered])
+  const kinds = stage.tasks["board/chores"].activity.map((event) => [event.type, event.data?.call_id])
+  expect(kinds.slice(-3)).toEqual([
+    ["node_tool_asking", "c1"],
+    ["node_tool_asking", "c2"],
+    ["node_tool_answered", "c1"],
+  ])
+})

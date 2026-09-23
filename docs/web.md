@@ -327,47 +327,49 @@ makes with the create route the first time a message is sent -- in the
 project's own folder, able only to look. Each message starts one of its runs
 with `{message, thread}`, and the runs that share a thread are the
 conversation: the header's picker names each by its first message, most
-recently spoken-in first, and `new conversation` starts another. A
-conversation is read back from the task's run records in the stage, so it is
-there after a reload and in the next session -- as far back as the stage's
-window of the chat's newest fifty runs reaches. A first message said before
-the card exists is held by the shell and sent once the daemon has picked the
-card up, so closing the panel meanwhile does not lose it, and a refusal then
-is shown when the panel is next open. A message the task is then held back
-from answering -- a spend limit reached -- says why instead of waiting. Each
-turn is a bubble, the reader's to the right and the answer -- the run's `said`
--- to the left, with `what it did` folded under it: opened, it fetches that
-run's events and draws its timeline. While the answer is being worked on, the
-run's live timeline stands in its place: what the model says between steps,
-which the drawer folds into the calls but the chat keeps, and each tool it
-reaches for, folded, with a picture it looked at drawn small on the call's
-line; a `working…` line closes it. `attach` picks pictures and text files for
-the next message -- at most four, checked against what the daemon takes before
-anything is sent, shown as chips that can be taken back -- and they ride with
-its run-now; a sent message draws its pictures small and its text files by
-name, from the files kept with its run. Words for a run already going carry
-none. The header's permission picker says what the chat may do -- read only,
-ask each time, accept edits, allow all -- and writes it into the chat card
-through the permission route; the next message runs under it, and choosing
-allow all says plainly that commands then run on this machine unasked. A call
-the answer is waiting on appears on its timeline as what the step wants to do,
-with allow and deny, which answer it through the approve route; once answered
-the line says which, and the drawer shows the same line without the buttons.
-What the model thinks is never shown in the chat; a task's thinking stays in
-its drawer. A message sent while the answer is being worked on is direction,
-heard at the run's next model turn and drawn on the timeline as `you said`.
-The stage keeps the chat's task, so its live events arrive, and leaves it off
-the board: it is not drawn, counted, or offered as a place to hand work to.
-While another task runs, a picker in the header names it: chosen, that run's
-timeline is the thread, live and folded, and the box sends it direction; when
-the run ends the box goes back to the conversation. The timeline itself lives
-in `detail/Timeline.tsx`, read by the drawer and the chat alike. Enter sends,
-Shift+Enter breaks the line, and Enter during input-method composition does
-nothing. A refusal stays on screen with the message still in the box. The
-shell holds which conversation is open rather than the panel, so a task picked
-off the board -- which takes the one margin -- does not close it; switching
-project does. An answer that came back empty says so instead of showing a
-blank, and a failed run shows its error under the turn.
+recently spoken-in first, and `new conversation` starts another; opened with
+none chosen while one is being answered -- after a reload, say -- the panel
+shows that one. A conversation is read back from the task's run records in the
+stage, so it is there after a reload and in the next session -- as far back as
+the stage's window of the chat's newest fifty runs reaches. A first message
+said before the card exists is held by the shell and sent once the daemon has
+picked the card up, so closing the panel meanwhile does not lose it, and a
+refusal then is shown when the panel is next open. A message the task is then
+held back from answering -- a spend limit reached -- says why instead of
+waiting. Each turn is a bubble, the reader's to the right and the answer --
+the run's `said` -- to the left, with `what it did` folded under it: opened,
+it fetches that run's events and draws its timeline. While the answer is being
+worked on, the run's live timeline stands in its place: what the model says
+between steps, which the drawer folds into the calls but the chat keeps, and
+each tool it reaches for, folded, with a picture it looked at drawn small on
+the call's line; a `working…` line closes it. `attach` picks pictures and text
+files for the next message -- at most four, checked against what the daemon
+takes before anything is sent, shown as chips that can be taken back -- and
+they ride with its run-now; a sent message draws its pictures small and its
+text files by name, from the files kept with its run. Words for a run already
+going carry none. The header's permission picker says what the chat may do --
+read only, ask each time, accept edits, allow all -- and writes it into the
+chat card through the permission route; the next message runs under it, and
+choosing allow all says plainly that commands then run on this machine
+unasked. A call the answer is waiting on appears on its timeline as what the
+step wants to do, with allow and deny, which answer it through the approve
+route; once answered the line says which, and the drawer shows the same line
+without the buttons. What the model thinks is never shown in the chat; a
+task's thinking stays in its drawer. A message sent while the answer is being
+worked on is direction, heard at the run's next model turn and drawn on the
+timeline as `you said`. The stage keeps the chat's task, so its live events
+arrive, and leaves it off the board: it is not drawn, counted, or offered as a
+place to hand work to. While another task runs, a picker in the header names
+it: chosen, that run's timeline is the thread, live and folded, and the box
+sends it direction; when the run ends the box goes back to the conversation.
+The timeline itself lives in `detail/Timeline.tsx`, read by the drawer and the
+chat alike. Enter sends, Shift+Enter breaks the line, and Enter during
+input-method composition does nothing. A refusal stays on screen with the
+message still in the box. The shell holds which conversation is open rather
+than the panel, so a task picked off the board -- which takes the one margin
+-- does not close it; switching project does. An answer that came back empty
+says so instead of showing a blank, and a failed run shows its error under the
+turn.
 
 The fields are a prompt and a name, and the name may be left blank: it is then
 the first line of the prompt, cut at the first sentence when that comes

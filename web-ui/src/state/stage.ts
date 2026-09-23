@@ -325,7 +325,13 @@ function keyOf(event: PoieoEvent): string {
   // The one event that can repeat within a turn in the same millisecond is
   // the person's words, two of them said while one tool ran; the words are
   // what tells them apart.
-  const ordinal = event.type === "node_directed" ? `${data.turn ?? ""}:${data.text ?? ""}` : (data.step ?? data.turn ?? "")
+  const ordinal =
+    event.type === "node_directed"
+      ? `${data.turn ?? ""}:${data.text ?? ""}`
+      : event.type === "node_tool_asking" || event.type === "node_tool_answered"
+        ? // Two calls asked about in one turn: the call tells them apart.
+          `${data.turn ?? ""}:${data.call_id ?? ""}`
+        : (data.step ?? data.turn ?? "")
   return [event.run_id, event.type, event.node_id ?? "", ordinal, event.at ?? ""].join("|")
 }
 
@@ -399,6 +405,12 @@ function patchFor(event: PoieoEvent, taskState: TaskState): Partial<TaskState> |
 
     case "node_directed":
       // Words from the person, heard: on the timeline, for the drawer.
+      return { activity: withEvent(taskState, event) }
+
+    case "node_tool_asking":
+    case "node_tool_answered":
+      // A call waiting on a person, and their answer: on the timeline, where
+      // the chat offers the choice and the drawer shows it.
       return { activity: withEvent(taskState, event) }
 
     case "node_finished":

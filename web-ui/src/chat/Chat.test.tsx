@@ -468,6 +468,20 @@ test("nothing is attached to words for a run already going", async () => {
   expect(attachButton().disabled).toBe(true)
 })
 
+test("opened with no conversation chosen, the chat shows the one being answered", async () => {
+  const activity = [frame("run_started", { task: "chat", project: "board", input: { message: "go on", thread: "t-9" } })]
+  const threads: (string | null)[] = []
+  show({ task: chatTask({ status: "running", activity, activityRunId: "r9" }), onThread: (one) => threads.push(one) })
+
+  expect(threads).toEqual(["t-9"])
+  expect(host.textContent).toContain("go on")
+
+  // ...but a new conversation, chosen on purpose, stays chosen.
+  await pick(conversations(), "")
+  expect(threads.at(-1)).toBeNull()
+  expect(host.querySelector(".chat-turn")).toBeNull()
+})
+
 // -- what the chat may do -----------------------------------------------------------
 
 const permission = () => host.querySelector<HTMLSelectElement>('select[aria-label="Permission"]')

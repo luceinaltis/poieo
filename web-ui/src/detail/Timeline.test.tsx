@@ -126,3 +126,19 @@ test("where nobody can answer, a waiting question says it waits", () => {
   expect(entry.textContent).toContain("waiting for a person")
   expect(entry.querySelector("button")).toBeNull()
 })
+
+test("a call waiting on a person is not a call gone missing from the record", async () => {
+  const { visibleTimelineEvents } = await import("./Timeline")
+  const turn: PoieoEvent = {
+    run_id: "r1",
+    type: "node_turn",
+    at: "2026-09-23T02:00:00Z",
+    node_id: "work",
+    data: { turn: 1, text: "I'll write it down.", tool_call_count: 1 },
+  }
+
+  const shown = visibleTimelineEvents([turn, asking()], { keepWords: true })
+
+  expect(shown.map((event) => event.type)).toEqual(["node_turn", "node_tool_asking"])
+  expect(shown[0].data?.missing_tool_call_count).toBeUndefined()
+})
