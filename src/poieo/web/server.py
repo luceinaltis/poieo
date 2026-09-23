@@ -2286,6 +2286,15 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
             return JSONResponse({"error": "only the chat's card is set this way"}, status_code=409)
         path = card.source_path
         tools, asks = CHAT_PERMISSIONS[mode]
+        # Rebuilt from its parse, a card keeps its data and nothing else: a
+        # comment would be dropped, and a JSON card written back as YAML would
+        # stop loading. Either is a card edited by hand, and stays so.
+        raw = await asyncio.to_thread(path.read_text, encoding="utf-8")
+        if path.suffix.lower() not in (".yaml", ".yml") or "#" in raw:
+            return JSONResponse(
+                {"error": "this chat card is written by hand; set `tools` and `ask_before` in the file"},
+                status_code=409,
+            )
 
         def _write() -> str | None:
             document = load_document(path)

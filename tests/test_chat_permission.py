@@ -85,3 +85,33 @@ async def test_only_a_chat_card_is_set_this_way_and_only_to_a_known_setting(tmp_
         assert (await post("/api/tasks/board/chores/permission", json={"mode": "all"})).status_code == 409
         assert (await post("/api/tasks/board/chat/permission", json={"mode": "everything"})).status_code == 400
         assert (await post("/api/tasks/board/chat/permission", json=[])).status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("stem", "text"),
+    [
+        (
+            "chat.yaml",
+            "name: chat\nfolder: ../work\nchat: true\nprompt: Help.  # kept short on purpose\ntools: [read]\n",
+        ),
+        ("chat.json", '{"name": "chat", "folder": "../work", "chat": true, "prompt": "Help.", "tools": ["read"]}'),
+    ],
+)
+async def test_a_card_the_picker_cannot_rewrite_whole_is_left_as_it_is(tmp_path, stem, text):
+    """A comment lives in the bytes, not the parse, and a JSON card is not YAML:
+    rebuilt, either would lose something or stop loading. Said, and not done."""
+    async with _Board(tmp_path) as board:
+        await down(board.daemon, board.serve)
+        (board.cards / "chat.yaml").unlink()
+        (board.cards / stem).write_text(text, encoding="utf-8")
+        board.daemon = Daemon(load_config(tmp_path / "poieo.yaml"), store=NullStore())
+        board.serve = await up(board.daemon)
+        board.client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(board.daemon)), base_url="http://poieo"
+        )
+
+        answer = await board.client.post("/api/tasks/board/chat/permission", json={"mode": "all"})
+
+        assert answer.status_code == 409
+        assert "by hand" in answer.json()["error"]
+        assert (board.cards / stem).read_text(encoding="utf-8") == text
