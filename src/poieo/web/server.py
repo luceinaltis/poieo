@@ -2221,6 +2221,30 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         except OSError as exc:
             return JSONResponse({"error": f"direction could not be saved: {exc}"}, status_code=409)
 
+    async def flow_approve(request: Request) -> JSONResponse:
+        """A person allows a tool call the run in flight is waiting on, or not.
+
+        Neither review nor control: it touches no file and moves no schedule.
+        It lets one call a step asked about go ahead -- which is why it stands
+        behind the same fence as the writes.
+        """
+        runner, missing = _asked(request)
+        if missing is not None:
+            return missing
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        if (
+            not isinstance(body, dict)
+            or not isinstance(body.get("call"), str)
+            or not isinstance(body.get("allow"), bool)
+        ):
+            return JSONResponse({"error": "answer a call with {call, allow}"}, status_code=400)
+        if not runner.answer_tool(body["call"], body["allow"]):
+            return JSONResponse({"error": "nothing is waiting on that call"}, status_code=409)
+        return JSONResponse({"status": "answered"})
+
     def _task_changed(runner: Any) -> None:
         if isinstance(getattr(runner, "store", None), BroadcastStore):
             runner.store.announce({"type": "tasks_changed", "project": runner.config.display_name})
@@ -2945,6 +2969,7 @@ def create_app(daemon: Any, loopback_only: bool = True) -> Starlette:
         Route("/api/tasks/{project}/{task}/pause", flow_pause, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/resume", flow_resume, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/run", flow_run, methods=["POST"]),
+        Route("/api/tasks/{project}/{task}/approve", flow_approve, methods=["POST"]),
         Route("/api/tasks/{project}/{task}/answer", flow_answer, methods=["POST"]),
         Route("/", index),
     ]

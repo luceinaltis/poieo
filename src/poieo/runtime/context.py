@@ -16,6 +16,7 @@ from ..graph import GraphSpec
 from ..providers import ProviderPool, Usage
 from ..store import Event, RunStore
 from ..tools import ToolContext
+from .approvals import Approvals
 
 
 def new_run_id() -> str:
@@ -57,6 +58,9 @@ class RunContext:
     # content blocks. The first model step to ask takes them, and no other:
     # a picture shown once is in that step's conversation from then on.
     attachments: list[dict[str, Any]] = field(default_factory=list)
+    # Where a step that asks before a tool call waits for the person's answer.
+    # The daemon fills it; None for a run with nobody to ask, which is no.
+    approvals: Approvals | None = None
 
     outputs: dict[str, Any] = field(default_factory=dict)
     aliases: dict[str, Any] = field(default_factory=dict)

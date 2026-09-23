@@ -26,6 +26,7 @@ from ..learn import learn as learn_pass
 from ..memory import keeps_memory, write_result
 from ..memory.results import revise_application
 from ..providers import ProviderPool, check_credentials
+from ..runtime.approvals import Approvals
 from ..runtime.context import RunResult, new_run_id
 from ..runtime.executor import execute, preflight
 from ..store import Event, RunStore, utcnow
@@ -348,6 +349,9 @@ class TaskRunner:
         # when a run starts and let go when it ends, so a note left between
         # runs takes the durable road instead.
         self.direction: asyncio.Queue[str] | None = None
+        # The run in flight's tool calls waiting on a person, for the board to
+        # answer; None between runs.
+        self.approvals: Approvals | None = None
         self.on_run = on_run
         self.trigger = build_trigger(task.spec.trigger)
         self.results: deque[RunResult] = deque(maxlen=RESULTS_KEPT)
@@ -616,6 +620,14 @@ class TaskRunner:
 
     def leave_note(self, text: str) -> dict:
         return leave_note(self, text)
+
+    def answer_tool(self, call_id: str, allowed: bool) -> bool:
+        """A person's answer to a tool call the run in flight is waiting on.
+
+        False when nothing is waiting under that id: the run ended, the call
+        was answered already, or it was never asked.
+        """
+        return self.approvals is not None and self.approvals.answer(call_id, allowed)
 
     async def undo_changes(self, run_id: str) -> dict:
         if self.workspace is None:
@@ -1049,6 +1061,7 @@ class TaskRunner:
                 # arrive from here on are heard once, at the next turn, rather
                 # than read at the start and heard again.
                 self.direction = asyncio.Queue()
+                self.approvals = Approvals()
                 result = await execute(
                     self.task.graph,
                     self.task.binding,
@@ -1065,6 +1078,7 @@ class TaskRunner:
                     workdir=workdir,
                     tool_context=self.tool_context,
                     direction=self.direction,
+                    approvals=self.approvals,
                     finalize=finish,
                     attachments=attached,
                 )
@@ -1108,6 +1122,7 @@ class TaskRunner:
         finally:
             self.status, self.current_run_id = "waiting", None
             self.direction = None
+            self.approvals = None
         self.results.append(result)
         if self.task.spec.carry_state:
             self.state = result.state

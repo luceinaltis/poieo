@@ -113,6 +113,7 @@ state is 409.
 | `POST /api/tasks/{project}/{task}/pause` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/resume` | no body; returns resulting runtime status |
 | `POST /api/tasks/{project}/{task}/run` | no body, or `{message, thread?}`: what a person says to start the run, at most 4,000 characters, and the conversation it continues, 1 to 64 letters, digits, `-` or `_`; with `attachments`, at most 4 `{name, media_type, data}` in base64 -- PNG, JPEG, GIF or WebP up to 3,750,000 bytes each, told apart by their bytes, or UTF-8 `text/plain`, `text/markdown`, `text/csv` or `application/json` up to 200,000 characters, each under one plain file name; the run reads the message as `input.message`, its first model step is shown the attachments beside its prompt, a picture as one and a text file as its words, and its record keeps the message, the thread and the attachments' names, the files themselves kept under `runs/files/<run-id>/`; returns `starting`, 400 for a body that is not that, or 409 with the in-flight run id |
+| `POST /api/tasks/{project}/{task}/approve` | `{call, allow}`: a person's answer to a tool call the run in flight is waiting on (`node_tool_asking` names the call); returns `answered`, 400 for a body that is not that, or 409 when nothing is waiting on that call |
 | `POST /api/tasks/{project}/{task}/answer` | `{choice}`; completes the persisted pending question or returns the currently offered choices |
 
 Accept and undo can update the checked-out project; discard removes pending

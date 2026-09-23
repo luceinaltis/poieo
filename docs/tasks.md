@@ -104,6 +104,11 @@ may hand work to it; `poieo eject` refuses it, having no graph it could keep
 `chat:` beside; and a run with nothing said is refused before it starts -- a
 bare run-now is a 400, and `poieo run` asks for `--set message=...`.
 
+A chat card may say `ask_before: [edits, commands]`, either or both, which its
+step carries: it stops at each such call and waits for the person to allow it
+through the task's `/approve` route. Only a chat card takes the key -- a task that runs unwatched
+has nobody to ask.
+
 ## Run input and journal
 
 Each run starts with the card's `input`; a mapping from `input_file` is reread

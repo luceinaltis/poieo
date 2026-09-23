@@ -398,3 +398,17 @@ TOOLSETS: dict[str, Any] = {
     "notes": notes_tools,
 }
 DEFAULT_TOOLSETS: list[str] = ["files", "shell"]
+
+# Which calls a step told to `ask_before` stops at, by kind. Everything else --
+# reading, listing, searching, leaving a note -- goes ahead without asking.
+_ASKS: dict[str, str] = {
+    "write_file": "edits",
+    "edit_file": "edits",
+    "append_file": "edits",
+    "run_command": "commands",
+}
+
+
+def asks_for(tool: str) -> str | None:
+    """The kind of call a tool makes that a person may be asked about, or None."""
+    return _ASKS.get(tool)

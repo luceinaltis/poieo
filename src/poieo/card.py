@@ -132,7 +132,7 @@ def _roster_block(task: CardSpec, roster: list[str] | None) -> str:
 
 # Keys that describe the single generated node, and therefore have nowhere to
 # go once the task names a graph of its own.
-_NODE_KEYS = ("prompt", "role", "tools", "max_turns", "deadline")
+_NODE_KEYS = ("prompt", "role", "tools", "max_turns", "deadline", "ask_before")
 
 
 class CardSpec(BaseModel):
@@ -177,6 +177,10 @@ class CardSpec(BaseModel):
     # The task the board's chat speaks to: it never fires by itself, and each
     # message starts one of its runs, which answers it.
     chat: bool = False
+    # What the chat's step stops at and waits for the person to allow: `edits`,
+    # `commands`, or both. Only a chat card asks -- a task that runs unwatched
+    # at 3am has nobody to answer.
+    ask_before: list[Literal["edits", "commands"]] = Field(default_factory=list)
     binding: str | None = None
     # Where this task's commands may run. Absent means the host, as before.
     # Not a node key: it describes the task, so `poieo eject` keeps it.
@@ -207,6 +211,8 @@ class CardSpec(BaseModel):
             raise ValueError("a chat card is a prompt card; it cannot name a graph")
         if self.chat and named:
             raise ValueError(f"a chat card waits to be spoken to, so it takes no {named[0]}")
+        if self.ask_before and not self.chat:
+            raise ValueError("only a chat card takes ask_before: a task nobody is watching has nobody to ask")
         if self.chat and "notes" in (self.tools or []):
             raise ValueError("a chat card answers the person in front of it; it takes no notes toolset")
         if len(named) > 1:
@@ -353,6 +359,7 @@ def build_graph(task: CardSpec, roster: list[str] | None = None) -> GraphSpec:
                 tools=list(DEFAULT_TOOLSETS) if task.tools is None else list(task.tools),
                 max_turns=task.max_turns,
                 deadline=task.deadline,
+                ask_before=list(task.ask_before),
                 system=system_block(task, roster),
                 # A chat card's prompt is the standing instruction in its
                 # system block; what the run answers is what was said.
