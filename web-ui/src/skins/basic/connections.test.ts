@@ -219,3 +219,17 @@ test("a wire that skips a column goes under the board when a card stands in its 
 
   expect(route("Watch", "Tell")).toBe("under")
 })
+
+test("a wire says the board's own conditions in words, not as the expression", () => {
+  handle.update(initialStage([
+    { ...task("Draft"), then: [{ to: "Review", label: "true" }] },
+    { ...task("Review"), then: [{ to: "Other", label: "run.status == 'failed'" }] },
+    task("Other"),
+  ]))
+  const words = [...host.querySelectorAll(".basic-connection")].map((c) => c.getAttribute("aria-label"))
+
+  expect(words).toEqual([
+    "Draft output → Review input: always",
+    "Review output → Other input: failed",
+  ])
+})

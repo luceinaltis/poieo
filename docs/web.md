@@ -467,7 +467,11 @@ something stands in the way of. Hovering or focusing a
 terminal or wire highlights its connections and both cards. Clicking a wire, or
 pressing Enter/Space on it, brings the receiving card into view and focuses Input.
 Title updates preserve focused terminals and wires while allowing the board to
-remeasure a wrapped title.
+remeasure a wrapped title. A wire's word is the connection's label, and the
+board's own conditions are said as the task panel says them -- `always`,
+`succeeded`, `failed`, or the word an answer must contain -- rather than as the
+expression. The task open in the panel is ringed on the board, and opening one
+moves the board only as far as it takes to show that card whole.
 
 Expanded card graphs measure their labels before Dagre places nodes from top to
 bottom. Expanded connected cards grow to fit the complete graph without internal

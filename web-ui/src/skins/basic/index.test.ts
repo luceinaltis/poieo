@@ -791,3 +791,41 @@ test("the board is magnified exactly as far as the page's type is", () => {
     document.documentElement.style.fontSize = ""
   }
 })
+
+const row = (name: string): (typeof TASK_ROWS)[number] => ({ ...TASK_ROWS[1], name, then: [] })
+
+test("the open task's card is marked, and only that one", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  handle.update(initialStage(TASK_ROWS))
+  const selected = () => [...el.querySelectorAll<HTMLElement>('.basic-task[data-selected="true"]')].map((c) => c.dataset.task)
+
+  handle.select?.("board/chores")
+  expect(selected()).toEqual(["board/chores"])
+  handle.select?.("board/revision")
+  expect(selected()).toEqual(["board/revision"])
+  handle.select?.(null)
+  expect(selected()).toEqual([])
+
+  // A card that arrives while its task is open arrives marked.
+  handle.select?.("board/later")
+  handle.update(initialStage([...TASK_ROWS, row("later")]))
+  expect(selected()).toEqual(["board/later"])
+  handle.destroy()
+})
+
+test("opening a task off screen brings its card into view; one already in view stays put", () => {
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
+  Object.defineProperty(viewport, "clientWidth", { value: 1000, configurable: true })
+  Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true })
+  // Two cards across, three down: the last row is below a 300px window.
+  handle.update(initialStage(["a", "b", "c", "d", "e", "f"].map(row)))
+  const before = transform()
+
+  handle.select?.("board/a")
+  expect(transform()).toBe(before)
+
+  handle.select?.("board/f")
+  expect(transform()).not.toBe(before)
+  handle.destroy()
+})

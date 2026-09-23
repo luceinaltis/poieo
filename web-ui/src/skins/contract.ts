@@ -22,6 +22,12 @@ export interface SkinCallbacks {
 export interface SkinHandle {
   update(stage: StageState): void
   destroy(): void
+  /**
+   * Which task the reader has open in the panel, or null. A skin that draws
+   * the task marks it and brings it into view; one that does not may leave
+   * this out.
+   */
+  select?(task: string | null): void
 }
 
 export interface Skin {

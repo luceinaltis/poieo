@@ -450,6 +450,32 @@ export const basic: Skin = {
     // Null until the reader moves the board themselves; after that it is their
     // view, and `show` stops fitting.
     let chosen: View | null = null
+    // The task open in the panel, whose card is marked and kept in view.
+    let selected: string | null = null
+
+    /**
+     * The least movement that shows a card whole: none when it already is,
+     * otherwise just far enough past the nearer edge. The card being read in
+     * the panel was otherwise wherever the board last left it -- often half
+     * under the bottom of the window.
+     */
+    function reveal(task: string): void {
+      const box = boxes.get(task)
+      const width = viewport.clientWidth
+      const height = viewport.clientHeight
+      if (!box || !width || !height) return
+      const view = where()
+      const edge = 16
+      const left = view.x + parseFloat(box.root.style.left) * view.zoom
+      const top = view.y + parseFloat(box.root.style.top) * view.zoom
+      const right = left + (box.root.offsetWidth || BOX.width) * view.zoom
+      const bottom = top + (box.root.offsetHeight || BOX.height) * view.zoom
+      const dx = left < edge ? edge - left : right > width - edge ? Math.max(edge - left, width - edge - right) : 0
+      const dy = top < edge ? edge - top : bottom > height - edge ? Math.max(edge - top, height - edge - bottom) : 0
+      if (!dx && !dy) return
+      chosen = { ...view, x: view.x + dx, y: view.y + dy }
+      show()
+    }
 
     // Only expanded independent graphs scroll locally; compact flows move with the board.
     const grabbable = (event: Event): boolean =>
@@ -751,6 +777,7 @@ export const basic: Skin = {
             moved = true
           }
           paint(box, taskState, isOpen(task, taskState))
+          box.root.dataset.selected = String(task === selected)
         }
         for (const [task, box] of boxes) {
           if (!(task in stage.tasks)) {
@@ -774,6 +801,12 @@ export const basic: Skin = {
           key = fresh
           relayout(stage)
         }
+      },
+
+      select(task: string | null) {
+        selected = task
+        for (const [key, box] of boxes) box.root.dataset.selected = String(key === task)
+        if (task !== null) reveal(task)
       },
 
       destroy() {

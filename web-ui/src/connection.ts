@@ -45,3 +45,16 @@ export function said(arrow: Connection): string {
   if (word) return saidWhen("says", word[1])
   return arrow.label ? `when “${arrow.label}”` : `when ${arrow.when}`
 }
+
+/**
+ * The word a wire carries on the board. The listing sends a connection's
+ * label, or its condition when it has none -- and the board's own conditions
+ * are said here in the same words as the task panel, not as the expression.
+ */
+export function wireWord(label: string): string {
+  if (label === "true") return "always"
+  if (label === "run.status == 'completed'") return "succeeded"
+  if (label === "run.status == 'failed'") return "failed"
+  const word = /^'(.*)' in str\(run\.outputs\)\.lower\(\)$/.exec(label)
+  return word ? word[1] : label
+}
