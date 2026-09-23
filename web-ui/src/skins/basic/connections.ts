@@ -20,7 +20,7 @@ export function taskConnections(stage: StageState) {
     if (!stage.tasks[to]) return
     const key = JSON.stringify([from, to])
     const connection = connections.get(key) ?? { from, to, labels: [] }
-    connection.labels.push(`${task.then.length > 1 ? `${index + 1}. ` : ""}${wireWord(way.label)}`)
+    connection.labels.push(`${task.then.length > 1 ? `${index + 1}. ` : ""}${wireWord(way.label, way.when)}`)
     connections.set(key, connection)
   })
   return [...connections.values()]

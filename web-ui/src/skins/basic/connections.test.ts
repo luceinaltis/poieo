@@ -233,3 +233,19 @@ test("a wire says the board's own conditions in words, not as the expression", (
     "Review output → Other input: failed",
   ])
 })
+
+test("a word somebody chose is kept, even one that reads like the board's own condition", () => {
+  // "if its answer says true": the label is the word, the condition is not
+  // `true`, so the wire must not say "always".
+  handle.update(initialStage([
+    { ...task("Draft"), then: [{ to: "Review", label: "true", when: "'true' in str(run.outputs).lower()" }] },
+    { ...task("Review"), then: [{ to: "Other", label: "true", when: "true" }] },
+    task("Other"),
+  ]))
+  const words = [...host.querySelectorAll(".basic-connection")].map((c) => c.getAttribute("aria-label"))
+
+  expect(words).toEqual([
+    "Draft output → Review input: true",
+    "Review output → Other input: always",
+  ])
+})

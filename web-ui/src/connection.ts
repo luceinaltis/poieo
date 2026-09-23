@@ -51,7 +51,10 @@ export function said(arrow: Connection): string {
  * label, or its condition when it has none -- and the board's own conditions
  * are said here in the same words as the task panel, not as the expression.
  */
-export function wireWord(label: string): string {
+export function wireWord(label: string, when?: string): string {
+  // A label that is not the condition repeated is one somebody chose -- a
+  // word an answer must contain may well be "true" -- and is said as written.
+  if (when !== undefined && label !== when) return label
   if (label === "true") return "always"
   if (label === "run.status == 'completed'") return "succeeded"
   if (label === "run.status == 'failed'") return "failed"

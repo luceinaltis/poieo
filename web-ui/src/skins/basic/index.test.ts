@@ -829,3 +829,28 @@ test("opening a task off screen brings its card into view; one already in view s
   expect(transform()).not.toBe(before)
   handle.destroy()
 })
+
+test("a move made only to show the open card does not stop the board refitting when the window changes", () => {
+  // The fit is the board's until the reader moves it themselves; bringing a
+  // card into view is the board's own move, so a resize may still refit.
+  let resized = () => {}
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { resized = callback }
+    observe() {}
+    disconnect() {}
+  })
+  const handle = basic.mount(el, { onSelectTask: vi.fn() })
+  const viewport = el.querySelector<HTMLElement>(".basic-viewport")!
+  Object.defineProperty(viewport, "clientWidth", { value: 1000, configurable: true })
+  Object.defineProperty(viewport, "clientHeight", { value: 300, configurable: true })
+  handle.update(initialStage(["a", "b", "c", "d", "e", "f"].map(row)))
+  handle.select?.("board/f")
+  const revealed = transform()
+
+  Object.defineProperty(viewport, "clientHeight", { value: 900, configurable: true })
+  resized()
+
+  expect(transform()).not.toBe(revealed)
+  handle.destroy()
+  vi.unstubAllGlobals()
+})

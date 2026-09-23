@@ -444,7 +444,17 @@ export const basic: Skin = {
     // a window that changes size needs a new one. Guarded: the observer is not
     // in jsdom, and a skin that cannot watch simply keeps the fit it has.
     const watching =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => show())
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            // A view the board only nudged to show the open card is still the
+            // board's, not the reader's, so a new window gets a new fit.
+            if (revealed) {
+              chosen = null
+              revealed = false
+            }
+            show()
+          })
     watching?.observe(viewport)
 
     // Null until the reader moves the board themselves; after that it is their
@@ -452,6 +462,9 @@ export const basic: Skin = {
     let chosen: View | null = null
     // The task open in the panel, whose card is marked and kept in view.
     let selected: string | null = null
+    // Whether `chosen` is only the board's nudge to show that card, rather
+    // than a view the reader made by moving the board.
+    let revealed = false
 
     /**
      * The least movement that shows a card whole: none when it already is,
@@ -475,6 +488,7 @@ export const basic: Skin = {
       if (!dx && !dy) return
       chosen = { ...view, x: view.x + dx, y: view.y + dy }
       show()
+      revealed = true
     }
 
     // Only expanded independent graphs scroll locally; compact flows move with the board.
@@ -485,6 +499,7 @@ export const basic: Skin = {
       event.stopPropagation()
       const go = (to: PointerEvent) => {
         const box = map.getBoundingClientRect()
+        revealed = false
         chosen = centreOn(
           where(),
           { x: (to.clientX - box.left) / mapped.zoom, y: (to.clientY - box.top) / mapped.zoom },
@@ -535,7 +550,10 @@ export const basic: Skin = {
       })
       .on("zoom", (event: D3ZoomEvent<HTMLDivElement, unknown>) => {
         const view = { x: event.transform.x, y: event.transform.y, zoom: event.transform.k }
-        if (!settling) chosen = view
+        if (!settling) {
+          chosen = view
+          revealed = false
+        }
         draw(view)
       })
 
@@ -549,6 +567,7 @@ export const basic: Skin = {
     // recoverable by reloading the page.
     viewport.addEventListener("dblclick", (event) => {
       if (!grabbable(event)) return
+      revealed = false
       chosen = fit(
         { width: board.offsetWidth, height: board.offsetHeight },
         { width: viewport.clientWidth, height: viewport.clientHeight },
@@ -649,6 +668,7 @@ export const basic: Skin = {
       const box = boxes.get(task)
       if (!box) return
       const current = where()
+      revealed = false
       chosen = { ...current,
         x: viewport.clientWidth / 2 - input.x * current.zoom,
         y: Math.min(160, viewport.clientHeight / 2) - input.y * current.zoom,
