@@ -462,7 +462,9 @@ Tasks joined by handoffs are a flow, and each flow is a band at the top of the
 board in the order its first task is listed: each task one column past its
 furthest sender, on the row of the sender that starts it or the first free row
 below. Tasks nothing joins stand in a grid under every flow, as wide as the
-window allows; with no handoffs at all the whole board is that grid.
+window allows, spaced closely because no wire runs between them; with no
+handoffs at all the whole board is that grid. The minimap in the corner is
+faint until the pointer is over it, so the cards under it show through.
 
 Board wires attach to the measured Output and Input, even after pan/zoom or a card
 resize. Forward wires use the gaps between columns; a forward wire that skips

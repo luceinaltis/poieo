@@ -664,23 +664,37 @@ export const basic: Skin = {
       // the column problem again, one axis over. The gap is added back before
       // dividing because the last box in a row has no gap after it -- without
       // that, three boxes that fit are laid out two and one.
-      const across = Math.max(1, Math.floor((viewport.clientWidth + BOX.gapX) / (BOX.width + BOX.gapX)))
+      // Counted at the grid's own spacing: nothing wires its cards together,
+      // so they need no wire's gap between them.
+      const across = Math.max(1, Math.floor((viewport.clientWidth + BOX.gridGap) / (BOX.width + BOX.gridGap)))
       const placed = place(tasks, handoffs, across)
       const rows = measure(placed, boxes)
-      const columns = Math.max(1, ...placed.map(one => one.column + 1))
+      const flowing = placed.filter(one => !one.grid)
+      const columns = Math.max(1, ...flowing.map(one => one.column + 1))
       const widths = Array.from({ length: columns }, () => BOX.width)
-      for (const one of placed) widths[one.column] = Math.max(widths[one.column], parseFloat(boxes.get(one.task)!.root.style.width))
+      for (const one of flowing) widths[one.column] = Math.max(widths[one.column], parseFloat(boxes.get(one.task)!.root.style.width))
       const positions = new Map(placed.map(one => [one.task, one]))
       const outer = taskConnections(stage).some(link => positions.get(link.to)!.column !== positions.get(link.from)!.column + 1)
       const lefts: number[] = []
       let left = outer ? 24 : 0
       for (const width of widths) { lefts.push(left); left += width + BOX.gapX }
+      const start = outer ? 24 : 0
+      // One pitch for the grid, as wide as its widest card: a card drawn wider
+      // -- one whose handoff names a task the board lacks -- would otherwise
+      // lie over its neighbour.
+      const pitch =
+        Math.max(BOX.width, ...placed.filter(one => one.grid).map(one => parseFloat(boxes.get(one.task)!.root.style.width) || BOX.width)) +
+        BOX.gridGap
+      let gridRight = 0
       for (const one of placed) {
         const box = boxes.get(one.task)!
-        box.root.style.left = `${lefts[one.column]}px`
+        const x = one.grid ? start + one.column * pitch : lefts[one.column]
+        box.root.style.left = `${x}px`
         box.root.style.top = `${corner(one, rows).y}px`
+        if (one.grid) gridRight = Math.max(gridRight, x + parseFloat(box.root.style.width))
       }
-      board.style.width = `${left - BOX.gapX + (outer ? 24 : 0)}px`
+      const flowRight = flowing.length ? left - BOX.gapX : 0
+      board.style.width = `${Math.max(flowRight, gridRight) + (outer ? 24 : 0)}px`
       const bottom = drawConnections(svg, stage, placed, boxes, rows.bottom, follow, trace)
       board.style.height = `${bottom}px`
       trace(null)

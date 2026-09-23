@@ -191,7 +191,7 @@ test("the grid of independent tasks starts under the tallest flow", () => {
 test("a handoff naming a task that is not on the board is ignored", () => {
   const placed = place(["chores"], { chores: ["gone"] })
 
-  expect(placed).toEqual([{ task: "chores", column: 0, row: 0 }])
+  expect(placed).toEqual([{ task: "chores", column: 0, row: 0, grid: true }])
 })
 
 test("a walk reads entry first and every node once, loop or not", () => {
@@ -414,4 +414,16 @@ test("a board that must shrink to fit ignores how far it could have grown", () =
   const view = fit({ width: 1904, height: 100 }, { width: 1000, height: 700 }, 24, 1.25)
 
   expect(view.zoom).toBe(0.5)
+})
+
+test("a task nothing joins is marked as standing in the grid, and a flow's tasks are not", () => {
+  // The grid needs no room for wires between its cards, so it is spaced on
+  // its own; the mark is how the board knows which cards those are.
+  const placed = place(["a", "b", "solo"], { a: ["b"] })
+  expect(placed.map((p) => [p.task, Boolean(p.grid)])).toEqual([
+    ["a", false],
+    ["b", false],
+    ["solo", true],
+  ])
+  expect(place(["x", "y"], {}).every((p) => p.grid)).toBe(true)
 })
